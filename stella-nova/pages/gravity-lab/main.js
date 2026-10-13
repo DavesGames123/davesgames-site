@@ -10,6 +10,7 @@
 //  ONE FRAME
 //    stepRun      move the sim by spec.rate x speed x the wall time
 //                 (app/run.js; events go on the bus)
+//    directFrame  where the action is (director.js through app/camera.js)
 //    saverFrame   the screensaver's camera goal and slow motion
 //    camFrame     the camera (app/camera.js) in frame coordinates
 //    render       bodies, segments, camera uniform, draw
@@ -19,12 +20,13 @@
 //  MODULE TREE (app/, one concern per file; each has its own grep list)
 //    state.js    S, UI, SPEEDS, $, the bus, bootReady
 //    run.js      startRun / stepRun / throwItem / bodyInstances / segments
-//    camera.js   the orbit camera, fitDist, the saver springs
+//    camera.js   the orbit camera, the director's focus, the saver springs
 //    pointer.js  turn, zoom, pick, follow, throw with the path ahead
 //    ui.js       controls, panels, gallery, tray, HUD, labels, toasts
-//    saver.js    window.snSaver: the director and the plate
+//    saver.js    window.snSaver: the shots and the plate
 //  Root (no DOM): nbody.js lab.js engine.js budget.js data.js
 //  experiments/ items.js roll.js frame.js saver-plan.js render.js size.js
+//  director.js
 //
 //  RELEASE. lib/gpu-guard.js destroys the device on pagehide; this file
 //  also destroys it there (and the Lab and renderer buffers first).
@@ -35,7 +37,7 @@ import { loadNbodyCode } from './engine.js';
 import { Renderer, loadRenderCode } from './render.js';
 import { S, UI, $, bootDone, bootFailed, PHONE_Q, COARSE } from './app/state.js';
 import { stepRun, bodyInstances, segments, lights } from './app/run.js';
-import { camFrame, cam } from './app/camera.js';
+import { camFrame, cam, directFrame } from './app/camera.js';
 import { buildUI, applyChoice, firstChoice, refreshHUD, placeLabels, resizeNow } from './app/ui.js';
 import { saverFrame } from './app/saver.js';
 import { typesetAll } from '../../lib/sci-math.js';
@@ -47,12 +49,13 @@ function loop(now) {
   const dt = Math.min(0.1, Math.max(0, (now - (last || now)) / 1000));
   last = now;
   S.fps = 0.95 * S.fps + 0.05 * (dt > 0 ? 1 / dt : 60);
-  if (S.saverOn && S.saver) saverFrame(dt);
   // a step while paused: S.stepFrames frames at the current speed
   const stepping = UI.paused && S.stepFrames > 0;
   if (stepping) { UI.paused = false; S.stepFrames--; }
   try { stepRun(dt); } catch (e) { console.error(e); }
   if (stepping) UI.paused = true;
+  directFrame(UI.paused ? 0 : dt);   // a paused run keeps its focus
+  if (S.saverOn && S.saver) saverFrame(dt);
   const R = S.ren, c = camFrame(R.W / (S.dpr || 1), R.H / (S.dpr || 1), dt);
   S.camNow = c;
   const b = bodyInstances();

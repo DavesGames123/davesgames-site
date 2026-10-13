@@ -3,7 +3,8 @@
 // ----------------------------------------------------------------------------
 //  With no tray item armed:
 //    drag            turn the camera (one finger on a touch screen)
-//    wheel / pinch   zoom
+//    wheel / pinch   zoom (the camera director gives the distance back
+//                    10 s after the last zoom: app/camera.js USER_HOLD)
 //    tap             select the body under the pointer (24 px), or none
 //    double tap      follow the body (the frame moves with it); again: stop
 //  With a tray item armed (UI.item):
@@ -100,7 +101,7 @@ export function bindPointer(onPick, onThrow) {
     if (pinch && pts.size >= 2) {
       const [a, b] = [...pts.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      cam.dist = Math.max(1e-6, pinch.dist * pinch.d / Math.max(10, d));
+      cam.dist = Math.max(1e-6, pinch.dist * pinch.d / Math.max(10, d)); cam.zoomAt = performance.now();
       cam.az = pinch.az - (mx - pinch.mx) * 0.006; cam.el = pinch.el + (my - pinch.my) * 0.006;
       return;
     }
@@ -142,5 +143,6 @@ export function bindPointer(onPick, onThrow) {
     e.preventDefault();
     if (S.saverOn) return;
     cam.dist *= Math.exp(Math.max(-0.5, Math.min(0.5, e.deltaY * 0.0012)));
+    cam.zoomAt = performance.now();   // the distance is the user's for a while (camera.js USER_HOLD)
   }, { passive: false });
 }

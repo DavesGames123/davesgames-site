@@ -31,7 +31,9 @@
 //     a circular orbit; extendSystem keeps every state; predictPath is
 //     the run that follows), frame.js, saver-plan.js (reel, shots, cuts,
 //     subjects, laws), budget.js pixelRatio, size.js (drawn radii under
-//     the cap, never under the collision radius)
+//     the cap, never under the collision radius), director.js (D1: the
+//     camera aims at the bound centre of mass or at an active pair, and
+//     the pair stays in the frame and in the saver band, 16:9 and 9:16)
 //  GPU (Deno WebGPU): cs_restricted against CpuParticles, cs_gravity and
 //  cs_kick against the f64 direct sum, the impact stamp and hit counts
 //  PAGE (Deno WebGPU, test-page.mjs): the whole page on a fake DOM: boot,
@@ -298,6 +300,8 @@ async function pageModuleTests() {
       over === 0 && under === 0 && worst[0] <= Z.SIZE_MAX + 1e-12 && mono,
       `${nb} bodies in ${specs.length} specs; ${before} drawn over 2% of the extent before (not at true scale), ${over} over the cap now, ${under} under R; largest capped ${(100 * worst[0]).toFixed(2)}% (${worst[1]})`);
   }
+  // D1 the camera director (director.js) on the CPU bodies
+  await directorTest(X, R, F);
   // B1 pixels
   {
     const pr = [BG.pixelRatio('auto', false, 1920, 1080, 2), BG.pixelRatio('auto', true, 390, 844, 3), BG.pixelRatio('high', false, 2560, 1440, 2)];
@@ -305,6 +309,97 @@ async function pageModuleTests() {
     ok('B1 pixel ratio: under each preset\'s pixel budget, at most 1.5 on a phone', px[0] <= BG.MAXPX.medium * 1.0001 && pr[1] <= 1.5 && px[1] <= BG.MAXPX.low * 1.0001 && px[2] <= BG.MAXPX.high * 1.0001,
       `desktop ${pr[0].toFixed(2)} (${(px[0] / 1e6).toFixed(2)} Mpx), phone ${pr[1].toFixed(2)} (${(px[1] / 1e6).toFixed(2)} Mpx), high ${pr[2].toFixed(2)} (${(px[2] / 1e6).toFixed(2)} Mpx)`);
   }
+}
+
+// D1: every library variant with bodies and 60 rolls run for D_SEC s of
+// real time at 30 frames a second (bodies only, no particles). Each frame
+// the director aims and four cameras follow it: 16:9 and 9:16, full
+// screen and inside a saver plate band. Checks: the aim is the bound
+// centre of mass (or the spec's centre body) or on the segment between
+// the two bodies of the pair, never a body that has left; 1 s after a
+// focus change both bodies of the pair project inside the frame (the
+// clear band for the saver); drawn radii stay under the size cap.
+async function directorTest(X, R, F) {
+  const D = await import('./director.js'), Z = await import('./size.js');
+  const D_SEC = 24, DT = 1 / 30;
+  const specs = [];
+  for (const [key, ex] of Object.entries(X.EXPERIMENTS)) for (const v of ex.variants) { const sp = X.build(key, 1, { n: 64, variant: v }); if (sp.bodies && sp.bodies.length) specs.push(sp); }
+  for (let seed = 1; seed <= 60; seed++) { const sp = R.roll(seed, { n: 64 }); if (sp.bodies && sp.bodies.length) specs.push(sp); }
+  const SCREENS = [
+    { name: '16:9', W: 1600, H: 900, band: null }, { name: '16:9 saver', W: 1600, H: 900, band: { t: 0.2 * 900, b: 0.3 * 900 } },
+    { name: '9:16', W: 540, H: 960, band: null }, { name: '9:16 saver', W: 540, H: 960, band: { t: 0.22 * 960, b: 0.34 * 960 } },
+  ];
+  const bad = { aim: [], gone: [], frame: [], size: [] };
+  let frames = 0, pairFrames = 0, checked = 0, focuses = 0, worstEdge = Infinity;
+  const TR = 420;
+  for (const sp of specs) {
+    const sys = new N.System(sp.bodies, sp.opts), ext = sp.view.extent, dir = D.makeDirector();
+    const meta = sp.bodies.map(b => ({ rDraw: b.rDraw || b.r || 0.01, r0: b.r || 0, m0: b.m }));
+    const trails = sp.bodies.map(() => ({ pts: new Float32Array(3 * TR), n: 0, head: 0, last: null }));
+    const rnd = N.rng(sp.seed * 7 + 3), az = 2 * Math.PI * rnd(), el = 0.1 + 1.2 * rnd();
+    const cams = SCREENS.map(() => ({ cut: true }));
+    let fk = '', fAt = 0, t = 0, dead = false;
+    for (let k = 0; k < D_SEC / DT && !dead; k++) {
+      sys.advance(sp.rate * DT, 1); t += DT;
+      for (const e of sys.drain()) D.noteEvent(dir, e, ext);
+      for (let i = 0; i < 3 * sys.n; i++) if (!isFinite(sys.x[i])) dead = true;
+      if (dead) break;
+      const fr = F.frameOf(sys, sp.view, -1), mMax = Z.heaviest(sys), rNow = [];
+      for (let i = 0; i < sys.n; i++) {
+        const m = meta[i], grow = m.r0 > 0 ? sys.R[i] / m.r0 : 1;
+        rNow.push(Z.drawRadius(m.rDraw * (grow > 0 && isFinite(grow) ? grow : 1), sys.m[i], mMax, ext, sys.R[i]));
+        if (sys.alive[i] && rNow[i] > Math.max(Z.SIZE_MAX * ext, sys.R[i]) * (1 + 1e-9)) bad.size.push(`${sp.title}: ${sp.bodies[i].name}`);
+        const T = trails[i]; if (!sys.alive[i]) continue;
+        const p = F.toFrame(fr, sys.pos(i));
+        if (T.last && Math.hypot(p[0] - T.last[0], p[1] - T.last[1], p[2] - T.last[2]) < ext * 0.0025) continue;
+        T.pts.set(p, 3 * T.head); T.head = (T.head + 1) % TR; T.n = Math.min(TR, T.n + 1); T.last = p;
+      }
+      const d = D.direct(dir, sys, fr, DT, { view: sp.view, ext, rNow, trail: i => D.ringTail(trails[i], D.DIR.TRAIL_K), parts: false });
+      frames++;
+      const key = d.mode + ':' + d.i + ':' + d.j;
+      if (key !== fk) { fk = key; fAt = t; if (d.mode !== 'calm') focuses++; }
+      // the aim
+      if (d.mode === 'calm') {
+        if (Number.isInteger(sp.view.center) && sys.alive[sp.view.center] && !d.gone[sp.view.center]) {
+          if (Math.hypot(...d.target) > 1e-9 * ext) bad.aim.push(`${sp.title}: calm target off the centre body`);
+        } else {
+          let M = 0, nb = 0; const c = [0, 0, 0], mn = [0, 0, 0];
+          for (let i = 0; i < sys.n; i++) if (sys.alive[i] && !d.gone[i]) { const p = F.toFrame(fr, sys.pos(i)); nb++; M += sys.m[i]; for (let q = 0; q < 3; q++) { c[q] += sys.m[i] * p[q]; mn[q] += p[q]; } }
+          const com = M > 0 ? c.map(x => x / M) : mn.map(x => x / Math.max(1, nb));
+          if (Math.hypot(d.target[0] - com[0], d.target[1] - com[1], d.target[2] - com[2]) > 0.02 * ext) bad.aim.push(`${sp.title}: calm target off the bound centre of mass`);
+        }
+      } else {
+        pairFrames++;
+        const ids = d.j >= 0 ? [d.i, d.j] : [d.i];
+        for (const i of ids) if (!sys.alive[i] || d.gone[i]) bad.gone.push(`${sp.title}: ${sp.bodies[i].name}`);
+        const P = ids.map(i => F.toFrame(fr, sys.pos(i)));
+        const sep = ids.length > 1 ? Math.hypot(P[0][0] - P[1][0], P[0][1] - P[1][1], P[0][2] - P[1][2]) : 0;
+        const near = Math.min(...P.map(p => Math.hypot(p[0] - d.target[0], p[1] - d.target[1], p[2] - d.target[2])));
+        if (near > 0.5 * sep + 1e-9 * ext) bad.aim.push(`${sp.title}: pair target ${near.toExponential(2)} from the pair (gap ${sep.toExponential(2)})`);
+      }
+      // the cameras
+      for (let s = 0; s < SCREENS.length; s++) {
+        const S = SCREENS[s], c = D.stepCam(cams[s], d, S.W, S.H, S.band, DT);
+        if (d.mode === 'calm' || t - fAt < 1.0) continue;
+        const eye = [c.target[0] + c.dist * Math.cos(el) * Math.cos(az), c.target[1] + c.dist * Math.cos(el) * Math.sin(az), c.target[2] + c.dist * Math.sin(el)];
+        const cam = { eye, target: c.target, up: [0, 0, 1], fovy: D.DIR.FOV, shiftY: c.shiftY };
+        const y0 = S.band ? S.band.t : 0, y1 = S.band ? S.H - S.band.b : S.H;
+        for (const i of (d.j >= 0 ? [d.i, d.j] : [d.i])) {
+          const q = D.project(cam, F.toFrame(fr, sys.pos(i)), S.W, S.H);
+          checked++;
+          if (!q) { bad.frame.push(`${sp.title} ${S.name}: behind the eye`); continue; }
+          const edge = Math.min(q.x, S.W - q.x, q.y - y0, y1 - q.y);
+          worstEdge = Math.min(worstEdge, edge);
+          if (edge < 0) bad.frame.push(`${sp.title} ${S.name}: ${sp.bodies[i].name} ${(-edge).toFixed(0)} px out`);
+        }
+      }
+    }
+  }
+  const u = a => [...new Set(a)];
+  ok('D1 camera director: aims at the bound centre of mass or at an active pair, never at a body that left; the pair stays in the frame and in the saver band (16:9 and 9:16); drawn radii under the cap',
+    bad.aim.length === 0 && bad.gone.length === 0 && bad.frame.length === 0 && bad.size.length === 0 && focuses >= 20,
+    `${specs.length} runs x ${D_SEC} s, ${frames} frames, ${focuses} focus changes to a pair, ${(100 * pairFrames / frames).toFixed(1)}% of frames on a pair; ${checked} body projections, nearest edge ${worstEdge.toFixed(1)} px; ` +
+    `aim ${bad.aim.length} [${u(bad.aim).slice(0, 3).join(' | ')}], gone ${bad.gone.length} [${u(bad.gone).slice(0, 3).join(' | ')}], frame ${bad.frame.length} [${u(bad.frame).slice(0, 4).join(' | ')}], size ${bad.size.length} [${u(bad.size).slice(0, 3).join(' | ')}]`);
 }
 
 // ── experiments ─────────────────────────────────────────────────────────────

@@ -4,34 +4,37 @@
 //  window.snSaver = { enter(opts), exit, cut, debug }. enter hides the GUI,
 //  draws the reel (saver-plan.js makeReel: a seeded shuffle bag of library
 //  variants and random rolls) and plays each run as RUN_SHOTS shots of
-//  5-12 s. The director is data-driven:
-//    subject   the body with the largest acceleration now (pickSubject),
-//              picked again at each cut
+//  5-12 s. The shot gives the angle; director.js gives the aim:
+//    action    when the director has a pair in focus (a close pass, a
+//              capture, a merge, a breakup), every shot frames that pair
+//              and its recent trails. A push goes from the whole system
+//              to the pair.
+//    calm      establish and top frame the bound system (centre of mass);
+//              push, follow and low frame the subject and its recent
+//              trail. The subject is the body with the largest
+//              acceleration (pickSubject), never a body that has left.
 //    events    a merge, a breakup, a hit, a capture, an ejection or a close
 //              periapsis cuts to a close shot of it in slow motion (a
 //              merge or a breakup after 3 s of the shot, the rest after
 //              5 s: saver-plan.js eventWait). A stale event is dropped and
 //              the same event of the same pair cuts once in 45 s.
-//    framing   the subject sits in the clear band of the plate (plateBand,
-//              lib/saver-clear.js): a lens shift moves it there and the
-//              distance grows with the band. A follow or a close shot
-//              locks the camera target on the subject (goal.lock), so a
-//              fast body stays in a tight frame. A push goes from the
-//              whole scene to the subject. A close shot also keeps the
-//              event's reach in frame (sv.eventReach: the other body of
-//              the pair, or the debris of a breakup).
+//    framing   stepCam (director.js) fits the framing in the clear band of
+//              the plate (plateBand, lib/saver-clear.js) at the real
+//              aspect (16:9, or the 9:16 column), with a lens shift to
+//              the band centre.
 //  The plate has the run's title, a law in TeX (Newton, vis-viva or the
 //  Jacobi integral, saver-plan.js lawFor) with the run's own equation,
 //  live numbers in real units, and the last event. No code.
 //  A new run fades through black; a cut inside a run is hard.
 //
-//  grep -n targets: "function nextRun", "function cutTo", "export function saverFrame",
+//  grep -n targets: "function nextRun", "function cutTo", "function closeFrame", "export function saverFrame",
 //  "function tick", "function plate", "function onEvent", "window.snSaver"
 // ============================================================================
 import { makeReel, shotPlan, shotDone, eventWorth, eventWait, eventKey, pickSubject, shotGoal, lawFor, mk, rng, CUT_MAX, EVENT_STALE, EVENT_REPEAT } from '../saver-plan.js';
 import { plateBand } from '../../../lib/saver-clear.js';
 import { S, UI, $, RM_Q, bus, bootReady } from './state.js';
-import { cam, fitDist } from './camera.js';
+import { cam } from './camera.js';
+import { frameSet, ringTail, DIR } from '../director.js';
 import { startRun, fmtTime, fmtSpeed, fmtLen } from './run.js';
 import { toFrame } from '../frame.js';
 import { dominant } from '../items.js';
@@ -61,86 +64,75 @@ function cutTo(i, shot) {
   sv.si = i; sv.shot = shot || sv.shots[i]; sv.shotAt = performance.now();
   sv.subject = -1;
   const sys = S.lab && S.lab.sys;
-  if (sys && (sv.shot.subject || sv.shot.track)) sv.subject = pickSubject(bodyStats(sys), sv.rnd);
-  if (sv.shot.event && sv.eventCut) {
-    const e = sv.eventCut;
-    sv.subject = e.e.j !== undefined && sys && sys.alive[e.e.j] && e.e.type !== 'merge' ? e.e.j : (e.e.i !== undefined && sys && sys.alive[e.e.i] ? e.e.i : -1);
-    sv.eventPos = e.pos ? toFrame(S.frame, e.pos) : null;
-    sv.eventText = e.text;
-    sv.eventReach = sys ? eventReach(sys, e.e, sv.subject, e.pos) : 0;
-  } else { sv.eventPos = null; sv.eventReach = 0; }
-  // a random point in the disk for a run without bodies
-  if (!sys || !sys.n) { const a = sv.rnd() * 2 * Math.PI, r = (0.3 + 0.4 * sv.rnd()) * S.spec.view.extent; sv.eventPos = [r * Math.cos(a), r * Math.sin(a), 0]; }
+  if (sys && sys.n) {
+    const d = S.dirNow;
+    if (sv.shot.event && sv.eventCut) {
+      // the event's body that is still in the system (the director has
+      // the pair in focus through its boost)
+      const e = sv.eventCut.e, live = k => k !== undefined && sys.alive[k] && !(d && d.gone && d.gone[k]);
+      sv.subject = d && d.mode !== 'calm' ? d.i : live(e.j) && e.type !== 'merge' ? e.j : live(e.i) ? e.i : -1;
+      sv.eventText = sv.eventCut.text;
+    } else if (sv.shot.subject || sv.shot.track) sv.subject = d && d.mode !== 'calm' ? d.i : pickSubject(bodyStats(sys, d), sv.rnd);
+    sv.eventPos = null;
+  } else {
+    // a run without bodies: a random point in the disk
+    const a = sv.rnd() * 2 * Math.PI, r = (0.3 + 0.4 * sv.rnd()) * S.spec.view.extent; sv.eventPos = [r * Math.cos(a), r * Math.sin(a), 0];
+  }
   cam.cut = true;
 }
-// The size a close shot must show: the gap to the other body of a pair
-// event, or the distance from the subject to a breakup point (the debris
-// orbits there). 0: the subject's own scale is enough.
-function eventReach(sys, e, subj, pos) {
-  if (subj < 0 || !sys.alive[subj]) return 0;
-  const x = sys.pos(subj);
-  if (/^(capture|release|periapsis)$/.test(e.type)) {
-    const o = e.i === subj ? e.j : e.i;
-    return o !== undefined && sys.alive[o] ? 1.25 * v3.len(v3.sub(sys.pos(o), x)) : 0;
-  }
-  if (e.type === 'breakup' && pos) return 1.4 * v3.len(v3.sub(pos, x));
-  return 0;
-}
-function bodyStats(sys) {
+function bodyStats(sys, d) {
   const dom = dominant(sys), out = [];
-  for (let i = 0; i < sys.n; i++) out.push({ i, alive: !!sys.alive[i], m: sys.m[i], a: Math.hypot(sys.a[3 * i], sys.a[3 * i + 1], sys.a[3 * i + 2]), dom: dom && dom.i === i });
+  for (let i = 0; i < sys.n; i++) out.push({ i, alive: !!sys.alive[i] && !(d && d.gone && d.gone[i]), m: sys.m[i], a: Math.hypot(sys.a[3 * i], sys.a[3 * i + 1], sys.a[3 * i + 2]), dom: dom && dom.i === i });
   return out;
 }
-// The size of the subject: a few times its radius, or the gap to its
-// nearest neighbour, never under 4% of the view.
-function subjectScale(i) {
-  const sys = S.lab.sys, ext = S.spec.view.extent, x = sys.pos(i);
-  let near = Infinity;
-  for (let j = 0; j < sys.n; j++) if (j !== i && sys.alive[j] && sys.m[j] > sys.m[i]) near = Math.min(near, v3.len(v3.sub(sys.pos(j), x)));
-  const r = S.meta[i] ? (S.meta[i].rNow ?? S.meta[i].rDraw) : 0;
-  return Math.max(0.04 * ext, Math.min(ext, Math.max(10 * r, 0.6 * (isFinite(near) ? near : ext))));
+// The close framing of a shot: the director's pair when there is action,
+// else the subject and its recent trail, else the calm view.
+function closeFrame(d) {
+  const sv = S.saver, sys = S.lab.sys;
+  if (d.mode !== 'calm') return d;
+  const i = sv.subject;
+  if (sys && i >= 0 && sys.alive[i] && !(d.gone && d.gone[i])) {
+    const rNow = S.meta.map(m => m.rNow ?? m.rDraw);
+    const f = frameSet(sys, S.frame, [i], S.spec.view.extent, rNow, k => ringTail(S.trails[k], DIR.TRAIL_K));
+    // at least an eighth of the calm view: the subject with room to move
+    const r = Math.min(d.calm.radius, Math.max(f.radius, 0.12 * S.spec.view.extent));
+    return { mode: 'one', i, j: -1, target: f.target, radius: r };
+  }
+  return d;
 }
-// Each frame (main loop): the camera goal, the slow motion, the fade.
+// Each frame (main loop, after the director): the camera goal, the slow
+// motion, the fade.
 export function saverFrame(dt) {
   const sv = S.saver; if (!sv || !S.spec) return;
   const W = $('gpu').clientWidth, H = $('gpu').clientHeight;
   const sh = sv.shot, el = (performance.now() - sv.shotAt) / 1000, u = Math.min(1, el / sh.len);
   const g0 = shotGoal(sh, u);
-  const ext = S.spec.view.extent, sys = S.lab.sys;
-  let target = [0, 0, 0], scale = ext, distK = g0.distK, lock = false, reach = 0;
-  if (sv.eventPos) { target = sv.eventPos.slice(); scale = ext * 0.6; }
-  if (sys && sv.subject >= 0 && sys.alive[sv.subject] && (sh.subject || sh.track || sh.event)) {
-    const p = toFrame(S.frame, sys.pos(sv.subject)), sc = subjectScale(sv.subject) * 2.2;
-    if (sh.track || sh.event) {
-      // the target is the subject now (not the old event point), locked
-      target = p; scale = sc; lock = true;
-      if (sh.event) reach = sv.eventReach || 0;
-    } else if (sh.kind === 'push') {
-      // from the whole scene to the subject: the target moves onto it and
-      // the framing shrinks from the extent to about 12 radii of the
-      // subject (between 4% and 30% of the extent)
-      const pe = Math.min(0.3 * ext, Math.max(0.04 * ext, 12 * (S.meta[sv.subject].rNow ?? S.meta[sv.subject].rDraw)));
-      const e = u * u * (3 - 2 * u), k = Math.log(Math.min(1, pe / (ext * sh.zoom)));
-      target = v3.mul(p, 0.55 + 0.45 * e);
-      scale = ext; distK = sh.zoom * Math.exp(k * e);
-    } else target = v3.mul(p, 0.55);   // low: between the centre and the subject
+  const ext = S.spec.view.extent;
+  const d = S.dirNow || { mode: 'calm', i: -1, j: -1, target: [0, 0, 0], radius: ext, calm: { target: [0, 0, 0], radius: ext } };
+  // the action takes every shot: the subject is the pair's first body
+  if (d.mode !== 'calm' && sv.subject !== d.i && sv.subject !== d.j) sv.subject = d.i;
+  let frame, zoomK = 1;
+  if (sv.eventPos) { frame = { mode: 'point', i: -1, j: -1, target: sv.eventPos, radius: 0.6 * ext }; zoomK = g0.distK; }
+  else if (sh.kind === 'push') {
+    // from the whole system about the focus to the focus: the target is
+    // the focus all the way (never empty space), the radius shrinks
+    const f = closeFrame(d), c = d.calm || d;
+    const r0 = Math.max(f.radius, c.radius + Math.hypot(f.target[0] - c.target[0], f.target[1] - c.target[1], f.target[2] - c.target[2]));
+    const e = u * u * (3 - 2 * u);
+    frame = { mode: 'push', i: f.i, j: f.j, target: f.target, radius: Math.exp(Math.log(r0) + (Math.log(f.radius) - Math.log(r0)) * e) };
+  } else if (sh.kind === 'establish' || sh.kind === 'top') {
+    frame = d; if (d.mode === 'calm') zoomK = g0.distK;
+  } else {
+    // follow, low, close: the action, or the subject
+    frame = closeFrame(d);
+    if (sh.kind === 'low' && frame.mode !== 'pair') zoomK = 1.25;
   }
-  // the clear band of the plate: lens shift and a longer distance
-  // plateBand measures the plate text in the parent document (a layout
-  // read): 4 times a second is enough, as in roche-limit/app/occlusion.js
+  // the clear band of the plate: plateBand measures the plate text in the
+  // parent document (a layout read): 4 times a second is enough, as in
+  // roche-limit/app/occlusion.js. stepCam sizes from it and the real W / H.
   const now = performance.now();
   if (!(now - (sv.bandAt || 0) < 250) || sv.bandH !== H) { sv.bandAt = now; sv.bandH = H; sv.band = plateBand(H); }
-  const band = sv.band;
-  let shiftY = 0, kBand = 1;
-  if (band) {
-    const yc = (band.t + (H - band.b)) / 2, fr = Math.max(0.3, (H - band.t - band.b) / H);
-    shiftY = -(yc - H / 2) / (H / 2);
-    kBand = 1 / Math.min(1, fr * 1.25);
-  }
-  const calmK = 1 + 0.3 * sv.calm;
-  let dist = fitDist(scale, W, H) * distK * kBand * (sh.kind === 'establish' || sh.kind === 'top' ? 1 : calmK);
-  if (reach > 0) dist = Math.max(dist, fitDist(reach, W, H) * kBand);
-  sv.goal = { az: g0.az, el: g0.el, dist, target, shiftY, lock };
+  sv.goal = { az: g0.az, el: g0.el, frame, band: sv.band, zoomK: zoomK * (sh.kind === 'establish' || sh.kind === 'top' ? 1 : 1 + 0.15 * sv.calm) };
   // slow motion in an event shot: in over 0.6 s, out over the last 1.5 s
   const slowGoal = sh.slow < 1 ? (el < sh.len - 1.5 ? sh.slow : 1) : 1;
   sv.speed += (slowGoal - sv.speed) * Math.min(1, dt * 2.5);
