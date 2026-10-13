@@ -1,0 +1,36 @@
+Breadboard Lab (stella-nova/pages/breadboard-lab)
+=================================================
+
+Third-party code and fonts
+  three.js r160 — MIT — Copyright (c) 2010-2023 three.js authors
+    stella-nova/vendor/three@0.160.0 (licence: vendor/three@0.160.0/LICENSE).
+    The 3D view, the part models and the material previews use it.
+  avr8js 0.21.1 — MIT — Copyright (c) 2019-2025 Uri Shaked
+    stella-nova/vendor/avr8js@0.21.1 (import specifiers given .js
+    extensions; see VENDORED.txt; licence: vendor/avr8js@0.21.1/LICENSE).
+    mcu/avr.js uses it to run .hex files on an emulated ATmega328P.
+    No example needs it.
+  Inter — SIL Open Font License 1.1 — the Inter Project Authors
+    stella-nova/vendor/fonts/inter.adf13477.css
+    (licence: vendor/fonts/LICENSES/Inter-OFL.txt). The panel type.
+
+Original work
+  Everything else in this folder was written for this site in 2026: the
+  circuit simulator (modified nodal analysis, Newton-Raphson, the
+  transient engine and every device model), the sketch compiler and
+  runtime, the part definitions, the procedural 3D models and material
+  patterns, the 5 x 7 LCD font, the instruments, the panels, the 32
+  example benches and the screensaver director. No code was ported from
+  tutorial, shader or simulator sites.
+
+Names and marks
+  The microcontroller boards are generic: the models carry plain
+  silkscreen pin names ("328 DEV BOARD", "WIFI DEVKIT") and no logos or
+  trademark names. Part numbers (555, LM358, 74HC595, CD4017, 1N4148,
+  2N3904 and so on) name the generic, multi-source devices whose
+  datasheet behaviour the models follow.
+
+Idea
+  The page grew from the owner's earlier 2D "breadboard bench"
+  (breadboard-designer-3.html), whose JSON benches the FILE panel can
+  import.

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Breadboard Lab — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BREADBOARD LAB  ·  page shell  (nav key: breadboard-lab)
+  ───────────────────────────────────────────────────────────────────────────
+   A 3D electronics bench. Put breadboards on the mat, plug in parts, run
+   jumper wires, and the circuit simulates live: LEDs glow from their
+   current, motors spin, buzzers sound, parts burn when you abuse them.
+   A multimeter, a scope and a logic analyzer have leads that plug into
+   holes. Three microcontroller boards run Arduino-style sketches on the
+   simulation clock. Materials and custom parts are editable.
+
+   Static markup only. main.js builds the store, the 3D view, the simulator
+   and the panels. The page uses WebGL through three.js r160 (no WGSL).
+
+   LAYOUT  (# marks an element id ui/app.js fills; CONTRACT 4.4)
+     #stage      the 3D view: canvas#gl fills it
+     #bar        top bar: panel tabs, tools, wire colours, run, undo
+     #leftCol    LIBRARY
+     #rightCol   INSPECT, CHECKS, EXAMPLES, MATERIALS, PARTS, CODE, FILE
+     #instrDock  one squircle per instrument along the base
+     #status     sim time, real-time ratio, the voltage under the pointer
+     #toasts     messages that unfold from the status bar
+     #tip        the hover tooltip
+     #nogl       the message when WebGL is missing
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: LIB, INSPECT, run, INSTR, TOOLS.
+                 portrait: the panels move into #sheet, a bottom sheet;
+                 landscape: #sheet is a drawer at the right edge.
+
+   MODULES  (each with its own grep map)
+     core/      bus, document, store with undo       (SCENE)
+     view/      renderer, camera, picking, tools     (SCENE)
+     parts/     part defs, geometry, 3D models       (PARTS)
+     sim/       netlist, MNA engine, worker          (SIM)
+     mcu/       sketch compiler and runtime, HEX     (MCU+UI)
+     ui/        panels, dock, files, share           (MCU+UI)
+     instruments/  meter, scope, logic, supply       (MCU+UI)
+     examples/  32 example benches (build.mjs writes them)
+     main.js    the glue; saver.js the screensaver hook
+
+   Everything here is original code. Third-party code: see NOTICE.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Breadboard Lab: build circuits on 3D breadboards and test them live. Resistors, LEDs, transistors, 555 timers, op-amps, logic chips, relays, motors and microcontroller boards running sketches, with a multimeter, an oscilloscope and a logic analyzer.">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<main id="stage" aria-label="3D breadboard bench"><canvas id="gl" tabindex="0" aria-label="Breadboard bench in 3D"></canvas></main>
+
+<header id="bar"></header>
+<aside id="leftCol" class="col" aria-label="Library"></aside>
+<aside id="rightCol" class="col" aria-label="Panels"></aside>
+<div id="instrDock" aria-label="Instruments"></div>
+<footer id="status"></footer>
+<div id="toasts" role="status" aria-live="polite"></div>
+<div id="tip" hidden></div>
+<div id="nogl" hidden>This page needs WebGL to draw the 3D bench, and this browser did not give it a WebGL context. The simulator and the panels still work.</div>
+
+<nav id="dock" aria-label="Quick controls"></nav>
+<aside id="sheet" aria-label="Panels"></aside>
+
+<noscript><p style="padding:16px">Breadboard Lab needs JavaScript.</p></noscript>
+<script type="module" src="main.js"></script>
+</body>
+</html>
