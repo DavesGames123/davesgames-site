@@ -10,7 +10,12 @@
 //  to ground, so a floating net stays solvable.
 //
 //  ONE STEP. Newton-Raphson on the stamped matrix (sparse LU, sim/solver.js;
-//  refactor() reuses the pivot order). Then three checks, in order:
+//  refactor() reuses the pivot order). Linear devices stamp once per step
+//  (A0, rhs0); nonlinear devices stamp on each iteration. Near convergence a
+//  chord step reuses the last LU with a residual solve; it counts as
+//  converged only if it also contracts. The start point is a linear
+//  prediction from the last two points after the last breakpoint. Then
+//  three checks, in order:
 //    1. Newton failed .............. h /= 8 and try again
 //    2. LTE ratio > 1 .............. h shrinks by the error ratio
 //    3. a logic input crosses inside the step (cross()) .. land just past it
@@ -20,7 +25,18 @@
 //  BREAKPOINTS. Source edges, PWM edges, MCU wake times, relay moves and
 //  button bounce are time points the step lands on exactly. After a
 //  breakpoint the next two steps use backward Euler (no trapezoid ringing)
-//  and start small (h = clamp(h/64)). Trapezoid steps after that.
+//  and start at hReg/64 (hReg: the last clean, untruncated step plan).
+//  Trapezoid steps after that. The first step after a breakpoint starts
+//  Newton from the solution seen at the last edge with the same switching
+//  state (startCache, keyed by Dev.sig()), so periodic circuits converge
+//  in one or two iterations at their edges.
+//
+//  CROSSINGS. cross() gives the fraction of the step where a logic input
+//  passes its threshold (a Hermite quadratic when the previous point is
+//  known, devbase CROSS). The retry aims 0.5 % short of a far crossing, and
+//  crossHint keeps the next step from jumping over it. A fraction that does
+//  not change when the step shrinks means the input jumped at the step
+//  start; that step is accepted.
 //
 //  START. The first advance solves the power-on state: capacitors at their
 //  ic (0 V), inductors at 0 A, motors still. That is a backward Euler step of
@@ -39,10 +55,12 @@
 //    TYPES ............... element type → device class
 //    createEngine / Engine
 //    _build .............. devices, unknowns, matrix entries, LU
-//    _newton ............. one Newton-Raphson solve
+//    _newton ............. one Newton-Raphson solve (base stamps, chord steps)
+//    _nlUnknowns ......... the unknowns nonlinear devices read (first-iteration exit)
 //    _solveRobust ........ Newton, then gmin stepping, then source stepping
 //    _start / _initSolve / dcop
-//    advanceTo ........... the time loop with step control
+//    advanceTo ........... the time loop with step control, crossHint, predictor
+//    startCache / pendingSig  the start point at a breakpoint
 //    _accept ............. state update, digital, breakpoints, MCUs, meters
 //    frame / drainEvents / drainSerial
 //    setParam / patch / press / repair / reset
@@ -119,16 +137,17 @@ export class Engine {
       return e;
     };
     const devs = [], warnings = [];
-    let cur = null;
+    let cur = null, used = null;
+    const note = (i) => { if (i >= 0) used.push(i); return i; };
     const b = {
       node: (term) => {
         const n = cur.nodes ? cur.nodes[term] : undefined;
-        if (n == null || n < 0 || n >= N) { nodeLike.push(true); return nUnk++; }
-        return n === 0 ? -1 : n - 1;
+        if (n == null || n < 0 || n >= N) { nodeLike.push(true); return note(nUnk++); }
+        return note(n === 0 ? -1 : n - 1);
       },
       has: (term) => cur.nodes && cur.nodes[term] != null,
-      internal: () => { nodeLike.push(true); return nUnk++; },
-      branch: () => { nodeLike.push(false); return nUnk++; },
+      internal: () => { nodeLike.push(true); return note(nUnk++); },
+      branch: () => { nodeLike.push(false); return note(nUnk++); },
       entry,
       pair: (a, c) => [entry(a, a), entry(a, c), entry(c, a), entry(c, c)],
       branchPair: (a, c, k) => [entry(a, k), entry(c, k), entry(k, a), entry(k, c), entry(k, k)],
@@ -137,7 +156,7 @@ export class Engine {
       const C = TYPES[el.type];
       if (!C) { warnings.push(`unknown element type "${el.type}" (${el.id})`); continue; }
       let d;
-      try { d = new C(el, this); cur = el; d.setup(b); }
+      try { d = new C(el, this); cur = el; used = []; d.setup(b); d.unknowns = used; }
       catch (e) { warnings.push(`${el.id}: ${e.message}`); continue; }
       devs.push(d);
     }
@@ -190,17 +209,10 @@ export class Engine {
       th: this.th, nh: 0, eng: this,
     };
   }
-  // unknowns that nonlinear devices read (their rows in the matrix)
+  // unknowns that nonlinear devices read (recorded by the builder in setup)
   _nlUnknowns() {
     const set = new Set();
-    const rowsOf = new Map();
-    for (const [k] of this.emap) { const r = Math.floor(k / BIG); rowsOf.set(r, true); }
-    for (const d of this.iterDevs) {
-      for (const key of Object.keys(d)) {
-        const v = d[key];
-        if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < this.n && /^(i[a-z_]*|n_[a-z]+|nd|k|kw)$/.test(key)) set.add(v);
-      }
-    }
+    for (const d of this.iterDevs) for (const i of d.unknowns || []) set.add(i);
     return Int32Array.from(set);
   }
   entryOf(r, c) {
@@ -424,8 +436,26 @@ export class Engine {
         // predictor: linear extrapolation of the last two points (not across a breakpoint)
         const xt = this.xTrial, xa = this.xAcc;
         if (this.sinceBp >= 2 && this.hLast > 0) {
-          const xp = this.xPrev, k = h / this.hLast, nn = this.n;
+          const xp = this.xPrev, nn = this.n;
+          let k = h / this.hLast;
           for (let i = 0; i < nn; i++) xt[i] = xa[i] + (xa[i] - xp[i]) * k;
+          // look ahead: if the predicted end state crosses a logic threshold,
+          // aim the step at the predicted crossing before solving
+          if (tries === 1 && this.digitalDevs.length) {
+            CROSS.xp = xp; CROSS.k = k;
+            let fr = 2;
+            for (const d of this.digitalDevs) { const f = d.cross(xa, xt); if (f < fr) fr = f; }
+            CROSS.xp = null;
+            if (fr <= 1 && (1 - fr) * h > o.tTol) {
+              const hn = Math.max(o.dtMin, fr * h + o.tTol * 0.5);
+              if (hn < h) {
+                h = hn; toBp = false; cut = true;
+                s.h = h; s.t = t + h; s.th[0] = t + h;
+                k = h / this.hLast;
+                for (let i = 0; i < nn; i++) xt[i] = xa[i] + (xa[i] - xp[i]) * k;
+              }
+            }
+          }
         } else {
           xt.set(xa);
           // right after a breakpoint: start from the solution seen last time

@@ -24,7 +24,9 @@
 //    VT / KELVIN ......... thermal voltage at 300 K
 //    softplus / sigmoid .. smooth limits used by the behavioural models
 //    pnjlim .............. junction voltage limiting for Newton steps
+//    CROSS / crossFrac ... crossing fraction (linear, or Hermite quadratic)
 //    Dev ................. the base class with default hooks and meters
+//                          (nonlinear, metered, digitalDev flags; sig())
 //    Builder hooks ....... b.node / b.internal / b.branch / b.entry / b.pair
 //    stampG / stampI / stampVCCS / stampBranch  the stamp helpers
 //    dd2 / dd3 / lteRatio  divided differences for step control
