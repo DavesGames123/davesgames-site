@@ -25,7 +25,7 @@
 //    setTopology ............ which set paths change connectivity
 //    opProgram / opMeta ..... MCU programs, title / notes / sim / nextId
 //    applyOp ................ dispatcher, batch
-//    createStore ............ history, merge window (600 ms), newId, load
+//    createStore ............ history, merge window (600 ms), history:false, newId, load
 // ============================================================================
 import { COLLECTION, ID_RE, PREFIX, idNumber, kindOfId, lookupDef } from './doc.js';
 import { parseHoleId } from './space.js';
@@ -293,6 +293,10 @@ export function createStore(doc, bus, opts = {}) {
         return null;
       }
       cur = r.doc;
+      if (o.history === false) {          // momentary edits (a held button): no undo step
+        emit([op], r.topology, 'user');
+        return r.inverse;
+      }
       redoStack = [];
       const t = now();
       const top = undoStack[undoStack.length - 1];
