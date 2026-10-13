@@ -1,0 +1,286 @@
+{
+ "meta": {
+  "key": "nano-joystick",
+  "title": "Joystick and PWM LEDs",
+  "level": 3,
+  "blurb": "A Nano-layout board reads a two-axis joystick on A0 and A1 and sets two LEDs by PWM: brightness is the distance from centre.",
+  "see": [
+   "At rest both LEDs are dark.",
+   "Push the stick along X: the green LED brightens, the blue one stays dark. Y works the same way.",
+   "Press the stick (SW): both LEDs go full on."
+  ],
+  "script": [
+   {
+    "at": 0.4,
+    "part": "p3",
+    "key": "x",
+    "value": 0.95
+   },
+   {
+    "at": 1.2,
+    "part": "p3",
+    "key": "sw",
+    "value": true
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.35,
+    "part": "p11",
+    "quantity": "vis.b",
+    "max": 0.03
+   },
+   {
+    "at": 0.35,
+    "part": "p15",
+    "quantity": "vis.b",
+    "max": 0.03
+   },
+   {
+    "at": 1,
+    "part": "p11",
+    "quantity": "vis.b",
+    "min": 0.4
+   },
+   {
+    "at": 1,
+    "part": "p15",
+    "quantity": "vis.b",
+    "max": 0.03
+   },
+   {
+    "at": 1.5,
+    "part": "p15",
+    "quantity": "vis.b",
+    "min": 0.35
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Joystick and PWM LEDs",
+  "notes": "A Nano-layout board reads a two-axis joystick on A0 and A1 and sets two LEDs by PWM: brightness is the distance from centre.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-nano",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {},
+    "label": "NANO"
+   },
+   {
+    "id": "p3",
+    "def": "joystick",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "x": 0.5,
+     "y": 0.5
+    },
+    "label": "Stick"
+   },
+   {
+    "id": "p10",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 40.64,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R LED X"
+   },
+   {
+    "id": "p11",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 50.8,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "LED X"
+   },
+   {
+    "id": "p14",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 58.42,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R LED Y"
+   },
+   {
+    "id": "p15",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 68.58,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "blue"
+    },
+    "label": "LED Y"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w4",
+    "a": {
+     "hole": "b1:b42"
+    },
+    "b": {
+     "hole": "b1:b21"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:b43"
+    },
+    "b": {
+     "hole": "b1:b20"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:b44"
+    },
+    "b": {
+     "hole": "b1:j14"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:b41"
+    },
+    "b": {
+     "hole": "b1:b13"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:b40"
+    },
+    "b": {
+     "hole": "b1:b11"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j13"
+    },
+    "b": {
+     "hole": "b1:BN10"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "hole": "b1:j53"
+    },
+    "b": {
+     "hole": "b1:BN43"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:j17"
+    },
+    "b": {
+     "hole": "b1:i48"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w16",
+    "a": {
+     "hole": "b1:j60"
+    },
+    "b": {
+     "hole": "b1:BN49"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:j18"
+    },
+    "b": {
+     "hole": "b1:i55"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// Two LEDs follow the joystick: brightness = distance from the centre.\nconst int VRX = A0, VRY = A1, SW = 2;\nconst int LED_X = 5, LED_Y = 6;\n\nint level(int raw) {\n  int d = abs(raw - 512);          // 0 at the centre\n  return constrain(d / 2, 0, 255);\n}\n\nvoid setup() {\n  pinMode(SW, INPUT_PULLUP);\n  pinMode(LED_X, OUTPUT);\n  pinMode(LED_Y, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int x = analogRead(VRX), y = analogRead(VRY);\n  bool pressed = digitalRead(SW) == LOW;\n  analogWrite(LED_X, pressed ? 255 : level(x));\n  analogWrite(LED_Y, pressed ? 255 : level(y));\n  delay(20);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 18
+ }
+}

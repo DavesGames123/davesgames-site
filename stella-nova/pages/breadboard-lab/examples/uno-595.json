@@ -1,0 +1,706 @@
+{
+ "meta": {
+  "key": "uno-595",
+  "title": "Shift register scanner",
+  "level": 3,
+  "blurb": "Three pins drive eight LEDs through a 74HC595: shiftOut clocks a byte in, the latch shows it.",
+  "see": [
+   "A single light sweeps back and forth across the eight LEDs.",
+   "The analyzer shows data (D0), the shift clock (D1, eight pulses per byte) and the latch (D2, once per step)."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 2.3,
+    "part": "p16",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p20",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p24",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p28",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p32",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p36",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p40",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "part": "p44",
+    "quantity": "i",
+    "agg": "max",
+    "win": 2.2,
+    "min": 0.008
+   },
+   {
+    "at": 2.3,
+    "probe": "m47",
+    "quantity": "freq:d2",
+    "value": 8.298755186721992,
+    "tol": 0.08,
+    "win": 2
+   },
+   {
+    "at": 2.3,
+    "probe": "m47",
+    "quantity": "rises:d1",
+    "min": 100,
+    "win": 2
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Shift register scanner",
+  "notes": "Three pins drive eight LEDs through a 74HC595: shiftOut clocks a byte in, the latch shows it.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p5",
+    "def": "ic-74hc595",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 595"
+   },
+   {
+    "id": "p15",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 5.08,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QA"
+   },
+   {
+    "id": "p16",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 15.24,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QA"
+   },
+   {
+    "id": "p19",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QB"
+   },
+   {
+    "id": "p20",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QB"
+   },
+   {
+    "id": "p23",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QC"
+   },
+   {
+    "id": "p24",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 45.72,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QC"
+   },
+   {
+    "id": "p27",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 50.8,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QD"
+   },
+   {
+    "id": "p28",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 60.96,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QD"
+   },
+   {
+    "id": "p31",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 5.08,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QE"
+   },
+   {
+    "id": "p32",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 15.24,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QE"
+   },
+   {
+    "id": "p35",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QF"
+   },
+   {
+    "id": "p36",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QF"
+   },
+   {
+    "id": "p39",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QG"
+   },
+   {
+    "id": "p40",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 45.72,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QG"
+   },
+   {
+    "id": "p43",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 50.8,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R QH"
+   },
+   {
+    "id": "p44",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 60.96,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "QH"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "part": "p2",
+     "pin": "5V"
+    },
+    "b": {
+     "hole": "b1:TP7"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:TN7"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j27"
+    },
+    "b": {
+     "hole": "b1:BN21"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:a23"
+    },
+    "b": {
+     "hole": "b1:TN18"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:a26"
+    },
+    "b": {
+     "hole": "b1:TP20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "part": "p2",
+     "pin": "D11"
+    },
+    "b": {
+     "hole": "b1:b22"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "part": "p2",
+     "pin": "D12"
+    },
+    "b": {
+     "hole": "b1:b25"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "part": "p2",
+     "pin": "D8"
+    },
+    "b": {
+     "hole": "b1:b24"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:a39"
+    },
+    "b": {
+     "hole": "b1:TN31"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w18",
+    "a": {
+     "hole": "b1:d21"
+    },
+    "b": {
+     "hole": "b1:b34"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "hole": "b1:a45"
+    },
+    "b": {
+     "hole": "b1:TN36"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:h20"
+    },
+    "b": {
+     "hole": "b1:b40"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w25",
+    "a": {
+     "hole": "b1:a51"
+    },
+    "b": {
+     "hole": "b1:TN41"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w26",
+    "a": {
+     "hole": "b1:h21"
+    },
+    "b": {
+     "hole": "b1:b46"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w29",
+    "a": {
+     "hole": "b1:a57"
+    },
+    "b": {
+     "hole": "b1:TN46"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w30",
+    "a": {
+     "hole": "b1:h22"
+    },
+    "b": {
+     "hole": "b1:b52"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w33",
+    "a": {
+     "hole": "b1:j39"
+    },
+    "b": {
+     "hole": "b1:BN31"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w34",
+    "a": {
+     "hole": "b1:h23"
+    },
+    "b": {
+     "hole": "b1:i34"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w37",
+    "a": {
+     "hole": "b1:j45"
+    },
+    "b": {
+     "hole": "b1:BN36"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w38",
+    "a": {
+     "hole": "b1:h24"
+    },
+    "b": {
+     "hole": "b1:i40"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w41",
+    "a": {
+     "hole": "b1:j51"
+    },
+    "b": {
+     "hole": "b1:BN41"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w42",
+    "a": {
+     "hole": "b1:h25"
+    },
+    "b": {
+     "hole": "b1:i46"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w45",
+    "a": {
+     "hole": "b1:j57"
+    },
+    "b": {
+     "hole": "b1:BN46"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w46",
+    "a": {
+     "hole": "b1:h26"
+    },
+    "b": {
+     "hole": "b1:i52"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m47",
+    "type": "logic",
+    "place": {
+     "x": -30,
+     "z": 72,
+     "rot": 0
+    },
+    "leads": {
+     "d0": {
+      "hole": "b1:c22"
+     },
+     "d1": {
+      "hole": "b1:c25"
+     },
+     "d2": {
+      "hole": "b1:c24"
+     },
+     "gnd": {
+      "hole": "b1:BN49"
+     }
+    },
+    "settings": {
+     "threshold": 2.5,
+     "rate": 1000000
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// A light that sweeps across eight LEDs through a 74HC595 shift register.\nconst int DATA = 11;\nconst int CLOCK = 12;\nconst int LATCH = 8;\n\nbyte pattern = 1;\nint dir = 1;\n\nvoid show(byte bits) {\n  digitalWrite(LATCH, LOW);\n  shiftOut(DATA, CLOCK, MSBFIRST, bits);\n  digitalWrite(LATCH, HIGH);\n}\n\nvoid setup() {\n  pinMode(DATA, OUTPUT);\n  pinMode(CLOCK, OUTPUT);\n  pinMode(LATCH, OUTPUT);\n  show(0);\n}\n\nvoid loop() {\n  show(pattern);\n  delay(120);\n  if (dir > 0) pattern = pattern << 1; else pattern = pattern >> 1;\n  if (pattern == 0x80 || pattern == 0x01) dir = -dir;\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 48
+ }
+}

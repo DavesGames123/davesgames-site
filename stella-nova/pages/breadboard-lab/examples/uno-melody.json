@@ -1,0 +1,143 @@
+{
+ "meta": {
+  "key": "uno-melody",
+  "title": "Melody with tone()",
+  "level": 2,
+  "blurb": "tone() drives a passive buzzer through 100 Ω: an arpeggio C E G C, a rest, and a run up to C again.",
+  "see": [
+   "Press run and unmute: the tune plays through the speakers, then repeats after a pause.",
+   "The inspector shows the buzzer frequency of each note: 262, 330, 392, 523 Hz …"
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.15,
+    "part": "p5",
+    "quantity": "vis.freq",
+    "value": 262,
+    "tol": 0.01
+   },
+   {
+    "at": 0.45,
+    "part": "p5",
+    "quantity": "vis.freq",
+    "value": 330,
+    "tol": 0.01
+   },
+   {
+    "at": 0.8,
+    "part": "p5",
+    "quantity": "vis.freq",
+    "value": 392,
+    "tol": 0.01
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Melody with tone()",
+  "notes": "tone() drives a passive buzzer through 100 Ω: an arpeggio C E G C, a rest, and a run up to C again.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p4",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 100
+    },
+    "label": "R 100"
+   },
+   {
+    "id": "p5",
+    "def": "buzzer-passive",
+    "place": {
+     "on": "b1",
+     "x": -20.32,
+     "z": -3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "BZ1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "D8"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:a27"
+    },
+    "b": {
+     "hole": "b1:TN21"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:TN5"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// Play a short tune with tone(), then wait and play it again.\nconst int BUZZER = 8;\n\nconst int NOTE_C4 = 262, NOTE_D4 = 294, NOTE_E4 = 330, NOTE_F4 = 349;\nconst int NOTE_G4 = 392, NOTE_A4 = 440, NOTE_B4 = 494, NOTE_C5 = 523;\n\nint melody[] = { NOTE_C4, NOTE_E4, NOTE_G4, NOTE_C5, 0, NOTE_G4, NOTE_A4, NOTE_B4, NOTE_C5 };\nint beats[]  = { 4, 4, 4, 2, 8, 8, 8, 8, 2 };   // 4 = quarter note\n\nvoid setup() {\n  pinMode(BUZZER, OUTPUT);\n}\n\nvoid loop() {\n  int count = sizeof(melody) / sizeof(melody[0]);\n  for (int i = 0; i < count; i++) {\n    int ms = 1000 / beats[i];\n    if (melody[i] > 0) tone(BUZZER, melody[i], ms);\n    delay(ms * 13 / 10);\n    noTone(BUZZER);\n  }\n  delay(1500);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 8
+ }
+}

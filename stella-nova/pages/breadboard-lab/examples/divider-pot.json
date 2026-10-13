@@ -1,0 +1,249 @@
+{
+ "meta": {
+  "key": "divider-pot",
+  "title": "Pot as a divider and a rheostat",
+  "level": 1,
+  "blurb": "One pot divides 5 V for the meter; a second pot is a variable resistor in series with an LED.",
+  "see": [
+   "The meter reads the wiper voltage: 2.50 V at mid travel. Turn the left knob and it follows.",
+   "The right pot sets the LED current: near 0 it is bright, near the middle it is dim."
+  ],
+  "script": [
+   {
+    "at": 0.6,
+    "part": "p5",
+    "key": "pos",
+    "value": 0.2
+   },
+   {
+    "at": 0.6,
+    "part": "p9",
+    "key": "pos",
+    "value": 0.5
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.5,
+    "probe": "m8",
+    "quantity": "value",
+    "value": 2.5,
+    "tol": 0.02
+   },
+   {
+    "at": 0.5,
+    "part": "p12",
+    "quantity": "i",
+    "value": 0.004097222222222223,
+    "tol": 0.12
+   },
+   {
+    "at": 1,
+    "probe": "m8",
+    "quantity": "value",
+    "value": 1,
+    "tol": 0.02
+   },
+   {
+    "at": 1,
+    "part": "p12",
+    "quantity": "i",
+    "value": 0.000603448275862069,
+    "tol": 0.15
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Pot as a divider and a rheostat",
+  "notes": "One pot divides 5 V for the meter; a second pot is a variable resistor in series with an LED.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.5
+    },
+    "label": "Divider"
+   },
+   {
+    "id": "p9",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.05
+    },
+    "label": "Rheostat"
+   },
+   {
+    "id": "p11",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 0,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1"
+   },
+   {
+    "id": "p12",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 10.16,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:b10"
+    },
+    "b": {
+     "hole": "b1:TN5"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:b14"
+    },
+    "b": {
+     "hole": "b1:TP12"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:TP20"
+    },
+    "b": {
+     "hole": "b1:b30"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a37"
+    },
+    "b": {
+     "hole": "b1:TN30"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m8",
+    "type": "dmm",
+    "place": {
+     "x": 140,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:c12"
+     },
+     "black": {
+      "hole": "b1:TN17"
+     }
+    },
+    "settings": {
+     "mode": "V",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 14
+ }
+}

@@ -1,0 +1,345 @@
+{
+ "meta": {
+  "key": "relay-lamp",
+  "title": "Relay switches a lamp",
+  "level": 3,
+  "blurb": "An NPN transistor drives a 5 V relay coil; the relay contacts switch a 6 V lamp on its own battery. A diode clamps the coil.",
+  "see": [
+   "Slide the switch: the relay clicks and the lamp lights.",
+   "The lamp current flows only in the 6 V loop: the 5 V side never carries it.",
+   "Slide back: the relay drops out and the diode catches the coil spike."
+  ],
+  "script": [
+   {
+    "at": 0.3,
+    "part": "p7",
+    "key": "pos",
+    "value": 1
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.25,
+    "part": "p20",
+    "quantity": "i",
+    "max": 0.001
+   },
+   {
+    "at": 0.6,
+    "part": "p16",
+    "quantity": "vis.contact",
+    "equals": "no"
+   },
+   {
+    "at": 1.2,
+    "part": "p20",
+    "quantity": "i",
+    "min": 0.06
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Relay switches a lamp",
+  "notes": "An NPN transistor drives a 5 V relay coil; the relay contacts switch a 6 V lamp on its own battery. A diode clamps the coil.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "switch-slide",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "pos": 0
+    },
+    "label": "S1"
+   },
+   {
+    "id": "p11",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -6.35,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "Rb 1k"
+   },
+   {
+    "id": "p12",
+    "def": "npn-2n2222",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Q1"
+   },
+   {
+    "id": "p14",
+    "def": "diode-1n4148",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {},
+    "label": "D1"
+   },
+   {
+    "id": "p16",
+    "def": "relay-5v",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "K1"
+   },
+   {
+    "id": "p19",
+    "def": "battery-aa4",
+    "place": {
+     "on": null,
+     "x": 128,
+     "z": 80,
+     "rot": 0
+    },
+    "params": {},
+    "label": "6 V"
+   },
+   {
+    "id": "p20",
+    "def": "lamp-6v",
+    "place": {
+     "on": null,
+     "x": 60,
+     "z": 66,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Lamp"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:a10"
+    },
+    "b": {
+     "hole": "b1:TN7"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a12"
+    },
+    "b": {
+     "hole": "b1:TP9"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:b11"
+    },
+    "b": {
+     "hole": "b1:e17"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a20"
+    },
+    "b": {
+     "hole": "b1:TN15"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:a26"
+    },
+    "b": {
+     "hole": "b1:TP20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:j30"
+    },
+    "b": {
+     "hole": "b1:BP24"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w18",
+    "a": {
+     "hole": "b1:b30"
+    },
+    "b": {
+     "hole": "b1:c22"
+    },
+    "color": "#2f80d6",
+    "style": "flat"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "part": "p19",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:j32"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:j36"
+    },
+    "b": {
+     "part": "p20",
+     "pin": "1"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w23",
+    "a": {
+     "part": "p20",
+     "pin": "2"
+    },
+    "b": {
+     "hole": "b1:BN36"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w24",
+    "a": {
+     "part": "p19",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:BN42"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 25
+ }
+}

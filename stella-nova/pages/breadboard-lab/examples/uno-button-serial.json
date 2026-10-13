@@ -1,0 +1,155 @@
+{
+ "meta": {
+  "key": "uno-button-serial",
+  "title": "Button and serial monitor",
+  "level": 2,
+  "blurb": "A button on pin 2 with the internal pull-up (INPUT_PULLUP), a 30 ms debounce in code, and a count on Serial.",
+  "see": [
+   "Open CODE and the serial monitor: \"Ready\" prints at start.",
+   "Each click of the button prints \"Press 1\", \"Press 2\" and so on; the L LED shows the button state.",
+   "No resistor is needed: the pin pulls itself up to 5 V and the button pulls it to ground."
+  ],
+  "script": [
+   {
+    "at": 0.3,
+    "part": "p3",
+    "key": "pressed",
+    "value": true
+   },
+   {
+    "at": 0.5,
+    "part": "p3",
+    "key": "pressed",
+    "value": false
+   },
+   {
+    "at": 0.8,
+    "part": "p3",
+    "key": "pressed",
+    "value": true
+   },
+   {
+    "at": 1,
+    "part": "p3",
+    "key": "pressed",
+    "value": false
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.2,
+    "serial": "p2",
+    "match": "Ready"
+   },
+   {
+    "at": 0.45,
+    "part": "p2",
+    "quantity": "vis.leds.L",
+    "min": 0.05
+   },
+   {
+    "at": 0.6,
+    "serial": "p2",
+    "match": "Press 1"
+   },
+   {
+    "at": 1.2,
+    "serial": "p2",
+    "match": "Press 2"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Button and serial monitor",
+  "notes": "A button on pin 2 with the internal pull-up (INPUT_PULLUP), a 30 ms debounce in code, and a count on Serial.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p3",
+    "def": "button-6mm",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "S1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "D2"
+    },
+    "b": {
+     "hole": "b1:j20"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:a22"
+    },
+    "b": {
+     "hole": "b1:TN17"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:TN5"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// Count button presses with a debounce, and report them on Serial.\nconst int BUTTON = 2;\nconst int LED = 13;\nconst unsigned long DEBOUNCE_MS = 30;\n\nint lastReading = HIGH;\nint state = HIGH;\nunsigned long lastChange = 0;\nint presses = 0;\n\nvoid setup() {\n  pinMode(BUTTON, INPUT_PULLUP);\n  pinMode(LED, OUTPUT);\n  Serial.begin(9600);\n  Serial.println(\"Ready: press the button\");\n}\n\nvoid loop() {\n  int reading = digitalRead(BUTTON);\n  if (reading != lastReading) {\n    lastChange = millis();\n    lastReading = reading;\n  }\n  if (millis() - lastChange >= DEBOUNCE_MS && reading != state) {\n    state = reading;\n    digitalWrite(LED, state == LOW ? HIGH : LOW);\n    if (state == LOW) {\n      presses++;\n      Serial.print(\"Press \");\n      Serial.println(presses);\n    }\n  }\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 7
+ }
+}

@@ -1,0 +1,305 @@
+{
+ "meta": {
+  "key": "esp32-traffic",
+  "title": "ESP32 traffic light",
+  "level": 3,
+  "blurb": "A 30-pin ESP32 devkit on 3.3 V logic runs a traffic light on GPIO 25, 26 and 27. Its rows sit in b and i, so a and j stay free for wires.",
+  "see": [
+   "Red for 3 s, red and amber for 1 s, green for 3 s, amber for 1 s, then again.",
+   "The meter on GPIO 25 reads about 3.2 V when it is high: 3.3 V logic, not 5 V.",
+   "The serial monitor names each phase."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 1,
+    "part": "p5",
+    "quantity": "i",
+    "min": 0.003
+   },
+   {
+    "at": 1,
+    "part": "p9",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1,
+    "part": "p13",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1,
+    "probe": "m16",
+    "quantity": "value",
+    "min": 3,
+    "max": 3.35
+   },
+   {
+    "at": 3.5,
+    "part": "p5",
+    "quantity": "i",
+    "min": 0.003
+   },
+   {
+    "at": 3.5,
+    "part": "p9",
+    "quantity": "i",
+    "min": 0.003
+   },
+   {
+    "at": 5,
+    "part": "p5",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 5,
+    "part": "p13",
+    "quantity": "i",
+    "min": 0.003
+   },
+   {
+    "at": 5,
+    "probe": "m16",
+    "quantity": "value",
+    "max": 0.05
+   },
+   {
+    "at": 5,
+    "serial": "p2",
+    "match": "GREEN"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "ESP32 traffic light",
+  "notes": "A 30-pin ESP32 devkit on 3.3 V logic runs a traffic light on GPIO 25, 26 and 27. Its rows sit in b and i, so a and j stay free for wires.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-esp32",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {},
+    "label": "ESP32"
+   },
+   {
+    "id": "p4",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R RED"
+   },
+   {
+    "id": "p5",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "RED"
+   },
+   {
+    "id": "p8",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R YELLOW"
+   },
+   {
+    "id": "p9",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 45.72,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "yellow"
+    },
+    "label": "YELLOW"
+   },
+   {
+    "id": "p12",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 50.8,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R GREEN"
+   },
+   {
+    "id": "p13",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 60.96,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "GREEN"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "hole": "b1:a33"
+    },
+    "b": {
+     "hole": "b1:TN26"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:a45"
+    },
+    "b": {
+     "hole": "b1:TN36"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a27"
+    },
+    "b": {
+     "hole": "b1:b40"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:a51"
+    },
+    "b": {
+     "hole": "b1:TN41"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:a28"
+    },
+    "b": {
+     "hole": "b1:b46"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:a57"
+    },
+    "b": {
+     "hole": "b1:TN46"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:a29"
+    },
+    "b": {
+     "hole": "b1:b52"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m16",
+    "type": "dmm",
+    "place": {
+     "x": 140,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:e40"
+     },
+     "black": {
+      "hole": "b1:TN47"
+     }
+    },
+    "settings": {
+     "mode": "V",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// A traffic light on 3.3 V logic. Serial prints each phase.\nconst int RED = 25;\nconst int YELLOW = 26;\nconst int GREEN = 27;\n\nvoid light(int r, int y, int g, const char* name, int ms) {\n  digitalWrite(RED, r);\n  digitalWrite(YELLOW, y);\n  digitalWrite(GREEN, g);\n  Serial.printf(\"%-6s %d ms\\n\", name, ms);\n  delay(ms);\n}\n\nvoid setup() {\n  pinMode(RED, OUTPUT);\n  pinMode(YELLOW, OUTPUT);\n  pinMode(GREEN, OUTPUT);\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  light(HIGH, LOW, LOW, \"RED\", 3000);\n  light(HIGH, HIGH, LOW, \"READY\", 1000);\n  light(LOW, LOW, HIGH, \"GREEN\", 3000);\n  light(LOW, HIGH, LOW, \"AMBER\", 1000);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 17
+ }
+}

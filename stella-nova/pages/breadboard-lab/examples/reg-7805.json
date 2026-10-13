@@ -1,0 +1,351 @@
+{
+ "meta": {
+  "key": "reg-7805",
+  "title": "7805 regulator",
+  "level": 2,
+  "blurb": "A 9 V battery through a 7805 linear regulator gives a steady 5 V rail for two LEDs.",
+  "see": [
+   "The meter on the output rail reads 5.00 V.",
+   "The battery charge falls slowly while it runs (see the inspector).",
+   "Set the battery charge to 0: its voltage sags to about 6 V, below the 7 V the 7805 needs, and the output drops out."
+  ],
+  "script": [
+   {
+    "at": 0.5,
+    "part": "p2",
+    "key": "soc",
+    "value": 0
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.4,
+    "probe": "m23",
+    "quantity": "value",
+    "value": 5,
+    "tol": 0.015
+   },
+   {
+    "at": 0.4,
+    "part": "p2",
+    "quantity": "vis.v",
+    "value": 9,
+    "tol": 0.03
+   },
+   {
+    "at": 1,
+    "probe": "m23",
+    "quantity": "value",
+    "max": 4.8,
+    "min": 3
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "7805 regulator",
+  "notes": "A 9 V battery through a 7805 linear regulator gives a steady 5 V rail for two LEDs.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "battery-9v",
+    "place": {
+     "on": null,
+     "x": -105,
+     "z": 12,
+     "rot": 0
+    },
+    "params": {
+     "soc": 1
+    },
+    "label": "9 V"
+   },
+   {
+    "id": "p6",
+    "def": "reg-7805",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 7805"
+   },
+   {
+    "id": "p9",
+    "def": "cap-ceramic",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 2
+    },
+    "params": {
+     "c": 3.3e-7
+    },
+    "label": "C in"
+   },
+   {
+    "id": "p12",
+    "def": "cap-elec",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {
+     "c": 0.00001,
+     "vmax": 16
+    },
+    "label": "C out"
+   },
+   {
+    "id": "p15",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 10.16,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 330
+    },
+    "label": "R D1"
+   },
+   {
+    "id": "p16",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "D1"
+   },
+   {
+    "id": "p19",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 330
+    },
+    "label": "R D2"
+   },
+   {
+    "id": "p20",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 40.64,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "D2"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a20"
+    },
+    "b": {
+     "hole": "b1:TP15"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:a21"
+    },
+    "b": {
+     "hole": "b1:TN16"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:a18"
+    },
+    "b": {
+     "hole": "b1:TN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:d22"
+    },
+    "b": {
+     "hole": "b1:BP17"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:j30"
+    },
+    "b": {
+     "hole": "b1:BP24"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:j31"
+    },
+    "b": {
+     "hole": "b1:BN25"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:j41"
+    },
+    "b": {
+     "hole": "b1:BN33"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w18",
+    "a": {
+     "hole": "b1:BP27"
+    },
+    "b": {
+     "hole": "b1:i36"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "hole": "b1:j49"
+    },
+    "b": {
+     "hole": "b1:BN40"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:BP34"
+    },
+    "b": {
+     "hole": "b1:i44"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m23",
+    "type": "dmm",
+    "place": {
+     "x": 140,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:BP45"
+     },
+     "black": {
+      "hole": "b1:BN45"
+     }
+    },
+    "settings": {
+     "mode": "V",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 24
+ }
+}

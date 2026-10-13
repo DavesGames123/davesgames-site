@@ -1,0 +1,242 @@
+{
+ "meta": {
+  "key": "cc-limit",
+  "title": "Current limit saves the day",
+  "level": 2,
+  "blurb": "The bench supply is set to 5 V with a 100 mA limit. The red button shorts the rail to ground.",
+  "see": [
+   "Hold the red button: the supply drops into CC mode, the CC lamp lights and the display reads 0.100 A at almost 0 V.",
+   "The LED goes dark, but nothing burns: the limit holds the current.",
+   "Let go: the rail comes back to 5 V."
+  ],
+  "script": [
+   {
+    "at": 0.3,
+    "part": "p10",
+    "key": "pressed",
+    "value": true
+   },
+   {
+    "at": 0.8,
+    "part": "p10",
+    "key": "pressed",
+    "value": false
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.25,
+    "part": "p8",
+    "quantity": "i",
+    "value": 0.012727272727272726,
+    "tol": 0.1
+   },
+   {
+    "at": 0.6,
+    "part": "p2",
+    "quantity": "vis.cc",
+    "equals": true
+   },
+   {
+    "at": 0.6,
+    "part": "p2",
+    "quantity": "vis.a",
+    "value": 0.1,
+    "tol": 0.05
+   },
+   {
+    "at": 0.6,
+    "part": "p8",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1.1,
+    "part": "p2",
+    "quantity": "vis.cc",
+    "equals": false
+   },
+   {
+    "at": 1.1,
+    "part": "p8",
+    "quantity": "i",
+    "value": 0.012727272727272726,
+    "tol": 0.1
+   },
+   {
+    "at": 1.1,
+    "event": "cc"
+   },
+   {
+    "at": 1.1,
+    "noEvent": "damage"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Current limit saves the day",
+  "notes": "The bench supply is set to 5 V with a 100 mA limit. The red button shorts the rail to ground.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.1,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p6",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1"
+   },
+   {
+    "id": "p8",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "D1"
+   },
+   {
+    "id": "p10",
+    "def": "button-12mm",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {
+     "cap": "red"
+    },
+    "label": "SHORT"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:TP7"
+    },
+    "b": {
+     "hole": "b1:a10"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a15"
+    },
+    "b": {
+     "hole": "b1:TN11"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:TP32"
+    },
+    "b": {
+     "hole": "b1:a40"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "hole": "b1:j42"
+    },
+    "b": {
+     "hole": "b1:BN34"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 13
+ }
+}

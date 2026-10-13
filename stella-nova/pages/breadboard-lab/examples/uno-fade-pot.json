@@ -1,0 +1,202 @@
+{
+ "meta": {
+  "key": "uno-fade-pot",
+  "title": "Pot fades an LED",
+  "level": 2,
+  "blurb": "analogRead on A0 reads the pot (0 to 1023); analogWrite on pin 9 sets the LED brightness by PWM.",
+  "see": [
+   "Turn the pot: the LED brightness follows it.",
+   "Open the serial plotter: the line follows the reading.",
+   "A logic analyzer on pin 9 would show 490 Hz pulses whose width follows the pot."
+  ],
+  "script": [
+   {
+    "at": 0.6,
+    "part": "p3",
+    "key": "pos",
+    "value": 0.75
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.5,
+    "part": "p8",
+    "quantity": "vis.b",
+    "min": 0.07,
+    "max": 0.16
+   },
+   {
+    "at": 1,
+    "part": "p8",
+    "quantity": "vis.b",
+    "min": 0.26,
+    "max": 0.4
+   },
+   {
+    "at": 0.5,
+    "serial": "p2",
+    "match": "\\d"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Pot fades an LED",
+  "notes": "analogRead on A0 reads the pot (0 to 1023); analogWrite on pin 9 sets the LED brightness by PWM.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p3",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.25
+    },
+    "label": "Pot"
+   },
+   {
+    "id": "p7",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R D1"
+   },
+   {
+    "id": "p8",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "blue"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:b20"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "part": "p2",
+     "pin": "5V"
+    },
+    "b": {
+     "hole": "b1:b24"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "part": "p2",
+     "pin": "A0"
+    },
+    "b": {
+     "hole": "b1:b22"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a45"
+    },
+    "b": {
+     "hole": "b1:TN36"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "part": "p2",
+     "pin": "D9"
+    },
+    "b": {
+     "hole": "b1:b40"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "part": "p2",
+     "pin": "GND.2"
+    },
+    "b": {
+     "hole": "b1:TN40"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// The pot sets the LED brightness. Open the plotter to see the reading.\nconst int POT = A0;\nconst int LED = 9;\n\nvoid setup() {\n  pinMode(LED, OUTPUT);\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  int raw = analogRead(POT);          // 0..1023\n  int duty = map(raw, 0, 1023, 0, 255);\n  analogWrite(LED, duty);\n  Serial.print(\"pot:\");\n  Serial.print(raw);\n  Serial.print(\",duty:\");\n  Serial.println(duty);\n  delay(50);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 12
+ }
+}

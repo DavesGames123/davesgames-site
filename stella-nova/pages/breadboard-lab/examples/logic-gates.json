@@ -1,0 +1,644 @@
+{
+ "meta": {
+  "key": "logic-gates",
+  "title": "AND and OR gates",
+  "level": 2,
+  "blurb": "Two slide switches feed a 74HC08 (AND) and a 74HC32 (OR). The unused gate inputs are tied low, as they should be.",
+  "see": [
+   "Flip A and B through 00, 10, 11, 01: the green LED (AND) lights only for 11; the blue LED (OR) for all but 00.",
+   "The logic analyzer draws A, B, AND and OR as four timing rows: a truth table in time."
+  ],
+  "script": [
+   {
+    "at": 0.25,
+    "part": "p31",
+    "key": "pos",
+    "value": 1
+   },
+   {
+    "at": 0.5,
+    "part": "p32",
+    "key": "pos",
+    "value": 1
+   },
+   {
+    "at": 0.75,
+    "part": "p31",
+    "key": "pos",
+    "value": 0
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.2,
+    "part": "p17",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 0.2,
+    "part": "p29",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 0.2,
+    "probe": "m41",
+    "quantity": "level:d2",
+    "equals": 0
+   },
+   {
+    "at": 0.2,
+    "probe": "m41",
+    "quantity": "level:d3",
+    "equals": 0
+   },
+   {
+    "at": 0.45,
+    "part": "p17",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 0.45,
+    "part": "p29",
+    "quantity": "i",
+    "min": 0.004
+   },
+   {
+    "at": 0.45,
+    "probe": "m41",
+    "quantity": "level:d2",
+    "equals": 0
+   },
+   {
+    "at": 0.45,
+    "probe": "m41",
+    "quantity": "level:d3",
+    "equals": 1
+   },
+   {
+    "at": 0.7,
+    "part": "p17",
+    "quantity": "i",
+    "min": 0.004
+   },
+   {
+    "at": 0.7,
+    "part": "p29",
+    "quantity": "i",
+    "min": 0.004
+   },
+   {
+    "at": 0.7,
+    "probe": "m41",
+    "quantity": "level:d2",
+    "equals": 1
+   },
+   {
+    "at": 0.7,
+    "probe": "m41",
+    "quantity": "level:d3",
+    "equals": 1
+   },
+   {
+    "at": 0.95,
+    "part": "p17",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 0.95,
+    "part": "p29",
+    "quantity": "i",
+    "min": 0.004
+   },
+   {
+    "at": 0.95,
+    "probe": "m41",
+    "quantity": "level:d2",
+    "equals": 0
+   },
+   {
+    "at": 0.95,
+    "probe": "m41",
+    "quantity": "level:d3",
+    "equals": 1
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "AND and OR gates",
+  "notes": "Two slide switches feed a 74HC08 (AND) and a 74HC32 (OR). The unused gate inputs are tied low, as they should be.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-74hc08",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 AND"
+   },
+   {
+    "id": "p16",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -50.8,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "r": 470
+    }
+   },
+   {
+    "id": "p17",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -60.96,
+     "z": 11.43,
+     "rot": 2
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "A AND B"
+   },
+   {
+    "id": "p19",
+    "def": "ic-74hc32",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U2 OR"
+   },
+   {
+    "id": "p28",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 0,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "r": 470
+    }
+   },
+   {
+    "id": "p29",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -10.16,
+     "z": 11.43,
+     "rot": 2
+    },
+    "params": {
+     "color": "blue"
+    },
+    "label": "A OR B"
+   },
+   {
+    "id": "p31",
+    "def": "switch-slide",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "pos": 0
+    },
+    "label": "A"
+   },
+   {
+    "id": "p32",
+    "def": "switch-slide",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "pos": 0
+    },
+    "label": "B"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP7"
+    },
+    "b": {
+     "hole": "b1:a10"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a11"
+    },
+    "b": {
+     "hole": "b1:TN8"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:a12"
+    },
+    "b": {
+     "hole": "b1:TN9"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:a14"
+    },
+    "b": {
+     "hole": "b1:TN10"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "hole": "b1:a15"
+    },
+    "b": {
+     "hole": "b1:TN11"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:j13"
+    },
+    "b": {
+     "hole": "b1:BN10"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:j14"
+    },
+    "b": {
+     "hole": "b1:BN11"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:j16"
+    },
+    "b": {
+     "hole": "b1:BN12"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w18",
+    "a": {
+     "hole": "b1:j7"
+    },
+    "b": {
+     "hole": "b1:BN5"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w20",
+    "a": {
+     "hole": "b1:TP24"
+    },
+    "b": {
+     "hole": "b1:a30"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "hole": "b1:a31"
+    },
+    "b": {
+     "hole": "b1:TN25"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:a32"
+    },
+    "b": {
+     "hole": "b1:TN26"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w23",
+    "a": {
+     "hole": "b1:a34"
+    },
+    "b": {
+     "hole": "b1:TN27"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w24",
+    "a": {
+     "hole": "b1:a35"
+    },
+    "b": {
+     "hole": "b1:TN28"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w25",
+    "a": {
+     "hole": "b1:j33"
+    },
+    "b": {
+     "hole": "b1:BN26"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w26",
+    "a": {
+     "hole": "b1:j34"
+    },
+    "b": {
+     "hole": "b1:BN27"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w27",
+    "a": {
+     "hole": "b1:j36"
+    },
+    "b": {
+     "hole": "b1:BN29"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w30",
+    "a": {
+     "hole": "b1:j27"
+    },
+    "b": {
+     "hole": "b1:BN21"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w33",
+    "a": {
+     "hole": "b1:a40"
+    },
+    "b": {
+     "hole": "b1:TN32"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w34",
+    "a": {
+     "hole": "b1:a42"
+    },
+    "b": {
+     "hole": "b1:TP34"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w35",
+    "a": {
+     "hole": "b1:a46"
+    },
+    "b": {
+     "hole": "b1:TN37"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w36",
+    "a": {
+     "hole": "b1:a48"
+    },
+    "b": {
+     "hole": "b1:TP39"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w37",
+    "a": {
+     "hole": "b1:b41"
+    },
+    "b": {
+     "hole": "b1:g10"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w38",
+    "a": {
+     "hole": "b1:d41"
+    },
+    "b": {
+     "hole": "b1:g30"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w39",
+    "a": {
+     "hole": "b1:b47"
+    },
+    "b": {
+     "hole": "b1:g11"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w40",
+    "a": {
+     "hole": "b1:d47"
+    },
+    "b": {
+     "hole": "b1:g31"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m41",
+    "type": "logic",
+    "place": {
+     "x": -30,
+     "z": 72,
+     "rot": 0
+    },
+    "leads": {
+     "d0": {
+      "hole": "b1:e41"
+     },
+     "d1": {
+      "hole": "b1:e47"
+     },
+     "d2": {
+      "hole": "b1:g12"
+     },
+     "d3": {
+      "hole": "b1:g32"
+     },
+     "gnd": {
+      "hole": "b1:BN45"
+     }
+    },
+    "settings": {
+     "threshold": 1.4,
+     "rate": 1000000
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 42
+ }
+}

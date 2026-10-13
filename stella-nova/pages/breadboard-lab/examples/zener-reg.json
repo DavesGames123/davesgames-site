@@ -1,0 +1,192 @@
+{
+ "meta": {
+  "key": "zener-reg",
+  "title": "Zener regulator",
+  "level": 2,
+  "blurb": "A 5.1 V zener and a 220 Ω resistor hold a load at about 5.1 V from 9 V.",
+  "see": [
+   "The meter reads about 5.1 V across the load.",
+   "Change the load from 1 kΩ to 470 Ω: the zener current falls, the voltage hardly moves.",
+   "Try 100 Ω: the zener runs out of current and the voltage drops."
+  ],
+  "script": [
+   {
+    "at": 0.5,
+    "part": "p8",
+    "key": "r",
+    "value": 470
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.4,
+    "probe": "m10",
+    "quantity": "value",
+    "value": 5.1,
+    "tol": 0.03
+   },
+   {
+    "at": 0.9,
+    "probe": "m10",
+    "quantity": "value",
+    "value": 5.1,
+    "tol": 0.03
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Zener regulator",
+  "notes": "A 5.1 V zener and a 220 Ω resistor hold a load at about 5.1 V from 9 V.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 9,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1 220"
+   },
+   {
+    "id": "p7",
+    "def": "zener",
+    "place": {
+     "on": "b1",
+     "x": -35.56,
+     "z": -8.89,
+     "rot": 2
+    },
+    "params": {
+     "vz": 5.1
+    },
+    "label": "Z1 5.1 V"
+   },
+   {
+    "id": "p8",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "Load"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TP7"
+    },
+    "b": {
+     "hole": "b1:a10"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a18"
+    },
+    "b": {
+     "hole": "b1:TN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m10",
+    "type": "dmm",
+    "place": {
+     "x": 140,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:e14"
+     },
+     "black": {
+      "hole": "b1:e18"
+     }
+    },
+    "settings": {
+     "mode": "V",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 11
+ }
+}

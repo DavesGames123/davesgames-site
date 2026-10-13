@@ -1,0 +1,154 @@
+{
+ "meta": {
+  "key": "uno-blink",
+  "title": "Blink",
+  "level": 1,
+  "blurb": "The first sketch: pin 13 drives an LED through 220 Ω, half a second on, half a second off.",
+  "see": [
+   "The red LED and the on-board L LED blink together at 1 Hz.",
+   "Open CODE to read the sketch; change delay(500) to delay(100) and compile: it blinks faster."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.25,
+    "part": "p5",
+    "quantity": "i",
+    "min": 0.01
+   },
+   {
+    "at": 0.75,
+    "part": "p5",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1.25,
+    "part": "p5",
+    "quantity": "i",
+    "min": 0.01
+   },
+   {
+    "at": 1.75,
+    "part": "p5",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1.25,
+    "part": "p2",
+    "quantity": "vis.leds.L",
+    "min": 0.05
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Blink",
+  "notes": "The first sketch: pin 13 drives an LED through 220 Ω, half a second on, half a second off.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p4",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1"
+   },
+   {
+    "id": "p5",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "D13"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:a25"
+    },
+    "b": {
+     "hole": "b1:TN20"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:TN5"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// Blink: the LED on pin 13 is on for half a second, off for half a second.\nconst int LED = 13;\n\nvoid setup() {\n  pinMode(LED, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED, HIGH);\n  delay(500);\n  digitalWrite(LED, LOW);\n  delay(500);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 8
+ }
+}

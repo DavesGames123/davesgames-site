@@ -1,0 +1,229 @@
+{
+ "meta": {
+  "key": "night-light",
+  "title": "Night light",
+  "level": 1,
+  "blurb": "A light sensor and a resistor divide 5 V; in the dark the divider turns on an NPN transistor and a white LED.",
+  "see": [
+   "In room light (300 lx) the LED is off.",
+   "Drag the LDR light slider down to 1 lx: the base voltage rises, the transistor turns on and the LED lights."
+  ],
+  "script": [
+   {
+    "at": 0.5,
+    "part": "p7",
+    "key": "lux",
+    "value": 1
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.4,
+    "part": "p12",
+    "quantity": "i",
+    "max": 0.0001
+   },
+   {
+    "at": 1,
+    "part": "p12",
+    "quantity": "i",
+    "min": 0.012
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Night light",
+  "notes": "A light sensor and a resistor divide 5 V; in the dark the divider turns on an NPN transistor and a white LED.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000
+    },
+    "label": "R1 10k"
+   },
+   {
+    "id": "p7",
+    "def": "ldr",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "lux": 300
+    },
+    "label": "LDR"
+   },
+   {
+    "id": "p9",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 4700
+    },
+    "label": "Rb 4.7k"
+   },
+   {
+    "id": "p10",
+    "def": "npn-2n3904",
+    "place": {
+     "on": "b1",
+     "x": -38.1,
+     "z": -3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Q1"
+   },
+   {
+    "id": "p12",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -8.89,
+     "rot": 2
+    },
+    "params": {
+     "color": "white"
+    },
+    "label": "D1"
+   },
+   {
+    "id": "p13",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 100
+    },
+    "label": "R2"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TP7"
+    },
+    "b": {
+     "hole": "b1:a10"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:a16"
+    },
+    "b": {
+     "hole": "b1:TN12"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:a17"
+    },
+    "b": {
+     "hole": "b1:TN13"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:a24"
+    },
+    "b": {
+     "hole": "b1:TP19"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 15
+ }
+}

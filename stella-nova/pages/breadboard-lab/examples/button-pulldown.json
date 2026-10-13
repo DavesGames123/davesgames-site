@@ -1,0 +1,226 @@
+{
+ "meta": {
+  "key": "button-pulldown",
+  "title": "Button with a pull-down",
+  "level": 1,
+  "blurb": "A push button feeds 5 V to an LED; a 10 kΩ pull-down holds the line low when the button is up.",
+  "see": [
+   "Click and hold the button cap: the LED lights.",
+   "Let go: the 10 kΩ pull-down takes the line back to 0 V and the LED goes out.",
+   "Probe the button output with P to see 0 V and 5 V."
+  ],
+  "script": [
+   {
+    "at": 0.5,
+    "part": "p7",
+    "key": "pressed",
+    "value": true
+   },
+   {
+    "at": 1,
+    "part": "p7",
+    "key": "pressed",
+    "value": false
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.4,
+    "part": "p12",
+    "quantity": "i",
+    "max": 0.00001
+   },
+   {
+    "at": 0.9,
+    "part": "p12",
+    "quantity": "i",
+    "value": 0.013181818181818182,
+    "tol": 0.1
+   },
+   {
+    "at": 1.4,
+    "part": "p12",
+    "quantity": "i",
+    "max": 0.00001
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Button with a pull-down",
+  "notes": "A push button feeds 5 V to an LED; a 10 kΩ pull-down holds the line low when the button is up.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "button-6mm",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "S1"
+   },
+   {
+    "id": "p9",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 13.97,
+     "rot": 2
+    },
+    "params": {
+     "r": 10000
+    },
+    "label": "R pull-down"
+   },
+   {
+    "id": "p11",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1"
+   },
+   {
+    "id": "p12",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -15.24,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "yellow"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:h18"
+    },
+    "b": {
+     "hole": "b1:BN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:j27"
+    },
+    "b": {
+     "hole": "b1:BN21"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 14
+ }
+}

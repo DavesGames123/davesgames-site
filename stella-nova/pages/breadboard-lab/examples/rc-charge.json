@@ -1,0 +1,235 @@
+{
+ "meta": {
+  "key": "rc-charge",
+  "title": "RC charge curve",
+  "level": 1,
+  "blurb": "10 kΩ and 100 µF: τ = RC = 1 s. Slide the switch to charge the capacitor and watch the curve on the scope.",
+  "see": [
+   "Slide the switch: the scope trace rises fast, then slower and slower.",
+   "After τ = 1 s the capacitor holds 63 % of 5 V (3.16 V); put a cursor there.",
+   "Slide back to discharge it through the same resistor."
+  ],
+  "script": [
+   {
+    "at": 0.5,
+    "part": "p5",
+    "key": "pos",
+    "value": 1
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.45,
+    "node": "b1:c15",
+    "quantity": "v",
+    "max": 0.01
+   },
+   {
+    "at": 1.5,
+    "node": "b1:c15",
+    "quantity": "v",
+    "value": 3.1606027941427883,
+    "tol": 0.02
+   },
+   {
+    "at": 3.5,
+    "node": "b1:c15",
+    "quantity": "v",
+    "value": 4.75106465816068,
+    "tol": 0.02
+   },
+   {
+    "at": 3.5,
+    "probe": "m11",
+    "quantity": "vmax:ch1",
+    "value": 4.75106465816068,
+    "tol": 0.02,
+    "win": 0.5
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "RC charge curve",
+  "notes": "10 kΩ and 100 µF: τ = RC = 1 s. Slide the switch to charge the capacitor and watch the curve on the scope.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "switch-slide",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "pos": 0
+    },
+    "label": "S1"
+   },
+   {
+    "id": "p8",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -53.34,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000
+    },
+    "label": "R 10k"
+   },
+   {
+    "id": "p9",
+    "def": "cap-elec",
+    "place": {
+     "on": "b1",
+     "x": -43.18,
+     "z": -3.81,
+     "rot": 0
+    },
+    "params": {
+     "c": 0.0001,
+     "vmax": 16
+    },
+    "label": "C 100µ"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:a10"
+    },
+    "b": {
+     "hole": "b1:TN7"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a12"
+    },
+    "b": {
+     "hole": "b1:TP9"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:a16"
+    },
+    "b": {
+     "hole": "b1:TN12"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m11",
+    "type": "scope",
+    "place": {
+     "x": 60,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:c15"
+     },
+     "gnd": {
+      "hole": "b1:TN24"
+     }
+    },
+    "settings": {
+     "tdiv": 0.5,
+     "vdiv": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "offset": [
+      -2.5,
+      0,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 1,
+      "level": 1,
+      "edge": "rise",
+      "mode": "auto"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 12
+ }
+}

@@ -1,0 +1,234 @@
+{
+ "meta": {
+  "key": "ohms-law",
+  "title": "Ohm's law",
+  "level": 1,
+  "blurb": "A 1 kΩ and a 2 kΩ resistor in series across 9 V, and two 2.2 kΩ resistors in parallel on their own.",
+  "see": [
+   "Meter 1 (V) across the 2 kΩ reads 6.00 V: 9 V × 2k / (1k + 2k).",
+   "Meter 2 (Ω) across the parallel pair reads 1.10 kΩ: half of 2.2 kΩ.",
+   "Move meter 2 onto the powered pair and it reads OL: an ohmmeter works only with the power off."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.3,
+    "probe": "m11",
+    "quantity": "value",
+    "value": 6,
+    "tol": 0.01
+   },
+   {
+    "at": 0.3,
+    "probe": "m12",
+    "quantity": "value",
+    "value": 1100,
+    "tol": 0.01
+   },
+   {
+    "at": 0.3,
+    "part": "p5",
+    "quantity": "i",
+    "value": 0.003,
+    "tol": 0.01
+   },
+   {
+    "at": 0.3,
+    "part": "p6",
+    "quantity": "p",
+    "value": 0.018,
+    "tol": 0.02
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Ohm's law",
+  "notes": "A 1 kΩ and a 2 kΩ resistor in series across 9 V, and two 2.2 kΩ resistors in parallel on their own.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 9,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R1 1k"
+   },
+   {
+    "id": "p6",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 2000
+    },
+    "label": "R2 2k"
+   },
+   {
+    "id": "p9",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {
+     "r": 2200
+    },
+    "label": "R3 2.2k"
+   },
+   {
+    "id": "p10",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 2200
+    },
+    "label": "R4 2.2k"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:TP7"
+    },
+    "b": {
+     "hole": "b1:c10"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:c18"
+    },
+    "b": {
+     "hole": "b1:TN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m11",
+    "type": "dmm",
+    "place": {
+     "x": 110,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:d14"
+     },
+     "black": {
+      "hole": "b1:d18"
+     }
+    },
+    "settings": {
+     "mode": "V",
+     "range": "auto"
+    }
+   },
+   {
+    "id": "m12",
+    "type": "dmm",
+    "place": {
+     "x": 205,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:h30"
+     },
+     "black": {
+      "hole": "b1:h34"
+     }
+    },
+    "settings": {
+     "mode": "R",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 13
+ }
+}

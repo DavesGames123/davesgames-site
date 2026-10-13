@@ -1,0 +1,136 @@
+{
+ "meta": {
+  "key": "no-resistor",
+  "title": "LED with no resistor",
+  "level": 1,
+  "blurb": "A red LED straight across a 9 V battery. Nothing limits the current, so the LED dies.",
+  "see": [
+   "The LED flashes very bright for a moment.",
+   "Smoke rises, the LED goes dark and chars, and a toast names the missing resistor.",
+   "Click \"Replace part\", add a 470 Ω resistor in series, and run again."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.5,
+    "event": "damage",
+    "owner": "p5"
+   },
+   {
+    "at": 1,
+    "part": "p5",
+    "quantity": "damaged",
+    "equals": "burnt"
+   },
+   {
+    "at": 1,
+    "part": "p5",
+    "quantity": "i",
+    "max": 0.0001
+   }
+  ],
+  "expectIssues": [
+   "led-no-resistor"
+  ]
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "LED with no resistor",
+  "notes": "A red LED straight across a 9 V battery. Nothing limits the current, so the LED dies.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "battery-9v",
+    "place": {
+     "on": null,
+     "x": -105,
+     "z": 12,
+     "rot": 0
+    },
+    "params": {},
+    "label": "9 V"
+   },
+   {
+    "id": "p5",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a21"
+    },
+    "b": {
+     "hole": "b1:TN16"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 8
+ }
+}

@@ -1,0 +1,323 @@
+{
+ "meta": {
+  "key": "transistor-motor",
+  "title": "Transistor motor switch",
+  "level": 2,
+  "blurb": "An NPN transistor switches a DC motor from a slide switch. A diode across the motor catches the spike when it turns off.",
+  "see": [
+   "Slide the switch: the motor spins up.",
+   "Slide it back: the scope shows the collector rise to about 5.7 V, held by the diode.",
+   "Delete the diode and switch off again: the collector spikes far above the supply."
+  ],
+  "script": [
+   {
+    "at": 0.3,
+    "part": "p7",
+    "key": "pos",
+    "value": 1
+   },
+   {
+    "at": 1.5,
+    "part": "p7",
+    "key": "pos",
+    "value": 0
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.25,
+    "part": "p13",
+    "quantity": "vis.omega",
+    "max": 1
+   },
+   {
+    "at": 1.45,
+    "part": "p13",
+    "quantity": "vis.omega",
+    "min": 300
+   },
+   {
+    "at": 1.45,
+    "node": "b1:d16",
+    "quantity": "v",
+    "max": 1
+   },
+   {
+    "at": 1.55,
+    "probe": "m18",
+    "quantity": "vmax:ch1",
+    "max": 6.2,
+    "min": 5.2,
+    "win": 0.05
+   },
+   {
+    "at": 1.9,
+    "part": "p13",
+    "quantity": "vis.omega",
+    "max": 900
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Transistor motor switch",
+  "notes": "An NPN transistor switches a DC motor from a slide switch. A diode across the motor catches the spike when it turns off.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 2,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "switch-slide",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "pos": 0
+    },
+    "label": "S1"
+   },
+   {
+    "id": "p10",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -53.34,
+     "z": -6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 470
+    },
+    "label": "Rb 470"
+   },
+   {
+    "id": "p11",
+    "def": "npn-2n2222",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Q1"
+   },
+   {
+    "id": "p13",
+    "def": "motor-dc",
+    "place": {
+     "on": null,
+     "x": 40,
+     "z": 52,
+     "rot": 0
+    },
+    "params": {},
+    "label": "M1"
+   },
+   {
+    "id": "p16",
+    "def": "diode-1n4007",
+    "place": {
+     "on": "b1",
+     "x": -40.64,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {},
+    "label": "D1 flyback"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:a10"
+    },
+    "b": {
+     "hole": "b1:TN7"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a12"
+    },
+    "b": {
+     "hole": "b1:TP9"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "hole": "b1:a14"
+    },
+    "b": {
+     "hole": "b1:TN10"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:b16"
+    },
+    "b": {
+     "part": "p13",
+     "pin": "B"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:BP24"
+    },
+    "b": {
+     "part": "p13",
+     "pin": "A"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:a20"
+    },
+    "b": {
+     "hole": "b1:TP15"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m18",
+    "type": "scope",
+    "place": {
+     "x": 90,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:d16"
+     },
+     "gnd": {
+      "hole": "b1:TN32"
+     }
+    },
+    "settings": {
+     "tdiv": 0.0002,
+     "vdiv": [
+      2,
+      1,
+      1,
+      1
+     ],
+     "offset": [
+      -2.5,
+      0,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 1,
+      "level": 4,
+      "edge": "rise",
+      "mode": "normal"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 19
+ }
+}

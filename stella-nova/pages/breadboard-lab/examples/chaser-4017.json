@@ -1,0 +1,738 @@
+{
+ "meta": {
+  "key": "chaser-4017",
+  "title": "4017 LED chaser",
+  "level": 3,
+  "blurb": "A 555 clock (about 4.8 Hz) steps a CD4017 decade counter; ten LEDs light one after another.",
+  "see": [
+   "A single light runs along the ten LEDs and starts again.",
+   "The analyzer shows the clock on D0 and Q0 to Q3 on D1 to D4: each Q is high for one clock in ten.",
+   "The 4017 outputs are weak (about 400 Ω), which limits each LED to a few mA here; a real build adds a resistor."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 3.5,
+    "probe": "m54",
+    "quantity": "freq:d0",
+    "value": 4.78405315614618,
+    "tol": 0.1,
+    "win": 3
+   },
+   {
+    "at": 3.5,
+    "probe": "m54",
+    "quantity": "rises:d2",
+    "min": 1,
+    "win": 3.4
+   },
+   {
+    "at": 3.5,
+    "part": "p24",
+    "quantity": "i",
+    "agg": "max",
+    "win": 3.4,
+    "min": 0.003
+   },
+   {
+    "at": 3.5,
+    "part": "p39",
+    "quantity": "i",
+    "agg": "max",
+    "win": 3.4,
+    "min": 0.003
+   },
+   {
+    "at": 3.5,
+    "part": "p51",
+    "quantity": "i",
+    "agg": "max",
+    "win": 3.4,
+    "min": 0.003
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "4017 LED chaser",
+  "notes": "A 555 clock (about 4.8 Hz) steps a CD4017 decade counter; ten LEDs light one after another.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-555",
+    "place": {
+     "on": "b1",
+     "x": -71.12,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 555"
+   },
+   {
+    "id": "p12",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -68.58,
+     "z": -11.43,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R1 1k"
+   },
+   {
+    "id": "p14",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -68.58,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 150000
+    },
+    "label": "R2 150k"
+   },
+   {
+    "id": "p16",
+    "def": "cap-ceramic",
+    "place": {
+     "on": "b1",
+     "x": -68.58,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "c": 0.000001
+    },
+    "label": "C 1µ"
+   },
+   {
+    "id": "p18",
+    "def": "ic-cd4017",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U2 4017"
+   },
+   {
+    "id": "p24",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q0"
+   },
+   {
+    "id": "p27",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 0,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q1"
+   },
+   {
+    "id": "p30",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 5.08,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q2"
+   },
+   {
+    "id": "p33",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 10.16,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q3"
+   },
+   {
+    "id": "p36",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 15.24,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q4"
+   },
+   {
+    "id": "p39",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q5"
+   },
+   {
+    "id": "p42",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 25.4,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q6"
+   },
+   {
+    "id": "p45",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 30.48,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q7"
+   },
+   {
+    "id": "p48",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "Q8"
+   },
+   {
+    "id": "p51",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": 40.64,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "yellow"
+    },
+    "label": "Q9"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP20"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN20"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP2"
+    },
+    "b": {
+     "hole": "b1:a4"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j4"
+    },
+    "b": {
+     "hole": "b1:BN2"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:j7"
+    },
+    "b": {
+     "hole": "b1:BP5"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:g5"
+    },
+    "b": {
+     "hole": "b1:d6"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a1"
+    },
+    "b": {
+     "hole": "b1:TP1"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:d9"
+    },
+    "b": {
+     "hole": "b1:c6"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:j3"
+    },
+    "b": {
+     "hole": "b1:BN1"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "hole": "b1:TP10"
+    },
+    "b": {
+     "hole": "b1:a14"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w20",
+    "a": {
+     "hole": "b1:a15"
+    },
+    "b": {
+     "hole": "b1:TN11"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "hole": "b1:a17"
+    },
+    "b": {
+     "hole": "b1:TN13"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:j21"
+    },
+    "b": {
+     "hole": "b1:BN16"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w23",
+    "a": {
+     "hole": "b1:i6"
+    },
+    "b": {
+     "hole": "b1:d16"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w25",
+    "a": {
+     "hole": "b1:j16"
+    },
+    "b": {
+     "hole": "b1:g30"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w26",
+    "a": {
+     "hole": "b1:j31"
+    },
+    "b": {
+     "hole": "b1:BN25"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w28",
+    "a": {
+     "hole": "b1:j15"
+    },
+    "b": {
+     "hole": "b1:g32"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w29",
+    "a": {
+     "hole": "b1:j33"
+    },
+    "b": {
+     "hole": "b1:BN26"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w31",
+    "a": {
+     "hole": "b1:j17"
+    },
+    "b": {
+     "hole": "b1:g34"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w32",
+    "a": {
+     "hole": "b1:j35"
+    },
+    "b": {
+     "hole": "b1:BN28"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w34",
+    "a": {
+     "hole": "b1:j20"
+    },
+    "b": {
+     "hole": "b1:g36"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w35",
+    "a": {
+     "hole": "b1:j37"
+    },
+    "b": {
+     "hole": "b1:BN30"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w37",
+    "a": {
+     "hole": "b1:b20"
+    },
+    "b": {
+     "hole": "b1:g38"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w38",
+    "a": {
+     "hole": "b1:j39"
+    },
+    "b": {
+     "hole": "b1:BN31"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w40",
+    "a": {
+     "hole": "b1:j14"
+    },
+    "b": {
+     "hole": "b1:g40"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w41",
+    "a": {
+     "hole": "b1:j41"
+    },
+    "b": {
+     "hole": "b1:BN33"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w43",
+    "a": {
+     "hole": "b1:j18"
+    },
+    "b": {
+     "hole": "b1:g42"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w44",
+    "a": {
+     "hole": "b1:j43"
+    },
+    "b": {
+     "hole": "b1:BN35"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w46",
+    "a": {
+     "hole": "b1:j19"
+    },
+    "b": {
+     "hole": "b1:g44"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w47",
+    "a": {
+     "hole": "b1:j45"
+    },
+    "b": {
+     "hole": "b1:BN36"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w49",
+    "a": {
+     "hole": "b1:b21"
+    },
+    "b": {
+     "hole": "b1:g46"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w50",
+    "a": {
+     "hole": "b1:j47"
+    },
+    "b": {
+     "hole": "b1:BN38"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w52",
+    "a": {
+     "hole": "b1:b19"
+    },
+    "b": {
+     "hole": "b1:g48"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w53",
+    "a": {
+     "hole": "b1:j49"
+    },
+    "b": {
+     "hole": "b1:BN40"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m54",
+    "type": "logic",
+    "place": {
+     "x": -30,
+     "z": 72,
+     "rot": 0
+    },
+    "leads": {
+     "d0": {
+      "hole": "b1:g6"
+     },
+     "d1": {
+      "hole": "b1:g16"
+     },
+     "d2": {
+      "hole": "b1:g15"
+     },
+     "d3": {
+      "hole": "b1:g17"
+     },
+     "d4": {
+      "hole": "b1:g20"
+     },
+     "gnd": {
+      "hole": "b1:BN49"
+     }
+    },
+    "settings": {
+     "threshold": 1.4,
+     "rate": 1000000
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 55
+ }
+}

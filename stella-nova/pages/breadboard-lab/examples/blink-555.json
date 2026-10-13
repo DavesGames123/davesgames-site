@@ -1,0 +1,396 @@
+{
+ "meta": {
+  "key": "blink-555",
+  "title": "555 blinker",
+  "level": 2,
+  "blurb": "A 555 timer in astable mode: 1 kΩ, 51 kΩ and 10 µF make about 1.4 Hz. Two LEDs take turns.",
+  "see": [
+   "The red and green LEDs swap about 1.4 times a second.",
+   "Scope channel 1 shows the capacitor ramp between 1/3 and 2/3 of 5 V (1.67 V and 3.33 V).",
+   "Channel 2 shows the square output; change R2 or C to change the rate."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 4,
+    "probe": "m23",
+    "quantity": "freq:ch2",
+    "value": 1.3980582524271843,
+    "tol": 0.08,
+    "win": 2.6
+   },
+   {
+    "at": 4,
+    "probe": "m23",
+    "quantity": "vmax:ch1",
+    "value": 3.3333333333333335,
+    "tol": 0.05,
+    "win": 2.6
+   },
+   {
+    "at": 4,
+    "probe": "m23",
+    "quantity": "vmin:ch1",
+    "value": 1.6666666666666667,
+    "tol": 0.05,
+    "win": 2.6
+   },
+   {
+    "at": 4,
+    "part": "p18",
+    "quantity": "i",
+    "agg": "max",
+    "win": 3,
+    "min": 0.005
+   },
+   {
+    "at": 4,
+    "part": "p21",
+    "quantity": "i",
+    "agg": "max",
+    "win": 3,
+    "min": 0.005
+   },
+   {
+    "at": 4,
+    "part": "p18",
+    "quantity": "i",
+    "agg": "min",
+    "win": 3,
+    "max": 0.0001
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "555 blinker",
+  "notes": "A 555 timer in astable mode: 1 kΩ, 51 kΩ and 10 µF make about 1.4 Hz. Two LEDs take turns.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-555",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 555"
+   },
+   {
+    "id": "p12",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -11.43,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R1 1k"
+   },
+   {
+    "id": "p14",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 51000
+    },
+    "label": "R2 51k"
+   },
+   {
+    "id": "p16",
+    "def": "cap-elec",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "c": 0.00001,
+     "vmax": 16
+    },
+    "label": "C 10µ"
+   },
+   {
+    "id": "p17",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R3"
+   },
+   {
+    "id": "p18",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -15.24,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "D1"
+   },
+   {
+    "id": "p20",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 13.97,
+     "rot": 2
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R4"
+   },
+   {
+    "id": "p21",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -38.1,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "color": "green"
+    },
+    "label": "D2"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j20"
+    },
+    "b": {
+     "hole": "b1:BN15"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:j23"
+    },
+    "b": {
+     "hole": "b1:BP18"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:g21"
+    },
+    "b": {
+     "hole": "b1:d22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a17"
+    },
+    "b": {
+     "hole": "b1:TP13"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:d25"
+    },
+    "b": {
+     "hole": "b1:c22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "hole": "b1:j27"
+    },
+    "b": {
+     "hole": "b1:BN21"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:i17"
+    },
+    "b": {
+     "hole": "b1:BP13"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m23",
+    "type": "scope",
+    "place": {
+     "x": 60,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:j21"
+     },
+     "ch2": {
+      "hole": "b1:g22"
+     },
+     "gnd": {
+      "hole": "b1:BN32"
+     }
+    },
+    "settings": {
+     "tdiv": 0.2,
+     "vdiv": [
+      1,
+      2,
+      1,
+      1
+     ],
+     "offset": [
+      -2.5,
+      -2.5,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 2,
+      "level": 2.5,
+      "edge": "rise",
+      "mode": "auto"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 24
+ }
+}

@@ -1,0 +1,322 @@
+{
+ "meta": {
+  "key": "tone-555",
+  "title": "555 tone generator",
+  "level": 2,
+  "blurb": "The 555 runs at audio rate and drives a passive buzzer. A pot in the timing chain sets the pitch.",
+  "see": [
+   "A tone of about 1108 Hz plays (press run and unmute).",
+   "Turn the pot down and the pitch rises: f = 1.44 / ((R1 + 2·R2) · C).",
+   "At 20 % travel it is about 2057 Hz."
+  ],
+  "script": [
+   {
+    "at": 0.3,
+    "part": "p15",
+    "key": "pos",
+    "value": 0.2
+   }
+  ],
+  "checks": [
+   {
+    "at": 0.25,
+    "part": "p21",
+    "quantity": "vis.freq",
+    "value": 1107.6923076923076,
+    "tol": 0.05
+   },
+   {
+    "at": 0.6,
+    "part": "p21",
+    "quantity": "vis.freq",
+    "value": 2057.142857142857,
+    "tol": 0.05
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "555 tone generator",
+  "notes": "The 555 runs at audio rate and drives a passive buzzer. A pot in the timing chain sets the pitch.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-555",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 555"
+   },
+   {
+    "id": "p12",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -8.89,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R1 1k"
+   },
+   {
+    "id": "p14",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R2 1k"
+   },
+   {
+    "id": "p15",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.5
+    },
+    "label": "Pitch"
+   },
+   {
+    "id": "p18",
+    "def": "cap-ceramic",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "c": 1e-7
+    },
+    "label": "C 100n"
+   },
+   {
+    "id": "p20",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 100
+    },
+    "label": "R3 100"
+   },
+   {
+    "id": "p21",
+    "def": "buzzer-passive",
+    "place": {
+     "on": "b1",
+     "x": -15.24,
+     "z": 13.97,
+     "rot": 0
+    },
+    "params": {},
+    "label": "BZ1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j20"
+    },
+    "b": {
+     "hole": "b1:BN15"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:j23"
+    },
+    "b": {
+     "hole": "b1:BP18"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:g21"
+    },
+    "b": {
+     "hole": "b1:d22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a17"
+    },
+    "b": {
+     "hole": "b1:TP13"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w16",
+    "a": {
+     "hole": "b1:c25"
+    },
+    "b": {
+     "hole": "b1:b30"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:c32"
+    },
+    "b": {
+     "hole": "b1:c22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "hole": "b1:j19"
+    },
+    "b": {
+     "hole": "b1:BN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:f29"
+    },
+    "b": {
+     "hole": "b1:BN23"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 23
+ }
+}

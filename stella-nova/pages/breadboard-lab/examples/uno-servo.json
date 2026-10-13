@@ -1,0 +1,182 @@
+{
+ "meta": {
+  "key": "uno-servo",
+  "title": "Pot steers a servo",
+  "level": 2,
+  "blurb": "The pot reading on A0 maps to 0–180°; the Servo library sends a 50 Hz pulse of 0.54–2.4 ms on pin 9.",
+  "see": [
+   "Turn the pot: the servo horn follows it.",
+   "At 20 % travel the horn sits at about 36°, at 80 % about 144°."
+  ],
+  "script": [
+   {
+    "at": 1,
+    "part": "p3",
+    "key": "pos",
+    "value": 0.8
+   }
+  ],
+  "checks": [
+   {
+    "at": 1,
+    "part": "p7",
+    "quantity": "vis.angle",
+    "value": 36,
+    "abs": 3
+   },
+   {
+    "at": 2,
+    "part": "p7",
+    "quantity": "vis.angle",
+    "value": 144,
+    "abs": 3
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Pot steers a servo",
+  "notes": "The pot reading on A0 maps to 0–180°; the Servo library sends a 50 Hz pulse of 0.54–2.4 ms on pin 9.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p3",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.2
+    },
+    "label": "Pot"
+   },
+   {
+    "id": "p7",
+    "def": "servo",
+    "place": {
+     "on": null,
+     "x": 60,
+     "z": 64,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Servo"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:b20"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "part": "p2",
+     "pin": "5V"
+    },
+    "b": {
+     "hole": "b1:b24"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "part": "p2",
+     "pin": "A0"
+    },
+    "b": {
+     "hole": "b1:b22"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "part": "p2",
+     "pin": "D9"
+    },
+    "b": {
+     "part": "p7",
+     "pin": "SIG"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:c24"
+    },
+    "b": {
+     "part": "p7",
+     "pin": "VCC"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:c20"
+    },
+    "b": {
+     "part": "p7",
+     "pin": "GND"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// The pot sets the servo horn angle.\n#include <Servo.h>\n\nServo horn;\n\nvoid setup() {\n  horn.attach(9);\n}\n\nvoid loop() {\n  int raw = analogRead(A0);\n  int angle = map(raw, 0, 1023, 0, 180);\n  horn.write(angle);\n  delay(20);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 11
+ }
+}

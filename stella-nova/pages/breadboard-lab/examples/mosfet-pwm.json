@@ -1,0 +1,447 @@
+{
+ "meta": {
+  "key": "mosfet-pwm",
+  "title": "PWM motor speed",
+  "level": 3,
+  "blurb": "A 555 with two steering diodes makes PWM at a fixed rate; the pot sets the duty. A logic-level MOSFET switches the motor.",
+  "see": [
+   "The scope shows the 555 output: a square wave whose high time follows the pot.",
+   "Turn the pot from 30 % to 80 %: the duty rises and the motor speeds up.",
+   "The diode across the motor carries its current between pulses."
+  ],
+  "script": [
+   {
+    "at": 1.5,
+    "part": "p14",
+    "key": "pos",
+    "value": 0.8
+   }
+  ],
+  "checks": [
+   {
+    "at": 1.4,
+    "probe": "m29",
+    "quantity": "duty:ch1",
+    "value": 0.36,
+    "abs": 0.07,
+    "win": 0.03
+   },
+   {
+    "at": 3.2,
+    "probe": "m29",
+    "quantity": "duty:ch1",
+    "value": 0.8,
+    "abs": 0.07,
+    "win": 0.03
+   },
+   {
+    "at": 1.4,
+    "part": "p26",
+    "quantity": "vis.omega",
+    "min": 100
+   },
+   {
+    "at": 3.2,
+    "part": "p26",
+    "quantity": "vis.omega",
+    "min": 400
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "PWM motor speed",
+  "notes": "A 555 with two steering diodes makes PWM at a fixed rate; the pot sets the duty. A logic-level MOSFET switches the motor.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 2,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-555",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 555"
+   },
+   {
+    "id": "p12",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": -11.43,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R1 1k"
+   },
+   {
+    "id": "p14",
+    "def": "pot",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.3
+    },
+    "label": "Duty"
+   },
+   {
+    "id": "p16",
+    "def": "diode-1n4148",
+    "place": {
+     "on": "b1",
+     "x": -5.08,
+     "z": -8.89,
+     "rot": 2
+    },
+    "params": {},
+    "label": "D1"
+   },
+   {
+    "id": "p18",
+    "def": "diode-1n4148",
+    "place": {
+     "on": "b1",
+     "x": 15.24,
+     "z": -8.89,
+     "rot": 2
+    },
+    "params": {},
+    "label": "D2"
+   },
+   {
+    "id": "p20",
+    "def": "cap-ceramic",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "c": 2.2e-7
+    },
+    "label": "C 220n"
+   },
+   {
+    "id": "p22",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -25.4,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 100
+    },
+    "label": "Rg 100"
+   },
+   {
+    "id": "p23",
+    "def": "nmos-logic-to220",
+    "place": {
+     "on": "b1",
+     "x": -15.24,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {},
+    "label": "Q1"
+   },
+   {
+    "id": "p25",
+    "def": "diode-1n4007",
+    "place": {
+     "on": "b1",
+     "x": -12.7,
+     "z": 11.43,
+     "rot": 2
+    },
+    "params": {},
+    "label": "D3"
+   },
+   {
+    "id": "p26",
+    "def": "motor-dc",
+    "place": {
+     "on": null,
+     "x": 40,
+     "z": 52,
+     "rot": 0
+    },
+    "params": {},
+    "label": "M1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:j20"
+    },
+    "b": {
+     "hole": "b1:BN15"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:j23"
+    },
+    "b": {
+     "hole": "b1:BP18"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:g21"
+    },
+    "b": {
+     "hole": "b1:d22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:a17"
+    },
+    "b": {
+     "hole": "b1:TP13"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "hole": "b1:c21"
+    },
+    "b": {
+     "hole": "b1:b32"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "hole": "b1:b26"
+    },
+    "b": {
+     "hole": "b1:c22"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "hole": "b1:b38"
+    },
+    "b": {
+     "hole": "b1:b22"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w21",
+    "a": {
+     "hole": "b1:j19"
+    },
+    "b": {
+     "hole": "b1:BN14"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w24",
+    "a": {
+     "hole": "b1:j28"
+    },
+    "b": {
+     "hole": "b1:BN22"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w27",
+    "a": {
+     "hole": "b1:j27"
+    },
+    "b": {
+     "part": "p26",
+     "pin": "B"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w28",
+    "a": {
+     "hole": "b1:BP9"
+    },
+    "b": {
+     "part": "p26",
+     "pin": "A"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m29",
+    "type": "scope",
+    "place": {
+     "x": 90,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:i22"
+     },
+     "ch2": {
+      "hole": "b1:j21"
+     },
+     "gnd": {
+      "hole": "b1:BN35"
+     }
+    },
+    "settings": {
+     "tdiv": 0.0005,
+     "vdiv": [
+      2,
+      1,
+      1,
+      1
+     ],
+     "offset": [
+      -2.5,
+      -2.5,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 1,
+      "level": 2.5,
+      "edge": "rise",
+      "mode": "auto"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 30
+ }
+}

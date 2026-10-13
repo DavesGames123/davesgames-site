@@ -1,0 +1,343 @@
+{
+ "meta": {
+  "key": "opamp-amp",
+  "title": "Op-amp amplifier, gain 11",
+  "level": 2,
+  "blurb": "An LM358 as a non-inverting amplifier on one 9 V supply: Rf 10 kΩ over Rg 1 kΩ gives a gain of 11.",
+  "see": [
+   "Channel 1: 0.2 V peak to peak in. Channel 2: 2.2 V peak to peak out, in phase.",
+   "The 10 µF capacitor keeps the DC gain at 1, so the output sits at the 2.5 V input level.",
+   "Raise the generator amplitude past about 0.4 V: the output flattens at the LM358 rails."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.2,
+    "probe": "m20",
+    "quantity": "vpp:ch1",
+    "value": 0.2,
+    "tol": 0.06,
+    "win": 0.01
+   },
+   {
+    "at": 0.2,
+    "probe": "m20",
+    "quantity": "vpp:ch2",
+    "value": 2.2,
+    "tol": 0.06,
+    "win": 0.01
+   },
+   {
+    "at": 0.2,
+    "probe": "m20",
+    "quantity": "gain:ch2/ch1",
+    "value": 11,
+    "tol": 0.04,
+    "win": 0.01
+   },
+   {
+    "at": 0.2,
+    "probe": "m20",
+    "quantity": "vavg:ch2",
+    "value": 2.5,
+    "tol": 0.04,
+    "win": 0.01
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Op-amp amplifier, gain 11",
+  "notes": "An LM358 as a non-inverting amplifier on one 9 V supply: Rf 10 kΩ over Rg 1 kΩ gives a gain of 11.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 9,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p7",
+    "def": "ic-lm358",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": 3.81,
+     "rot": 0
+    },
+    "params": {},
+    "label": "U1 LM358"
+   },
+   {
+    "id": "p12",
+    "def": "funcgen",
+    "place": {
+     "on": null,
+     "x": -120,
+     "z": 92,
+     "rot": 0
+    },
+    "params": {
+     "wave": "sine",
+     "freq": 1000,
+     "amp": 0.1,
+     "offset": 2.5
+    },
+    "label": "GEN"
+   },
+   {
+    "id": "p15",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000
+    },
+    "label": "Rf 10k"
+   },
+   {
+    "id": "p17",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -27.94,
+     "z": 6.35,
+     "rot": 2
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "Rg 1k"
+   },
+   {
+    "id": "p18",
+    "def": "cap-elec",
+    "place": {
+     "on": "b1",
+     "x": -38.1,
+     "z": 8.89,
+     "rot": 2
+    },
+    "params": {
+     "c": 0.00001,
+     "vmax": 16
+    },
+    "label": "C 10µ"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "hole": "b1:TP50"
+    },
+    "b": {
+     "hole": "b1:BP50"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:TN50"
+    },
+    "b": {
+     "hole": "b1:BN50"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:TP15"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:a23"
+    },
+    "b": {
+     "hole": "b1:TN18"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:b22"
+    },
+    "b": {
+     "hole": "b1:b21"
+    },
+    "color": "#e0c126",
+    "style": "flat"
+   },
+   {
+    "id": "w11",
+    "a": {
+     "hole": "b1:j23"
+    },
+    "b": {
+     "hole": "b1:BN18"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "part": "p12",
+     "pin": "OUT"
+    },
+    "b": {
+     "hole": "b1:j22"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "part": "p12",
+     "pin": "COM"
+    },
+    "b": {
+     "hole": "b1:BN7"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w16",
+    "a": {
+     "hole": "b1:i25"
+    },
+    "b": {
+     "hole": "b1:i20"
+    },
+    "color": "#2f80d6",
+    "style": "flat"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "hole": "b1:j16"
+    },
+    "b": {
+     "hole": "b1:BN12"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m20",
+    "type": "scope",
+    "place": {
+     "x": 70,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:g22"
+     },
+     "ch2": {
+      "hole": "b1:j20"
+     },
+     "gnd": {
+      "hole": "b1:BN27"
+     }
+    },
+    "settings": {
+     "tdiv": 0.0005,
+     "vdiv": [
+      0.1,
+      0.5,
+      1,
+      1
+     ],
+     "offset": [
+      -2.5,
+      -2.5,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 1,
+      "level": 2.5,
+      "edge": "rise",
+      "mode": "auto"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 21
+ }
+}

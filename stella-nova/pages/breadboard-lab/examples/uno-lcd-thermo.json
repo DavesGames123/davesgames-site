@@ -1,0 +1,354 @@
+{
+ "meta": {
+  "key": "uno-lcd-thermo",
+  "title": "LCD thermometer",
+  "level": 3,
+  "blurb": "A 10 kΩ NTC thermistor divider on A0; the sketch turns the reading into °C and prints it on a 16 × 2 LCD in 4-bit mode.",
+  "see": [
+   "The LCD shows \"TEMP 23.4 C\".",
+   "Drag the thermistor temperature: the reading follows within a second.",
+   "The contrast trimmer sets V0; turn it up and the text fades."
+  ],
+  "script": [
+   {
+    "at": 1,
+    "part": "p23",
+    "key": "tempC",
+    "value": 30
+   }
+  ],
+  "checks": [
+   {
+    "at": 1,
+    "part": "p3",
+    "quantity": "vis.rows.0",
+    "match": "^TEMP 23\\.[345] C"
+   },
+   {
+    "at": 1.6,
+    "part": "p3",
+    "quantity": "vis.rows.0",
+    "match": "^TEMP (29\\.[89]|30\\.[01]) C"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "LCD thermometer",
+  "notes": "A 10 kΩ NTC thermistor divider on A0; the sketch turns the reading into °C and prints it on a 16 × 2 LCD in 4-bit mode.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 40,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "mcu-uno",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -48,
+     "rot": 0
+    },
+    "params": {},
+    "label": "MCU"
+   },
+   {
+    "id": "p3",
+    "def": "lcd-1602",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -13.97,
+     "rot": 0
+    },
+    "params": {},
+    "label": "LCD"
+   },
+   {
+    "id": "p11",
+    "def": "trimpot",
+    "place": {
+     "on": "b1",
+     "x": 20.32,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000,
+     "pos": 0.1
+    },
+    "label": "Contrast"
+   },
+   {
+    "id": "p21",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": 35.56,
+     "z": 6.35,
+     "rot": 0
+    },
+    "params": {
+     "r": 10000
+    },
+    "label": "R 10k"
+   },
+   {
+    "id": "p23",
+    "def": "thermistor",
+    "place": {
+     "on": "b1",
+     "x": 45.72,
+     "z": 8.89,
+     "rot": 0
+    },
+    "params": {
+     "tempC": 23.4
+    },
+    "label": "NTC"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "5V"
+    },
+    "b": {
+     "hole": "b1:BP4"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w5",
+    "a": {
+     "part": "p2",
+     "pin": "GND.1"
+    },
+    "b": {
+     "hole": "b1:BN4"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:e10"
+    },
+    "b": {
+     "hole": "b1:BN7"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:e11"
+    },
+    "b": {
+     "hole": "b1:BP8"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w8",
+    "a": {
+     "hole": "b1:e14"
+    },
+    "b": {
+     "hole": "b1:BN10"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w9",
+    "a": {
+     "hole": "b1:e24"
+    },
+    "b": {
+     "hole": "b1:BP19"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w10",
+    "a": {
+     "hole": "b1:e25"
+    },
+    "b": {
+     "hole": "b1:BN20"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w12",
+    "a": {
+     "hole": "b1:j40"
+    },
+    "b": {
+     "hole": "b1:BN32"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w13",
+    "a": {
+     "hole": "b1:j42"
+    },
+    "b": {
+     "hole": "b1:BP34"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w14",
+    "a": {
+     "hole": "b1:h41"
+    },
+    "b": {
+     "hole": "b1:d12"
+    },
+    "color": "#2f80d6",
+    "style": "arch"
+   },
+   {
+    "id": "w15",
+    "a": {
+     "part": "p2",
+     "pin": "D12"
+    },
+    "b": {
+     "hole": "b1:d13"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w16",
+    "a": {
+     "part": "p2",
+     "pin": "D11"
+    },
+    "b": {
+     "hole": "b1:d15"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   },
+   {
+    "id": "w17",
+    "a": {
+     "part": "p2",
+     "pin": "D5"
+    },
+    "b": {
+     "hole": "b1:d20"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w18",
+    "a": {
+     "part": "p2",
+     "pin": "D4"
+    },
+    "b": {
+     "hole": "b1:d21"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w19",
+    "a": {
+     "part": "p2",
+     "pin": "D3"
+    },
+    "b": {
+     "hole": "b1:d22"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w20",
+    "a": {
+     "part": "p2",
+     "pin": "D2"
+    },
+    "b": {
+     "hole": "b1:d23"
+    },
+    "color": "#e2704a",
+    "style": "arch"
+   },
+   {
+    "id": "w22",
+    "a": {
+     "hole": "b1:j46"
+    },
+    "b": {
+     "hole": "b1:BP37"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   },
+   {
+    "id": "w24",
+    "a": {
+     "hole": "b1:j52"
+    },
+    "b": {
+     "hole": "b1:BN42"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w25",
+    "a": {
+     "part": "p2",
+     "pin": "A0"
+    },
+    "b": {
+     "hole": "b1:i50"
+    },
+    "color": "#4e9a2e",
+    "style": "arch"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {
+   "p2": {
+    "lang": "sketch",
+    "source": "// A thermometer: the thermistor reading on a 16x2 LCD.\n#include <LiquidCrystal.h>\n\nLiquidCrystal lcd(12, 11, 5, 4, 3, 2);\n\nconst float R_FIXED = 10000.0;   // the resistor from 5 V to A0\nconst float R25 = 10000.0;       // thermistor at 25 C\nconst float BETA = 3950.0;\n\nfloat readTempC() {\n  int adc = analogRead(A0);\n  if (adc <= 0) adc = 1;\n  if (adc >= 1023) adc = 1022;\n  float r = R_FIXED * adc / (1023.0 - adc);\n  float invT = 1.0 / 298.15 + log(r / R25) / BETA;\n  return 1.0 / invT - 273.15;\n}\n\nvoid setup() {\n  lcd.begin(16, 2);\n  lcd.print(\"Thermometer\");\n  delay(300);\n}\n\nvoid loop() {\n  float t = readTempC();\n  lcd.setCursor(0, 0);\n  lcd.print(\"TEMP \");\n  lcd.print(t, 1);\n  lcd.print(\" C     \");\n  lcd.setCursor(0, 1);\n  lcd.print(\"ADC \");\n  lcd.print(analogRead(A0));\n  lcd.print(\"     \");\n  delay(250);\n}\n"
+   }
+  },
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 26
+ }
+}

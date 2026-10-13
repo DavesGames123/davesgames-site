@@ -1,0 +1,183 @@
+{
+ "meta": {
+  "key": "rc-lowpass",
+  "title": "RC low-pass filter",
+  "level": 2,
+  "blurb": "1 kΩ and 100 nF make a low-pass filter with a corner at fc = 1/(2πRC) ≈ 1592 Hz. The generator sits right at fc.",
+  "see": [
+   "At fc the output (channel 2) is 0.707 of the input: −3 dB.",
+   "The output lags the input by 45°: a quarter of the way to the next peak is one eighth of a period.",
+   "Turn the frequency up ten times: the output falls to about 0.1 and the lag nears 90°."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.03,
+    "probe": "m8",
+    "quantity": "gain:ch2/ch1",
+    "value": 0.7071067811865476,
+    "tol": 0.03,
+    "win": 0.006
+   },
+   {
+    "at": 0.03,
+    "probe": "m8",
+    "quantity": "phase:ch2/ch1",
+    "value": -45,
+    "abs": 5,
+    "win": 0.006
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "RC low-pass filter",
+  "notes": "1 kΩ and 100 nF make a low-pass filter with a corner at fc = 1/(2πRC) ≈ 1592 Hz. The generator sits right at fc.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "funcgen",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "wave": "sine",
+     "freq": 1591.5,
+     "amp": 1,
+     "offset": 0
+    },
+    "label": "GEN"
+   },
+   {
+    "id": "p5",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 1000
+    },
+    "label": "R 1k"
+   },
+   {
+    "id": "p6",
+    "def": "cap-ceramic",
+    "place": {
+     "on": "b1",
+     "x": -20.32,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "c": 1e-7
+    },
+    "label": "C 100n"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "OUT"
+    },
+    "b": {
+     "hole": "b1:a20"
+    },
+    "color": "#e0c126",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "COM"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a26"
+    },
+    "b": {
+     "hole": "b1:TN20"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m8",
+    "type": "scope",
+    "place": {
+     "x": 60,
+     "z": -48,
+     "rot": 0
+    },
+    "leads": {
+     "ch1": {
+      "hole": "b1:c20"
+     },
+     "ch2": {
+      "hole": "b1:d24"
+     },
+     "gnd": {
+      "hole": "b1:TN29"
+     }
+    },
+    "settings": {
+     "tdiv": 0.0002,
+     "vdiv": [
+      0.5,
+      0.5,
+      1,
+      1
+     ],
+     "offset": [
+      0,
+      0,
+      0,
+      0
+     ],
+     "trig": {
+      "ch": 1,
+      "level": 0,
+      "edge": "rise",
+      "mode": "auto"
+     }
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 9
+ }
+}

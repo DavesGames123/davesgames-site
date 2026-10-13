@@ -1,0 +1,174 @@
+{
+ "meta": {
+  "key": "first-led",
+  "title": "First LED",
+  "level": 1,
+  "blurb": "A 5 V supply, a 220 Ω resistor and a red LED, with the multimeter in series to read the current.",
+  "see": [
+   "The LED glows red.",
+   "The multimeter in A mode reads about 13.6 mA: (5 V − 2 V) / 220 Ω.",
+   "Turn the supply up and the current rises; past about 50 mA the LED burns."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 0.5,
+    "probe": "m8",
+    "quantity": "value",
+    "value": 0.013636363636363636,
+    "tol": 0.1
+   },
+   {
+    "at": 0.5,
+    "part": "p6",
+    "quantity": "i",
+    "value": 0.013636363636363636,
+    "tol": 0.1
+   },
+   {
+    "at": 0.5,
+    "part": "p6",
+    "quantity": "vis.b",
+    "min": 0.5,
+    "max": 0.8
+   },
+   {
+    "at": 0.5,
+    "part": "p5",
+    "quantity": "i",
+    "value": 0.013636363636363636,
+    "tol": 0.1
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "First LED",
+  "notes": "A 5 V supply, a 220 Ω resistor and a red LED, with the multimeter in series to read the current.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "supply-bench",
+    "place": {
+     "on": null,
+     "x": -60,
+     "z": -42,
+     "rot": 0
+    },
+    "params": {
+     "v": 5,
+     "ilim": 0.5,
+     "on": true
+    },
+    "label": "PSU"
+   },
+   {
+    "id": "p5",
+    "def": "res",
+    "place": {
+     "on": "b1",
+     "x": -55.88,
+     "z": -11.43,
+     "rot": 0
+    },
+    "params": {
+     "r": 220
+    },
+    "label": "R1"
+   },
+   {
+    "id": "p6",
+    "def": "led",
+    "place": {
+     "on": "b1",
+     "x": -45.72,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "color": "red"
+    },
+    "label": "D1"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a15"
+    },
+    "b": {
+     "hole": "b1:TN11"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   }
+  ],
+  "probes": [
+   {
+    "id": "m8",
+    "type": "dmm",
+    "place": {
+     "x": 140,
+     "z": 108,
+     "rot": 0
+    },
+    "leads": {
+     "red": {
+      "hole": "b1:TP8"
+     },
+     "black": {
+      "hole": "b1:a10"
+     }
+    },
+    "settings": {
+     "mode": "A",
+     "range": "auto"
+    }
+   }
+  ],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 9
+ }
+}

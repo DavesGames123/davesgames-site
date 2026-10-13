@@ -1,0 +1,129 @@
+{
+ "meta": {
+  "key": "reverse-cap",
+  "title": "Reversed electrolytic",
+  "level": 2,
+  "blurb": "A 100 µF electrolytic in backwards: its + lead on ground, its − lead (the stripe) on 9 V.",
+  "see": [
+   "For a moment nothing happens.",
+   "Then the capacitor vents: smoke, a burst top, and a toast that says it was reversed.",
+   "Electrolytics have a + and a − lead: the stripe marks −."
+  ],
+  "script": [],
+  "checks": [
+   {
+    "at": 1,
+    "event": "damage",
+    "owner": "p5"
+   },
+   {
+    "at": 1.2,
+    "part": "p5",
+    "quantity": "damaged",
+    "equals": "vented"
+   }
+  ],
+  "expectIssues": []
+ },
+ "doc": {
+  "format": "breadboard-lab",
+  "version": 1,
+  "title": "Reversed electrolytic",
+  "notes": "A 100 µF electrolytic in backwards: its + lead on ground, its − lead (the stripe) on 9 V.",
+  "boards": [
+   {
+    "id": "b1",
+    "type": "bb830",
+    "x": 0,
+    "z": 0,
+    "rot": 0
+   }
+  ],
+  "parts": [
+   {
+    "id": "p2",
+    "def": "battery-9v",
+    "place": {
+     "on": null,
+     "x": -105,
+     "z": 12,
+     "rot": 0
+    },
+    "params": {},
+    "label": "9 V"
+   },
+   {
+    "id": "p5",
+    "def": "cap-elec",
+    "place": {
+     "on": "b1",
+     "x": -30.48,
+     "z": -8.89,
+     "rot": 0
+    },
+    "params": {
+     "c": 0.0001,
+     "vmax": 16
+    },
+    "label": "C1 (reversed)"
+   }
+  ],
+  "wires": [
+   {
+    "id": "w3",
+    "a": {
+     "part": "p2",
+     "pin": "+"
+    },
+    "b": {
+     "hole": "b1:TP2"
+    },
+    "color": "#d63b3b",
+    "style": "arch"
+   },
+   {
+    "id": "w4",
+    "a": {
+     "part": "p2",
+     "pin": "−"
+    },
+    "b": {
+     "hole": "b1:TN2"
+    },
+    "color": "#2b2b2b",
+    "style": "arch"
+   },
+   {
+    "id": "w6",
+    "a": {
+     "hole": "b1:a20"
+    },
+    "b": {
+     "hole": "b1:TN15"
+    },
+    "color": "#2b2b2b",
+    "style": "flat"
+   },
+   {
+    "id": "w7",
+    "a": {
+     "hole": "b1:a21"
+    },
+    "b": {
+     "hole": "b1:TP16"
+    },
+    "color": "#d63b3b",
+    "style": "flat"
+   }
+  ],
+  "probes": [],
+  "materials": [],
+  "customParts": [],
+  "programs": {},
+  "sim": {
+   "speed": 1,
+   "pwm": "auto"
+  },
+  "nextId": 8
+ }
+}
