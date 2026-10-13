@@ -66,7 +66,7 @@
 //    frame / drainEvents / drainSerial
 //    setParam / patch / press / repair / reset
 //    loadProgram / serialIn / addProbe / removeProbe
-//    measureR ............ zeroed sources, 1 mA test current
+//    measureR ............ zeroed sources, autoranged test current, 3 V compliance
 //    snapshotState / restoreState
 //    pinSwitched ......... the PWM auto rule
 //    runFor .............. test helper
@@ -730,13 +730,18 @@ export class Engine {
       }
       els.push(e);
     }
-    els.push({ id: '__ohm', owner: '__ohm', type: 'isource', nodes: { p: nodeA, n: nodeB }, params: { i: 1e-3 } });
-    const sub = new Engine({ ...this.nl, elements: els, probes: [], mcus: [] }, { start: 'dcop' });
-    for (const d of sub.devs) { const o = this.devById.get(d.id); if (o && o.damaged) d.damaged = o.damaged; }
-    const r = sub.dcop();
-    let R = r.ok ? (sub.vNode(nodeA) - sub.vNode(nodeB)) / 1e-3 : Infinity;
-    if (!(R < 1e9)) R = Infinity;
-    if (R < 0) R = Math.abs(R);
+    // autorange like a real meter: 1 mA, 10 uA, 100 nA test currents, each
+    // with a 3 V compliance; above 3 V on the lowest current it reads open
+    let R = Infinity;
+    for (const it of [1e-3, 1e-5, 1e-7]) {
+      const sub = new Engine({ ...this.nl, elements: [...els, { id: '__ohm', owner: '__ohm', type: 'isource', nodes: { p: nodeA, n: nodeB }, params: { i: it } }], probes: [], mcus: [] }, { start: 'dcop' });
+      for (const d of sub.devs) { const o = this.devById.get(d.id); if (o && o.damaged) d.damaged = o.damaged; }
+      const r = sub.dcop();
+      if (!r.ok) continue;
+      const v = sub.vNode(nodeA) - sub.vNode(nodeB);
+      if (Math.abs(v) <= 3) { R = Math.abs(v / it); break; }
+    }
+    if (!(R < 4e7)) R = Infinity;
     this._mrCache.set(key, R);
     return R;
   }
