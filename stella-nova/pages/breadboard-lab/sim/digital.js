@@ -29,7 +29,7 @@
 //    McuCore ............. the board supply draw (vdd to gnd)
 //    DIGITAL_TYPES ....... type name → class
 // ============================================================================
-import { Dev, vat, stampG, GMIN, pnjlim, vcritOf, VT, crossFrac, CROSS } from './devbase.js';
+import { Dev, vat, stampG, GMIN, pnj, LIMIT, vcritOf, VT, crossFrac, CROSS } from './devbase.js';
 import { chipOf, FAMILIES, exprCompile, Hd44780 } from './chips.js';
 
 // One input with hysteresis. thr(x) returns [vil, vih] in absolute volts.
@@ -365,16 +365,15 @@ export class McuPin extends Dev {
     } else stampG(A, this.hg, 1e-8);
     // ESD clamp diodes: pin → vdd and gnd → pin
     const vp = vat(x, this.ip);
-    let v1 = vp - vat(x, this.ivdd), v2 = vat(x, this.ignd) - vp;
-    let l1, l2;
-    [v1, l1] = pnjlim(v1, this.vc1, VT * 1.5, this.vcrit);
-    [v2, l2] = pnjlim(v2, this.vc2, VT * 1.5, this.vcrit);
-    if (l1 || l2) s.noncon = true;
+    const v1 = pnj(vp - vat(x, this.ivdd), this.vc1, VT * 1.5, this.vcrit);
+    if (LIMIT.hit) s.noncon = true;
+    const v2 = pnj(vat(x, this.ignd) - vp, this.vc2, VT * 1.5, this.vcrit);
+    if (LIMIT.hit) s.noncon = true;
     this.vc1 = v1; this.vc2 = v2;
     const nvt = 1.5 * VT;
-    const e1 = Math.exp(Math.min(v1 / nvt, 80)), e2 = Math.exp(Math.min(v2 / nvt, 80));
-    const i1 = 1e-15 * (e1 - 1), g1 = 1e-15 * e1 / nvt + GMIN;
-    const i2 = 1e-15 * (e2 - 1), g2 = 1e-15 * e2 / nvt + GMIN;
+    if (v1 !== this._b1) { const e1 = Math.exp(Math.min(v1 / nvt, 80)); this._b1 = v1; this._i1 = 1e-15 * (e1 - 1); this._g1 = 1e-15 * e1 / nvt + GMIN; }
+    if (v2 !== this._b2) { const e2 = Math.exp(Math.min(v2 / nvt, 80)); this._b2 = v2; this._i2 = 1e-15 * (e2 - 1); this._g2 = 1e-15 * e2 / nvt + GMIN; }
+    const i1 = this._i1, g1 = this._g1, i2 = this._i2, g2 = this._g2;
     stampG(A, this.hv, g1);
     if (this.ip >= 0) s.rhs[this.ip] -= i1 - g1 * v1;
     if (this.ivdd >= 0) s.rhs[this.ivdd] += i1 - g1 * v1;

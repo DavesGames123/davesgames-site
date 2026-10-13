@@ -27,6 +27,7 @@
 //  GREP MAP
 //    DIODE_MODELS / LED_VF / BJT_MODELS / MOS_MODELS   the model tables
 //    junction ............ current and conductance of one pn junction
+//    BYPASS_V ............ reuse the last tangent when a junction moved less
 //    Diode / Zener / Led
 //    Bjt ................. npn and pnp
 //    Mos ................. nmos and pmos
@@ -34,8 +35,10 @@
 //    SEMI_TYPES .......... type name → class
 // ============================================================================
 import {
-  Dev, VT, GMIN, vat, stampG, stampI, pnjlim, vcritOf, stepLimit, softplus, sigmoid, thermalStep,
+  Dev, VT, GMIN, vat, stampG, stampI, pnjlim, pnj, LIMIT, vcritOf, stepLimit, softplus, sigmoid, thermalStep,
 } from './devbase.js';
+
+export const BYPASS_V = 2e-5;
 
 export const DIODE_MODELS = {
   '1n4148': { is: 2.52e-9, n: 1.752, rs: 0.568, bv: 100, pmax: 0.5 },
@@ -88,6 +91,18 @@ export class Diode extends Dev {
     this.nvt = this.p.n * VT;
     this.vcrit = vcritOf(this.p.is, this.nvt);
     this.vd = 0;
+    [this.rbv, this.rr, this.rsm] = this.revParams();
+    this._bv = undefined;
+  }
+  // reverse knee: [voltage, slope resistance, softness]
+  revParams() { return [this.p.bv, 1, 0.05]; }
+  // junction plus reverse knee at vl, into _bi / _bg (no arrays)
+  jeval(vl) {
+    const e = Math.exp(Math.min(vl / this.nvt, 90));
+    const u = (-vl - this.rbv) / this.rsm;
+    this._bi = this.p.is * (e - 1) + GMIN * vl - this.rsm / this.rr * softplus(u);
+    this._bg = this.p.is * e / this.nvt + GMIN + sigmoid(u) / this.rr;
+    this._bv = vl;
   }
   setup(b) {
     this.ia = b.node('a'); this.ik = b.node('k');
@@ -103,20 +118,28 @@ export class Diode extends Dev {
     if (this.damaged) { stampG(s.A, this.hd, GMIN); if (this.hrs) stampG(s.A, this.hrs, 1 / this.p.rs); return; }
     if (this.hrs) stampG(s.A, this.hrs, 1 / this.p.rs);
     const v = vat(s.x, this.ij) - vat(s.x, this.ik);
-    const [vl, lim] = pnjlim(v, this.vd, this.nvt, this.vcrit);
-    if (lim) s.noncon = true;
+    const vl = pnj(v, this.vd, this.nvt, this.vcrit);
+    if (LIMIT.hit) s.noncon = true;
     this.vd = vl;
-    let [i, g] = junction(vl, this.p.is, this.nvt);
-    const [ir, gr] = this.rev(-vl);
-    i -= ir; g += gr;
+    // bypass: within BYPASS_V of the last evaluated point, reuse its tangent
+    // (current error about (Δv / nVT)² / 2, below 1e-6 relative)
+    const v0 = this._bv;
+    if (!(v0 !== undefined && Math.abs(vl - v0) < BYPASS_V)) this.jeval(vl);
+    const g = this._bg;
     stampG(s.A, this.hd, g);
-    stampI(s.rhs, this.ij, this.ik, i - g * vl);
+    stampI(s.rhs, this.ij, this.ik, this._bi - g * this._bv);
   }
   iAt(v) {
     const [i] = junction(v, this.p.is, this.nvt);
     return i - this.rev(-v)[0];
   }
-  current(x) { return this.damaged ? 0 : this.iAt(vat(x, this.ij) - vat(x, this.ik)); }
+  // the tangent of the last evaluation (exact within BYPASS_V), else a fresh one
+  current(x) {
+    if (this.damaged) return 0;
+    const v = vat(x, this.ij) - vat(x, this.ik);
+    if (this._bv === undefined || Math.abs(v - this._bv) >= BYPASS_V) this.jeval(v);
+    return this._bi + this._bg * (v - this._bv);
+  }
   power(x) { return this.damaged ? 0 : this.current(x) * (vat(x, this.ia) - vat(x, this.ik)); }
   accept(s) {
     this.vd = vat(s.x, this.ij) - vat(s.x, this.ik);
@@ -132,6 +155,7 @@ export class Diode extends Dev {
 export class Zener extends Diode {
   static defaults = { vz: 5.1, rz: 5, is: 1e-14, n: 1, rs: 0, bv: 0, pmax: 0.5 };
   rev(vka) { return avalanche(vka, this.p.vz, this.p.rz, 0.03); }
+  revParams() { return [this.p.vz, this.p.rz, 0.03]; }
 }
 
 export class Led extends Diode {
@@ -144,6 +168,7 @@ export class Led extends Diode {
     this.metered = true;
   }
   paramChanged(key) {
+    this._bv = undefined;
     if (key === 'color') {
       const m = ledModel(this.p.color);
       Object.assign(this.p, { is: m.is, n: m.n, rs: m.rs });
@@ -215,12 +240,15 @@ export class Bjt extends Dev {
     }
     const vb = vat(x, this.ib), vc = vat(x, this.ic), ve = vat(x, this.ie);
     let vbe = sg * (vb - ve), vbc = sg * (vb - vc);
-    const [l1, a] = pnjlim(vbe, this.vbe, VT, this.vcrit);
-    const [l2, b2] = pnjlim(vbc, this.vbc, VT, this.vcrit);
-    if (a || b2) s.noncon = true;
-    vbe = l1; vbc = l2;
+    vbe = pnj(vbe, this.vbe, VT, this.vcrit);
+    if (LIMIT.hit) s.noncon = true;
+    vbc = pnj(vbc, this.vbc, VT, this.vcrit);
+    if (LIMIT.hit) s.noncon = true;
     this.vbe = vbe; this.vbc = vbc;
-    const [Ic, gcbe, gcbc, Ib, gbbe, gbbc] = this.eval(vbe, vbc);
+    let ev = this._be;
+    if (!ev || Math.abs(vbe - this._bvbe) >= BYPASS_V || Math.abs(vbc - this._bvbc) >= BYPASS_V) { ev = this._be = this.eval(vbe, vbc); this._bvbe = vbe; this._bvbc = vbc; }
+    else { vbe = this._bvbe; vbc = this._bvbc; } // the tangent stays at its own point
+    const [Ic, gcbe, gcbc, Ib, gbbe, gbbc] = ev;
     const A = s.A, H = this.H, rhs = s.rhs;
     // rows c (0), b (1), e (2); cols in the same order. Each terminal current
     // (leaving its node) is sg·T(vbe, vbc); mapped to nodes it has

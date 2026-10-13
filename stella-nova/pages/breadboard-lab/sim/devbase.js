@@ -23,7 +23,7 @@
 //  GREP MAP
 //    VT / KELVIN ......... thermal voltage at 300 K
 //    softplus / sigmoid .. smooth limits used by the behavioural models
-//    pnjlim .............. junction voltage limiting for Newton steps
+//    pnjlim / pnj ........ junction voltage limiting for Newton steps
 //    CROSS / crossFrac ... crossing fraction (linear, or Hermite quadratic)
 //    Dev ................. the base class with default hooks and meters
 //                          (nonlinear, metered, digitalDev flags; sig())
@@ -64,6 +64,20 @@ export function pnjlim(vnew, vold, vt, vcrit) {
     return [vt * Math.log(vnew / vt), true];
   }
   return [vnew, false];
+}
+// Same rule without an array: returns the limited voltage, sets LIMIT.hit.
+export const LIMIT = { hit: false };
+export function pnj(vnew, vold, vt, vcrit) {
+  if (vnew > vcrit && Math.abs(vnew - vold) > 2 * vt) {
+    LIMIT.hit = true;
+    if (vold > 0) {
+      const arg = 1 + (vnew - vold) / vt;
+      return arg > 0 ? vold + vt * Math.log(arg) : vcrit;
+    }
+    return vt * Math.log(vnew / vt);
+  }
+  LIMIT.hit = false;
+  return vnew;
 }
 export function vcritOf(is, nvt) { return nvt * Math.log(nvt / (Math.SQRT2 * is)); }
 
