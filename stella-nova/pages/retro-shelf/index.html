@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Retro Shelf: freeware classics and your own discs — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RETRO SHELF  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Two parts. (1) A shelf of freeware classics that people really played:
+   DOOM (shareware), Beneath a Steel Sky, Flight of the Amazon Queen, Lure
+   of the Temptress, Drascula, Sołtys and Sfinx. Each one is the unchanged
+   archive that its rights holder released for free distribution
+   (LICENSES.md has the review, games.json the sha256). The games run in
+   open-source engines: DOSBox (js-dos emulators) and ScummVM. (2) Bring
+   your own disc: an emulator (EmulatorJS) that hosts no games and no BIOS.
+   The person picks a file from their own device; it is not uploaded.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts)
+   Script at the end of body: main.js (module), which imports saver.js.
+
+   PLAYERS (one child iframe at a time, inside #player)
+     play-dos.html      DOSBox: unpacks the DOS game and runs its .EXE
+     play-scummvm.html  ScummVM: unpacks the game into /games/<id>
+     play-emu.html      EmulatorJS: runs the file that the person picked
+   Exit removes the iframe, which ends the engine, its workers and audio.
+
+   LAYOUT  (# marks an element id)
+     #shelf     the game cards (built from games.json)
+     #touchNote the keyboard note for phones and tablets
+     #byo       bring your own disc: #sys, #romFile, #biosFile, #own, #byoPlay
+     #credits   the credit tables (#gameRows #engineRows #coreRows)
+     #player    the full-window player: #playerFrame, #fsBtn, #exitBtn
+     #info      the licence dialog of one game
+
+   GREP MAP
+     grep -n 'id="'        every element id
+     grep -n 'class="sec'  the sections
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Play freeware classics in the browser: the DOOM shareware episode, Beneath a Steel Sky, Flight of the Amazon Queen, Lure of the Temptress, Drascula, Sołtys and Sfinx, each released for free by its owner, in DOSBox and ScummVM. Or load your own game dump into an emulator that hosts no games.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Retro Shelf</div>
+</div>
+
+<main id="doc">
+
+<header class="sec hero">
+  <p class="kicker">Retro Shelf</p>
+  <h1>Games people really played</h1>
+  <p class="lead">Each game on this shelf was released for free by the people who own it. We host the unchanged archive and run it in an open-source engine in your browser. Nothing to install.</p>
+  <p class="touch-note" id="touchNote" hidden>Most of these games need a keyboard. On a phone or tablet, the DOS game has on-screen keys, and the adventure games work with touch (tap to walk and to use).</p>
+</header>
+
+<section class="sec" aria-labelledby="shelfH">
+  <h2 id="shelfH">The freeware shelf</h2>
+  <p class="note">Press a card to play. <span class="kb-only">Keyboard and gamepad work.</span> The <b>✕ Exit</b> button at the top right ends the game.</p>
+  <div class="shelf" id="shelf" role="list"></div>
+  <p class="status" id="shelfStatus" aria-live="polite"></p>
+</section>
+
+<section class="sec byo" id="byo" aria-labelledby="byoH">
+  <h2 id="byoH">Bring your own disc</h2>
+  <p class="lead">An emulator for games that you own. This page hosts <b>no games and no BIOS files</b>. Pick a dump of a game that you own from your own device. Your browser reads the file here; it is <b>not uploaded</b> and it stays on your device.</p>
+  <div class="byo-grid">
+    <fieldset class="sys" id="sys">
+      <legend>1. System</legend>
+    </fieldset>
+    <div class="byo-files">
+      <label class="pick"><span>2. Your game file</span>
+        <input type="file" id="romFile">
+        <small id="romHint"></small>
+      </label>
+      <label class="pick" id="biosPick" hidden><span>BIOS file (optional)</span>
+        <input type="file" id="biosFile">
+        <small id="biosHint"></small>
+      </label>
+      <label class="own"><input type="checkbox" id="own"> <span>I own this game, and I made this copy from my own disc or cartridge.</span></label>
+      <button type="button" class="play-btn" id="byoPlay" disabled>Play my game</button>
+      <p class="status" id="byoStatus" aria-live="polite"></p>
+    </div>
+  </div>
+  <p class="note">Only play games that you own, from a copy that you made yourself. In many countries a copy downloaded from the internet is not legal, even when you own the game. Save files stay in this browser. Super Nintendo and Mega Drive are not here: the only cores for them have non-commercial licences.</p>
+</section>
+
+<section class="sec" id="credits" aria-labelledby="credH">
+  <h2 id="credH">Credits and licences</h2>
+  <p>Every game below is © its owner and is here under the owner's own free-distribution terms. The full review, the exact licence text of each game and the games that we left out (and why) are in <a href="LICENSES.md">LICENSES.md</a>.</p>
+  <div class="tbl"><table><thead><tr><th>Game</th><th>Owner</th><th>Terms</th><th>Archive</th></tr></thead><tbody id="gameRows"></tbody></table></div>
+  <h3>Engines</h3>
+  <div class="tbl"><table><thead><tr><th>Engine</th><th>Licence</th><th>Source code</th></tr></thead><tbody id="engineRows"></tbody></table></div>
+  <h3>Emulator cores (bring your own disc)</h3>
+  <div class="tbl"><table><thead><tr><th>System</th><th>Core</th><th>Licence</th><th>Source code</th></tr></thead><tbody id="coreRows"></tbody></table></div>
+  <p class="note">The ScummVM build was made for this site from the official v2026.4.0 source with no changes; its build script is in <a href="../../vendor/scummvm-web@2026.4.0/build/build.sh">vendor/scummvm-web@2026.4.0/build/</a>. Game names are trademarks of their owners. The owners do not endorse this site.</p>
+</section>
+
+</main>
+
+<div class="player" id="player" hidden role="dialog" aria-modal="true" aria-labelledby="playerTitle">
+  <div class="player-bar">
+    <span class="player-title" id="playerTitle"></span>
+    <button type="button" id="fsBtn" title="Full screen">⛶ <span>Full screen</span></button>
+    <button type="button" id="exitBtn" class="exit" title="End the game">✕ <span>Exit</span></button>
+  </div>
+  <div class="player-stage" id="playerStage"></div>
+</div>
+
+<dialog class="info" id="info" aria-labelledby="infoTitle">
+  <form method="dialog"><button class="close" aria-label="Close">✕</button></form>
+  <h2 id="infoTitle"></h2>
+  <p class="by" id="infoBy"></p>
+  <p id="infoBlurb"></p>
+  <p><b>Controls</b> <span id="infoCtl"></span></p>
+  <p><b>Licence</b> <span id="infoLic"></span></p>
+  <p class="mono" id="infoFile"></p>
+  <p><button type="button" class="play-btn" id="infoPlay">Play</button></p>
+</dialog>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

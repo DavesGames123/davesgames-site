@@ -1,0 +1,120 @@
+/* ============================================================================
+   RETRO SHELF  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A scrolling document: hero, the shelf of game cards, the bring-your-own-
+   disc form and the credit tables. #player covers the whole window when a
+   game runs; the game itself is in a child iframe. Fonts come from
+   ../../lib/sci.css. Phone first: one card column, two from 560 px, three
+   from 900 px.
+     grep -n 'SHELF'  'CARD'  'BYO'  'TABLES'  'PLAYER'  'DIALOG'  'TOUCH'
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --bg:#07080b; --card:#0e1016; --card2:#151822;
+  --ink:#ecebe6; --ink2:#c4c2ba; --dim:#8a8a90; --faint:#3b3d48;
+  --line:rgba(255,255,255,0.08); --line2:rgba(255,255,255,0.16);
+  --acc:#ffb347; --acc-bg:rgba(255,179,71,0.12); --acc-line:rgba(255,179,71,0.5);
+  --serif:var(--sci-serif,'STIX Two Text',Georgia,serif);
+  --sans:var(--sci-sans,Inter,system-ui,-apple-system,sans-serif);
+  --mono:var(--sci-mono,ui-monospace,'SF Mono',Menlo,monospace);
+  --top:52px;
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px); --sb:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* overflow-x stays on html only: on the body it breaks position:sticky. */
+html{background:var(--bg);overflow-x:hidden;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+html.in-frame{--top:0px}
+html.playing,html.playing body{overflow:hidden}
+button,select,input{font-family:inherit;font-size:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+a{color:var(--acc);text-decoration:none}
+@media (hover:hover){a:hover{text-decoration:underline}}
+code,.mono{font-family:var(--mono);font-size:0.84em}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;
+  padding:0 calc(20px + var(--sr)) 0 calc(20px + var(--sl));background:rgba(7,8,11,0.88);border-bottom:1px solid var(--line);pointer-events:none}
+.brand{font:500 0.85rem/1 var(--sans);color:var(--dim);white-space:nowrap}
+.pagetitle{font:400 1.1rem/1 var(--serif);color:var(--ink);margin-left:auto;white-space:nowrap}
+html.in-frame .topbar{display:none}
+
+main{max-width:1120px;margin:0 auto;padding:calc(var(--top) + 28px) calc(16px + var(--sr)) calc(48px + var(--sb)) calc(16px + var(--sl))}
+.sec{margin:0 0 56px}
+.kicker{font:600 0.72rem/1.2 var(--sans);letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);margin-bottom:10px}
+h1{font:400 clamp(2rem,6vw,3.4rem)/1.05 var(--serif);letter-spacing:-0.01em;margin-bottom:14px}
+h2{font:400 1.6rem/1.2 var(--serif);margin-bottom:10px}
+h3{font:600 0.95rem/1.3 var(--sans);margin:26px 0 8px;color:var(--ink2)}
+.lead{font-size:1.05rem;color:var(--ink2);max-width:64ch}
+.note{color:var(--dim);font-size:0.9rem;max-width:72ch;margin:8px 0 16px}
+.status{color:var(--acc);font-size:0.9rem;min-height:1.4em;margin-top:8px}
+.status.err{color:#ff7a6b}
+.touch-note{margin-top:16px;padding:10px 14px;border:1px solid var(--acc-line);background:var(--acc-bg);border-radius:10px;color:var(--ink);font-size:0.92rem;max-width:64ch}
+@media (hover:none) and (pointer:coarse){.kb-only{display:none}}
+
+/* ---------------------------------------------------------------- SHELF */
+.shelf{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:560px){.shelf{grid-template-columns:1fr 1fr}}
+@media (min-width:900px){.shelf{grid-template-columns:1fr 1fr 1fr}}
+
+/* ---------------------------------------------------------------- CARD */
+/* A typographic card: no box art, no screenshots. The left edge is the
+   game's accent colour, like the spine of a box on a shelf. */
+.card{position:relative;display:flex;flex-direction:column;min-height:228px;border:1px solid var(--line);border-radius:12px;
+  background:linear-gradient(160deg,var(--card2),var(--card) 60%);overflow:hidden;color:var(--ink);text-align:left}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--c,#888)}
+.card .open{flex:1;display:flex;flex-direction:column;gap:6px;padding:18px 18px 12px 26px;background:none;border:0;color:inherit;text-align:left}
+.card .open:focus-visible{outline:2px solid var(--acc);outline-offset:-4px;border-radius:12px}
+.card .yr{font:600 0.72rem/1 var(--mono);letter-spacing:0.08em;color:var(--c,#aaa)}
+.card .tt{font:400 1.55rem/1.1 var(--serif);letter-spacing:-0.005em}
+.card .sub{font-size:0.82rem;color:var(--dim)}
+.card .bl{font-size:0.88rem;color:var(--ink2);margin-top:4px}
+.card .foot{display:flex;align-items:center;gap:8px;padding:0 14px 14px 26px;flex-wrap:wrap}
+.chip{font:500 0.7rem/1 var(--sans);padding:5px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
+.card .lic{margin-left:auto;font:500 0.78rem/1 var(--sans);padding:6px 10px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink2)}
+.card .go{font:600 0.82rem/1 var(--sans);color:var(--c,#fff)}
+@media (hover:hover){.card:hover{border-color:var(--line2)} .card:hover .go{text-decoration:underline}}
+
+/* ---------------------------------------------------------------- BYO */
+.byo-grid{display:grid;grid-template-columns:1fr;gap:18px;margin:18px 0 8px}
+@media (min-width:760px){.byo-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}}
+.sys{border:1px solid var(--line);border-radius:12px;padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.sys legend{padding:0 6px;font:600 0.8rem/1 var(--sans);color:var(--ink2)}
+.sys label{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+.sys label:has(input:checked){border-color:var(--acc-line);background:var(--acc-bg)}
+.sys small{color:var(--dim);margin-left:auto;font-size:0.72rem}
+.byo-files{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pick{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--line2);border-radius:12px;padding:12px 14px}
+.pick span{font:600 0.8rem/1 var(--sans);color:var(--ink2)}
+.pick input{max-width:100%;color:var(--ink2)}
+.pick small{color:var(--dim);font-size:0.78rem}
+.own{display:flex;gap:10px;align-items:flex-start;font-size:0.9rem;color:var(--ink2)}
+.own input{margin-top:4px;width:18px;height:18px;flex:none}
+.play-btn{align-self:flex-start;font:600 0.95rem/1 var(--sans);padding:12px 20px;border-radius:10px;border:1px solid var(--acc-line);background:var(--acc);color:#1a1206}
+.play-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+/* ---------------------------------------------------------------- TABLES */
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:0.84rem}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-weight:600;color:var(--ink2);background:var(--card)}
+tr:last-child td{border-bottom:0}
+td .mono{color:var(--dim);word-break:break-all}
+
+/* ---------------------------------------------------------------- PLAYER */
+.player{position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column}
+.player-bar{display:flex;align-items:center;gap:8px;height:44px;padding:0 calc(8px + var(--sr)) 0 calc(12px + var(--sl));background:#0b0c10;border-bottom:1px solid var(--line);flex:none}
+.player-title{font:400 1rem/1 var(--serif);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-bar button{font:500 0.82rem/1 var(--sans);padding:8px 12px;border-radius:8px;border:1px solid var(--line2);background:var(--card2);color:var(--ink)}
+.player-bar .exit{border-color:rgba(255,122,107,0.6);color:#ffb0a6}
+@media (max-width:480px){.player-bar button span{display:none}}
+.player-stage{position:relative;flex:1;min-height:0}
+.player-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
+
+/* ---------------------------------------------------------------- DIALOG */
+.info{margin:auto;max-width:min(560px,calc(100vw - 32px));border:1px solid var(--line2);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 22px 18px}
+.info::backdrop{background:rgba(0,0,0,0.6)}
+.info h2{padding-right:30px}
+.info p{margin:8px 0;font-size:0.92rem;color:var(--ink2)}
+.info .by{color:var(--dim)}
+.info .mono{word-break:break-all;color:var(--dim)}
+.info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink)}
