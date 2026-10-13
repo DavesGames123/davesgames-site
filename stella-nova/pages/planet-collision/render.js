@@ -28,7 +28,7 @@
 //              coverage (the outline), X then Y, f.smooth times (rg32float
 //              ping-pong)
 //    scene     rgba16float + depth: sky, the lit surface with atmospheres
-//              (shade.wgsl), debris fragments and their streaks
+//              (shade.wgsl), debris droplets and their streaks
 //              (debris.wgsl), the vapour, the impact flashes
 //    bloom     post.wgsl (the roche-limit chain, a copy): only light above
 //              f.bloomThreshold (hot melt, the sun) blooms
@@ -36,7 +36,7 @@
 //
 //  PARTICLE CLASSES (common.wgsl fn klass): fluid -> the surface, debris
 //  (a summed density far under the reference: a free fragment) ->
-//  rock fragments and streaks, vapour (Tillotson blend weight) -> the
+//  droplets and streaks, vapour (Tillotson blend weight) -> the
 //  vapour layer. The test in tests.mjs (section R) checks that a contact
 //  run makes all three.
 //
@@ -100,6 +100,9 @@ export const SPHERE_K = 0.62;
 // field (tests.mjs 12: the iso surface of a settled body sits 0.62
 // spacing out, like the spheres, with a radius spread of 0.01 spacing)
 export const VOL_K = 1.8, VOL_ISO = 1.1;
+// debris droplets: at most DROPS_MAX per particle, radius 0.55 DROP_K to
+// 1.45 DROP_K spacings (debris.wgsl "const DROP_K")
+export const DROPS_MAX = 16, DROP_K = 0.13;
 
 // ── 4x4 matrices, column-major (a copy of roche-limit render.js M4) ───────
 export const M4 = {
@@ -151,7 +154,7 @@ export function defaultFrame() {
     mode: 0,                      // 0 real, 1 temperature, 2 origin body, 3 speed, 4 material
     cut: { on: false, n: [0, -1, 0], d: 0 },
     streakT: 0,                   // sim time of one frame (code), for motion streaks
-    frags: 3,                     // fragments drawn per debris particle (1-4)
+    frags: 10,                    // droplets drawn per debris particle (1-16)
     smooth: 2,                    // bilateral X+Y iterations
     debrisQ: 1.6,                 // h / h0 over this (or h at h_max): debris
     vapK: 1.5, vapGlow: 0.15, xvLo: 0.3, xvHi: 0.5,
@@ -246,7 +249,7 @@ export class Renderer {
     this.pSky = rp(M.shade, 'vs_full', 'fs_sky', LS, [tgt(HDR)], dNone, 'sky');
     this.pSurf = rp(M.shade, 'vs_full', 'fs_surface', LS, [tgt(HDR, premul)], dAlwaysW, 'surface');
     this.pVap = rp(M.shade, 'vs_full', 'fs_vapour', LS, [tgt(HDR, premul)], dNone, 'vapour composite');
-    this.pRock = rp(M.debris, 'vs_rock', 'fs_rock', LS, [tgt(HDR)], dW, 'rocks');
+    this.pDrop = rp(M.debris, 'vs_drop', 'fs_drop', LS, [tgt(HDR)], dW, 'droplets');
     this.pStreak = rp(M.debris, 'vs_streak', 'fs_streak', LS, [tgt(HDR, add)], dT, 'streaks');
     this.pFlash = rp(M.debris, 'vs_flash', 'fs_flash', LS, [tgt(HDR, add)], dNone, 'flash');
     const LC = pl(this.bglC);
@@ -333,7 +336,7 @@ export class Renderer {
     this.smB = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING | T.COPY_SRC, [w, h], 'smooth B');
     this.attr = [0, 1, 2].map(k => mk(HDR, RT, [w, h], 'field ' + k));
     this.thick = mk('rg16float', RT, [Math.max(1, w >> 1), Math.max(1, h >> 1)], 'vapour');
-    this.hdr = mk(HDR, RT, [w, h], 'hdr');
+    this.hdr = mk(HDR, RT | T.COPY_SRC, [w, h], 'hdr');
     this.bloom = [];
     let bw = w, bh = h;
     for (let i = 0; i < BLOOM_LEVELS; i++) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); this.bloom.push(mk(HDR, RT, [bw, bh], 'bloom ' + i)); }
@@ -365,7 +368,7 @@ export class Renderer {
     d[32] = W; d[33] = H; d[34] = 1 / W; d[35] = 1 / H;
     put(36, norm(f.sun), f.sunI);
     const cut = f.cut || {};
-    d[40] = f.mode || 0; d[41] = cut.on ? 1 : 0; d[42] = f.streakT || 0; d[43] = Math.max(1, Math.min(4, f.frags | 0 || 1));
+    d[40] = f.mode || 0; d[41] = cut.on ? 1 : 0; d[42] = f.streakT || 0; d[43] = Math.max(1, Math.min(DROPS_MAX, f.frags | 0 || 1));
     put(44, norm(cut.n || [0, -1, 0]), cut.d || 0);
     d[48] = lk.surf[0]; d[49] = lk.surf[1]; d[50] = lk.surf[2]; d[51] = f.debrisQ ?? 1.6;
     d[52] = (f.vapK ?? 1.5) / lk.unit; d[53] = f.xvLo ?? 0.3; d[54] = f.xvHi ?? 0.5; d[55] = f.vapGlow ?? 0.15;
@@ -437,8 +440,8 @@ export class Renderer {
       p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgShade);
       p.setPipeline(this.pSky); p.draw(3);
       p.setPipeline(this.pSurf); p.draw(3);
-      const F = Math.max(1, Math.min(4, f.frags | 0 || 1));
-      p.setPipeline(this.pRock); p.draw(24, n * F);
+      const F = Math.max(1, Math.min(DROPS_MAX, f.frags | 0 || 1));
+      p.setPipeline(this.pDrop); p.draw(6, n * F);
       if (f.streakT > 0) { p.setPipeline(this.pStreak); p.draw(6, n); }
       p.setPipeline(this.pVap); p.draw(3);
       if (f.flashes && f.flashes.length) { p.setPipeline(this.pFlash); p.draw(6, Math.min(4, f.flashes.length)); }

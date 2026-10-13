@@ -2,18 +2,18 @@
 //  PLANET COLLISION  ·  shaders/debris.wgsl — ejecta fragments, motion
 //  streaks and the impact flash (after common.wgsl)
 // ----------------------------------------------------------------------------
-//    vs_rock + fs_rock      one instance per debris particle and fragment
+//    vs_drop + fs_drop      one instance per debris particle and droplet
 //                           (instance = particle * F + f, F = U.mode.w):
-//                           an octahedron with a random stretch per axis and
-//                           a tumble, flat faces (the face normal comes from
-//                           the three corners in the vertex shader). The
-//                           first fragment is the particle; the others are
-//                           smaller pieces round it. They are drawn, not
-//                           simulated: the particle is the simulated mass.
-//                           Colour: the body's surface map at the start
-//                           position for crust pieces, rock, iron or ice
-//                           inside, and the glow of fn glow at the
-//                           particle temperature.
+//                           a small sphere impostor (ray-sphere hit,
+//                           frag_depth), radius 0.07-0.19 spacing, spread
+//                           through the particle's volume and drawn out
+//                           along its velocity. Many small dense drops,
+//                           not a few big rocks; a debris clump also joins
+//                           the iso surface of the volume (vol.wgsl). The
+//                           drops are drawn, not simulated: the particle
+//                           is the simulated mass. Colour: the body's
+//                           surface map at the start position, rock, iron
+//                           or ice inside, and the glow of fn glow.
 //    vs_streak + fs_streak  a line from x back to x - v * U.mode.z (the
 //                           sim time of one frame: real motion blur), 1.3 px
 //                           wide, additive: hot pieces trail their glow,
@@ -22,79 +22,59 @@
 //                           incandescent light where the bodies first touch
 //                           (the page sets them from the stats).
 //
-//  grep -n targets: "fn rotQ", "fn vs_rock", "fn fs_rock", "fn vs_streak",
+//  grep -n targets: "const DROP_K", "fn vs_drop", "fn fs_drop", "fn vs_streak",
 //  "fn fs_streak", "fn vs_flash", "fn fs_flash"
 // ============================================================================
 
-fn rotQ(q: vec4f, v: vec3f) -> vec3f {
-  let t = 2.0 * cross(q.xyz, v);
-  return v + q.w * t + cross(q.xyz, t);
-}
-fn randQuat(s: u32) -> vec4f {
-  let u1 = hashU(s * 3u + 1u);
-  let u2 = 6.2831853 * hashU(s * 3u + 2u);
-  let u3 = 6.2831853 * hashU(s * 3u + 3u);
-  let a = sqrt(1.0 - u1);
-  let b = sqrt(u1);
-  return vec4f(a * sin(u2), a * cos(u2), b * sin(u3), b * cos(u3));
-}
-fn axisAngle(ax: vec3f, ang: f32) -> vec4f { return vec4f(ax * sin(0.5 * ang), cos(0.5 * ang)); }
-fn qmul(a: vec4f, b: vec4f) -> vec4f {
-  return vec4f(a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz), a.w * b.w - dot(a.xyz, b.xyz));
-}
+// The droplets of one debris particle: DROPS = U.mode.w (render.js
+// renderBudget frags: 10 desktop, 4 phone). Droplet radius 0.55 to
+// 1.45 DROP_K (0.07 to 0.19 of the spacing), spread through the particle's volume
+// (radius 0.55 of h, held to 0.6-2.5 spacings) and drawn out along the
+// velocity, so a debris cloud reads as a dense spray of molten rock.
+const DROP_K: f32 = 0.13;
 
 struct ROut {
   @builtin(position) pos: vec4f,
-  @location(0) @interpolate(flat) nrm: vec3f,
-  @location(1) @interpolate(flat) alb: vec4f,    // albedo, specular
+  @location(0) @interpolate(flat) centre: vec4f,  // xyz, radius
+  @location(1) @interpolate(flat) alb: vec4f,     // albedo, specular
   @location(2) @interpolate(flat) emit: vec3f,
 };
-fn octCorner(face: u32, k: u32) -> vec3f {
-  let sx = select(1.0, -1.0, (face & 1u) != 0u);
-  let sy = select(1.0, -1.0, (face & 2u) != 0u);
-  let sz = select(1.0, -1.0, (face & 4u) != 0u);
-  if (k == 0u) { return vec3f(sx, 0.0, 0.0); }
-  if (k == 1u) { return vec3f(0.0, sy, 0.0); }
-  return vec3f(0.0, 0.0, sz);
+fn dropCorner(vi: u32) -> vec2f {
+  var q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  return q[vi % 6u];
 }
 @vertex
-fn vs_rock(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -> ROut {
+fn vs_drop(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -> ROut {
   var o: ROut;
   o.pos = vec4f(2.0, 2.0, 2.0, 1.0);
   let F = max(u32(U0.mode.w + 0.5), 1u);
   let ii = inst / F;
   let f = inst % F;
-  if (ii >= arrayLength(&pTag) || klass(ii) != K_DEBRIS) { return o; }
+  if (ii >= arrayLength(&pTag)) { return o; }
+  if (klass(ii) != K_DEBRIS) { return o; }
   let x = pPos[ii].xyz;
   if (removed(x)) { return o; }
   let s0 = spacing0(ii);
-  let seed = ii * 8u + f;
-  // size, stretch, place and tumble of this fragment
-  var size = 0.9 * U0.surf.x * s0;
-  var off = vec3f(0.0);
-  if (f > 0u) {
-    size = size * (0.28 + 0.3 * hashU(seed * 7u + 5u));
-    let dir = normalize(vec3f(hashU(seed * 7u + 1u), hashU(seed * 7u + 2u), hashU(seed * 7u + 3u)) - 0.5 + vec3f(1e-4));
-    off = dir * s0 * (0.7 + 0.9 * hashU(seed * 7u + 4u));
-  }
-  let stretch = vec3f(0.6, 0.6, 0.6) + 0.8 * vec3f(hashU(seed * 5u + 11u), hashU(seed * 5u + 12u), hashU(seed * 5u + 13u));
-  let ax = normalize(vec3f(hashU(seed + 91u), hashU(seed + 92u), hashU(seed + 93u)) - 0.5 + vec3f(1e-4));
-  let rate = 0.4 + 2.2 * hashU(seed + 94u);
-  let q = qmul(axisAngle(ax, rate * U0.eye.w), randQuat(seed));
-  let clusterQ = axisAngle(ax, 0.3 * rate * U0.eye.w);
-  let centre = x + rotQ(clusterQ, off);
-  let face = (vi / 3u) % 8u;
-  let k = vi % 3u;
-  let c0 = rotQ(q, octCorner(face, 0u) * stretch) * size;
-  let c1 = rotQ(q, octCorner(face, 1u) * stretch) * size;
-  let c2 = rotQ(q, octCorner(face, 2u) * stretch) * size;
-  var cn = c0;
-  if (k == 1u) { cn = c1; }
-  if (k == 2u) { cn = c2; }
-  var n = normalize(cross(c1 - c0, c2 - c0));
-  if (dot(n, c0 + c1 + c2) < 0.0) { n = -n; }
-  o.pos = U0.vp * vec4f(centre + cn, 1.0);
-  o.nrm = n;
+  let seed = ii * 16u + f;
+  // a point in the ball of the particle, drawn out along v
+  let dir = normalize(vec3f(hashU(seed * 7u + 1u), hashU(seed * 7u + 2u), hashU(seed * 7u + 3u)) - vec3f(0.5) + vec3f(1e-4));
+  let spread = 0.55 * clamp(pPos[ii].w, 0.6 * s0, 2.5 * s0);
+  var off = dir * spread * pow(hashU(seed * 7u + 4u), 1.0 / 3.0);
+  let v = pVel[ii].xyz;
+  let sp = length(v);
+  if (sp > 1e-6) { let vh = v / sp; off = off + vh * (1.2 * dot(off, vh)); }
+  let c = x + off;
+  let r = DROP_K * s0 * (0.55 + 0.9 * hashU(seed * 7u + 5u));
+  let toEye = U0.eye.xyz - c;
+  let dist = length(toEye);
+  if (dot(-toEye, U0.fwd.xyz) < r) { return o; }
+  let n = toEye / dist;
+  let side = normalize(cross(U0.up.xyz, n));
+  let upv = cross(n, side);
+  let q = dropCorner(vi);
+  let s = r * dist / sqrt(max(dist * dist - r * r, 1e-12));
+  o.pos = U0.vp * vec4f(c + (q.x * side + q.y * upv) * s + n * r, 1.0);
+  o.centre = vec4f(c, r);
   // colour
   let mt = matOf(ii);
   let og = pOrig[ii].xyz;
@@ -106,24 +86,47 @@ fn vs_rock(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -
   if (mode == 0) {
     let a = matAlbedo(og, fIron, fIce, style, 2.0);
     let Tm = tMelt(fIron, fIce);
-    o.alb = vec4f(a.rgb * (1.0 - 0.7 * smoothstep(0.7 * Tm, Tm, T)) * (0.8 + 0.4 * hashU(seed + 17u)), 0.3 * fIron);
-    // a small piece cools faster than the bulk; some carry a cold crust
+    o.alb = vec4f(a.rgb * (1.0 - 0.7 * smoothstep(0.7 * Tm, Tm, T)) * (0.8 + 0.4 * hashU(seed + 17u)), 0.3 * fIron + 0.4 * smoothstep(Tm, 1.2 * Tm, T));
+    // a small drop cools faster than the bulk; some carry a cold skin
     let crust = select(0.0, 1.0, hashU(seed + 29u) < crustShare());
     o.emit = glow(skinT(T, 0.25) * (1.0 - 0.55 * crust));
   } else {
-    o.alb = vec4f(modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, length(pVel[ii].xyz), fIron, fIce), 0.0);
+    o.alb = vec4f(modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, sp, fIron, fIce), 0.0);
     o.emit = vec3f(0.0);
   }
   return o;
 }
+struct DropOut { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
 @fragment
-fn fs_rock(in: ROut) -> @location(0) vec4f {
+fn fs_drop(in: ROut) -> DropOut {
+  // a small drop far away: the hit from the closest approach of the ray
+  // (the plain quadratic loses the radius to f32 rounding)
+  let D = rayAt(in.pos.xy);
+  let Dn = normalize(D);
+  let e = U0.eye.xyz;
+  let oc = e - in.centre.xyz;
+  let b = dot(oc, Dn);
+  let q = oc - b * Dn;
+  let r = in.centre.w;
+  let h = r * r - dot(q, q);
+  if (h < 0.0) { discard; }
+  let s = -b - sqrt(h);
+  if (s <= 0.0) { discard; }
+  let t = s * dot(Dn, U0.fwd.xyz);
+  let n = normalize(q + (s + b) * Dn);
   let L = U0.sun.xyz;
-  let ndl = max(dot(in.nrm, L), 0.0);
+  let ndl = max(dot(n, L), 0.0);
+  var o: DropOut;
+  o.depth = depthOfZ(t);
   let mode = i32(U0.mode.x + 0.5);
-  if (mode != 0) { return vec4f(in.alb.rgb * (0.3 + 0.7 * ndl), 1.0); }
-  let col = in.alb.rgb * (U0.sun.w * ndl + U0.view.w) + in.emit + vec3f(in.alb.w * ndl * U0.sun.w * 0.3);
-  return vec4f(col, 1.0);
+  if (mode != 0) { o.color = vec4f(in.alb.rgb * (0.3 + 0.7 * ndl), 1.0); return o; }
+  let V = -Dn;
+  let H = normalize(L + V);
+  let spec = in.alb.w * pow(max(dot(n, H), 0.0), 60.0) * ndl * U0.sun.w;
+  // the glow is brighter where the drop faces the eye (limb darkening)
+  let mu = max(dot(n, V), 0.0);
+  o.color = vec4f(in.alb.rgb * (U0.sun.w * ndl + U0.view.w) + in.emit * (0.55 + 0.45 * mu) + vec3f(spec), 1.0);
+  return o;
 }
 
 // ── streaks ─────────────────────────────────────────────────────────────────

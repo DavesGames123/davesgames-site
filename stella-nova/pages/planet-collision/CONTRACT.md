@@ -204,7 +204,7 @@ Frame fields (`defaultFrame`): `eye target up fov near time`, `grid` (density vo
 `mode` (0 real, 1 temperature, 2 origin body, 3 speed, 4 material),
 `cut {on, n, d}` (dot(n, x) > d is cut away; the cut face is flat),
 `streakT` (code time of one frame: motion streaks; 0 = off), `frags`
-(fragments drawn per debris particle, 1-4; phones 1-2), `smooth` (filter
+(droplets drawn per debris particle, 1-16; desktop 10, phones 4), `smooth` (filter
 iterations), `debrisQ`, `vapK`, `vapGlow`, `xvLo`, `xvHi`, `glowGain`,
 `ambient`, `coolH` (sim hours since contact, < 0 before), `bodies[b] {atm, shadow}` (0..1: fade the drawn atmosphere and
 the sphere shadow of body b; set both to 0 after the bodies merge),
@@ -217,12 +217,12 @@ Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`;
 | Class | Test | Drawn as |
 |---|---|---|
 | vapour | `xv > xvHi` (0.5) | translucent layer, opacity 0.6 (1 - exp(-vapK chord)), crisp edge |
-| debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | flat-faced fragments, `frags` per particle, and streaks |
+| debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | small molten droplets (sphere impostors, radius 0.07-0.19 spacing), `frags` per particle, and streaks; a clump also joins the iso surface |
 | fluid | all others | the iso surface of the density volume (vol.wgsl, march.wgsl; debris adds to it too); outside the volume, spheres |
 
 A free particle has a low summed density: that is the debris test. (A test
 on h took the whole surface layer of Earth for debris, because those
-particles sit at the `hmax` clamp.) The renderer binds `th` for it. Debris fragments past the first are drawn,
+particles sit at the `hmax` clamp.) The renderer binds `th` for it. Debris droplets are drawn,
 not simulated (label this on the page).
 
 What the surface shows (mode 0): the body's surface map at each particle's

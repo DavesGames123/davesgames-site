@@ -134,7 +134,7 @@ fn fs_depth(in: SOut) -> DOut {
   var o: DOut;
   o.z = vec4f(h.x, h.y, 0.0, 0.0);
   let P = U0.eye.xyz + h.x * D;
-  var n = (P - in.centre.xyz) / in.centre.w;
+  var n = normalize(P - in.centre.xyz);
   if (h.y > 0.5) { n = select(-U0.cut.xyz, U0.cut.xyz, dot(U0.cut.xyz, U0.eye.xyz - P) > 0.0); }
   o.n = vec4f(n, 1.0);
   o.depth = depthOfZ(h.x);

@@ -58,7 +58,9 @@
 //     Earth (moon-earth, 32k) the iso surface sits about 0.6 spacing out
 //     with a radius spread under 0.05 spacing, against 0.28 for the union
 //     of particle spheres (the old look); a lone particle stays under the
-//     iso level, two touching ones join; the volume tiers and bytes
+//     iso level, two touching ones join; the volume tiers and bytes;
+//     debris drops are small (radius under 2.5 % of the body radius, under
+//     a third of the old rock size) and the rock primitives are gone
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -76,7 +78,7 @@ import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
 import { bandFrom, makeView, frameTarget, eyeOf, stepView, cameraOf, impactYaw, sideFor, contactPoint } from './view.js';
-import { M4, VOL_K, VOL_ISO, SPHERE_K } from './render.js';
+import { M4, VOL_K, VOL_ISO, SPHERE_K, DROP_K, DROPS_MAX } from './render.js';
 import * as SP from './saver-plan.js';
 
 const ARGS = typeof Deno !== 'undefined' ? Deno.args : process.argv.slice(2);
@@ -380,7 +382,7 @@ function cameraTests() {
 }
 
 // 12 ─ the density volume: a smooth iso surface, not particle bumps
-function volumeTests() {
+async function volumeTests() {
   const su = buildScenario(PRESETS.find(p => p.key === 'moon-earth'), 32768, 1), B = su.bodies[0], pts = [];
   for (let i = 0; i < su.N; i++) if (su.body[i] === 0) {
     const x = [0, 1, 2].map(c => su.pos[3 * i + c] - B.X[c]), r = Math.hypot(...x);
@@ -403,6 +405,21 @@ function volumeTests() {
   const rb = BG.renderBudget({ cssW: 390, cssH: 844, dpr: 3, touch: true, phone: true }), rd = BG.renderBudget({ cssW: 1600, cssH: 900, dpr: 2 });
   ok('12 volume tiers: phones get a smaller volume, the governor steps down', rb.grid < rd.grid && rd.grid % 8 === 0 && rb.grid % 8 === 0 && BG.lowerGrid(rd.grid) < rd.grid && BG.lowerGrid(64) === 64 && BG.volBytes(rd.grid) < 40e6,
     `desktop ${rd.grid}^3 (${mb(rd.grid)}), phone ${rb.grid}^3 (${mb(rb.grid)}); tiers ${BG.GRID_TIERS.join(' ')}`);
+  // debris: many small drops, not a few rocks. The largest drop over the
+  // target radius for every preset, desktop and phone counts; the old rock
+  // was 0.9 SPHERE_K spacing times a stretch up to 1.4
+  let worst = 0, key = '';
+  for (const p of PRESETS) for (const N of [BG.PROFILES.medium.N, BG.PROFILES.phone.N]) {
+    const su2 = buildScenario(p, N, 1);
+    for (const b of su2.bodies) { const s0 = Math.cbrt(b.mp / (MATERIALS.granite.rho0 / UNIT.RHO)), r = 1.45 * DROP_K * s0 / su2.bodies[0].R; if (r > worst) { worst = r; key = p.key + ' ' + N; } }
+  }
+  const oldRock = 0.9 * SPHERE_K * 1.4, newDrop = 1.45 * DROP_K;
+  ok('12 debris drops are small: under 2.5 % of the body radius', worst < 0.025 && newDrop < oldRock / 3 && rd.frags >= 8 && rb.frags >= 3 && rd.frags <= DROPS_MAX,
+    `largest drop ${(100 * worst).toFixed(2)} % of the target radius (${key}); drop ${newDrop.toFixed(2)} spacing against the old rock ${oldRock.toFixed(2)}; ${rd.frags} drops a particle desktop, ${rb.frags} phone`);
+  const { readFileSync } = await import('node:fs'), fsr = n => readFileSync(new URL(n, import.meta.url), 'utf8');
+  const rjs = fsr('./render.js'), dw = fsr('./shaders/debris.wgsl');
+  ok('12 the rock primitives are gone: no octahedra, droplet impostors only', !/vs_rock|pRock|octCorner|draw\(24/.test(rjs + dw) && /pDrop\); p\.draw\(6, n \* F\)/.test(rjs) && /fn vs_drop/.test(dw),
+    'render.js draws 6 vertices per droplet (pDrop); debris.wgsl has no vs_rock or octCorner');
 }
 
 function settledEarth(N, seed) {
@@ -698,6 +715,13 @@ async function renderTests() {
     `t ${(st.tSec / 3600).toFixed(2)} h: fluid ${cls.fluid}, debris ${cls.debris}, vapour ${cls.vapour}`);
   ren.render(f); at = await rgb();
   const post = scan(at);
+  // the HDR image has no spikes: a far drop is a sub-pixel sphere, and
+  // the plain quadratic hit put |n| over 1 there (a specular of 2052)
+  { f.frags = 10; ren.render(f);
+    const bpr = Math.ceil(W * 8 / 256) * 256, raw = new Uint16Array((await readTex(ren.hdr, 8, W, H)).a);
+    const half = h => { const ex = (h >> 10) & 31, m = h & 1023; if (ex === 31) return m ? NaN : Infinity; return (h >> 15 ? -1 : 1) * (ex ? Math.pow(2, ex - 15) * (1 + m / 1024) : Math.pow(2, -14) * (m / 1024)); };
+    let mx = 0, bad = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) for (let k = 0; k < 3; k++) { const v = half(raw[y * bpr / 2 + 4 * x + k]); if (!Number.isFinite(v)) bad++; else mx = Math.max(mx, v); }
+    ok('R debris drops: no NaN or spike in the HDR image', bad === 0 && mx < 50, `max ${mx.toFixed(2)} (scene units), ${bad} NaN or Inf, ${cls.debris} debris particles x 10 drops`); }
   ok('R after contact: hot melt glows (red > green > blue pixels)', post.glow > 20, `${post.glow} glowing px, ${post.lit} lit px`);
   const means = [];
   for (const m of [0, 1, 2, 3, 4]) { f.mode = m; ren.render(f); means.push(scan(await rgb()).mean); }
@@ -825,7 +849,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); volumeTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); await volumeTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

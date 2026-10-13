@@ -53,7 +53,7 @@ struct U {
   fwd: vec4f,       // xyz, w focal length (px)
   vpSize: vec4f,    // W H 1/W 1/H
   sun: vec4f,       // direction to the sun, intensity
-  mode: vec4f,      // x colour mode, y cutaway 0/1, z streak time (code), w fragments per debris particle
+  mode: vec4f,      // x colour mode, y cutaway 0/1, z streak time (code), w droplets per debris particle
   cut: vec4f,       // plane normal, d: dot(n, x) > d is cut away
   surf: vec4f,      // x sphere radius / spacing0, y depth band (world), z filter px per world px, w debris h / h0
   vap: vec4f,       // x extinction per world unit, y xv where vapour starts, z xv of the class, w vapour glow

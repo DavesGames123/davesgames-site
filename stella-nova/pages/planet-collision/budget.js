@@ -19,7 +19,7 @@
 //
 //  RENDER. The renderer (render.js) costs fill rate: 5.8 ms per frame at
 //  1600 x 900 (tests.mjs --time). renderBudget caps the drawing buffer at
-//  PIXELS[desktop | touch] and sets the debris fragments per particle, the
+//  PIXELS[desktop | touch] and sets the debris droplets per particle, the
 //  filter iterations and the volume size (GRID: cells per side of the
 //  density volume; memory volBytes). The governor in main.js steps the
 //  volume down GRID_TIERS when the frame stays slow at one step a frame.
@@ -71,5 +71,5 @@ export function renderBudget(o) {
   const touch = !!(o.touch || o.phone), cap = touch ? PIXELS.touch : PIXELS.desktop;
   const css = Math.max(1, o.cssW * o.cssH);
   const ratio = Math.max(0.5, Math.min(o.dpr || 1, 2, Math.sqrt(cap / css)));
-  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 2 : 3, smooth: 2, grid: touch ? GRID.touch : GRID.desktop };
+  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 4 : 10, smooth: 2, grid: touch ? GRID.touch : GRID.desktop };
 }
