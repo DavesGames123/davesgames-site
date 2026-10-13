@@ -492,7 +492,7 @@ if (sceneTests.run) {
   void r;
 } else {
   section('scene');
-  console.log('skip scene: view/test/scene-tests.mjs is not built yet');
+  check('scene tests load', false, String(sceneTests.missing && sceneTests.missing.message));
 }
 
 console.log(`\n${passes} passed, ${fails} failed`);
