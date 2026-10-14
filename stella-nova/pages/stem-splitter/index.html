@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Stem Splitter — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STEM SPLITTER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   The user drops a song. Demucs v4 (Hybrid Transformer Demucs, Meta, MIT)
+   separates it into drums, bass, other and vocals, or six stems with
+   guitar and piano. The model runs in this browser in a module Worker
+   with onnxruntime-web (WebGPU, else WebAssembly). The audio never leaves
+   the device. After the first separation with a model, the page works
+   with no network: the page code is in the site offline manifest, and the
+   engine keeps the model files in the Cache Storage "stem-models-v1".
+   CONTRACT.md is the spec. NOTICE lists every hosted model file.
+
+   FILES
+     main.js            mounts the UI with the engine (CONTRACT 5.5)
+     models.js          the two models: files, bytes, sha256, stems
+     engine/client.js   the main-thread engine API (starts the worker)
+     engine/worker.js   module Worker: vendored onnxruntime-web + runtime.js
+     engine/runtime.js  the worker requests, sessions, WebGPU -> wasm fallback
+     engine/dsp.js      Demucs STFT / iSTFT and the CaC layout (JS port)
+     engine/segment.js  segments, overlap-add, shifts (JS port)
+     engine/weights.js  model download, sha256 check, Cache Storage
+     ui/app.js          the page UI: file, model, separate, mixer, downloads
+     ui/*.js            drop zone, decode, WAV, player, mixer, phone sheet
+     style.css          desktop two columns, phone dock and sheet
+     models/            ONNX graphs (git) + the official .th weights (deploy)
+     tests.mjs          node tests: engine, UI, page, end-to-end separation
+
+   LAYOUT
+     ui/app.js builds every element inside #app. See the header of
+     style.css for the desktop and phone layouts.
+
+   grep -n targets
+     JSZip (zip download) ... "jszip.min.js"
+     page module ............ "main.js"
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Stem Splitter: drop a song and split it into drums, bass, vocals and other (or six stems with guitar and piano) with Demucs. It runs on your device, the audio is never uploaded, and it works offline after the first use.">
+<link rel="stylesheet" href="style.css">
+<script src="../../vendor/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<div id="app"></div>
+<noscript><p style="padding:16px">Stem Splitter needs JavaScript and WebAssembly.</p></noscript>
+<script type="module" src="main.js"></script>
+</body>
+</html>
