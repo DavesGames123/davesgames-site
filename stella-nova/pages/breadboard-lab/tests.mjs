@@ -120,6 +120,24 @@ const css = fs.readFileSync(path.join(DIR, 'style.css'), 'utf8');
   const shows = hiddenIds.filter(id => new RegExp(`#${id}\\s*\\{[^}]*display\\s*:\\s*(?!none)[a-z-]+\\s*!important`).test(css));
   check('no hidden element has an !important display rule that shows it', shows.length === 0, `hidden at load: ${hiddenIds.join(', ') || 'none'}`);
   check('the page title is "Breadboard Lab"', /<title>Breadboard Lab — /.test(html), '');
+  // landscape phone: the dock (bottom left, z 45) must end where the right
+  // drawer (min(46vw, 400px), z 40) starts. Evaluate the two widths of the
+  // landscape block at common phone sizes.
+  {
+    const block = (css.match(/@media \(max-height:520px\) and \(orientation:landscape\)\{([\s\S]*?)\n\}/) || [])[1] || '';
+    const dockW = (/body\.phone #dock\{[^}]*width:([^;}]+)/.exec(block) || [])[1] || '';
+    const sheetW = (/body\.phone #sheet,body\.phone #sheet\.full\{[^}]*width:([^;}]+)/.exec(block) || [])[1] || '';
+    // a small evaluator for min(), calc(), px and vw
+    const evalLen = (expr, vw) => Function('min', `return ${expr.replace(/calc\(/g, '(').replace(/(\d+(?:\.\d+)?)vw/g, (m, n) => `(${n}*${vw / 100})`).replace(/(\d+(?:\.\d+)?)px/g, '$1')};`)(Math.min);
+    let worst = -Infinity, at = '';
+    try {
+      for (const [w] of [[844], [932], [740], [667], [568]]) {
+        const over = evalLen(dockW, w) - (w - evalLen(sheetW, w));
+        if (over > worst) { worst = over; at = `${w} px`; }
+      }
+    } catch (e) { worst = NaN; at = e.message; }
+    check('landscape phone: the dock does not reach under the right drawer', worst <= 0.5, `dock ${dockW.trim()}, drawer ${sheetW.trim()}; worst overlap ${Number.isFinite(worst) ? worst.toFixed(1) + ' px at ' + at : at}`);
+  }
 }
 
 // ---------------------------------------------------------------- examples

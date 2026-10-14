@@ -357,5 +357,5 @@ body.phone #toasts{bottom:calc(var(--dock-h) + var(--sheet-h) + 46px)}
   body.phone .sheet-grip{display:none}
   body.phone .sheet-close{display:grid;place-items:center;position:absolute;top:6px;right:8px;width:44px;height:44px;border:0;--sq-r:11px;--sq-fill:var(--btn);z-index:2}
   body.phone .sheet-tabs{padding-top:6px;padding-right:56px}
-  body.phone #dock{right:auto;width:min(560px,58vw);border-right:1px solid var(--line);border-radius:0 12px 0 0}
+  body.phone #dock{right:auto;width:min(560px,58vw,calc(100vw - min(46vw,400px)));border-right:1px solid var(--line);border-radius:0 12px 0 0}
 }
