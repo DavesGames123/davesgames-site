@@ -357,7 +357,7 @@ async function e2e(V) {
       const sepS = (performance.now() - t0) / 1000;
       check(L.length === P.seconds * 44100 && L[0] === L0[0] && L[7] === L0[7], 'e2e: separate() without transfer leaves the caller arrays intact');
       const sp = prog.filter(p => p.phase === 'separate');
-      check(sp.length === res.segments && sp.every((p, i) => p.done === i + 1 && p.total === res.segments), `e2e separate progress: done 1..${res.segments} once each`);
+      check(sp.length === res.segments + 1 && sp.every((p, i) => p.done === i && p.total === res.segments), `e2e separate progress: done 0 (before segment 1), then 1..${res.segments} once each`);
       const parts = [];
       let worst = Infinity;
       for (const [stem, ref] of Object.entries(P.stems)) {
