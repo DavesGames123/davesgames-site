@@ -39,6 +39,7 @@
 //    toast .................. squircle toasts that unfold from the status bar
 //    keys ................... V W P X R Delete Cmd-Z Cmd-D F T O Space 1-8 Esc
 //    setFrame / setNetlist .. the ui API
+//    scheduleAutosave / flushAutosave  1.5 s after an edit; flushed on dispose
 // ============================================================================
 import { h, icon, btn, seg, toggle, well, PanelManager, menu, unfold } from './panels.js';
 import { createDock } from './dock.js';
@@ -603,7 +604,9 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     renderStatus();
   }
   let autoT = null;
-  function scheduleAutosave() { clearTimeout(autoT); autoT = setTimeout(() => C.files.autosave(store.doc), 1500); }
+  function scheduleAutosave() { clearTimeout(autoT); autoT = setTimeout(() => { autoT = null; C.files.autosave(store.doc); }, 1500); }
+  // write a pending autosave now (pagehide: the timer would never fire)
+  function flushAutosave() { if (autoT === null) return; clearTimeout(autoT); autoT = null; C.files.autosave(store.doc); }
 
   // ── per-viewer layout memory (localStorage, never required) ──
   function saveUi() {
@@ -689,7 +692,16 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     open: key => (byKey[key] ? openPanel(key) : key === 'instr' ? (dock.phone ? dock.openTab('instr') : null) : null),
     close: key => panels.close(key),
     examples: list => examples.setList(list),
-    showNoGL(msg) { D.nogl.classList.add('sq'); D.nogl.textContent = msg || 'This page needs WebGL. The 3D bench cannot start in this browser.'; D.nogl.hidden = false; },
+    // with no message, keep the text of index.html (it says that the
+    // simulator and the panels still work); fall back only when it is empty
+    showNoGL(msg) {
+      D.nogl.classList.add('sq');
+      if (msg) D.nogl.textContent = msg;
+      else if (!String(D.nogl.textContent || '').trim()) D.nogl.textContent = 'This page needs WebGL to draw the 3D bench. The simulator and the panels still work.';
+      D.nogl.hidden = false;
+    },
+    flushAutosave,
+    cancelAutosave() { clearTimeout(autoT); autoT = null; },
     insets,
     instrument: id => (cards.get(id) || {}).panel || null,
     get audio() { return C.audio; },
@@ -698,6 +710,8 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     dispose() {
       for (const off of offs) { try { off(); } catch (e) { /* ignore */ } }
       if (ro) ro.disconnect();
+      // edits of the last 1.5 s would be lost with the timer: write them now
+      try { flushAutosave(); } catch (e) { /* storage blocked */ }
       clearTimeout(autoT);
       C.audio.close();
     }
