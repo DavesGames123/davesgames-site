@@ -310,7 +310,7 @@ function deferred() { let res, rej; const p = new Promise((a, b) => { res = a; r
 function fakeEngine(models, opts = {}) {
   const calls = [];
   const cached = {};
-  let gate = null, cancelled = false;
+  let gate = null, cancelled = false, loadGate = null;
   const eng = {
     calls, cached,
     async init(o) { calls.push(['init', o]); if (opts.initError) throw opts.initError; return { ep: opts.ep || 'webgpu', gpu: true, threads: 1, isolated: false }; },
@@ -321,6 +321,7 @@ function fakeEngine(models, opts = {}) {
     async load(id, onP) {
       calls.push(['load', id]);
       onP({ op: 'progress', phase: 'download', model: id, loaded: 45e6, total: 90.7e6 });
+      if (opts.loadGate) { loadGate = deferred(); await loadGate.p; }
       onP({ op: 'progress', phase: 'verify', model: id });
       onP({ op: 'progress', phase: 'session', model: id });
       if (opts.loadError) throw opts.loadError;
@@ -338,13 +339,14 @@ function fakeEngine(models, opts = {}) {
         const stems = {};
         models[modelId].stems.forEach((n, k) => { stems[n] = [left.map(x => x * (k + 1) * 0.1), right.map(x => x * (k + 1) * 0.1)]; });
         left.fill(NaN); right.fill(NaN);   // the worker owns (and here spoils) the arrays it got
-        return { stems, ms: 12000, ep: opts.ep || 'webgpu', segments: 3 };
+        return { stems, ms: 12000, ep: opts.sepEp || opts.ep || 'webgpu', fallback: opts.sepFallback || null, segments: 3 };
       });
     },
     finish() { if (gate) gate.res(); },
     cancel() { calls.push(['cancel']); cancelled = true; if (gate) gate.res(); },
     async evict(id) { calls.push(['evict', id]); cached[id] = false; },
-    terminate() { calls.push(['terminate']); },
+    // like engine/client.js: a pending call rejects as cancelled
+    terminate() { calls.push(['terminate']); if (loadGate) { const e = new Error('engine stopped'); e.code = 'cancelled'; loadGate.rej(e); loadGate = null; } },
   };
   return eng;
 }
@@ -646,6 +648,41 @@ else {
     check('no WebAssembly: message, engine not started, Separate off', E.$('.ss-error').dataset.code === 'nowasm' && !E.engine.calls.some(c => c[0] === 'init'));
     await E.pick(fakeFile('a.mp3', 1));
     check('no WebAssembly: Separate stays off with a song', E.$('.ss-go').disabled);
+    E.app.destroy();
+  }
+  {
+    // Cancel during the model download stops the download (terminate),
+    // not only the separation.
+    const E = boot({ engineOpts: { loadGate: true } });
+    await settle(10); await E.pick(fakeFile('a.mp3', 1)); E.$('.ss-go').click(); await settle(10);
+    E.$('.ss-cancel').click();
+    const txt = E.$('.ss-phase').textContent;
+    await settle(10);
+    check('cancel in the download: engine.terminate, "Stopping the download", then ready + "Cancelled."',
+      E.engine.calls.some(c => c[0] === 'terminate') && txt === 'Stopping the download' && E.root.dataset.state === 'ready' && E.$('.ss-msg').textContent === 'Cancelled.' && !E.engine.calls.some(c => c[0] === 'separate'),
+      `calls ${E.engine.calls.map(c => c[0]).join(',')}; phase "${txt}"; state ${E.root.dataset.state}`);
+    E.app.destroy();
+  }
+  {
+    // WebGPU fails in the first run: load said webgpu, the result says wasm.
+    const E = boot({ engineOpts: { ep: 'webgpu', sepEp: 'wasm', sepFallback: 'GPU device lost' } });
+    await settle(10); await E.pick(fakeFile('a.mp3', 1)); E.$('.ss-go').click(); await settle(10);
+    E.engine.finish(); await settle(20);
+    check('fallback in the first run: EP line and choice line say CPU and GPU failed',
+      /CPU \(slower\)/.test(E.$('.ss-ep').textContent) && /GPU failed/.test(E.$('.ss-ep').textContent) && /CPU/.test(E.$('.ss-choice').textContent),
+      `"${E.$('.ss-ep').textContent}" | "${E.$('.ss-choice').textContent}"`);
+    E.app.destroy();
+  }
+  {
+    // After window.__snRelease the stems stay, and Play builds a new context.
+    const E = boot();
+    await settle(10); await E.pick(fakeFile('a.mp3', 1)); E.$('.ss-go').click(); await settle(10);
+    E.engine.finish(); await settle(20);
+    globalThis.__snRelease();
+    E.$('.ss-play').click();
+    check('after __snRelease: Play makes a new AudioContext and plays',
+      !E.$('.ss-play').disabled && E.ctxs.length === 2 && E.app.player && E.app.player.playing && E.ctxs[1].log.sources.filter(x => !x.stopped).length === E.$$('.ss-row').length,
+      `contexts ${E.ctxs.length}, playing ${!!(E.app.player && E.app.player.playing)}`);
     E.app.destroy();
   }
   check('classifyError on messages without a code',

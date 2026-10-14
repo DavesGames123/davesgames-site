@@ -35,7 +35,9 @@
 //    renderModels ...... the model picker rows
 //    onProgress ........ engine events -> phase line, bar, times
 //    runSeparate ....... load + separate + result
+//    cancel ............ terminate in the load stage, soft cancel after
 //    showResult ........ mixer, player, downloads
+//    makePlayer ........ player from result.tracks (again after release)
 //    download .......... WAV and zip files
 //    onKey ............. Space = play / pause
 //    release ........... pagehide and window.__snRelease
@@ -109,6 +111,7 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
   let quality = 'standard';
   let song = null;            // { name, base, left, right, duration, channels }
   let busy = false, cancelAsked = false;
+  let stage = null;           // 'load' | 'separate' while busy
   let cached = {};            // modelId -> boolean
   let sizes = {};             // modelId -> bytes (graph + weights)
   let epInfo = null, fallback = null;
@@ -353,11 +356,13 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
     tick = setInterval(paintTimes, 500);
     const id = modelId, q = quality;
     try {
+      stage = 'load';
       const ld = await engine.load(id, onProgress);
       if (ld && ld.ep) { epInfo = { ...(epInfo || {}), ep: ld.ep }; }
       fallback = ld && ld.fallback ? ld.fallback : null;
       renderEp();
       if (cancelAsked) { const c = new Error('cancelled'); c.code = 'cancelled'; throw c; }
+      stage = 'separate';
       // transfer: our copies go to the worker as they are (engine/client.js
       // copies again without it; an engine without the flag ignores it).
       const res = await engine.separate({ modelId: id, left: song.left.slice(), right: song.right.slice(), quality: q, onProgress, transfer: true });
@@ -372,6 +377,7 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
       else showError(code, e && e.message);
       setState(result ? 'done' : 'ready');
     } finally {
+      stage = null;
       clearInterval(tick); tick = 0;
       if (!dead) { prog.hidden = true; refreshModels(); }
     }
@@ -382,6 +388,13 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
     cancelAsked = true;
     cancelBtn.disabled = true;
     cancelBtn.textContent = 'Stopping…';
+    if (stage === 'load') {
+      // The download, check and session steps have no cancel point in the
+      // worker: end the worker. The client starts a new one on the next call.
+      phase.textContent = lastEv && lastEv.phase === 'download' ? 'Stopping the download' : 'Stopping';
+      try { engine.terminate(); } catch (e) { /* the load ends with an error */ }
+      return;
+    }
     phase.textContent = 'Stopping after this segment';
     try { engine.cancel(); } catch (e) { /* the run ends with an error */ }
   }
@@ -408,10 +421,14 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
 
   function showResult(id, res) {
     clearResult();
+    // The EP can change in the first run (WebGPU -> wasm fallback).
+    if (res.ep) epInfo = { ...(epInfo || {}), ep: res.ep };
+    if (res.fallback) fallback = res.fallback;
+    renderEp();
     const stems = res.stems || {};
     const known = (models[id] && models[id].stems) || [];
     const order = [...known.filter(n => stems[n]), ...Object.keys(stems).filter(n => !known.includes(n))];
-    result = { id, stems, order };
+    result = { id, stems, order, tracks: null };
     const rows = [...order.map(n => ({ id: n, channels: stems[n] })), { id: ORIGINAL, channels: [song.left, song.right] }];
     const c = audioCtx();
     if (c) {
@@ -422,7 +439,8 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
         else stems[r.id] = r.channels;
         return { id: r.id, buffer, mute: r.id === ORIGINAL };
       });
-      player = createPlayer({ ctx: c, tracks, onEnded: () => { paintTransport(); stopLoop(); } });
+      result.tracks = tracks;
+      makePlayer();
     }
     mixer = createMixer(mixHost, {
       rows, doc, win,
@@ -441,6 +459,18 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
     const segs = Number.isFinite(res.segments) ? `, ${res.segments} segments` : '';
     note(`Done in ${fmtTime((res.ms || 0) / 1000)} on ${epText(res.ep || (epInfo && epInfo.ep))}${segs}.`);
     setState('done');
+  }
+
+  // A player for the stems of `result`. After window.__snRelease closes the
+  // context, the next Play makes a new context and player from the same
+  // AudioBuffers, with the mixer states.
+  function makePlayer() {
+    if (!result || !result.tracks) return null;
+    const c = audioCtx();
+    if (!c) return null;
+    player = createPlayer({ ctx: c, tracks: result.tracks, onEnded: () => { paintTransport(); stopLoop(); } });
+    if (mixer) player.setAll(mixer.states);
+    return player;
   }
 
   function buildDownloads() {
@@ -507,6 +537,7 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
   }
   function stopLoop() { if (raf) { win.cancelAnimationFrame(raf); raf = 0; } }
   function togglePlay() {
+    if (!player) makePlayer();
     if (!player) return;
     player.toggle();
     paintTransport();
