@@ -2,7 +2,7 @@
 //  STEM SPLITTER  ·  ui/tests.mjs — node tests of the UI (CONTRACT 8.3)
 // ----------------------------------------------------------------------------
 //  Run: node stella-nova/pages/stem-splitter/ui/tests.mjs
-//  No browser. The DOM is ui/fakedom.mjs. The engine is a fake object with
+//  No browser. The DOM is ui/test-fakedom.mjs. The engine is a fake object with
 //  the client shape of CONTRACT 5.4. AudioContext and OfflineAudioContext
 //  are fakes that record what the UI does. JSZip is the vendored file,
 //  loaded with require().
@@ -370,7 +370,7 @@ class FakeOffline {
 section('app (fake DOM, fake engine, fake audio)');
 if (!existsSync(join(HERE, 'app.js'))) skipped('app flow', 'ui/app.js absent');
 else {
-  const { installDom, mkEvent, fireWindow } = await import('./fakedom.mjs');
+  const { installDom, mkEvent, fireWindow } = await import('./test-fakedom.mjs');
   let MODELS = STUB_MODELS, DEFAULT = 'htdemucs', modelsSrc = 'STUB_MODELS (models.js absent)';
   if (existsSync(join(PAGE, 'models.js'))) {
     try { const m = await import(pathToFileURL(join(PAGE, 'models.js')).href); MODELS = m.MODELS; DEFAULT = m.DEFAULT_MODEL; modelsSrc = 'models.js'; }

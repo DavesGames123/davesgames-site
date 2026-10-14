@@ -1,5 +1,5 @@
 // ============================================================================
-//  STEM SPLITTER  ·  ui/fakedom.mjs — a small DOM for node tests (no browser)
+//  STEM SPLITTER  ·  ui/test-fakedom.mjs — a small DOM for node tests (no browser)
 // ----------------------------------------------------------------------------
 //  A copy of pages/breadboard-lab/ui/fakedom.mjs (same site, same author),
 //  with two changes: window has its own listener map (fireWindow sends an

@@ -430,7 +430,7 @@ The Python port must use 32-bit unsigned arithmetic with masks
 |---|---|
 | **MODEL** | `tools/stem-splitter/` (all: `README.md`, `export.py`, `thzip.py`, `synth.py`, `parity.py`, `make_vectors.py`, `opcheck.mjs`, `fetch.mjs`, `fetch.lock.json`); `stella-nova/pages/stem-splitter/models/htdemucs.onnx`, `models/htdemucs_6s.onnx`; `stella-nova/pages/stem-splitter/models.js`; `stella-nova/pages/stem-splitter/test/vectors.json`; `stella-nova/pages/stem-splitter/NOTICE`; `stella-nova/pages/stem-splitter/LICENSE-demucs.txt`; the one `.gitignore` line; the `pages.yml` cache + fetch steps |
 | **DSP+RUNTIME** | `stella-nova/pages/stem-splitter/engine/` (all: `fft.js`, `dsp.js`, `segment.js`, `synth.js`, `weights.js`, `worker.js`, `client.js`, `tests.mjs`) |
-| **UI** | `stella-nova/pages/stem-splitter/ui/` (all: `app.js`, `dropzone.js`, `audio-io.js`, `wav.js`, `player.js`, `mixer.js`, `waveform.js`, `sheet.js`, `fakedom.mjs`, `tests.mjs`); `stella-nova/pages/stem-splitter/style.css` |
+| **UI** | `stella-nova/pages/stem-splitter/ui/` (all: `app.js`, `dropzone.js`, `audio-io.js`, `wav.js`, `player.js`, `mixer.js`, `waveform.js`, `sheet.js`, `test-fakedom.mjs`, `tests.mjs`); `stella-nova/pages/stem-splitter/style.css` |
 | **INTEGRATE** (after the three) | `stella-nova/pages/stem-splitter/index.html`, `main.js`, `tests.mjs`; the row in `stella-nova/lib/nav-data.js`; the blurb in `stella-nova/pages/home/sectors.js`; the files that `tools/nav-sync.js` writes; `pages/home/thumbs/stem-splitter.jpg`, `thumbs/sm/stem-splitter.jpg`, `thumbs/list.js`; the two `EXCLUDE` lines in `tools/offline-manifest.mjs`; the `PASS_PATH` lines in `sw.js`; the regenerated `sw.js` stamp and `sw-manifest.js` |
 | **ARCHITECT** | this file |
 
@@ -715,7 +715,7 @@ and count it as skipped, not passed.
 
 ### 7.3 UI
 
-Section 6 and 5.5. Tests with a fake DOM (`ui/fakedom.mjs`, like
+Section 6 and 5.5. Tests with a fake DOM (`ui/test-fakedom.mjs`, like
 `pages/breadboard-lab/tests.mjs` and `pages/gravity-lab/tests.mjs`), a
 fake engine and a fake `AudioContext`. `wav.js` and `waveform.js` peaks
 are pure functions.

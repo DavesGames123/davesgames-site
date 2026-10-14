@@ -155,6 +155,14 @@ const { MODELS } = await import(pathToFileURL(path.join(PAGE, 'models.js')).href
   const ex = om.slice(om.indexOf('const EXCLUDE'), om.indexOf('];', om.indexOf('const EXCLUDE')));
   check(ex.includes('/^stella-nova\\/pages\\/stem-splitter\\/models\\//') && ex.includes('/^stella-nova\\/pages\\/stem-splitter\\/test\\//'),
     'tools/offline-manifest.mjs EXCLUDE has the models/ and test/ lines');
+  // Node-only helpers (.mjs) must match an EXCLUDE line, so visitors do not
+  // download them at install.
+  const exRes = new Function('return ' + ex.slice(ex.indexOf('[')) + '];')();
+  const mjs = [];
+  const walk = d => { for (const f of fs.readdirSync(path.join(PAGE, d), { withFileTypes: true })) { const r = d ? d + '/' + f.name : f.name; if (f.isDirectory()) walk(r); else if (f.name.endsWith('.mjs')) mjs.push('stella-nova/pages/stem-splitter/' + r); } };
+  walk('');
+  const shipped = mjs.filter(p => !exRes.some(re => re.test(p)));
+  check(mjs.length > 0 && shipped.length === 0, `every .mjs in the page folder is in EXCLUDE (${mjs.length} files, ${exRes.length} patterns${shipped.length ? '; not excluded: ' + shipped.join(', ') : ''})`);
   const sw = read(path.join(ROOT, 'sw.js'));
   check(/const PASS_PATH = \/\^stella-nova\\\/pages\\\/stem-splitter\\\/models\\\/\/;/.test(sw), 'sw.js has PASS_PATH for stem-splitter/models/');
   const r = sw.slice(sw.indexOf('function route(e)'));
