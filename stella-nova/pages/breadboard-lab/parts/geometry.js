@@ -26,6 +26,7 @@
 //    pinLocal / partPinsWorld ... pin grid -> mm -> world
 //    nearestHole ............ the snap search over every board
 //    resolvePins ............ pin -> hole for the whole document
+//    defOfPart .............. registry, else doc.customParts
 //    partFootprint .......... holes under a part body (covered-hole check)
 // ============================================================================
 import { G, pinGrid } from './schema.js';
@@ -215,12 +216,21 @@ export function isBoardMounted(part, def) {
   return !!(part.place && part.place.on) && def.mount !== 'free';
 }
 
+// The def of a part: the registry, else the document's own custom parts
+// (as sim/netlist.js and core/doc.js lookupDef do). Only the part editor's
+// Save adds a custom def to the registry, so a document from a link, the
+// autosave or a file has its custom defs only in doc.customParts.
+function defOfPart(doc, registry, id) {
+  const d = registry && registry.get ? registry.get(id) : null;
+  return d || (doc.customParts || []).find(c => c && c.id === id) || null;
+}
+
 export function resolvePins(doc, registry) {
   const pinHole = {};
   const covered = new Set();
   const byHole = new Map();
   for (const part of doc.parts || []) {
-    const def = registry.get(part.def);
+    const def = defOfPart(doc, registry, part.def);
     if (!def) continue;
     const mounted = isBoardMounted(part, def);
     for (const p of partPinsWorld(doc, part, def)) {
@@ -231,7 +241,7 @@ export function resolvePins(doc, registry) {
     }
   }
   for (const part of doc.parts || []) {
-    const def = registry.get(part.def);
+    const def = defOfPart(doc, registry, part.def);
     if (!def || !isBoardMounted(part, def)) continue;
     for (const h of partFootprint(doc, part, def).holes) covered.add(h);
   }

@@ -468,6 +468,20 @@ for (const type of Object.keys(P.BOARD_TYPES)) {
   b.dispose();
 }
 
+// ============================================================ CUSTOM DEFS
+// a custom part on a board, with its def only in doc.customParts (a share
+// link, the autosave, a file): its pins resolve to holes
+{
+  const reg = P.createRegistry();
+  const cr = { id: 'cp-r', name: 'My R', category: 'custom', mount: 'board', desc: '', params: [],
+    pins: [{ name: '1', x: 0, z: 0 }, { name: '2', x: 4, z: 0 }],
+    electrical: [{ id: 'main', type: 'resistor', nodes: { a: '1', b: '2' }, params: { r: 1000 } }], slots: [], model: { template: 'box', w: 10, d: 3, h: 3 } };
+  const h = P.holeLocal('bb400', 'a10');
+  const doc = { boards: [{ id: 'b1', type: 'bb400', x: 0, z: 0, rot: 0 }], customParts: [cr], wires: [], parts: [{ id: 'p1', def: 'cp-r', place: { on: 'b1', x: h.x, z: h.z, rot: 0 }, params: {} }] };
+  const r = P.resolvePins(doc, reg);
+  check('resolvePins finds a custom def in doc.customParts (not in the registry)', r.pinHole['p1.1'] === 'b1:a10' && r.pinHole['p1.2'] === 'b1:a14', JSON.stringify(r.pinHole));
+}
+
 // ============================================================ HYGIENE
 function walk(dir) {
   return readdirSync(dir).flatMap(f => { const p = join(dir, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
