@@ -67,6 +67,7 @@ const SEARCH_WORDS = {
   'gravity-lab': 'gravity sandbox n-body nbody orbits lagrange points three-body slingshot black hole galaxies tidal tails kepler',
   'planet-collision': 'planet collision giant impact moon crashes into earth theia moon formation sph smoothed particle hydrodynamics synestia melt debris',
   'roche-limit': 'roche limit tidal disruption rings saturn moon breakup shoemaker-levy comet rubble pile',
+  'stem-splitter': 'stem separation source separation demucs htdemucs vocal remover karaoke instrumental acapella isolate vocals drums bass guitar piano unmix split stems ai music offline',
 };
 
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
