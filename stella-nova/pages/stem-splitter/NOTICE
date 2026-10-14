@@ -94,3 +94,21 @@ Runtime
   onnxruntime-web 1.30.0 — MIT — Copyright (c) Microsoft Corporation.
     stella-nova/vendor/onnxruntime-web@1.30.0 (see its SOURCE.txt and
     LICENSE). The page loads it from the site, not from a CDN.
+  JSZip 3.10.1 — dual licence, MIT or GPLv3 (we use it under MIT) —
+    (c) 2009-2016 Stuart Knightley. It includes pako (MIT).
+    stella-nova/vendor/jszip@3.10.1/dist/jszip.min.js, loaded by
+    index.html for the "All stems (zip)" download. Unchanged release file.
+    Source:  https://github.com/Stuk/jszip (release v3.10.1)
+    Bytes:   97630
+    sha256:  acc7e41455a80765b5fd9c7ee1b8078a6d160bbbca455aeae854de65c947d59e
+    Licence text: stella-nova/vendor/jszip@3.10.1/LICENSE.markdown
+             (sha256 566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4)
+
+Differences from the demucs command
+  - "Standard" quality equals `demucs --shifts 0`. The command default is
+    `--shifts 1` (one random shift). "Best" uses 2 shifts.
+  - The browser decodes and resamples the file (decodeAudioData). The
+    command uses ffmpeg and julius. For a 48 kHz file the stems can differ
+    from the command by more than the engine error (see CONTRACT.md 2.6).
+  - A track of 1 sample: upstream fails (std is NaN). The page gives a
+    finite output.

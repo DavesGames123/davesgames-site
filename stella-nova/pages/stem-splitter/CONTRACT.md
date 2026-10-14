@@ -214,15 +214,31 @@ uses only ops that `ort.min.mjs` lists, or at most CPU-side shape ops.
   | phone | wasm | 20-40 s (E) | may fail: memory (E) |
 
   "Best" quality (2 shifts) doubles every row.
-- Memory, 4 minute song, worker JS heap: input 2 x 10.58 M x 4 B = 85 MB;
-  output accumulator S x 85 MB (339 MB for 4 stems, 508 MB for 6); weight
-  sum 2.8 MB (one segment of float64, `segmentWeightSum`; it was an N-length
-  float64 array of 85 MB before the review fix); per segment `mag` 11 MB, `spec_out` 44 MB (66 MB for 6),
-  `wave_out` 11 MB (17 MB). Plus the ORT heap (wasm: about 2.5-3 GB peak,
-  from the node RSS above; webgpu: GPU memory, not measured). Limit: the UI
-  refuses songs over 20 min, and over 8 min on a phone (coarse pointer and
-  width under 700 px), with a message.
-- Progress: one event per finished segment run, with `done`, `total`,
+- Memory, 4 minute song (N = 10 584 000; one channel = 42.3 MB). Numbers
+  from the product review, by arithmetic (not measured in a browser):
+
+  | where | item | 4 stems | 6 stems |
+  |---|---|---|---|
+  | worker JS | input | 85 MB | 85 MB |
+  | worker JS | output accumulators | 339 MB | 508 MB |
+  | worker JS | weight sum (one segment, float64) | 2.8 MB | 2.8 MB |
+  | worker JS | model bytes, kept until the first good run | 91 MB | 60 MB |
+  | worker JS | per-segment buffers (mag, spec_out and wave_out copies, mix, iSTFT) | about 70 MB | about 95 MB |
+  | worker JS | total | about 590 MB | about 750 MB |
+  | main thread | at the result: song + stems from the worker + AudioBuffers | about 850 MB | about 1 190 MB |
+  | main thread | after GC | 423 MB | 593 MB |
+  | main thread | extra during the "All stems" zip | about +420 MB | more |
+
+  Plus the ORT heap (wasm: about 2.5-3 GB peak, from the node RSS above;
+  webgpu: GPU memory, not measured). All track terms scale with the song
+  length. Limit: the UI refuses songs over 20 min, and over 8 min on a
+  phone (coarse pointer and width under 700 px), with a message. The
+  review expects that an 8 min song does not fit in an iOS tab (about
+  1.2 GB worker JS plus the ORT heap). The phone limit stays at 8 min
+  until a real phone run measures it; a song that does not fit ends with
+  the `oom` message, which suggests a shorter song.
+- Progress: one event with `done` 0 before segment 1 (`etaMs` NaN), then
+  one event per finished segment run, with `done`, `total`,
   `elapsedMs`, `etaMs`. ETA = mean time of the finished segments, without
   the first segment once a second one is done (the first one has shader
   compile), times the segments left.
@@ -307,7 +323,12 @@ visitor. The plan:
 - Input: `<input type=file accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.opus">`
   and drag-and-drop. Decode with
   `new OfflineAudioContext(2, 1, 44100).decodeAudioData(arrayBuffer)`: the
-  browser resamples to 44 100 Hz, so no JS resampler.
+  browser resamples to 44 100 Hz, so no JS resampler. Parity note: the
+  demucs command resamples with ffmpeg / julius. A different resampler
+  alone moves the stems of a 48 kHz file to 50-62 dB SDR against the
+  demucs command (parity review), while the engine itself is at 64-68 dB
+  on the same 44.1 kHz input. So for 48 kHz files, parity depends on the
+  browser's resampler. 44.1 kHz files are not resampled.
 - Channels (as `demucs/audio.py convert_audio_channels`): 1 channel -> copy
   to L and R; 2 -> as is; more than 2 -> the first two.
 - Output: one `AudioBuffer` per stem for playback. WAV export: 16-bit PCM,
@@ -533,7 +554,11 @@ Events (no id): `{ op: 'progress', phase: 'download', model, loaded, total }`,
 `{ op: 'progress', phase: 'separate', model, done, total, elapsedMs, etaMs }`.
 
 `quality`: `standard` = `{ shifts: 0, overlap: 0.25 }`, `best` =
-`{ shifts: 2, overlap: 0.25 }`.
+`{ shifts: 2, overlap: 0.25 }`. Note: "Standard" equals the demucs command
+with `--shifts 0`. The command default is `--shifts 1` (`separate.py`
+line 46, `api.py` line 59), which is one random shift and the same run
+time as Standard. Standard keeps shifts 0, so its output does not depend
+on a random offset and the tests can compare it with PyTorch.
 
 ### 5.4 Client (`engine/client.js`, main thread) — what the UI calls
 
