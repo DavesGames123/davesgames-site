@@ -1,0 +1,96 @@
+Stem Splitter (stella-nova/pages/stem-splitter)
+===============================================
+
+The page separates a song into stems with Demucs v4 (Hybrid Transformer
+Demucs) by Meta AI Research. It runs in the browser. The audio does not
+leave the device.
+
+Upstream
+  Demucs — MIT — Copyright (c) Meta Platforms, Inc. and affiliates.
+    https://github.com/facebookresearch/demucs
+    commit e976d93ecc3865e5757426930257e200846a520a (2023-11-16)
+    Licence text: LICENSE-demucs.txt in this folder (an unchanged copy of
+    the upstream LICENSE file).
+
+Hosted model files
+  The page hosts four model files. The two .th files are the official
+  Demucs checkpoints, unchanged. The deploy downloads them
+  (tools/stem-splitter/fetch.mjs, pins in tools/stem-splitter/fetch.lock.json)
+  and checks each sha256. They are not in git. The two .onnx files are
+  made here from the Demucs code and hold no weights.
+
+  models/955717e8-8726e21a.th
+    What:    the htdemucs checkpoint (4 sources: drums, bass, other,
+             vocals), float16 state, torch zip. Unchanged.
+    Source:  https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th
+             (named in demucs/remote/files.txt and demucs/remote/htdemucs.yaml)
+    Bytes:   84141911
+    sha256:  8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4
+    Licence: MIT (see "Licence of the weights" below), LICENSE-demucs.txt
+
+  models/5c90dfd2-34c22ccb.th
+    What:    the htdemucs_6s checkpoint (6 sources: drums, bass, other,
+             vocals, guitar, piano), float16 state, torch zip. Unchanged.
+    Source:  https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/5c90dfd2-34c22ccb.th
+             (named in demucs/remote/files.txt and demucs/remote/htdemucs_6s.yaml)
+    Bytes:   54996327
+    sha256:  34c22ccb381c6f9fdbf324f04e1e2fe21aaaf293f5ded163a162697ff9a02ddd
+    Licence: MIT (see "Licence of the weights" below), LICENSE-demucs.txt
+
+  models/htdemucs.onnx
+    What:    the htdemucs network core as an ONNX graph (opset 17), with no
+             STFT and no weights. Each weight is an external float16
+             initializer that points to a byte range of
+             955717e8-8726e21a.th. A derived work of the Demucs code
+             (demucs/htdemucs.py HTDemucs.forward), made by
+             tools/stem-splitter/export.py with torch 2.7.1 and onnx 1.23.2.
+    Bytes:   6469436
+    sha256:  e9bdea7e706cacd2ec75b84e8c3cb577e30fea18fa9becd8cff26fe4fcde8c31
+    Licence: MIT, LICENSE-demucs.txt (Copyright (c) Meta Platforms, Inc.
+             and affiliates)
+
+  models/htdemucs_6s.onnx
+    What:    the same for htdemucs_6s; weights in 5c90dfd2-34c22ccb.th.
+    Bytes:   5000199
+    sha256:  792568d1efb79451c92695199fdc4225c37dddea115348ef80e13677fdedf7d9
+    Licence: MIT, LICENSE-demucs.txt (Copyright (c) Meta Platforms, Inc.
+             and affiliates)
+
+Licence of the weights
+  Meta gives no separate licence and no model card for the pretrained
+  weights. The only licence statement covers the whole project:
+  README.md, section "License" (lines 300-302 at the pinned commit):
+  "Demucs is released under the MIT license as found in the LICENSE
+  file." setup.py also says license='MIT License', and the MIT-licensed
+  code names the weight URLs (demucs/remote/files.txt, demucs/pretrained.py
+  ROOT_URL). We host the official files unchanged under that statement,
+  with the MIT text next to them. This is a project-wide line, not a
+  licence written for the weights.
+
+  The models were trained on MUSDB18-HQ and an extra set of 800 songs
+  (README.md line 30 and line 222). That training data has its own terms.
+  We do not host or give out any of it.
+
+Port of the Demucs processing (MIT, Copyright (c) Meta Platforms, Inc.
+and affiliates)
+  The page does the steps around the network core in JS. They follow the
+  Demucs code:
+    engine/dsp.js      demucs/spec.py spectro and ispectro (torch.stft and
+                       torch.istft), demucs/htdemucs.py HTDemucs._spec,
+                       _magnitude, _mask (cac) and _ispec, and the track
+                       normalisation of demucs/api.py separate_tensor
+    engine/segment.js  demucs/apply.py apply_model (the shifts and split
+                       branches, the transition weight), TensorChunk.padded
+                       and demucs/utils.py center_trim
+  The model tools in tools/stem-splitter/ (core.py, export.py,
+  demucs_np.py, thzip.py) follow the same files and HTDemucs.forward.
+
+Test audio
+  The tests use only synth-v1, a synthetic signal made for this site
+  (CONTRACT.md 3.5; tools/stem-splitter/synth.py, engine/synth.js). No
+  music with copyright is in this folder or in the tests.
+
+Runtime
+  onnxruntime-web 1.30.0 — MIT — Copyright (c) Microsoft Corporation.
+    stella-nova/vendor/onnxruntime-web@1.30.0 (see its SOURCE.txt and
+    LICENSE). The page loads it from the site, not from a CDN.
