@@ -28,10 +28,13 @@
 //  reloads, because its GPU context is gone.
 //
 //  START ORDER: share link (#d=...), else the autosave, else the first
-//  example. Pass ?example=<key> to open an example directly.
+//  example. Pass ?example=<key> to open an example directly. A link or an
+//  example opens once: dropUrlDoc takes it out of the URL after the load,
+//  so a reload opens the autosave with the user's edits.
 //
 //  GREP MAP
 //    initialDoc .......... share link, autosave, first example
+//    dropUrlDoc .......... clear #d= or ?example= after it loads
 //    runState ............ running / speed from sim 'state' (for the saver)
 //    makeView / stubView . the 3D view, or a no-op view without WebGL
 //    rebuild ............. netlist -> sim.load -> view/ui netlists
@@ -65,6 +68,20 @@ const bus = createBus();
 let saverOn = false;           // the screensaver owns the camera
 
 // ── the first document ─────────────────────────────────────────────────────
+// A share link or ?example= opens once. After it loads, the URL drops it, so
+// a reload opens the autosave (the user's edits) and not the link again.
+function dropUrlDoc(what) {
+  try {
+    let search = location.search || '';
+    if (what === 'example') {
+      const sp = new URLSearchParams(search);
+      sp.delete('example');
+      search = sp.toString() ? '?' + sp.toString() : '';
+    }
+    const hash = what === 'hash' ? '' : (location.hash || '');
+    history.replaceState(null, '', (location.pathname || '') + search + hash);
+  } catch (e) { /* no history API: the link stays, as before */ }
+}
 async function initialDoc() {
   const norm = (raw, from) => {
     const { doc, warnings } = normalizeDoc(raw, { registry, validateMaterial: materials.validateMaterial });
@@ -74,11 +91,11 @@ async function initialDoc() {
   let q = null;
   try { q = new URLSearchParams(location.search).get('example'); } catch (e) { q = null; }
   if (q && EXAMPLES.some(e => e.key === q)) {
-    try { return { doc: norm((await loadExample(q)).doc, 'example'), from: 'example' }; } catch (e) { /* fall through */ }
+    try { const doc = norm((await loadExample(q)).doc, 'example'); dropUrlDoc('example'); return { doc, from: 'example' }; } catch (e) { /* fall through */ }
   }
   try {
     const raw = await decodeHash(location.hash);
-    if (raw) return { doc: norm(raw, 'share link'), from: 'link' };
+    if (raw) { const doc = norm(raw, 'share link'); dropUrlDoc('hash'); return { doc, from: 'link' }; }
   } catch (e) { console.warn('breadboard-lab: the share link could not be read', e); }
   try {
     const raw = createFiles().loadAutosave();
