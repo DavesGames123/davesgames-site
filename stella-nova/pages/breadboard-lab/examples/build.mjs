@@ -849,7 +849,10 @@ def('uno-7seg', (B) => {
     title: '7-segment counter', level: 2,
     blurb: 'Seven pins light the seven segments of a common-cathode digit, each through its own 220 Ω resistor. The sketch counts 0 to 9.',
     see: ['The digit counts 0, 1, 2 … 9 and starts again, a step every 0.6 s.', 'Each segment is an LED: a table of bit patterns in the sketch says which ones light for each digit.'],
-    checks: [on(0.3, 'a'), on(0.3, 'f'), off(0.3, 'g'), on(0.9, 'b'), on(0.9, 'c'), off(0.9, 'a'), on(1.5, 'g'), on(1.5, 'e'), off(1.5, 'c')],
+    // every digit 0 … 9, every segment, in the middle of its 0.6 s step
+    // (the bit table of the sketch: bit 0 = a … bit 6 = g)
+    checks: [0b0111111, 0b0000110, 0b1011011, 0b1001111, 0b1100110, 0b1101101, 0b1111101, 0b0000111, 0b1111111, 0b1101111]
+      .flatMap((bits, d) => 'abcdefg'.split('').map((s, i) => ((bits >> i) & 1 ? on : off)(+(0.3 + 0.6 * d).toFixed(2), s))),
   };
 });
 

@@ -19,6 +19,30 @@
    {
     "at": 0.3,
     "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 0.3,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 0.3,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 0.3,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "min": 0.4
+   },
+   {
+    "at": 0.3,
+    "part": "p3",
     "quantity": "vis.leds.f",
     "min": 0.4
    },
@@ -26,6 +50,12 @@
     "at": 0.3,
     "part": "p3",
     "quantity": "vis.leds.g",
+    "max": 0.05
+   },
+   {
+    "at": 0.9,
+    "part": "p3",
+    "quantity": "vis.leds.a",
     "max": 0.05
    },
    {
@@ -43,13 +73,49 @@
    {
     "at": 0.9,
     "part": "p3",
-    "quantity": "vis.leds.a",
+    "quantity": "vis.leds.d",
+    "max": 0.05
+   },
+   {
+    "at": 0.9,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 0.9,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "max": 0.05
+   },
+   {
+    "at": 0.9,
+    "part": "p3",
+    "quantity": "vis.leds.g",
     "max": 0.05
    },
    {
     "at": 1.5,
     "part": "p3",
-    "quantity": "vis.leds.g",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 1.5,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 1.5,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "max": 0.05
+   },
+   {
+    "at": 1.5,
+    "part": "p3",
+    "quantity": "vis.leds.d",
     "min": 0.4
    },
    {
@@ -61,8 +127,308 @@
    {
     "at": 1.5,
     "part": "p3",
-    "quantity": "vis.leds.c",
+    "quantity": "vis.leds.f",
     "max": 0.05
+   },
+   {
+    "at": 1.5,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "max": 0.05
+   },
+   {
+    "at": 2.1,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "max": 0.05
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "max": 0.05
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "min": 0.4
+   },
+   {
+    "at": 2.7,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "max": 0.05
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "min": 0.4
+   },
+   {
+    "at": 3.3,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "max": 0.05
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "min": 0.4
+   },
+   {
+    "at": 3.9,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "max": 0.05
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "max": 0.05
+   },
+   {
+    "at": 4.5,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "max": 0.05
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "min": 0.4
+   },
+   {
+    "at": 5.1,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.a",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.b",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.c",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.d",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.e",
+    "max": 0.05
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.f",
+    "min": 0.4
+   },
+   {
+    "at": 5.7,
+    "part": "p3",
+    "quantity": "vis.leds.g",
+    "min": 0.4
    }
   ],
   "expectIssues": []
