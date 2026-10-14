@@ -45,7 +45,8 @@ export function phaseText(ev) {
         : `Downloading model ${fmtMB(ev.loaded)}`;
     case 'verify': return 'Checking the model download';
     case 'session': return 'Preparing the model';
-    case 'separate': return `Separating segment ${ev.done} of ${ev.total}`;
+    // done = segments finished, so the segment in work is done + 1.
+    case 'separate': return `Separating segment ${Math.min(ev.done + 1, ev.total)} of ${ev.total}`;
     default: return '';
   }
 }

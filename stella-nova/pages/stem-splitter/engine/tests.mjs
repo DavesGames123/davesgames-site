@@ -350,7 +350,7 @@ section('separate');
     const { mean } = trackStats(L, R);
     const wantStem = k => both(L.map(v => k * (v - mean) + mean), R.map(v => k * (v - mean) + mean));
     const s0 = sdr(wantStem(1), both(out[0][0], out[0][1])), s1 = sdr(wantStem(2), both(out[1][0], out[1][1]));
-    check(Math.min(s0, s1) >= 100, `separate, fake core, ${name}: stem s = (s+1)(x - mean) + mean, SDR ${fmt(s0)} / ${fmt(s1)} dB >= 100 (${prog.length} segments, ${fmt(ms / 1000, 1)} s)`);
+    check(Math.min(s0, s1) >= 100, `separate, fake core, ${name}: stem s = (s+1)(x - mean) + mean, SDR ${fmt(s0)} / ${fmt(s1)} dB >= 100 (${prog.length - 1} segments, ${fmt(ms / 1000, 1)} s)`);
     // progress: done 1..total once each; total = the real segment count.
     const shifts = extra.shifts || 0;
     let expect;
@@ -358,9 +358,15 @@ section('separate');
       const offs = extra.shiftOffsets || shiftOffsetsFor(shifts);
       expect = offs.reduce((a, o) => a + segmentPlan(L.length + 22050 - o).offsets.length, 0);
     } else expect = segmentPlan(L.length).offsets.length;
-    const seq = prog.map(p => p.done).join(',');
+    // A done 0 event comes first, so the UI shows "segment 0 of N" and
+    // the bar during the first (long) segment.
+    const p0 = prog[0];
+    check(p0 && p0.done === 0 && p0.total === expect && p0.elapsedMs === 0 && Number.isNaN(p0.etaMs),
+      `progress: first event before segment 1 = done 0, total ${p0 && p0.total}, etaMs ${p0 && p0.etaMs} (want done 0, total ${expect}, NaN)`);
+    const segEv = prog.slice(1);
+    const seq = segEv.map(p => p.done).join(',');
     const want = Array.from({ length: expect }, (_, i) => i + 1).join(',');
-    check(seq === want && prog.every(p => p.total === expect) && prog.every(p => p.etaMs >= 0 && p.elapsedMs >= 0),
+    check(seq === want && segEv.every(p => p.total === expect) && segEv.every(p => p.etaMs >= 0 && p.elapsedMs >= 0),
       `progress: done = 1..${expect} once each, total ${prog[0] && prog[0].total} = ${shifts ? 'sum of the segments of each shifted run' : 'segments'}` +
       (shifts ? ` (offsets.length x shifts would be ${segmentPlan(L.length).offsets.length * shifts})` : ''));
     check(prog.length ? prog[prog.length - 1].etaMs === 0 : false, `progress: etaMs 0 after the last segment`);
@@ -540,7 +546,7 @@ function makeRt(ortOpts = {}, { gpu = true, isolated = false, failNet = false } 
   const both = (x, y) => { const o = new Float32Array(x.length * 2); o.set(x); o.set(y, x.length); return o; };
   check(sdr(both(L, R), both(st.vocals[0], st.vocals[1])) >= 100, `separate through the runtime: stem = input, SDR ${fmt(sdr(both(L, R), both(st.vocals[0], st.vocals[1])))} dB`);
   const sp = posts.slice(p0).filter(p => p.m.op === 'progress').map(p => p.m);
-  check(sp.length === 2 && sp.every(p => p.phase === 'separate' && p.model === 'two' && 'etaMs' in p && 'elapsedMs' in p) && sp[1].done === 2 && sp[1].total === 2,
+  check(sp.length === 3 && sp.every(p => p.phase === 'separate' && p.model === 'two' && 'etaMs' in p && 'elapsedMs' in p) && sp[0].done === 0 && sp[2].done === 2 && sp[2].total === 2,
     `separate events: ${sp.map(p => p.done + '/' + p.total).join(' ')}`);
   const runs = ort.log.filter(l => l.run);
   check(JSON.stringify(runs[0].magDims) === '[1,4,2048,336]' && JSON.stringify(runs[0].mixDims) === '[1,2,343980]', `core feeds: mag ${JSON.stringify(runs[0].magDims)}, mix ${JSON.stringify(runs[0].mixDims)}`);
@@ -642,7 +648,7 @@ class FakeWorker {
   const [L, R] = synthV1(3);
   const sp = [];
   const res = await eng.separate({ modelId: 'two', left: L, right: R, quality: 'standard', onProgress: p => sp.push(p) });
-  check(res.stems.drums[0].length === L.length && L.length === 132300 && sp.length === 1 && sp[0].phase === 'separate',
+  check(res.stems.drums[0].length === L.length && L.length === 132300 && sp.length === 2 && sp[0].done === 0 && sp[1].done === 1 && sp[1].phase === 'separate',
     `client separate: stems ${Object.keys(res.stems).join(', ')}, caller arrays kept (length ${L.length}), ${sp.length} progress event(s)`);
   // terminate during a separate: the call rejects, the next call starts a new worker
   const big = synthV1(25);

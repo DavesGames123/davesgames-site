@@ -139,6 +139,9 @@ export async function separate(left, right, opts = {}) {
   const segTimes = [];
   const t0 = now();
   let done = 0;
+  // An event before segment 1: the first segment can take 8-40 s, and the
+  // UI must show the segment count and the bar during that time.
+  if (onProgress) onProgress({ done: 0, total, elapsedMs: 0, etaMs: NaN });
 
   for (let r = 0; r < runs.length; r++) {
     const { len, lag } = runs[r];
