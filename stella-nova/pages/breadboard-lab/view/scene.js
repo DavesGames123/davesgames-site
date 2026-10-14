@@ -34,7 +34,8 @@
 //    syncWires ............. wire paths and meshes, flow paths
 //    syncProbes / leadRec .. instruments, lead cables and tips
 //    sync .................. the document diff
-//    pick / benchPoint ..... what is under the pointer
+//    pick / benchPoint ..... what is under the pointer (viewOf: view offset)
+//    applyInsets / setInsets  frame the bench between the panel columns
 //    endWorld / nodeOf ..... wire ends in world mm; net of a target
 //    highlightNet .......... rings on every hole and pin of a net
 //    setFrame .............. sim frame → handles, damage, flow, screens
@@ -51,7 +52,7 @@ import { createFlow } from './flow.js';
 import { createInteraction } from './interact.js';
 import { createPreview } from './preview.js';
 import { dataTexture, fallbackBoard, fallbackPart, fallbackWire, fallbackWirePath } from './fallback.js';
-import { ndcFromClient, pickBench, pickPoints, projectPoint, rayFromCamera, rayPlaneY } from './picking.js';
+import { ndcFromClient, pickBench, pickPoints, projectPoint, rayFromCamera, rayPlaneY, insetViewOffset } from './picking.js';
 import { BOARD_H, BOARD_TYPES, boardHit, boardRect, holeWorld, partFrame, partPinsWorld, strips, parseHoleId, findBoard, stripOf } from '../core/space.js';
 import { lookupDef, probeDefaults } from '../core/doc.js';
 
@@ -552,10 +553,17 @@ export function createView(opts = {}) {
     const s = renderer.getSize ? renderer.getSize(new THREE.Vector2()) : { x: 800, y: 500 };
     return { left: 0, top: 0, width: s.x || 800, height: s.y || 500 };
   }
+  // the camera view offset (insets, or the saver's band), or null
+  const viewOf = () => (camera.view && camera.view.enabled ? camera.view : null);
   function rayAt(cx, cy) {
     const r = rect();
-    const ndc = ndcFromClient(cx, cy, r);
-    return { ndc, ray: rayFromCamera(rig.cam(), ndc.x, ndc.y), r };
+    const ndc = ndcFromClient(cx, cy, r, viewOf());
+    // inside: the pointer is on the canvas (with a view offset the NDC of
+    // the visible window is not -1 … 1)
+    const inside = cx >= r.left - 0.01 * r.width && cx <= r.left + 1.01 * r.width && cy >= r.top - 0.01 * r.height && cy <= r.top + 1.01 * r.height;
+    // ndc: of the full image (the plain-data ray); ndcCanvas: of the canvas
+    // (THREE's projection matrix already holds the view offset)
+    return { ndc, ndcCanvas: ndcFromClient(cx, cy, r), ray: rayFromCamera(rig.cam(), ndc.x, ndc.y), r, inside };
   }
   const targetOf = obj => { let o = obj; while (o) { if (o.userData && o.userData.bbTarget) return o.userData.bbTarget; o = o.parent; } return null; };
 
@@ -564,8 +572,8 @@ export function createView(opts = {}) {
   function pick(cx, cy, mode = 'select') {
     lastPointer = { x: cx, y: cy };
     lastHit = null;
-    const { ndc, ray } = rayAt(cx, cy);
-    if (Math.abs(ndc.x) > 1.02 || Math.abs(ndc.y) > 1.02) return null;
+    const { ndcCanvas, ray, inside } = rayAt(cx, cy);
+    if (!inside) return null;
     const doc = shown || store.doc;
     if (mode !== 'endpoint') {
       const lt = pickPoints(ray, leadPoints, 3.2);
@@ -580,7 +588,7 @@ export function createView(opts = {}) {
     }
     refreshPickables();
     rig.apply(camera);
-    ndcV.set(ndc.x, ndc.y);
+    ndcV.set(ndcCanvas.x, ndcCanvas.y);
     raycaster.setFromCamera(ndcV, camera);
     const hits = raycaster.intersectObjects(pickables, false);
     for (const h of hits) {
@@ -731,7 +739,7 @@ export function createView(opts = {}) {
   function screenPos(t) {
     const p = targetPoint(t);
     if (!p) return null;
-    const pr = projectPoint(rig.cam(), p, rect());
+    const pr = projectPoint(rig.cam(), p, rect(), viewOf());
     return pr ? { x: pr.x, y: pr.y } : null;
   }
 
@@ -865,7 +873,19 @@ export function createView(opts = {}) {
     renderer.setSize(w, h, false);
     if (composer) { composer.setPixelRatio(Math.min(dpr, 2)); composer.setSize(w, h); }
     rig.setAspect(w / Math.max(1, h));
+    applyInsets(w, h);
     requestRender();
+  }
+  // frame the bench between the open panel columns (CONTRACT 8): a view
+  // offset moves the image centre into the free band. main.js passes the
+  // ui 'layout' insets; the saver sets its own offset while it runs.
+  let insets = null;
+  function applyInsets(w, h) {
+    if (!insets) return;
+    w = w || (canvas && canvas.clientWidth) || 800; h = h || (canvas && canvas.clientHeight) || 500;
+    const v = insetViewOffset(insets, w, h);
+    if (v) camera.setViewOffset(v.fullWidth, v.fullHeight, v.offsetX, v.offsetY, v.width, v.height);
+    else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   }
 
   // ── interaction ──────────────────────────────────────────────────────────
@@ -946,6 +966,7 @@ export function createView(opts = {}) {
     getCamera() { return rig.pose(); },
     setFlow(on) { flow.setOn(on); requestRender(); },
     getFlow() { return !!flow.on; },
+    setInsets(i) { insets = i ? { ...i } : { left: 0, right: 0, top: 0, bottom: 0 }; applyInsets(); requestRender(); },
     setQuality(q) {
       if (q !== 'high' && q !== 'low') return;
       quality = q;

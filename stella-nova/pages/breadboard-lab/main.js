@@ -41,6 +41,7 @@
 //    onDocChange ......... the routing of document edits
 //    flatOps / partDef ... op helpers
 //    wireSim ............. sim events -> view, ui, bus
+//    layout .............. ui 'layout' insets -> view.setInsets (not while the saver runs)
 //    pagehide ............ GPU release
 //    window.snSaver ...... saver.js (installSaver)
 // ============================================================================
@@ -254,9 +255,15 @@ window.addEventListener('pagehide', release);
 window.addEventListener('pageshow', e => { if (e.persisted && gone) location.reload(); });
 
 // ── screensaver ────────────────────────────────────────────────────────────
+// ── layout: the view frames the bench between the open columns ─────────────
+let lastInsets = null;
+bus.on('layout', i => { lastInsets = i; if (!saverOn) view.setInsets(i); });
+try { lastInsets = ui.insets(); view.setInsets(lastInsets); } catch (e) { /* no layout yet */ }
+
 const saver = installSaver({
   store, view, realView, sim, bus, registry, geo, normalizeDoc, loadExample,
-  setSaverOn: v => { saverOn = !!v; },
+  // the saver sets its own view offset; on exit the panel insets come back
+  setSaverOn: v => { saverOn = !!v; if (!saverOn && lastInsets) view.setInsets(lastInsets); },
   runState: () => ({ ...runState }),
 });
 window.snSaver = saver;

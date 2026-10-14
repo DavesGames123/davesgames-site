@@ -445,6 +445,44 @@ section('picking');
   const got = pickPoints(rayFromCamera(cam, pr.nx, pr.ny), pins, 1.0);
   check('pickPoints returns the point under the ray', got && got.id === 'b', got && got.id);
 }
+// the bench framed between the open columns: a camera view offset, and
+// picks and projections that follow it (integration review 6)
+{
+  const P = await import('./picking.js');
+  const THREE = await import('../../../vendor/three@0.160.0/build/three.module.js');
+  const rect = { left: 0, top: 0, width: 1400, height: 900 };
+  const ins = { left: 334, right: 434, top: 56, bottom: 210 };
+  const view = P.insetViewOffset ? P.insetViewOffset(ins, rect.width, rect.height) : null;
+  // the camera target (NDC 0, 0 of the full image) lands in the middle of the free band
+  const c = view ? P.clientFromNdc(0, 0, rect, view) : null;
+  const wantX = ins.left + (rect.width - ins.left - ins.right) / 2, wantY = ins.top + (rect.height - ins.top - ins.bottom) / 2;
+  // a round trip: client → ndc → client, for a point near each corner
+  let worst = 0;
+  if (view) for (const [x, y] of [[ins.left + 5, ins.top + 5], [rect.width - ins.right - 5, rect.height - ins.bottom - 5], [700, 450]]) {
+    const n = P.ndcFromClient(x, y, rect, view), b = P.clientFromNdc(n.x, n.y, rect, view);
+    worst = Math.max(worst, Math.hypot(b.x - x, b.y - y));
+  }
+  // THREE with the same view offset agrees: its raycaster takes canvas NDC
+  // (the projection holds the offset), picking.js takes full-image NDC
+  let agree = Infinity;
+  if (view) {
+    const cam = new THREE.PerspectiveCamera(38, rect.width / rect.height, 1, 5000);
+    cam.position.set(60, 180, 220); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+    cam.setViewOffset(view.fullWidth, view.fullHeight, view.offsetX, view.offsetY, view.width, view.height);
+    const rc = new THREE.Raycaster();
+    agree = 0;
+    for (const [x, y] of [[400, 100], [900, 600], [700, 450]]) {
+      const nc = P.ndcFromClient(x, y, rect); rc.setFromCamera(new THREE.Vector2(nc.x, nc.y), cam);
+      const nf = P.ndcFromClient(x, y, rect, cam.view);
+      const r = P.rayFromCamera({ pos: [60, 180, 220], target: [0, 0, 0], fov: 38, aspect: rect.width / rect.height }, nf.x, nf.y);
+      const d = rc.ray.direction;
+      agree = Math.max(agree, Math.hypot(d.x - r.d[0], d.y - r.d[1], d.z - r.d[2]));
+    }
+  }
+  check('insets: a THREE raycaster with the view offset and the picking.js ray agree', agree < 1e-9, `largest direction difference ${agree.toExponential(1)}`);
+  check('insets: the camera target sits in the middle of the free band, and client ↔ NDC round-trips', !!c && Math.abs(c.x - wantX) < 0.5 && Math.abs(c.y - wantY) < 0.5 && worst < 1e-6,
+    c ? `target at ${c.x.toFixed(1)}, ${c.y.toFixed(1)} px vs ${wantX}, ${wantY}; round trip ${worst.toExponential(1)} px` : 'no insetViewOffset / clientFromNdc in picking.js');
+}
 
 // ── camera ─────────────────────────────────────────────────────────────────
 section('camera');

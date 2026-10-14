@@ -12,7 +12,9 @@
 //
 //  GREP MAP
 //    cameraBasis ........ forward / right / up of a look-at camera
-//    ndcFromClient ...... client px → normalized device coords
+//    ndcFromClient ...... client px → normalized device coords (view offset)
+//    clientFromNdc ...... the inverse
+//    insetViewOffset .... the view offset that centres the free band
 //    rayFromCamera ...... a world ray through an NDC point
 //    rayPlaneY .......... hit of the ray with a horizontal plane
 //    rayPointDistance ... closest distance of a point to the ray
@@ -37,8 +39,28 @@ export function cameraBasis(cam) {
   return { f, r, u };
 }
 
-export function ndcFromClient(clientX, clientY, rect) {
-  return { x: ((clientX - rect.left) / rect.width) * 2 - 1, y: -(((clientY - rect.top) / rect.height) * 2 - 1) };
+// view: an optional camera view offset (THREE camera.view: fullWidth,
+// fullHeight, offsetX, offsetY, width, height, enabled). With it the canvas
+// shows a window of a larger image, so a client pixel maps into that image.
+export function ndcFromClient(clientX, clientY, rect, view = null) {
+  if (!view || view.enabled === false) return { x: ((clientX - rect.left) / rect.width) * 2 - 1, y: -(((clientY - rect.top) / rect.height) * 2 - 1) };
+  const sx = (clientX - rect.left) / rect.width * view.width + view.offsetX;
+  const sy = (clientY - rect.top) / rect.height * view.height + view.offsetY;
+  return { x: sx / view.fullWidth * 2 - 1, y: -(sy / view.fullHeight * 2 - 1) };
+}
+// the inverse: NDC of the full image → client px
+export function clientFromNdc(nx, ny, rect, view = null) {
+  if (!view || view.enabled === false) return { x: rect.left + (nx + 1) / 2 * rect.width, y: rect.top + (1 - ny) / 2 * rect.height };
+  const sx = (nx + 1) / 2 * view.fullWidth - view.offsetX, sy = (1 - ny) / 2 * view.fullHeight - view.offsetY;
+  return { x: rect.left + sx / view.width * rect.width, y: rect.top + sy / view.height * rect.height };
+}
+// The view offset that puts the image centre (the camera target) in the
+// middle of the band the panels leave free. insets in px: left, right, top,
+// bottom. null when there is nothing to move.
+export function insetViewOffset(ins, w, h) {
+  const ox = -((ins.left || 0) - (ins.right || 0)) / 2, oy = -((ins.top || 0) - (ins.bottom || 0)) / 2;
+  if (Math.abs(ox) < 0.5 && Math.abs(oy) < 0.5) return null;
+  return { enabled: true, fullWidth: w, fullHeight: h, offsetX: ox, offsetY: oy, width: w, height: h };
 }
 
 export function rayFromCamera(cam, nx, ny) {
@@ -67,7 +89,7 @@ export function rayPointDistance(ray, p) {
   return { d: Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]), t };
 }
 
-export function projectPoint(cam, p, rect) {
+export function projectPoint(cam, p, rect, view = null) {
   const { f, r, u } = cameraBasis(cam);
   const v = sub(p, cam.pos);
   const z = dot(v, f);
@@ -76,7 +98,7 @@ export function projectPoint(cam, p, rect) {
   const nx = dot(v, r) / (z * th * (cam.aspect || 1));
   const ny = dot(v, u) / (z * th);
   const out = { nx, ny, depth: z };
-  if (rect) { out.x = rect.left + (nx + 1) / 2 * rect.width; out.y = rect.top + (1 - ny) / 2 * rect.height; }
+  if (rect) { const c = clientFromNdc(nx, ny, rect, view); out.x = c.x; out.y = c.y; }
   return out;
 }
 
