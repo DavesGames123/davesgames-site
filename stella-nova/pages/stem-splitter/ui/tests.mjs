@@ -210,6 +210,15 @@ section('player (fake AudioContext)');
   p2.play();
   check('play resumes a suspended context', ctx.log.resumed === 1);
   p2.destroy();
+  // Pause within START_DELAY of play / seek must not move the position back.
+  const p3 = pl.createPlayer({ ctx, tracks: [{ id: 'a', buffer: buf(10) }] });
+  ctx.currentTime = 20;
+  p3.seek(2); p3.play(); p3.pause();
+  const a1 = p3.position();
+  p3.play(); p3.pause();
+  const a2 = p3.position();
+  check('quick play / pause keeps the position (no step back by START_DELAY)', a1 === 2 && a2 === 2, `${a1}, ${a2}`);
+  p3.destroy();
 }
 
 // ------------------------------------------------------------------- peaks

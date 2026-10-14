@@ -53,7 +53,8 @@ export function createPlayer({ ctx, tracks, onEnded } = {}) {
 
   function position() {
     if (!playing) return offset;
-    return Math.min(duration, Math.max(0, offset + (ctx.currentTime - when)));
+    // Before `when` the sources have not started: the position is offset.
+    return Math.min(duration, offset + Math.max(0, ctx.currentTime - when));
   }
 
   function stopAll() {
