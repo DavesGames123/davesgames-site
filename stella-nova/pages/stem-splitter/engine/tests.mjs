@@ -126,6 +126,7 @@ const { makeFFT } = await import('./fft.js');
 const { hann, specCac, ispecCac, stft, istft, trackStats } = await import('./dsp.js');
 const seg = await import('./segment.js');
 const { segmentPlan, transitionWeight, paddedChunk, separate, weightSum, shiftOffsetsFor } = seg;
+const segmentWeightSum = seg.segmentWeightSum || (() => new Float64Array(0));
 const { mulberry32, synthV1 } = await import('./synth.js');
 const W = await import('./weights.js');
 const { createRuntime } = await import('./runtime.js');
@@ -400,6 +401,30 @@ section('separate');
     try { await separate(L, R, { sources: 4, runCore: async (mag, mix) => ({ spec_out: new Float32Array(mag.length), wave_out: new Float32Array(mix.length) }) }); } catch (e) { err = e; }
     check(err && /spec_out/.test(err.message), `separate rejects a core output of the wrong size: "${err && err.message}"`);
   }
+}
+
+// Memory: the weight sum of a run must not be an N-length Float64Array
+// (85 MB for 4 min, 423 MB for 20 min). A spy on the global constructor
+// records the largest Float64Array that separate() makes.
+{
+  const n = 4 * 257985 + 1234;   // 5 segments, longer than every per-segment buffer
+  const L = new Float32Array(n).map((_, i) => Math.sin(i * 0.01)), R = L.slice();
+  const Real = globalThis.Float64Array;
+  let biggest = 0;
+  globalThis.Float64Array = new Proxy(Real, { construct(t, args) { const a = Reflect.construct(t, args); biggest = Math.max(biggest, a.length); return a; } });
+  try {
+    await separate(L, R, { sources: 1, yieldEvents: false, runCore: async (mag, mix) => ({ spec_out: new Float32Array(mag.length), wave_out: mix.slice() }) });
+  } finally { globalThis.Float64Array = Real; }
+  check(biggest < n, `separate(${n} samples): largest Float64Array ${biggest} values (want < ${n}, no N-length weight sum)`);
+  let worst = 0;
+  for (const m of [1, 1000, 343980, 343981, 600000, 1290000, 2 * 257985]) {
+    const full = weightSum(m), { offsets } = segmentPlan(m);
+    for (const o of offsets) {
+      const w = segmentWeightSum(m, o), len = Math.min(m - o, 343980);
+      for (let j = 0; j < len; j++) worst = Math.max(worst, Math.abs(w[j] - full[o + j]));
+    }
+  }
+  check(worst === 0, `segmentWeightSum = weightSum slice for 7 lengths, every segment: max abs diff ${worst}`);
 }
 
 // ================================================================ weights

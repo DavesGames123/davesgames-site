@@ -201,6 +201,9 @@ export function createRuntime(deps) {
       if (codeOf(e, 'run') !== 'cancelled') await release();
       throw e;
     }
+    // The input is not needed now: drop the references of the request, so
+    // the input (85 MB for 4 min) can be freed before the reply is sent.
+    msg.left = msg.right = null;
     const stems = {}, transfer = [];
     m.stems.forEach((name, s) => { stems[name] = out[s]; transfer.push(out[s][0].buffer, out[s][1].buffer); });
     return { result: { model: id, stems, ms: Math.round(now() - t0), ep: current ? current.ep : null, fallback: current ? current.fallback : null, segments }, transfer };

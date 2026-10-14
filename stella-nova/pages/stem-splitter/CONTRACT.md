@@ -215,8 +215,9 @@ uses only ops that `ort.min.mjs` lists, or at most CPU-side shape ops.
 
   "Best" quality (2 shifts) doubles every row.
 - Memory, 4 minute song, worker JS heap: input 2 x 10.58 M x 4 B = 85 MB;
-  output accumulator S x 85 MB (339 MB for 4 stems, 508 MB for 6); sum of
-  weights 42 MB; per segment `mag` 11 MB, `spec_out` 44 MB (66 MB for 6),
+  output accumulator S x 85 MB (339 MB for 4 stems, 508 MB for 6); weight
+  sum 2.8 MB (one segment of float64, `segmentWeightSum`; it was an N-length
+  float64 array of 85 MB before the review fix); per segment `mag` 11 MB, `spec_out` 44 MB (66 MB for 6),
   `wave_out` 11 MB (17 MB). Plus the ORT heap (wasm: about 2.5-3 GB peak,
   from the node RSS above; webgpu: GPU memory, not measured). Limit: the UI
   refuses songs over 20 min, and over 8 min on a phone (coarse pointer and

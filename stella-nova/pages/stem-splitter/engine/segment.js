@@ -15,8 +15,10 @@
 //    demucs/api.py     Separator.separate_tensor (mean / std of the mix)
 //
 //  Memory: one output array per stem and channel (length N). The weight
-//  sum of each run is known before the run, so every segment adds
-//  weight / sum / shifts straight into the output; no second accumulator.
+//  sum at each sample is known before the segment runs (segmentWeightSum,
+//  from the overlapping segments of the plan), so every segment adds
+//  weight / sum / shifts straight into the output; no second accumulator
+//  and no N-length weight sum.
 //  The input is normalised on the fly when a chunk is cut, so no
 //  normalised copy of the track is made. Before each segment separate()
 //  waits one macrotask, so a worker can read a cancel message.
@@ -25,7 +27,8 @@
 //    constants ............. "export const SEGMENT"
 //    plan .................. "export function segmentPlan"
 //    triangle weight ....... "export function transitionWeight"
-//    weight sum ............ "export function weightSum"
+//    weight sum ............ "export function weightSum" (whole track, tests)
+//    one segment's sum ..... "export function segmentWeightSum"
 //    padded chunk .......... "export function paddedChunk"  ("function cutChunk")
 //    shift offsets ......... "export function shiftOffsetsFor"
 //    full pass ............. "export async function separate"
@@ -64,6 +67,22 @@ export function weightSum(n, { segment = SEGMENT, overlap = OVERLAP, weight = tr
     for (let j = 0; j < len; j++) sum[o + j] += weight[j];
   }
   return sum;
+}
+
+// The same sum for one segment only: sum[offset + j], j < segment, from
+// the segments of the plan that overlap it (2 with overlap 0.25). The
+// adds go in the order of weightSum, so the values are equal. Memory: one
+// Float64Array of `segment` values, not one of n.
+export function segmentWeightSum(n, offset, { segment = SEGMENT, overlap = OVERLAP, weight = transitionWeight(segment), out = new Float64Array(segment) } = {}) {
+  const stride = Math.trunc((1 - overlap) * segment);
+  out.fill(0);
+  const first = Math.max(0, Math.ceil((offset - segment + 1) / stride));
+  for (let o = first * stride; o < n && o < offset + segment; o += stride) {
+    const len = Math.min(n - o, segment);
+    const a = Math.max(o, offset), b = Math.min(o + len, offset + segment);
+    for (let p = a; p < b; p++) out[p - offset] += weight[p - o];
+  }
+  return out;
 }
 
 // TensorChunk(track, offset, segment).padded(segment), with the track
@@ -136,6 +155,7 @@ export async function separate(left, right, opts = {}) {
   const out = [];
   for (let s = 0; s < sources; s++) out.push([new Float32Array(n), new Float32Array(n)]);
   const mix = new Float32Array(2 * segment);
+  const sum = new Float64Array(segment);
   const segTimes = [];
   const t0 = now();
   let done = 0;
@@ -145,7 +165,6 @@ export async function separate(left, right, opts = {}) {
 
   for (let r = 0; r < runs.length; r++) {
     const { len, lag } = runs[r];
-    const sum = weightSum(len, { segment, overlap, weight });
     const runScale = 1 / runs.length;
     // Shifted-track sample i -> track sample i + lag, normalised; 0 outside
     // the shifted track and outside the track.
@@ -158,6 +177,7 @@ export async function separate(left, right, opts = {}) {
       if (isCancelled && isCancelled()) throw cancelled();
       const ts = now();
       const { chunkLen, trimLeft } = cutChunk(srcL, srcR, len, offset, segment, mix);
+      segmentWeightSum(len, offset, { segment, overlap, weight, out: sum });
       const mag = specCac(mix.subarray(0, segment), mix.subarray(segment));
       const res = await runCore(mag, mix);
       const specOut = res.spec_out, waveOut = res.wave_out;
@@ -173,7 +193,7 @@ export async function separate(left, right, opts = {}) {
             const k = offset + j + lag;                      // track index
             if (k < 0 || k >= n) continue;                   // outside the kept part
             const src = trimLeft + j;
-            dst[k] += (wv[src] + y[src]) * weight[j] / sum[offset + j] * runScale;
+            dst[k] += (wv[src] + y[src]) * weight[j] / sum[j] * runScale;
           }
         }
       }
