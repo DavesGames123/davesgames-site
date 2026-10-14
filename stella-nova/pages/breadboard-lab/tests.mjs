@@ -16,6 +16,10 @@
 //                     that meets every meta.check (examples/verify.mjs)
 //    saver .......... reel and shot maths; every reel bench fits the clear
 //                     band in 16:9, in 9:16, and in a 9:16 column
+//    scenarios ...... boot-scenarios.mjs, one boot per process: the saver
+//                     gives the bench back, pagehide flushes the autosave,
+//                     a link or ?example= opens once, the #nogl text, a
+//                     custom part from the autosave
 //    boot ........... main.js runs in node on ui/fakedom.mjs: 'three'
 //                     resolves to the vendored copy, fetch reads files, the
 //                     first example loads, the inline sim sends frames, the
@@ -332,6 +336,24 @@ section('boot');
   }
   console.error = oldErr; console.warn = oldWarn;
   check('no console.error during the boot', errs.length === 0, errs.slice(0, 2).join(' | ') || 'none');
+}
+
+// ---------------------------------------------------------------- scenarios
+// one page boot per process (boot-scenarios.mjs): saver, pagehide, links,
+// the no-WebGL text and a custom part from the autosave
+section('scenarios');
+for (const [name, what] of [
+  ['saver-restore', 'the saver gives back the bench, undo, run state; the autosave after exit is the user\'s'],
+  ['pagehide-flush', 'an edit 300 ms before pagehide reaches the autosave'],
+  ['link-once', 'a #d= link loads once: the hash is cleared after the load'],
+  ['example-once', '?example= loads once: the query is cleared after the load'],
+  ['nogl-text', 'no WebGL: #nogl keeps the index.html text (the panels still work)'],
+  ['custom-autosave', 'a custom part on a board from the autosave has its pins on the strips'],
+]) {
+  const r = spawnSync(process.execPath, [path.join(DIR, 'boot-scenarios.mjs'), name], { encoding: 'utf8', timeout: 60000 });
+  let out = null;
+  try { out = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch (e) { out = null; }
+  check(`scenario ${name}: ${what}`, !!out && out.ok === true, out ? out.measured : `no result (exit ${r.status}) ${(r.stderr || '').split('\n')[0]}`);
 }
 
 // ---------------------------------------------------------------- roles
