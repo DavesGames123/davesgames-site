@@ -779,11 +779,12 @@ no screenshots, no `tools/saver-check.mjs`.**
 | `transitionWeight` | exact formula; sum within 1e-6 relative of the reference |
 | `segmentPlan`, `paddedChunk` vs `vectors.plan` | offsets, start, trimLeft exactly equal; sum samples within 1e-6 |
 | `separate` with a fake `runCore` that returns `spec_out = mag` per source and `wave_out = 0` | output = input per stem, SDR >= 100 dB (tests 3.1-3.4 glue with no model) |
-| progress | `done` goes 1..total exactly once each; total = segments x max(1, shifts) |
+| progress | one event with `done` 0 before segment 1, then `done` goes 1..total exactly once each; total = the sum of the segments of each run |
 | cancel (fake core) | after `isCancelled` turns true, at most one more `runCore` call; rejects with `cancelled` |
 | real graph in node, wasm EP: `core` vs `vectors.core.htdemucs` | SDR >= 60 dB for spec and wave samples |
 | real pipeline in node, synth-v1 10 s, `htdemucs` standard, vs `vectors.pipeline.htdemucs` | SDR >= 50 dB per stem |
 | real pipeline, shifts 2 with the vector offsets | SDR >= 50 dB per stem |
+| real pipeline, clip-v1 (synth-v1 6 s x 10, clipped to [-1, 1]) vs `test/vectors-clip.json` | error against the mix energy >= 60 dB per stem, and stem SDR >= 35 dB. The ORT-web wasm core loses accuracy on this input (drums 48.5 dB, bass 38.6 dB stem SDR; ORT CPU gives 55-60 dB), so the 50 dB stem bar does not apply. The error is about -70 dB against the mix. |
 | `htdemucs_6s` core | SDR >= 60 dB (skip if absent, reported as skip) |
 | worker protocol with a fake ORT (inject via a test hook) | `init/load/separate/cancel/dispose` replies match 5.3; arrays transferred |
 | `node --check` on each `engine/*.js`; ESM import of each in node | no SyntaxError, no missing export |

@@ -11,6 +11,8 @@
 //                            stub below, and the line says so.
 //    ../test/vectors.json    PyTorch reference values (MODEL, CONTRACT 5.6).
 //                            STEM_VECTORS=<file> overrides the path.
+//    ../test/vectors-clip.json  PyTorch reference on clipped loud input
+//                            (tools/stem-splitter/make_clip_vectors.py).
 //    ../models/<id>.onnx and ../models/<weights.name>   the graph and the
 //                            official .th. STEM_MODELS_DIR=<dir> overrides.
 //
@@ -809,6 +811,39 @@ else {
         if (Math.abs(e - ref.energy) / ref.energy > 1e-3) parts.push(stem + ' energy rel diff ' + sci(Math.abs(e - ref.energy) / ref.energy));
       }
       check(worst >= 50, `real pipeline ${key} (synth-v1 ${P.seconds} s, ${quality}${P.shiftOffsets && P.shiftOffsets.length ? ', offsets ' + P.shiftOffsets.join('/') : ''}) vs PyTorch apply_model: SDR per stem ${parts.join(', ')} dB (>= 50)`);
+    }
+    // Clipped loud input (test/vectors-clip.json, make_clip_vectors.py).
+    // The ORT-web wasm core loses accuracy here (review: drums 48.5 dB,
+    // bass 38.4 dB). The stems with low energy show it most, so the bar is
+    // the error against the mix energy (CONTRACT 8.2, clipped row): >= 60
+    // dB for each stem, with the stem SDR >= 35 dB as a floor.
+    const CLIP_FILE = path.join(PAGE, 'test', 'vectors-clip.json');
+    if (!fs.existsSync(CLIP_FILE)) skip('real pipeline clip-v1 (test/vectors-clip.json absent: make_clip_vectors.py)');
+    else {
+      const CV = JSON.parse(fs.readFileSync(CLIP_FILE, 'utf8'));
+      const [L, R] = synthV1(CV.seconds);
+      for (let i = 0; i < L.length; i++) { L[i] = Math.max(-1, Math.min(1, Math.fround(L[i] * CV.gain))); R[i] = Math.max(-1, Math.min(1, Math.fround(R[i] * CV.gain))); }
+      let me = 0; for (let i = 0; i < L.length; i++) me += L[i] * L[i] + R[i] * R[i];
+      check(Math.abs(me - CV.mixEnergy) / CV.mixEnergy < 1e-6, `clip-v1 input: JS mix energy ${fmt(me, 1)} = Python ${fmt(CV.mixEnergy, 1)}`);
+      const t0 = performance.now();
+      await rt.handle({ id: 20, op: 'separate', model: 'htdemucs', left: L.slice(), right: R.slice(), quality: 'standard' });
+      const r = reply(20).m;
+      if (check(r.ok, `real pipeline clip-v1: ok (${r.ok ? r.result.segments + ' segments, ' + fmt((performance.now() - t0) / 1000, 1) + ' s' : r.error})`)) {
+        const parts = [];
+        let worstStem = Infinity, worstMix = Infinity;
+        for (const [stem, ref] of Object.entries(CV.stems)) {
+          const idx = dec(ref.idx), got = r.result.stems[stem];
+          const refv = new Float32Array(idx.length * 2); refv.set(dec(ref.L)); refv.set(dec(ref.R), idx.length);
+          const est = new Float32Array(idx.length * 2); est.set(at(got[0], idx)); est.set(at(got[1], idx), idx.length);
+          const mixv = new Float32Array(idx.length * 2); mixv.set(at(L, idx)); mixv.set(at(R, idx), idx.length);
+          let em = 0, ee = 0;
+          for (let i = 0; i < refv.length; i++) { em += mixv[i] * mixv[i]; const d = refv[i] - est[i]; ee += d * d; }
+          const s = sdr(refv, est), sm = ee === 0 ? Infinity : 10 * Math.log10(em / ee);
+          worstStem = Math.min(worstStem, s); worstMix = Math.min(worstMix, sm);
+          parts.push(`${stem} ${fmt(s, 1)} / ${fmt(sm, 1)}`);
+        }
+        check(worstMix >= 60 && worstStem >= 35, `real pipeline clip-v1 (x${CV.gain}, clipped, ${CV.seconds} s) vs PyTorch: SDR per stem / error vs mix energy (dB): ${parts.join(', ')} (want >= 35 / >= 60)`);
+      }
     }
     await rt.handle({ id: 30, op: 'dispose' });
     console.log(`     node rss after the real runs: ${rssMB()} MB`);

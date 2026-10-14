@@ -13,6 +13,7 @@ These tools make and check the model files of the Stem Splitter page
 | `demucs_np.py` | numpy port of the Demucs pre/post-processing (CONTRACT.md 3) |
 | `parity.py` | torch vs ONNX core; torch `apply_model` vs numpy port + ONNX |
 | `make_vectors.py` | writes `test/vectors.json` for the JS engine tests |
+| `make_clip_vectors.py` | writes `test/vectors-clip.json`: torch `apply_model` on clipped loud input |
 | `opcheck.mjs` | graph ops vs the vendored WebGPU kernels; `--run` in node (wasm EP) |
 
 ## Setup
@@ -56,6 +57,7 @@ $PY tools/stem-splitter/export.py htdemucs        # writes models/htdemucs.onnx
 $PY tools/stem-splitter/export.py htdemucs_6s     # writes models/htdemucs_6s.onnx
 $PY tools/stem-splitter/parity.py                 # about 1-3 min
 $PY tools/stem-splitter/make_vectors.py           # writes test/vectors.json
+$PY tools/stem-splitter/make_clip_vectors.py      # writes test/vectors-clip.json (about 5 s)
 node tools/stem-splitter/opcheck.mjs
 $PY tools/stem-splitter/parity.py --skip-30 --skip-shifts --dump <scratch>/dump
 node tools/stem-splitter/opcheck.mjs htdemucs --run --threads 4 --input <scratch>/dump
@@ -114,5 +116,12 @@ does not change it. Per stem, htdemucs wave_out is 68.0, 65.0, 57.7 and
 node (engine/tests.mjs) still gives 64-70 dB per stem.
 
 `make_vectors.py`: `test/vectors.json` is 999 727 B (limit 1 MB).
+
+`make_clip_vectors.py`: `test/vectors-clip.json` is 131 555 B. On this
+clipped input the JS pipeline in node gives a stem SDR of drums 48.5,
+bass 38.6, other 64.8, vocals 62.8 dB. Against the mix energy the error
+is 69.8, 69.9, 65.1 and 104.4 dB. The loss is in the ORT-web wasm core,
+not in the JS steps (the parity review: JS specCac against torch _spec
+is 136 dB). The op that loses it is not found yet.
 
 Not measured here: any browser, the WebGPU EP, phones.
