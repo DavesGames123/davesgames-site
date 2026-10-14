@@ -516,6 +516,9 @@ export function mountApp(root, { engine, models, defaultModel, jszip = null, win
 
   play.addEventListener('click', togglePlay);
   seek.addEventListener('pointerdown', () => { seeking = true; });
+  // A tap that does not change the value fires no `change`, so the end of
+  // the pointer also ends `seeking`; else the bar stops for good.
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) seek.addEventListener(t, () => { seeking = false; });
   seek.addEventListener('input', () => {
     if (!player) return;
     const f = (Number(seek.value) || 0) / 1000;

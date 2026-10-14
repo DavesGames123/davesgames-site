@@ -485,9 +485,15 @@ else {
   $('.ss-row[data-stem="drums"] .ss-wave').dispatchEvent(mkEvent('pointerdown', { clientX: 75, pointerId: 1 }));
   L = live();
   check('waveform click at 25% seeks to 0.75 s', L.every(s => s.started.offset === 0.75));
+  // A tap on the seek bar with no value change fires no `change`; the bar
+  // must still follow the play position after it.
+  seek.dispatchEvent(mkEvent('pointerdown', { pointerId: 2 }));
+  seek.dispatchEvent(mkEvent('pointerup', { pointerId: 2 }));
+  ctx.currentTime = 5.05;
   // Space
   T.doc.dispatchEvent(mkEvent('keydown', { key: ' ', code: 'Space', target: T.doc.body }));
   check('Space pauses', !T.app.player.playing && live().length === 0);
+  check('seek bar follows the position after a tap with no change', seek.value === String(Math.round(1.75 / 3 * 1000)), `value ${seek.value}, want ${Math.round(1.75 / 3 * 1000)}`);
   const txt = T.doc.createElement('input'); txt.type = 'text';
   T.doc.dispatchEvent(mkEvent('keydown', { key: ' ', code: 'Space', target: txt }));
   check('Space in a text field does nothing', !T.app.player.playing);
