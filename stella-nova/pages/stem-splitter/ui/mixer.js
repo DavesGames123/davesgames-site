@@ -12,10 +12,14 @@
 //    vocals   solo on vocals only, mutes stay as they are
 //    all      every stem unmuted, Original muted, no solo
 //
-//  A click or a drag on a waveform calls onSeek(fraction 0..1).
+//  A click or a drag on a waveform calls onSeek(fraction 0..1). On touch,
+//  a tap seeks on pointerup and only a horizontal drag scrubs, so a
+//  vertical scroll that starts on a waveform does not seek.
 //
 //  GREP MAP
 //    STEM_COLORS ....... the colours of CONTRACT 6.3
+//    TAP_PX ............ tap / scroll limit of a touch on a waveform
+//    waveform seek ..... "const fracAt" (pointer handlers below it)
 //    STEM_LABELS ....... the row names
 //    initialStates ..... { id: { volume, mute, solo } }
 //    applyPreset ....... karaoke / vocals / all
@@ -23,6 +27,9 @@
 // ============================================================================
 
 import { computePeaks, canvasColumns, drawWaveform } from './waveform.js';
+
+// A touch that moves less than this (CSS px) is a tap.
+export const TAP_PX = 8;
 
 export const STEM_COLORS = {
   drums: '#ff8a5c', bass: '#7a9cff', other: '#b48cff', vocals: '#ff8ac2',
@@ -91,15 +98,51 @@ export function createMixer(parent, { rows, onChange, onSeek, doc = globalThis.d
     solo.addEventListener('click', () => set(r.id, { solo: !states[r.id].solo }));
     vol.addEventListener('input', () => set(r.id, { volume: Math.max(0, Math.min(100, Number(vol.value) || 0)) / 100 }));
 
-    let dragging = false;
-    const seekAt = e => {
-      const b = wave.getBoundingClientRect();
-      if (b.width > 0 && onSeek) onSeek(Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)));
+    // Mouse: seek on pointerdown, scrub while the button is down. Touch and
+    // pen: the browser can still turn the gesture into a pan-y scroll, so
+    // pointerdown only stores the point. A tap (< TAP_PX of movement) seeks
+    // on pointerup. A drag that is more horizontal than vertical scrubs,
+    // with at most one seek per animation frame.
+    let drag = null;   // { x, y, mouse, scrub, pending, raf }
+    const fracAt = x => { const b = wave.getBoundingClientRect(); return b.width > 0 ? Math.min(1, Math.max(0, (x - b.left) / b.width)) : null; };
+    const seekX = x => { const f = fracAt(x); if (f !== null && onSeek) onSeek(f); };
+    const flush = () => {
+      if (!drag) return;
+      if (drag.raf) { (win.cancelAnimationFrame || clearTimeout)(drag.raf); drag.raf = 0; }
+      if (drag.pending !== null) { const x = drag.pending; drag.pending = null; seekX(x); }
     };
-    wave.addEventListener('pointerdown', e => { dragging = true; if (wave.setPointerCapture && e.pointerId !== undefined) try { wave.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } seekAt(e); });
-    wave.addEventListener('pointermove', e => { if (dragging) seekAt(e); });
-    wave.addEventListener('pointerup', () => { dragging = false; });
-    wave.addEventListener('pointercancel', () => { dragging = false; });
+    const later = x => {
+      drag.pending = x;
+      if (drag.raf) return;
+      const raf = win.requestAnimationFrame || (fn => setTimeout(fn, 16));
+      drag.raf = raf(() => { if (drag) { drag.raf = 0; flush(); } });
+    };
+    wave.addEventListener('pointerdown', e => {
+      const mouse = e.pointerType === 'mouse';
+      drag = { x: e.clientX, y: e.clientY, mouse, scrub: mouse, pending: null, raf: 0 };
+      if (mouse) {
+        if (wave.setPointerCapture && e.pointerId !== undefined) try { wave.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
+        seekX(e.clientX);
+      }
+    });
+    wave.addEventListener('pointermove', e => {
+      if (!drag) return;
+      if (!drag.scrub) {
+        const dx = Math.abs(e.clientX - drag.x), dy = Math.abs((e.clientY || 0) - (drag.y || 0));
+        if (dx < TAP_PX || dx <= dy) return;
+        drag.scrub = true;
+        if (wave.setPointerCapture && e.pointerId !== undefined) try { wave.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
+      }
+      later(e.clientX);
+    });
+    wave.addEventListener('pointerup', e => {
+      if (!drag) return;
+      const d = drag;
+      if (d.scrub) { if (!d.mouse) d.pending = e.clientX; flush(); }
+      else if (Math.abs(e.clientX - d.x) < TAP_PX && Math.abs((e.clientY || 0) - (d.y || 0)) < TAP_PX) seekX(d.x);
+      drag = null;
+    });
+    wave.addEventListener('pointercancel', () => { if (drag && drag.raf) (win.cancelAnimationFrame || clearTimeout)(drag.raf); drag = null; });
 
     ui.set(r.id, { row, canvas, head, mute, solo, vol, channels: r.channels, color, peaks: null, cols: 0 });
   }

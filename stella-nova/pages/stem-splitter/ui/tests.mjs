@@ -482,9 +482,34 @@ else {
   check('seek bar to 50% restarts all sources at 1.5 s', L.length === rows.length && L.every(s => s.started.offset === 1.5 && s.started.when === 3.05), JSON.stringify(L[0] && L[0].started));
   // waveform click seek
   ctx.currentTime = 4;
-  $('.ss-row[data-stem="drums"] .ss-wave').dispatchEvent(mkEvent('pointerdown', { clientX: 75, pointerId: 1 }));
+  $('.ss-row[data-stem="drums"] .ss-wave').dispatchEvent(mkEvent('pointerdown', { clientX: 75, pointerId: 1, pointerType: 'mouse' }));
+  $('.ss-row[data-stem="drums"] .ss-wave').dispatchEvent(mkEvent('pointerup', { clientX: 75, pointerId: 1, pointerType: 'mouse' }));
   L = live();
   check('waveform click at 25% seeks to 0.75 s', L.every(s => s.started.offset === 0.75));
+  // Touch: a scroll that starts on a waveform must not seek; a tap seeks;
+  // a horizontal drag scrubs with at most one restart per frame.
+  {
+    const w = $('.ss-row[data-stem="bass"] .ss-wave');
+    const n0 = ctx.log.sources.length;
+    const tp = (type, x, y) => w.dispatchEvent(mkEvent(type, { clientX: x, clientY: y, pointerId: 3, pointerType: 'touch' }));
+    tp('pointerdown', 150, 10);
+    const afterDown = ctx.log.sources.length - n0;
+    tp('pointermove', 152, 40); tp('pointermove', 153, 90); tp('pointercancel', 153, 90);
+    const afterScroll = ctx.log.sources.length - n0;
+    check('touch: pointerdown and a vertical scroll do not seek', afterDown === 0 && afterScroll === 0, `${afterDown} and ${afterScroll} new sources`);
+    tp('pointerdown', 150, 10); tp('pointerup', 152, 12);
+    L = live();
+    check('touch: a tap at 50% seeks to 1.5 s', ctx.log.sources.length - n0 === rows.length && L.every(s => s.started.offset === 1.5), `${ctx.log.sources.length - n0} new sources`);
+    const n1 = ctx.log.sources.length;
+    tp('pointerdown', 0, 10);
+    for (const x of [30, 60, 100, 150, 225]) tp('pointermove', x, 12);
+    tp('pointerup', 225, 12);
+    await settle(10);
+    L = live();
+    check('touch: a horizontal drag scrubs, one restart, ends at 75% = 2.25 s', ctx.log.sources.length - n1 === rows.length && L.every(s => s.started.offset === 2.25), `${(ctx.log.sources.length - n1) / rows.length} restarts, offset ${L[0] && L[0].started.offset}`);
+    ctx.currentTime = 4;
+    $('.ss-seek').value = '250'; $('.ss-seek').dispatchEvent(mkEvent('change'));
+  }
   // A tap on the seek bar with no value change fires no `change`; the bar
   // must still follow the play position after it.
   seek.dispatchEvent(mkEvent('pointerdown', { pointerId: 2 }));
