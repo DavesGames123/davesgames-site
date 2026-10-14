@@ -56,6 +56,19 @@ jobs:
       - name: Fetch pinned Retro Shelf files
         run: node tools/retro-fetch.mjs && node tools/retro-fetch.mjs --check
         continue-on-error: true
+      # Stem Splitter: the official Demucs checkpoints (84 MB + 55 MB) are
+      # not in git. The cache keeps them between runs, so the scheduled
+      # deploys do not download them from Meta each time. Each file is
+      # sha256 checked. A failure does not stop the deploy: the page then
+      # says that the model is not available.
+      - name: Restore Stem Splitter weights
+        uses: actions/cache@v4
+        with:
+          path: stella-nova/pages/stem-splitter/models/*.th
+          key: stem-weights-8726e21a-34c22ccb
+      - name: Fetch pinned Stem Splitter weights
+        run: node tools/stem-splitter/fetch.mjs && node tools/stem-splitter/fetch.mjs --check
+        continue-on-error: true
       # The service worker file list and version stamp (sw-manifest.js, sw.js).
       # Run here too, so the deploy never ships a list that is out of date.
       - name: Write offline manifest

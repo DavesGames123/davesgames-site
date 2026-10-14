@@ -4,3 +4,6 @@ stella-nova/vendor/craft/*/
 # Retro Shelf engines and freeware game archives. tools/retro-fetch.mjs
 # downloads them from the pins in stella-nova/vendor/retro/retro.lock.json.
 stella-nova/vendor/retro/fetched/
+# Stem Splitter: the official Demucs checkpoints. tools/stem-splitter/fetch.mjs
+# downloads them from the pins in tools/stem-splitter/fetch.lock.json.
+stella-nova/pages/stem-splitter/models/*.th
