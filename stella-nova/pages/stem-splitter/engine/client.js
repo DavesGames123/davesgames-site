@@ -21,6 +21,7 @@
 //    factory ............... "export function createEngine"
 //    worker start .......... "function start"
 //    request ............... "function call"
+//    init retry ............ "function initOnce"
 //    stop / release ........ "function terminate"
 //    API methods ........... "const engine = {"
 // ============================================================================
@@ -70,9 +71,17 @@ export function createEngine({ workerUrl, WorkerImpl, modelsLoader } = {}) {
   }
 
   // A worker started after terminate() repeats the last init first.
+  // A failed init is not kept: the next call tries init again (for example,
+  // the first visit was offline before ort.min.mjs was in the cache).
+  function initOnce(ep) {
+    const p = call('init', { ep });
+    initDone = p;
+    p.catch(() => { if (initDone === p) initDone = null; });
+    return p;
+  }
   async function ready() {
     if (!w) start();
-    if (!initDone) initDone = call('init', { ep: (initArgs && initArgs.ep) || 'auto' });
+    if (!initDone) initOnce((initArgs && initArgs.ep) || 'auto');
     return initDone;
   }
 
@@ -98,8 +107,7 @@ export function createEngine({ workerUrl, WorkerImpl, modelsLoader } = {}) {
     async init({ ep = 'auto' } = {}) {
       initArgs = { ep };
       if (!w) start();
-      initDone = call('init', { ep });
-      return initDone;
+      return initOnce(ep);
     },
     async models() {
       const g = gen;

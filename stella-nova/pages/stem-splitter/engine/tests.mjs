@@ -642,6 +642,32 @@ class FakeWorker {
   if (savedWin === undefined) delete globalThis.window; else globalThis.window = savedWin;
 }
 
+// A failed init must not block the engine: after the network comes back,
+// the next call repeats init on the same worker (review: init stuck).
+{
+  let offline = true, inits = 0;
+  class FlakyWorker extends FakeWorker {
+    constructor(url, opts) {
+      super(url, opts);
+      const self_ = this;
+      this.rt = createRuntime({
+        loadOrt: async () => { inits++; if (offline) throw new TypeError('Failed to fetch dynamically imported module'); return fakeOrt(); },
+        models: FAKE_MODELS, gpuAdapter: async () => false, env: { isolated: false, cores: 4 },
+        getBytes: async (u, meta) => { const d = new Uint8Array(meta.bytes); d[0] = 2; return { data: d, fromCache: true }; },
+        cached: async () => ({ two: true, three: false }), evict: async () => {},
+        post: (m) => { if (!self_.dead) setTimeout(() => self_.onmessage && self_.onmessage({ data: m }), 0); },
+      });
+    }
+  }
+  const eng = createEngine({ WorkerImpl: FlakyWorker, workerUrl: 'x', modelsLoader: async () => FAKE_MODELS });
+  let e1 = null; try { await eng.init({ ep: 'auto' }); } catch (e) { e1 = e; }
+  offline = false;
+  let lr = null, e2 = null; try { lr = await eng.load('two'); } catch (e) { e2 = e; }
+  check(e1 && !e2 && lr && lr.model === 'two' && inits === 2,
+    `client: init fails offline ("${e1 && e1.message}"), then load after the network is back -> ${e2 ? 'rejects "' + e2.message + '"' : 'ok'}, loadOrt calls ${inits} (want 2)`);
+  eng.terminate();
+}
+
 // ================================================================ real
 section('real');
 if (QUICK) skip('real graph tests (--quick)');
