@@ -66,6 +66,8 @@ const EXCLUDE = [
   /(^|\/)build[^/]*\.mjs$/, /(^|\/)tests?[^/]*\.mjs$/, /\.test\.mjs$/,
   /(^|\/)LICENSE[^/]*$/,
   /^sw\.js$/, /^sw-manifest\.js$/,
+  /^stella-nova\/pages\/stem-splitter\/models\//,  // graphs + weights: engine cache, on demand
+  /^stella-nova\/pages\/stem-splitter\/test\//,    // node test vectors
 ];
 // Code and fonts: a page cannot start without them. Core takes them at any
 // size, and any other file up to CORE_MAX_BYTES (icons, thumbnails, small

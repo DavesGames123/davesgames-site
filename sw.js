@@ -40,12 +40,13 @@
 //    version stamp ........ "const VERSION"
 //    local-server guard ... "const DEV_OFF"
 //    live data rules ...... "const LIVE_PATH"
+//    pass-through paths ... "const PASS_PATH"
 //    install / precache ... "async function precache"
 //    background pass ...... "async function warm"
 //    request routing ..... "function route"
 // ============================================================================
 'use strict';
-const VERSION = 'd5d856418e98fc25';
+const VERSION = '8f53142bba286535';
 importScripts('sw-manifest.js');
 
 const DEV_OFF = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(self.location.hostname)
@@ -62,6 +63,8 @@ const lazyHash = new Map(M.lazy);
 // live values. Other cross-origin requests pass through untouched.
 const LIVE_PATH = /^stella-nova\/pages\/leo-catalog\/data\/[^/]+\.txt$/;
 const LIVE_HOSTS = new Set(['davesgames.io', 'www.nhc.noaa.gov', 'celestrak.org', 'alphafold.ebi.ac.uk']);
+// Model files: the page keeps them in its own cache (stem-splitter engine).
+const PASS_PATH = /^stella-nova\/pages\/stem-splitter\/models\//;
 
 // Site path of a same-origin URL: no leading slash, "dir/" -> "dir/index.html".
 function sitePath(url) {
@@ -254,6 +257,7 @@ function route(e) {
   if (url.origin === self.location.origin) {
     const path = sitePath(url);
     if (path === null) return null;
+    if (PASS_PATH.test(path)) return null;
     if (LIVE_PATH.test(path)) return liveFirst(req);
     if (coreHash.has(path) || lazyHash.has(path)) return fromManifest(req, path);
     return staleWhileRevalidate(e, req);
