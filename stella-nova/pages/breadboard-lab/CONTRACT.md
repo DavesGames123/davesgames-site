@@ -509,14 +509,14 @@ Terminals in brackets. Default params in parentheses.
 | `isource` | p n | i (pushes current into node p through the outside circuit) |
 | `supply` | p n | v, ilim, on — CV/CC bench supply; reports cc:true in CC |
 | `battery` | p n | v (full EMF), rint, mah, soc 0..1 (EMF falls with soc) |
-| `usbpower` | p n | v (5), rint (0.2), trip (0.5 A polyfuse, resets when cool), usb (on) |
+| `usbpower` | p n | v (5), rint (0.2), trip (0.5 A polyfuse; resets when cool, and only after the fault is gone), usb (on) |
 | `diode` | a k | model '1n4148'/'1n4007'/'schottky' or is, n, rs, bv, ibv, cj |
 | `zener` | a k | vz, rz (5), plus forward diode |
-| `led` | a k | color (sets vf at 20 mA: red 2.0, orange 2.05, yellow 2.1, green 2.2, blue 3.1, white 3.1, ir 1.3), imax (0.02), iabs (0.05), vrmax (5) |
-| `npn` / `pnp` | c b e | model '2n3904'/'2n2222'/'2n3906' or bf, br, is, vaf, pmax — Ebers-Moll with Early effect |
+| `led` | a k | color (sets vf at 20 mA: red 2.0, orange 2.05, yellow 2.1, green 2.2, blue 3.1, white 3.1, ir 1.3), imax (0.02), iabs (0.05), vrmax (5; warns above it, reverse knee at 4 × vrmax) |
+| `npn` / `pnp` | c b e | model '2n3904'/'2n2222'/'2n3906' or bf, br, is, vaf, pmax, cje, cjc (junction capacitance), rb (10 Ω), ikf (high-injection knee) — Ebers-Moll with Early effect |
 | `nmos` / `pmos` | d g s | model '2n7000'/'logic-to220'/'p-to220' or vth, k (A/V²), lambda, pmax — square law |
-| `opamp` | inp inn out vcc vee | model 'lm358'/'ideal' — a0, gbw, rout, slew, swing to rails per model |
-| `timer555` | gnd trig out reset ctrl thres dis vcc | behavioural: comparators at 2/3 and 1/3 of vcc (or ctrl), SR latch, dis switch 10 Ω, out source rout 10 Ω |
+| `opamp` | inp inn out vcc vee | model 'lm358'/'ideal' — a0, gbw, rout, slew, vos (input offset: 1 mV / 1 µV), swing to rails per model |
+| `timer555` | gnd trig out reset ctrl thres dis vcc | behavioural: comparators at 2/3 and 1/3 of vcc (or ctrl), SR latch, dis switch 10 Ω, out source rout 10 Ω; the output burns above 300 mA for 50 ms or above 150 °C |
 | `switch` | a b | on, ron (0.05) |
 | `spdt` | com a b | pos 0/1 |
 | `button` | a b | pressed (live), ron (0.05), bounce (0 or ms) |
@@ -530,7 +530,7 @@ Terminals in brackets. Default params in parentheses.
 | `speaker` | a b | r (8) |
 | `lamp` | a b | vnom (6), pnom (0.6), cold/hot resistance ratio (10) |
 | `fuse` | a b | rating A, i2t; blows → open |
-| `regulator` | in gnd out | model '7805'/'ncp1117-5'/'ams1117-3.3' (vout, dropout, iq, imax, thermal limit) |
+| `regulator` | in gnd out | model '7805'/'ncp1117-5'/'ams1117-3.3' (vout, dropout, iq, imax, thermal limit); boost: true is the ideal boost, uvlo (2.7 V for a boost) its undervoltage lockout |
 | `logic` | p1 … pN | chip '74hc00'/'02'/'04'/'08'/'32'/'86'/'74'/'595'/'cd4017' — pins by DIP number |
 | `logic-expr` | named pins incl. vcc gnd | outputs { Y:'!(A&B)' }, inputs [..] — for custom parts |
 | `hd44780` | vss vdd v0 rs rw e d0…d7 | 16×2, 4- and 8-bit mode, ROM A00 subset |
