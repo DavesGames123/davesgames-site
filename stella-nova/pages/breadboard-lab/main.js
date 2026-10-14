@@ -32,6 +32,7 @@
 //
 //  GREP MAP
 //    initialDoc .......... share link, autosave, first example
+//    runState ............ running / speed from sim 'state' (for the saver)
 //    makeView / stubView . the 3D view, or a no-op view without WebGL
 //    rebuild ............. netlist -> sim.load -> view/ui netlists
 //    onDocChange ......... the routing of document edits
@@ -203,7 +204,10 @@ bus.on('doc:change', onDocChange);
 
 // ── sim traffic ────────────────────────────────────────────────────────────
 let errShown = false;
+// the run state, for the saver to give back on exit
+const runState = { running: false, speed: 1 };
 function wireSim() {
+  sim.on('state', s => { if (typeof s.running === 'boolean') runState.running = s.running; if (typeof s.speed === 'number') runState.speed = s.speed; });
   sim.on('frame', f => { view.setFrame(f); ui.setFrame(f); bus.emit('sim:frame', f); });
   sim.on('event', e => {
     bus.emit('sim:event', e);
@@ -236,6 +240,7 @@ window.addEventListener('pageshow', e => { if (e.persisted && gone) location.rel
 const saver = installSaver({
   store, view, realView, sim, bus, registry, geo, normalizeDoc, loadExample,
   setSaverOn: v => { saverOn = !!v; },
+  runState: () => ({ ...runState }),
 });
 window.snSaver = saver;
 

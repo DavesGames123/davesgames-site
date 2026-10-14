@@ -26,6 +26,7 @@
 //    opProgram / opMeta ..... MCU programs, title / notes / sim / nextId
 //    applyOp ................ dispatcher, batch
 //    createStore ............ history, merge window (600 ms), history:false, newId, load
+//    snapshot / restore ..... the document with its undo and redo stacks
 // ============================================================================
 import { COLLECTION, ID_RE, PREFIX, idNumber, kindOfId, lookupDef } from './doc.js';
 import { parseHoleId } from './space.js';
@@ -349,6 +350,17 @@ export function createStore(doc, bus, opts = {}) {
       while (locate(cur, PREFIX[kind] + n)) n++;
       reserved = n + 1;
       return PREFIX[kind] + n;
+    },
+
+    // The whole state (document and history), for a visitor that borrows
+    // the bench (the screensaver) and gives it back. Documents are copy-on-
+    // write, so the references stay valid.
+    snapshot() { return { doc: cur, undo: undoStack.slice(), redo: redoStack.slice(), reserved }; },
+    restore(snap) {
+      if (!snap || !snap.doc) return;
+      cur = snap.doc;
+      undoStack = (snap.undo || []).slice(); redoStack = (snap.redo || []).slice(); reserved = snap.reserved || 0;
+      emit([], true, 'load');
     },
 
     find(id) { return findItem(cur, id); },

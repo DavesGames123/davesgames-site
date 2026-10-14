@@ -945,6 +945,7 @@ export function createView(opts = {}) {
     cameraTo(pose, ms = 600) { rig.animateTo(pose, ms, now()); requestRender(); },
     getCamera() { return rig.pose(); },
     setFlow(on) { flow.setOn(on); requestRender(); },
+    getFlow() { return !!flow.on; },
     setQuality(q) {
       if (q !== 'high' && q !== 'low') return;
       quality = q;

@@ -25,7 +25,10 @@
 //  image centre into the band. tests.mjs checks both 16:9 and 9:16 frames.
 //
 //  The saver writes no autosave: Storage.setItem ignores the bblab:
-//  autosave and layout keys while it runs, so the user's bench survives.
+//  autosave and layout keys while it runs. enter() keeps the user's bench
+//  (store.snapshot: the document with undo and redo, the camera, the flow
+//  dots, the run state and speed); exit() gives all of it back before it
+//  lifts the guard, so the next autosave writes the user's bench.
 //
 //  GREP MAP
 //    REEL / DRIVE / EQ ...... the benches, their knob motions, the relations
@@ -34,6 +37,7 @@
 //    fitDistance / shotPose . framing maths (pure, node-tested)
 //    activePart ............. the busiest part in a frame
 //    installSaver ........... enter / exit; loadBench, camera loop, plate
+//    saved .................. the user's bench while the saver runs
 // ============================================================================
 import { plateBand } from '../../lib/saver-clear.js';
 
@@ -179,6 +183,9 @@ export function activePart(frame, doc, registry) {
 export function installSaver(ctx) {
   const { store, view, realView, sim, bus, registry, normalizeDoc, loadExample, geo } = ctx;
   let on = false, rnd = Math.random, calm = 0.7, label = () => {}, seconds = 60;
+  // the user's bench while the saver borrows the page: the document with
+  // its undo history, the camera, the flow dots and the run state
+  let saved = null;
   let raf = null, timers = [], offs = [], styleEl = null, restoreSet = null;
   let order = [], bench = -1, shots = [], shotI = 0, shotKind = 'bench', shotEnd = 0, glide = null;
   let frame = null, frameAt = 0, fresh = false, scriptI = 0, meta = null, driveAt = 0, band = null, bandAt = 0;
@@ -365,6 +372,12 @@ export function installSaver(ctx) {
       rnd = mulberry((o.seed >>> 0) || ((Math.random() * 2 ** 32) >>> 0));
       label = typeof o.label === 'function' ? o.label : () => {};
       if (ctx.setSaverOn) ctx.setSaverOn(true);
+      saved = {
+        snap: store.snapshot ? store.snapshot() : { doc: store.doc },
+        cam: (() => { try { return realView ? realView.getCamera() : null; } catch (e) { return null; } })(),
+        flow: (() => { try { return realView && realView.getFlow ? realView.getFlow() : null; } catch (e) { return null; } })(),
+        run: ctx.runState ? ctx.runState() : null,
+      };
       guardStorage();
       styleEl = document.createElement('style');
       styleEl.textContent = '#bar,#leftCol,#rightCol,#instrDock,#status,#toasts,#tip,#dock,#sheet,#nogl,.menu,#sn-wishlist-chip{display:none!important}#stage{inset:0!important;bottom:0!important}#gl{cursor:none;transition:opacity .5s ease}';
@@ -392,6 +405,20 @@ export function installSaver(ctx) {
       const c = canvas();
       if (c) c.style.opacity = '';
       try { if (realView && realView.camera.view && realView.camera.view.enabled) realView.camera.clearViewOffset(); } catch (e) { /* gone */ }
+      // give the bench back while the storage guard still holds: the load
+      // reschedules the autosave, and that timer then writes the user's doc
+      if (saved) {
+        const sv = saved;
+        saved = null;
+        if (store.restore) store.restore(sv.snap); else store.load(sv.snap.doc);
+        try { if (realView && sv.cam) realView.cameraTo(sv.cam, 0); } catch (e) { /* gone */ }
+        try { if (realView && sv.flow !== null) realView.setFlow(sv.flow); } catch (e) { /* no flow */ }
+        if (sv.run) {
+          sim.setSpeed(sv.run.speed || 1);
+          if (sv.run.running) sim.start(); else sim.pause();
+        }
+      }
+      meta = null; frame = null;
       if (restoreSet) restoreSet();
       if (ctx.setSaverOn) ctx.setSaverOn(false);
       label(null);
