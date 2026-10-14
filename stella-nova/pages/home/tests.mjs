@@ -9,6 +9,8 @@
 //
 //  The checks:
 //    - main.js links and runs to its end in the stub (O.find is set)
+//    - the star chart (chart-layout.js) has no label over a label, star or
+//      line, nothing cut by the frame, no constellations that overlap
 //    - every registered key except DIRECTORY_ONLY is in FIND_ITEMS
 //    - every such page is a result of a search for its own label
 //    - every port (CREDITS key) is a result of a search for "port"
@@ -45,6 +47,7 @@ const FILES = [
   path.join(HOME, 'thumbs', 'list.js'),
   path.join(HOME, '..', '..', 'lib', 'nav-data.js'),
   path.join(HOME, 'sectors.js'),
+  path.join(HOME, 'chart-layout.js'),
   path.join(HOME, 'main.js'),
 ];
 
@@ -107,6 +110,20 @@ check('main.js ran to its end (O.find is set)', !!(O && O.find));
   const src = fs.readFileSync(path.join(HOME, 'main.js'), 'utf8');
   const bad = [...src.matchAll(/(?<![$\w])\$\(([^()]|\([^()]*\))*\)\.forEach/g)].map(m => m[0].slice(0, 60));
   check('main.js never calls forEach on $(sel) (one element; use $$)', !bad.length, bad.join(' | '));
+}
+// The star chart is readable (chart-layout.js): at the desktop chart
+// widths no label covers another label or a star or line of any
+// constellation, nothing is cut by the frame, and no two constellations
+// share space. At 760 px (the narrowest two-column chart) one touch is
+// allowed: the labels are then large against the chart.
+{
+  const pages = O.allPages(), groupsOf = sec => O.sectorGroups(sec, pages);
+  for (const [px, allow] of [[760, 1], [900, 0], [1100, 0]]) {
+    const r = O.chartIssues(O.layoutChart(O.SECTORS, groupsOf, O.LAYOUT, { chartPx: px }));
+    const sum = Object.values(r).reduce((a, b) => a + b, 0);
+    check(`star chart at ${px} px: labels clear of labels, stars and lines; nothing cut; no shared space (${allow} allowed)`, sum <= allow,
+      Object.entries(r).map(([k, v]) => k + ' ' + v).join(', '));
+  }
 }
 if (!O || !O.find) { console.log(`\n${passes} passed, ${fails} failed`); process.exit(1); }
 

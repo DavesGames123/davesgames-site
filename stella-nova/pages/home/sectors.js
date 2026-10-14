@@ -8,7 +8,8 @@
 //  centre (LAYOUT).
 //
 //  Classic script, no ES modules, so the page also runs on file://.
-//  Load order: thumbs/list.js, ../../lib/nav-data.js, sectors.js, main.js
+//  Load order: thumbs/list.js, ../../lib/nav-data.js, sectors.js,
+//  chart-layout.js, main.js
 //  (all defer). It reads window.SN_NAV and O.THUMB_KEYS and adds its
 //  exports to O (O = window.Observatory). tools/nav-sync.js also loads this
 //  file, to read EXCLUDED, DIRECTORY_ONLY, BLURBS and CREDITS for the home
@@ -16,7 +17,6 @@
 //
 //  grep -n targets
 //    sector text .......... "const SECTOR_TEXT"
-//    region bands ......... "const REGION_BANDS"
 //    sector table ......... "const SECTORS"
 //    anchor layout ........ "function layoutFor"
 //    page blurbs .......... "const BLURBS"
@@ -156,15 +156,6 @@ const SECTOR_TEXT = {
   tools: { at: [950, 488], tilt: -20, lead: 'manim-live',
     blurb: 'Our own tools for making things: real Manim animations compiled in your browser, a pattern designer, thread art and halftone prints, PBR materials, an SDF modeller, a node compositor, a Pascal editor, a science toolkit and a sunlight study.' },
 };
-
-// Region bands on the chart: a faint name and the edge of the band.
-const REGION_BANDS = [
-  { id: 'stella', name: 'Stella Nova', at: [22, 606], edge: 'M250 30 L250 600' },
-  { id: 'science', name: 'Science', at: [272, 352], edge: 'M265 368 Q 620 348 985 368' },
-  { id: 'graphics', name: 'Graphics', at: [272, 394], edge: null },
-  { id: 'finance', name: 'Finance', at: [700, 606], edge: null },
-  { id: 'studio', name: 'Studio', at: [880, 606], edge: null },
-];
 
 // One sector per constellation, in nav order.
 const SECTORS = [];
@@ -464,6 +455,25 @@ function layoutFor(sec, counts) {
   return out;
 }
 
+// The groups of a sector with their pages, in nav order, for the chart,
+// the inspector and the phone cards. The game sector also gets the in-page
+// stars (GAME_STARS) in its first group. pages: allPages().
+function sectorGroups(sec, pages) {
+  const groups = [];
+  const seen = new Set();
+  for (const p of pages) {
+    if (p.sector !== sec) continue;
+    let g = groups.find(x => x.name === p.group && x.cluster === p.cluster);
+    if (!g) { g = { name: p.group, cluster: p.cluster, pages: [] }; groups.push(g); }
+    if (!seen.has(p.key)) { g.pages.push(p); seen.add(p.key); }
+  }
+  if (sec.id === 'game') {
+    const extra = GAME_STARS.map(s => ({ ...s, key: null, badge: s.ext ? 'LINK' : null, group: 'Stella Nova', sector: sec }));
+    groups[0].pages = [...extra.slice(0, 4), ...groups[0].pages, ...extra.slice(4)];
+  }
+  return groups;
+}
+
 // LAYOUT: anchors per sector, from the groups that have a shown page.
 // The game sector also carries the in-page stars (GAME_STARS) in group 0.
 const LAYOUT = {};
@@ -482,5 +492,5 @@ const LAYOUT = {};
   });
 }
 
-Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, CREDITS, PORTS, searchPages, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS, FEATURED, allPages });
+Object.assign(O, { sectorGroups, EXCLUDED, DIRECTORY_ONLY, CREDITS, PORTS, searchPages, THUMBS, SECTORS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS, FEATURED, allPages });
 })(window.Observatory = window.Observatory || {});

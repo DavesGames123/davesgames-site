@@ -19,9 +19,10 @@
      2. thumbs/list.js  keys that have a thumbs/<key>.jpg
      3. nav-data.js     ../../lib/nav-data.js, the page registry (SN_NAV)
      4. sectors.js      sector table, blurbs, featured keys
-     5. sky-data.js     real sky objects for the hero background
-     6. main.js         sky, chart, rails, routing, directory filter, form
-     All five scripts share one object: window.Observatory.
+     5. chart-layout.js star, line and label places of the star chart
+     6. sky-data.js     real sky objects for the hero background
+     7. main.js         sky, chart, rails, routing, directory filter, form
+     All six scripts share one object: window.Observatory.
 
    PAGE FLOW  (# marks an element id)
      #top        hero: title, statement, CTAs, inline search, four portals,
@@ -978,6 +979,7 @@
 <script defer src="thumbs/list.js"></script>
 <script defer src="../../lib/nav-data.js"></script>
 <script defer src="sectors.js"></script>
+<script defer src="chart-layout.js"></script>
 <script defer src="sky-data.js"></script>
 <script defer src="commit-data.js"></script>
 <script defer src="main.js"></script>

@@ -6,8 +6,8 @@
 //
 //  Classic scripts let the page run from file:// (a Finder double-click).
 //  Browsers block ES modules there. Load order, all with defer:
-//    thumbs/list.js -> ../../lib/nav-data.js -> sectors.js -> sky-data.js ->
-//    commit-data.js -> main.js
+//    thumbs/list.js -> ../../lib/nav-data.js -> sectors.js -> chart-layout.js ->
+//    sky-data.js -> commit-data.js -> main.js
 //  They share one namespace object: window.Observatory.
 //
 //  Search is inline (initFind): a field in the hero and one in the dock,
@@ -55,7 +55,7 @@
 // ============================================================================
 (function (O) {
 'use strict';
-const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS = {}, THUMBS, FEATURED, allPages, searchPages } = O;
+const { SECTORS, LAYOUT, GAME_STARS, BLURBS, SEARCH_WORDS = {}, THUMBS, FEATURED, allPages, searchPages } = O;
 
 document.documentElement.classList.add('js');
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
@@ -525,21 +525,7 @@ function initRails() {
 
 // ── sector page lists ──────────────────────────────────────────────────────
 // For each sector: its groups in NAV order, each a list of star records.
-function sectorGroups(sec) {
-  const groups = [];
-  const seen = new Set();
-  for (const p of PAGES) {
-    if (p.sector !== sec) continue;
-    let g = groups.find(x => x.name === p.group && x.cluster === p.cluster);
-    if (!g) { g = { name: p.group, cluster: p.cluster, pages: [] }; groups.push(g); }
-    if (!seen.has(p.key)) { g.pages.push(p); seen.add(p.key); }
-  }
-  if (sec.id === 'game') {
-    const extra = GAME_STARS.map(s => ({ ...s, key: null, badge: s.ext ? 'LINK' : null, group: 'Stella Nova', sector: sec }));
-    groups[0].pages = [...extra.slice(0, 4), ...groups[0].pages, ...extra.slice(4)];
-  }
-  return groups;
-}
+function sectorGroups(sec) { return O.sectorGroups(sec, PAGES); }
 const GAME_IMG = { '#features': 'media/game-3.jpg', '#media': 'media/game-2.jpg', '#download': 'media/game-1.jpg', '#report': 'media/game-5.jpg', home: 'media/game-6.jpg' };
 function withImg(p) { const img = GAME_IMG[p.href || p.key]; return img ? { ...p, img } : p; }
 
@@ -549,7 +535,6 @@ function buildChart() {
   const svg = $('#chartSvg'), starsEl = $('#chartStars'), map = $('#chartMap');
   const NS = 'http://www.w3.org/2000/svg';
   const rand = mulberry(42);
-  let svgHTML = '';
   // Sky grid: meridians, parallels, an ecliptic and edge ticks.
   let grid = '<g class="grid">';
   for (let i = 1; i < 6; i++) { const x = i * 1000 / 6; grid += `<path d="M${x} 0 Q ${x + (x - 500) * 0.18} 310 ${x} 620"/>`; }
@@ -562,101 +547,92 @@ function buildChart() {
   let bg = '<g>';
   for (let i = 0; i < 220; i++) bg += `<circle class="bg-star" cx="${(rand() * 1000).toFixed(1)}" cy="${(rand() * 620).toFixed(1)}" r="${(0.3 + rand() * 0.9).toFixed(2)}" opacity="${(0.15 + rand() * 0.5).toFixed(2)}"/>`;
   bg += '</g>';
-  // Region bands: the region name and the edge of its band (SN_NAV regions).
-  let bands = '<g class="regions">';
-  REGION_BANDS.forEach(b => {
-    bands += `<text class="rgn" x="${b.at[0]}" y="${b.at[1]}">${esc(b.name)}</text>`;
-    if (b.edge) bands += `<path class="rgn-edge" d="${b.edge}"/>`;
-  });
-  bands += '</g>';
-  svgHTML += grid + bg + bands;
+  const sky = grid + bg;
 
-  const allStars = [];
-  let labelsHTML = '', starsHTML = '';
-  SECTORS.forEach((sec, si) => {
-    const groups = sectorGroups(sec);
-    const anchors = LAYOUT[sec.id];
-    const r = mulberry(100 + si * 17);
-    const placed = [];
-    let edges = [];
-    groups.forEach((g, gi) => {
-      const [cx, cy, rad] = anchors[gi] || anchors[anchors.length - 1];
-      const pts = [];
-      g.pages.forEach((p, pi) => {
-        let best = null;
-        if (g.pages.length === 1) best = [cx, cy];
-        else {
-          let bd = -1;
-          for (let k = 0; k < 40; k++) {
-            const a = r() * Math.PI * 2, d = Math.sqrt(r()) * rad;
-            const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.78;
-            let md = 1e9; for (const q of pts) md = Math.min(md, Math.hypot(q[0] - x, q[1] - y));
-            if (pts.length === 0) md = 1e9 - d;
-            if (md > bd) { bd = md; best = [x, y]; }
-          }
-        }
-        pts.push(best);
-        const s = { p, x: best[0], y: best[1], g: gi, sec };
-        placed.push(s);
+  // The stars, lines and labels: chart-layout.js places them for the
+  // chart's CSS width, because the labels keep a fixed CSS size. The first
+  // draw uses guessed label sizes; then the real ones are measured and the
+  // chart is laid out again, and again when the width changes by 6 %.
+  let allStars = [];
+  let drawnPx = 0;
+  function render(labelPx) {
+    const chartPx = map.clientWidth || 900;
+    drawnPx = chartPx;
+    const L = O.layoutChart(SECTORS, sectorGroups, LAYOUT, { chartPx, labelPx });
+    const twr = mulberry(42);
+    let svgHTML = sky, labelsHTML = '', starsHTML = '';
+    allStars = [];
+    SECTORS.forEach((sec, si) => {
+      const { stars: placed, edges, label } = L[sec.id];
+      // Lines: one line per edge (for the draw-in).
+      let lines = '';
+      edges.forEach(([a, b], k) => {
+        const A = placed[a], B = placed[b];
+        const len = Math.hypot(A.x - B.x, A.y - B.y).toFixed(1);
+        lines += `<line class="ln" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" style="--len:${len};--d:${si * 180 + k * 40}"/>`;
       });
-      // Prim minimum spanning tree inside the group.
-      const idx = placed.map((s, i) => i).filter(i => placed[i].g === gi);
-      const inT = new Set([idx[0]]);
-      while (inT.size < idx.length) {
-        let bd = 1e9, e = null;
-        for (const a of inT) for (const b of idx) if (!inT.has(b)) {
-          const d = Math.hypot(placed[a].x - placed[b].x, placed[a].y - placed[b].y);
-          if (d < bd) { bd = d; e = [a, b]; }
-        }
-        edges.push(e); inT.add(e[1]);
-      }
-      // Join the group to the nearest star of an earlier group.
-      if (gi > 0) {
-        let bd = 1e9, e = null;
-        for (const a of idx) placed.forEach((s, b) => { if (s.g < gi) { const d = Math.hypot(placed[a].x - s.x, placed[a].y - s.y); if (d < bd) { bd = d; e = [b, a]; } } });
-        if (e) edges.push(e);
-      }
+      // Clean diagram: thin even lines. No group names (the constellations are
+      // small, and the inspector lists the pages), no glow path, no halo.
+      svgHTML += `<g class="con" data-sector="${sec.id}">${lines}</g>`;
+      // Stars as real anchors.
+      placed.forEach(s => {
+        const p = s.p;
+        s.sec = sec;
+        const big = p.key === sec.lead || FEATURED.includes(p.key);
+        const size = big ? 9 : THUMBS.has(p.key) ? 7 : 5;
+        const tw = twr() < 0.35 ? ` data-tw style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px;--tw:${(3 + twr() * 4).toFixed(1)}s;--twd:${(-twr() * 5).toFixed(1)}s"` : ` style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px"`;
+        starsHTML += `<a class="star${p.ext ? ' ext' : ''}" data-sector="${sec.id}" data-i="${allStars.length}" ${linkAttrs(p)} aria-label="${esc(p.label)}, ${esc(sec.name)}"${tw}><i></i></a>`;
+        allStars.push(s);
+      });
+      labelsHTML += `<button class="c-label" type="button" data-sector="${sec.id}" style="--x:${label[0].toFixed(1)};--y:${label[1].toFixed(1)}"><span class="g">${sec.glyph}</span>${esc(sec.short)}<small>${placed.length}</small></button>`;
     });
-    // Lines: one line per edge (for the draw-in).
-    let lines = '';
-    edges.forEach(([a, b], k) => {
-      const A = placed[a], B = placed[b];
-      const len = Math.hypot(A.x - B.x, A.y - B.y).toFixed(1);
-      lines += `<line class="ln" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" style="--len:${len};--d:${si * 180 + k * 40}"/>`;
-    });
-    // Clean diagram: thin even lines. No group names (the constellations are
-    // small, and the inspector lists the pages), no glow path, no halo.
-    svgHTML += `<g class="con" data-sector="${sec.id}">${lines}</g>`;
-    // Stars as real anchors.
-    placed.forEach((s, k) => {
-      const p = s.p;
-      const big = p.key === sec.lead || FEATURED.includes(p.key);
-      const size = big ? 9 : THUMBS.has(p.key) ? 7 : 5;
-      const tw = rand() < 0.35 ? ` data-tw style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px;--tw:${(3 + rand() * 4).toFixed(1)}s;--twd:${(-rand() * 5).toFixed(1)}s"` : ` style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px"`;
-      starsHTML += `<a class="star${p.ext ? ' ext' : ''}" data-sector="${sec.id}" data-i="${allStars.length}" ${linkAttrs(p)} aria-label="${esc(p.label)}, ${esc(sec.name)}"${tw}><i></i></a>`;
-      allStars.push(s);
-    });
-    labelsHTML += `<button class="c-label" type="button" data-sector="${sec.id}" style="--x:${sec.label[0]};--y:${sec.label[1]}"><span class="g">${sec.glyph}</span>${esc(sec.short)}<small>${placed.length}</small></button>`;
-  });
-  svg.innerHTML = svgHTML;
-  starsEl.innerHTML = starsHTML + labelsHTML;
+    svg.innerHTML = svgHTML;
+    starsEl.innerHTML = starsHTML + labelsHTML;
+  }
+  // The real label sizes in CSS px, or null when the page has no layout yet.
+  function measured() {
+    const out = {};
+    let any = false;
+    $$('.c-label', starsEl).forEach(b => { if (b.offsetWidth > 0) { out[b.dataset.sector] = [b.offsetWidth, b.offsetHeight]; any = true; } });
+    return any ? out : null;
+  }
+  function layout() {
+    render(null);
+    const m = measured();
+    if (m) render(m);
+    if (state.active) state.refresh();
+  }
 
   const tip = $('#chartTip');
   const state = { active: null, pinned: false, touched: false, tour: 0 };
   chartState = state;
+  // the classes of the active sector (again after a new layout)
+  state.refresh = () => {
+    const id = state.active;
+    $$('.con', svg).forEach(g => g.classList.toggle('on', g.dataset.sector === id));
+    $$('.star', starsEl).forEach(a => a.classList.toggle('on', a.dataset.sector === id));
+    $$('.c-label', starsEl).forEach(b => b.classList.toggle('on', b.dataset.sector === id));
+  };
   function setActive(id, opts = {}) {
     if (opts.user) { state.touched = true; stopTour(); }
     if (state.active !== id) {
       state.active = id;
-      $$('.con', svg).forEach(g => g.classList.toggle('on', g.dataset.sector === id));
-      $$('.star', starsEl).forEach(a => a.classList.toggle('on', a.dataset.sector === id));
-      $$('.c-label', starsEl).forEach(b => b.classList.toggle('on', b.dataset.sector === id));
+      state.refresh();
       $$('.chip[data-goto]').forEach(c => c.classList.toggle('on', c.dataset.goto === id));
       renderInspector(SECTOR[id]);
     }
     map.classList.toggle('has-active', !!opts.dim);
   }
   state.setActive = setActive;
+  layout();
+  // A new layout when the chart width changes (the labels keep their px size).
+  if (typeof ResizeObserver === 'function') {
+    let t = 0;
+    new ResizeObserver(() => {
+      clearTimeout(t);
+      t = setTimeout(() => { const w = map.clientWidth; if (w > 0 && Math.abs(w - drawnPx) > drawnPx * 0.06) layout(); }, 150);
+    }).observe(map);
+  }
   // Pointer: the nearest star within reach picks the sector.
   map.addEventListener('pointermove', e => {
     if (e.pointerType !== 'mouse') return;

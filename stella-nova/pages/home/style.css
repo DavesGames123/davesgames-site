@@ -369,8 +369,6 @@ main { position: relative; }
 .chart-svg .grid .ecl { stroke: rgba(150, 200, 255, .12); stroke-dasharray: 2 5; }
 .chart-svg .grid text { font: 500 9px var(--f-mono); fill: rgba(150, 200, 255, .22); letter-spacing: .1em; }
 .chart-svg .bg-star { fill: #cfe0ff; }
-.chart-svg .rgn { font: 500 10px var(--f-mono); letter-spacing: .32em; text-transform: uppercase; fill: rgba(150, 200, 255, .34); }
-.chart-svg .rgn-edge { fill: none; stroke: rgba(150, 200, 255, .1); stroke-width: 1; stroke-dasharray: 1 6; vector-effect: non-scaling-stroke; }
 .chart-svg .con { transition: opacity .5s; }
 .chart-svg .con .ln { fill: none; stroke: var(--c); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; opacity: .32; stroke-dasharray: var(--len) var(--len); stroke-dashoffset: var(--len); transition: opacity .5s, stroke-width .5s; }
 .chart.drawn .chart-svg .con .ln { stroke-dashoffset: 0; transition: stroke-dashoffset 2.4s var(--ease), opacity .5s, stroke-width .5s; transition-delay: calc(var(--d, 0) * 1ms), 0s, 0s; }
@@ -391,8 +389,8 @@ main { position: relative; }
 .chart.has-active .star { opacity: .35; }
 .chart.has-active .star.on { opacity: 1; }
 
-.c-label { position: absolute; left: calc(var(--x) * 0.1%); top: calc(var(--y) * 0.16129%); translate: -50% -50%; z-index: 4; display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); background: rgba(10, 13, 21, .86); color: var(--ink); font: 500 0.78rem/1 var(--f-sans); letter-spacing: .04em; white-space: nowrap; cursor: pointer; transition: border-color .3s, background .3s, box-shadow .4s, opacity .4s, transform .4s var(--ease); }
-.c-label .g { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.72rem; color: #0a0c12; background: var(--c); }
+.c-label { position: absolute; left: calc(var(--x) * 0.1%); top: calc(var(--y) * 0.16129%); translate: -50% -50%; z-index: 4; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px 0 5px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); background: rgba(10, 13, 21, .86); color: var(--ink); font: 500 0.78rem/1 var(--f-sans); letter-spacing: .03em; white-space: nowrap; cursor: pointer; transition: border-color .3s, background .3s, box-shadow .4s, opacity .4s, transform .4s var(--ease); }
+.c-label .g { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 0.72rem; color: #0a0c12; background: var(--c); }
 .c-label small { font: 500 0.66rem/1 var(--f-mono); color: var(--dim); }
 .c-label:hover, .c-label.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 16%, rgba(10, 13, 21, .9)); }
 .chart.has-active .c-label:not(.on) { opacity: .5; }
