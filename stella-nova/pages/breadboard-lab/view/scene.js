@@ -31,6 +31,7 @@
 //    resolver .............. material id → THREE material (presets + doc)
 //    buildBoardRec ......... board objects
 //    buildPartRec .......... part handles, pickable tags, damage carry-over
+//    partKey / liveKey ..... rebuild key; live params go to handle.setParams
 //    syncWires ............. wire paths and meshes, flow paths
 //    syncProbes / leadRec .. instruments, lead cables and tips
 //    sync .................. the document diff
@@ -250,11 +251,21 @@ export function createView(opts = {}) {
     return h;
   }
 
+  // the build key leaves out the live params (a knob, a held button): a
+  // change of only those goes to handle.setParams when the model redraws
+  // them itself (handle.liveParams), so the mesh is not rebuilt per tick
+  function splitParams(p, def) {
+    const live = new Set(((def && def.params) || []).filter(x => x.live).map(x => x.key));
+    const fixed = {}, lv = {};
+    for (const k of Object.keys(p.params || {})) (live.has(k) ? lv : fixed)[k] = p.params[k];
+    return [fixed, lv];
+  }
   function partKey(p, def) {
     const custom = def && String(def.id).startsWith('cp-') ? JSON.stringify(def) : '';
     const usesCustomMat = p.looks && Object.values(p.looks).some(v => String(v).startsWith('mat-'));
-    return JSON.stringify([p.def, p.params, p.label || '', labels, quality, depsVersion, custom, usesCustomMat ? matVersion : 0]);
+    return JSON.stringify([p.def, splitParams(p, def)[0], p.label || '', labels, quality, depsVersion, custom, usesCustomMat ? matVersion : 0]);
   }
+  const liveKey = (p, def) => JSON.stringify(splitParams(p, def)[1]);
 
   function buildPartRec(p, def) {
     const d = def || { id: p.def, name: p.def, category: 'custom', mount: 'board', pins: [], params: [], slots: [], model: {} };
@@ -263,7 +274,7 @@ export function createView(opts = {}) {
     handle.object.traverse(c => { if (c.isMesh && !c.isSprite) c.castShadow = true; });
     tagPickables(handle.pickables, { kind: 'part', id: p.id });
     gParts.add(handle.object);
-    const rec = { item: p, handle, key: partKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d };
+    const rec = { item: p, handle, key: partKey(p, def), live: liveKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d };
     const pf = lastFrame && lastFrame.parts ? lastFrame.parts[p.id] : undefined;
     if (pf) applyPartFrame(rec, pf, 0);
     return rec;
@@ -493,8 +504,13 @@ export function createView(opts = {}) {
       const def = lookupDef(doc, registry, p.def);
       let rec = recs.parts.get(p.id);
       if (rec && rec.item !== p) {
-        if (rec.key !== partKey(p, def)) { disposeRec(rec, gParts); recs.parts.delete(p.id); rec = null; }
-        else { applyLooks(rec, p); rec.item = p; }
+        const lk = liveKey(p, def);
+        const liveOk = lk === rec.live || (rec.handle.liveParams === true && typeof rec.handle.setParams === 'function');
+        if (rec.key !== partKey(p, def) || !liveOk) { disposeRec(rec, gParts); recs.parts.delete(p.id); rec = null; }
+        else {
+          if (lk !== rec.live) { try { rec.handle.setParams(p.params || {}); } catch (e) { /* model error: keep the mesh */ } rec.live = lk; requestRender(); }
+          applyLooks(rec, p); rec.item = p;
+        }
       }
       if (!rec) { rec = buildPartRec(p, def); recs.parts.set(p.id, rec); pickDirty = true; }
       setPartTransform(rec, doc);

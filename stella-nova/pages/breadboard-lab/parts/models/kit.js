@@ -340,6 +340,9 @@ export function createKit(THREE, def, part, ctx = {}) {
         Object.assign(params, resolveParams(def, { ...params, ...p }));
         if (paramsFn) paramsFn(params);
       },
+      // true when the model redraws live params itself (onParams); the
+      // scene then calls setParams instead of a rebuild
+      get liveParams() { return !!paramsFn; },
       setDamage(kind) {
         damage = kind || null;
         const ch = charMaterial(THREE);

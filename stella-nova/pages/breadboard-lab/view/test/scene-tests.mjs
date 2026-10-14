@@ -357,6 +357,24 @@ export async function run({ section, check, near, sampleDoc }) {
       await v.ready;
       const s = v.stats();
       check('real PARTS bench (3 × 830, 60 parts) builds within the draw budget', s.parts === 60 && s.meshes <= 250 && s.sceneTriangles <= 400000, `${s.meshes} meshes, ${s.sceneTriangles} triangles, ${ids.length} defs used`);
+      // a live param edit (a knob, a held button) goes to handle.setParams
+      // and keeps the mesh; a non-live param still rebuilds
+      // (integration review 7)
+      {
+        store.apply({ op: 'add', kind: 'part', item: { id: 'p900', def: 'pot', place: { on: 'b1', x: colX(63, 60), z: rowZ(2), rot: 0 }, params: { pos: 0.2 } } });
+        store.apply({ op: 'add', kind: 'part', item: { id: 'p901', def: 'res', place: { on: 'b1', x: colX(63, 55), z: rowZ(8), rot: 0 }, params: {} } });
+        let tk = 1000;
+        v.tick(tk += 16);
+        const o0 = v.objectOf('p900'), r0 = v.objectOf('p901');
+        store.apply({ op: 'set', id: 'p900', path: 'params.pos', value: 0.8 });
+        v.tick(tk += 16);
+        const o1 = v.objectOf('p900');
+        store.apply({ op: 'set', id: 'p901', path: 'params.r', value: 4700 });
+        v.tick(tk += 16);
+        const r1 = v.objectOf('p901');
+        check('live param edit (pot pos) keeps the part mesh; a non-live param (resistor r) rebuilds it', !!o0 && o0 === o1 && !!r0 && r0 !== r1,
+          `pot ${o0 === o1 ? 'kept' : 'rebuilt'}, resistor ${r0 !== r1 ? 'rebuilt' : 'kept'}`);
+      }
       v.dispose();
     }
   }
