@@ -17,10 +17,17 @@
 //  a wire change rebuilds the netlist and keeps running.
 //
 //  FRAMES at 30 Hz: {type:'frame', ...Frame}, typed arrays transferred. Then
-//  one {type:'event'} per SimEvent and {type:'serial', mcu, text}.
+//  one {type:'event'} per SimEvent and {type:'serial', mcu, text}. While
+//  paused, an edit (param, patch, press, probe, repair) advances 1 µs and
+//  posts one frame, so the meters and LEDs show it (refresh).
+//
+//  REPLIES. Every 'load' gets a 'loaded' (ok: false when it threw) and
+//  every 'program' a 'program', so the client's FIFO of promises stays in
+//  step.
 //
 //  GREP MAP
 //    createHost .......... the command switch (handle)
+//    refresh ............. a frame after an edit while paused
 //    loop / rebase ....... the real-time slices
 //    postFrame ........... frame, events, serial
 //    MCU_RUNTIME ......... the lazy import of mcu/runtime.js
@@ -104,11 +111,25 @@ export function createHost(post, opts = {}) {
 
   function handle(msg) {
     if (disposed || !msg) return;
-    const run = (f) => { queue = queue.then(f).catch(e => post({ type: 'error', msg: String(e && e.message || e) })); return queue; };
+    const run = (f, onFail) => {
+      queue = queue.then(f).catch(e => { const m = String(e && e.message || e); post({ type: 'error', msg: m }); if (onFail) onFail(m); });
+      return queue;
+    };
     switch (msg.cmd) {
-      case 'load': return run(() => doLoad(msg));
+      // a load that throws still answers, or the client waits for ever and
+      // every later rebuild queues behind it
+      case 'load': return run(() => doLoad(msg), m => post({ type: 'loaded', ok: false, warnings: [`The simulator could not load the circuit: ${m}`], dcop: null, programs: {} }));
       default: return run(() => cmd(msg));
     }
+  }
+  // an edit while paused: settle the circuit 1 µs on and show it
+  function refresh() {
+    if (running || !eng) return;
+    try { eng.advanceTo(eng.t + 1e-6); } catch (e) { post({ type: 'error', msg: `sim: ${e && e.message || e}` }); }
+    // an empty averaging window: the frame shows the values at this point,
+    // not the mean of the old and new state over the 1 µs step
+    eng.frameT0 = eng.t;
+    postFrame();
   }
 
   function cmd(msg) {
@@ -119,13 +140,18 @@ export function createHost(post, opts = {}) {
       case 'dispose': running = false; disposed = true; if (timer != null) clearTimeout(timer); timer = null; eng = null; break;
       case 'speed': speed = Math.max(1e-6, +msg.x || 1); rebase(); state(); break;
       case 'step': if (eng) { eng.advanceTo(eng.t + (+msg.dt || 1e-3)); postFrame(); state(); } break;
-      case 'param': if (eng) eng.setParam(msg.owner, msg.key, msg.value); break;
-      case 'patch': if (eng) eng.patch(msg.owner, msg.elements); break;
-      case 'press': if (eng) eng.press(msg.id, !!msg.on); break;
-      case 'repair': if (eng) { eng.repair(msg.owner); postFrame(); } break;
-      case 'program': if (eng) { const r = eng.loadProgram(msg.mcu, msg.program); post({ type: 'program', mcu: msg.mcu, ...r }); } break;
+      case 'param': if (eng) { eng.setParam(msg.owner, msg.key, msg.value); refresh(); } break;
+      case 'patch': if (eng) { eng.patch(msg.owner, msg.elements); refresh(); } break;
+      case 'press': if (eng) { eng.press(msg.id, !!msg.on); refresh(); } break;
+      case 'repair': if (eng) { eng.repair(msg.owner); if (running) postFrame(); else refresh(); } break;
+      case 'program': {
+        // always answer: the client matches replies to requests in order
+        if (eng) { const r = eng.loadProgram(msg.mcu, msg.program); post({ type: 'program', mcu: msg.mcu, ...r }); }
+        else post({ type: 'program', mcu: msg.mcu, ok: false, errors: [{ line: 0, msg: 'No circuit is loaded yet.' }] });
+        break;
+      }
       case 'serial': if (eng) eng.serialIn(msg.mcu, msg.text); break;
-      case 'probe': if (eng) { if (msg.probe) eng.addProbe(msg.probe); else if (msg.remove) eng.removeProbe(msg.remove); } break;
+      case 'probe': if (eng) { if (msg.probe) eng.addProbe(msg.probe); else if (msg.remove) eng.removeProbe(msg.remove); refresh(); } break;
       case 'measureR': {
         let ohms = Infinity;
         if (eng) {

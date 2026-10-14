@@ -1133,6 +1133,49 @@ if (section('review fixes')) {
     check('NPN base on an ideal 5 V source: it dies, and no message gives more than 100 A or 1 kW', evs.some(v => v.kind === 'damage' && v.owner === 'q') && big < 100,
       `largest number ${big}; ${evs.map(v => v.msg).slice(0, 2).join(' | ')}`);
   }
+  // 13. (integration review 5) edits while paused post a frame
+  {
+    const sim = createSim({ inline: true, loadRuntime: false });
+    const frames = [];
+    sim.on('frame', f => frames.push(f));
+    await sim.load(net(3, [E('s/main', 'supply', { p: 1, n: 0 }, { v: 5, ilim: 1, on: true }), E('r/main', 'resistor', { a: 1, b: 2 }, { r: 220 }), E('d1/main', 'led', { a: 2, k: 0 }),
+      E('bt/main', 'button', { a: 1, b: 0 }, { ron: 1000 })]));
+    sim.pause();
+    await new Promise(r => setTimeout(r, 20));
+    const n0 = frames.length;
+    sim.setParam('s', 'v', 9);
+    await new Promise(r => setTimeout(r, 20));
+    const f1 = frames[frames.length - 1], n1 = frames.length;
+    sim.press('bt', true);
+    await new Promise(r => setTimeout(r, 20));
+    const n2 = frames.length;
+    sim.setParam('s', 'on', false);
+    await new Promise(r => setTimeout(r, 20));
+    const f3 = frames[frames.length - 1];
+    sim.dispose();
+    const i1 = f1 && f1.parts.d1 ? f1.parts.d1.i : NaN, i3 = f3 && f3.parts.d1 ? f3.parts.d1.i : NaN;
+    check('paused: a param edit, a press and a supply switch each post a frame with the new state', n1 > n0 && n2 > n1 && frames.length > n2 && i1 > 0.025 && Math.abs(i3) < 1e-6,
+      `frames ${n0} → ${n1} → ${n2} → ${frames.length}; LED ${(i1 * 1e3).toFixed(1)} mA at 9 V, ${(i3 * 1e3).toFixed(3)} mA with the supply off`);
+  }
+  // 14. (integration review 8) a load that throws still answers
+  {
+    const sim = createSim({ inline: true, loadRuntime: false });
+    const errs = [];
+    sim.on('error', m => errs.push(m));
+    // a null netlist makes createEngine throw
+    const r = await Promise.race([sim.load(null), new Promise(res => setTimeout(() => res('TIMEOUT'), 1000))]);
+    const r2 = await Promise.race([sim.load(net(2, [vsrc('v', 1, 5), E('r/main', 'resistor', { a: 1, b: 0 }, { r: 100 })])), new Promise(res => setTimeout(() => res('TIMEOUT'), 1000))]);
+    sim.dispose();
+    check('a load that throws answers { ok: false } with the message, and the next load works', r !== 'TIMEOUT' && r.ok === false && (r.warnings || []).length > 0 && r2 !== 'TIMEOUT' && r2.ok === true,
+      `first: ${r === 'TIMEOUT' ? 'TIMEOUT' : `ok ${r.ok}, "${(r.warnings || [])[0]}"`}; second: ${r2 === 'TIMEOUT' ? 'TIMEOUT' : 'ok ' + r2.ok}; ${errs.length} error messages`);
+  }
+  // 15. (integration review 10) a program sent with no engine still answers
+  {
+    const sim = createSim({ inline: true, loadRuntime: false });
+    const r = await Promise.race([sim.loadProgram('u', { lang: 'sketch', source: '' }), new Promise(res => setTimeout(() => res('TIMEOUT'), 500))]);
+    sim.dispose();
+    check('loadProgram before any load answers { ok: false }', r !== 'TIMEOUT' && r.ok === false, r === 'TIMEOUT' ? 'TIMEOUT' : JSON.stringify(r));
+  }
 }
 
 console.log(`\n${count - fails}/${count} checks passed${fails ? `, ${fails} FAILED` : ''}`);
