@@ -1,0 +1,191 @@
+/* ============================================================================
+   STEM SPLITTER  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark page. Type is the system UI stack, numbers use tabular figures.
+   ui/app.js builds every element. The class names start with "ss-".
+
+   DESKTOP. Two columns: .ss-left (drop zone, model, quality, Separate,
+   progress) and .ss-right (transport, presets, mixer rows, downloads).
+
+   PHONE (max-width 699px, or a coarse pointer; the same query as PHONE_Q in
+   ui/sheet.js). One column. .ss-dock is fixed at the base with the
+   settings button and the transport. #ss-settings is a bottom sheet over
+   the dock. Touch targets are at least 44 px. Sliders have
+   touch-action:none on the range input only, so the page still scrolls.
+
+     grep -n 'TOKENS'     colours and sizes
+     grep -n 'DROP'       the drop zone
+     grep -n 'MODEL'      the model picker and quality
+     grep -n 'PROGRESS'   the progress block
+     grep -n 'MIXER'      the stem rows, waveform and play head
+     grep -n 'DOCK'       the transport bar
+     grep -n 'PHONE'      the phone block
+     grep -n 'TOUCH'      coarse pointer sizes
+   ========================================================================== */
+
+[hidden]{display:none !important}
+
+/* TOKENS */
+:root{
+  --bg:#0b0d12; --bg2:#12151c; --bg3:#1a1e28; --line:rgba(255,255,255,0.08); --line-b:rgba(255,255,255,0.16);
+  --ink:#e6e8ee; --dim:#9aa3b2; --faint:#5d6575; --accent:#8fb4ff; --accent-bg:rgba(143,180,255,0.14);
+  --err:#ff8a7a; --err-bg:rgba(255,120,100,0.10);
+  --dock-h:0px; --tap:36px;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{overflow-x:hidden;background:var(--bg)}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+button,input{font:inherit;color:inherit}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+button:disabled{cursor:default;opacity:0.5}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.ss-app{max-width:1240px;margin:0 auto;padding:20px 24px 40px}
+.ss-top{margin:0 0 18px}
+.ss-title{margin:0;font-size:1.5rem;font-weight:650;letter-spacing:0.01em}
+.ss-sub{margin:4px 0 0;color:var(--dim);font-size:0.92rem;max-width:62ch}
+.ss-h2{margin:18px 0 8px;font-size:0.78rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--dim)}
+.ss-cols{display:grid;grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:28px;align-items:start}
+.ss-left,.ss-right{min-width:0}
+
+/* DROP */
+.ss-drop{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:170px;padding:26px 18px;
+  border:2px dashed var(--line-b);border-radius:16px;background:var(--bg2);text-align:center;cursor:pointer;
+  transition:border-color 0.15s,background 0.15s}
+.ss-drop:hover,.ss-drop.over{border-color:var(--accent);background:var(--accent-bg)}
+.ss-drop.busy{cursor:progress;opacity:0.7}
+.ss-drop-big{font-size:1.08rem;font-weight:600}
+.ss-drop-fmt{font-size:0.82rem;color:var(--dim)}
+.ss-drop-privacy{font-size:0.82rem;color:var(--accent)}
+.ss-file{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none}
+.ss-drop-info{margin-top:6px;font-size:0.86rem;color:var(--ink);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+
+/* MODEL */
+.ss-sheet{margin-top:4px}
+.ss-grip{display:none}
+.ss-models{display:flex;flex-direction:column;gap:8px}
+.ss-model{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);padding:4px}
+.ss-model.on{border-color:var(--accent);background:var(--accent-bg)}
+.ss-model-pick{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:var(--tap);padding:8px 10px;
+  border:0;border-radius:9px;background:transparent;text-align:left}
+.ss-model-label{font-weight:600}
+.ss-model-meta{font-size:0.82rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.ss-model-note{font-size:0.78rem;color:var(--faint)}
+.ss-model-rm{align-self:flex-start;margin:0 0 4px 10px;min-height:28px;padding:2px 10px;border:1px solid var(--line-b);border-radius:8px;
+  background:transparent;color:var(--dim);font-size:0.8rem}
+.ss-model-rm:hover{color:var(--err);border-color:var(--err)}
+.ss-seg{display:flex;border:1px solid var(--line-b);border-radius:10px;overflow:hidden}
+.ss-seg button{flex:1;min-width:0;min-height:var(--tap);border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim)}
+.ss-seg button:last-child{border-right:0}
+.ss-seg button.on{background:var(--accent-bg);color:var(--accent)}
+.ss-ep{margin:12px 0 0;font-size:0.85rem;color:var(--dim)}
+
+.ss-actions{margin-top:18px}
+.ss-go{width:100%;min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#0b0d12;font-size:1.02rem;font-weight:650}
+.ss-go:not(:disabled):hover{filter:brightness(1.08)}
+.ss-choice{display:none}
+
+/* PROGRESS */
+.ss-progress{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.ss-phase{font-weight:600;font-variant-numeric:tabular-nums}
+.ss-bar{position:relative;height:8px;margin:10px 0 8px;border-radius:4px;background:var(--bg3);overflow:hidden}
+.ss-bar-fill{height:100%;width:0;border-radius:4px;background:var(--accent);transition:width 0.25s}
+.ss-bar.busy .ss-bar-fill{opacity:0.45;animation:ss-pulse 1.2s ease-in-out infinite}
+@keyframes ss-pulse{50%{opacity:0.15}}
+.ss-times{font-size:0.85rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.ss-cancel{margin-top:10px;min-height:var(--tap);padding:4px 16px;border:1px solid var(--line-b);border-radius:9px;background:transparent}
+.ss-cancel:not(:disabled):hover{border-color:var(--err);color:var(--err)}
+.ss-msg{margin:12px 0 0;color:var(--dim);font-size:0.9rem;font-variant-numeric:tabular-nums}
+.ss-error{margin-top:12px;padding:10px 12px;border:1px solid var(--err);border-radius:10px;background:var(--err-bg);color:var(--err);font-size:0.9rem}
+
+/* MIXER */
+.ss-empty{display:flex;align-items:center;justify-content:center;min-height:240px;padding:20px;border:1px solid var(--line);border-radius:16px;
+  color:var(--faint);text-align:center}
+.ss-presets{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.ss-preset{min-height:var(--tap);padding:4px 14px;border:1px solid var(--line-b);border-radius:999px;background:var(--bg2)}
+.ss-preset:not(:disabled):hover{border-color:var(--accent);color:var(--accent)}
+.ss-mixer{display:flex;flex-direction:column;gap:8px}
+.ss-row{display:grid;grid-template-columns:100px minmax(0,1fr) auto;grid-template-areas:"name wave ctl";align-items:center;gap:12px;
+  padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);transition:opacity 0.15s}
+.ss-row.silent{opacity:0.45}
+.ss-row-name{grid-area:name;display:flex;align-items:center;gap:8px;min-width:0;font-weight:600}
+.ss-row-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-swatch{flex:0 0 12px;width:12px;height:12px;border-radius:3px;background:var(--stem)}
+.ss-wave{grid-area:wave;position:relative;height:56px;min-width:0;border-radius:6px;background:var(--bg);cursor:pointer;touch-action:pan-y;overflow:hidden}
+.ss-wave-canvas{display:block;width:100%;height:100%}
+.ss-head{position:absolute;top:0;bottom:0;left:0;width:2px;margin-left:-1px;background:#fff;opacity:0.8;pointer-events:none}
+.ss-row-ctl{grid-area:ctl;display:flex;align-items:center;gap:6px}
+.ss-mute,.ss-solo{width:var(--tap);height:var(--tap);border:1px solid var(--line-b);border-radius:8px;background:var(--bg3);font-weight:700;font-size:0.85rem}
+.ss-mute.on{background:rgba(255,138,122,0.18);border-color:var(--err);color:var(--err)}
+.ss-solo.on{background:rgba(255,209,102,0.18);border-color:#ffd166;color:#ffd166}
+.ss-vol{width:96px;accent-color:var(--stem);touch-action:none}
+.ss-downloads{margin-top:16px}
+.ss-dl-row{display:flex;flex-wrap:wrap;gap:8px}
+.ss-dl{min-height:var(--tap);padding:4px 14px;border:1px solid var(--line-b);border-radius:9px;background:var(--bg2)}
+.ss-dl:not(:disabled):hover{border-color:var(--accent);color:var(--accent)}
+.ss-dl-zip{border-color:var(--accent);color:var(--accent)}
+
+/* DOCK (desktop: the transport bar over the mixer) */
+.ss-dock{display:none}
+.ss-dock.has-transport{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.ss-dock-settings{display:none}
+.ss-transport{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.ss-play{flex:0 0 48px;width:48px;height:48px;border:0;border-radius:50%;background:var(--accent);color:#0b0d12;font-size:1.05rem}
+.ss-seek{flex:1;min-width:0;accent-color:var(--accent);touch-action:none}
+.ss-time{flex:0 0 auto;font-size:0.88rem;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* TOUCH: any coarse pointer gets 44 px targets */
+@media (pointer:coarse){
+  :root{--tap:44px}
+  .ss-model-rm{min-height:44px}
+}
+
+/* PHONE. The query matches PHONE_Q in ui/sheet.js. */
+@media (max-width:699px), (pointer:coarse){
+  :root{--dock-h:calc(66px + env(safe-area-inset-bottom))}
+  .ss-app{padding:14px calc(16px + env(safe-area-inset-right)) calc(var(--dock-h) + 28px) calc(16px + env(safe-area-inset-left))}
+  .ss-title{font-size:1.3rem}
+  .ss-cols{grid-template-columns:minmax(0,1fr);gap:18px}
+  .ss-drop{min-height:140px}
+
+  .ss-dock,.ss-dock.has-transport{
+    display:flex;align-items:center;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;
+    padding:9px calc(16px + env(safe-area-inset-right)) calc(9px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    background:rgba(11,13,18,0.96);border-top:1px solid var(--line-b)}
+  .ss-dock-settings{display:block;flex:0 0 48px;width:48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);font-size:1.15rem}
+  .ss-dock-settings.on{border-color:var(--accent);color:var(--accent)}
+  .ss-transport{gap:10px}
+  .ss-time{font-size:0.8rem}
+
+  /* #ss-settings is a bottom sheet above the dock. */
+  .ss-sheet{position:fixed;left:0;right:0;bottom:var(--dock-h);z-index:35;margin:0;
+    max-height:min(72vh,560px);max-height:min(72dvh,560px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px calc(16px + env(safe-area-inset-left));
+    background:var(--bg2);border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,0.45);
+    transform:translateY(calc(100% + var(--dock-h)));visibility:hidden;
+    transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),visibility 0s linear 0.3s}
+  .ss-sheet.open{transform:translateY(0);visibility:visible;transition-delay:0s}
+  .ss-choice{display:block;width:100%;min-height:44px;margin-top:8px;padding:6px 10px;border:1px solid var(--line);border-radius:10px;
+    background:transparent;color:var(--dim);font-size:0.86rem;text-align:center}
+  .ss-grip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px;
+    background:linear-gradient(180deg,var(--bg2) 70%,rgba(18,21,28,0));touch-action:none;cursor:grab}
+  .ss-grip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .ss-sheet .ss-h2:first-of-type{margin-top:4px}
+  .ss-model{background:var(--bg3)}
+
+  /* Stem rows: name and buttons on one line, the waveform under them. */
+  .ss-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name ctl" "wave wave";gap:8px;padding:8px}
+  .ss-wave{height:48px}
+  .ss-vol{width:min(110px,28vw)}
+  .ss-empty{min-height:120px}
+}
+
+/* LANDSCAPE phone: the sheet is a drawer on the right edge. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  .ss-sheet{top:0;left:auto;bottom:var(--dock-h);width:min(46%,380px);max-height:none;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    transform:translateX(100%)}
+  .ss-sheet.open{transform:translateX(0)}
+}
