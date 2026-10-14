@@ -245,6 +245,7 @@ const BLURBS = {
   chordlab: 'Sing or play: it names the chord live.',
   'string-lab': 'Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios.',
   harmonywheel: 'The circle of fifths you can spin.',
+  'stem-splitter': 'Split a song into drums, bass, vocals and more with Demucs, on your device.',
   'resonance-table': 'Resonance figures for every mode.',
   noise: 'Perlin, simplex, Worley and more, live.',
   fields: 'Compute-shader fields and flows.',
