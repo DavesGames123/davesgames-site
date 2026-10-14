@@ -11,6 +11,8 @@
 //  adapter, else "wasm". When the WebGPU session fails to build, or its
 //  first run throws, the runtime builds a wasm session, repeats the segment
 //  and reports `fallback` (the first 200 characters of the error).
+//  A run error that is not a cancel releases the session, so the next
+//  load builds a new one (the device can be lost in the middle of a song).
 //  Threads: min(4, cores) when cross-origin isolated, else 1.
 //  Only one session lives at a time: load() of another model releases the
 //  old one first (each holds 110-168 MB of float32 weights).
@@ -185,12 +187,20 @@ export function createRuntime(deps) {
     const m = models[id];
     const t0 = now();
     let segments = 0;
-    const out = await separate(left, right, {
-      sources: m.stems.length, overlap: q.overlap, shifts: q.shifts, shiftOffsets,
-      runCore: (mag, mix) => runCore(m, mag, mix),
-      isCancelled: () => cancelFlag,
-      onProgress: p => { segments = p.total; post({ op: 'progress', phase: 'separate', model: id, ...p }); },
-    });
+    let out;
+    try {
+      out = await separate(left, right, {
+        sources: m.stems.length, overlap: q.overlap, shifts: q.shifts, shiftOffsets,
+        runCore: (mag, mix) => runCore(m, mag, mix),
+        isCancelled: () => cancelFlag,
+        onProgress: p => { segments = p.total; post({ op: 'progress', phase: 'separate', model: id, ...p }); },
+      });
+    } catch (e) {
+      // A session that failed a run (for example, a lost GPU device) can
+      // fail every later run. Release it, so the next load builds it again.
+      if (codeOf(e, 'run') !== 'cancelled') await release();
+      throw e;
+    }
     const stems = {}, transfer = [];
     m.stems.forEach((name, s) => { stems[name] = out[s]; transfer.push(out[s][0].buffer, out[s][1].buffer); });
     return { result: { model: id, stems, ms: Math.round(now() - t0), ep: current ? current.ep : null, fallback: current ? current.fallback : null, segments }, transfer };

@@ -453,8 +453,9 @@ section('weights');
 section('protocol');
 // A fake ORT: every source gets spec_out = mag and wave_out = mix -
 // ispec(mag), so a separation gives stems equal to the input.
-function fakeOrt({ failGpuCreate = false, failGpuRun = false, oomRun = false } = {}) {
+function fakeOrt({ failGpuCreate = false, failGpuRun = false, oomRun = false, breakAfter = 0 } = {}) {
   const log = [];
+  let sessions = 0;
   class Tensor { constructor(type, data, dims) { this.type = type; this.data = data; this.dims = dims; } async getData() { return this.data; } dispose() { this.disposed = true; } }
   const ort = {
     env: { wasm: {}, logLevel: 'warning' }, Tensor, log,
@@ -463,9 +464,13 @@ function fakeOrt({ failGpuCreate = false, failGpuRun = false, oomRun = false } =
       log.push({ create: ep, ext: opts.externalData && opts.externalData[0].path, graphBytes: graph.length, gol: opts.graphOptimizationLevel });
       if (ep === 'webgpu' && failGpuCreate) throw new Error('webgpu: no kernel for Mod');
       const S = graph[0];
+      // breakAfter k: the first session breaks after k runs (a lost device).
+      const first = ++sessions === 1;
+      let nRun = 0;
       return {
         async run(feeds) {
           log.push({ run: ep, magDims: feeds.mag.dims, mixDims: feeds.mix.dims });
+          if (breakAfter && first && ++nRun > breakAfter) throw new Error('device lost (session broken)');
           if (ep === 'webgpu' && failGpuRun) throw new Error('GPU device lost');
           if (oomRun) throw new RangeError('Array buffer allocation failed');
           const mag = feeds.mag.data, mix = feeds.mix.data, h = mix.length / 2;
@@ -592,6 +597,20 @@ function makeRt(ortOpts = {}, { gpu = true, isolated = false, failNet = false } 
   await e.rt.handle({ id: 1, op: 'init', ep: 'wasm' });
   const re = e.reply(1).m.result;
   check(re.threads === 4 && re.isolated === true && re.gpu === false && re.ep === 'wasm' && e.ort.env.wasm.numThreads === 4, `init ep 'wasm', cross-origin isolated, 8 cores: ${JSON.stringify(re)}`);
+}
+// A run error after the first segment: the job fails with 'run', and the
+// broken session must not stay (review: the next separate failed too).
+{
+  const f = makeRt({ breakAfter: 1 });
+  await f.rt.handle({ id: 1, op: 'init', ep: 'auto' });
+  const [L, R] = synthV1(9);
+  await f.rt.handle({ id: 2, op: 'separate', model: 'two', left: L.slice(), right: R.slice(), quality: 'standard' });
+  const r2 = f.reply(2).m;
+  await f.rt.handle({ id: 3, op: 'separate', model: 'two', left: L.slice(), right: R.slice(), quality: 'standard' });
+  const r3 = f.reply(3).m;
+  const creates = f.ort.log.filter(l => l.create).length;
+  check(!r2.ok && r2.code === 'run' && r3.ok && creates === 2,
+    `run error in segment 2 -> code '${r2.code}'; next separate of the same model -> ok ${r3.ok}${r3.ok ? '' : ' ("' + r3.error + '")'}, sessions built ${creates} (want 2)`);
 }
 // client.js with a fake Worker that runs a runtime in this process.
 class FakeWorker {
