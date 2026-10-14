@@ -153,7 +153,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `translate` | Translation Tool | Community & Tools > Help Translate | i18n | Help put Stella Nova in your language. |  | shown | generic, tier 5 | no |
 | `flight-board` | Flight Board | Community & Tools > Live Data | LIVE | A split-flap board for any airport, from live ADS-B. |  | shown | no | no |
 | `wasm4-arcade` | WASM-4 Arcade | Community & Tools > Arcade | WASM | Open-source WASM-4 fantasy console carts in a CRT arcade cabinet. | WASM-4 runtime by Bruno Garcia (ISC); 19 community carts under MIT, BSD-2-Clause and ISC | shown | hook, tier 3, default | no |
-| `retro-shelf` | Retro Shelf | Community & Tools > Arcade | NEW | Freeware classics (DOOM shareware, Beneath a Steel Sky and more) in DOSBox and ScummVM, or your own disc. | Freeware games released by their owners; DOSBox via js-dos (GPL-2.0), ScummVM (GPL-3.0), EmulatorJS (GPL-3.0) | shown | no | yes |
+| `retro-shelf` | Retro Shelf | Community & Tools > Arcade | NEW | Freeware classics (DOOM shareware, Beneath a Steel Sky and more) in DOSBox and ScummVM, or your own disc. | Freeware games released by their owners; DOSBox via js-dos (GPL-2.0), ScummVM (GPL-3.0), EmulatorJS (GPL-3.0) | shown | hook, tier 3, default | yes |
 
 ### Science
 
@@ -239,7 +239,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
 | `harmonywheel` (pages/harmony-wheel) | Harmony Wheel | Sound & Vibration > Music | NEW | The circle of fifths you can spin. |  | shown | hook, tier 3 | yes |
-| `stem-splitter` | Stem Splitter | Sound & Vibration > Music | NEW | Split a song into drums, bass, vocals and more with Demucs, on your device. |  | shown | no | yes |
+| `stem-splitter` | Stem Splitter | Sound & Vibration > Music | NEW | Split a song into drums, bass, vocals and more with Demucs, on your device. |  | shown | generic, tier 5 | yes |
 | `resonance-figure` | Resonance Figure | Sound & Vibration > Resonance | NEW | Lissajous figures from two tones. |  | shown | hook, tier 1, default | yes |
 | `resonance-table` | Resonance Table | Sound & Vibration > Resonance | NEW | Resonance figures for every mode. |  | shown | generic, tier 5 | yes |
 | `resonance-3d` | Resonance 3D | Sound & Vibration > Resonance | 3D | Resonance figures in 3D. |  | shown | hook, tier 2, default | yes |
