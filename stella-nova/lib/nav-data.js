@@ -230,7 +230,8 @@ w.SN_NAV = [
       ["chordlab", "ChordLab", "MIC"],
       ["string-lab", "String Lab", "3D"],
       ["chordchart", "Chord Chart", "NEW", "chord-chart"],
-      ["harmonywheel", "Harmony Wheel", "NEW", "harmony-wheel"]
+      ["harmonywheel", "Harmony Wheel", "NEW", "harmony-wheel"],
+      ["stem-splitter", "Stem Splitter", "NEW"]
     ] },
     { h: "Resonance", p: [
       ["resonance-figure", "Resonance Figure", "NEW"],
