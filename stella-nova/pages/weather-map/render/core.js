@@ -57,7 +57,7 @@ export function qualityFor({ coarse, minSide }) {
 // side at 2560 and the short side at 1440.
 export function backingSize(cssW, cssH, dpr, quality = 2) {
   const d = Math.min(dpr || 1, quality === 0 ? 1.5 : 2);
-  let w = Math.max(1, cssW * d), h = Math.max(1, cssH * d);
+  const w = Math.max(1, cssW * d), h = Math.max(1, cssH * d);
   const k = Math.min(1, MAX_BACKING.long / Math.max(w, h), MAX_BACKING.short / Math.min(w, h));
   return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)), scale: d * k };
 }

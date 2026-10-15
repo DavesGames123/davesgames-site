@@ -13,9 +13,15 @@
 //         render/clouds.js  createClouds(core) -> layer, setGrid
 //         render/fields.js  createFields(core) -> layer, setGrid, setRadar, set
 //         render/fronts.js  createFronts(core) -> layer, setFronts, set
-//         director.js       REGIONS, createDirector(app)
-//         labels.js         createLabels(root, app) -> { update(m, dt), onPick }
-//         saver.js          globalThis.snSaver (+ optional initSaver(app, ctx))
+//         director.js       REGIONS, createDirector(app, { view })
+//         labels.js         createLabels(root, app) -> { update(m, dt), onPick, setMarks }
+//         saver.js          installSaver({ app, director, canvas, onEnter, onExit })
+//                           -> saver; it also sets globalThis.snSaver and
+//                           binds the S and Esc keys itself
+//
+//  Frame order: the saver tick (when it runs, it owns app.cam and app.t),
+//  else the map clock and the director, then core.render, then the labels
+//  (with the isobar marks of render/fields.js), then the chrome.
 //
 //  app.t is the map time (epoch ms). app.followNow keeps it at the
 //  reference now; app.playing runs the time-lapse at app.rate hours per
@@ -49,7 +55,7 @@ const app = {
   focus: { name: 'United States', lat: NATIONAL.lat, lon: NATIONAL.lon, tz: 'America/Chicago' },
   data: { grid: null, fronts: null, radar: null, current: null },
   core: null, cam: camState(NATIONAL.lat, NATIONAL.lon, NATIONAL.alt, NATIONAL.tilt, 0),
-  mods: {}, layerObjs: {}, director: null, labels: null, ui: null,
+  mods: {}, layerObjs: {}, director: null, labels: null, ui: null, saverObj: null,
 };
 // deno-lint-ignore no-window
 window.WX = app;
@@ -79,7 +85,9 @@ const bootWall = Date.now();
 function nowRef() {
   const g = app.data.grid;
   if (g && g.live === false && g.times && g.times.length > 1) {
-    const a = g.times[0], z = g.times[g.times.length - 1];
+    const a = g.times[0], z = g.times[g.times.length - 1], wall = Date.now();
+    // a recent session copy still holds the real now
+    if (wall >= a && wall <= z) return wall;
     const anchor = Number.isFinite(g.fetched) && g.fetched >= a && g.fetched <= z ? g.fetched : Math.min(z, a + 6 * H);
     return Math.min(z, anchor + (Date.now() - bootWall));
   }
@@ -139,7 +147,8 @@ function wire() {
   once(L.fields, 'setGrid', d.grid);
   once(L.fields, 'setRadar', d.radar);
   once(L.fronts, 'setFronts', d.fronts);
-  once(app.labels, 'setData', d);
+  // WPC H / L for the fields layer; without it, H / L come from grid extrema
+  once(L.fields, 'setFronts', d.fronts);
   // a past sample: put the map time inside its window
   if (d.grid && d.grid.live === false && app.followNow) app.t = nowRef();
 }
@@ -161,7 +170,6 @@ function applyLayers() {
   call(L.fronts, 'set', { visible: on.fronts });
   const lr = $('labels');
   if (lr) lr.hidden = !on.labels;
-  call(app.labels, 'set', { visible: on.labels, isobars: on.isobars });
 }
 function setLayer(key, val) {
   app.layers[key] = !!val;
@@ -350,10 +358,11 @@ function currentMatrices() {
 addEventListener('keydown', e => {
   const tag = (e.target && e.target.tagName) || '';
   if (/INPUT|TEXTAREA|SELECT/.test(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+  // saver.js binds S and Esc; while it runs, the page keys are off
+  if (saverOn()) return;
   const k = e.key;
   if (k === ' ') { e.preventDefault(); app.ui.togglePlay(); }
   else if (k === 'n' || k === 'N') app.ui.goNow();
-  else if (k === 's' || k === 'S') toggleSaver();
   else if (k === 'u' || k === 'U') setUnits(app.units === 'F' ? 'C' : 'F');
   else if (k === '/') { e.preventDefault(); const q = $('search'); if (q) { if (globalThis.matchMedia && app.ui.sheet && matchMedia('(max-width: 768px)').matches) app.ui.sheet.open('focus'); q.focus(); } }
   else if (k === 'ArrowLeft' || k === 'ArrowRight') {
@@ -361,8 +370,7 @@ addEventListener('keydown', e => {
     app.followNow = false; app.playing = false; app.ui.syncPlay();
     app.t = clamp(Math.round((app.t + (k === 'ArrowLeft' ? -H : H)) / H) * H, r.t0, r.t1);
   } else if (k === 'Escape') {
-    if (saverOn()) exitSaver();
-    else if (cardOpen()) closeForecast();
+    if (cardOpen()) closeForecast();
     else if (app.ui.sheet) app.ui.sheet.close();
   }
 });
@@ -372,42 +380,68 @@ function setUnits(u) {
   savePrefs();
   app.ui.syncUnits();
   refreshForecast();
-  call(app.labels, 'setUnits', app.units);
 }
 
 // ── SAVER ───────────────────────────────────────────────────────────────
-let saverActive = false;
-const saverOn = () => (globalThis.snSaver && typeof globalThis.snSaver.active === 'boolean' ? globalThis.snSaver.active : saverActive)
-  || document.documentElement.classList.contains('wx-saver');
-function enterSaver() {
-  const s = globalThis.snSaver;
-  if (!s || typeof s.enter !== 'function') { app.ui.setStatus('The screensaver is not available yet'); return; }
+// saver.js (installSaver) owns the saver state. app.saverObj is null until
+// bootSaver() has run.
+const saverOn = () => !!(app.saverObj && app.saverObj.active);
+function toggleSaver() {
+  const s = app.saverObj;
+  if (!s) { app.ui.setStatus('The screensaver is not available yet'); return; }
+  try { s.toggle(); } catch (e) { console.warn('weather-map: saver toggle failed', e); }
+}
+// On enter: close the card and the sheet, stop the auto modes and any
+// flight. saver.js sets app.layers itself; the layer objects follow here.
+function onSaverEnter() {
   closeForecast();
   if (app.ui.sheet) app.ui.sheet.close();
-  try { s.enter({ calm: 0.5, seed: (Math.random() * 2 ** 31) | 0, fromPage: true }); saverActive = true; }
-  catch (e) { console.warn('weather-map: saver enter failed', e); }
+  stopTour(); fly = null; vel = { lat: 0, lon: 0 }; userHold = false;
+  app.ui.setActiveRegion(null);
+  applyLayers();
 }
-function exitSaver() {
-  const s = globalThis.snSaver;
-  saverActive = false;
-  if (s && typeof s.exit === 'function') { try { s.exit(); } catch (e) { console.warn('weather-map: saver exit failed', e); } }
+function onSaverExit() {
+  applyLayers();
+  if (app.ui.syncLayers) app.ui.syncLayers();
+  app.ui.syncPlay();
 }
-function toggleSaver() { if (saverOn()) exitSaver(); else enterSaver(); }
 
 // ── LOOP ────────────────────────────────────────────────────────────────
-let last = performance.now(), focusKey = '';
+let last = performance.now(), focusKey = '', lastMarks = null;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  // the map time
   const r = range();
+  app.tBase = r.now;   // labels.js and saver.js: the "now" the observations belong to
+  let saverRan = false;
+  if (app.saverObj) {
+    try { saverRan = !!app.saverObj.tick(dt); } catch (e) { console.warn('weather-map: saver tick failed', e); }
+  }
+  if (!saverRan) clockAndCamera(dt, r);
+  if (app.core && !app.core.lost) {
+    try { app.core.render(app.cam, app); } catch (e) { console.error(e); app.core.lost = true; app.ui.setStatus('The renderer stopped'); }
+  }
+  // the isobar values (and grid H / L without WPC) from render/fields.js
+  const F = app.layerObjs.fields;
+  if (app.labels && F && typeof F.marks === 'function') {
+    const mk = F.marks();
+    if (mk && mk !== lastMarks) { lastMarks = mk; call(app.labels, 'setMarks', mk); }
+  }
+  if (app.labels && typeof app.labels.update === 'function') {
+    try { app.labels.update(currentMatrices(), dt); } catch (e) { console.warn('weather-map: labels failed', e); app.labels = null; }
+  }
+  app.ui.update(dt);
+  requestAnimationFrame(frame);
+}
+
+function clockAndCamera(dt, r) {
+  // the map time
   if (app.followNow) app.t = r.now;
   else if (app.playing) {
     app.t += dt * app.rate * H;
     if (app.t > r.t1) app.t = r.t0;
   }
   if (!app.followNow) app.t = clamp(app.t, r.t0, r.t1);
-  app.tBase = r.now;   // labels.js: the "now" the observations belong to
   // the camera: the director (tour or move), else a fallback flight, else the glide
   const d = app.director;
   if (d && typeof d.tick === 'function') {
@@ -434,14 +468,6 @@ function frame(now) {
     vel = { lat: vel.lat * k, lon: vel.lon * k };
     if (Math.abs(vel.lat) + Math.abs(vel.lon) < 1e-4) vel = { lat: 0, lon: 0 };
   }
-  if (app.core && !app.core.lost) {
-    try { app.core.render(app.cam, app); } catch (e) { console.error(e); app.core.lost = true; app.ui.setStatus('The renderer stopped'); }
-  }
-  if (app.labels && typeof app.labels.update === 'function' && app.layers.labels) {
-    try { app.labels.update(currentMatrices(), dt); } catch (e) { console.warn('weather-map: labels failed', e); app.labels = null; }
-  }
-  app.ui.update(dt);
-  requestAnimationFrame(frame);
 }
 
 // ── BOOT ────────────────────────────────────────────────────────────────
@@ -503,7 +529,9 @@ async function bootDirector() {
   const dm = await opt('./director.js');
   app.mods.director = dm;
   if (dm && typeof dm.createDirector === 'function') {
-    try { app.director = dm.createDirector(app); } catch (e) { console.warn('weather-map: createDirector failed', e); }
+    // view(): the canvas minus the chrome, read at each move, so a region
+    // fit leaves the panel, the top bar and the time bar clear
+    try { app.director = dm.createDirector(app, { view: clearInsets }); } catch (e) { console.warn('weather-map: createDirector failed', e); }
     syncView();
     addEventListener('resize', syncView);
   }
@@ -524,9 +552,14 @@ async function bootDirector() {
 
 async function bootSaver() {
   const sm = await opt('./saver.js');
-  if (sm && typeof sm.initSaver === 'function') {
-    try { sm.initSaver(app, { canvas, director: app.director, labels: app.labels, ui: app.ui, regions }); }
-    catch (e) { console.warn('weather-map: initSaver failed', e); }
+  if (sm && typeof sm.installSaver === 'function') {
+    try {
+      app.saverObj = sm.installSaver({
+        app, director: app.director, canvas,
+        resize: () => { if (app.core) app.core.resize(); syncView(); },
+        onEnter: onSaverEnter, onExit: onSaverExit,
+      });
+    } catch (e) { console.warn('weather-map: installSaver failed', e); app.saverObj = null; }
   }
 }
 
