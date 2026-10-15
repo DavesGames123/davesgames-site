@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-222 registered pages in 5 regions and 20 constellations.
+223 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -204,6 +204,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `city-atlas` | City Atlas | Fluids > Earth & Ocean | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
 | `map-generator` | City Generator | Fluids > Earth & Ocean | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
 | `storm-globe` | Storm Globe | Fluids > Earth & Ocean | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
+| `weather-map` | Weather Map | Fluids > Earth & Ocean | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | no |
 | `map-projections` | Map Projections | Fluids > Earth & Ocean | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
 | `ns-equations` | Navier–Stokes 1D | Fluids > Navier–Stokes | MATH | The Navier-Stokes terms one at a time in 1D. |  | shown | generic, tier 5 | yes |
 | `ns-burgers` | Burgers Equation | Fluids > Navier–Stokes | SIM | Shocks form in the Burgers equation. |  | shown | hook, tier 3, default | yes |

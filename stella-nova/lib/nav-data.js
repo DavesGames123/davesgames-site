@@ -168,6 +168,7 @@ w.SN_NAV = [
       ["city-atlas", "City Atlas", "3D"],
       ["map-generator", "City Generator", "3D"],
       ["storm-globe", "Storm Globe", "DATA"],
+      ["weather-map", "Weather Map", "DATA"],
       ["map-projections", "Map Projections", "MATH"]
     ] },
     { h: "Navier–Stokes", p: [

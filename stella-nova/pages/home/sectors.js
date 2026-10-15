@@ -314,6 +314,7 @@ const BLURBS = {
   'city-atlas': 'Twenty-one 3D cities with real terrain, currents and wind.',
   'map-generator': 'Grow a procedural city from a seed (after MapGenerator).',
   'storm-globe': 'Today’s storms on a globe of real GFS winds.',
+  'weather-map': 'Live US weather on a real globe: fronts, radar, forecasts.',
   'map-projections': '26 map projections, Tissot circles and a true-size tool.',
   'ns-equations': 'The Navier-Stokes terms one at a time in 1D.',
   'ns-wave': 'The blowup question through a wave model.',
