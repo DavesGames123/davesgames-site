@@ -1,0 +1,81 @@
+/* ============================================================================
+   WEATHER MAP · saver.css — the in-page screensaver lower third (saver.js)
+   ----------------------------------------------------------------------------
+   The plate sits at the bottom left in a landscape frame and across the
+   bottom in a portrait frame. saver.js frames the globe in the band above
+   it (it reads the plate box). The shell screensaver draws its own plate;
+   this one shows only in the in-page mode (html.wx-saver).
+   grep -n targets: "PLATE", "WHEN", "WX", "STRIP", "HINT", "PORTRAIT"
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* PLATE */
+.wxs-plate{
+  --wxs-accent:#ffb640;
+  position:fixed;z-index:60;left:max(32px,env(safe-area-inset-left,0px) + 16px);
+  bottom:max(32px,env(safe-area-inset-bottom,0px) + 16px);
+  display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;
+  min-width:min(560px,calc(100vw - 64px));max-width:min(860px,calc(100vw - 64px));
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:#f4f6fa;
+  pointer-events:none;opacity:0;transform:translateY(14px);
+  transition:opacity .9s ease,transform .9s cubic-bezier(.2,.7,.2,1);
+  filter:drop-shadow(0 10px 30px rgba(0,0,0,.45));
+}
+.wxs-plate.on{opacity:1;transform:none}
+.wxs-bar{grid-row:1/3;width:6px;border-radius:3px 0 0 3px;background:linear-gradient(var(--wxs-accent),#ff6a3d)}
+.wxs-main,.wxs-wx{background:rgba(10,16,28,.78);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2)}
+.wxs-main{padding:14px 22px 14px 18px;display:flex;flex-direction:column;justify-content:center;gap:6px;min-width:0}
+.wxs-place{display:flex;align-items:baseline;gap:12px;min-width:0;transition:opacity .35s ease,transform .35s ease}
+.wxs-name{font-size:clamp(22px,2.6vw,38px);font-weight:650;letter-spacing:-.01em;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wxs-sub{font-size:clamp(12px,1.05vw,15px);color:#b8c3d6;white-space:nowrap}
+
+/* WHEN */
+.wxs-when{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;font-variant-numeric:tabular-nums}
+.wxs-time{font-size:clamp(17px,1.7vw,24px);font-weight:500;color:#fff}
+.wxs-tz{font-size:12px;font-weight:600;letter-spacing:.06em;color:var(--wxs-accent)}
+.wxs-date{font-size:clamp(13px,1.15vw,16px);color:#c9d2e0}
+
+/* WX */
+.wxs-wx{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;align-items:center;column-gap:12px;
+  padding:12px 22px;border-left:1px solid rgba(255,255,255,.1);border-radius:0 6px 0 0;transition:opacity .35s ease}
+.wxs-icon{grid-row:1/3;width:48px;height:48px}
+.wxs-icon svg{width:100%;height:100%}
+.wxs-temp{display:flex;align-items:baseline;gap:2px;font-variant-numeric:tabular-nums}
+.wxs-temp b{font-size:clamp(30px,3.2vw,46px);font-weight:600;line-height:1}
+.wxs-temp i{font-style:normal;font-size:clamp(15px,1.4vw,20px);font-weight:500;color:#dfe6f0}
+.wxs-temp small{margin-left:8px;font-size:clamp(13px,1.2vw,17px);color:#aab6c8}
+.wxs-cond{font-size:clamp(12px,1.05vw,15px);color:#d5dcea;white-space:nowrap}
+
+/* STRIP */
+.wxs-strip{grid-column:2/4;display:flex;justify-content:space-between;gap:16px;padding:6px 18px;
+  background:rgba(255,182,64,.92);color:#1a1206;font-size:12px;font-weight:600;border-radius:0 0 6px 0;white-space:nowrap}
+.wxs-credit{font-weight:500;opacity:.75;overflow:hidden;text-overflow:ellipsis}
+
+/* the cut: the old place fades out, the new one fades in */
+.wxs-plate.swap .wxs-place,.wxs-plate.swap .wxs-wx{opacity:0;transform:translateY(6px)}
+
+/* HINT */
+.wxs-hint{position:fixed;z-index:61;top:max(16px,env(safe-area-inset-top,0px) + 8px);right:max(16px,env(safe-area-inset-right,0px) + 8px);
+  padding:6px 12px;border-radius:999px;background:rgba(10,16,28,.7);color:#dfe6f0;
+  font:500 12px/1.3 'Inter',system-ui,sans-serif;opacity:0;transition:opacity .5s ease;pointer-events:none}
+.wxs-hint.on{opacity:1}
+html.wx-saver,html.wx-saver body{cursor:none}
+
+/* PORTRAIT: the plate spans the bottom, the weather block under the place */
+@media (max-aspect-ratio:1/1){
+  .wxs-plate{left:max(12px,env(safe-area-inset-left,0px) + 8px);right:max(12px,env(safe-area-inset-right,0px) + 8px);
+    bottom:max(16px,env(safe-area-inset-bottom,0px) + 10px);min-width:0;max-width:none;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto}
+  .wxs-bar{grid-row:1/4}
+  .wxs-main{padding:12px 16px}
+  .wxs-name{font-size:clamp(22px,6.4vw,34px)}
+  .wxs-wx{grid-column:2;border-left:0;border-top:1px solid rgba(255,255,255,.1);border-radius:0;padding:10px 16px;justify-content:start}
+  .wxs-icon{width:40px;height:40px}
+  .wxs-temp b{font-size:clamp(28px,8vw,40px)}
+  .wxs-strip{grid-column:2;padding:6px 16px}
+  .wxs-credit{display:none}
+  .wxs-time{font-size:clamp(17px,4.6vw,22px)}
+  .wxs-date{font-size:clamp(13px,3.6vw,16px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .wxs-plate,.wxs-place,.wxs-wx{transition:none}
+}
