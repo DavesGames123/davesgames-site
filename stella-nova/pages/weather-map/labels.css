@@ -1,0 +1,62 @@
+/* ============================================================================
+   WEATHER MAP  ·  labels.css — city labels and pressure marks (DIRECTOR)
+   ----------------------------------------------------------------------------
+   labels.js puts one absolutely placed button per city in .wxl-layer and
+   moves it with transform. The dot sits on the city; the body hangs to
+   the right (LABEL_DX, LABEL_DY in labels.js match the offsets here).
+   --wxl-c is the temperature colour of the label chip.
+     grep -n 'LAYER'   the overlay layer
+     grep -n 'LABEL'   the city label
+     grep -n 'MARK'    H / L and isobar values
+     grep -n 'TOUCH'   coarse pointers
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* LAYER */
+.wxl-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;
+  font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-feature-settings:'tnum' 1;contain:layout style}
+
+/* LABEL */
+.wxl{position:absolute;left:0;top:0;display:block;padding:0;border:0;background:none;color:#fff;
+  transform-origin:0 0;will-change:transform,opacity;pointer-events:auto;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation;text-align:left;--wxl-c:#8b95a5}
+.wxl-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;
+  background:#fff;box-shadow:0 0 0 2px rgba(6,10,18,0.75),0 0 6px rgba(0,0,0,0.5)}
+.wxl-body{position:absolute;left:9px;top:-18px;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  padding:3px 9px 3px 5px;border-radius:9px;
+  background:linear-gradient(180deg,rgba(14,20,32,0.86),rgba(8,12,22,0.86));
+  border:1px solid rgba(255,255,255,0.10);border-left:3px solid var(--wxl-c);
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.wxl-icon{display:block;width:20px;height:20px;flex:none}
+.wxl-icon svg{display:block}
+.wxl-text{display:flex;flex-direction:column;line-height:1.1}
+.wxl-temp{font-size:15px;font-weight:650;letter-spacing:-0.01em}
+.wxl-name{font-size:12px;font-weight:450;color:#c3ccda}
+.wxl:hover .wxl-body,.wxl:focus-visible .wxl-body{border-color:rgba(255,255,255,0.32);background:rgba(20,30,48,0.94)}
+.wxl:focus-visible{outline:none}
+.wxl:focus-visible .wxl-body{box-shadow:0 0 0 2px #4aa3ff}
+
+/* compact (narrow views): temperature only, name below in small type */
+.wxl-compact .wxl-body{top:-11px;padding:2px 6px 2px 4px;gap:4px;border-radius:7px}
+.wxl-compact .wxl-icon,.wxl-compact .wxl-icon svg{width:16px;height:16px}
+.wxl-compact .wxl-text{flex-direction:row;align-items:baseline;gap:5px}
+.wxl-compact .wxl-temp{font-size:13px}
+.wxl-compact .wxl-name{font-size:10.5px}
+
+/* MARK */
+.wxm{position:absolute;left:0;top:0;pointer-events:none;text-align:center;transform-origin:0 0;
+  text-shadow:0 1px 3px rgba(0,0,0,0.7)}
+.wxm b{position:absolute;left:-14px;top:-22px;width:28px;font-size:30px;font-weight:800;line-height:1}
+.wxm small{position:absolute;left:-24px;top:9px;width:48px;font-size:11px;font-weight:600;color:#e6ebf3}
+.wxm-h b{color:#3d8bff}
+.wxm-l b{color:#ff4040}
+.wxm-iso small{top:-7px;font-size:10px;color:rgba(235,240,248,0.85)}
+
+/* TOUCH */
+@media (pointer:coarse){
+  .wxl-body{padding-top:5px;padding-bottom:5px}
+  .wxl::after{content:'';position:absolute;left:-12px;top:-22px;width:56px;height:44px}
+}
+@media (prefers-reduced-motion:reduce){
+  .wxl{will-change:auto}
+}
