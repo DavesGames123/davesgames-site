@@ -257,7 +257,9 @@ export function createDirector(app, opts = {}) {
     if (r && !r.auto) {
       const first = CITY_BY_ID.get(r.cities[0]);
       const cam = regionCam(r, v) || r.cam;
-      return { id: r.id, name: r.name, cam, lat: cam.lat, lon: cam.lon, tz: first ? first.tz : null, kind: 'region' };
+      // the National chip names the place 'United States' (main.js focusOf, saver plate)
+      const name = r.id === 'national' ? 'United States' : r.name;
+      return { id: r.id, name, cam, lat: cam.lat, lon: cam.lon, tz: first ? first.tz : null, kind: 'region' };
     }
     const c = CITY_BY_ID.get(x);
     if (c) return { id: c.id, name: `${c.name}, ${c.state}`, cam: camState(c.lat, c.lon, cityAlt, NEWS_TILT, 0), lat: c.lat, lon: c.lon, tz: c.tz, kind: 'city' };

@@ -325,10 +325,13 @@ canvas.addEventListener('pointermove', e => {
   hideHint();
 });
 const up = e => {
-  pointers.delete(e.pointerId);
+  // a pointerup without our pointerdown is not a click: the saver eats the
+  // pointerdown of the tap that stops it (saver.js onPointer), and that
+  // tap must not open a forecast
+  const had = pointers.delete(e.pointerId);
   lastPinch = 0; lastMid = null;
   if (!pointers.size) canvas.classList.remove('drag');
-  if (dragMoved < 5 && e.type === 'pointerup' && e.button === 0) {
+  if (had && dragMoved < 5 && e.type === 'pointerup' && e.button === 0) {
     const r = canvas.getBoundingClientRect();
     const ll = pick(currentMatrices(), e.clientX - r.left, e.clientY - r.top);
     if (ll && typeof app.onPick === 'function') app.onPick(ll);

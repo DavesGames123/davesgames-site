@@ -429,9 +429,19 @@ export function installSaver(ctx) {
     if (e.key === 's' || e.key === 'S') { e.preventDefault(); saver.toggle(); }
     else if (run && e.key === 'Escape') { e.preventDefault(); saver.exit(); }
   }
+  // The tap that stops the saver ends there: its click must not reach a
+  // city label (that opens the forecast card) or a button under it.
+  let eatUntil = 0;
+  function eatClick(e) {
+    removeEventListener('click', eatClick, true);
+    if (performance.now() > eatUntil) return;
+    e.preventDefault(); e.stopPropagation();
+  }
   function onPointer(e) {
     if (!run || run.shell || performance.now() - run.at < 600) return;
     e.preventDefault(); e.stopPropagation();
+    eatUntil = performance.now() + 1000;
+    addEventListener('click', eatClick, true);
     saver.exit();
   }
   function onMove() {

@@ -234,7 +234,8 @@ export async function openForecast(target, opts = {}) {
   if (!root) return null;
   const my = ++token;
   const near = target.name ? null : nearestCity(target.lat, target.lon, 1.5);
-  const tz = target.tz || (near && near.tz) || (nearestCity(target.lat, target.lon, 12) || {}).tz || 'UTC';
+  const known = target.tz || (near && near.tz) || (nearestCity(target.lat, target.lon, 12) || {}).tz || null;
+  const tz = known || 'UTC';
   shown = { ...target, tz };
   root.innerHTML = shell(placeTitle(target, near), tz);
   root.hidden = false;
@@ -243,7 +244,9 @@ export async function openForecast(target, opts = {}) {
   startClock(tz);
   const loader = opts.loadForecast || loadForecast;
   let fc;
-  try { fc = await loader(target.lat, target.lon, tz); }
+  // no city near (open sea, Canada, Mexico): Open-Meteo names the zone
+  // ('auto'), so the days and the clock are local, not UTC
+  try { fc = await loader(target.lat, target.lon, known || 'auto'); }
   catch (e) {
     if (my !== token) return null;
     const body = root.querySelector('.fc-body');
