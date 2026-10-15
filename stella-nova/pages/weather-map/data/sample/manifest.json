@@ -1,0 +1,35 @@
+{
+ "made": 1792089547174,
+ "source": {
+  "fronts": {
+   "asus01": "2026-10-15T16:27:00+00:00",
+   "asus02": "2026-10-15T15:00:00+00:00",
+   "fsus02": [
+    "2026-10-15T17:20:00+00:00",
+    "2026-10-15T17:18:00+00:00"
+   ]
+  }
+ },
+ "fronts": {
+  "analysis": "asus01.txt",
+  "hires": "asus02.txt",
+  "forecasts": [
+   "fsus02-a.txt",
+   "fsus02-b.txt"
+  ]
+ },
+ "grid": "grid.json",
+ "current": "current.json",
+ "forecast": "forecast.json",
+ "radar": "radar.json",
+ "bytes": {
+  "asus01.txt": 1778,
+  "asus02.txt": 2368,
+  "fsus02-a.txt": 1236,
+  "fsus02-b.txt": 1247,
+  "grid.json": 218739,
+  "current.json": 18379,
+  "forecast.json": 4117,
+  "radar.json": 818
+ }
+}
