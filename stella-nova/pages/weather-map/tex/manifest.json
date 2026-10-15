@@ -1,0 +1,111 @@
+{
+  "day-8k.jpg": {
+    "w": 8192,
+    "h": 4096,
+    "bounds": {
+      "lat0": -90,
+      "lat1": 90,
+      "lon0": -180,
+      "lon1": 180
+    },
+    "bytes": 5898963,
+    "sha256": "babd7bb56d78aa845536621b15d9062f93fdd4cd280c8a6ee106dcee914fb362",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-base/july/world.200407.3x21600x10800.jpg",
+    "sourceBytes": 21125326,
+    "sourceSha256": "dea8b4dc8a4f93f5f8bce0c8c85a508a178e7901e9ed8e6bf86e6ce7ef6d61e2",
+    "license": "Public domain (NASA); credit requested",
+    "note": "Blue Marble Next Generation, 2004-07, no shaded relief, equirect",
+    "quality": 95
+  },
+  "day-2k.jpg": {
+    "w": 2048,
+    "h": 1024,
+    "bounds": {
+      "lat0": -90,
+      "lat1": 90,
+      "lon0": -180,
+      "lon1": 180
+    },
+    "bytes": 474320,
+    "sha256": "b1afb642f8310d89050f10be70c46a56c52e1df278b7e16de20d969137c1d2d1",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-base/july/world.200407.3x21600x10800.jpg",
+    "sourceBytes": 21125326,
+    "sourceSha256": "dea8b4dc8a4f93f5f8bce0c8c85a508a178e7901e9ed8e6bf86e6ce7ef6d61e2",
+    "license": "Public domain (NASA); credit requested",
+    "note": "Blue Marble Next Generation, 2004-07, phone fallback",
+    "quality": 95
+  },
+  "us-day.jpg": {
+    "w": 7200,
+    "h": 2700,
+    "bounds": {
+      "lat0": 15,
+      "lat1": 60,
+      "lon0": -170,
+      "lon1": -50
+    },
+    "bytes": 2938384,
+    "sha256": "f0f0348ea969317a71cf13b15d30b4ee06e40cc7d153ecf04543006948cff024",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bmng-base/july/world.200407.3x21600x10800.jpg",
+    "sourceBytes": 21125326,
+    "sourceSha256": "dea8b4dc8a4f93f5f8bce0c8c85a508a178e7901e9ed8e6bf86e6ce7ef6d61e2",
+    "license": "Public domain (NASA); credit requested",
+    "note": "Blue Marble Next Generation at native 60 px/deg, light unsharp mask",
+    "quality": 95
+  },
+  "night-4k.jpg": {
+    "w": 4096,
+    "h": 2048,
+    "bounds": {
+      "lat0": -90,
+      "lat1": 90,
+      "lon0": -180,
+      "lon1": 180
+    },
+    "bytes": 852934,
+    "sha256": "01e84391642ef1a1feba6234047650cb8c764def263b767020510dbb44f5b822",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_3km.jpg",
+    "sourceBytes": 8106233,
+    "sourceSha256": "230aac448ae68c358be433dd518888cccb3a85ccf66f7b44326441c324ad6725",
+    "license": "Public domain (NASA); credit requested",
+    "note": "Black Marble 2016 city lights; moonlit land and sea faded to black (luma 22..60 smoothstep)",
+    "quality": 95
+  },
+  "height-4k.png": {
+    "w": 4096,
+    "h": 2048,
+    "bounds": {
+      "lat0": -90,
+      "lat1": 90,
+      "lon0": -180,
+      "lon1": 180
+    },
+    "bytes": 987854,
+    "sha256": "47a335eea1d483a807081cb3b18685d3f14dacc80166549c8dc25f837dcdd026",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/topography/gebco_08_rev_elev_21600x10800.jpg",
+    "sourceBytes": 14107764,
+    "sourceSha256": "aeecb1d0ae367f836e95f5fec8edcacf37df423f07f9ecaa1739debab8985b58",
+    "license": "Public domain (NASA); credit requested",
+    "note": "GEBCO 08 land elevation grey, sea = 0, lakes keep their grey value (use water-2k for lakes); metres ~ 6500 * (v/255)^(1/0.85) (fitted, approximate)"
+  },
+  "water-2k.png": {
+    "w": 2048,
+    "h": 1024,
+    "bounds": {
+      "lat0": -90,
+      "lat1": 90,
+      "lon0": -180,
+      "lon1": 180
+    },
+    "bytes": 92187,
+    "sha256": "349105f26d643d0eaed3c1aa17a24d1ab5f2178ba87bfb23c2ce33c1c5286545",
+    "source": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/bmng/bathymetry/gebco_08_rev_bath_5400x2700.jpg",
+    "sourceBytes": 2940609,
+    "sourceSha256": "d2e5de09ccd154fdde4f8c45473f311b12230b0d998a19b0cdc042833f0e963e",
+    "license": "Public domain (NASA); credit requested",
+    "source2": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_lakes.geojson",
+    "source2Sha256": "2d036f53dedec578001c5c30c2959ee7d4eebc1306900fa4367c49929ec8f2d9",
+    "license2": "Public domain (Natural Earth)",
+    "note": "255 = water (GEBCO 08 sea plus Natural Earth 10m lakes), 0 = land; box-filtered from 8192x4096"
+  }
+}
