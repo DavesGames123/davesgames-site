@@ -520,7 +520,29 @@ function clearInsets() {
   const ins = { t: top ? Math.max(0, top.bottom - cr.top - 12) : 0, r: 0, b: 0, l: 0 };
   if (panel && panel.left < W * 0.3 && panel.bottom > cr.top && panel.top < cr.bottom && panel.width < W * 0.5) ins.l = Math.max(0, panel.right - cr.left);
   if (bar && bar.top < cr.bottom) ins.b = Math.max(0, cr.bottom - bar.top);
+  // the legend card sits on the right; a fit keeps cities out from under it
+  const leg = rect('legend');
+  if (leg && leg.left > cr.left + W * 0.6 && leg.top < cr.bottom && leg.bottom > cr.top) ins.r = Math.max(0, cr.right - leg.left);
   return { w: W, h: Hh, inset: ins };
+}
+// The boot camera (NATIONAL) is a guess for an unknown window size. Once
+// the director and the chrome exist, swap it for the National region fit
+// of the clear area, and fit again on a resize while the view still sits
+// on that fit (the user has not moved it).
+let natFit = null;
+const sameCam = (a, b) => !!a && !!b && Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lon - b.lon) < 1e-6 && Math.abs(a.alt - b.alt) < 1e-6;
+function fitNational() {
+  const dm = app.mods.director;
+  if (!dm || typeof dm.regionCam !== 'function' || !dm.REGIONS || fly || pointers.size) return;
+  const untouched = natFit ? sameCam(app.cam, natFit) : sameCam(app.cam, NATIONAL);
+  if (!untouched || !app.director || dirBusy(app.director)) return;
+  const r = dm.REGIONS.find(x => x.id === 'national');
+  let c = null;
+  try { c = r && dm.regionCam(r, clearInsets()); } catch { c = null; }
+  if (!c || !Number.isFinite(c.lat) || !Number.isFinite(c.alt)) return;
+  Object.assign(app.cam, { lat: c.lat, lon: c.lon, alt: c.alt, tilt: c.tilt || 0, heading: c.heading || 0 });
+  natFit = { ...app.cam };
+  if (typeof app.director.setCam === 'function') app.director.setCam(app.cam);
 }
 function syncView() {
   if (!app.director || typeof app.director.view !== 'function') return;
@@ -536,7 +558,8 @@ async function bootDirector() {
     // fit leaves the panel, the top bar and the time bar clear
     try { app.director = dm.createDirector(app, { view: clearInsets }); } catch (e) { console.warn('weather-map: createDirector failed', e); }
     syncView();
-    addEventListener('resize', syncView);
+    fitNational();
+    addEventListener('resize', () => { syncView(); fitNational(); });
   }
   app.ui.refreshRegions();
   const lm = await opt('./labels.js');
