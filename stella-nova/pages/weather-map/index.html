@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Weather Map — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   WEATHER MAP  ·  page shell (first version, package CORE)
+  ───────────────────────────────────────────────────────────────────────────
+   A live, TV-news-style weather map of the United States on a realistic
+   WebGPU globe. This first version boots the core renderer and shows the
+   globe with an orbit camera. Package UI replaces this file in phase 2
+   (CONTRACT.md): layout, focus chips, layer toggles, legend, scrubber.
+
+   GREP MAP
+     grep -n 'id="view'    the WebGPU canvas
+     grep -n 'id="top'     the top bar
+     grep -n 'id="nogpu'   the message when WebGPU is missing
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A live weather map of the United States on a realistic 3D globe: fronts, radar, temperatures and forecasts, in the style of a TV weather broadcast.">
+<link rel="stylesheet" href="../../vendor/fonts/inter.adf13477.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="stage">
+  <canvas id="view" aria-label="3D globe with the weather over the United States"></canvas>
+</main>
+<header id="top">
+  <div class="title">Weather Map</div>
+  <div id="status" class="status">Starting…</div>
+  <button id="lightBtn" type="button" aria-pressed="false" title="Show the real day and night">Real sun</button>
+</header>
+<div id="hint">Drag to move · scroll or pinch to zoom · right-drag or two fingers to tilt</div>
+<div id="nogpu" hidden>
+  <h2>WebGPU is not available</h2>
+  <p>This page draws the globe with WebGPU. Use a recent Chrome, Edge or Safari to see it.</p>
+</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

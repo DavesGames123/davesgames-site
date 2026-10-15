@@ -1,0 +1,49 @@
+/* ============================================================================
+   WEATHER MAP  ·  stylesheet (first version, package CORE)
+   ----------------------------------------------------------------------------
+   The WebGPU canvas fills the frame. A thin top bar holds the title, the
+   status line and the light-mode button. Package UI replaces this file in
+   phase 2. Type: Inter (vendored). Sentence case, no HUD gimmicks.
+     grep -n 'TOP'     the top bar
+     grep -n 'NOGPU'   the WebGPU-missing message
+     grep -n 'TOUCH'   touch target sizes
+   ========================================================================== */
+:root{
+  --bg:#03050a; --panel:rgba(8,12,20,0.78); --ink:#eef2f7; --ink2:#b8c2d0; --dim:#7f8a9b;
+  --line:rgba(255,255,255,0.10); --accent:#4aa3ff;
+  --sans:Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html{overflow-x:hidden}
+html,body{width:100%;height:100%;background:var(--bg);overscroll-behavior:none}
+body{overflow:hidden;font:400 14px/1.45 var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 1}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+
+#stage{position:fixed;inset:0}
+#view{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#view.drag{cursor:grabbing}
+
+/* TOP */
+#top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:12px;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  background:linear-gradient(to bottom,rgba(3,5,10,0.75),rgba(3,5,10,0));pointer-events:none}
+#top .title{font-weight:600;font-size:17px;letter-spacing:0.01em}
+#top .status{color:var(--dim);font-size:12.5px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#top button{pointer-events:auto;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--ink2)}
+#top button[aria-pressed="true"]{border-color:var(--accent);color:var(--ink)}
+
+#hint{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  color:var(--dim);font-size:12px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px;
+  pointer-events:none;transition:opacity 0.6s;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+#hint.gone{opacity:0}
+
+/* NOGPU */
+#nogpu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center;background:var(--bg)}
+#nogpu h2{font-weight:600;font-size:20px}
+#nogpu p{color:var(--ink2);max-width:420px}
+
+/* TOUCH */
+@media (pointer:coarse){
+  #top button{min-height:44px;padding:0 16px}
+  #top .status{font-size:11px}
+}
