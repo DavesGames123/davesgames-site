@@ -68,6 +68,7 @@ const SEARCH_WORDS = {
   'planet-collision': 'planet collision giant impact moon crashes into earth theia moon formation sph smoothed particle hydrodynamics synestia melt debris',
   'roche-limit': 'roche limit tidal disruption rings saturn moon breakup shoemaker-levy comet rubble pile',
   'stem-splitter': 'stem separation source separation demucs htdemucs vocal remover karaoke instrumental acapella isolate vocals drums bass guitar piano unmix split stems ai music offline',
+  'weather-map': 'weather forecast weather map live weather radar doppler nexrad satellite clouds cold front warm front stationary front occluded front isobars high pressure low pressure temperature fahrenheit celsius rain snow storm meteorology meteorologist tv weather news weatherman united states usa us map forecast 10 day hourly wpc nws noaa open-meteo screensaver',
 };
 
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
