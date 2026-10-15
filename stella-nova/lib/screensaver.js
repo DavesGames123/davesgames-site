@@ -149,7 +149,7 @@ function isCombo(e) {
   return e.code === 'KeyS' && e.altKey && !e.shiftKey && (e.metaKey !== e.ctrlKey);
 }
 function onKey(e) {
-  if (isCombo(e)) { e.preventDefault(); e.stopPropagation(); if (run) stopSaver(); else openMenu(); return; }
+  if (isCombo(e)) { e.preventDefault(); e.stopPropagation(); if (run) stopSaver('Cmd+Option+S'); else openMenu(); return; }
   if (run) runKey(e);
   else if (menu && !menu.hidden && e.key === 'Escape') { e.preventDefault(); closeMenu(); }
 }
@@ -173,7 +173,7 @@ function onTap(e) {
   }
   tapPrev = { t: now, x: e.screenX, y: e.screenY };
   clearTimeout(tapTimer);
-  if (touch) tapTimer = setTimeout(() => { if (tapPrev && tapPrev.t === now) { tapPrev = null; stopSaver(); } }, DOUBLE_MS);
+  if (touch) tapTimer = setTimeout(() => { if (tapPrev && tapPrev.t === now) { tapPrev = null; stopSaver('a tap'); } }, DOUBLE_MS);
 }
 window.addEventListener('pointerdown', onTap, true);
 
@@ -555,6 +555,7 @@ function buildMenu() {
     save();
   }
   m.sync = () => {
+    menuMsg(lastStopText());
     const on = new Set(chosenKeys());
     boxes().forEach(b => { b.checked = on.has(b.value); });
     m.querySelectorAll('[data-k]').forEach(el => {
@@ -715,8 +716,37 @@ function paneRect() {
 // In the pane display the sidebar and the top bar stay live. A press there
 // stops the run, so a nav click goes to the page that the user picked.
 window.addEventListener('pointerdown', e => {
-  if (run && S.display === 'pane' && e.target.closest && e.target.closest('#sidebar, #topbar, #overlay')) stopSaver();
+  if (run && S.display === 'pane' && e.target.closest && e.target.closest('#sidebar, #topbar, #overlay')) stopSaver('a press on the site bar');
 }, true);
+// STOP REASON. Each stop records why the run ended and on which page, and
+// the menu shows it on the next open. While a run plays, a marker in
+// localStorage names the page; a marker found at load means the browser
+// reloaded or closed the tab during that run (the run did not stop itself).
+const STOP_KEY = 'sn-saver-stop', LIVE_KEY = 'sn-saver-live';
+function pageLabel(k) { const L = window.LABELS || {}; return L[k] || k || 'a page'; }
+function noteStop(why, r) {
+  const key = r.order && r.order[r.i];
+  const rec = { why, page: pageLabel(key), sec: Math.round((performance.now() - (r.pageAt || r.t0 || 0)) / 1000) };
+  try { localStorage.setItem(STOP_KEY, JSON.stringify(rec)); localStorage.removeItem(LIVE_KEY); } catch (e) {}
+  console.info('[saver] stopped on', rec.page, 'after', rec.sec, 's:', why);
+}
+function markLive(r, key) {
+  r.pageAt = performance.now();
+  try { localStorage.setItem(LIVE_KEY, JSON.stringify({ page: pageLabel(key), at: Date.now() })); } catch (e) {}
+}
+(function lostRun() {
+  try {
+    const live = JSON.parse(localStorage.getItem(LIVE_KEY) || 'null'); if (!live) return;
+    localStorage.removeItem(LIVE_KEY);
+    localStorage.setItem(STOP_KEY, JSON.stringify({ why: 'the browser reloaded or closed the tab', page: live.page, sec: null }));
+  } catch (e) {}
+})();
+function lastStopText() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STOP_KEY) || 'null'); if (!s) return '';
+    return `Last run stopped on ${s.page}${s.sec != null ? ' after ' + s.sec + ' s' : ''}: ${s.why}.`;
+  } catch (e) { return ''; }
+}
 // Leaving full screen (Esc in the browser) stops the run.
 function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
 function goFullscreen() {
@@ -736,12 +766,12 @@ function clickToStart(r) {
     b.focus();
   });
 }
-function onFullscreen() { if (run && S.display === 'screen' && !fsElement()) stopSaver(); }
+function onFullscreen() { if (run && S.display === 'screen' && !fsElement()) stopSaver('full screen ended'); }
 
 function next(step) {
   if (!run) return;
   let i = run.i + step;
-  if (i >= run.order.length) { if (!S.loop) { stopSaver(); return; } i = 0; if (S.order === 'shuffle') shuffle(run.order); }
+  if (i >= run.order.length) { if (!S.loop) { stopSaver('the list ended'); return; } i = 0; if (S.order === 'shuffle') shuffle(run.order); }
   if (i < 0) i = run.order.length - 1;
   run.i = i;
   showPage(run.order[i]);
@@ -750,6 +780,7 @@ function next(step) {
 // Fade out, swap the page, wait for its load, enter saver mode, fade in.
 async function showPage(key) {
   const r = run, token = ++r.token;
+  markLive(r, key);
   clearTimeout(r.timer);
   await finishRecording(r);
   const cover = el('sn-saver-cover'), cap = el('sn-saver-cap');
@@ -1103,21 +1134,21 @@ function armInput(w) {
   w.addEventListener('mousemove', e => {
     if (!run || !run.moveArm) return;
     if (x === null) { x = e.clientX; y = e.clientY; return; }
-    if (Math.abs(e.clientX - x) + Math.abs(e.clientY - y) > 12) stopSaver();
+    if (Math.abs(e.clientX - x) + Math.abs(e.clientY - y) > 12) stopSaver(`a mouse move in the page (${Math.round(Math.abs(e.clientX - x) + Math.abs(e.clientY - y))} px)`);
   });
-  w.addEventListener('mousedown', () => { if (run && run.moveArm) stopSaver(); });
+  w.addEventListener('mousedown', () => { if (run && run.moveArm) stopSaver('a click in the page'); });
 }
 window.addEventListener('mousemove', e => {
   if (!run || !S.exitOnInput || !run.moveArm) return;
   if (run.mx === undefined) { run.mx = e.clientX; run.my = e.clientY; return; }
-  if (Math.abs(e.clientX - run.mx) + Math.abs(e.clientY - run.my) > 12) stopSaver();
+  if (Math.abs(e.clientX - run.mx) + Math.abs(e.clientY - run.my) > 12) stopSaver(`a mouse move (${Math.round(Math.abs(e.clientX - run.mx) + Math.abs(e.clientY - run.my))} px)`);
 });
 
 function runKey(e) {
   if (isCombo(e)) return;
-  if (S.exitOnInput && !['Shift', 'Meta', 'Alt', 'Control'].includes(e.key)) { e.preventDefault(); stopSaver(); return; }
+  if (S.exitOnInput && !['Shift', 'Meta', 'Alt', 'Control'].includes(e.key)) { e.preventDefault(); stopSaver('the key ' + (e.key === ' ' ? 'Space' : e.key)); return; }
   const k = e.key;
-  if (k === 'Escape') { e.preventDefault(); stopSaver(); }
+  if (k === 'Escape') { e.preventDefault(); stopSaver('Escape'); }
   else if (k === 'ArrowRight') { e.preventDefault(); next(1); }
   else if (k === 'ArrowLeft') { e.preventDefault(); next(-1); }
   else if (k === ' ') { e.preventDefault(); togglePause(); }
@@ -1130,9 +1161,10 @@ function togglePause() {
 }
 function hud(t) { const h = el('sn-saver-hud'); h.textContent = t; }
 
-async function stopSaver() {
+async function stopSaver(why) {
   const r = run; if (!r) return;
   run = null;
+  noteStop(why || 'stopped', r);
   clearTimeout(r.timer);
   if (r.cancelGo) r.cancelGo();
   await finishRecording(r);
@@ -1211,7 +1243,7 @@ function startRecording(r, key, canvas, warmup, token) {
   if (!type || !(r.cap || r.paint)) return;
   if (r.cap) {
     const track = r.cap.getVideoTracks()[0];
-    if (!track.snEnded) { track.snEnded = true; track.addEventListener('ended', () => { if (run === r) stopSaver(); }); }
+    if (!track.snEnded) { track.snEnded = true; track.addEventListener('ended', () => { if (run === r) stopSaver('the tab share ended'); }); }
   }
   setTimeout(() => {
     if (run !== r || token !== r.token || r.rec) return;
