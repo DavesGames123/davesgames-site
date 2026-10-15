@@ -152,7 +152,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `starward-belt` | Starward Belt | Community & Tools > From the Community | MAP | A player-made map of the belt. |  | shown | hook, tier 3, default | yes |
 | `translate` | Translation Tool | Community & Tools > Help Translate | i18n | Help put Stella Nova in your language. |  | shown | generic, tier 5 | no |
 | `flight-board` | Flight Board | Community & Tools > Live Data | LIVE | A split-flap board for any airport, from live ADS-B. |  | shown | no | no |
-| `wasm4-arcade` | WASM-4 Arcade | Community & Tools > Arcade | WASM | Open-source WASM-4 fantasy console carts in a CRT arcade cabinet. | WASM-4 runtime by Bruno Garcia (ISC); 19 community carts under MIT, BSD-2-Clause and ISC | shown | hook, tier 3, default | no |
+| `wasm4-arcade` | WASM-4 Arcade | Community & Tools > Arcade | WASM | Open-source WASM-4 fantasy console carts in a CRT arcade cabinet. | WASM-4 runtime by Bruno Garcia (ISC); 19 community carts under MIT, BSD-2-Clause and ISC | shown | hook, tier 3, default | yes |
 | `retro-shelf` | Retro Shelf | Community & Tools > Arcade | NEW | Freeware classics (DOOM shareware, Beneath a Steel Sky and more) in DOSBox and ScummVM, or your own disc. | Freeware games released by their owners; DOSBox via js-dos (GPL-2.0), ScummVM (GPL-3.0), EmulatorJS (GPL-3.0) | shown | hook, tier 3, default | yes |
 
 ### Science
@@ -336,7 +336,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `sdf-clouds` | SDF Clouds | Rendering > Ray Marching | GPU | Raymarched clouds from signed-distance shapes. | SDF Clouds by Alex Foulon | search only | no | yes |
 | `cornell` | Rendering Engine | Rendering > Light Transport | PATH | A path tracer in the browser. |  | shown | hook, tier 3, default | yes |
 | `glass-cube` | Refraction | Rendering > Light Transport | GPU | Light bending through glass. |  | shown | hook, tier 3, default | yes |
-| `diamond` | Diamond Lab | Rendering > Light Transport | GPU | Fire and sparkle traced through cut gems. |  | shown | hook, tier 3, default | no |
+| `diamond` | Diamond Lab | Rendering > Light Transport | GPU | Fire and sparkle traced through cut gems. |  | shown | hook, tier 3, default | yes |
 | `platonic` (pages/platonic-mirrors) | Platonic Mirrors | Rendering > Light Transport | SHADER | Platonic solids in mirrored shells. |  | shown | hook, tier 1, default | yes |
 | `branched-flow` (pages/cube_branched_flow) | Branched Flow | Rendering > Light Transport | GPU | Light that splits into branching paths. |  | shown | hook, tier 3, default | yes |
 | `orbs` (pages/presence-orbs) | Presence Orbs | Rendering > Volumes | WGSL | Soft volumetric presence orbs. |  | shown | hook, tier 3, default | yes |
