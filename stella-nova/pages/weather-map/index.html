@@ -7,39 +7,139 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#060a12">
 <title>Weather Map — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   WEATHER MAP  ·  page shell (first version, package CORE)
+   WEATHER MAP  ·  page shell (package UI)
   ───────────────────────────────────────────────────────────────────────────
    A live, TV-news-style weather map of the United States on a realistic
-   WebGPU globe. This first version boots the core renderer and shows the
-   globe with an orbit camera. Package UI replaces this file in phase 2
-   (CONTRACT.md): layout, focus chips, layer toggles, legend, scrubber.
+   WebGPU globe. The globe fills the frame. The chrome sits over it:
+   a top bar (title, live badge, focus place and its local time, unit
+   order, light and screensaver buttons), a left panel (focus search and
+   region chips, layer toggles), a legend card, a time scrubber and the
+   forecast card. On a phone the panel is a bottom sheet over a dock.
 
    GREP MAP
-     grep -n 'id="view'    the WebGPU canvas
-     grep -n 'id="top'     the top bar
-     grep -n 'id="nogpu'   the message when WebGPU is missing
+     grep -n 'id="view'       the WebGPU canvas
+     grep -n 'id="labels'     DIRECTOR's city label layer (labels.js)
+     grep -n 'id="top'        the top bar
+     grep -n 'id="panel'      focus + layers (bottom sheet on a phone)
+     grep -n 'id="legend'     the legend card
+     grep -n 'id="timebar'    the time scrubber
+     grep -n 'id="dock'       the phone dock
+     grep -n 'id="card'       the forecast card (forecast-card.js)
+     grep -n 'id="nogpu'      the message when WebGPU is missing
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A live weather map of the United States on a realistic 3D globe: fronts, radar, temperatures and forecasts, in the style of a TV weather broadcast.">
 <link rel="stylesheet" href="../../vendor/fonts/inter.adf13477.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="labels.css">
+<link rel="stylesheet" href="saver.css">
 </head>
 <body>
 <main id="stage">
   <canvas id="view" aria-label="3D globe with the weather over the United States"></canvas>
+  <div id="labels" aria-label="City temperatures"></div>
 </main>
+
 <header id="top">
-  <div class="title">Weather Map</div>
-  <div id="status" class="status">Starting…</div>
-  <button id="lightBtn" type="button" aria-pressed="false" title="Show the real day and night">Real sun</button>
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <h1>Weather Map</h1>
+    <span id="badge" data-state="wait" title="Where the data comes from">Loading</span>
+  </div>
+  <div class="place" aria-live="polite">
+    <div id="focusName">United States</div>
+    <div class="clock"><span id="focusTime">–</span><span class="sep" aria-hidden="true">·</span><span id="focusDate"></span></div>
+  </div>
+  <div class="actions">
+    <div class="seg" role="group" aria-label="Temperature unit shown first">
+      <button type="button" data-units="F" aria-pressed="true" title="Show °F first">°F</button>
+      <button type="button" data-units="C" aria-pressed="false" title="Show °C first">°C</button>
+    </div>
+    <button id="lightBtn" data-light class="pill" type="button" aria-pressed="false" title="Show the real day and night">Real sun</button>
+    <button id="saverBtn" class="pill" type="button" title="Screensaver (S)">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Screensaver</span>
+    </button>
+  </div>
 </header>
-<div id="hint">Drag to move · scroll or pinch to zoom · right-drag or two fingers to tilt</div>
+
+<aside id="panel" data-tab="focus" aria-label="Map controls">
+  <div id="sheetGrip" aria-hidden="true"><span></span></div>
+  <section class="sec" data-sec="focus">
+    <div class="sec-h"><h2>Focus</h2><button id="panelClose" type="button" class="x" aria-label="Close the panel">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+    <div class="search">
+      <svg class="mag" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13 13l4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input id="search" type="search" placeholder="Search a city" autocomplete="off" spellcheck="false"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchList" aria-label="Search a city">
+      <ul id="searchList" role="listbox" aria-label="Cities" hidden></ul>
+    </div>
+    <div id="regionChips" class="chips" role="group" aria-label="Regions"></div>
+  </section>
+  <section class="sec" data-sec="layers">
+    <div class="sec-h"><h2>Layers</h2></div>
+    <div id="layerList" class="toggles"></div>
+    <div class="display">
+      <div class="seg" role="group" aria-label="Temperature unit shown first">
+        <button type="button" data-units="F" aria-pressed="true">°F first</button>
+        <button type="button" data-units="C" aria-pressed="false">°C first</button>
+      </div>
+      <button type="button" data-light class="pill" aria-pressed="false">Real sun</button>
+    </div>
+    <div id="legendSlot"></div>
+  </section>
+</aside>
+
+<div id="legend" class="card" aria-label="Legend"></div>
+
+<footer id="timebar" aria-label="Time">
+  <button id="playBtn" class="round" type="button" aria-pressed="false" aria-label="Play the time-lapse"></button>
+  <div class="when">
+    <span id="timeRel" data-kind="now">Now</span>
+    <span id="timeLabel">–</span>
+  </div>
+  <div class="track">
+    <div id="scrubTicks" aria-hidden="true"></div>
+    <div id="scrubNow" aria-hidden="true"></div>
+    <input id="scrub" type="range" min="0" max="1000" step="1" value="111" aria-label="Forecast time">
+  </div>
+  <select id="rateSel" aria-label="Time-lapse speed" title="Time-lapse speed">
+    <option value="1">1 h/s</option>
+    <option value="3" selected>3 h/s</option>
+    <option value="6">6 h/s</option>
+  </select>
+  <button id="nowBtn" class="pill" type="button" title="Back to now (N)">Now</button>
+</footer>
+
+<nav id="dock" aria-label="Controls">
+  <button type="button" data-tab="focus" aria-pressed="false">
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle cx="10" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 18s-6-5.2-6-9.2a6 6 0 0 1 12 0c0 4-6 9.2-6 9.2z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    <span>Focus</span></button>
+  <button type="button" data-tab="layers" aria-pressed="false">
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M10 3l7 4-7 4-7-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 11l7 4 7-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span>Layers</span></button>
+  <button id="dockPlay" type="button" aria-pressed="false" aria-label="Play the time-lapse"></button>
+  <button id="dockNow" type="button"><span>Now</span></button>
+  <button id="dockSaver" type="button" aria-label="Screensaver">
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <span>Saver</span></button>
+</nav>
+
+<div id="card" hidden></div>
+
+<div id="foot">
+  <span id="status">Starting…</span>
+  <span class="attr">Weather data by Open-Meteo.com (CC BY 4.0) · Radar by RainViewer · Fronts by NOAA WPC · Imagery by NASA</span>
+</div>
+<div id="hint">Drag to move · scroll or pinch to zoom · right-drag to tilt · click a place for its forecast</div>
+
 <div id="nogpu" hidden>
   <h2>WebGPU is not available</h2>
-  <p>This page draws the globe with WebGPU. Use a recent Chrome, Edge or Safari to see it.</p>
+  <p>This page draws the globe with WebGPU. Use a recent Chrome, Edge or Safari to see it. The city search and the forecasts still work.</p>
 </div>
 <script type="module" src="main.js"></script>
 </body>
