@@ -52,3 +52,9 @@ body{font-family:var(--sci-sans);font-size:14px;color:var(--text);-webkit-font-s
 #vec-btn{position:absolute;bottom:28px;right:10px;z-index:20;height:32px;padding:0 12px;background:rgba(9,12,20,0.85);border:1px solid var(--border-b);color:var(--text-dim);font-family:inherit;font-size:.76rem;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;font-weight:500;border-radius:4px}
 #vec-btn:hover{border-color:rgba(150,200,255,0.4);color:var(--text)}
 #vec-btn.on{background:rgba(150,200,255,0.12);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+/* Pointer section: active tool button, small mirror buttons, the ink row
+   (rainbow toggle and colour swatch) and the one-line hint. */
+.add-btn.active{color:var(--blue);border-color:rgba(150,200,255,0.4);background:rgba(150,200,255,0.1)}
+.sim-btn.mini{padding:6px 2px;min-width:0;font-size:.74rem}
+.ink-row{display:flex;gap:4px;margin-top:8px;align-items:stretch}.ink-row .tog-btn{flex:1;width:auto}.ink-row input[type=color]{width:38px;border:1px solid var(--border-b);background:transparent;border-radius:4px;cursor:pointer;padding:2px}
+.p-hint{margin-top:8px;font-size:.72rem;line-height:1.4;color:var(--text-dim)}

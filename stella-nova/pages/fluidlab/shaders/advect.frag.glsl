@@ -3,8 +3,9 @@
 //  advect.frag.glsl — solver stages 1 and 3: semi-Lagrangian advection + forces
 // ----------------------------------------------------------------------------
 //  This one shader runs twice per step, chosen by uMode:
-//    uMode 0  advect VELOCITY, then add all forces (emitters, mouse vortex,
-//             gravity), stamp shape solid-body velocity, and zero the border.
+//    uMode 0  advect VELOCITY, then add the emitter and gravity forces, stamp
+//             shape solid-body velocity, and zero the border. Pointer forces
+//             come from splat.frag.glsl before this pass.
 //    uMode 1  advect DYE along the new velocity and inject emitter colour.
 //
 //  Advection is semi-Lagrangian: trace each cell backward along the velocity
@@ -21,14 +22,14 @@
 //      barrier velocity . "if(barrier"     shape solid-body flow in no-flow cells
 //      backtrace ........ "vec2 sp="       semi-Lagrangian sample point
 //      emitter forces ... "for(int i=0"    add each emitter's velocity
-//      mouse / gravity .. "uMouseDown"     interactive stir and body force
+//      gravity .......... "uGravity"       downward body force
 //      border ........... "float bw="      clamp the domain edge to no-flow
 //      dye mode ......... "}else{"         advect and tint the dye field
 // ============================================================================
 precision highp float;in vec2 vUV;out vec4 fragColor;
 uniform sampler2D uVelocity,uDye,uBarrier;uniform vec2 uInvRes;uniform float uDt,uAspect;uniform int uMode;
 uniform int uNumEmitters,uNumShapes;uniform vec4 uEmitA[${MAX_E}],uEmitB[${MAX_E}],uEmitC[${MAX_E}];uniform vec4 uShapeA[${MAX_S}];
-uniform vec2 uMousePos;uniform float uMouseDown,uMouseVortex,uGravity,uFade;
+uniform float uGravity,uFade;
 ${BILERP_GLSL}
 void main(){vec2 uv=vUV;float barrier=texture(uBarrier,uv).r;vec2 oldVel=texture(uVelocity,uv).xy;
 if(uMode==0){
@@ -58,11 +59,6 @@ if(uMode==0){
       d.x*=uAspect;float dist=length(d);
       if(dist<ew){float t=smoothstep(ew,ew*.85,dist);vel+=ed*es*t*uDt;}
     }}
-  // Mouse stir: a Gaussian-falloff tangential swirl around the cursor; sign from
-  // which button is held.
-  if(uMouseDown>.5){vec2 d=uv-uMousePos;d.x*=uAspect;float dist2=dot(d,d);
-    vec2 tang=vec2(-d.y,d.x);float r=length(d);
-    if(r>.002){tang/=r;vel+=tang*exp(-dist2/.004)*uMouseVortex*175.0*uDt;}}
   // Optional gravity as a downward body force.
   vel.y-=uGravity*uDt;
   // Force the one-cell domain border to no-flow so the fluid stays contained.

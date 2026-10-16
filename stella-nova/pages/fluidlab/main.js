@@ -10,7 +10,9 @@
 //
 //  SIMULATION DATA FLOW   (one step(); ► = a full-screen shader pass)
 //  ------------------------------------------------------------------------
-//     emitters · mouse · gravity · shape spin   (forces, added during advect)
+//     pointers · bursts ─▶ splat queue ►splat (vF, dyF)   Gaussian splats
+//                        │
+//     emitters · gravity · shape spin   (forces, added during advect)
 //                        │
 //     vF ►advect(uMode 0)──▶ vF*   ── if ν>0: copy u* to u0F, then ─┐
 //        semi-Lagrangian backtrace + forces        diffuse ×20 ◀────┘  vF
@@ -54,8 +56,9 @@
 //      fbos ............... "initFBOs"         allocate sim grid textures
 //      step ............... "function step"    the per-frame solver pipeline
 //      display ............ "function display" render pass + overlays
+//      splats ............. "SPLATS"           splat queue, pointer strokes, mirror
 //      overlays ........... "OVERLAY"          2D icons, vectors, brush
-//      input .............. "INPUT"            mouse/touch: drag, draw, vortex
+//      input .............. "INPUT"            pointer events: drag, draw, stir
 //      ui list ............ "rebuildList"      object cards + sliders
 //      presets ............ "function preset"  scene setups
 //      loop ............... "function loop"    rAF: step + display + FPS
@@ -65,7 +68,7 @@
 (async () => {
 // Fetch every shader stage in parallel before any GL setup, keyed by path.
 const RAW = {};
-await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/advect.frag.glsl","shaders/divergence.frag.glsl","shaders/jacobi.frag.glsl","shaders/gradient.frag.glsl","shaders/display.frag.glsl","shaders/copy.frag.glsl","shaders/diffuse.frag.glsl","shaders/curl.frag.glsl","shaders/vorticity.frag.glsl"].map(async (n) => {
+await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/advect.frag.glsl","shaders/divergence.frag.glsl","shaders/jacobi.frag.glsl","shaders/gradient.frag.glsl","shaders/display.frag.glsl","shaders/copy.frag.glsl","shaders/diffuse.frag.glsl","shaders/curl.frag.glsl","shaders/vorticity.frag.glsl","shaders/splat.frag.glsl"].map(async (n) => {
   const r = await fetch(new URL(n, document.baseURI));
   if (!r.ok) throw new Error('shader fetch failed ('+r.status+'): '+n);
   RAW[n] = await r.text();
@@ -161,9 +164,13 @@ function decodeReadValue(arr,i){
 
 // Hard caps on emitters and shapes; the shader declares uniform arrays this big.
 const MAX_E=24,MAX_S=12;
+// Splats per pass of splat.frag.glsl; a longer queue runs in more passes.
+const MAX_SPL=16;
 // The one global state object: play/pause, display gains, solver iteration
-// counts, edit modes, colormap, vector overlay, gravity, and viscosity.
-const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,curl:20,dyeFade:0.997,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
+// counts, edit modes, colormap, vector overlay, gravity, viscosity, vorticity
+// eps (curl), dye fade, and the pointer tool (tool, splat radius, force, ink,
+// mirror count, rainbow or fixed ink colour).
+const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,curl:20,dyeFade:0.997,tool:'push',splatR:0.035,force:1.5,ink:0.5,mirror:1,rainbow:true,inkColor:[1,0.5,0.19],drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
 // Object lists and running counters. CW/CH are canvas CSS size; simW/simH the
 // simulation grid resolution (smaller than the canvas for speed).
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
@@ -311,7 +318,7 @@ const DSP_FS=eval('`'+RAW['shaders/display.frag.glsl']+'`');
 // One program per solver stage, each with its uniform locations cached:
 //   aP advect (also injects forces and carries dye)   dP divergence
 //   jP jacobi pressure solve   gP gradient subtract   rP display
-const aP=mkP(VS,ADV_FS),aU=gU(aP,['uVelocity','uDye','uBarrier','uInvRes','uDt','uAspect','uMode','uMousePos','uMouseDown','uMouseVortex','uGravity','uFade','uNumEmitters','uNumShapes',...Array.from({length:MAX_E},(_,i)=>[`uEmitA[${i}]`,`uEmitB[${i}]`,`uEmitC[${i}]`]).flat(),...Array.from({length:MAX_S},(_,i)=>`uShapeA[${i}]`)]);
+const aP=mkP(VS,ADV_FS),aU=gU(aP,['uVelocity','uDye','uBarrier','uInvRes','uDt','uAspect','uMode','uGravity','uFade','uNumEmitters','uNumShapes',...Array.from({length:MAX_E},(_,i)=>[`uEmitA[${i}]`,`uEmitB[${i}]`,`uEmitC[${i}]`]).flat(),...Array.from({length:MAX_S},(_,i)=>`uShapeA[${i}]`)]);
 const dP=mkP(VS,DIV_FS),dU=gU(dP,['uVelocity','uBarrier','uInvRes']);
 const jP=mkP(VS,JAC_FS),jU=gU(jP,['uPressure','uDivergence','uBarrier','uInvRes']);
 const gP=mkP(VS,GRD_FS),gUn=gU(gP,['uPressure','uVelocity','uBarrier','uInvRes']);
@@ -332,6 +339,9 @@ const DIFFUSE_ITERS=20;
 // that turns the flow back round each swirl centre. Skipped when SIM.curl is 0.
 const kP=mkP(VS,RAW['shaders/curl.frag.glsl']),kU=gU(kP,['uVelocity','uBarrier','uInvRes']);
 const vP=mkP(VS,RAW['shaders/vorticity.frag.glsl']),vU=gU(vP,['uVelocity','uCurlTex','uBarrier','uInvRes','uCurl','uDt']);
+// Splats: spP adds a batch of Gaussian splats to one field (velocity or dye).
+const SPL_FS=eval('`'+RAW['shaders/splat.frag.glsl']+'`');
+const spP=mkP(VS,SPL_FS),spU=gU(spP,['uTarget','uBarrier','uAspect','uKind','uCount',...Array.from({length:MAX_SPL},(_,i)=>[`uSplatP[${i}]`,`uSplatF[${i}]`,`uSplatC[${i}]`]).flat()]);
 
 // The simulation textures: velocity, pressure, divergence, dye, and stashed u*.
 let vF,pF,dvF,dyF,u0F,cuF;
@@ -357,6 +367,9 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   // Re-raster the barrier if a shape moved or spun, so no-flow cells track them.
   let nb=barrierDirty;for(const s of shapes)if(s.spin!==0||!s.fixed){nb=true;break;}if(nb){renderBarrierCanvas();barrierDirty=false;}
   gl.viewport(0,0,simW,simH);
+  // Stage 0 - splats: turn the live pointers into splats, then draw every
+  // queued splat (pointer strokes, bursts) into vF and dyF.
+  pointerSplats();flushSplats();
   // Stage 1 - advect velocity (uMode 0): semi-Lagrangian backtrace of vF, plus
   // emitter/mouse/gravity forces and shape solid-body velocity. Writes vF.write.
   gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(aP);
@@ -364,9 +377,6 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);
   gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(aU.uBarrier,2);
   gl.uniform2f(aU.uInvRes,inv[0],inv[1]);gl.uniform1f(aU.uDt,deltaTime);gl.uniform1f(aU.uAspect,asp);gl.uniform1i(aU.uMode,0);
-  gl.uniform2f(aU.uMousePos,mouse.x,mouse.y);
-  gl.uniform1f(aU.uMouseDown,(mouse.down&&!SIM.drawMode&&!SIM.eraseMode)?1:0);
-  gl.uniform1f(aU.uMouseVortex,mouseVortex);
   gl.uniform1f(aU.uGravity,SIM.gravity?SIM.gravityStr:0);gl.uniform1f(aU.uFade,SIM.dyeFade);
   gl.uniform1i(aU.uNumEmitters,emitters.length);gl.uniform1i(aU.uNumShapes,shapes.length);
   // Pack each active emitter into three vec4 uniforms (position+direction,
@@ -419,12 +429,52 @@ function display(){
   if(barrierDirty){renderBarrierCanvas();barrierDirty=false;}
   gl.viewport(0,0,canvas.width,canvas.height);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.useProgram(rP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(rU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(rU.uDye,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(rU.uBarrier,2);gl.uniform1f(rU.uGain,SIM.gain);gl.uniform1f(rU.uBloom,SIM.bloom);gl.uniform1i(rU.uCmap,SIM.cmap);dq();drawOverlays();}
 
+// Splat queue. Each entry is {x, y (uv, y up), r (height units), m (0 push,
+// 1 swirl, 2 dye only), fx, fy (cells/s, or swirl rate in fx), c (rgb)}.
+// flushSplats() draws the queue in batches of MAX_SPL: one velocity pass and
+// one dye pass per batch. The queue keeps at most 256 entries while paused.
+/* ═══ SPLATS ═══ */
+let splats=[];
+function queueSplat(q){splats.push(q);if(splats.length>256)splats.splice(0,splats.length-256);}
+function flushSplats(){if(!splats.length)return;gl.useProgram(spP);gl.uniform1f(spU.uAspect,simW/simH);
+  gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(spU.uBarrier,1);
+  for(let b=0;b<splats.length;b+=MAX_SPL){const n=Math.min(MAX_SPL,splats.length-b);
+    for(let i=0;i<n;i++){const q=splats[b+i];gl.uniform4f(spU[`uSplatP[${i}]`],q.x,q.y,q.r,q.m);gl.uniform4f(spU[`uSplatF[${i}]`],q.fx,q.fy,0,0);gl.uniform4f(spU[`uSplatC[${i}]`],q.c[0],q.c[1],q.c[2],0);}
+    gl.uniform1i(spU.uCount,n);
+    for(const[kind,F]of[[0,vF],[1,dyF]]){gl.bindFramebuffer(gl.FRAMEBUFFER,F.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,F.read.tex);gl.uniform1i(spU.uTarget,0);gl.uniform1i(spU.uKind,kind);dq();F.swap();}}
+  splats=[];}
+// Queue one splat given in screen px, once per mirror copy. Copies turn round
+// the canvas centre by 2 pi k / SIM.mirror; the force vector turns with them.
+// fx, fy are screen px/s for a push, or the swirl rate for a swirl.
+function mirrorSplat(sx,sy,r,m,fx,fy,c){const N=Math.max(1,SIM.mirror|0),cx=CW/2,cy=CH/2;
+  for(let k=0;k<N;k++){const a=k/N*Math.PI*2,ca=Math.cos(a),sa=Math.sin(a),dx=sx-cx,dy=sy-cy;
+    const x=cx+dx*ca-dy*sa,y=cy+dx*sa+dy*ca;if(x<0||y<0||x>CW||y>CH)continue;
+    const vx=m===0?fx*ca-fy*sa:fx,vy=m===0?fx*sa+fy*ca:0;
+    queueSplat({x:x/CW,y:1-y/CH,r,m,fx:m===0?vx/CW*simW:vx,fy:m===0?-vy/CH*simH:0,c});}}
+// Turn each live pointer into splats for this step. A push follows the
+// stroke from the last position to this one, with one splat per 0.6 radius
+// (at most 8), so a fast stroke leaves no gaps. A swirl and an ink stamp
+// apply each step while held. A new press first drops one ink blob.
+function pointerSplats(){if(!pointers.size)return;const dt=Math.max(deltaTime,1e-3),rpx=SIM.splatR*CH;
+  for(const P of pointers.values()){const tool=P.swirl?'swirl':SIM.tool;
+    if(SIM.rainbow)P.hue+=dt*90;const c0=SIM.rainbow?saverHsl(P.hue,0.9,0.55):SIM.inkColor,ink=SIM.ink*0.25,col=k=>[c0[0]*k,c0[1]*k,c0[2]*k];
+    if(P.fresh){P.fresh=false;mirrorSplat(P.x,P.y,SIM.splatR*1.2,2,0,0,col(ink*2));}
+    const dx=P.x-P.px,dy=P.y-P.py,dist=Math.hypot(dx,dy);
+    if(tool==='swirl'){mirrorSplat(P.x,P.y,SIM.splatR*1.8,1,P.sign*120*SIM.force*dt,0,col(ink*0.15));}
+    else if(tool==='ink'){mirrorSplat(P.x,P.y,SIM.splatR,2,0,0,col(ink*(dist>0.5?0.8:0.3)));}
+    if(dist>0.5){const n=Math.min(8,Math.max(1,Math.ceil(dist/(rpx*0.6))));
+      let vx=dx/dt*SIM.force*0.4,vy=dy/dt*SIM.force*0.4;const vm=Math.hypot(vx,vy),cap=4000/simW*CW;if(vm>cap){vx*=cap/vm;vy*=cap/vm;}
+      for(let i=1;i<=n;i++){const x=P.px+dx*i/n,y=P.py+dy*i/n;
+        if(tool==='push')mirrorSplat(x,y,SIM.splatR,0,vx,vy,col(ink*0.8/Math.sqrt(n)));
+        else if(tool==='ink'&&i<n)mirrorSplat(x,y,SIM.splatR,2,0,0,col(ink*0.8/Math.sqrt(n)));}}
+    P.px=P.x;P.py=P.y;}}
+
 // The 2D overlay canvas sits above the WebGL canvas and draws object icons,
 // selection highlights, the vector field, and the draw brush.
 /* ═══ OVERLAY ═══ */
 let overlayCanvas,overlayCtx;
 // Create the overlay canvas and add it over the sim canvas.
-function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.id='display-canvas';overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;cursor:crosshair';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
+function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.id='display-canvas';overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;cursor:crosshair;touch-action:none';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
 // Redraw the overlay each frame: blit the WebGL frame, then draw emitter and
 // shape icons with their selection state and spin arcs, then optionally the
 // vector field and the brush cursor.
@@ -484,36 +534,47 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
     }catch(e){gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
   }
 
+  // Pointer rings: one per live pointer and mirror copy, at the splat radius.
+  if(pointers.size&&!SIM.drawMode&&!SIM.eraseMode){const N=Math.max(1,SIM.mirror|0),cx=CW/2,cy=CH/2,rr=SIM.splatR*CH*(SIM.tool==='swirl'?1.8:1);ctx.strokeStyle='rgba(200,220,255,0.35)';ctx.lineWidth=1;
+    for(const P of pointers.values())for(let k=0;k<N;k++){const a=k/N*Math.PI*2,dx=P.x-cx,dy=P.y-cy;ctx.beginPath();ctx.arc(cx+dx*Math.cos(a)-dy*Math.sin(a),cy+dx*Math.sin(a)+dy*Math.cos(a),rr,0,Math.PI*2);ctx.stroke();}}
   if(SIM.drawMode||SIM.eraseMode){ctx.strokeStyle=SIM.eraseMode?'rgba(255,80,80,0.5)':'rgba(150,200,255,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(mouse.screenX,mouse.screenY,SIM.brushSize/2,0,Math.PI*2);ctx.stroke();}}
 
-// Pointer state and interaction. Depending on mode, a press either drags/rotates
-// an object, paints the barrier brush, or stirs the fluid with a mouse vortex.
+// Pointer state and interaction, by Pointer Events, so each finger of a
+// multi-touch is its own pointer. Depending on mode, a press drags or turns
+// an object (one pointer at a time), paints the barrier brush (primary
+// pointer only), or adds a stirring pointer to the pointers map.
 /* ═══ INPUT ═══ */
-let mouse={x:0,y:0,screenX:0,screenY:0,down:false,px:0,py:0};
-let dragObj=null,dragOffX=0,dragOffY=0,rotating=false;
-let mouseVortex=0;
+let mouse={screenX:0,screenY:0,down:false};
+let dragObj=null,dragPid=null,dragOffX=0,dragOffY=0,rotating=false;
+// Live stirring pointers by pointerId: {x, y, px, py (screen px), swirl (right
+// button), sign, hue, fresh}. pointerSplats() reads and advances them.
+const pointers=new Map();let inkHue=Math.random()*360;
 
-// Pointer position in canvas-local pixels (mouse or first touch).
-function gp(e){const r=document.getElementById('canvas-wrap').getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{sx:t.clientX-r.left,sy:t.clientY-r.top};}
+// Pointer position in canvas-local pixels.
+function gp(e){const r=document.getElementById('canvas-wrap').getBoundingClientRect();return{sx:e.clientX-r.left,sy:e.clientY-r.top};}
 // Hit-test emitters then shapes (topmost first) at a screen point.
 function hitObj(sx,sy){for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];if(Math.sqrt((sx-e.x)**2+(sy-e.y)**2)<e.width*CH+15)return{obj:e,type:'emitter'};}
   for(let i=shapes.length-1;i>=0;i--){const s=shapes[i];const ca=Math.cos(-s.angle),sa=Math.sin(-s.angle);const dx=sx-s.x,dy=sy-s.y;if(Math.abs(dx*ca-dy*sa)<s.w/2+12&&Math.abs(dx*sa+dy*ca)<s.h/2+12)return{obj:s,type:'shape'};}return null;}
 
-// Press: paint if in draw/erase mode; else grab an object under the cursor
-// (shift to rotate); else start stirring (left = vortex one way, right = other).
-function onDown(e){e.preventDefault();const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
-  if(SIM.drawMode||SIM.eraseMode){mouse.down=true;drawBrush(sx,sy);return;}
-  const hit=hitObj(sx,sy);
-  if(hit){dragObj=hit.obj;dragOffX=hit.obj.x-sx;dragOffY=hit.obj.y-sy;rotating=e.shiftKey;SIM.selectedId=hit.obj.id;SIM.selectedType=hit.type;rebuildList();}
-  else{mouse.down=true;mouseVortex=(e.button===2)?-1:1;
-    mouse.x=sx/CW;mouse.y=1-sy/CH;mouse.px=mouse.x;mouse.py=mouse.y;SIM.selectedId=-1;rebuildList();}}
-// Move: continue painting, drag/rotate the held object, or update the stir point.
-function onMove(e){const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
-  if(SIM.drawMode||SIM.eraseMode){if(mouse.down)drawBrush(sx,sy);return;}
-  if(dragObj){e.preventDefault();if(rotating)dragObj.angle=Math.atan2(sy-dragObj.y,sx-dragObj.x);else{dragObj.x=sx+dragOffX;dragObj.y=sy+dragOffY;}barrierDirty=true;return;}
-  if(mouse.down){mouse.x=sx/CW;mouse.y=1-sy/CH;}}
-// Release: drop any held object (zeroing its velocity) and stop stirring.
-function onUp(){if(dragObj){dragObj.vx=0;dragObj.vy=0;}dragObj=null;rotating=false;mouse.down=false;mouseVortex=0;}
+// Press: paint if in draw/erase mode; else grab an object under the pointer
+// (shift to turn it); else start a stirring pointer (right button = swirl the
+// other way round, whatever the tool).
+function onDown(e){e.preventDefault();const{sx,sy}=gp(e);if(e.isPrimary!==false){mouse.screenX=sx;mouse.screenY=sy;}
+  try{overlayCanvas.setPointerCapture(e.pointerId);}catch(_){}
+  if(SIM.drawMode||SIM.eraseMode){if(e.isPrimary!==false){mouse.down=true;drawBrush(sx,sy);}return;}
+  const hit=dragObj?null:hitObj(sx,sy);
+  if(hit){dragObj=hit.obj;dragPid=e.pointerId;dragOffX=hit.obj.x-sx;dragOffY=hit.obj.y-sy;rotating=e.shiftKey;SIM.selectedId=hit.obj.id;SIM.selectedType=hit.type;rebuildList();return;}
+  inkHue=(inkHue+47)%360;
+  pointers.set(e.pointerId,{x:sx,y:sy,px:sx,py:sy,swirl:e.button===2,sign:e.button===2?-1:1,hue:inkHue,fresh:true});
+  if(SIM.selectedId!==-1){SIM.selectedId=-1;rebuildList();}}
+// Move: continue painting, drag/turn the held object, or move a stirring pointer.
+function onMove(e){const{sx,sy}=gp(e);if(e.isPrimary!==false){mouse.screenX=sx;mouse.screenY=sy;}
+  if(SIM.drawMode||SIM.eraseMode){if(mouse.down&&e.isPrimary!==false)drawBrush(sx,sy);return;}
+  if(dragObj&&e.pointerId===dragPid){e.preventDefault();if(rotating)dragObj.angle=Math.atan2(sy-dragObj.y,sx-dragObj.x);else{dragObj.x=sx+dragOffX;dragObj.y=sy+dragOffY;}barrierDirty=true;return;}
+  const P=pointers.get(e.pointerId);if(P){P.x=sx;P.y=sy;}}
+// Release: drop the held object (zeroing its velocity) or end that pointer's stir.
+function onUp(e){if(dragObj&&e.pointerId===dragPid){dragObj.vx=0;dragObj.vy=0;dragObj=null;dragPid=null;rotating=false;}
+  pointers.delete(e.pointerId);if(e.isPrimary!==false)mouse.down=false;}
 
 // Barrier brush: stamp (or erase) a filled circle into the drawn-wall canvas at
 // sim resolution and flag the barrier for re-upload.
@@ -527,7 +588,13 @@ function clearDrawn(){drawnCtx.clearRect(0,0,simW,simH);barrierDirty=true;}
 function toggleDraw(){SIM.drawMode=!SIM.drawMode;if(SIM.drawMode)SIM.eraseMode=false;updD();}
 function toggleErase(){SIM.eraseMode=!SIM.eraseMode;if(SIM.eraseMode)SIM.drawMode=false;updD();}
 // Reflect the current mode in the buttons, cursor, and status bar.
-function updD(){document.getElementById('tog-draw').className='tog-btn '+(SIM.drawMode?'on':'off');document.getElementById('tog-erase').className='tog-btn '+(SIM.eraseMode?'on':'off');if(overlayCanvas)overlayCanvas.style.cursor=(SIM.drawMode||SIM.eraseMode)?'none':'crosshair';document.getElementById('st-mode').textContent=SIM.drawMode?'draw':SIM.eraseMode?'erase':'vortex';}
+function updD(){document.getElementById('tog-draw').className='tog-btn '+(SIM.drawMode?'on':'off');document.getElementById('tog-erase').className='tog-btn '+(SIM.eraseMode?'on':'off');if(overlayCanvas)overlayCanvas.style.cursor=(SIM.drawMode||SIM.eraseMode)?'none':'crosshair';document.getElementById('st-mode').textContent=SIM.drawMode?'draw':SIM.eraseMode?'erase':SIM.tool+(SIM.mirror>1?' ×'+SIM.mirror:'');}
+// Pointer tool, mirror count and ink colour. The tool and mirror buttons
+// carry data-tool and data-mirror; picking a colour turns rainbow ink off.
+function setTool(t){SIM.tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b.dataset.tool===t));updD();}
+function setMirror(n){SIM.mirror=n;document.querySelectorAll('[data-mirror]').forEach(b=>b.classList.toggle('active',+b.dataset.mirror===n));updD();}
+function toggleRainbow(){SIM.rainbow=!SIM.rainbow;document.getElementById('tog-rainbow').className='tog-btn '+(SIM.rainbow?'on':'off');}
+function setInkColor(hex){SIM.inkColor=[parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255];if(SIM.rainbow)toggleRainbow();}
 
 // Paint a range input's filled portion via the --pct CSS variable.
 /* ═══ UI ═══ */
@@ -689,11 +756,10 @@ function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)
 // line exposes the handlers the inline HTML onclick attributes call.
 initOverlay();
 overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
-overlayCanvas.addEventListener('mousedown',onDown);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
-overlayCanvas.addEventListener('touchstart',e=>{if(e.touches.length===1)onDown(e);},{passive:false});overlayCanvas.addEventListener('touchmove',e=>{if(e.touches.length===1)onMove(e);},{passive:false});overlayCanvas.addEventListener('touchend',onUp,{passive:false});
+overlayCanvas.addEventListener('pointerdown',onDown);overlayCanvas.addEventListener('pointermove',onMove);overlayCanvas.addEventListener('pointerup',onUp);overlayCanvas.addEventListener('pointercancel',onUp);
 resize();renderCmapPreviews();
 setTimeout(()=>{defaultSetup();requestAnimationFrame(loop);},60);
-window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;
+window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;window.setTool=setTool;window.setMirror=setMirror;window.toggleRainbow=toggleRainbow;window.setInkColor=setInkColor;
 // Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI and
 // the outline overlay, makes #canvas-wrap fill the window (resize() then sizes
 // the buffer), and starts a director that opts.seed drives. A prewarm runs three
@@ -809,7 +875,7 @@ window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
   const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
+  resize();pointers.clear();splats=[];SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
   const R=saverStart(opts);window.__saverScene=R.scene+'/'+R.slots;
   const until=performance.now()+2400;(function pw(){if(performance.now()<until){for(let i=0;i<3;i++){step();frame++;}requestAnimationFrame(pw);}})();
   return{canvas,warmupMs:2500};},
