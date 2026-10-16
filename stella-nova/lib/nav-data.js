@@ -161,7 +161,8 @@ w.SN_NAV = [
       ["euler-fluid", "Euler Fluid", "SIM"],
       ["flip-fluid", "FLIP Water", "SIM"],
       ["pbf-boundary", "PBF Boundaries", "SIM"],
-      ["fire-simulation", "Fire Simulation", "SIM"]
+      ["fire-simulation", "Fire Simulation", "SIM"],
+      ["thermal-convection", "Thermal Convection", "SIM"]
     ] },
     { h: "Earth & Ocean", p: [
       ["tidal-currents", "Tidal Currents", "DATA"],

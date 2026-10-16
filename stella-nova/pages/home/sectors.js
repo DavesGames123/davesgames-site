@@ -403,6 +403,7 @@ const BLURBS = {
   'flip-fluid': 'FLIP water: particles carry it, a grid solves the pressure.',
   'pbf-boundary': 'Position based particles with moving walls and friction.',
   'fire-simulation': 'Fire from a grid fluid: heat and smoke rise and swirl.',
+  'thermal-convection': 'Hot fluid rising in cells: the surface and the cut beneath.',
   'julia-fractals': 'Julia and Mandelbrot sets, zoom and explore.',
   'sci-tools': 'Units, constants, statistics, fits and chemistry in one offline page.',
 };

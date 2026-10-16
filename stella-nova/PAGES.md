@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-223 registered pages in 5 regions and 20 constellations.
+224 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -200,11 +200,12 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `flip-fluid` | FLIP Water | Fluids > Flow | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `pbf-boundary` | PBF Boundaries | Fluids > Flow | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `fire-simulation` | Fire Simulation | Fluids > Flow | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `thermal-convection` | Thermal Convection | Fluids > Flow | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
 | `tidal-currents` | Tidal Currents | Fluids > Earth & Ocean | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
 | `city-atlas` | City Atlas | Fluids > Earth & Ocean | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
 | `map-generator` | City Generator | Fluids > Earth & Ocean | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
 | `storm-globe` | Storm Globe | Fluids > Earth & Ocean | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
-| `weather-map` | Weather Map | Fluids > Earth & Ocean | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | no |
+| `weather-map` | Weather Map | Fluids > Earth & Ocean | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
 | `map-projections` | Map Projections | Fluids > Earth & Ocean | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
 | `ns-equations` | Navier–Stokes 1D | Fluids > Navier–Stokes | MATH | The Navier-Stokes terms one at a time in 1D. |  | shown | generic, tier 5 | yes |
 | `ns-burgers` | Burgers Equation | Fluids > Navier–Stokes | SIM | Shocks form in the Burgers equation. |  | shown | hook, tier 3, default | yes |
