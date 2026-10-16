@@ -28,7 +28,7 @@
 precision highp float;in vec2 vUV;out vec4 fragColor;
 uniform sampler2D uVelocity,uDye,uBarrier;uniform vec2 uInvRes;uniform float uDt,uAspect;uniform int uMode;
 uniform int uNumEmitters,uNumShapes;uniform vec4 uEmitA[${MAX_E}],uEmitB[${MAX_E}],uEmitC[${MAX_E}];uniform vec4 uShapeA[${MAX_S}];
-uniform vec2 uMousePos;uniform float uMouseDown,uMouseVortex,uGravity;
+uniform vec2 uMousePos;uniform float uMouseDown,uMouseVortex,uGravity,uFade;
 ${BILERP_GLSL}
 void main(){vec2 uv=vUV;float barrier=texture(uBarrier,uv).r;vec2 oldVel=texture(uVelocity,uv).xy;
 if(uMode==0){
@@ -70,8 +70,8 @@ if(uMode==0){
   fragColor=vec4(vel,0,0);
 }else{
   // Dye mode: backtrace and sample the dye, clear it inside barriers, and fade it
-  // slightly (0.997) each step so trails dissipate. Emitters then add colour.
-  vec2 sp=uv-oldVel*uDt*uInvRes;vec4 dye=${SAMPLE_DYE};if(barrier>.1){fragColor=vec4(0);return;}dye*=.997;
+  // by uFade (0.997 by default) each step so trails dissipate. Emitters then add colour.
+  vec2 sp=uv-oldVel*uDt*uInvRes;vec4 dye=${SAMPLE_DYE};if(barrier>.1){fragColor=vec4(0);return;}dye*=uFade;
   for(int i=0;i<${MAX_E};i++){if(i>=uNumEmitters)break;if(uEmitB[i].w<.5)continue;
     vec2 ep=uEmitA[i].xy,ed=uEmitA[i].zw;float ew=uEmitB[i].y;int et=int(uEmitB[i].z);vec3 ec=uEmitC[i].rgb;vec2 d=uv-ep;
     if(et==0){

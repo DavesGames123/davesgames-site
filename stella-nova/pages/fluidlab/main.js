@@ -16,6 +16,8 @@
 //        semi-Lagrangian backtrace + forces        diffuse ×20 ◀────┘  vF
 //                        │  (velocity now advected, optionally viscous)
 //     dyF ►advect(uMode 1, samples vF)──▶ dyF      dye carried by velocity
+//                        │                               (fades by SIM.dyeFade)
+//     if eps>0: vF ►curl──▶ cuF ►vorticity──▶ vF   confinement puts spin back
 //                        │
 //     vF ►divergence──▶ dvF ►jacobi ×N (pressure Poisson)──▶ pF
 //                        │
@@ -28,6 +30,7 @@
 //     vF  velocity   (DoubleFBO, ping-pong)   pF  pressure   (DoubleFBO)
 //     dyF dye/colour (DoubleFBO)              dvF divergence (single FBO)
 //     u0F stashed u* for viscous solve (single)   barrierTex  no-flow mask
+//     cuF scalar curl for vorticity confinement (single)
 //     mkDF() builds a ping-pong pair (read/write/swap); mkF() a single FBO.
 //
 //  BARRIER: shapes are rasterized (drawShapePath) plus the drawn-wall canvas
@@ -47,6 +50,7 @@
 //      gl helpers ......... "WEBGL"            compile, FBO, ping-pong, quad
 //      programs ........... "const aP="        one program per solver stage
 //      viscosity .......... "VISCOUS DIFFUSION" implicit diffuse solve
+//      vorticity .......... "Vorticity confinement" curl + confinement programs
 //      fbos ............... "initFBOs"         allocate sim grid textures
 //      step ............... "function step"    the per-frame solver pipeline
 //      display ............ "function display" render pass + overlays
@@ -61,7 +65,7 @@
 (async () => {
 // Fetch every shader stage in parallel before any GL setup, keyed by path.
 const RAW = {};
-await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/advect.frag.glsl","shaders/divergence.frag.glsl","shaders/jacobi.frag.glsl","shaders/gradient.frag.glsl","shaders/display.frag.glsl","shaders/copy.frag.glsl","shaders/diffuse.frag.glsl"].map(async (n) => {
+await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/advect.frag.glsl","shaders/divergence.frag.glsl","shaders/jacobi.frag.glsl","shaders/gradient.frag.glsl","shaders/display.frag.glsl","shaders/copy.frag.glsl","shaders/diffuse.frag.glsl","shaders/curl.frag.glsl","shaders/vorticity.frag.glsl"].map(async (n) => {
   const r = await fetch(new URL(n, document.baseURI));
   if (!r.ok) throw new Error('shader fetch failed ('+r.status+'): '+n);
   RAW[n] = await r.text();
@@ -159,7 +163,7 @@ function decodeReadValue(arr,i){
 const MAX_E=24,MAX_S=12;
 // The one global state object: play/pause, display gains, solver iteration
 // counts, edit modes, colormap, vector overlay, gravity, and viscosity.
-const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
+const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,curl:20,dyeFade:0.997,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
 // Object lists and running counters. CW/CH are canvas CSS size; simW/simH the
 // simulation grid resolution (smaller than the canvas for speed).
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
@@ -307,7 +311,7 @@ const DSP_FS=eval('`'+RAW['shaders/display.frag.glsl']+'`');
 // One program per solver stage, each with its uniform locations cached:
 //   aP advect (also injects forces and carries dye)   dP divergence
 //   jP jacobi pressure solve   gP gradient subtract   rP display
-const aP=mkP(VS,ADV_FS),aU=gU(aP,['uVelocity','uDye','uBarrier','uInvRes','uDt','uAspect','uMode','uMousePos','uMouseDown','uMouseVortex','uGravity','uNumEmitters','uNumShapes',...Array.from({length:MAX_E},(_,i)=>[`uEmitA[${i}]`,`uEmitB[${i}]`,`uEmitC[${i}]`]).flat(),...Array.from({length:MAX_S},(_,i)=>`uShapeA[${i}]`)]);
+const aP=mkP(VS,ADV_FS),aU=gU(aP,['uVelocity','uDye','uBarrier','uInvRes','uDt','uAspect','uMode','uMousePos','uMouseDown','uMouseVortex','uGravity','uFade','uNumEmitters','uNumShapes',...Array.from({length:MAX_E},(_,i)=>[`uEmitA[${i}]`,`uEmitB[${i}]`,`uEmitC[${i}]`]).flat(),...Array.from({length:MAX_S},(_,i)=>`uShapeA[${i}]`)]);
 const dP=mkP(VS,DIV_FS),dU=gU(dP,['uVelocity','uBarrier','uInvRes']);
 const jP=mkP(VS,JAC_FS),jU=gU(jP,['uPressure','uDivergence','uBarrier','uInvRes']);
 const gP=mkP(VS,GRD_FS),gUn=gU(gP,['uPressure','uVelocity','uBarrier','uInvRes']);
@@ -324,9 +328,13 @@ const DIFF_FS=RAW['shaders/diffuse.frag.glsl'];
 const cP=mkP(VS,COPY_FS),cU=gU(cP,['uTex']);
 const fP=mkP(VS,DIFF_FS),fU=gU(fP,['uVel','uVel0','uBarrier','uInvRes','uA']);
 const DIFFUSE_ITERS=20;
+// Vorticity confinement: kP writes the scalar curl into cuF, vP adds the force
+// that turns the flow back round each swirl centre. Skipped when SIM.curl is 0.
+const kP=mkP(VS,RAW['shaders/curl.frag.glsl']),kU=gU(kP,['uVelocity','uBarrier','uInvRes']);
+const vP=mkP(VS,RAW['shaders/vorticity.frag.glsl']),vU=gU(vP,['uVelocity','uCurlTex','uBarrier','uInvRes','uCurl','uDt']);
 
 // The simulation textures: velocity, pressure, divergence, dye, and stashed u*.
-let vF,pF,dvF,dyF,u0F;
+let vF,pF,dvF,dyF,u0F,cuF;
 // Allocate them at a grid resolution derived from the canvas aspect and a device
 // scale, capped by maxSide. Also creates the barrier texture and the offscreen
 // barrier canvases, and reports the grid size to the status bar.
@@ -336,7 +344,7 @@ function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75
   const maxSide=isMob?384:1024;
   if(canvas.width>=canvas.height){simW=Math.min(Math.floor(canvas.width*scale),maxSide);simH=Math.max(64,Math.round(simW*canvas.height/canvas.width));}
   else{simH=Math.min(Math.floor(canvas.height*scale),maxSide);simW=Math.max(64,Math.round(simH*canvas.width/canvas.height));}
-  simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);u0F=mkF(simW,simH);
+  simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);u0F=mkF(simW,simH);cuF=mkF(simW,simH);
   barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+(TEX_CAN_LINEAR?'':' [nearest]');}
 // Match canvas backing size to the wrapper and reallocate the sim grid.
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
@@ -359,7 +367,7 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   gl.uniform2f(aU.uMousePos,mouse.x,mouse.y);
   gl.uniform1f(aU.uMouseDown,(mouse.down&&!SIM.drawMode&&!SIM.eraseMode)?1:0);
   gl.uniform1f(aU.uMouseVortex,mouseVortex);
-  gl.uniform1f(aU.uGravity,SIM.gravity?SIM.gravityStr:0);
+  gl.uniform1f(aU.uGravity,SIM.gravity?SIM.gravityStr:0);gl.uniform1f(aU.uFade,SIM.dyeFade);
   gl.uniform1i(aU.uNumEmitters,emitters.length);gl.uniform1i(aU.uNumShapes,shapes.length);
   // Pack each active emitter into three vec4 uniforms (position+direction,
   // strength/width/type, dye colour); direction depends on the emitter type.
@@ -387,6 +395,13 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   // Stage 3 - advect dye (uMode 1): carry the colour field along the new
   // velocity, so the dye traces the flow. Writes dyF.write, then swap.
   gl.useProgram(aP);gl.bindFramebuffer(gl.FRAMEBUFFER,dyF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(aU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);gl.uniform1i(aU.uMode,1);dq();dyF.swap();
+  // Stage 3b - vorticity confinement (only when SIM.curl>0): curl of vF into
+  // cuF, then add eps (N x w) dt to vF. Runs before the projection, so the
+  // added force is made divergence-free with the rest of the velocity.
+  if(SIM.curl>1e-3){
+    gl.bindFramebuffer(gl.FRAMEBUFFER,cuF.fbo);gl.useProgram(kP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(kU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(kU.uBarrier,1);gl.uniform2f(kU.uInvRes,inv[0],inv[1]);dq();
+    gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(vP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(vU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,cuF.tex);gl.uniform1i(vU.uCurlTex,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(vU.uBarrier,2);gl.uniform2f(vU.uInvRes,inv[0],inv[1]);gl.uniform1f(vU.uCurl,SIM.curl);gl.uniform1f(vU.uDt,deltaTime);dq();vF.swap();
+  }
   // Stage 4 - divergence: measure ∇·u of the advected velocity into dvF (the
   // right-hand side of the pressure Poisson equation).
   gl.bindFramebuffer(gl.FRAMEBUFFER,dvF.fbo);gl.useProgram(dP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(dU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(dU.uBarrier,1);gl.uniform2f(dU.uInvRes,inv[0],inv[1]);dq();
@@ -698,7 +713,9 @@ window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;
 // at calm 1. A scene has 2 or 3 slots (wake 1 or 2), so with the crossfade at
 // most 6 emitters push at one time. The palette has two hues, and the hue
 // drifts 0.3 degrees per second times rate. The saver viscosity is SAVER_NU.
-// exit() stops the director and puts back the GUI, nu 0 and the boot scene.
+// The saver turns vorticity confinement off (it would undo the calm of nu) and
+// keeps the dye fade at 0.997. exit() stops the director and puts back the GUI,
+// nu 0, the confinement and fade slider values, and the boot scene.
 let saverRun=null;
 function saverRng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
 function saverHsl(h,s,l){h=((h%360)+360)%360/360;const f=n=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return l-a*Math.max(-1,Math.min(k-3,9-k,1));};return[f(0),f(8),f(4)];}
@@ -792,11 +809,11 @@ window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
   const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.bloom=0.25;setCmap(3);
+  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
   const R=saverStart(opts);window.__saverScene=R.scene+'/'+R.slots;
   const until=performance.now()+2400;(function pw(){if(performance.now()<until){for(let i=0;i<3;i++){step();frame++;}requestAnimationFrame(pw);}})();
   return{canvas,warmupMs:2500};},
   exit(){if(saverRun){cancelAnimationFrame(saverRun.raf);saverRun=null;}
     const st=document.getElementById('saver-style');if(st)st.remove();document.documentElement.classList.remove('saver');
-    SIM.viscosity=0;SIM.bloom=0.4;resize();clearAll();defaultSetup();}};
+    SIM.viscosity=0;SIM.bloom=0.4;SIM.curl=+document.getElementById('sl-curl').value;SIM.dyeFade=+document.getElementById('sl-fade').value;resize();clearAll();defaultSetup();}};
 })();
