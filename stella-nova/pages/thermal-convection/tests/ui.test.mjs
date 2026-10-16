@@ -132,7 +132,7 @@ export default async function run(ok) {
   ok('static: main.js imports the contract names',
     /import \{ DEFAULTS, PRESETS, clampParams, GRIDS \} from '\.\/sim\/params\.js'/.test(main)
     && /from '\.\/render\/palettes\.js'/.test(main) && /layoutRects, sliceSegment, wrapOffset \} from '\.\/render\/layout\.js'/.test(main)
-    && /orbitCam, fitBlock \} from '\.\/render\/orbit\.js'/.test(main)
+    && /orbitCam, fitBlock(, refitCam)? \} from '\.\/render\/orbit\.js'/.test(main)
     && main.includes("import('./sim/gpu.js')") && main.includes("import('./render/views.js')") && main.includes("import('./saver.js')"));
   ok('static: window.TC is the app', /window\.TC = app/.test(main));
   ok('static: no Math.random in the UI', !/Math\.random/.test(main + uijs));
@@ -200,7 +200,8 @@ export function wrapOffset(angle, offset, Lx = 4, Ly = 4) {
 export function sliceSegment(slice, Lx = 4, Ly = 4) { return { len: Lx, offset: slice.offset, angle: slice.angle }; }`,
   'render/orbit.js': `
 export function orbitCam(c) { return { ...c, view: new Float32Array(16), proj: new Float32Array(16), viewProj: new Float32Array(16), eye: [0, 0, 5] }; }
-export function fitBlock(dims, aspect) { globalThis.__tcLog.fitDims = dims; return { yaw: 0.6, pitch: 0.5, dist: 6, target: [dims.Lx / 2, dims.Ly / 2, 0.5], fovY: 0.6, aspect }; }`,
+export function fitBlock(dims, aspect) { globalThis.__tcLog.fitDims = dims; return { yaw: 0.6, pitch: 0.5, dist: 6, target: [dims.Lx / 2, dims.Ly / 2, 0.5], fovY: 0.6, aspect }; }
+export function refitCam(cam, dims, aspect) { return cam && cam.fitLz === dims.Lz ? cam : { ...(cam || fitBlock(dims, aspect)), fitLz: dims.Lz, aspect }; }`,
   'render/views.js': `
 const L = () => globalThis.__tcLog;
 export async function createViews(device, format, sim, opts) {

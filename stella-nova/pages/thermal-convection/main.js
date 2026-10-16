@@ -37,7 +37,7 @@
 import { DEFAULTS, PRESETS, clampParams, GRIDS } from './sim/params.js';
 import { PALETTES, ramp } from './render/palettes.js';
 import { layoutRects, sliceSegment, wrapOffset } from './render/layout.js';
-import { orbitCam, fitBlock } from './render/orbit.js';
+import { orbitCam, fitBlock, refitCam } from './render/orbit.js';
 import {
   createUI, pickQuality, parseQuery, backingSize, presetParts, presetIds, occlusionOf, sliceThrough, VIEWS,
 } from './ui.js';
@@ -318,7 +318,9 @@ function frame(now) {
     if (viewsDirty) { app.views.set(viewState()); viewsDirty = false; }
     if (!saving && app.rects.block) {
       const r = app.rects.block, aspect = r.w / Math.max(1, r.h);
-      if (!app.cam) app.cam = { ...fitBlock({ ...boxDims(), Lz: app.zScale }, aspect) };
+      // fit again when the vertical scale or the rect aspect changes (a phone
+      // turned, the slider moved); refitCam keeps the user's zoom
+      app.cam = refitCam(app.cam, { ...boxDims(), Lz: app.zScale }, aspect);
       app.cam.aspect = aspect;
       app.views.set({ cam: orbitCam(app.cam) });
     }
@@ -345,7 +347,10 @@ function setupStatic() {
   ui.setPresets(presetIds(PRESETS).map(id => presetParts(PRESETS, DEFAULTS, id)).filter(Boolean));
   const start = query.preset && presetParts(PRESETS, DEFAULTS, query.preset) ? query.preset
     : presetParts(PRESETS, DEFAULTS, 'granulation') ? 'granulation' : null;
-  if (start) app.applyPreset(start, { keepView: !!query.view });
+  // The start look is the granulation preset, but in the split view: the
+  // surface and the section under the cut together (CONTRACT.md "UI").
+  // A ?preset= link gets the view of that preset, unless ?view= is set.
+  if (start) app.applyPreset(start, { keepView: !query.preset || !!query.view });
   if (query.view) app.view = query.view;
   ui.sync();
   drawLegend();

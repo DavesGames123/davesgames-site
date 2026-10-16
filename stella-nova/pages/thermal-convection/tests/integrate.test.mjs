@@ -414,7 +414,7 @@ async function partB(ok) {
     ok('integrate boot: no device errors in the page frames', dev && dev.errors.length === 0, dev && dev.errors.slice(0, 4).join(' | '));
     ok('integrate boot: the frame loop logs no error', !logged.some(l => l[0] === 'error'), logged.filter(l => l[0] === 'error').map(l => l[1]).slice(0, 2).join(' | '));
     ok('integrate boot: saver installed, buttons show', !!app.saverObj && doc.getElementById('saverBtn').hidden === false && typeof globalThis.snSaver === 'object');
-    ok('integrate boot: views get the granulation look', app.views.state.palette === 'solar' && app.view === 'surface');
+    ok('integrate boot: views get the granulation look in the split view (surface and section)', app.views.state.palette === 'solar' && app.view === 'split', app.view);
 
     // every view from the page side
     for (const v of ['split', 'block', 'slice', 'surface']) { app.setView(v); await wait(60); }

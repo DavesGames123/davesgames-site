@@ -15,11 +15,14 @@
 //  boxCorners(dims) -> 8 [x, y, z]
 //  project(viewProj, p) -> { x, y, z, w } NDC (x, y in -1..1, z depth 0..1)
 //  clampCam(cam) -> pitch in [0.08, 1.45], dist > 0
+//  refitCam(cam, dims, aspect) -> cam fitted again when Lz or aspect changed,
+//    with the user zoom kept
 //  BLOCK_YAW, BLOCK_PITCH  the default view (front-left, 32° down)
 //
 //  grep -n targets: "export function orbitCam", "export function fitBlock",
 //  "export function boxCorners", "export function project", "export function lookAt",
-//  "export function perspective", "export function mul4", "export function clampCam"
+//  "export function perspective", "export function mul4", "export function clampCam",
+//  "export function refitCam"
 // ============================================================================
 
 export const BLOCK_YAW = -2.25;
@@ -112,4 +115,19 @@ export function fitBlock(dims = {}, aspect = 1, opts = {}) {
   while (!fits(hi) && hi < 1e4) hi *= 1.6;
   for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (fits(m)) hi = m; else lo = m; }
   return { yaw, pitch, dist: hi, target, fovY, aspect };
+}
+
+// Keep a user camera framed when the block changes shape. cam = null or a
+// camera state; dims = { Lx, Ly, Lz }. When Lz (the vertical scale) or the
+// rect aspect differs from the last fit, fit again at the camera's yaw and
+// pitch and keep the user's zoom (dist / fitted dist). Same Lz and aspect:
+// the same object comes back.
+export function refitCam(cam, dims = {}, aspect = 1) {
+  const Lz = dims.Lz || 1;
+  if (cam && cam.fitLz === Lz && Math.abs((cam.fitAspect || 0) - aspect) < 1e-3) return cam;
+  const f = fitBlock(dims, aspect, cam ? { yaw: cam.yaw, pitch: cam.pitch } : {});
+  const fit = { fitDist: f.dist, fitLz: Lz, fitAspect: aspect, aspect };
+  if (!cam) return { ...f, ...fit };
+  const zoom = Number.isFinite(cam.dist) && cam.fitDist > 0 ? cam.dist / cam.fitDist : 1;
+  return { ...cam, ...fit, target: f.target, dist: f.dist * zoom };
 }
