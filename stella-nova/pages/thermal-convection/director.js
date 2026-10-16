@@ -36,7 +36,7 @@
 //
 //  Exports (all pure, except createDirector which writes to app):
 //    rng(seed), shuffle(a, rnd), smooth(u)
-//    SHOTS, KINDS, HOLD_S, SIDE_ASPECT, PAD_K
+//    SHOTS, KINDS, HOLD_S, SIDE_ASPECT, SIDE_ZSCALE, PAD_K
 //    buildShots(seed, { calm, aspect, avoid }) -> [shot]
 //    clearBox(frame) -> { x, y, w, h }        frame = { W, H, band:{t,b,w} }
 //    frameShot(shot, frame, layout, dims) -> { surface?, slice?, block? }
@@ -97,6 +97,10 @@ export const SHOTS = [
 ];
 export const KINDS = [...new Set(SHOTS.map(s => s.kind))];
 
+// The vertical exaggeration of a side-by-side split shot: 2.3 x or more.
+export const SIDE_ZSCALE = 2.3;
+const sideZ = (z, side, rnd) => (side ? Math.max(z, SIDE_ZSCALE + 0.2 * rnd()) : z);
+
 const validOrder = (l, avoid) => l.every((s, i) => (i === 0 ? s.kind !== avoid : s.kind !== l[i - 1].kind));
 
 // The shot list of one run. aspect: the clear box w / h (it sets the
@@ -111,8 +115,10 @@ export function buildShots(seed, opts = {}) {
       ...v, toggles: { ...v.toggles },
       hold: HOLD_S[0] + (HOLD_S[1] - HOLD_S[0] - 2) * calm + 2 * rnd(),
       side,
-      // a thin layer stays legible: 1.6-2.2 x, the section label names it
-      zScale: v.view === 'block' ? 1.4 : 1.6 + 0.6 * rnd(),
+      // a thin layer stays legible: 1.6-2.2 x, the section label names it.
+      // Side by side, the band height sets the section height: 2.3-2.5 x
+      // keeps the section over 22% of the short side (saver.test.mjs).
+      zScale: sideZ(v.view === 'block' ? 1.4 : 1.6 + 0.6 * rnd(), side, rnd),
       surfaceZ: v.surfaceZ ?? 0.94,
       angle: rnd() < 0.5 ? 0 : Math.PI / 2,
       from: rnd() - 0.5,                                    // slice start, fraction of the period
@@ -214,11 +220,11 @@ export const EQ = [
   '∂T/∂t + u·∇T = ∇²T / √(Ra Pr)',
 ];
 
-// CODE_PLACEHOLDER: written from the buoyancy term of CONTRACT.md, because
-// shaders/sim-*.wgsl did not exist when this package was built.
-// INTEGRATE must replace it with a real extract: set CODE_SOURCE to the
-// SIM kernel that adds the buoyancy force, and saver.js then shows the
-// real lines (extractWgsl) and drops this text.
+// CODE_SOURCE is the real extract: the tri kernel of shaders/sim-tri.wgsl,
+// where the implicit solves of U, V and T run and the new T then pushes W
+// (the buoyancy term + T z_hat). saver.js loads the file once and cuts it
+// with extractWgsl. CODE_PLACEHOLDER shows only until that fetch is done,
+// or when the fetch fails. It is a sketch of the same term, not SIM code.
 export const CODE_PLACEHOLDER = {
   lang: 'wgsl', name: 'sim · buoyancy and viscosity', placeholder: true,
   text: [
@@ -233,7 +239,7 @@ export const CODE_PLACEHOLDER = {
     '}',
   ].join('\n'),
 };
-export const CODE_SOURCE = { url: 'shaders/sim-forces.wgsl', marker: /buoyan/i, name: 'sim-forces.wgsl' };
+export const CODE_SOURCE = { url: 'shaders/sim-tri.wgsl', marker: /let tw = 0\.5 \* dt/, name: 'sim-tri.wgsl · implicit solves and buoyancy' };
 
 // The function of src around the first line that matches marker: from its
 // attribute or fn line to the closing brace, at most max lines.
@@ -375,6 +381,7 @@ export function createDirector(app, opts = {}) {
     const f = frame();
     shot = { ...list[i] };
     shot.side = sideFor(shot, f);
+    if (shot.side) shot.zScale = Math.max(shot.zScale, SIDE_ZSCALE);
     t = 0; shots++;
     lastKind = shot.kind;
     begin(shot);
@@ -401,7 +408,7 @@ export function createDirector(app, opts = {}) {
       let cam = { yaw, pitch: s.pitch, dist: null, target };
       if (typeof opts.fitBlock === 'function' && r) {
         try {
-          const base = opts.fitBlock({ ...(app.sim && app.sim.dims), Lx: d.Lx, Ly: d.Ly }, r.w / r.h) || {};
+          const base = opts.fitBlock({ ...(app.sim && app.sim.dims), Lx: d.Lx, Ly: d.Ly, Lz: s.zScale }, r.w / r.h) || {};
           cam = { ...base, yaw, pitch: s.pitch, dist: Number.isFinite(base.dist) ? base.dist * 1.08 : null, target: base.target || target };
         } catch (e) { if (typeof console !== 'undefined') console.warn(e); }
       }
