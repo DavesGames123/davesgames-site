@@ -69,6 +69,7 @@ const SEARCH_WORDS = {
   'roche-limit': 'roche limit tidal disruption rings saturn moon breakup shoemaker-levy comet rubble pile',
   'stem-splitter': 'stem separation source separation demucs htdemucs vocal remover karaoke instrumental acapella isolate vocals drums bass guitar piano unmix split stems ai music offline',
   'weather-map': 'weather forecast weather map live weather radar doppler nexrad satellite clouds cold front warm front stationary front occluded front isobars high pressure low pressure temperature fahrenheit celsius rain snow storm meteorology meteorologist tv weather news weatherman united states usa us map forecast 10 day hourly wpc nws noaa open-meteo screensaver',
+  'thermal-convection': 'thermal convection heat convection rayleigh benard rayleigh-benard benard cells marangoni hexagons soup pot boiling buoyancy boussinesq navier stokes heat equation rayleigh number prandtl nusselt plumes solar granulation sun surface granules plasma voronoi cross section temperature gradient',
 };
 
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
