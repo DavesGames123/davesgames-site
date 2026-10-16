@@ -201,8 +201,9 @@ export function sliceThrough(pt, angle, dims = {}) {
 }
 
 // ── LABEL ────────────────────────────────────────────────────────────────
-// The momentum and heat equations (free-fall units), colour-coded: m1
-// advection, m2 pressure, m3 viscosity, m4 buoyancy, m5 diffusion.
+// The momentum and heat equations (free-fall units), colour-coded with the
+// classes of the page key (explainer.js TERMS): m1 advection, m6 pressure,
+// m3 viscosity, m2 buoyancy, m4 diffusion. Ra is m5 as on the panel.
 export const TEX = [
   '\\frac{\\partial \\mathbf{u}}{\\partial t} + (\\mathbf{u}\\cdot\\nabla)\\mathbf{u} = -\\nabla p + \\sqrt{\\mathrm{Pr}/\\mathrm{Ra}}\\,\\nabla^2\\mathbf{u} + T\\,\\hat{\\mathbf{z}}',
   '\\frac{\\partial T}{\\partial t} + \\mathbf{u}\\cdot\\nabla T = \\frac{1}{\\sqrt{\\mathrm{Ra}\\,\\mathrm{Pr}}}\\,\\nabla^2 T',
@@ -210,10 +211,10 @@ export const TEX = [
 export const RULES = [
   ['(\\mathbf{u}\\cdot\\nabla)\\mathbf{u}', 'm1'],
   ['\\mathbf{u}\\cdot\\nabla T', 'm1'],
-  ['-\\nabla p', 'm2'],
+  ['-\\nabla p', 'm6'],
   ['\\sqrt{\\mathrm{Pr}/\\mathrm{Ra}}\\,\\nabla^2\\mathbf{u}', 'm3'],
-  ['T\\,\\hat{\\mathbf{z}}', 'm4'],
-  ['\\frac{1}{\\sqrt{\\mathrm{Ra}\\,\\mathrm{Pr}}}\\,\\nabla^2 T', 'm5'],
+  ['T\\,\\hat{\\mathbf{z}}', 'm2'],
+  ['\\frac{1}{\\sqrt{\\mathrm{Ra}\\,\\mathrm{Pr}}}\\,\\nabla^2 T', 'm4'],
 ];
 export const EQ = [
   '∂u/∂t + (u·∇)u = −∇p + √(Pr/Ra) ∇²u + T ẑ',
@@ -286,10 +287,10 @@ export function labelParams(app) {
   const st = readStats(app) || {};
   const t = Number.isFinite(st.simTime) ? st.simTime : (app.sim && Number.isFinite(app.sim.time) ? app.sim.time : NaN);
   return [
-    { sym: '\\mathrm{Ra}', name: 'Rayleigh number', value: fmtSci(p.Ra), cls: 'm4' },
-    { sym: '\\mathrm{Pr}', name: 'Prandtl number', value: Number.isFinite(p.Pr) ? String(+p.Pr.toPrecision(3)) : '–', cls: 'm3' },
-    { sym: '\\mathrm{Nu}', name: 'Nusselt number', value: Number.isFinite(st.Nu) ? st.Nu.toFixed(2) : '–', cls: 'm5' },
-    { sym: 't', name: 'time', value: Number.isFinite(t) ? `${t.toFixed(1)} tff` : '–', cls: 'm6' },
+    { sym: '\\mathrm{Ra}', name: 'Rayleigh number', value: fmtSci(p.Ra), cls: 'm5' },
+    { sym: '\\mathrm{Pr}', name: 'Prandtl number', value: Number.isFinite(p.Pr) ? String(+p.Pr.toPrecision(3)) : '–', cls: 'm6' },
+    { sym: '\\mathrm{Nu}', name: 'Nusselt number', value: Number.isFinite(st.Nu) ? st.Nu.toFixed(2) : '–', cls: '' },
+    { sym: 't', name: 'time', value: Number.isFinite(t) ? `${t.toFixed(1)} tff` : '–', cls: '' },
   ];
 }
 
@@ -339,6 +340,9 @@ export function createDirector(app, opts = {}) {
     app.toggles = { ...(app.toggles || {}), ...s.toggles };
     app.surfaceZ = s.surfaceZ;
     app.zScale = s.zScale;
+    // A tracer shot needs the sim tracers on: the user may have turned them
+    // off before the saver (then sim.tracerCount is 0 and none draw).
+    if (s.toggles && s.toggles.tracers) call('setToggle', 'tracers', true);
     try {
       if (app.views && typeof app.views.set === 'function') {
         app.views.set({ palette: s.palette, surfaceZ: s.surfaceZ, zScale: s.zScale, sliceLine: s.sliceLine !== false, ...s.toggles });

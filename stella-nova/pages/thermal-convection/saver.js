@@ -252,6 +252,8 @@ export function installSaver(ctx) {
         if (s.preset !== undefined) app.preset = s.preset;
         Object.assign(app, { palette: s.palette, surfaceZ: s.surfaceZ, zScale: s.zScale, cam: s.cam });
         if (s.toggles) app.toggles = s.toggles;
+        // a soup shot turns the sim tracers on; give back the user's choice
+        if (s.toggles && typeof app.setToggle === 'function') app.setToggle('tracers', !!s.toggles.tracers);
         if (app.views && typeof app.views.set === 'function') {
           app.views.set({ palette: s.palette, surfaceZ: s.surfaceZ, zScale: s.zScale, sliceLine: true, ...(s.toggles || {}), ...(s.cam ? { cam: s.cam } : {}) });
         }
