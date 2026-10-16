@@ -171,7 +171,7 @@ const MAX_SPL=16;
 // counts, edit modes, colormap, vector overlay, gravity, viscosity, vorticity
 // eps (curl), dye fade, and the pointer tool (tool, splat radius, force, ink,
 // mirror count, rainbow or fixed ink colour).
-const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,curl:20,dyeFade:0.997,tool:'push',splatR:0.035,force:1.5,ink:0.5,mirror:1,rainbow:true,inkColor:[1,0.5,0.19],drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
+const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,curl:0,dyeFade:0.997,tool:'push',splatR:0.035,force:1.5,ink:0.5,mirror:1,rainbow:true,inkColor:[1,0.5,0.19],drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
 // Object lists and running counters. CW/CH are canvas CSS size; simW/simH the
 // simulation grid resolution (smaller than the canvas for speed).
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
@@ -752,7 +752,7 @@ function preset(name){clearAll();
 // spinning, wandering and dynamic objects and widens every random range.
 // splash() fires dye bursts; RND.auto fires them by itself every 0.7-2.2 s.
 /* ═══ RANDOMIZER ═══ */
-const RND={layout:'any',palette:'any',emitters:4,shapes:2,chaos:0.5,auto:false,autoT:0};
+const RND={layout:'any',palette:'any',emitters:4,shapes:8,chaos:0.5,auto:false,autoT:0};
 const RND_LAYOUTS=['scatter','ring','crossfire','mirror','rain','whirlpool'];
 const RND_SCHEMES=['analogous','complement','triad','rainbow','mono'];
 // n dye colours (rgb 0..1) of one scheme round a random base hue.
@@ -769,7 +769,8 @@ function rndEmitterParams(e,ch){const r=Math.random;
   e.mult=1;e.spin=e.type==='jet'&&r()<ch*0.3?(r()<0.5?-1:1)*Math.round((0.3+r()*1.5)*4)/4:0;
   e.wander=r()<0.25+ch*0.6?Math.round((0.15+r()*(0.2+ch*0.8))*20)/20:0;e.wf=0.3+r()*0.9;e.wt=r()*6.283;}
 // Random size, angle, spin, teeth/points and fixed/dynamic for a shape.
-function rndShapeParams(s,ch){const r=Math.random,sz=Math.min(CW,CH)*(0.07+r()*0.1);
+// scale shrinks the size when many shapes share the canvas.
+function rndShapeParams(s,ch,scale=1){const r=Math.random,sz=Math.min(CW,CH)*(0.07+r()*0.1)*scale;
   s.w=sz;s.h=sz;if(s.type==='rect'){s.w=sz*(1+r()*1.5);s.h=sz*(0.2+r()*0.4);}else if(s.type==='airfoil'){s.w=sz*2.2;s.h=sz*0.5;}else if(s.type==='wedge'){s.w=sz*1.1;s.h=sz*0.9;}else if(s.type==='tesla'){s.w=sz*2.4;s.h=sz*0.9;}
   s.w=Math.round(Math.max(10,Math.min(250,s.w)));s.h=Math.round(Math.max(10,Math.min(250,s.h)));
   s.angle=(r()-0.5)*6.283;s.teeth=6+Math.floor(r()*11);s.points=3+Math.floor(r()*6);
@@ -800,10 +801,15 @@ function randomScene(){const r=Math.random,ch=RND.chaos,n=Math.max(1,Math.min(MA
   else if(lay==='rain'){for(let i=0;i<n;i++){const up=ch>0.6?r()<0.5:i%2===0,x=CW*(0.08+0.84*(i+0.5)/n)+jit()*CW*0.08;add('jet',x,up?CH-M:M,(up?-1:1)*Math.PI/2+jit()*0.8,i);}}
   else{const v=add('vortex',cx+jit()*R*0.2,cy+jit()*R*0.2,0,0);if(v){v.width=+(0.12+r()*0.12).toFixed(3);v.strength=Math.round(80+r()*120);}
     for(let i=1;i<n;i++){const ph=r()*6.283,rad=R*(0.3+r()*0.15),x=cx+Math.cos(ph)*rad*CW/R*0.9,y=cy+Math.sin(ph)*rad;add('jet',x,y,ph+hand*(Math.PI/2+0.3)+jit()*0.6,i);}}
-  const ST=['circle','circle','rect','airfoil','wedge','gear','star','tesla'];let dyn=0;
-  for(let i=0;i<Math.min(MAX_S,RND.shapes|0);i++){const t=ST[Math.floor(r()*ST.length)];let x=cx,y=cy;
-    for(let k=0;k<30;k++){x=lay==='mirror'?cx:CW*(0.18+r()*0.64);y=CH*(0.18+r()*0.64);if([...emitters,...shapes].every(o=>(o.x-x)**2+(o.y-y)**2>(R*0.14)**2))break;}
-    const s=createShape(t,x,y);rndShapeParams(s,ch);if(lay==='mirror'){s.angle=Math.PI/2;s.spin=0;}
+  // Shapes spread over the whole canvas, every type equally likely. The gap
+  // between objects and the shape size both shrink as the count grows. In
+  // the mirror layout shapes come in left/right pairs (angle pi - a).
+  const ST=['circle','rect','airfoil','wedge','gear','star','tesla'],ns=Math.min(MAX_S,RND.shapes|0),
+    gap=Math.sqrt(CW*CH/Math.max(1,ns+emitters.length))*0.6,scale=1/Math.sqrt(Math.max(1,ns/4));let dyn=0;
+  for(let i=0;i<ns;i++){const t=ST[Math.floor(r()*ST.length)],pair=lay==='mirror'&&i+1<ns;let x=cx,y=cy;
+    for(let k=0;k<40;k++){x=lay==='mirror'?(pair?CW*(0.1+r()*0.32):cx):CW*(0.08+r()*0.84);y=CH*(0.1+r()*0.8);if([...emitters,...shapes].every(o=>(o.x-x)**2+(o.y-y)**2>gap*gap))break;}
+    const s=createShape(t,x,y);rndShapeParams(s,ch,scale);
+    if(lay==='mirror'){s.spin=0;s.fixed=true;if(pair){const m={...s,id:nextId++,x:CW-x,angle:Math.PI-s.angle};shapes.push(s,m);i++;continue;}s.angle=Math.PI/2;}
     if(!s.fixed&&dyn>=2)s.fixed=true;if(!s.fixed)dyn++;shapes.push(s);}
   SIM.selectedId=-1;barrierDirty=true;rebuildList();document.getElementById('st-mode').textContent='scene '+lay;}
 // Fire n dye bursts: random place, direction, speed and radius, colours of
@@ -824,13 +830,6 @@ function autoSplash(){if(!RND.auto)return;RND.autoT-=deltaTime;if(RND.autoT<=0){
 document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||document.documentElement.classList.contains('saver'))return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA')return;
   if(e.key===' '){e.preventDefault();splash(6);}else if(e.key==='n'||e.key==='N')randomScene();});
 
-// The scene shown on first load: two opposing coloured jets and a central disc.
-function defaultSetup(){
-  const e1=createEmitter('jet',40,CH*.42);e1.strength=100;e1.width=.06;e1.dyeR=.15;e1.dyeG=.5;e1.dyeB=1;emitters.push(e1);
-  const e2=createEmitter('jet',40,CH*.58);e2.strength=100;e2.width=.06;e2.dyeR=1;e2.dyeG=.35;e2.dyeB=.1;emitters.push(e2);
-  const s=createShape('circle',CW*.35,CH*.5);s.w=100;s.h=100;shapes.push(s);
-  barrierDirty=true;rebuildList();}
-
 // Main loop: clamp the timestep (so a stall cannot blow up the solver), step the
 // simulation when playing, always display, and update the FPS/frame readouts.
 function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)/1000,.033);lastTime=now;fpsAccum+=deltaTime;fpsCount++;
@@ -838,13 +837,13 @@ function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)
   if(SIM.playing){autoSplash();step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
 
 // Boot: create the overlay, wire pointer/touch events, size everything, draw the
-// colormap previews, then load the default scene and start the loop. The last
+// colormap previews, then build a random scene (randomScene) and start the loop. The last
 // line exposes the handlers the inline HTML onclick attributes call.
 initOverlay();
 overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
 overlayCanvas.addEventListener('pointerdown',onDown);overlayCanvas.addEventListener('pointermove',onMove);overlayCanvas.addEventListener('pointerup',onUp);overlayCanvas.addEventListener('pointercancel',onUp);
 resize();renderCmapPreviews();
-setTimeout(()=>{defaultSetup();requestAnimationFrame(loop);},60);
+setTimeout(()=>{randomScene();requestAnimationFrame(loop);},60);
 window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;window.setTool=setTool;window.setMirror=setMirror;window.toggleRainbow=toggleRainbow;window.setInkColor=setInkColor;window.RND=RND;window.randomScene=randomScene;window.splash=splash;window.shuffleColours=shuffleColours;window.toggleAutoSplash=toggleAutoSplash;
 // Read-only test hook: the live object lists and the splat queue length.
 window.__fluidlab={get emitters(){return emitters},get shapes(){return shapes},get splats(){return splats.length},get pointers(){return pointers.size}};
@@ -869,7 +868,7 @@ window.__fluidlab={get emitters(){return emitters},get shapes(){return shapes},g
 // drifts 0.3 degrees per second times rate. The saver viscosity is SAVER_NU.
 // The saver turns vorticity confinement off (it would undo the calm of nu) and
 // keeps the dye fade at 0.997. exit() stops the director and puts back the GUI,
-// nu 0, the confinement and fade slider values, and the boot scene.
+// nu 0, the confinement and fade slider values, and a new random scene.
 let saverRun=null;
 function saverRng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
 function saverHsl(h,s,l){h=((h%360)+360)%360/360;const f=n=>{const k=(n+h*12)%12,a=s*Math.min(l,1-l);return l-a*Math.max(-1,Math.min(k-3,9-k,1));};return[f(0),f(8),f(4)];}
@@ -960,7 +959,7 @@ function saverPlate(R){if(!R.label)return;let jets=0,vort=0;for(const A of R.act
     rules:[['u','m1'],['w','m1'],['p','m2'],['\\nu','m3'],['\\rho','m5'],['f','m6']],code:SAVER_CODE,
     eq:['∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u + f','∇·u = 0','∇²p = (ρ/Δt) ∇·w','u = w − (Δt/ρ) ∇p']});}catch(e){}}
 window.snSaver={async enter(opts){
-  await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
+  await new Promise(r=>setTimeout(r,150));  // let the boot randomScene() run first
   const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #quick-bar,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
   resize();pointers.clear();splats=[];toggleAutoSplash(false);SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
@@ -969,5 +968,5 @@ window.snSaver={async enter(opts){
   return{canvas,warmupMs:2500};},
   exit(){if(saverRun){cancelAnimationFrame(saverRun.raf);saverRun=null;}
     const st=document.getElementById('saver-style');if(st)st.remove();document.documentElement.classList.remove('saver');
-    SIM.viscosity=0;SIM.bloom=0.4;SIM.curl=+document.getElementById('sl-curl').value;SIM.dyeFade=+document.getElementById('sl-fade').value;resize();clearAll();defaultSetup();}};
+    SIM.viscosity=0;SIM.bloom=0.4;SIM.curl=+document.getElementById('sl-curl').value;SIM.dyeFade=+document.getElementById('sl-fade').value;resize();clearAll();randomScene();}};
 })();
