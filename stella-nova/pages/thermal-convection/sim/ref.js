@@ -248,15 +248,6 @@ export function derived(Pin, dims) {
   return D;
 }
 
-function bisect(f, a, b) {
-  let fa = f(a);
-  for (let it = 0; it < 80; it++) {
-    const m = 0.5 * (a + b), fm = f(m);
-    if ((fm > 0) === (fa > 0)) { a = m; fa = fm; } else b = m;
-  }
-  return 0.5 * (a + b);
-}
-
 export function bottomT(D, x, y) {
   if (D.mode !== 1) return 1;
   let ddx = x - D.bx; ddx -= D.Lx * Math.round(ddx / D.Lx);
@@ -522,8 +513,8 @@ export function createRefSim(opts = {}, params = {}) {
       const lam = (-4 * (sx * sx + sy * sy)) / dz2;
       const thx = (2 * Math.PI * mx) / nx, thy = (2 * Math.PI * my) / ny;
       // gradient factors g = (1 - e^(-i th)) / dx = (1 - cos th + i sin th) / dx
-      const gxr = (1 - Math.cos(thx)) / dx, gxi = Math.sin(thx) / dx;
-      const gyr = (1 - Math.cos(thy)) / dx, gyi = Math.sin(thy) / dx;
+      const gxr = (2 * sx * sx) / dx, gxi = Math.sin(thx) / dx; // 1 - cos th = 2 sin^2(th / 2)
+      const gyr = (2 * sy * sy) / dx, gyi = Math.sin(thy) / dx;
       const zero = mx === 0 && my === 0;
       // incremental pressure: u* -= dt grad p_old (p kept in Fourier space)
       if (!zero) {
@@ -555,8 +546,8 @@ export function createRefSim(opts = {}, params = {}) {
         }
         continue;
       }
-      const axr = (Math.cos(thx) - 1) / dx, axi = Math.sin(thx) / dx;
-      const ayr = (Math.cos(thy) - 1) / dx, ayi = Math.sin(thy) / dx;
+      const axr = (-2 * sx * sx) / dx, axi = Math.sin(thx) / dx;
+      const ayr = (-2 * sy * sy) / dx, ayi = Math.sin(thy) / dx;
       // forward sweep of (lam + Lz) phi = div, Neumann ends (e = +1), into pr/pi
       let prev = 0;
       const off = 1 / dz2;

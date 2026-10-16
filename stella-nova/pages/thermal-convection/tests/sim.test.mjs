@@ -2,8 +2,13 @@
 // sim/ref.js (the CPU spec of the solver) and, when present, the WGSL and
 // sim/gpu.js. No browser. Run through ../tests.mjs, or alone:
 //   node -e "import('./tests/sim.test.mjs').then(m => m.default((n, c, i) => console.log(c ? 'ok  ' : 'FAIL', n, i || '')))"
-import { DEFAULTS, PRESETS, GRIDS, TRACERS, clampParams, planFrame, cflDt, DT_MAX, MAX_FRAME_DT, TIME_RATE, RA_CRIT } from '../sim/params.js';
-import { createRefSim, fftLine, radices, initialState, derived } from '../sim/ref.js';
+import { PRESETS, GRIDS, TRACERS, clampParams, planFrame, cflDt, DT_MAX, MAX_FRAME_DT, TIME_RATE, RA_CRIT } from '../sim/params.js';
+import { createRefSim, fftLine, radices, initialState, derived, pcg, u01 } from '../sim/ref.js';
+import { UNIFORM_FIELDS, SHADER_FILES, COMMON_FILE, LAYOUTS, ENTRIES, radixCode, packUniform, cellGroups, createSim } from '../sim/gpu.js';
+import { readFileSync, writeFileSync, mkdtempSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir, homedir } from 'node:os';
+import { join } from 'node:path';
 
 const finite = a => { for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) return false; return true; };
 
@@ -207,4 +212,218 @@ export default async function (ok) {
     ok('sim ref: sun mode heats an 8-layer bottom zone over an insulating wall, Robin top', D.botNeumann && D.nHeat === 8 && D.tRobin && D.rTop < 1 && D.Tcond[0] > D.Tcond[31]);
   }
 
+  await gpuTests(ok);
+}
+
+// ───────────────────────── WGSL and gpu.js ─────────────────────────
+const page = new URL('../', import.meta.url);
+const readPage = p => readFileSync(new URL(p, page), 'utf8');
+const stripComments = t => t.replace(/\/\/[^\n]*/g, '');
+
+// WGSL operator-mix check (Chrome's Tint is stricter than naga): an operand
+// of & | ^ << >> must be a unary expression, and && may not meet || without
+// parentheses. Template brackets are removed first.
+export function tintTraps(src) {
+  const out = [];
+  const lines = stripComments(src).split('\n');
+  lines.forEach((line0, ln) => {
+    let line = line0;
+    for (let it = 0; it < 4; it++) line = line.replace(/\b(array|vec[234]|mat[234]x[234]|ptr|atomic|var|bitcast|texture_[a-z_0-9]+)<[^<>]*>/g, '$1');
+    const toks = line.match(/<<=|>>=|<<|>>|&&|\|\||==|!=|<=|>=|->|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|\+\+|--|[A-Za-z_][A-Za-z0-9_]*|[0-9][0-9a-zA-Z_.]*|\S/g) || [];
+    const stack = [new Set()];
+    let prevOperand = false;
+    const check = set => {
+      const ops = [...set];
+      const bit = ops.filter(o => o === '&' || o === '|' || o === '^');
+      const sh = ops.filter(o => o === '<<' || o === '>>');
+      if (bit.length && ops.some(o => o !== bit[0])) out.push(`${ln + 1}: mixed ${ops.join(' ')}`);
+      if (sh.length && ops.some(o => ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>'].includes(o) && o !== sh[0])) out.push(`${ln + 1}: shift mixed ${ops.join(' ')}`);
+      if (set.has('&&') && set.has('||')) out.push(`${ln + 1}: && with ||`);
+    };
+    for (const t of toks) {
+      if (t === '(' || t === '[') { stack.push(new Set()); prevOperand = false; continue; }
+      if (t === ')' || t === ']') { check(stack.pop()); prevOperand = true; continue; }
+      if ([',', ';', '{', '}', '=', '->', ':', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>='].includes(t)) {
+        check(stack[stack.length - 1]); stack[stack.length - 1] = new Set(); prevOperand = false; continue;
+      }
+      if (/^[A-Za-z_0-9]/.test(t)) { prevOperand = !['return', 'let', 'var', 'if', 'else', 'for', 'while', 'loop', 'const'].includes(t); continue; }
+      if (['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '&&', '||', '<', '>', '<=', '>=', '==', '!='].includes(t)) {
+        if (prevOperand) {
+          const set = stack[stack.length - 1];
+          if ((t === '<<' || t === '>>') && (set.has('<<') || set.has('>>'))) out.push(`${ln + 1}: chained shift`);
+          set.add(t);
+        }
+        prevOperand = false; continue;
+      }
+      prevOperand = false;
+    }
+    while (stack.length) check(stack.pop());
+  });
+  return out;
+}
+
+const RESERVED = ('NULL Self abstract active alignas alignof as asm asm_fragment async attribute auto await become cast catch class co_await co_return co_yield coherent column_major common compile compile_fragment concept const_cast consteval constexpr constinit crate debugger decltype delete demote demote_to_helper do dynamic_cast enum explicit export extends extern external fallthrough filter final finally friend from fxgroup get goto groupshared highp impl implements import inline instanceof interface layout lowp macro macro_rules match mediump meta mod module move mut mutable namespace new nil noexcept noinline nointerpolation noperspective null nullptr of operator package packoffset partition pass patch pixelfragment precise precision premerge priv protected pub public readonly ref regardless register reinterpret_cast require resource restrict self set shared sizeof smooth snorm static static_assert static_cast std subroutine super target template this thread_local throw trait try type typedef typeid typename typeof union unless unorm unsafe unsized use using varying virtual volatile wgsl where with writeonly yield').split(' ');
+
+function fakeDevice(log) {
+  const mkBuf = d => ({
+    size: d.size, usage: d.usage, label: d.label, state: 'unmapped', content: new Float32Array(Math.ceil(d.size / 4)),
+    destroy() { this.destroyed = true; },
+    mapAsync() { log.maps.push({ label: this.label, frame: log.frame }); this.state = 'mapped'; return Promise.resolve(); },
+    getMappedRange() { return this.content.buffer; },
+    unmap() { this.state = 'unmapped'; },
+  });
+  return {
+    createBuffer(d) { const b = mkBuf(d); log.buffers.push(b); return b; },
+    createShaderModule(d) { log.modules.push(d.code); return { code: d.code, getCompilationInfo: async () => ({ messages: [] }) }; },
+    createBindGroupLayout(d) { return { entries: d.entries }; },
+    createPipelineLayout(d) { return d; },
+    createBindGroup(d) {
+      const a = d.entries.map(e => e.binding).join(), b = d.layout.entries.map(e => e.binding).join();
+      if (a !== b || d.entries.some(e => !e.resource.buffer)) log.errors.push(`bind group ${d.label}: ${a} vs ${b}`);
+      for (const e of d.entries) {
+        const want = d.layout.entries.find(x => x.binding === e.binding).buffer.type === 'uniform' ? 0x40 : 0x80;
+        if (!(e.resource.buffer.usage & want)) log.errors.push(`binding ${e.binding} usage`);
+      }
+      return d;
+    },
+    async createComputePipelineAsync(d) {
+      if (!new RegExp(`@compute[^\\n]*\\n\\s*fn ${d.compute.entryPoint}\\(`).test(d.compute.module.code)) log.errors.push(`no entry ${d.compute.entryPoint}`);
+      return { entry: d.compute.entryPoint };
+    },
+    createCommandEncoder() {
+      return {
+        beginComputePass() {
+          let cur = null;
+          return { setPipeline(p) { cur = p; }, setBindGroup() {}, dispatchWorkgroups(x, y = 1) { if (x > 65535 || y > 65535) log.errors.push('dispatch > 65535'); log.dispatch.push(cur.entry); }, end() {} };
+        },
+        copyBufferToBuffer(src, _so, dst, _dof, size) {
+          if (dst.state !== 'unmapped') log.errors.push('copy into a mapped buffer');
+          dst.content.set(src.content.subarray(0, size / 4)); log.copies.push({ frame: log.frame, label: dst.label });
+        },
+        clearBuffer(b) { b.content.fill(0); },
+        finish() { return {}; },
+      };
+    },
+    queue: { writeBuffer() { log.writes++; }, submit() { log.submits++; } },
+  };
+}
+
+async function gpuTests(ok) {
+  // ── WGSL: naga, Tint traps, reserved words, layouts ──
+  const common = readPage(`shaders/${COMMON_FILE}`);
+  const naga = join(homedir(), '.cargo/bin/naga');
+  const tmp = mkdtempSync(join(tmpdir(), 'tc-sim-'));
+  const files = [COMMON_FILE, ...Object.values(SHADER_FILES)];
+  ok('sim wgsl: every sim shader file exists', files.every(f => existsSync(new URL(`shaders/${f}`, page))));
+  const composed = {};
+  for (const [mod, file] of Object.entries(SHADER_FILES)) composed[mod] = common + '\n' + readPage(`shaders/${file}`);
+  if (existsSync(naga)) {
+    for (const [name, code] of [['common', common], ...Object.entries(composed)]) {
+      const f = join(tmp, `${name}.wgsl`);
+      writeFileSync(f, code);
+      let msg = '';
+      try { msg = execFileSync(naga, [f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { msg = 'ERROR ' + (e.stderr || e.message); }
+      ok(`sim wgsl: naga validates ${name === 'common' ? COMMON_FILE : 'common + ' + SHADER_FILES[name]}`, /Validation successful/.test(msg), msg.trim().split('\n').slice(-3).join(' | '));
+    }
+  } else ok('sim wgsl: ~/.cargo/bin/naga is present', false, 'naga missing: WGSL not validated');
+  for (const f of files) {
+    const traps = tintTraps(readPage(`shaders/${f}`));
+    ok(`sim wgsl: no Tint operator-mix traps in ${f}`, traps.length === 0, traps.slice(0, 4).join('; '));
+    const ids = new Set(stripComments(readPage(`shaders/${f}`)).match(/[A-Za-z_][A-Za-z0-9_]*/g));
+    const bad = RESERVED.filter(w => ids.has(w));
+    ok(`sim wgsl: no WGSL reserved words as names in ${f}`, bad.length === 0, bad.join(' '));
+  }
+  ok('sim wgsl: tintTraps catches a ^ b * c, a << b + c and a && b || c',
+    tintTraps('let x = a ^ b * c;').length > 0 && tintTraps('let x = a << b + c;').length > 0 && tintTraps('if (a && b || c) {}').length > 0
+    && tintTraps('let x = (a ^ b) * c; let y = (s >> ((s >> 28u) + 4u)) ^ s;').length === 0);
+  // struct Prm order
+  const body = common.match(/struct Prm \{([^}]*)\}/)[1];
+  const fields = [...body.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(u32|f32)/g)].map(m => [m[1], m[2] === 'u32' ? 'u' : 'f']);
+  ok('sim wgsl: struct Prm matches gpu.js UNIFORM_FIELDS (names, types, order)', JSON.stringify(fields) === JSON.stringify(UNIFORM_FIELDS), `${fields.length} vs ${UNIFORM_FIELDS.length}`);
+  ok('sim wgsl: the uniform is 144 bytes (a multiple of 16)', UNIFORM_FIELDS.length * 4 === 144);
+  for (const [mod, code] of Object.entries(composed)) {
+    const own = stripComments(readPage(`shaders/${SHADER_FILES[mod]}`));
+    const declared = new Map([...stripComments(code).matchAll(/@binding\((\d+)\)\s*var<(uniform|storage)/g)].map(m => [+m[1], m[2]]));
+    const need = [0, ...[...own.matchAll(/@binding\((\d+)\)/g)].map(m => +m[1])];
+    if (/velAt\(|vel\[/.test(own)) need.push(5);
+    const lay = LAYOUTS[mod];
+    ok(`sim wgsl: ${mod} layout = the bindings it uses, all declared`,
+      need.every(b => lay.includes(b)) && lay.every(b => need.includes(b) && declared.has(b)), `layout ${lay.join(',')} needs ${need.join(',')}`);
+    const storage = lay.filter(b => b !== 0).length;
+    ok(`sim wgsl: ${mod} uses <= 8 storage buffers and binding 0 is the uniform`, storage <= 8 && declared.get(0) === 'uniform', `${storage} storage`);
+    const wg = [...stripComments(code).matchAll(/@workgroup_size\((\d+)\)/g)].map(m => +m[1]);
+    ok(`sim wgsl: ${mod} workgroup sizes <= 256`, wg.length > 0 && wg.every(v => v <= 256), wg.join(','));
+    let wgBytes = 0;
+    for (const m of stripComments(code).matchAll(/var<workgroup>\s*\w+\s*:\s*([^;]+);/g)) {
+      const t = m[1].replace(/\s/g, '');
+      const a2 = t.match(/^array<array<f32,(\d+)>,(\d+)>$/), v2 = t.match(/^array<vec2f,(\d+)>$/);
+      if (a2) wgBytes += 4 * a2[1] * a2[2]; else if (v2) wgBytes += 8 * v2[1]; else wgBytes += 1e9;
+    }
+    ok(`sim wgsl: ${mod} workgroup memory <= 16 KB`, wgBytes <= 16384, `${wgBytes} B`);
+    ok(`sim wgsl: ${mod} has its entry points and no vertex stage`,
+      ENTRIES[mod].every(e => new RegExp(`@compute[^\\n]*\\n\\s*fn ${e}\\(`).test(code)) && !/@vertex/.test(code));
+  }
+  ok('sim wgsl: WGSL pcg / u01 match ref.js (spot values)', pcg(0) === 129708002 && u01(0xffffffff) < 1, `${pcg(0)} ${pcg(1)}`);
+
+  // ── gpu.js pure helpers ──
+  const r128 = radixCode(128), r96 = radixCode(96);
+  ok('sim gpu: radixCode packs the stages 4 bits each (128 = 4.4.4.2, 96 = 4.4.2.3)', r128.stages === 4 && r128.code === 0x2444 && r96.code === 0x3244);
+  const D = derived({ mode: 'pan', Ra: 300, Pr: 7, Ma: 120 }, { nx: 128, ny: 128, nz: 32 });
+  const ub = packUniform(D, { nx: 128, ny: 128, nz: 32 }, { dt: 0.05, frame: 7, seed: 3, tracerCount: 100 });
+  const u = new Uint32Array(ub), f = new Float32Array(ub), at = name => UNIFORM_FIELDS.findIndex(x => x[0] === name);
+  ok('sim gpu: packUniform writes the derived values at the struct offsets',
+    ub.byteLength === 144 && u[at('nh')] === 65 && u[at('specN')] === 65 * 128 * 32 && Math.abs(f[at('dt')] - 0.05) < 1e-7
+    && u[at('mode')] === 3 && u[at('topFree')] === 1 && Math.abs(f[at('maEff')] - 120 / Math.sqrt(2100)) < 1e-5 && u[at('kMid')] === 16 && u[at('frame')] === 7);
+  ok('sim gpu: cellGroups keeps each dispatch dimension <= 65535', cellGroups(524288).join() === '8192,1' && cellGroups(4 * 65536 * 64).every(v => v <= 65535));
+
+  // ── createSim on a fake device: buffers, bind groups, dispatch order, stats readback ──
+  const log = { buffers: [], modules: [], errors: [], dispatch: [], copies: [], maps: [], writes: 0, submits: 0, frame: 0 };
+  const loadText = async url => readFileSync(new URL(url), 'utf8');
+  const sim = await createSim(fakeDevice(log), { quality: 2, seed: 4, loadText });
+  const big = Math.max(...log.buffers.map(b => b.size));
+  ok('sim gpu: createSim builds 4 modules (common + file) and every bind group matches its layout',
+    log.modules.length === 4 && log.modules.every(c => c.startsWith(common)) && log.errors.length === 0, log.errors.join('; '));
+  ok('sim gpu: desktop dims and buffer sizes (largest < 128 MB, T f32 x n, vel vec4 x n)',
+    sim.dims.nx === 128 && sim.dims.nz === 32 && sim.dims.Lx === 4 && sim.dims.dx === 1 / 32 && big < 128 * 2 ** 20
+    && sim.buffers.T.size === 4 * 524288 && sim.buffers.vel.size === 16 * 524288 && sim.buffers.tracers.size >= 16 * 20000 && sim.tracerCount === 20000,
+    `largest ${(big / 2 ** 20).toFixed(1)} MB`);
+  ok('sim gpu: reset submits the start state and one vel pass', log.submits === 1 && log.dispatch.join() === 'velPass');
+  sim.set({ Ra: 1e5, mode: 'plate' });
+  const stOut = log.buffers.find(b => b.label === 'tc-stats');
+  const nxy = 128 * 128, n = nxy * 32;
+  // a crafted stats record: Nu 3, vmax 0.5, Tmean 0.5, ke 0.01, hot at column 130 (i 2, j 1)
+  stOut.content.set([2 * 0.01 * n, 0.5 * n, 3 * nxy, 0.25, 0.9, 130, 0.1, 5, 0.3, 129, 0, 0.6 * nxy]);
+  log.dispatch.length = 0; log.frame = 1;
+  const enc = () => fakeDevice(log).createCommandEncoder();
+  const plan1 = sim.step(enc(), 1 / 60);
+  const perSub = ['advA', 'advB', 'fwdX', 'fwdY', 'tri', 'invY', 'invX', 'tracerStep', 'velPass'];
+  ok('sim gpu: step encodes the substeps in ref.js order, then the stats pair',
+    plan1.n >= 1 && log.dispatch.join() === [...Array(plan1.n)].flatMap(() => perSub).concat(['statsA', 'statsB']).join(), log.dispatch.join(' '));
+  ok('sim gpu: the stats copy lands in a readback buffer, which is not mapped in the same frame',
+    log.copies.length === 1 && log.maps.length === 0);
+  log.frame = 2; log.dispatch.length = 0;
+  sim.step(enc(), 1 / 60);
+  await new Promise(r => setTimeout(r, 0));
+  const s2 = sim.stats();
+  ok('sim gpu: the next step maps the copy (mapAsync) and stats() parses it',
+    log.maps.length === 1 && log.maps[0].frame === 2 && Math.abs(s2.Nu - 3) < 1e-6 && Math.abs(s2.vmax - 0.5) < 1e-6 && Math.abs(s2.Tmean - 0.5) < 1e-6
+    && Math.abs(s2.hot[0] - 2.5 / 32) < 1e-9 && Math.abs(s2.hot[1] - 1.5 / 32) < 1e-9 && Math.abs(s2.Ttop[2] - 0.6) < 1e-6 && Math.abs(s2.ke - 0.01) < 1e-6,
+    JSON.stringify(s2));
+  ok('sim gpu: no stats pass within 250 ms of the last one (at most 4 Hz)', !log.dispatch.includes('statsA'));
+  log.dispatch.length = 0;
+  const plan3 = sim.step(enc(), 1 / 60);
+  ok('sim gpu: the CFL plan uses the read vmax (x 1.2): dt <= 0.7 dx / 0.6', plan3.dt <= (0.7 / 32) / 0.6 + 1e-12 && plan3.n >= 1, JSON.stringify(plan3));
+  sim.set({ speed: 0 }); log.dispatch.length = 0;
+  sim.step(enc(), 1 / 60);
+  ok('sim gpu: speed 0 encodes no substeps', !log.dispatch.includes('advA'));
+  stOut.content[0] = NaN; sim.set({ speed: 1 });
+  await new Promise(r => setTimeout(r, 300));
+  const subs0 = log.submits;
+  sim.step(enc(), 1 / 60); sim.step(enc(), 1 / 60);
+  await new Promise(r => setTimeout(r, 0));
+  ok('sim gpu: a NaN in the stats resets the field (counted in nanResets)', sim.stats().nanResets === 1 && log.submits > subs0 && sim.time < 0.2, `resets ${sim.stats().nanResets}`);
+  sim.setTracers(1e9);
+  ok('sim gpu: setTracers clamps to the buffer capacity', sim.tracerCount === sim.tracerCapacity);
+  sim.destroy();
+  ok('sim gpu: destroy releases every buffer that is not mid-map', log.buffers.filter(b => !/readback/.test(b.label)).every(b => b.destroyed));
 }
