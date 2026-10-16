@@ -10,7 +10,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   CLOUD_SHELL, CLOUD_MAP_BOUNDS, SKY_FLOATS, GP_FLOATS, cloudMapSize, fillNaN, packGridGPU, gridSlices, midCloud,
-  pcg, hash3, vnoise3, lowNoise, cirrusNoise, LOW_CELL, LOW_CELL_W, HIGH_SMEAR, LOW_Q, HIGH_Q, LOW_SOFT, HIGH_SOFT, coverThreshold, layerDensity,
+  pcg, hash3, vnoise3, lowNoise, cirrusNoise, LOW_FREQ, LOW_WARP, LOW_OCT, HIGH_SMEAR, detailErode, detailOctaves, DETAIL_F0, DETAIL_ROT, LOW_Q, HIGH_Q, LOW_SOFT, HIGH_SOFT, coverThreshold, layerDensity,
   flowPhases, packSky, createClouds,
 } from '../render/clouds.js';
 import {
@@ -206,6 +206,32 @@ export default async function (ok) {
   // map-scale cells are mesoscale (about 250 km); the draw pass adds the fine texture
   ok('sky: 50 % cover breaks into separate cells along 40 deg of longitude (10 or more)', runs >= 10, `${runs} cells`);
 
+  // draw-pass detail (detailErode, mirrored in fsCloud): nothing from far
+  // away, crisp edges and an opaque body close in, cirrus left thin
+  ok('sky: detail adds no octaves when a pixel is bigger than the map scale', detailOctaves(1 / DETAIL_F0) === 0 && detailErode(dir(45, -120), 0.4, 0, 0.01).op === 0.4);
+  ok('sky: detail octaves grow as the pixel shrinks, capped by quality', detailOctaves(2e-4) > 3 && detailOctaves(2e-4) < 4 && detailOctaves(1e-7) === 7 && detailOctaves(1e-7, 4) === 4);
+  {
+    // a smooth map ramp 0..1 over 0.4 deg, seen at 0.002 deg per pixel
+    let mapMid = 0, detMid = 0, thick = 1, mean0 = 0, mean1 = 0;
+    const foot = 0.002 * R, N = 400;
+    for (let i = 0; i < N; i++) for (let j = 0; j < 20; j++) {
+      const op = i / (N - 1), n = dir(40 + j * 0.05, -100 + op * 0.4), r = detailErode(n, op, 0, foot);
+      if (op > 0.1 && op < 0.9) mapMid++;
+      if (r.op > 0.1 && r.op < 0.9) detMid++;
+      mean0 += op; mean1 += r.op;
+      if (op >= 0.95) thick = Math.min(thick, r.op);
+    }
+    ok('sky: detail makes a smooth map edge crisp (half-cloud share at least halved)', detMid < mapMid * 0.5, `${(100 * detMid / mapMid).toFixed(1)} % of the map's`);
+    ok('sky: detail keeps thick cloud opaque (op 0.95 stays above 0.9)', thick > 0.9, thick.toFixed(3));
+    ok('sky: detail keeps the mean cover of an edge within 0.05 (no swelling on zoom)', Math.abs(mean1 - mean0) / (N * 20) < 0.05, ((mean1 - mean0) / (N * 20)).toFixed(3));
+    let cir = 1; for (let i = 0; i < 200; i++) cir = Math.min(cir, 0.3 - Math.abs(detailErode(dir(41, -99 + i * 0.002), 0.3, 1, foot).op - 0.3));
+    ok('sky: detail leaves pure cirrus thin (op 0.3 stays within 0.3 of 0.3)', cir >= 0, cir.toFixed(3));
+  }
+  const cwD = read('shaders/clouds.wgsl');
+  ok('sky: detail constants in WGSL match the JS mirror', cwD.includes('const CL_DETAIL_F0 = 220.0;') && DETAIL_F0 === 220
+    && cwD.includes(`mat3x3f(${[0, 3, 6, 1, 4, 7, 2, 5, 8].map(i => DETAIL_ROT[i].toFixed(DETAIL_ROT[i] % 1 ? 2 : 1).replace(/0$/, '').replace(/\.$/, '.0')).join(', ')})`)
+    && cwD.includes('let dc = clamp((d - 0.5) * 3.2, -1.0, 1.0);') && cwD.includes('let x = op + dc * 0.85 * k * (1.0 - 0.5 * cirrus0) * edge;') && cwD.includes('let c0 = mix(mix(0.1, 0.45, k), 0.1, cirrus0);'));
+
   const fp = flowPhases(0), fq = flowPhases(1), fr = flowPhases(2);
   ok('sky: flow weights sum to 1', [fp, fq, fr].every(f => near(f.w1 + f.w2, 1, 1e-12)));
   ok('sky: a flow phase restarts only at zero weight', near(fp.t1, 0, 1e-12) && near(fp.w1, 0, 1e-12) && near(fr.t2, 0, 1e-12) && near(fr.w2, 0, 1e-12), JSON.stringify([fp, fr]));
@@ -221,7 +247,7 @@ export default async function (ok) {
   ok('sky: CL_HIGH_Q in clouds.wgsl equals HIGH_Q', JSON.stringify(arr(cw, 'CL_HIGH_Q')) === JSON.stringify(HIGH_Q));
   ok('sky: soft edges in WGSL equal the JS values', cw.includes(`CL_LOW_SOFT = ${LOW_SOFT};`) && cw.includes(`CL_HIGH_SOFT = ${HIGH_SOFT};`));
   ok('sky: shell radii in WGSL equal the JS values', cw.includes(`CL_SHELL = ${CLOUD_SHELL};`) && fw.includes(`FD_SHELL = ${FIELD_SHELL};`));
-  ok('sky: noise constants in WGSL match the JS mirror', cw.includes('0.82 * cl_fbm(q * 24.0, 5)') && cw.includes('0.18 * (1.0 - min(cl_worley(q * 90.0)') && cw.includes('* 0.012)) * 30.0, 4') && LOW_CELL_W === 0.18 && LOW_CELL === 90 && HIGH_SMEAR === 0.012 && cw.includes('747796405u') && cw.includes('73856093u'));
+  ok('sky: noise constants in WGSL match the JS mirror', cw.includes('let p = q * 32.0;') && cw.includes('cl_fbm(p + w * 1.6, 4)') && cw.includes('vec3f(5.2, 1.3, 8.1)') && cw.includes('* 0.012)) * 30.0, 4') && LOW_FREQ === 32 && LOW_WARP === 1.6 && LOW_OCT === 4 && HIGH_SMEAR === 0.012 && cw.includes('747796405u') && cw.includes('73856093u'));
   const vec4s = (code, st) => { const m = code.match(new RegExp(`struct ${st} \\{([\\s\\S]*?)\\n\\}`)); if (!m) return -1; let n = 0; for (const l of m[1].split('\n')) { const a = l.match(/array<vec4f, (\d+)>/); if (a) n += +a[1]; else if (/:\s*vec4f/.test(l)) n++; } return n; };
   ok('sky: struct Sky is SKY_FLOATS / 4 vec4', vec4s(cw, 'Sky') * 4 === SKY_FLOATS, String(vec4s(cw, 'Sky')));
   ok('sky: struct Fld is FIELD_FLOATS / 4 vec4', vec4s(fw, 'Fld') * 4 === FIELD_FLOATS, String(vec4s(fw, 'Fld')));

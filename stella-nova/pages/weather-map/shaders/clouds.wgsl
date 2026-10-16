@@ -6,8 +6,8 @@
 //           Grid cover, Catmull-Rom in space and linear in time, sets where
 //           cloud is; flowing noise sets its texture. Writes outMap:
 //           r opacity, g precip 0..1, b cirrus opacity, a top height 0..1.
-//  fsCloud  full-screen pass, ray-traced against the shell CL_SHELL. Fine
-//           detail noise near the ground, top relief from map a, self-shadow
+//  fsCloud  full-screen pass, ray-traced against the shell CL_SHELL. Detail
+//           octaves from the map scale to the pixel footprint, top relief from map a, self-shadow
 //           toward the sun, warm terminator light, grazing-view thickening.
 //           Display-referred sRGB, premultiplied; writes frag_depth so the
 //           globe's depth hides the far side.
@@ -27,7 +27,7 @@ struct Sky {
   gridB: vec4f,    // nLat, nLon, point offset of slice k0, of slice k1
   timeA: vec4f,    // x slice mix u, y flow hours, z has grid, w opacity
   mapSize: vec4f,  // w, h, 1 / w, 1 / h
-  look: vec4f,     // x detail gain, y camera alt, z quality, w flow period (h)
+  look: vec4f,     // x detail gain, y camera alt (unused), z quality, w flow period (h)
 }
 
 struct GP { a: vec4f, b: vec4f }  // a: cloud, low, high, precip (mm / 3 h); b: u10, v10, t2m, snow
@@ -40,9 +40,13 @@ struct GP { a: vec4f, b: vec4f }  // a: cloud, low, high, precip (mm / 3 h); b: 
 
 const CL_SHELL = 1.0018;
 const CL_DEG_PER_H = 0.0324;  // degrees of latitude per hour at 1 m/s
-const CL_LOW_Q = array<f32, 17>(0.89, 0.6569, 0.6191, 0.5923, 0.5699, 0.5498, 0.5312, 0.5136, 0.4964, 0.4791, 0.4612, 0.4429, 0.4235, 0.4014, 0.3744, 0.338, 0.09);
+const CL_LOW_Q = array<f32, 17>(0.91, 0.6865, 0.6439, 0.6124, 0.5859, 0.5621, 0.5396, 0.5188, 0.4985, 0.478, 0.4564, 0.434, 0.41, 0.3836, 0.3528, 0.3102, 0.05);
 const CL_HIGH_Q = array<f32, 17>(0.89, 0.6451, 0.6132, 0.5895, 0.5691, 0.5505, 0.5334, 0.5168, 0.5002, 0.4839, 0.4673, 0.4499, 0.4311, 0.4106, 0.3865, 0.3529, 0.12);
 const CL_LOW_SOFT = 0.035;
+const CL_DETAIL_F0 = 220.0;  // detail start, cycles per radian (about 30 km)
+// rotation between detail octaves (render/clouds.js DETAIL_ROT), so the
+// value-noise lattice does not show as squares
+const CL_DETAIL_ROT = mat3x3f(0.0, -0.8, -0.6, 0.8, 0.36, -0.48, 0.6, -0.48, 0.64);
 const CL_HIGH_SOFT = 0.07;
 
 // ── noise (mirrors render/clouds.js) ──
@@ -103,8 +107,13 @@ fn cl_worley(p: vec3f) -> f32 {
   return sqrt(d);
 }
 
+// domain-warped fBm (render/clouds.js lowNoise): a 3-octave warp field at
+// half frequency moves the sample point by up to 0.8 noise cells
 fn cl_lowNoise(q: vec3f) -> f32 {
-  return 0.82 * cl_fbm(q * 24.0, 5) + 0.18 * (1.0 - min(cl_worley(q * 90.0), 1.0));
+  let p = q * 32.0;
+  let h = p * 0.5;
+  let w = vec3f(cl_fbm(h + vec3f(5.2, 1.3, 8.1), 3), cl_fbm(h + vec3f(9.7, 4.4, 2.6), 3), cl_fbm(h + vec3f(3.9, 7.1, 6.3), 3)) - 0.5;
+  return cl_fbm(p + w * 1.6, 4);
 }
 
 // five taps along the wind w (weights 0.1 0.2 0.4 0.2 0.1, step 0.012)
@@ -333,17 +342,43 @@ fn fsCloud(in: CV) -> CO {
   var op = m.r;
   if (op < 0.004) { discard; }
 
-  // fine detail when the camera is low: eroded edges and lumpy tops
-  let alt = S.look.y;
-  let dw = (1.0 - smoothstep(0.04, 0.7, alt)) * S.look.x;
+  // detail from the map scale down to the pixel footprint (render/clouds.js
+  // detailErode): a crisp fractal edge, an opaque body, texture on the tops
+  let mv0 = max(dot(n, -rd), 0.02);
+  let foot = t * length(cl_ray(in.pos.xy + vec2f(1.0, 0.0)) - rd) / max(sqrt(mv0), 0.3);
+  let maxOct = select(4.0, 7.0, S.look.z > 1.5);
+  let oc = clamp(log2(0.5 / max(foot, 1e-9) / CL_DETAIL_F0), 0.0, maxOct);
+  let cirrus0 = clamp(m.b / max(m.r, 1e-3), 0.0, 1.0);
   var bump = 0.0;
-  if (dw > 0.0) {
-    let drift = vec3f(S.timeA.y * 0.002, 0.0, S.timeA.y * 0.0013);
-    let d1 = cl_fbm(n * 700.0 + drift, select(2, 3, S.look.z > 1.5));
-    let d2 = cl_vnoise(n * 2600.0 + drift * 3.0);
-    let d = d1 * 0.75 + d2 * 0.25;
-    op = clamp(op + (d - 0.5) * dw * 2.4 * op * (1.0 - op * 0.6), 0.0, 1.0);
-    bump = (d - 0.5) * dw;
+  var shade = 1.0;
+  if (oc > 0.0) {
+    var pd = n * CL_DETAIL_F0 + vec3f(S.timeA.y * 0.3, 0.0, S.timeA.y * 0.2);
+    var amp = 0.5;
+    var s = 0.0;
+    var b = 0.0;
+    var nr = 0.0;
+    let nOct = i32(ceil(oc));
+    for (var i = 0; i < nOct; i++) {
+      let w = amp * min(1.0, oc - f32(i));
+      let v = cl_vnoise(pd);
+      s += w * v;
+      b += w * (1.0 - abs(2.0 * v - 1.0));
+      nr += w;
+      pd = (CL_DETAIL_ROT * pd) * 2.03;
+      amp *= 0.55;
+    }
+    let d = (0.6 * s + 0.4 * b) / nr;
+    let k = min(1.0, oc / 2.5) * min(S.look.x, 1.0);
+    let dc = clamp((d - 0.5) * 3.2, -1.0, 1.0);
+    let edge = pow(1.0 - min(op, 1.0), 0.8);
+    let x = op + dc * 0.85 * k * (1.0 - 0.5 * cirrus0) * edge;
+    let wd = mix(mix(0.1, 0.02, k), 0.15, cirrus0);
+    let c0 = mix(mix(0.1, 0.45, k), 0.1, cirrus0);
+    let cov = smoothstep(c0 - wd, c0 + wd, x);
+    let body = x + (smoothstep(0.35, 0.75, x) - x) * 0.85 * k * (1.0 - cirrus0);
+    shade = 1.0 + dc * 0.12 * k * min(op * 1.5, 1.0);
+    op = cov * clamp(body, 0.0, 1.0);
+    bump = dc * 0.5 * k;
   }
   if (op < 0.004) { discard; }
 
@@ -393,7 +428,7 @@ fn fsCloud(in: CV) -> CO {
   let cirrus = clamp(m.b / max(m.r, 1e-3), 0.0, 1.0);
   var alb = mix(vec3f(0.74, 0.76, 0.8), vec3f(0.97, 0.97, 0.98), smoothstep(0.2, 0.9, op));
   alb = mix(alb, vec3f(0.86, 0.9, 0.98), cirrus * 0.7);
-  var c = alb * lit;
+  var c = alb * lit * shade;
 
   // a slant view looks through more cloud: thicker, then hazier at the limb
   let mv = max(dot(n, -rd), 0.02);

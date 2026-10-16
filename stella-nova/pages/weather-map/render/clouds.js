@@ -14,7 +14,7 @@
 //  shaders/clouds.wgsl, core.encoderHooks) writes the cloud map: rgba16float,
 //  CLOUD_MAP_BOUNDS, row 0 = north edge. The coarse grid cover (total, low,
 //  high, precip; Catmull-Rom in space, linear in time) sets where the clouds
-//  are. Noise sets how they look: fBm plus Worley cells for low and middle
+//  are. Noise sets how they look: domain-warped fBm for low and middle
 //  cloud, wind-stretched fBm for cirrus, cell puffs where it rains. The noise
 //  flows with the 10 m wind (two-phase flow, FLOW_PERIOD_H). A quantile table
 //  (LOW_Q, HIGH_Q) turns a cover fraction into a noise threshold, so the
@@ -24,8 +24,8 @@
 //    map g  precipitation 0..1 (1 - exp(-mm per 3 h / 2.5))
 //    map b  cirrus opacity
 //    map a  cloud-top height 0..1 (low 0.3, cirrus 0.95, storm tops 1)
-//  The draw pass (fsCloud) ray-traces the shell at CLOUD_SHELL, adds fine
-//  detail noise when the camera is low, bumps the tops from map a, casts
+//  The draw pass (fsCloud) ray-traces the shell at CLOUD_SHELL, adds detail
+//  octaves from the map scale down to the pixel size (detailErode), bumps the tops from map a, casts
 //  self-shadow toward the sun, tints the terminator and writes frag_depth.
 //
 //  The noise functions below mirror the WGSL (same integer hash), so node
@@ -36,7 +36,8 @@
 //  "export function midCloud", "export function pcg", "export function vnoise3",
 //  "export function fbm3", "export function worley3", "export function lowNoise",
 //  "export function cirrusNoise", "export const LOW_Q", "export function coverThreshold",
-//  "export function flowPhases", "export function packSky", "export function cloudMapSize"
+//  "export function flowPhases", "export function packSky", "export function cloudMapSize",
+//  "export function detailErode", "export function detailOctaves"
 // ============================================================================
 import { timeBracket } from '../data/grid.js';
 
@@ -155,14 +156,19 @@ export function worley3(x, y, z) {
   return Math.sqrt(d);
 }
 
-// Low and middle cloud texture at globe-space point q (unit sphere): fBm
-// clumps with a Worley cell texture (a strong Worley share gives evenly
-// spread round dots at low cover, which real cumulus fields do not show).
-export const LOW_FREQ = 24, LOW_CELL = 90, LOW_CELL_W = 0.18;
+// Low and middle cloud texture at globe-space point q (unit sphere):
+// domain-warped fBm. A 3-octave warp field moves the sample point, so the
+// clumps come out as curved bands, hooks and filaments, as in satellite
+// images. The finest octave is about 24 km (about 2 map texels), so the map has
+// no texel-size bubbles. The draw pass (fsCloud) adds the detail under that
+// scale, at the pixel size of the view.
+export const LOW_FREQ = 32, LOW_OCT = 4, LOW_WARP = 1.6, LOW_WARP_FREQ = 0.5;
 export function lowNoise(qx, qy, qz) {
-  const f = fbm3(qx * LOW_FREQ, qy * LOW_FREQ, qz * LOW_FREQ, 5);
-  const w = Math.min(worley3(qx * LOW_CELL, qy * LOW_CELL, qz * LOW_CELL), 1);
-  return (1 - LOW_CELL_W) * f + LOW_CELL_W * (1 - w);
+  const x = qx * LOW_FREQ, y = qy * LOW_FREQ, z = qz * LOW_FREQ, h = LOW_WARP_FREQ;
+  const wx = fbm3(x * h + 5.2, y * h + 1.3, z * h + 8.1, 3) - 0.5;
+  const wy = fbm3(x * h + 9.7, y * h + 4.4, z * h + 2.6, 3) - 0.5;
+  const wz = fbm3(x * h + 3.9, y * h + 7.1, z * h + 6.3, 3) - 0.5;
+  return fbm3(x + wx * LOW_WARP, y + wy * LOW_WARP, z + wz * LOW_WARP, LOW_OCT);
 }
 
 // Cirrus: fBm smeared along the wind direction w (unit, tangent at q) by
@@ -182,7 +188,7 @@ export function cirrusNoise(qx, qy, qz, wx, wy, wz) {
 // i / 16 of points exceed (index 0: nothing exceeds, 16: everything does).
 // Measured from lowNoise / cirrusNoise over the sphere (tests/sky.test.mjs
 // checks the cloudy share against the cover). Keep in step with clouds.wgsl.
-export const LOW_Q = [0.89, 0.6569, 0.6191, 0.5923, 0.5699, 0.5498, 0.5312, 0.5136, 0.4964, 0.4791, 0.4612, 0.4429, 0.4235, 0.4014, 0.3744, 0.338, 0.09];
+export const LOW_Q = [0.91, 0.6865, 0.6439, 0.6124, 0.5859, 0.5621, 0.5396, 0.5188, 0.4985, 0.478, 0.4564, 0.434, 0.41, 0.3836, 0.3528, 0.3102, 0.05];
 export const HIGH_Q = [0.89, 0.6451, 0.6132, 0.5895, 0.5691, 0.5505, 0.5334, 0.5168, 0.5002, 0.4839, 0.4673, 0.4499, 0.4311, 0.4106, 0.3865, 0.3529, 0.12];
 export const LOW_SOFT = 0.035, HIGH_SOFT = 0.07;
 
@@ -193,6 +199,43 @@ export function coverThreshold(table, cover) {
 }
 
 const smoothstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// Draw-pass detail (mirrors fsCloud in clouds.wgsl). The map stops at about
+// 30 km (DETAIL_F0 cycles per radian), so fsCloud adds octaves from there
+// down to the pixel footprint `foot` (radians on the globe): none from far
+// away, up to `maxOct` (7, or 4 at low quality) close in. With k, the share
+// of resolved detail (0..1), the edge gets eroded into a crisp, fractal
+// boundary and the body moves toward opaque; cirrus stays soft and thin.
+// The edge threshold rises with k (0.1 to 0.45), so the mean opacity of an
+// edge stays about the same at every zoom (tests/sky.test.mjs).
+// n is the unit globe point, op the map opacity, cirrus the cirrus share.
+// Returns { op, shade, bump }: shade multiplies the light (top texture),
+// bump tilts the normal.
+export const DETAIL_F0 = 220, DETAIL_ROT = [0.0, 0.8, 0.6, -0.8, 0.36, -0.48, -0.6, -0.48, 0.64];
+export function detailOctaves(foot, maxOct = 7) {
+  return Math.min(maxOct, Math.max(0, Math.log2(0.5 / Math.max(foot, 1e-9) / DETAIL_F0)));
+}
+export function detailErode(n, op, cirrus, foot, maxOct = 7, gain = 1, drift = [0, 0, 0]) {
+  const oc = detailOctaves(foot, maxOct);
+  if (oc <= 0 || op < 0.004) return { op, shade: 1, bump: 0 };
+  const R = DETAIL_ROT;
+  let px = n[0] * DETAIL_F0 + drift[0], py = n[1] * DETAIL_F0 + drift[1], pz = n[2] * DETAIL_F0 + drift[2];
+  let a = 0.5, s = 0, b = 0, nr = 0;
+  for (let i = 0; i < Math.ceil(oc); i++) {
+    const w = a * Math.min(1, oc - i), v = vnoise3(px, py, pz);
+    s += w * v; b += w * (1 - Math.abs(2 * v - 1)); nr += w;
+    const qx = R[0] * px + R[1] * py + R[2] * pz, qy = R[3] * px + R[4] * py + R[5] * pz, qz = R[6] * px + R[7] * py + R[8] * pz;
+    px = qx * 2.03; py = qy * 2.03; pz = qz * 2.03; a *= 0.55;
+  }
+  const d = (0.6 * s + 0.4 * b) / nr, k = Math.min(1, oc / 2.5) * Math.min(gain, 1);
+  const dc = Math.max(-1, Math.min(1, (d - 0.5) * 3.2));
+  const edge = Math.pow(1 - Math.min(op, 1), 0.8);
+  const x = op + dc * 0.85 * k * (1 - 0.5 * cirrus) * edge;
+  const wd = mix(mix(0.1, 0.02, k), 0.15, cirrus), c0 = mix(mix(0.1, 0.45, k), 0.1, cirrus);
+  const cov = smoothstep(c0 - wd, c0 + wd, x);
+  const body = x + (smoothstep(0.35, 0.75, x) - x) * 0.85 * k * (1 - cirrus);
+  return { op: cov * Math.min(1, Math.max(0, body)), shade: 1 + dc * 0.12 * k * Math.min(op * 1.5, 1), bump: dc * 0.5 * k };
+}
 // density of a cloud layer at noise value n for cover c
 export function layerDensity(table, soft, cover, n) {
   const thr = coverThreshold(table, cover);
