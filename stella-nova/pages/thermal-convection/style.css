@@ -210,8 +210,9 @@ html.in-frame #physics{padding-top:20px}
 }
 
 /* LANDSCAPE phone. The panel is a drawer on the right; the dock is a tab at
-   the lower left; the topbar is hidden. */
-@media (max-height:500px) and (orientation:landscape){
+   the lower left; the topbar is hidden. The query is a subset of PHONE, so a
+   short desktop window (no dock, #physics on the right) keeps its columns. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse), (max-height:500px) and (orientation:landscape) and (max-width:768px){
   :root{--top-h:0px}
   .topbar{display:none}
   #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}

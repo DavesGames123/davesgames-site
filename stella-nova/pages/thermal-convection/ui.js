@@ -156,7 +156,8 @@ export function presetParts(PRESETS, DEFAULTS, id) {
 // Overlay margins in CSS px from overlay boxes [{left, top, right, bottom}].
 // A box wider than tall (relative to the frame) covers the top or the
 // base; any other box covers a side. A box counts only when it spans half
-// of that edge or more, so a small corner box does not move the views.
+// of that edge or more (30 % for a bar that touches the top or the base),
+// so a small corner box does not move the views.
 export function occlusionOf(boxes, w, h) {
   const o = { l: 0, r: 0, t: 0, b: 0 };
   for (const q of boxes) {
@@ -166,7 +167,10 @@ export function occlusionOf(boxes, w, h) {
     if (x1 - x0 < 1 || y1 - y0 < 1) continue;
     const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
     if (fw >= fh) {
-      if (fw < 0.5) continue;
+      // A bar on the top or base edge counts from 30 % of the width: the
+      // status bar between the two side columns is 47 % of a 1280 px frame.
+      const edge = y0 <= 1 || y1 >= h - 1;
+      if (fw < (edge ? 0.3 : 0.5)) continue;
       if (y0 + y1 > h) o.b = Math.max(o.b, h - y0); else o.t = Math.max(o.t, y1);
     } else {
       if (fh < 0.5) continue;
