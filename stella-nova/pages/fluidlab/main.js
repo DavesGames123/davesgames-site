@@ -61,6 +61,7 @@
 //      input .............. "INPUT"            pointer events: drag, draw, stir
 //      ui list ............ "rebuildList"      object cards + sliders
 //      presets ............ "function preset"  scene setups
+//      randomizer ......... "RANDOMIZER"       random scenes, splash bursts, dice, keys
 //      loop ............... "function loop"    rAF: step + display + FPS
 //      screensaver ........ "window.snSaver"   shell saver hook (lib/screensaver.js)
 //      saver plate ........ "function saverPlate" label plate: equations + live values
@@ -187,8 +188,9 @@ function setCmap(i){SIM.cmap=i;document.querySelectorAll('.cmap-btn').forEach(b=
 
 // Object factories. An emitter injects velocity and dye (jet=directional line,
 // point=omni, vortex=swirl); a shape is a rigid barrier with size and physics.
+// An emitter's wander (radians) swings its angle at wf rad/s; wt is the phase.
 /* ═══ OBJECTS ═══ */
-function createEmitter(t,x,y){return{id:nextId++,kind:'emitter',type:t,x,y,angle:0,strength:t==='jet'?200:80,mult:1,width:t==='jet'?0.04:0.06,spin:0,dyeR:Math.random()*.7+.3,dyeG:Math.random()*.7+.3,dyeB:Math.random()*.7+.3,active:true};}
+function createEmitter(t,x,y){return{id:nextId++,kind:'emitter',type:t,x,y,angle:0,strength:t==='jet'?200:80,mult:1,width:t==='jet'?0.04:0.06,spin:0,wander:0,wf:0.6,wt:Math.random()*6.283,dyeR:Math.random()*.7+.3,dyeG:Math.random()*.7+.3,dyeB:Math.random()*.7+.3,active:true};}
 function createShape(t,x,y){const s={id:nextId++,kind:'shape',type:t,x,y,angle:0,spin:0,fixed:true,vx:0,vy:0,va:0,mass:2,w:60,h:60,teeth:10,points:5};
   if(t==='rect'){s.w=80;s.h=30;}if(t==='airfoil'){s.w=100;s.h=24;}if(t==='wedge'){s.w=60;s.h=50;}if(t==='gear'){s.w=70;s.h=70;}if(t==='star'){s.w=70;s.h=70;}if(t==='tesla'){s.w=160;s.h=60;}return s;}
 
@@ -244,6 +246,9 @@ function sampleVelocityAt(wx,wy){
 function integrateShapes(){
   for(const s of shapes){if(s.spin!==0&&s!==dragObj)s.angle+=s.spin*deltaTime;}
   for(const e of emitters){if(e.spin!==0&&e!==dragObj)e.angle+=e.spin*deltaTime;}
+  // Wander: add the rate of wander*sin(wt), so the angle swings round wherever
+  // the angle slider or a drag left it.
+  for(const e of emitters){if(e.wander>0&&e!==dragObj){e.wt+=e.wf*deltaTime;e.angle+=e.wander*e.wf*Math.cos(e.wt)*deltaTime;}}
   for(const s of shapes){
     if(s.fixed||s===dragObj)continue;
     const[fvx,fvy]=sampleVelocityAt(s.x,s.y);
@@ -618,8 +623,8 @@ function bindSlider(inp, obj, prop, kind) {
 }
 
 // Rebuild the object panel: one card per emitter and shape, sorted by id, each
-// with type-specific sliders (strength/width, size, spin, colour) and its
-// duplicate/delete/fixed controls wired up.
+// with type-specific sliders (strength/width, size, spin, wander, colour) and
+// its randomize/duplicate/delete/fixed controls wired up.
 function rebuildList(){
   const list=document.getElementById('obj-list');list.innerHTML='';
   const eI={jet:'▸',point:'◉',vortex:'◎'},sI={circle:'●',rect:'▬',airfoil:'◗',wedge:'◣',gear:'⚙',star:'★',tesla:'⇌'};
@@ -640,7 +645,7 @@ function rebuildList(){
       SIM.selectedId=capturedId;SIM.selectedType=capturedKind;rebuildList();
     });
 
-    let head=`<div class="obj-card-head"><span class="obj-card-name">${isE?'Emitter':'Shape'} · ${obj.type}</span><button class="obj-card-dup" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:2px 4px" title="Duplicate">⧉</button><button class="obj-card-del">✕</button></div>`;
+    let head=`<div class="obj-card-head"><span class="obj-card-name">${isE?'Emitter':'Shape'} · ${obj.type}</span><button class="obj-card-dup" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:2px 4px" title="Duplicate">⧉</button><button class="obj-card-rnd" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.8rem;padding:2px 4px" title="Randomize">⚄</button><button class="obj-card-del">✕</button></div>`;
     let rows='';
     if(isE){
       const curMult=obj.mult||1;
@@ -651,6 +656,7 @@ function rebuildList(){
         +`<div class="mag-row"><span class="mag-row-lbl">Width</span><input type="range" data-p="width" min="0.01" max="0.35" value="${obj.width}" step="0.005"><span class="val">${obj.width.toFixed(2)}</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" data-p="angle" min="-3.14159" max="3.14159" value="${obj.angle}" step="0.05"><span class="val">${(obj.angle*180/Math.PI).toFixed(0)}°</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" data-p="spin" min="-12" max="12" value="${obj.spin}" step="0.25"><span class="val">${obj.spin.toFixed(1)}</span></div>`
+        +`<div class="mag-row"><span class="mag-row-lbl">Wander</span><input type="range" data-p="wander" min="0" max="1.5" value="${obj.wander||0}" step="0.05"><span class="val">${(obj.wander||0).toFixed(2)}</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Color</span><input type="color" data-p="color" value="${'#'+(1<<24|((obj.dyeR*255|0)<<16)|((obj.dyeG*255|0)<<8)|(obj.dyeB*255|0)).toString(16).slice(1)}" style="flex:1;height:22px;border:1px solid var(--border-b);background:transparent;cursor:pointer"><span class="val" style="min-width:0"></span></div>`;
     } else {
       rows=`<div class="mag-row"><span class="mag-row-lbl">Width</span><input type="range" data-p="w" min="10" max="250" value="${obj.w}" step="2"><span class="val">${obj.w}</span></div>`
@@ -691,6 +697,9 @@ function rebuildList(){
 
     const delBtn=c.querySelector('.obj-card-del');
     if(delBtn) delBtn.addEventListener('click', function(){removeObj(capturedId,capturedKind);});
+
+    const rndBtn=c.querySelector('.obj-card-rnd');
+    if(rndBtn) rndBtn.addEventListener('click', function(){randomizeObj(capturedId,capturedKind);});
 
     const dupBtn=c.querySelector('.obj-card-dup');
     if(dupBtn) dupBtn.addEventListener('click', function(){duplicateObj(capturedId,capturedKind);});
@@ -738,6 +747,83 @@ function preset(name){clearAll();
   else if(name==='jet'){const e1=createEmitter('jet',CW*.15,CH/2);e1.strength=300;e1.width=.02;e1.dyeR=1;e1.dyeG=.3;e1.dyeB=.1;emitters.push(e1);const e2=createEmitter('jet',CW*.15,CH*.35);e2.angle=.3;e2.strength=250;e2.width=.015;e2.dyeR=.1;e2.dyeG=.5;e2.dyeB=1;emitters.push(e2);const e3=createEmitter('jet',CW*.15,CH*.65);e3.angle=-.3;e3.strength=250;e3.width=.015;e3.dyeR=.2;e3.dyeG=1;e3.dyeB=.3;emitters.push(e3);}
   barrierDirty=true;rebuildList();}
 
+// Random scenes. RND holds the generator settings: layout, palette scheme,
+// emitter and shape counts, and chaos (0..1). Chaos raises the share of
+// spinning, wandering and dynamic objects and widens every random range.
+// splash() fires dye bursts; RND.auto fires them by itself every 0.7-2.2 s.
+/* ═══ RANDOMIZER ═══ */
+const RND={layout:'any',palette:'any',emitters:4,shapes:2,chaos:0.5,auto:false,autoT:0};
+const RND_LAYOUTS=['scatter','ring','crossfire','mirror','rain','whirlpool'];
+const RND_SCHEMES=['analogous','complement','triad','rainbow','mono'];
+// n dye colours (rgb 0..1) of one scheme round a random base hue.
+function rndColours(n,scheme){const r=Math.random,base=r()*360,sc=scheme==='any'?RND_SCHEMES[Math.floor(r()*RND_SCHEMES.length)]:scheme,out=[];
+  for(let i=0;i<n;i++){const f=n>1?i/(n-1):0.5;let h=base,l=0.55;
+    if(sc==='analogous')h=base+(f-0.5)*80;else if(sc==='complement')h=base+(i%2)*180+(r()-0.5)*20;else if(sc==='triad')h=base+(i%3)*120+(r()-0.5)*16;else if(sc==='rainbow')h=base+i/n*360;else{h=base+(r()-0.5)*14;l=0.35+0.3*f;}
+    out.push(saverHsl(h,0.75+r()*0.2,l));}
+  return out;}
+// Random strength, width, spin and wander for an emitter of its type.
+function rndEmitterParams(e,ch){const r=Math.random;
+  if(e.type==='jet'){e.strength=Math.round((60+r()*200)*(0.7+ch*0.6));e.width=+(0.015+r()*(0.03+ch*0.05)).toFixed(3);}
+  else if(e.type==='vortex'){e.strength=Math.round(40+r()*(80+ch*120));e.width=+(0.04+r()*0.08).toFixed(3);}
+  else{e.strength=Math.round(60+r()*100);e.width=+(0.025+r()*0.04).toFixed(3);}
+  e.mult=1;e.spin=e.type==='jet'&&r()<ch*0.3?(r()<0.5?-1:1)*Math.round((0.3+r()*1.5)*4)/4:0;
+  e.wander=r()<0.25+ch*0.6?Math.round((0.15+r()*(0.2+ch*0.8))*20)/20:0;e.wf=0.3+r()*0.9;e.wt=r()*6.283;}
+// Random size, angle, spin, teeth/points and fixed/dynamic for a shape.
+function rndShapeParams(s,ch){const r=Math.random,sz=Math.min(CW,CH)*(0.07+r()*0.1);
+  s.w=sz;s.h=sz;if(s.type==='rect'){s.w=sz*(1+r()*1.5);s.h=sz*(0.2+r()*0.4);}else if(s.type==='airfoil'){s.w=sz*2.2;s.h=sz*0.5;}else if(s.type==='wedge'){s.w=sz*1.1;s.h=sz*0.9;}else if(s.type==='tesla'){s.w=sz*2.4;s.h=sz*0.9;}
+  s.w=Math.round(Math.max(10,Math.min(250,s.w)));s.h=Math.round(Math.max(10,Math.min(250,s.h)));
+  s.angle=(r()-0.5)*6.283;s.teeth=6+Math.floor(r()*11);s.points=3+Math.floor(r()*6);
+  const spinny=s.type==='gear'||s.type==='star'||s.type==='rect';s.spin=r()<ch*(spinny?0.7:0.25)?(r()<0.5?-1:1)*Math.round((0.4+r()*2.2)*4)/4:0;
+  s.fixed=!(s.spin===0&&r()<ch*0.4);s.vx=s.vy=s.va=0;}
+// Build a new random scene from RND. Layouts:
+//   scatter    emitters of any type anywhere, any angle
+//   ring       jets on a ring, all pushing round it one way
+//   crossfire  jets on the edges, aimed near the centre
+//   mirror     jet pairs mirrored left/right, shapes on the centre line
+//   rain       jets from the top and bottom edges, pushing across
+//   whirlpool  one big vortex fed by jets aimed round it
+// Shapes go where no other object is (30 tries), at most 2 of them dynamic,
+// because each dynamic shape reads the velocity back every frame.
+function randomScene(){const r=Math.random,ch=RND.chaos,n=Math.max(1,Math.min(MAX_E,RND.emitters|0)),
+    lay=RND.layout==='any'?RND_LAYOUTS[Math.floor(r()*RND_LAYOUTS.length)]:RND.layout,cols=rndColours(n,RND.palette),hand=r()<0.5?-1:1,
+    cx=CW/2,cy=CH/2,R=Math.min(CW,CH),M=R*0.05,jit=()=>(r()-0.5)*ch;
+  clearAll();
+  const add=(type,x,y,a,i)=>{if(emitters.length>=MAX_E)return null;const e=createEmitter(type,Math.max(M,Math.min(CW-M,x)),Math.max(M,Math.min(CH-M,y)));
+    rndEmitterParams(e,ch);e.angle=Math.atan2(Math.sin(a),Math.cos(a));const c=cols[i%cols.length];e.dyeR=c[0];e.dyeG=c[1];e.dyeB=c[2];emitters.push(e);return e;};
+  const pick=()=>{const q=r();return q<0.7-ch*0.2?'jet':q<0.93?'vortex':'point';};
+  if(lay==='scatter'){for(let i=0;i<n;i++)add(pick(),CW*(0.1+r()*0.8),CH*(0.1+r()*0.8),r()*6.283,i);}
+  else if(lay==='ring'){const rad=R*(0.22+r()*0.14),ph0=r()*6.283;for(let i=0;i<n;i++){const ph=ph0+i/n*6.283+jit()*0.6;add('jet',cx+Math.cos(ph)*rad,cy+Math.sin(ph)*rad,ph+hand*Math.PI/2+jit()*1.2,i);}}
+  else if(lay==='crossfire'){for(let i=0;i<n;i++){const ed=Math.floor(r()*4),u=0.15+r()*0.7;let x,y;if(ed===0){x=M;y=CH*u;}else if(ed===1){x=CW-M;y=CH*u;}else if(ed===2){x=CW*u;y=M;}else{x=CW*u;y=CH-M;}
+    const tx=cx+jit()*R*0.5,ty=cy+jit()*R*0.5;add('jet',x,y,Math.atan2(ty-y,tx-x)+hand*(0.1+ch*0.4)*r(),i);}}
+  else if(lay==='mirror'){for(let i=0;emitters.length<n;i++){const x=CW*(0.06+r()*0.3),y=CH*(0.15+r()*0.7),a=(r()-0.5)*(0.5+ch*1.6),e=add('jet',x,y,a,i);if(!e||emitters.length>=n)break;
+    const m=add('jet',CW-x,y,Math.PI-a,i);if(m){m.strength=e.strength;m.width=e.width;m.spin=-e.spin;m.wander=e.wander;m.wf=e.wf;m.wt=e.wt+Math.PI;}}}
+  else if(lay==='rain'){for(let i=0;i<n;i++){const up=ch>0.6?r()<0.5:i%2===0,x=CW*(0.08+0.84*(i+0.5)/n)+jit()*CW*0.08;add('jet',x,up?CH-M:M,(up?-1:1)*Math.PI/2+jit()*0.8,i);}}
+  else{const v=add('vortex',cx+jit()*R*0.2,cy+jit()*R*0.2,0,0);if(v){v.width=+(0.12+r()*0.12).toFixed(3);v.strength=Math.round(80+r()*120);}
+    for(let i=1;i<n;i++){const ph=r()*6.283,rad=R*(0.3+r()*0.15),x=cx+Math.cos(ph)*rad*CW/R*0.9,y=cy+Math.sin(ph)*rad;add('jet',x,y,ph+hand*(Math.PI/2+0.3)+jit()*0.6,i);}}
+  const ST=['circle','circle','rect','airfoil','wedge','gear','star','tesla'];let dyn=0;
+  for(let i=0;i<Math.min(MAX_S,RND.shapes|0);i++){const t=ST[Math.floor(r()*ST.length)];let x=cx,y=cy;
+    for(let k=0;k<30;k++){x=lay==='mirror'?cx:CW*(0.18+r()*0.64);y=CH*(0.18+r()*0.64);if([...emitters,...shapes].every(o=>(o.x-x)**2+(o.y-y)**2>(R*0.14)**2))break;}
+    const s=createShape(t,x,y);rndShapeParams(s,ch);if(lay==='mirror'){s.angle=Math.PI/2;s.spin=0;}
+    if(!s.fixed&&dyn>=2)s.fixed=true;if(!s.fixed)dyn++;shapes.push(s);}
+  SIM.selectedId=-1;barrierDirty=true;rebuildList();document.getElementById('st-mode').textContent='scene '+lay;}
+// Fire n dye bursts: random place, direction, speed and radius, colours of
+// the RND palette. Mirror copies apply, as for a pointer stroke.
+function splash(n){const r=Math.random,cols=rndColours(Math.max(2,n),RND.palette);
+  for(let i=0;i<n;i++){const a=r()*6.283,v=(0.8+r()*1.6)*CH,c=cols[i%cols.length],k=0.5+r()*0.4;
+    mirrorSplat(CW*(0.1+r()*0.8),CH*(0.1+r()*0.8),0.025+r()*0.035,0,Math.cos(a)*v,Math.sin(a)*v,[c[0]*k,c[1]*k,c[2]*k]);}}
+// Recolour every emitter with a fresh palette.
+function shuffleColours(){const cols=rndColours(emitters.length,RND.palette);emitters.forEach((e,i)=>{const c=cols[i];e.dyeR=c[0];e.dyeG=c[1];e.dyeB=c[2];});rebuildList();}
+// The per-card dice: new random parameters, keeping the object's place.
+function randomizeObj(id,kind){if(kind==='emitter'){const e=emitters.find(o=>o.id===id);if(!e)return;rndEmitterParams(e,RND.chaos);e.angle=(Math.random()-0.5)*6.283;const c=rndColours(1,'any')[0];e.dyeR=c[0];e.dyeG=c[1];e.dyeB=c[2];}
+  else{const s=shapes.find(o=>o.id===id);if(!s)return;rndShapeParams(s,RND.chaos);if(!s.fixed&&shapes.filter(o=>!o.fixed).length>2)s.fixed=true;barrierDirty=true;}
+  rebuildList();}
+function toggleAutoSplash(on){RND.auto=on===undefined?!RND.auto:on;RND.autoT=0;const b=document.getElementById('tog-auto');b.className='tog-btn '+(RND.auto?'on':'off');b.textContent=RND.auto?'Auto splash on':'Auto splash off';}
+// Auto splash timer, run from loop() while playing.
+function autoSplash(){if(!RND.auto)return;RND.autoT-=deltaTime;if(RND.autoT<=0){RND.autoT=0.7+Math.random()*1.5;splash(1+Math.floor(Math.random()*3));}}
+// Keys: N = new scene, Space = splash. Off while typing in a field or in the saver.
+document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||document.documentElement.classList.contains('saver'))return;const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA')return;
+  if(e.key===' '){e.preventDefault();splash(6);}else if(e.key==='n'||e.key==='N')randomScene();});
+
 // The scene shown on first load: two opposing coloured jets and a central disc.
 function defaultSetup(){
   const e1=createEmitter('jet',40,CH*.42);e1.strength=100;e1.width=.06;e1.dyeR=.15;e1.dyeG=.5;e1.dyeB=1;emitters.push(e1);
@@ -749,7 +835,7 @@ function defaultSetup(){
 // simulation when playing, always display, and update the FPS/frame readouts.
 function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)/1000,.033);lastTime=now;fpsAccum+=deltaTime;fpsCount++;
   if(fpsAccum>=.5){document.getElementById('st-fps').textContent=Math.round(fpsCount/fpsAccum)+' fps';fpsAccum=0;fpsCount=0;}
-  if(SIM.playing){step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
+  if(SIM.playing){autoSplash();step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
 
 // Boot: create the overlay, wire pointer/touch events, size everything, draw the
 // colormap previews, then load the default scene and start the loop. The last
@@ -759,7 +845,9 @@ overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
 overlayCanvas.addEventListener('pointerdown',onDown);overlayCanvas.addEventListener('pointermove',onMove);overlayCanvas.addEventListener('pointerup',onUp);overlayCanvas.addEventListener('pointercancel',onUp);
 resize();renderCmapPreviews();
 setTimeout(()=>{defaultSetup();requestAnimationFrame(loop);},60);
-window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;window.setTool=setTool;window.setMirror=setMirror;window.toggleRainbow=toggleRainbow;window.setInkColor=setInkColor;
+window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;window.setTool=setTool;window.setMirror=setMirror;window.toggleRainbow=toggleRainbow;window.setInkColor=setInkColor;window.RND=RND;window.randomScene=randomScene;window.splash=splash;window.shuffleColours=shuffleColours;window.toggleAutoSplash=toggleAutoSplash;
+// Read-only test hook: the live object lists and the splat queue length.
+window.__fluidlab={get emitters(){return emitters},get shapes(){return shapes},get splats(){return splats.length},get pointers(){return pointers.size}};
 // Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI and
 // the outline overlay, makes #canvas-wrap fill the window (resize() then sizes
 // the buffer), and starts a director that opts.seed drives. A prewarm runs three
@@ -873,9 +961,9 @@ function saverPlate(R){if(!R.label)return;let jets=0,vort=0;for(const A of R.act
     eq:['∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u + f','∇·u = 0','∇²p = (ρ/Δt) ∇·w','u = w − (Δt/ρ) ∇p']});}catch(e){}}
 window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
-  const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
+  const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #quick-bar,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  resize();pointers.clear();splats=[];SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
+  resize();pointers.clear();splats=[];toggleAutoSplash(false);SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.gravity=false;SIM.viscosity=SAVER_NU;SIM.curl=0;SIM.dyeFade=0.997;SIM.bloom=0.25;setCmap(3);
   const R=saverStart(opts);window.__saverScene=R.scene+'/'+R.slots;
   const until=performance.now()+2400;(function pw(){if(performance.now()<until){for(let i=0;i<3;i++){step();frame++;}requestAnimationFrame(pw);}})();
   return{canvas,warmupMs:2500};},

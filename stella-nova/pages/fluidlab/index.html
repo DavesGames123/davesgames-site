@@ -13,7 +13,7 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. The fluid is solved and drawn by main.js on
    #sim-canvas; a 2D overlay canvas is added above it at runtime. This file
-   lays out the left control panel (colormap, pointer tool, emitters, shapes,
+   lays out the left control panel (colormap, randomizer, pointer tool, emitters, shapes,
    object list, barrier draw, presets, display, simulation) and the status bar. Most
    buttons call global handlers main.js exposes on window.
 
@@ -31,8 +31,9 @@
      ├──────────────┬────────────────────────────────────────────────────┤
      │ #panel       │ #canvas-wrap                                         │
      │  colormap    │   <canvas id=sim-canvas>  (overlay added on top)     │
+     │  randomize   │   #quick-bar: new scene · splash · #vec-btn          │
      │  pointer     │                                                      │
-     │  emitters    │   #vec-btn                                           │
+     │  emitters    │                                                      │
      │  shapes      │   #eq-panel  (Navier-Stokes, MathJax)                │
      │  #obj-list   │                                                      │
      │  draw/presets│                                                      │
@@ -62,6 +63,16 @@
       <button class="cmap-btn" data-cmap="2" onclick="setCmap(2)"><canvas></canvas><span class="cmap-label">Oceanic</span></button>
       <button class="cmap-btn active" data-cmap="3" onclick="setCmap(3)"><canvas></canvas><span class="cmap-label">Dye</span></button>
     </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Randomize</div>
+      <div class="sim-btns"><button class="sim-btn active" onclick="randomScene()">New scene</button><button class="sim-btn" onclick="splash(6)">Splash</button><button class="sim-btn" onclick="shuffleColours()">Recolour</button></div>
+      <div class="sel-row"><label class="mag-row-lbl" for="rnd-layout">Layout</label><select id="rnd-layout" onchange="RND.layout=this.value"><option value="any">Any</option><option value="scatter">Scatter</option><option value="ring">Ring</option><option value="crossfire">Crossfire</option><option value="mirror">Mirror</option><option value="rain">Rain</option><option value="whirlpool">Whirlpool</option></select></div>
+      <div class="sel-row"><label class="mag-row-lbl" for="rnd-palette">Palette</label><select id="rnd-palette" onchange="RND.palette=this.value"><option value="any">Any</option><option value="analogous">Analogous</option><option value="complement">Complement</option><option value="triad">Triad</option><option value="rainbow">Rainbow</option><option value="mono">Mono</option></select></div>
+      <div class="mag-row"><span class="mag-row-lbl">Emitters</span><input type="range" id="sl-rnd-e" min="1" max="12" value="4" step="1" oninput="RND.emitters=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">4</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Shapes</span><input type="range" id="sl-rnd-s" min="0" max="6" value="2" step="1" oninput="RND.shapes=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">2</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Chaos</span><input type="range" id="sl-rnd-c" min="0" max="1" value="0.5" step="0.05" oninput="RND.chaos=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(2)"><span class="val">0.50</span></div>
+      <button class="tog-btn off" id="tog-auto" onclick="toggleAutoSplash()">Auto splash off</button>
+      <div class="p-hint">Keys: N new scene, Space splash. The dice on an object card randomizes that object.</div>
+    </div>
     <div class="p-section"><div class="p-sec-lbl">Pointer</div>
       <div class="add-grid"><button class="add-btn active" data-tool="push" onclick="setTool('push')">Push</button><button class="add-btn" data-tool="swirl" onclick="setTool('swirl')">Swirl</button><button class="add-btn" data-tool="ink" onclick="setTool('ink')">Ink</button></div>
       <div class="mag-row" style="margin-top:8px"><span class="mag-row-lbl">Radius</span><input type="range" id="sl-splat" min="0.01" max="0.12" value="0.035" step="0.005" oninput="SIM.splatR=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(3)"><span class="val">0.035</span></div>
@@ -115,7 +126,7 @@
   </div></div>
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
   <div id="canvas-wrap"><canvas id="sim-canvas"></canvas>
-    <button id="vec-btn" onclick="SIM.showVectors=!SIM.showVectors;this.className=SIM.showVectors?'on':'';this.innerHTML=SIM.showVectors?'Vectors on':'Vectors';document.getElementById('tog-vectors').className='tog-btn '+(SIM.showVectors?'on':'off')">Vectors</button>
+    <div id="quick-bar"><button onclick="randomScene()">New scene</button><button onclick="splash(6)">Splash</button><button id="vec-btn" onclick="SIM.showVectors=!SIM.showVectors;this.className=SIM.showVectors?'on':'';this.innerHTML=SIM.showVectors?'Vectors on':'Vectors';document.getElementById('tog-vectors').className='tog-btn '+(SIM.showVectors?'on':'off')">Vectors</button></div>
     <section class="eq-panel collapsed" id="eq-panel"><div class="eq-head" id="eq-toggle"><span class="lbl">Stable fluids: Stam's operator splitting</span><span class="arrow">▼</span></div>
       <div class="eq-blocks"><div class="eq-block"><div class="eq-sublabel">Momentum</div><div class="eq-row" id="eq-mom"></div></div><div class="eq-block"><div class="eq-sublabel">Incompressibility</div><div class="eq-row" id="eq-cont"></div></div><div class="eq-block"><div class="eq-sublabel">Pressure Poisson</div><div class="eq-row" id="eq-pois"></div></div><div class="eq-block"><div class="eq-sublabel">Velocity correction</div><div class="eq-row" id="eq-corr"></div></div></div>
     </section>
