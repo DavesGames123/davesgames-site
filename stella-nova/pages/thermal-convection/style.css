@@ -1,0 +1,229 @@
+/* ============================================================================
+   THERMAL CONVECTION  ·  stylesheet (package UI)
+   ----------------------------------------------------------------------------
+   Dark frame, warm accent. Type comes from lib/sci.css (loaded first):
+   STIX Two Text for the site name and the headings, Inter for the
+   controls, the system mono for numbers only. Labels are sentence case.
+
+   WIDE SCREEN. #panel is a column on the left, #physics a column on the
+   right, #status a bar under the stage. The WebGPU canvas fills the
+   window, and main.js puts the views in the clear area between them.
+
+   PHONE (max-width 768px, or a short landscape touch screen). A dock at
+   the base holds the one-tap controls. In portrait #panel is a bottom
+   sheet over the dock, with two tabs: controls and equations (ui.js moves
+   #physics into the sheet). In landscape #panel is a drawer on the right.
+
+     grep -n 'TOKENS'     colours and sizes
+     grep -n 'PANEL'      the control column
+     grep -n 'PHYSICS'    the equations and explainer column
+     grep -n 'STATUS'     the readout bar and the colour bar
+     grep -n 'TOUCH'      44 px targets for any touch screen
+     grep -n 'PHONE'      the phone block (matches PHONE_Q in ui.js)
+     grep -n 'LANDSCAPE'  the landscape phone overrides
+     grep -n 'sn-saver'   the shell screensaver mode
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* TOKENS */
+:root{
+  --bg:#07080b; --bg2:#101217; --bg3:#161920; --ink:#e7e3dc; --dim:#958e84; --faint:#3a3631;
+  --line:rgba(240,200,160,0.10); --line-b:rgba(240,170,110,0.24);
+  --warm:#f2a65a; --cold:#6fb6ff;
+  --panel-w:300px; --phys-w:380px; --status-h:38px; --top-h:52px; --dock-h:0px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);overflow-x:hidden}
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:14px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top-h);z-index:30;display:flex;align-items:center;gap:16px;padding:0 16px 0 20px;pointer-events:none}
+.topbar > *{pointer-events:auto}
+.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#f1ece4}
+.pagetitle{font-size:0.82rem;color:var(--dim)}
+.topbar #saverBtn{margin-left:auto}
+html.in-frame .topbar{display:none}
+.pill{height:32px;padding:0 14px;border:1px solid var(--line-b);border-radius:16px;background:rgba(16,18,23,0.85);color:var(--ink);font-size:0.8rem}
+.pill:hover{border-color:var(--warm);color:var(--warm)}
+
+/* STAGE */
+#stage{position:fixed;inset:0;z-index:1}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.vlabel{position:absolute;z-index:3;font-size:0.76rem;color:var(--ink);background:rgba(7,8,11,0.78);padding:3px 8px;border-radius:4px;pointer-events:none;white-space:nowrap}
+.vlabel .d{color:var(--dim)}
+#hint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--status-h) + var(--dock-h) + 10px);z-index:3;font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;text-align:center}
+#hint.gone{opacity:0}
+#toast{position:absolute;left:50%;top:calc(var(--top-h) + 10px);transform:translateX(-50%);z-index:4;padding:8px 14px;border-radius:8px;background:rgba(16,18,23,0.95);border:1px solid var(--line-b);font-size:0.8rem}
+#nogpu{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);z-index:4;width:min(420px,calc(100vw - 32px));padding:18px 20px;border-radius:10px;background:var(--bg2);border:1px solid var(--line-b)}
+#nogpu h2{font-family:var(--sci-serif);font-weight:500;font-size:1.2rem;margin-bottom:8px}
+#nogpu p{font-size:0.86rem;line-height:1.55;color:var(--dim)}
+
+#gear,#physBtn{position:fixed;top:12px;z-index:40;width:38px;height:38px;border:1px solid var(--line-b);background:rgba(16,18,23,0.85);color:var(--ink);border-radius:9px;font-size:1.05rem;display:none}
+#gear{left:14px}
+#physBtn{right:14px;font-family:var(--sci-serif)}
+html:not(.in-frame) #physBtn{top:calc(var(--top-h) + 6px)}
+#gear:hover,#physBtn:hover{border-color:var(--warm);color:var(--warm)}
+#dock,#sheetGrip,.tabs{display:none}
+
+/* PANEL */
+#panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(11,12,16,0.97);border-right:1px solid var(--line-b);padding:62px 18px 24px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:20px}
+#panelClose,#physClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#panelClose:hover,#physClose:hover{color:var(--warm);border-color:var(--warm)}
+.sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:18px 0 8px}
+#controls > .sec-label:first-child{margin-top:0}
+.hint{font-size:0.76rem;line-height:1.5;color:var(--dim);margin:7px 0 2px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{padding:6px 10px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:14px;font-size:0.78rem}
+.chips button:hover{border-color:var(--line-b);color:var(--ink)}
+.chips button.on{border-color:var(--warm);color:var(--warm);background:rgba(242,166,90,0.08)}
+.chips .sw{display:inline-block;width:26px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+.seg{display:flex;border:1px solid var(--line-b);border-radius:8px;overflow:hidden}
+.seg button{flex:1;min-width:0;padding:8px 4px;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-size:0.76rem}
+.seg button:last-child{border-right:0}
+.seg button.on{background:rgba(242,166,90,0.13);color:var(--warm)}
+.toggles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0 4px}
+.toggles button{padding:7px 2px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:7px;font-size:0.74rem}
+.toggles button[aria-pressed="true"]{border-color:var(--warm);color:var(--warm)}
+.btns{display:flex;gap:8px;margin-top:8px}
+.btns button{flex:1;padding:9px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;font-size:0.8rem}
+.btns button:hover{border-color:var(--warm)}
+
+/* Parameter row: label and value on one line, the slider under them. */
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 8px;margin:9px 0}
+.row label{grid-row:1;grid-column:1;font-size:0.78rem;color:var(--ink)}
+.row label .sci-sym{font-size:0.95rem;margin-right:3px}
+.row label .w{color:var(--dim)}
+.row input[type=range]{grid-row:2;grid-column:1/3;width:100%;accent-color:var(--warm);height:3px;margin:4px 0}
+.row .val{grid-row:1;grid-column:2;text-align:right;font:0.76rem var(--sci-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+
+.readout{width:100%;border-collapse:collapse;margin-top:6px;font-size:0.76rem}
+.readout td{padding:4px 0;border-bottom:1px solid var(--line)}
+.readout td:first-child{color:var(--dim)}
+.readout td:last-child{text-align:right;font-family:var(--sci-mono);font-variant-numeric:tabular-nums}
+.readout .sci-sym{font-size:0.9rem}
+
+/* PHYSICS */
+#physics{position:fixed;top:0;right:0;bottom:0;width:var(--phys-w);z-index:34;background:rgba(11,12,16,0.97);border-left:1px solid var(--line-b);padding:62px 20px 28px;overflow-y:auto;transform:translateX(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
+#physics.open{transform:translateX(0)}
+html.in-frame #physics{padding-top:20px}
+#physics h2{font-family:var(--sci-serif);font-weight:500;font-size:1.15rem;color:#f1ece4;margin:0 0 10px}
+#physics h3{font-family:var(--sci-serif);font-weight:500;font-size:1.02rem;color:#f1ece4;margin:22px 0 8px}
+#eqList .eq-sub{font-size:0.76rem;color:var(--dim);margin:10px 0 2px}
+#eqList .sci-eq{font-size:1rem;padding:3px 0}
+.eq-key{display:flex;flex-wrap:wrap;gap:4px 12px;margin:10px 0 0;font-size:0.76rem}
+.eq-key span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;background:currentColor;margin-right:5px;vertical-align:baseline}
+.defs{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:baseline;margin-top:6px}
+.defs .sym{font-size:0.95rem}
+.defs .txt{font-size:0.8rem;line-height:1.5;color:var(--dim)}
+.defs .txt .sci-eq{font-size:0.92rem;color:var(--ink)}
+#explainer p{font-size:0.84rem;line-height:1.62;color:#c9c3ba;margin:0 0 9px}
+#explainer .cite{color:var(--dim);font-size:0.76rem}
+#explainer .note{color:var(--dim);font-style:italic}
+#explainer ol.refs{padding-left:18px;font-size:0.76rem;line-height:1.5;color:var(--dim)}
+#explainer ol.refs li{margin:0 0 6px}
+#explainer a{color:var(--warm)}
+
+/* STATUS */
+#status{position:fixed;left:0;right:0;bottom:0;height:var(--status-h);z-index:25;display:flex;gap:16px;align-items:center;padding:0 18px;font-size:0.78rem;background:rgba(9,10,13,0.92);border-top:1px solid var(--line);white-space:nowrap;overflow:hidden}
+#stMain{min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:var(--sci-mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+#legend{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--dim);font-size:0.74rem}
+#lgBar{display:block;width:160px;height:10px;border-radius:2px}
+.lg-lo{color:var(--cold)} .lg-hi{color:var(--warm)}
+
+@media (min-width:769px){
+  body.panel-open #status{left:var(--panel-w)}
+  body.phys-open #status{right:var(--phys-w)}
+  body.panel-open .topbar{padding-left:calc(var(--panel-w) + 20px)}
+  body.phys-open .topbar{padding-right:calc(var(--phys-w) + 16px)}
+  body:not(.panel-open) #gear{display:block}
+  body:not(.phys-open) #physBtn{display:block}
+  body:not(.panel-open) .topbar{padding-left:66px}
+  body:not(.phys-open) .topbar{padding-right:62px}
+}
+
+/* TOUCH. Any touch screen or narrow window: targets 44 px or more. */
+@media (pointer:coarse), (max-width:768px){
+  #panelClose,#physClose{width:44px;height:44px;top:8px;right:8px}
+  .chips button{min-height:44px;padding:0 14px;border-radius:22px}
+  .seg button{min-height:44px}
+  .toggles button,.btns button{min-height:44px}
+  .row{min-height:44px;margin:4px 0}
+  .readout td{padding:7px 0}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1b1612}
+  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1b1612}
+  #gear,#physBtn,.pill{min-width:44px;min-height:44px}
+  #explainer p{font-size:0.86rem}
+}
+
+/* PHONE. The query matches PHONE_Q in ui.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom));--status-h:30px;--top-h:calc(46px + env(safe-area-inset-top))}
+  .topbar{padding:env(safe-area-inset-top) calc(12px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left))}
+  .pagetitle{display:none}
+  .topbar #saverBtn,#gear,#physBtn{display:none!important}
+
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;
+    padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+    background:rgba(9,10,13,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+  #dock > button.wide{flex:1 1 auto}
+  #dock > button.on{border-color:var(--warm);color:var(--warm)}
+  #dock .k{font-size:0.68rem;color:var(--dim)}
+  #dock .v{font-size:0.78rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
+  #dockView{flex:0 0 74px!important}
+  #dock .sw{display:block;width:26px;height:12px;border-radius:3px}
+
+  #status{bottom:var(--dock-h);height:var(--status-h);padding:0 calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));font-size:0.74rem;gap:10px}
+  #lgBar{width:70px;height:8px}
+  #legend .lg-lo,#legend .lg-hi{font-size:0.7rem}
+  #hint{left:16px;right:16px;transform:none;font-size:0.76rem}
+  body.panel-open #hint{opacity:0}
+
+  /* The panel is a bottom sheet above the dock. */
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,520px);height:min(46dvh,520px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:3;justify-content:center;align-items:center;height:30px;margin:0 -16px;background:rgb(11,12,16);touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .tabs{display:flex;position:sticky;top:30px;z-index:3;gap:6px;margin:0 -16px 12px;padding:0 16px 8px;background:rgb(11,12,16);border-bottom:1px solid var(--line)}
+  .tabs button{flex:1;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--dim);font-size:0.82rem}
+  .tabs button.on{border-color:var(--warm);color:var(--warm)}
+  #panel[data-tab="physics"] #controls{display:none}
+  #panel[data-tab="controls"] #physics{display:none}
+  /* #physics sits inside the sheet here (ui.js moves it). */
+  #panel #physics{position:static;width:auto;transform:none;border:0;padding:0;background:transparent;overflow:visible}
+  #panel #physClose{display:none}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right; the dock is a tab at
+   the lower left; the topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape){
+  :root{--top-h:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #status{right:auto;width:min(460px,58vw);bottom:var(--dock-h)}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,400px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  .tabs{top:0;padding-top:8px}
+}
+
+/* sn-saver: the shell screensaver. The views fill the frame alone. */
+html.sn-saver #panel,html.sn-saver #physics,html.sn-saver #dock,html.sn-saver #status,html.sn-saver .topbar,
+html.sn-saver #gear,html.sn-saver #physBtn,html.sn-saver #hint,html.sn-saver #toast,html.sn-saver .vlabel{display:none!important}
+html.sn-saver #view{cursor:none}

@@ -1,0 +1,39 @@
+Thermal Convection — credits and sources
+========================================
+
+The simulation, the views, the screensaver and this page are original work
+for davesgames.io. No third-party simulation code is used.
+
+Sources cited in the explainer (explainer.js REFS)
+--------------------------------------------------
+[1] H. Bénard (1900). Les tourbillons cellulaires dans une nappe liquide.
+    Revue générale des sciences pures et appliquées 11, 1261–1271 and
+    1309–1328.
+[2] Lord Rayleigh (1916). On convection currents in a horizontal layer of
+    fluid, when the higher temperature is on the under side. Philosophical
+    Magazine (6) 32, 529–546. https://doi.org/10.1080/14786441608635602
+[3] J. R. A. Pearson (1958). On convection cells induced by surface
+    tension. Journal of Fluid Mechanics 4, 489–500.
+    https://doi.org/10.1017/S0022112058000616
+[4] S. Chandrasekhar (1961). Hydrodynamic and Hydromagnetic Stability.
+    Oxford: Clarendon Press. Chapter II (onset values Ra_c = 1707.76 for
+    two rigid walls, 1100.65 for a rigid bottom and a free top).
+[5] Å. Nordlund, R. F. Stein and M. Asplund (2009). Solar surface
+    convection. Living Reviews in Solar Physics 6, 2.
+    https://doi.org/10.12942/lrsp-2009-2
+
+Only facts from these sources are used (numbers, mechanisms, history). No
+text, figures or data are copied from them.
+
+Software and fonts
+------------------
+- MathJax 3.2.2 (Apache License 2.0), vendored at vendor/mathjax@3.2.2,
+  loaded through lib/sci-math.js. The equations are typeset at run time.
+- Inter (SIL Open Font License 1.1) and STIX Two Text (SIL Open Font
+  License 1.1), vendored under vendor/fonts and loaded through lib/sci.css.
+
+Illustrative values
+-------------------
+The grid sizes, the burner patch, the top cooling law of the sun mode and
+the effective Marangoni number are chosen to give a clear picture in real
+time. They are not fitted to any one fluid.
