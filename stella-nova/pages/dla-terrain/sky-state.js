@@ -69,7 +69,7 @@ export const WEATHER = Object.freeze([
   { id: 'thunderstorm', label: 'Thunderstorm',     cover: 0.9,  rain: 1.0,  snow: 0,   storm: 1.0,  fog: 1.8e-4,   wind: 13, cumulus: 1.0, cirrus: 0.6,  mie: 2.2, temp: -5, valley: 0.2 },
   { id: 'snow',         label: 'Snow',             cover: 0.9,  rain: 0,    snow: 0.6, storm: 0.1,  fog: 2.6e-4,   wind: 4,  cumulus: 0.3, cirrus: 0.1,  mie: 2.0, temp: -14, valley: 0.4 },
   { id: 'blizzard',     label: 'Blizzard',         cover: 1.0,  rain: 0,    snow: 1.0, storm: 0.5,  fog: 1.6e-3, wind: 17, cumulus: 0.4, cirrus: 0.0,  mie: 3.0, temp: -20, valley: 0.0 },
-  { id: 'golden-haze',  label: 'Golden hour haze', cover: 0.18, rain: 0,    snow: 0,   storm: 0,    fog: 1.6e-4, wind: 2,  cumulus: 0.9, cirrus: 0.6,  mie: 3.5, temp: 3,  valley: 1.2 },
+  { id: 'golden-haze',  label: 'Golden hour haze', cover: 0.18, rain: 0,    snow: 0,   storm: 0,    fog: 1.15e-4, wind: 2,  cumulus: 0.9, cirrus: 0.6,  mie: 3.5, temp: 3,  valley: 1.2 },
 ]);
 const BY_ID = new Map(WEATHER.map((w) => [w.id, w]));
 const KEYS = ['cover', 'rain', 'snow', 'storm', 'fog', 'wind', 'cumulus', 'cirrus', 'mie', 'temp', 'valley'];

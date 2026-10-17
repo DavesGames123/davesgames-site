@@ -44,6 +44,7 @@
 //  "fn fsPrecip", "fn vsBolt", "fn fsBolt"
 // ============================================================================
 
+const HAZE_DEEP_MAX: f32 = 1.4e-4;   // per m: the cap of the deep haze layer
 fn vol_grid() -> vec3u { return vec3u(S.vol2.xyz); }
 fn vol_sliceDist(s: f32) -> f32 {
   return S.vol0.x * pow(S.vol0.y / S.vol0.x, s / S.vol2.z);
@@ -71,7 +72,11 @@ fn vol_medium(p: vec3f) -> VolMedium {
   // circles over the fog sea in far aerial views, even large and weak
   let bank = clamp(n1.r * 1.3 - 0.25, 0.0, 1.5);
   // ground haze: a thin layer on the ground and a deep layer above the sea
-  let haze = S.vol1.z * (0.45 * exp(-hG / 140.0) + 0.55 * exp(-hSea / 1700.0)) * (0.55 + 0.6 * bank);
+  // the deep layer is capped: thick weather (fog, storms, blizzards) is
+  // thick near the ground and in the valleys, while ridges and the far
+  // land stay readable through it, and a far view is not one grey wall
+  let deep = min(S.vol1.z, HAZE_DEEP_MAX);
+  let haze = ((S.vol1.z * 0.45 * exp(-hG / 140.0)) + (deep * 0.55 * exp(-hSea / 1700.0))) * (0.55 + 0.6 * bank);
   // valley fog: a lake of fog under the fog top, ragged top edge
   let top = S.vol0.w + (n1.g - 0.5) * 80.0 + (n1.b - 0.5) * 25.0;
   let valley = S.precip.w * S.vol0.z * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
@@ -218,6 +223,19 @@ fn vol_rainbow(rd: vec3f) -> vec3f {
   return bow * S.misc.w * G.sunColor.rgb * 0.011;
 }
 
+// the froxel volume with a small 5-tap tent (0.75 froxel): in thick
+// weather each froxel's jittered sample differs, and one bilinear tap
+// showed that as a fixed dot pattern over the haze
+fn hazeTap(uv: vec2f, w: f32) -> vec4f {
+  let o = vec2f(0.75) / vec2f(S.vol2.xy);
+  var v = textureSampleLevel(tVolume, sClamp, vec3f(uv, w), 0.0) * 0.4;
+  v += textureSampleLevel(tVolume, sClamp, vec3f(uv + vec2f(o.x, o.y), w), 0.0) * 0.15;
+  v += textureSampleLevel(tVolume, sClamp, vec3f(uv + vec2f(-o.x, o.y), w), 0.0) * 0.15;
+  v += textureSampleLevel(tVolume, sClamp, vec3f(uv + vec2f(o.x, -o.y), w), 0.0) * 0.15;
+  v += textureSampleLevel(tVolume, sClamp, vec3f(uv + vec2f(-o.x, -o.y), w), 0.0) * 0.15;
+  return v;
+}
+
 @fragment
 fn fsHaze(i: VOut) -> @location(0) vec4f {
   let ij = vec2i(i.pos.xy);
@@ -228,7 +246,7 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
     let wp = worldFromDepth(i.uv, dz);
     let dist = length(wp - G.camPos.xyz);
     let w = clamp((vol_distSlice(dist) - 0.5) / n, 0.5 / n, 1.0 - 0.5 / n);
-    let v = textureSampleLevel(tVolume, sClamp, vec3f(i.uv, w), 0.0);
+    let v = hazeTap(i.uv, w);
     var L = v.rgb;
     if (dist > 150.0) { L += vol_rainbow(rd) * (1.0 - v.a * 0.5) * sk_ss(150.0, 600.0, dist); }
     // past the far slice: keep the far transmittance
@@ -241,7 +259,7 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
   let H = 1700.0;
   let dy = max(rd.y, 0.0);
   let path = min(H / max(dy, 1e-3), 120000.0);
-  let tauHaze = S.vol1.z * 0.55 * exp(-h0 / H) * path * (1.0 - exp(-path * dy / H)) / max(path * dy / H, 1e-3);
+  let tauHaze = min(S.vol1.z, HAZE_DEEP_MAX) * 0.55 * exp(-h0 / H) * path * (1.0 - exp(-path * dy / H)) / max(path * dy / H, 1e-3);
   let tauPrec = (S.vol1.x * 1.2e-4 + S.vol1.y * 3.5e-4) * min(max(S.cloud0.x - G.camPos.y, 0.0) / max(dy, 0.05), 6000.0);
   let Tf = exp(-(tauHaze * 0.6 + tauPrec));
   var L = fogCol * (1.0 - Tf);
