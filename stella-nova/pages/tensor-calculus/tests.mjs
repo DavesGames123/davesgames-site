@@ -6,6 +6,8 @@
 //  lines of each file and a total, and exits 1 when one file fails. A
 //  filter string runs only the files whose name holds it.
 //  NODE_PATH passes through, so a test can find a scratchpad jsdom.
+//  JSDOM_DIR and MATHJAX_DIR (node_modules folders) are added to NODE_PATH
+//  for the child processes, so every package test sees the same copies.
 // ============================================================================
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -16,10 +18,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, 'tests');
 const filter = process.argv[2] || '';
 const files = readdirSync(dir).filter(f => f.endsWith('.test.mjs') && f.includes(filter)).sort();
+const env = { ...process.env };
+const extra = [env.JSDOM_DIR, env.MATHJAX_DIR].filter(Boolean);
+if (extra.length) env.NODE_PATH = [...new Set([...(env.NODE_PATH || '').split(':').filter(Boolean), ...extra])].join(':');
 let failed = 0;
 for (const f of files) {
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, [join(dir, f)], { encoding: 'utf8', timeout: 600000, env: process.env });
+  const r = spawnSync(process.execPath, [join(dir, f)], { encoding: 'utf8', timeout: 600000, env });
   const ok = r.status === 0;
   if (!ok) failed++;
   const out = (r.stdout || '').trim().split('\n');
