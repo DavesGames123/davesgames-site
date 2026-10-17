@@ -1,0 +1,1 @@
+Note added by the coordinator, 2026-10-17: at this commit, node tests.mjs does not load (the old tests import the removed rockY). The validation lines in the body came from the working tree at a later point, not from this tree. Tests pass again from 3d33d170.
