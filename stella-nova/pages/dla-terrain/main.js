@@ -26,7 +26,14 @@
 //
 //  frame (to the modules): { globals, g (named views), camera, time, dt,
 //  tod, weather (skyState result), sky, quality, coarse, layers, terrain,
-//  frameIndex, cascade, shadowInfo, shadowBindGroup, shadowDistance }
+//  frameIndex, cascade, shadowInfo, shadowBindGroup, shadowDistance,
+//  cloudShadow, skyView (SKY exports), veg { density, conifer, flowers },
+//  waterLook { tint, waves }, season }
+//
+//  WIRING (NOTES.md)  after the modules load: gpu.cloudShadow and
+//  gpu.skyView from the sky module; setAerial(false) on ground and
+//  vegetation when the sky has drawVolumetric (one haze, not two); a
+//  quality change calls module.setQuality(q) on each module.
 //
 //  SAVER  window.snSaver = { enter(opts), exit() } (see "── SAVER"). The
 //  shot plan is saver.js. P toggles the in-page saver.
@@ -212,6 +219,7 @@ function applyQuality() {
   sh.resize(gpu.shadowSize, gpu.shadowCascades);
   post.settings.taa = qp.taa; post.resetHistory();
   fg.maxScale = qp.scale; fg.setScale(qp.scale);
+  for (const m of fg.modules) if (m.setQuality) try { m.setQuality(qp.q); } catch (e) { console.warn(e); }
 }
 
 // ── BOOT ────────────────────────────────────────────────────────────────
@@ -328,11 +336,14 @@ async function loadModules() {
 // aerial perspective, and the cloud shadow of the sky reaches the ground
 function wireModules() {
   const sky = fg.modules.find(m => m.role === 'sky' && !m.failed);
-  const ground = fg.modules.find(m => m.role === 'ground' && !m.failed);
   gpu.cloudShadow = sky && sky.cloudShadow ? sky.cloudShadow : null;
   gpu.skyView = sky && sky.skyView ? sky.skyView : null;
-  if (ground && ground.setAerial) {
-    try { ground.setAerial(!(sky && sky.drawVolumetric)); } catch (e) { console.warn(e); }
+  // the sky haze replaces the own aerial perspective of ground and plants
+  const aerial = !(sky && sky.drawVolumetric);
+  for (const m of fg.modules) {
+    if ((m.role === 'ground' || m.role === 'vegetation') && !m.failed && m.setAerial) {
+      try { m.setAerial(aerial); } catch (e) { console.warn(e); }
+    }
   }
 }
 
@@ -502,7 +513,7 @@ function loop(now) {
   const frame = {
     globals: G, g: GV, camera: m, time: now / 1000, dt, tod: app.tod, weather: st, sky: st,
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
-    cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null,
+    cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
   };
   for (const md of fg.active()) if (md.update) {
