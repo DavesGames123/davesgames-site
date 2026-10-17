@@ -20,6 +20,10 @@
 //    sLinear, sNearest, sRepeat samplers
 //    shadowCascades, shadowSize the cascade count and the map size
 //
+//    loadRawWGSL(url)           one file, no prefix
+//    coarse                     a touch screen (true): packages may do less
+//    shadows, shadowSampleBindGroup, shadowSplits   the cascade state
+//
 //  loadWGSL(url) fetches shaders/common.wgsl, then the detail file
 //  (../../lib/dla-terrain-detail.wgsl, else gpu/detail-stub.wgsl), then url,
 //  and returns the joined text. A relative url resolves against the page
@@ -60,6 +64,8 @@ export function wgslPrefix() {
   })();
   return prefixP;
 }
+// the text of one file, no prefix (a relative url resolves against the page)
+export function loadRawWGSL(url) { return fetchText(new URL(url, PAGE).href); }
 export async function loadWGSL(url) {
   const u = new URL(url, PAGE).href;
   const [pre, body] = await Promise.all([wgslPrefix(), fetchText(u)]);
@@ -73,6 +79,23 @@ export const QUALITY = [
   { id: 'ultra', label: 'Ultra', q: 1.0, scale: 1.0, shadow: 4096, cascades: 4, taa: true },
 ];
 
+// The packages need more than the WebGPU defaults (VEG has 9 storage
+// buffers in one compute stage, for example): ask for what the adapter has,
+// with caps on the sizes.
+const RAISE = ['maxStorageBuffersPerShaderStage', 'maxStorageTexturesPerShaderStage', 'maxSampledTexturesPerShaderStage',
+  'maxSamplersPerShaderStage', 'maxUniformBuffersPerShaderStage', 'maxBindingsPerBindGroup', 'maxDynamicUniformBuffersPerPipelineLayout',
+  'maxDynamicStorageBuffersPerPipelineLayout', 'maxComputeWorkgroupStorageSize', 'maxComputeInvocationsPerWorkgroup',
+  'maxComputeWorkgroupSizeX', 'maxComputeWorkgroupSizeY', 'maxComputeWorkgroupSizeZ', 'maxColorAttachmentBytesPerSample',
+  'maxInterStageShaderVariables', 'maxVertexBuffers', 'maxVertexAttributes', 'maxTextureArrayLayers', 'maxBindGroups'];
+export function deviceLimits(lim) {
+  const out = {};
+  for (const k of RAISE) if (lim[k] !== undefined) out[k] = lim[k];
+  out.maxTextureDimension2D = Math.min(lim.maxTextureDimension2D, 8192);
+  out.maxStorageBufferBindingSize = Math.min(lim.maxStorageBufferBindingSize, 1 << 30);
+  out.maxBufferSize = Math.min(lim.maxBufferSize, 1 << 30);
+  return out;
+}
+
 export async function createGPU(canvas, opts = {}) {
   if (!globalThis.navigator || !navigator.gpu) throw new Error('no WebGPU');
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
@@ -82,11 +105,7 @@ export async function createGPU(canvas, opts = {}) {
   const lim = adapter.limits;
   const device = await adapter.requestDevice({
     requiredFeatures: want,
-    requiredLimits: {
-      maxTextureDimension2D: Math.min(lim.maxTextureDimension2D, 8192),
-      maxStorageBufferBindingSize: Math.min(lim.maxStorageBufferBindingSize, 1 << 28),
-      maxBufferSize: Math.min(lim.maxBufferSize, 1 << 28),
-    },
+    requiredLimits: deviceLimits(lim),
   });
   let context = null, canvasFormat = 'bgra8unorm';
   if (canvas && canvas.getContext) {
@@ -130,7 +149,10 @@ export async function createGPU(canvas, opts = {}) {
     hdrFormat: 'rgba16float', depthFormat: 'depth32float',
     globalsLayout, shadowSampleLayout, shadowPassLayout, emptyLayout,
     globalsBuffer, sLinear, sNearest, sRepeat,
-    loadWGSL, assets: opts.assets || null,
+    loadWGSL, loadRawWGSL, assets: opts.assets || null, coarse: !!opts.coarse,
+    shadows: null,               // gpu/shadows.js object (main.js sets it)
+    get shadowSampleBindGroup() { return gpu.shadows ? gpu.shadows.sampleBindGroup : null; },
+    get shadowSplits() { return gpu.shadows && gpu.shadows.info ? gpu.shadows.info.splits : null; },
     qualityIndex: qi, quality: QUALITY[qi].q, qualityPreset: QUALITY[qi],
     shadowSize: Math.min(QUALITY[qi].shadow, device.limits.maxTextureDimension2D), shadowCascades: QUALITY[qi].cascades,
     features: want,

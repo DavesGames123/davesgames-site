@@ -19,7 +19,8 @@
 //                 module.drawSky (sky at depth 0, compare greater-equal)
 //    4 copy       HDR -> sceneColor, depth -> sceneDepth (the state before water)
 //    5 water      HDR + depth (load, store): module.drawWater(pass, frame, ctx)
-//                 ctx.sceneColorView, ctx.depthView = the copy (sceneDepth)
+//                 ctx.sceneColorView, ctx.depthView = the copy (sceneDepth),
+//                 ctx.depthIsCopy = true
 //    6 volumetric HDR only, no depth attachment: module.drawVolumetric(pass,
 //                 frame, ctx), ctx.depthView = the live depth after water,
 //                 ctx.sceneDepthView = the copy before water. Group 2 too.
@@ -89,7 +90,7 @@ export function createFrameGraph(gpu, parts) {
   // the modules that draw: the loaded ones, plus a fallback for a missing
   // ground or sky
   fg.active = () => {
-    const list = fg.modules.filter(m => !m.failed);
+    const list = fg.modules.filter(m => !m.failed && !m.off);
     if (!list.some(m => m.role === 'ground') && fg.fallbacks.ground) list.unshift(fg.fallbacks.ground);
     if (!list.some(m => m.role === 'sky') && fg.fallbacks.sky) list.push(fg.fallbacks.sky);
     return list;
@@ -122,6 +123,8 @@ export function createFrameGraph(gpu, parts) {
   fg.render = frame => {
     const T = fg.T, sh = parts.shadows;
     const mods = fg.active();
+    frame.shadowBindGroup = sh.sampleBindGroup;
+    frame.shadowInfo = sh.info;
     const enc = device.createCommandEncoder({ label: 'frame' });
     let passes = 0;
     // ── 1 compute
@@ -176,7 +179,7 @@ export function createFrameGraph(gpu, parts) {
       });
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(2, sh.sampleBindGroup);
-      ctx.depthView = T.sceneDepthView; ctx.depthTexture = T.sceneDepth;
+      ctx.depthView = T.sceneDepthView; ctx.depthTexture = T.sceneDepth; ctx.depthIsCopy = true;
       for (const m of water) guard(m, 'drawWater', () => m.drawWater(pass, frame, ctx));
       pass.end(); passes++;
     }
@@ -189,7 +192,7 @@ export function createFrameGraph(gpu, parts) {
       });
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(2, sh.sampleBindGroup);
-      ctx.depthView = T.depthView; ctx.depthTexture = T.depth;
+      ctx.depthView = T.depthView; ctx.depthTexture = T.depth; ctx.depthIsCopy = false;
       for (const m of vol) guard(m, 'drawVolumetric', () => m.drawVolumetric(pass, frame, ctx));
       pass.end(); passes++;
     }

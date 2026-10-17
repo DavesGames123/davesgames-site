@@ -9,7 +9,10 @@
 //  CASCADE_FLOATS, packCascades(f32, c) and packShadowPass(f32, c, i) do the
 //  same for struct CascadeInfo and struct ShadowPass.
 //
-//  grep -n targets: "export const GLOBALS", "export function packGlobals",
+//  applyWxOver(f, over) puts the weather sliders of the page on top of the
+//  SKY values in a packed Globals; wxFromGlobals(f) reads them back.
+//
+//  grep -n targets: "export const GLOBALS", "export function packGlobals", "export function applyWxOver",
 //  "export function packCascades", "export function globalsView"
 // ============================================================================
 
@@ -99,3 +102,24 @@ export function packShadowPass(f, c, i) {
   f[16] = i; f[17] = c.texel[i]; f[18] = c.count; f[19] = c.size;
   return f;
 }
+
+// the weather sliders on top of the preset (fog 0..1 -> 1.5e-5 .. 6e-3 per m)
+export function applyWxOver(f, over) {
+  const W = GLOBALS.weather.offset, W2 = GLOBALS.weather2.offset, F = GLOBALS.fog.offset, WI = GLOBALS.wind.offset;
+  if (over.cover !== undefined) f[W] = over.cover;
+  if (over.rain !== undefined) { f[W + 1] = over.rain; f[W2] = Math.max(f[W2], Math.min(1, over.rain * 1.2)); }
+  if (over.snow !== undefined) { f[W + 2] = over.snow; f[W2 + 1] = Math.max(f[W2 + 1], over.snow); }
+  if (over.fog !== undefined) f[F + 3] = 1.5e-5 * Math.pow(400, over.fog);
+  if (over.wind !== undefined) {
+    const l = Math.hypot(f[WI], f[WI + 1]);
+    if (l < 1e-6) { f[WI] = over.wind; f[WI + 1] = 0; }
+    else { f[WI] = f[WI] / l * over.wind; f[WI + 1] = f[WI + 1] / l * over.wind; }
+  }
+  return f;
+}
+export function wxFromGlobals(f) {
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const W = GLOBALS.weather.offset, F = GLOBALS.fog.offset, WI = GLOBALS.wind.offset;
+  return { cover: f[W], rain: f[W + 1], snow: f[W + 2], fog: clamp(Math.log(Math.max(f[F + 3], 1.5e-5) / 1.5e-5) / Math.log(400), 0, 1), wind: Math.hypot(f[WI], f[WI + 1]) };
+}
+
