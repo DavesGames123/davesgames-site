@@ -251,3 +251,18 @@ output. Delete the PNGs when done. Say in each commit body what ran.
 As in GROWTH-PAGES.md: main, pathspec commits in one command, no add -A,
 no amend, rebase or stash, ASD-STE100 bodies, small commits, prefix
 `dla-terrain:` (LIB uses `lib:`, ASSETS uses `assets:`). Do not push.
+
+## Addendum: volumetric haze (user, verbatim, 2026-10-17)
+
+> volumetric haze will be important on this page
+
+SKY owns it in drawVolumetric: a froxel (frustum voxel) volume, about
+160x90x64 at full quality, with height-falloff haze plus noise banks
+that drift in G.wind, in-scatter from the sun with CORE's cascaded
+shadow map (crepuscular rays through ridges and forest canopy, light
+shafts through cloud gaps with the cloud shadow), sky ambient, moon at
+night, rain and fog weather raise the density, morning valley fog that
+pools in low ground (from terrain height) and burns off as the sun
+rises. Temporal reprojection with G.prevViewProj. Integrate front to
+back and apply to the scene and to water. CORE binds the shadow map and
+CascadeInfo to the volumetric pass too (group 2, same layout as opaque).
