@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Diffusion-limited aggregation after fogleman/dlaf by Michael Fogleman: grow clusters live in 2D and 3D, watch one walker in slow motion, try the dlaf hooks, colour the growth with heatmap gradients and download the CSV.">
+<title>Diffusion-Limited Aggregation — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DIFFUSION-LIMITED AGGREGATION  ·  page shell  (key dlaf)
+  ───────────────────────────────────────────────────────────────────────────
+   A credit and showcase page for fogleman/dlaf (Michael Fogleman, MIT). The
+   growth is lib/dla-engine.js, our JavaScript port of dlaf. main.js grows a
+   cluster in a time budget per frame and draws it with WebGL2 (render.js).
+   No network calls: all files are same-origin.
+
+   FILES
+     sim.js       presets (the dlaf hooks), colour values, replay, CSV (no DOM)
+     walk.js      record one walker and build the slow-motion overlay (no DOM)
+     camera.js    2D and 3D view maths, fit to the clear rect (no DOM)
+     saver.js     screensaver shots, shuffle, pace, framing, label (no DOM)
+     render.js    WebGL2: lines, dots, front glow, overlay, gradient LUT
+     main.js      UI, frame loop, pointer input, window.snSaver
+     tests.mjs    node tests of the DOM-free modules
+     CREDITS.txt  the MIT licence of dlaf
+
+   HEAD LOAD ORDER (PAGES.md and lib/GROWTH-PAGES.md)
+     gpu-guard, wishlist, stats-beacon, then style.css, lib/sci.css and
+     lib/growth-gradients.css. main.js is a module at the end of the body.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #gl        the full-window WebGL2 canvas
+     #panel     left panel on a desktop, bottom sheet (portrait) or right
+                drawer (landscape) on a phone
+     #legend    the gradient bar of the colour mode, lower right
+     #walkCap   the caption of the walker demo, at the base
+     #status    preset, particle count, walks and resets
+     #dock      phone only: panel, colour by, regrow, pause
+
+   GREP MAP (main.js)
+     grep -n 'function frame'      the frame loop
+     grep -n 'function regrow'     a new model
+     grep -n 'function occlusion'  the margins that frame the cluster
+     grep -n 'function buildUI'    the panel controls
+     grep -n 'window.snSaver'      the screensaver hook
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../lib/growth-gradients.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Diffusion-limited aggregation · after fogleman/dlaf</div>
+</div>
+
+<canvas id="gl"></canvas>
+<div id="nogl" hidden>This page needs WebGL2. Your browser did not give a WebGL2 context.</div>
+<div id="hint">drag to pan · pinch or scroll to zoom · double-tap to fit</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<div id="legend">
+  <div class="lg-title" id="lgTitle">Colour by age</div>
+  <div id="lgBar"></div>
+  <div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div>
+</div>
+
+<div id="walkCap" hidden>
+  <div class="wc-head"><span id="wcKind">Start</span><span id="wcNum"></span></div>
+  <div id="wcText"></div>
+  <div class="wc-keys">
+    <span class="k k-jump">jump circle</span><span class="k k-ring">attraction ring</span>
+    <span class="k k-push">push-back</span><span class="k k-join">join</span>
+  </div>
+</div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="ptitle">Diffusion-limited aggregation</div>
+  <div class="credit-line">After <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman · MIT</div>
+
+  <div class="sec-label">View</div>
+  <div class="modes">
+    <button id="modeGrow" class="on">Grow</button>
+    <button id="modeWalk">How the walk works</button>
+  </div>
+  <div class="modes">
+    <button id="dim2" class="on">2D</button>
+    <button id="dim3">3D</button>
+  </div>
+  <div class="hint" id="dimHint"></div>
+
+  <div class="sec-label">Hook presets</div>
+  <div class="presets" id="presets"></div>
+  <div class="hook-name" id="hookName"></div>
+  <div class="hint" id="presetNote"></div>
+  <pre class="code" id="presetCode"></pre>
+
+  <div class="sec-label">Parameters</div>
+  <div id="params"></div>
+  <div class="row"><label>Particles</label><input type="range" id="target" min="1000" max="60000" step="1000" value="25000"><span class="val" id="targetV"></span></div>
+  <div class="row"><label>Growth speed</label><input type="range" id="speed" min="1" max="10" step="1" value="5"><span class="val" id="speedV"></span></div>
+  <div class="modes">
+    <button id="regrowBtn">Regrow</button>
+    <button id="pauseBtn">Pause</button>
+  </div>
+
+  <div class="sec-label">Colour by</div>
+  <div class="presets four" id="colourModes"></div>
+  <div class="hint" id="colourHint"></div>
+  <div id="gradPick"></div>
+
+  <div class="sec-label">Replay</div>
+  <div class="hint">Particles join in id order, so the first k ids are the cluster at the time it had k particles.</div>
+  <div class="row"><label>Particle</label><input type="range" id="replay" min="0" max="1000" step="1" value="1000"><span class="val" id="replayV"></span></div>
+  <div class="modes">
+    <button id="replayPlay">Play growth</button>
+    <button id="replayLive" class="on">Live</button>
+  </div>
+
+  <div id="walkBox" hidden>
+    <div class="sec-label">Walker</div>
+    <div class="row"><label>Slow motion</label><input type="range" id="walkSpeed" min="0.25" max="4" step="0.25" value="1"><span class="val" id="walkSpeedV"></span></div>
+    <div class="modes"><button id="walkNext">Next walker</button><button id="walkNew">New cluster</button></div>
+    <div class="hint">The demo cluster has 260 particles and Stickiness 0.4 or less, so a push-back can happen.</div>
+  </div>
+
+  <div class="sec-label">dlaf output</div>
+  <div class="hint">dlaf writes one line per particle to stdout. The parent_id is −1 for a seed. In 2D, z is 0.</div>
+  <pre class="code csv" id="csv"></pre>
+  <div class="modes"><button id="csvBtn">Download CSV</button></div>
+
+  <div class="sec-label">Credit</div>
+  <div class="about">
+    <p><b>dlaf</b> is a fast C++ program for diffusion-limited aggregation in 2D or 3D, by Michael Fogleman (2019). Its README gives 35 seconds for one million points on one core. It uses the boost R-tree as its spatial index. Source: <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>, MIT licence (see CREDITS.txt in this folder).</p>
+    <p>Each new particle starts on a circle around the cluster and walks at random until it comes within AttractionDistance of a particle. Then it joins that particle, ParticleSpacing away. The trick: far from the cluster the walker jumps d − AttractionDistance at once, because no particle can be in that circle.</p>
+    <p><b>Our port</b>, lib/dla-engine.js, keeps the walk, the join test, the push-back and the five parameters. Two parts are different. The spatial index is a sparse grid with a pyramid of coarse grids, not an R-tree, so a far walker gets a lower bound of d and jumps a bit less far. The five hooks are functions in an options object, not methods of a class, so each preset here replaces one hook.</p>
+    <p class="ex-label">AddParticle in dlaf.cpp (extract)</p>
+    <pre class="code" id="cppCode"></pre>
+    <p class="ex-label">The same walk in lib/dla-engine.js (extract)</p>
+    <pre class="code" id="jsCode"></pre>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockColours" class="seg"></div>
+  <button id="dockRegrow" aria-label="Regrow">↻</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

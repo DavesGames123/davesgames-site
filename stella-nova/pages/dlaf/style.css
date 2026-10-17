@@ -1,0 +1,212 @@
+/* ============================================================================
+   DIFFUSION-LIMITED AGGREGATION  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark shell, warm accent (the hot end of inferno). Type comes from
+   lib/sci.css (loaded after this file). The WebGL2 canvas fills the frame.
+   The panel is on the left on a desktop. The legend sits at the lower right.
+   The walker caption sits at the base. The status bar is at the base.
+
+   PHONE (max-width 768px, or a short landscape touch screen): the pattern of
+   pages/wave-membrane. A dock at the base holds the panel button, the colour
+   modes, regrow and pause. In portrait the panel is a bottom sheet above the
+   dock. In landscape it is a drawer on the right edge. Targets are 44px.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+     grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'SAVER'      the screensaver mode
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --bg:#050308; --bg2:#0d0a12; --ink:#e2dbe6; --dim:#968aa0; --faint:#3a2c44;
+  --line:rgba(250,170,110,0.10); --line-b:rgba(250,150,90,0.24);
+  --warm:#f98c0a; --gold:#f9c932; --panel-w:300px;
+  --gg-accent:#f9c932; --gg-dim:#968aa0}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:var(--gold)}
+
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;
+  pointer-events:none}
+.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#f0e8f4}
+.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto}
+html.in-frame .topbar{display:none}
+
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--bg)}
+#nogl{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:50;max-width:360px;padding:16px 18px;
+  background:rgba(13,10,18,0.95);border:1px solid var(--line-b);border-radius:10px;font-size:0.86rem;line-height:1.5}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#dock,#sheetGrip{display:none}
+#hint{position:fixed;left:calc(50% + var(--panel-w) / 2);bottom:48px;transform:translateX(-50%);z-index:20;
+  font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;white-space:nowrap}
+#hint.gone{opacity:0}
+
+#gear{
+  position:fixed;top:14px;left:14px;z-index:40;width:38px;height:38px;
+  border:1px solid var(--line-b);background:rgba(13,10,18,0.7);color:var(--ink);
+  border-radius:9px;font-size:1.05rem;cursor:pointer;display:none}
+#gear:hover{border-color:var(--warm);color:var(--warm)}
+
+#panel{
+  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
+  background:rgba(10,8,14,0.96);border-right:1px solid var(--line-b);padding:64px 18px 24px;overflow-y:auto;
+  transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:20px}
+#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+html.in-frame #panelClose{top:10px}
+#panelClose:hover{color:var(--warm);border-color:var(--warm)}
+
+.ptitle{font-family:var(--sci-serif);font-size:1.15rem;color:#f4ecf6;margin-right:36px}
+.credit-line{font-size:0.76rem;color:var(--dim);margin:4px 0 4px}
+.sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:20px 0 9px}
+
+.presets{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.presets.four{grid-template-columns:repeat(4,1fr)}
+.presets button{padding:8px 4px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.76rem;text-align:center}
+.presets button:hover{border-color:var(--line-b);color:var(--ink)}
+.presets button.on{border-color:var(--warm);background:rgba(249,140,10,0.08);color:var(--gold)}
+.hook-name{font:0.76rem var(--sci-mono);color:var(--gold);margin:10px 0 0}
+
+.modes{display:flex;gap:8px}
+.modes + .modes{margin-top:8px}
+.modes button{flex:1;padding:9px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;cursor:pointer;font-family:inherit;font-size:0.78rem}
+.modes button.on{border-color:var(--warm);background:rgba(249,140,10,0.10);color:var(--gold)}
+.modes button:hover{border-color:var(--warm)}
+.modes button:disabled{opacity:0.4;cursor:default;border-color:var(--line)}
+
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 8px;margin:10px 0}
+.row label{grid-row:1;grid-column:1;font-size:0.78rem;color:var(--ink)}
+.row label .w{color:var(--dim);font-size:0.74rem}
+.row input[type=range]{grid-row:2;grid-column:1/3;width:100%;accent-color:var(--warm);height:3px;margin:4px 0}
+.row .val{grid-row:1;grid-column:2;text-align:right;font:0.76rem var(--sci-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.row .tip{grid-row:3;grid-column:1/3;font-size:0.72rem;color:var(--dim);line-height:1.4}
+.hint{font-size:0.76rem;line-height:1.5;color:var(--dim);margin:8px 0 4px}
+#gradPick{margin-top:12px}
+
+.code{font:0.7rem/1.45 var(--sci-mono);color:#e9dccb;background:#0a0710;border:1px solid var(--line);border-radius:6px;
+  padding:8px 9px;margin:8px 0 4px;overflow-x:auto;white-space:pre;max-height:260px}
+.code.csv{height:13.6em;max-height:none;overflow:hidden;color:#d8d0e0}
+.code.csv .new{color:var(--gold)}
+.code.csv .cmt{color:var(--dim)}
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+.about b{color:var(--ink);font-weight:600}
+.ex-label{margin-top:10px!important;color:var(--ink)!important;font-size:0.76rem!important}
+
+#status{
+  position:fixed;left:var(--panel-w);bottom:0;z-index:25;display:flex;gap:16px;align-items:center;padding:9px 18px;
+  font-size:0.78rem;color:var(--ink);background:rgba(7,5,10,0.85);max-width:calc(100% - var(--panel-w))}
+#status .fn{color:var(--gold)}
+#status .right{color:var(--dim);font-family:var(--sci-mono);font-variant-numeric:tabular-nums}
+
+#legend{
+  position:fixed;right:18px;bottom:46px;z-index:20;padding:9px 11px 7px;width:200px;
+  background:rgba(13,10,18,0.72);border:1px solid var(--line);border-radius:8px;pointer-events:none}
+.lg-title{font-size:0.76rem;color:var(--dim);margin-bottom:6px}
+#lgBar{height:10px;border-radius:2px}
+.lg-ticks{display:flex;justify-content:space-between;font-size:0.74rem;color:var(--ink);margin-top:4px}
+
+#walkCap{
+  position:fixed;left:calc(var(--panel-w) + (100% - var(--panel-w)) / 2);bottom:48px;transform:translateX(-50%);z-index:22;
+  width:min(560px,calc(100% - var(--panel-w) - 32px));padding:11px 14px 10px;
+  background:rgba(10,8,14,0.9);border:1px solid var(--line-b);border-radius:10px;pointer-events:none}
+.wc-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px}
+#wcKind{font-size:0.86rem;font-weight:600;color:var(--gold)}
+#wcNum{font:0.72rem var(--sci-mono);color:var(--dim);white-space:nowrap}
+#wcText{font-size:0.8rem;line-height:1.5;color:var(--ink);min-height:3em}
+.wc-keys{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:0.72rem;color:var(--dim)}
+.wc-keys .k::before{content:'';display:inline-block;width:14px;height:2px;margin-right:5px;vertical-align:middle;background:currentColor}
+.k-jump{color:#8cff80}.k-ring{color:#66e6ff}.k-push{color:#ff5a5a}.k-join{color:#ffd84d}
+
+@media(min-width:769px){
+  body.panel-closed #gear{display:block}
+  body.panel-closed #status{left:0;max-width:100%}
+  body.panel-closed #hint{left:50%}
+  body.panel-closed #walkCap{left:50%;width:min(560px,calc(100% - 32px))}
+}
+
+/* TOUCH. Any touch screen or narrow window: every target is 44px or more. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:320px}
+  #panelClose{width:44px;height:44px}
+  .modes button,.presets button{min-height:46px;font-size:0.76rem;border-radius:10px}
+  .row{min-height:44px;margin:4px 0}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1a1218;box-shadow:0 0 0 1px var(--warm)}
+  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1a1218}
+  .about p{font-size:0.82rem;line-height:1.65}
+  .about a,.credit-line a{display:inline-block;min-height:28px;line-height:28px}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .pagetitle{display:none}
+  #gear,body.panel-closed #gear{display:none}
+  #dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,8,14,0.95);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  #dock > button.on{border-color:var(--warm);color:var(--gold)}
+  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-family:inherit;font-size:0.76rem;cursor:pointer}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:rgba(249,140,10,0.14);color:var(--gold)}
+  #status{left:0;right:0;bottom:var(--dock-h);max-width:none;gap:10px;padding:6px calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));white-space:nowrap;overflow:hidden}
+  #status span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  #legend{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;top:calc(50px + env(safe-area-inset-top));bottom:auto;
+    display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center;padding:6px 10px}
+  html.in-frame #legend{top:8px}
+  .lg-title{grid-row:1 / 3;margin:0;white-space:nowrap}
+  #lgBar{grid-column:2;height:8px}
+  .lg-ticks{grid-column:2;margin-top:3px}
+  #hint{left:16px;right:16px;bottom:auto;top:calc(100px + env(safe-area-inset-top));transform:none;text-align:center;white-space:normal}
+  html.in-frame #hint{top:56px}
+  body:not(.panel-closed) #hint{opacity:0}
+  #walkCap,body.panel-closed #walkCap{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;transform:none;bottom:calc(var(--dock-h) + 34px);padding:9px 12px}
+  #wcText{font-size:0.78rem;min-height:4.5em}
+  body:not(.panel-closed) #walkCap{opacity:0}
+  #panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    height:min(50vh,540px);height:min(50dvh,540px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 24px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px 0;
+    background:linear-gradient(180deg,rgba(10,8,14,1) 65%,rgba(10,8,14,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
+   tab at the lower left. The topbar and the status bar are hidden. */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar,#status{display:none}
+  #legend,html.in-frame #legend{display:block;top:10px;right:auto;width:200px;left:calc(10px + env(safe-area-inset-left))}
+  #hint,html.in-frame #hint{top:10px;left:30%;right:30%}
+  #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #walkCap,body.panel-closed #walkCap{left:auto;right:calc(10px + env(safe-area-inset-right));width:min(340px,40vw);bottom:10px}
+  #panel,#panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;
+    transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
+}
+
+/* SAVER. main.js sets html.saver in snSaver.enter. Only the canvas stays. */
+html.saver #panel,html.saver #dock,html.saver #status,html.saver #legend,html.saver #walkCap,
+html.saver #hint,html.saver #gear,html.saver .topbar,html.saver #nogl{display:none!important}
+html.saver #gl{cursor:none}
