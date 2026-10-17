@@ -24,12 +24,15 @@
 //    const r = createRoots({ seed: 3, scale: 0.12 });
 //    r.growFor(4);   r.count;   r.world(i, out)
 //    r.radius, r.order, r.flow, r.born (set with r.stamp(clock))
+//    packRoots(r, { x, z, spIndex, mode, rTop }) -> the GPU rows of pose.js
 //
 //  grep -n targets
 //    the hooks ............. "const hooks"
 //    pipe radius ........... "function pipe"
+//    GPU rows .............. "export function packRoots"
 // ============================================================================
 import { createModel, randomInUnitSphere } from '../../lib/dla-engine.js';
+import { TEX_W, nodeFrames, frameQuat } from './pose.js';
 
 // opts: seed, scale (metres per engine unit), bias (0..1, the pull up to
 // the crown), max (particle cap), r0 (tip radius in metres), rTop (the
@@ -112,4 +115,39 @@ export function createRoots(opts = {}) {
     world(i, out = [0, 0, 0]) { out[0] = m.pos[i * 3] * scale; out[1] = m.pos[i * 3 + 1] * scale; out[2] = m.pos[i * 3 + 2] * scale; return out; },
     get max() { return max; },
   };
+}
+
+// The roots as GPU rows (the T0..T4 layout of pose.js packYear), so the
+// branch shader draws them as smooth tubes too. The main child of a
+// particle is its child with the largest subtree, so the thick paths are
+// the continuous axes. opts: x, z (the plant), spIndex, mode, rScale
+// (multiplies every radius, so the root collar matches the trunk).
+export function packRoots(r, opts = {}) {
+  const m = r.model, n = Math.min(r.count, r.born.length), S = r.scale;
+  const ox = opts.x || 0, oz = opts.z || 0, rs = opts.rScale ?? 1;
+  const sizes = r.flow;
+  const mc = new Int32Array(n).fill(-1), best = new Float32Array(n);
+  for (let i = 1; i < n; i++) { const p = m.parent[i]; if (p >= 0 && sizes[i] > best[p]) { best[p] = sizes[i]; mc[p] = i; } }
+  const px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n), par = new Int32Array(n);
+  for (let i = 0; i < n; i++) { px[i] = m.pos[i * 3] * S + ox; py[i] = m.pos[i * 3 + 1] * S; pz[i] = m.pos[i * 3 + 2] * S + oz; par[i] = m.parent[i]; }
+  const fr = nodeFrames({ count: n, px, py, pz, parent: par, mainChild: mc });
+  const rows = Math.max(1, Math.ceil(n / TEX_W)), size = TEX_W * rows * 4;
+  const T = [0, 1, 2, 3, 4].map(() => new Float32Array(size));
+  const sArc = new Float32Array(n);
+  let maxOrder = 1, maxFlow = 1;
+  for (let i = 0; i < n; i++) { if (r.order[i] > maxOrder) maxOrder = r.order[i]; if (sizes[i] > maxFlow) maxFlow = sizes[i]; }
+  const lf = Math.log(1 + maxFlow);
+  for (let i = 0; i < n; i++) {
+    const o = i * 4, p = par[i];
+    if (p >= 0) sArc[i] = sArc[p] + Math.hypot(px[i] - px[p], py[i] - py[p], pz[i] - pz[p]);
+    T[0][o] = px[i]; T[0][o + 1] = py[i]; T[0][o + 2] = pz[i]; T[0][o + 3] = r.born[i];
+    T[1][o] = T[1][o + 1] = r.radius[i] * rs;
+    T[1][o + 2] = p < 0 ? i : (mc[p] === i ? p : -(p + 1));
+    T[1][o + 3] = 1e9;
+    frameQuat(fr.tan[i * 3], fr.tan[i * 3 + 1], fr.tan[i * 3 + 2], fr.nrm[i * 3], fr.nrm[i * 3 + 1], fr.nrm[i * 3 + 2], T[2], o);
+    T[3][o] = sArc[i]; T[3][o + 1] = mc[i] >= 0 ? r.born[mc[i]] : 1e9; T[3][o + 2] = 0;
+    T[3][o + 3] = opts.mode === 'order' ? r.order[i] / maxOrder : (opts.mode === 'flow' || opts.mode === 'vigour') ? Math.log(1 + sizes[i]) / lf : 0;
+    T[4][o] = opts.spIndex || 0; T[4][o + 1] = 0; T[4][o + 2] = (i * 0.618034) % 1; T[4][o + 3] = 0;
+  }
+  return { n, rows, T };
 }
