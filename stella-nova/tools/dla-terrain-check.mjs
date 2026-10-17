@@ -103,15 +103,22 @@ function sanity(t, o, label) {
   const relief = st.maxHeight - Math.max(st.minHeight, st.seaLevel);
   const biomes = st.biomeFractions.filter((f) => f > 0.005).length;
   const wantLand = 1 - o.seaFraction;
-  const landOk = o.seaFraction > 0.005 ? Math.abs(st.landFraction - wantLand) < 0.12 : st.landFraction > 0.97;
+  // glacial valleys flood under the sea (fjords): less land is allowed then
+  const dLand = st.landFraction - wantLand;
+  const landOk = o.seaFraction > 0.005 ? dLand < 0.12 && dLand > -0.12 - 0.3 * (o.glacier || 0) : st.landFraction > 0.97;
   const reliefOk = relief > 0.35 * o.heightScale;
   // a flat world: most land in a thin height band
   let flat = 0, land = 0;
   for (let i = 0; i < t.height.length; i += 3) if (t.height[i] >= st.seaLevel) { land++; if (t.height[i] - st.seaLevel < 0.02 * o.heightScale) flat++; }
   const flatFrac = land ? flat / land : 1;
   const rs = riverStats(t);
-  const ok = !bad && landOk && reliefOk && biomes >= 3 && flatFrac < 0.6 && rs.rises === 0 && (o.rainfall < 0.15 || st.riverCount > 0);
-  return { ok, info: `${label}: land ${st.landFraction.toFixed(2)} (want ${wantLand.toFixed(2)}) relief ${relief.toFixed(0)} m of ${o.heightScale} flat ${(flatFrac * 100).toFixed(0)}% biomes ${biomes} rivers ${st.riverCount} (${st.riverLengthKm.toFixed(0)} km, rises ${rs.rises}) lakes ${st.lakeCount}${bad ? ' NaN in ' + bad : ''} ${st.ms} ms` };
+  // stripes: curvature across rows against along rows (1 is isotropic)
+  let ca = 0, cb = 0;
+  const n = t.n, H = t.height;
+  for (let y = 1; y < n - 1; y += 2) for (let x = 1; x < n - 1; x++) { const i = y * n + x; ca += Math.abs(H[i + n] + H[i - n] - 2 * H[i]); cb += Math.abs(H[i + 1] + H[i - 1] - 2 * H[i]); }
+  const aniso = ca / (cb || 1);
+  const ok = aniso > 0.5 && aniso < 2 && !bad && landOk && reliefOk && biomes >= 3 && flatFrac < 0.6 && rs.rises === 0 && (o.rainfall < 0.15 || st.riverCount > 0);
+  return { ok, info: `${label}: land ${st.landFraction.toFixed(2)} (want ${wantLand.toFixed(2)}${o.glacier > 0 ? ', fjords may take ' + (0.3 * o.glacier).toFixed(2) : ''}) relief ${relief.toFixed(0)} m of ${o.heightScale} flat ${(flatFrac * 100).toFixed(0)}% biomes ${biomes} rivers ${st.riverCount} (${st.riverLengthKm.toFixed(0)} km, rises ${rs.rises}) lakes ${st.lakeCount} stripes ${aniso.toFixed(2)}${bad ? ' NaN in ' + bad : ''} ${st.ms} ms` };
 }
 
 // ── PNG preview ────────────────────────────────────────────────────────
@@ -263,6 +270,14 @@ async function gpuCompare() {
 }
 
 // ── main ───────────────────────────────────────────────────────────────
+// --hash: print the hash of three presets (n 256), for the engine compare.
+const HASH_SET = ['highlands', 'fjords', 'volcanic-isles'];
+async function hashSet() {
+  const out = [];
+  for (const id of HASH_SET) { const t = await generateTerrain({ ...PRESETS[id].opts, n: 256 }); out.push(`${id}:${hashArrays(t)}:${t.lakes.length}:${t.rivers.length}`); }
+  return out.join(' ');
+}
+if (flag('--hash')) { console.log('HASH ' + await hashSet()); process.exit(0); }
 if (GPU) {
   if (!isDeno || !globalThis.navigator?.gpu) { console.log('FAIL  --gpu needs deno run -A (navigator.gpu)'); process.exit(1); }
   await gpuCompare();
@@ -308,6 +323,26 @@ if (GPU) {
   const shapes = ['height', 'flow', 'river', 'water', 'moisture', 'temperature', 'sediment', 'biome'].every((k) => a[k].length === a.n * a.n);
   check('terrain shape', shapes && a.dla.count > 0 && a.dla.pos.length === a.dla.count * 2 && a.ridges.length > 0 && a.biome instanceof Uint8Array,
     `rivers ${a.rivers.length}, lakes ${a.lakes.length}, ridges ${a.ridges.length}, dla ${a.dla.count}`);
+}
+
+// determinism across calls: preset A, then B, then A; and across engines
+{
+  const tt = performance.now();
+  const A1 = await generateTerrain({ ...PRESETS.highlands.opts, n: 512 });
+  const Bt = await generateTerrain({ ...PRESETS.alpine.opts, n: 512 });
+  const A2 = await generateTerrain({ ...PRESETS.highlands.opts, n: 512 });
+  check('determinism A, B, A', hashArrays(A1) === hashArrays(A2) && A1.lakes.length === A2.lakes.length,
+    `highlands ${hashArrays(A1)} (${A1.lakes.length} lakes), alpine ${hashArrays(Bt)}, highlands again ${hashArrays(A2)} (${A2.lakes.length} lakes) (${ms(tt)})`);
+  const frozen = JSON.stringify(PRESETS.highlands.opts) === JSON.stringify(PRESETS.highlands.opts) && JSON.stringify(defaults()) === JSON.stringify(defaults());
+  check('presets not mutated', frozen && Object.isFrozen(PRESETS), 'PRESETS frozen, defaults() fresh');
+  let deno = null;
+  try { deno = execFileSync('deno', ['--version'], { encoding: 'utf8' }).split('\n')[0]; } catch { deno = null; }
+  if (!isDeno && deno) {
+    const mine = await hashSet();
+    let other = '';
+    try { other = execFileSync('deno', ['run', '-A', fileURLToPath(import.meta.url), '--hash'], { encoding: 'utf8' }).trim().replace(/^HASH /, ''); } catch (e) { other = 'deno failed: ' + e.message; }
+    check('determinism node = deno', mine === other, `node ${mine} | ${deno}: ${other}`);
+  } else console.log('SKIP  determinism node = deno (deno not found)');
 }
 
 // detail: no seams across texel edges, zero under water
@@ -379,21 +414,47 @@ if (PNG) fs.mkdirSync(PNG, { recursive: true });
   }
 }
 
-// random worlds
+// random worlds: sane, and no two alike (siblings)
+function signature(t) {
+  const n = t.n, k = 16, f = n / k, sig = new Float64Array(k * k);
+  for (let j = 0; j < k; j++) for (let i = 0; i < k; i++) {
+    let s = 0;
+    for (let y = 0; y < f; y += 2) for (let x = 0; x < f; x += 2) s += t.height[(j * f + y) * n + i * f + x];
+    sig[j * k + i] = s;
+  }
+  let m = 0, v = 0;
+  for (const x of sig) m += x; m /= sig.length;
+  for (const x of sig) v += (x - m) ** 2; v = Math.sqrt(v / sig.length) || 1;
+  return { h: sig.map((x) => (x - m) / v), b: t.stats.biomeFractions, land: t.stats.landFraction };
+}
 {
-  const N = QUICK ? 10 : 30;
+  const N = QUICK ? 12 : 50;
   let okc = 0;
-  const bad = [];
+  const bad = [], sigs = [], arch = {};
   const tt = performance.now();
   for (let s = 1; s <= N; s++) {
-    const o = normalizeOptions({ ...randomOptions(s * 7919, defaults()), n: 256 });
+    const ro = randomOptions(s * 7919, defaults());
+    arch[ro.archetype] = (arch[ro.archetype] || 0) + 1;
+    const o = normalizeOptions({ ...ro, n: 256 });
     const t = await generateTerrain(o);
-    const r = sanity(t, o, `random ${s}`);
+    const r = sanity(t, o, `random ${s} (${ro.archetype}, ${o.mask}, ${o.layout})`);
     if (r.ok) okc++; else bad.push(r.info);
-    if (PNG && s <= 12) writePNG(path.join(PNG, `random-${s}.png`), 256, 256, renderPreview(t, 256));
+    sigs.push(signature(t));
+    if (PNG && s <= 24) writePNG(path.join(PNG, `random-${s}.png`), 256, 256, renderPreview(t, 256));
   }
   for (const b of bad) console.log('      ' + b);
-  check('random worlds', okc === N, `${okc} of ${N} sane at n 256 (${ms(tt)})`);
+  check('random worlds', okc === N, `${okc} of ${N} sane at n 256 (${ms(tt)}); archetypes ${JSON.stringify(arch)}`);
+  let maxC = -1, pair = '', sib = 0;
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+    let c = 0;
+    for (let k = 0; k < 256; k++) c += sigs[i].h[k] * sigs[j].h[k];
+    c /= 256;
+    let bd = 0;
+    for (let k = 0; k < 16; k++) bd += Math.abs(sigs[i].b[k] - sigs[j].b[k]);
+    if (c > maxC) { maxC = c; pair = `${i + 1}/${j + 1} (biome L1 ${bd.toFixed(2)})`; }
+    if (c > 0.85 && bd < 0.3) { sib++; console.log(`      sibling ${i + 1}/${j + 1}: corr ${c.toFixed(2)}, biome L1 ${bd.toFixed(2)}`); }
+  }
+  check('random worlds differ', sib === 0, `${N * (N - 1) / 2} pairs, max height-map correlation ${maxC.toFixed(2)} at ${pair}, sibling pairs (corr > 0.85 and biome L1 < 0.3): ${sib}`);
 }
 
 // rivers on a big map, timing
