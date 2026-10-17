@@ -347,3 +347,87 @@ regrow();
 if (R) frameTo(false);
 requestAnimationFrame(frame);
 
+// ============================================================ screensaver
+// window.snSaver (protocol: lib/screensaver.js). enter() plays a seeded
+// shuffle of shots (saver.js makeShots): each grows a new plant from its
+// own seed, species, colour mode and gradient, in 5 to 12 s (shotRate).
+// The camera frames the plant and its soil in the clear band of the label
+// plate (plateBand, bandFrame, fitDistance), aims a little toward the
+// growth front, and orbits slowly. calm 1 gives the slowest orbit and wind.
+window.snSaver = {
+  enter(o = {}) {
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    const rnd = rng((o.seed >>> 0) || 1);
+    const label = typeof o.label === 'function' ? o.label : () => {};
+    saverOn = true; saverBand = null;
+    const html = document.documentElement, added = !html.classList.contains('sn-saver');
+    html.classList.add('sn-saver');
+    setOpen(false); setExplain(false); $('legend').hidden = true;
+    let bandFn = null, bandAt = -1e9;
+    import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => { /* no plate */ });
+    const shots = makeShots(rnd, 30, calm);
+    const CODE = { lang: 'js', name: 'grow.js · one colonisation step', text: codeExtract(createPlant({ species: 'sapling' }).step.toString()) };
+    let k = -1, shot = null, t = 0, az = 0, tgt = null;
+    const params = () => [
+      { sym: 'N', name: 'nodes', value: plant.count.toLocaleString(), cls: 'm1' },
+      { sym: 'n_{\\mathrm{tip}}', name: 'tips', value: plant.tipCount.toLocaleString(), cls: 'm2' },
+      { sym: 'h', name: 'height', value: plant.maxY.toFixed(2) + ' m', cls: 'm3' },
+      { sym: 'A', name: 'attractors left', value: plant.aliveCount.toLocaleString(), cls: 'm4' },
+    ];
+    const plate = () => {
+      if (!shot) return;
+      const mode = COLOUR_MODES.find(c => c.id === shot.mode);
+      label({
+        title: SPECIES[shot.species].label,
+        sub: 'Space colonisation · ' + (shot.mode === 'natural' ? 'natural colour' : 'coloured by ' + mode.label.toLowerCase() + ' · ' + GRADIENTS[shot.gradient].label) + (shot.roots ? ' · DLA roots after fogleman/dlaf' : ''),
+        params: params(),
+        tex: [String.raw`\hat{d}_v = \frac{\sum_{a \in S(v)} (a - v)/\lVert a - v\rVert}{\bigl\lVert \sum_{a \in S(v)} (a - v)/\lVert a - v\rVert \bigr\rVert},\qquad v' = v + D\,\hat{d}_v`,
+          String.raw`r_{\mathrm{parent}}^{\,p} = \sum r_{\mathrm{child}}^{\,p}`],
+        rules: [['D', 'm1'], ['p', 'm4']],
+        eq: ['d̂ᵥ = unit mean of (a − v)/‖a − v‖ over the attractors within dᵢ', 'v′ = v + D d̂ᵥ', 'r_parentᵖ = Σ r_childᵖ'],
+        lines: ['An attractor dies when a node comes within the kill distance.'],
+        code: CODE,
+      });
+    };
+    const next = () => {
+      k = (k + 1) % shots.length; shot = shots[k]; t = 0;
+      S.species = shot.species; speciesDefaults(shot.species);
+      S.seed = shot.seed; S.crown = 1; S.tropism = 1; S.speed = 1; S.paused = false;
+      S.wind = shot.wind * (1 - 0.5 * calm);
+      S.roots = shot.roots; if (R) { R.setRootsOn(shot.roots); R.setLeavesOn(true); } S.leaves = true;
+      setMode(shot.mode); setGradient(shot.gradient, shot.reversed);
+      regrow();
+      saverRate = shotRate(plant.estIters(), shot.dur);
+      az = shot.az0; tgt = null; glide.on = false;
+      plate();
+    };
+    saverTick = dt => {
+      const now = performance.now();
+      if (bandFn && now - bandAt > 400) { bandAt = now; const b = bandFn(innerHeight); if (b) saverBand = b; }
+      t += dt;
+      if (t > shot.dur) next();
+      const s = subject(), w = innerWidth, h = innerHeight, f = bandFrame(saverBand, w, h);
+      const d = fitDistance(s.r, FOV, w / h, f.hFrac, f.wFrac, 0.8);
+      // the growth front: the mean height of the newest nodes
+      let fy = 0, m = 0;
+      for (let i = Math.max(0, plant.count - 40); i < plant.count; i++) { fy += plant.pos[i * 3 + 1]; m++; }
+      const goal = s.c[1] + ((m ? fy / m : s.c[1]) - s.c[1]) * 0.25;
+      tgt = tgt === null ? goal : tgt + (goal - tgt) * Math.min(1, dt * 1.2);
+      az += shot.orbit * dt;
+      const ce = Math.cos(shot.el);
+      R.controls.target.set(0, tgt, 0);
+      R.camera.position.set(Math.sin(az) * ce * d, tgt + Math.sin(shot.el) * d, Math.cos(az) * ce * d);
+    };
+    next();
+    this._plate = setInterval(plate, 1000);
+    this._added = added;
+    return { canvas: $('gl'), warmupMs: 1200 };
+  },
+  exit() {
+    saverOn = false; saverTick = null; saverBand = null;
+    clearInterval(this._plate);
+    if (this._added) document.documentElement.classList.remove('sn-saver');
+    S.wind = 0.35; syncSliders(); legend(); setRootsOn(S.roots); setLeavesOn(true); setPaused(false);
+    setOpen(!PHONE_Q.matches);
+  },
+};

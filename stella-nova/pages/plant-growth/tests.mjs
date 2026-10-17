@@ -169,6 +169,9 @@ for (const id of SPECIES_IDS) {
   ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 0, mode: 'age' }, P, C);
   const L = Math.hypot(P[last * 4] - P[q * 4], P[last * 4 + 1] - P[q * 4 + 1], P[last * 4 + 2] - P[q * 4 + 2]);
   ok(Math.abs(L - p.D) < 1e-5 && C[last * 4 + 3] === 1, `pose: grown after one step (${L.toFixed(4)})`);
+  ps.fill(v, { clock: clock + 20, time: 3, dt: 0.016, wind: 0, mode: 'age', ageRef: clock }, P, C);
+  ok(Math.abs(C[last * 4] - 1) < 1e-6, 'pose: ageRef keeps the newest node at the hot end after the clock runs on');
+  ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 0, mode: 'age' }, P, C);
   const still = P.slice();
   ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 1, mode: 'age' }, P, C);
   let d0 = Math.hypot(P[0] - still[0], P[1] - still[1], P[2] - still[2]), tipMove = 0;
