@@ -6,13 +6,17 @@
 // primitives that use the same material. It reads accessors with
 // byteStride and normalized integer types. It does not read sparse
 // accessors, Draco or meshopt compression (the asset build does not use
-// them). It applies KHR_texture_transform to the base colour UVs when it
+// them). It accepts KHR_mesh_quantization data (normalized integers).
+// Images can be embedded (bufferView) or external files (uri): an
+// external image has bytes null and a uri until a loader fetches it. It applies KHR_texture_transform to the base colour UVs when it
 // is present. It ignores the other KHR_materials_* extensions.
 //
 // API (grep -n these names):
 //   parseGLB(arrayBuffer, opts?) -> GLBScene
 //     opts.bake (default true): apply node matrices to the vertex data.
-//     opts.merge (default true): merge primitives by material.
+//     opts.merge (default true): merge primitives by material. With
+//       merge false each mesh keeps node (node index) and root (index of
+//       its top level scene node), so a tool can split variants.
 //   GLBScene = {
 //     meshes: [{ name, positions: Float32Array (xyz), normals: Float32Array|null,
 //                uvs: Float32Array|null (uv), tangents: Float32Array|null (xyzw),
@@ -28,7 +32,9 @@
 //                metallicFactor, roughnessFactor, normalScale,
 //                occlusionStrength, alphaMode: 'OPAQUE'|'MASK'|'BLEND',
 //                alphaCutoff, doubleSided, extras }
-//   Image = { bytes: Uint8Array, mime, index }  (index into GLBScene.images)
+//   Image = { bytes: Uint8Array|null, uri: string|null, mime, index }
+//     index is the glTF image index. The nature pack uses uri images
+//     (../tex/<source>/<name>_<size>.webp) that several GLB files share.
 //   sceneBounds(scene) -> { min, max }
 //
 // Browser loader (needs only fetch and createImageBitmap):
@@ -43,7 +49,10 @@
 //     loadNatureManifest loaded.
 //   bitmaps = Map image index -> ImageBitmap (sRGB conversion off, no
 //     premultiply). Upload base colour as rgba8unorm-srgb and the other
-//     maps as rgba8unorm.
+//     maps as rgba8unorm. Each scene image gets .url (the absolute file
+//     URL) and .bitmap. The loader caches by URL, so all variants and
+//     LODs that share a file share one ImageBitmap: key GPU textures on
+//     image.url to upload each file once.
 //
 // The node tests for this file are tools/nature-assets/glb-lite.test.mjs.
 
@@ -224,12 +233,24 @@ function imageOf(json, bin, images, texInfo) {
   if (src === undefined) return null;
   if (!images[src]) {
     const im = json.images[src];
-    if (im.bufferView === undefined) throw new Error('glb-lite: image ' + src + ' is not embedded (uri images are not supported)');
-    const bv = json.bufferViews[im.bufferView];
-    const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
-    images[src] = { bytes, mime: im.mimeType || sniffMime(bytes), index: src };
+    if (im.bufferView === undefined) {
+      // External image: the nature pack shares one WebP file between the
+      // variants and LODs of a source. bytes stay null until a loader
+      // fetches the uri (loadAsset does).
+      if (!im.uri || im.uri.startsWith('data:')) throw new Error('glb-lite: image ' + src + ' has no bufferView and no file uri');
+      images[src] = { bytes: null, uri: im.uri, mime: im.mimeType || mimeFromName(im.uri), index: src };
+    } else {
+      const bv = json.bufferViews[im.bufferView];
+      const bytes = bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength);
+      images[src] = { bytes, uri: null, mime: im.mimeType || sniffMime(bytes), index: src };
+    }
   }
   return images[src];
+}
+
+function mimeFromName(u) {
+  const e = u.split('?')[0].split('.').pop().toLowerCase();
+  return e === 'webp' ? 'image/webp' : e === 'png' ? 'image/png' : (e === 'jpg' || e === 'jpeg') ? 'image/jpeg' : 'application/octet-stream';
 }
 
 function sniffMime(b) {
@@ -360,7 +381,7 @@ export function parseGLB(buffer, opts = {}) {
   if (!json) throw new Error('glb-lite: no JSON chunk');
   const req = json.extensionsRequired || [];
   for (const e of req) {
-    if (e === 'KHR_draco_mesh_compression' || e === 'EXT_meshopt_compression' || e === 'KHR_mesh_quantization') {
+    if (e === 'KHR_draco_mesh_compression' || e === 'EXT_meshopt_compression' || e === 'KHR_texture_basisu') {
       throw new Error('glb-lite: unsupported required extension ' + e);
     }
   }
@@ -377,7 +398,7 @@ export function parseGLB(buffer, opts = {}) {
   const prims = [];
   const scene = json.scenes ? json.scenes[json.scene ?? 0] : null;
   const roots = scene ? scene.nodes : (json.nodes || []).map((_, i) => i);
-  const visit = (ni, parent) => {
+  const visit = (ni, parent, root) => {
     const n = json.nodes[ni];
     const m = mMul(parent, nodeMatrix(n));
     if (n.mesh !== undefined) {
@@ -386,14 +407,15 @@ export function parseGLB(buffer, opts = {}) {
         const prim = readPrimitive(json, bin, p);
         if (!prim) continue;
         prim.name = mesh.name || n.name || '';
+        prim.node = ni; prim.root = root;
         if (bake) transformAttrs(prim, m);
         else prim.matrix = m;
         prims.push(prim);
       }
     }
-    for (const c of n.children || []) visit(c, m);
+    for (const c of n.children || []) visit(c, m, root);
   };
-  if (json.nodes) for (const r of roots) visit(r, mIdentity());
+  if (json.nodes) for (const r of roots) visit(r, mIdentity(), r);
   else if (json.meshes) { // meshes with no nodes: read them as is
     for (const mesh of json.meshes) for (const p of mesh.primitives) {
       const prim = readPrimitive(json, bin, p); if (prim) { prim.name = mesh.name || ''; prims.push(prim); }
@@ -422,6 +444,7 @@ export function parseGLB(buffer, opts = {}) {
       triangleCount: p.indices.length / 3,
       bounds: boundsOf(p.positions),
       matrix: p.matrix,
+      node: p.node, root: p.root,
       material: mat,
     };
   });
@@ -462,6 +485,19 @@ async function bitmapFrom(bytes, mime) {
   return createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
 }
 
+const imageCache = new Map(); // absolute url -> Promise<{ bytes, bitmap }>
+function sharedImage(u, mime) {
+  if (!imageCache.has(u)) {
+    const p = (async () => {
+      const bytes = new Uint8Array(await fetchBytes(u));
+      return { bytes, bitmap: await bitmapFrom(bytes, mime) };
+    })();
+    imageCache.set(u, p);
+    p.catch(() => imageCache.delete(u));
+  }
+  return imageCache.get(u);
+}
+
 export async function loadNatureManifest(baseUrl) {
   const base = String(baseUrl).replace(/\/?$/, '/');
   const r = await fetch(base + 'manifest.json');
@@ -486,10 +522,19 @@ export async function loadNatureManifest(baseUrl) {
       const key = id + '#' + li;
       if (!cache.has(key)) {
         cache.set(key, (async () => {
-          const scene = parseGLB(await fetchBytes(url(rec.lods[li].file)));
+          const glbUrl = url(rec.lods[li].file);
+          const scene = parseGLB(await fetchBytes(glbUrl));
           const bitmaps = new Map();
           await Promise.all(scene.images.map(async (im) => {
-            bitmaps.set(im.index, await bitmapFrom(im.bytes, im.mime));
+            if (im.uri) {
+              im.url = new URL(im.uri, glbUrl).href;
+              const got = await sharedImage(im.url, im.mime);
+              im.bytes = got.bytes; im.bitmap = got.bitmap;
+            } else {
+              im.url = glbUrl + '#image' + im.index;
+              im.bitmap = await bitmapFrom(im.bytes, im.mime);
+            }
+            bitmaps.set(im.index, im.bitmap);
           }));
           return { record: rec, lod: li, scene, bitmaps };
         })());
@@ -501,14 +546,14 @@ export async function loadNatureManifest(baseUrl) {
       const rec = assets.get(id);
       if (!rec || !rec.impostor) return null;
       const im = rec.impostor;
-      const [a, n] = await Promise.all([im.albedo, im.normal].map(async (p) => p ? bitmapFrom(await fetchBytes(url(p)), 'image/webp') : null));
+      const [a, n] = await Promise.all([im.albedo, im.normal].map(async (p) => p ? (await sharedImage(url(p), 'image/webp')).bitmap : null));
       return { record: rec, impostor: im, albedo: a, normal: n };
     },
     async loadGround(ids) {
       const list = (ids || manifest.groundLayers || []).map((g) => assets.get(g)).filter(Boolean);
       return Promise.all(list.map(async (rec) => {
         const t = rec.textures;
-        const get = async (p) => p ? bitmapFrom(await fetchBytes(url(p)), 'image/webp') : null;
+        const get = async (p) => p ? (await sharedImage(url(p), 'image/webp')).bitmap : null;
         const [albedo, normal, orm] = await Promise.all([get(t.albedo), get(t.normal), get(t.orm)]);
         return { record: rec, albedo, normal, orm };
       }));
