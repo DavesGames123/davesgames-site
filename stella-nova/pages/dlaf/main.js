@@ -25,7 +25,13 @@
 //    pointer input ......... "function bindPointer"
 //    panel controls ........ "function buildUI"
 //    CSV ................... "function updateCSV"
+//    surface view .......... "function surfaceStep"
 //    screensaver ........... "window.snSaver"
+//
+//  Surface view (Surface: Smooth): the cluster as a smooth SDF mesh.
+//  surface.js runs surface-core.js (lib/dla-sdf.js) in a module worker;
+//  the brick records go to surface-render.js. The growth waits for the
+//  mesher (at most LEAD particles ahead), so the surface grows live.
 // ============================================================================
 import { lut, cssGradient, mountGradientPicker, GRADIENTS } from '../../lib/growth-gradients.js';
 import {
@@ -36,6 +42,12 @@ import { recordWalk, timeline, frameAt, overlay, CAPTIONS } from './walk.js';
 import { clearRect, fit2D, ortho2D, fit3D, orbitMatrix, ease } from './camera.js';
 import { planShots, paceTarget, frameShot, shotLabel } from './saver.js';
 import { createRenderer } from './render.js';
+import { createSurface } from './surface.js';
+import { createSurfaceRenderer } from './surface-render.js';
+import { surfaceFrame } from './surface-frame.js';
+import { surfaceOptions, surfaceCap, RESOLUTIONS, SURFACE_DEFAULTS, PHONE_RES_CAP, RES_IDS } from './surface-core.js';
+import { MATERIALS, materialById } from './surface-shaders.js';
+import { relief2D } from './camera.js';
 
 export { S };
 
@@ -53,6 +65,8 @@ const S = {
   user: { zoom: 1, panX: 0, panY: 0 },
   cam: { yaw: 0.6, pitch: 0.35, dist: 120, ox: 0, oy: 0, fov: FOV, spin: 0.12, idleAt: 0 },
   walk: null, saver: null, saverOn: false,
+  surf: { on: false, res: PHONE_Q.matches ? 'low' : SURFACE_DEFAULTS.res, blend: SURFACE_DEFAULTS.blend, flow: SURFACE_DEFAULTS.flow,
+    material: SURFACE_DEFAULTS.material, sf: null, SR: null, err: null, minUp: 0, scanned: 0, finished: false, pending: [], key: '' },
 };
 if (/[?&]debug\b/.test(location.search)) window.dlaf = S;
 
@@ -74,6 +88,7 @@ function regrow(seed) {
   S.sub = null; S.subAt = 0; S.replay = null;
   S.vals = new Float32Array(1024);
   if (R && S.mode === 'grow') R.setModel(S.m);
+  surfaceReset();
   S.viewInit = false; S.user.zoom = 1; S.user.panX = 0; S.user.panY = 0;
   csvLast = -1;
   syncReplayUI();
@@ -226,6 +241,90 @@ function syncReplayUI() {
   $('replayPlay').classList.toggle('on', !!(S.replay && S.replay.playing));
 }
 
+// ------------------------------------------------------------------ surface
+// The surface view is live in grow mode only (the walker demo stays lines).
+const surfActive = () => S.surf.on && S.mode === 'grow' && !S.surf.err && !!R;
+
+// Make the worker client and the GL side on first use. A shader or
+// context failure turns the surface off and says why.
+function surfaceInit() {
+  const u = S.surf;
+  if (u.SR || u.err || !R) return !!u.SR;
+  try {
+    u.SR = createSurfaceRenderer(R, { phone: PHONE_Q.matches });
+    u.sf = createSurface();
+  } catch (e) {
+    u.err = String(e && e.message || e).slice(0, 160); u.on = false;
+    setText('surfHint', 'The surface view did not start: ' + u.err);
+    syncSurfaceUI();
+  }
+  return !!u.SR;
+}
+
+function surfOpts() {
+  const m = S.m, u = S.surf;
+  return surfaceOptions({ res: u.res, blend: u.blend, flow: u.flow, spacing: m ? m.params.particleSpacing : 1, phone: PHONE_Q.matches });
+}
+
+// A new surface for the model on screen: a regrow, or a new blend, flow
+// strength or resolution. The particles go to the mesher again from id 0.
+function surfaceReset() {
+  const u = S.surf;
+  if (!u.on || !surfaceInit()) return;
+  u.sf.reset(surfOpts());
+  u.pending = []; u.scanned = 0; u.minUp = 0; u.finished = false;
+  u.SR.clear();
+}
+
+// One frame of the surface: send new particles, run the inline core if
+// there is no worker, upload the records that arrived (at most about
+// 160k vertices a frame, so a full rebuild does not stall one frame).
+function surfaceStep() {
+  const u = S.surf, m = S.m;
+  u.sf.push(m);
+  u.sf.tick(PHONE_Q.matches ? 5 : 7);
+  const t = u.sf.take();
+  if (t.cleared) { u.SR.clear(); u.pending = []; }
+  for (const r of t.list) u.pending.push(r);
+  let budget = 160000, n = 0;
+  while (n < u.pending.length && budget > 0) { budget -= u.pending[n].positions.length / 3 + 2000; n++; }
+  if (n) { u.SR.upload(u.pending.slice(0, n)); u.pending = u.pending.slice(n); }
+  // the lowest particle along up (3D floor height)
+  for (let i = u.scanned; i < m.count; i++) { const y = m.pos[i * 3 + 1]; if (i === 0 || y < u.minUp) u.minUp = y; }
+  u.scanned = m.count;
+}
+
+// How far the growth may run ahead of the mesher, and where it stops.
+const LEAD = () => (S.dim === 3 ? 220 : 380) * (PHONE_Q.matches ? 0.6 : 1);
+function surfaceLimit(m) {
+  const u = S.surf;
+  return Math.min(surfaceCap(m.dim, PHONE_Q.matches), Math.max(m.count, u.sf.applied + LEAD()));
+}
+
+function drawSurface(m, k, dt, growing) {
+  const u = S.surf, c = modeInfo(S.colour), w = canvas.width, h = canvas.height;
+  const opts = u.sf.opts || surfOpts();
+  let center, radius;
+  if (m.dim === 3) { center = [0, 0, 0]; radius = Math.max(4, m.boundingRadius); }
+  else {
+    const e = m.user.ext;                          // x0, x1, y0, y1 of the particles
+    center = [(e[0] + e[1]) / 2, (e[2] + e[3]) / 2, 0];
+    radius = Math.max(4, Math.hypot(e[1] - e[0], e[3] - e[2]) / 2);
+  }
+  let M = mat;
+  if (m.dim === 2) {
+    const v = S.view, us = S.user;
+    M = relief2D({ cx: v.cx + us.panX, cy: v.cy + us.panY, scale: v.scale * us.zoom, ox: v.ox, oy: v.oy }, canvas.clientWidth, canvas.clientHeight, Math.max(16, opts.rMax * 8));
+  }
+  const f = surfaceFrame({
+    dim: m.dim, mat: M, cam: S.cam, center, radius, minUp: u.minUp, opts, material: u.material, w, h,
+    max: maxOf(S.colour, m, k), floor: c.floor, gamma: c.gamma, count: k,
+    k: S.replay ? k : 1e9,
+    glowN: Math.max(24, Math.min(420, k * 0.02)), glowStr: growing ? (S.colour === 'age' ? 1.1 : 0.45) : 0.12,
+  });
+  u.SR.draw(f);
+}
+
 // ------------------------------------------------------------------ frame
 let lastT = 0, statusAt = 0;
 function frame(now) {
@@ -246,12 +345,21 @@ function frame(now) {
     k = st.k; ov = st.overlay;
   } else {
     m = S.m;
-    const growing = !S.paused && !S.replay && m.count < S.target;
+    const surf = surfActive() && surfaceInit();
+    const stop = surf ? Math.min(S.target, surfaceCap(m.dim, PHONE_Q.matches)) : S.target;
+    const growing = !S.paused && !S.replay && m.count < stop;
     if (growing && !S.saverOn) {
-      const limit = Math.ceil(S.speed / 5 * (3 + m.count / 150) * (m.dim === 3 ? 0.5 : 1));
-      m.growFor(Math.min(12, 2 + S.speed * 1.2), limit);
+      let limit = Math.ceil(S.speed / 5 * (3 + m.count / 150) * (m.dim === 3 ? 0.5 : 1));
+      if (surf) limit = Math.min(limit, surfaceLimit(m) - m.count);
+      if (limit > 0) m.growFor(Math.min(12, 2 + S.speed * 1.2), limit);
     }
     R.sync(valFn);
+    if (surf) {
+      surfaceStep();
+      if (!growing && !S.surf.finished && !S.saverOn) { S.surf.sf.finish(); S.surf.finished = true; }
+      if (growing) S.surf.finished = false;
+    }
+    S.surfGrowing = growing;
     if (S.replay && S.replay.playing) {
       S.replay.k = Math.min(m.count, S.replay.k + Math.max(1, m.count * dt / 8));
       if (S.replay.k >= m.count) S.replay = null;
@@ -266,7 +374,8 @@ function frame(now) {
   const pxu = m.dim === 3 ? null : (S.view.scale * S.user.zoom);
   const sp = m.params.particleSpacing;
   const dotPx = m.dim === 3 ? sp * 0.9 * (canvas.height / 2) / Math.tan(FOV / 2) : sp * 0.95 * pxu * dpr;
-  R.draw({
+  if (S.mode === 'grow' && surfActive() && S.surf.SR) drawSurface(m, k, dt, S.surfGrowing);
+  else R.draw({
     mat, k, max: maxOf(S.colour, m, k), floor: c.floor, gamma: c.gamma,
     dotPx: m.dim === 3 ? dotPx : (dotPx >= 1.5 ? Math.min(14 * dpr, dotPx) : 0), persp: m.dim === 3 ? 1 : 0,
     glowN: S.mode === 'walk' ? 6 : Math.max(24, Math.min(420, k * 0.02)),
@@ -279,7 +388,12 @@ function frame(now) {
     statusAt = now;
     const pr = presetById(S.preset);
     setText('stMain', S.mode === 'walk' ? 'How the walk works' : `${pr.name} · ${S.dim}D · ${fmt(k)} particles`);
-    setText('stRight', `walks ${fmt(m.walks)} · resets ${fmt(m.resets)} · R ${m.boundingRadius.toFixed(1)}`);
+    const sfx = surfActive() && S.surf.sf ? ` · mesh ${fmt(S.surf.sf.verts)} verts${S.surf.sf.busy ? ' · meshing' : ''}` : '';
+    setText('stRight', `walks ${fmt(m.walks)} · resets ${fmt(m.resets)} · R ${m.boundingRadius.toFixed(1)}${sfx}`);
+    if (surfActive()) {
+      const cap = surfaceCap(m.dim, PHONE_Q.matches);
+      setText('surfStat', S.target > cap ? `The surface growth stops at ${fmt(cap)} particles on this device.` : '');
+    }
     if (!S.replay) syncReplayUI();
     $('dockPlay').textContent = S.paused ? '▶' : '❚❚';
     setText('pauseBtn', S.paused ? 'Resume' : 'Pause');
@@ -394,6 +508,23 @@ function setColour(id) {
   applyGradient();
 }
 
+function syncSurfaceUI() {
+  const u = S.surf;
+  $('surfOff').classList.toggle('on', !u.on); $('surfOn').classList.toggle('on', u.on);
+  $('dockSurf').classList.toggle('on', u.on);
+  $('surfBox').hidden = !u.on;
+  document.querySelectorAll('#materials button').forEach(b => b.classList.toggle('on', b.dataset.id === u.material));
+  const cap = PHONE_Q.matches ? RES_IDS.indexOf(PHONE_RES_CAP) : RES_IDS.length - 1;
+  document.querySelectorAll('#surfRes button').forEach(b => { b.classList.toggle('on', b.dataset.id === u.res); b.disabled = RES_IDS.indexOf(b.dataset.id) > cap; });
+  setText('surfBlendV', (+u.blend).toFixed(2)); setText('surfFlowV', (+u.flow).toFixed(2));
+}
+function setSurface(on) {
+  const u = S.surf;
+  u.on = !!on && !u.err;
+  if (u.on) { if (S.mode === 'walk') setMode('grow'); surfaceReset(); }
+  syncSurfaceUI();
+}
+
 function buildUI() {
   // presets
   const pb = $('presets');
@@ -463,6 +594,28 @@ function buildUI() {
   $('walkNext').addEventListener('click', () => { if (S.walk) nextWalker(); });
   $('walkNew').addEventListener('click', () => startWalk(true));
 
+  // surface view
+  $('surfOff').addEventListener('click', () => setSurface(false));
+  $('surfOn').addEventListener('click', () => setSurface(true));
+  $('dockSurf').addEventListener('click', () => setSurface(!S.surf.on));
+  for (const mt of MATERIALS) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.id = mt.id; b.textContent = mt.label;
+    b.addEventListener('click', () => { S.surf.material = mt.id; syncSurfaceUI(); });
+    $('materials').appendChild(b);
+  }
+  for (const r of RESOLUTIONS) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.id = r.id; b.textContent = r.label;
+    b.addEventListener('click', () => { S.surf.res = r.id; syncSurfaceUI(); surfaceReset(); });
+    $('surfRes').appendChild(b);
+  }
+  for (const [id, key] of [['surfBlend', 'blend'], ['surfFlow', 'flow']]) {
+    const inp = $(id);
+    inp.value = String(S.surf[key]);
+    inp.addEventListener('input', () => { S.surf[key] = +inp.value; syncSurfaceUI(); });
+    inp.addEventListener('change', () => surfaceReset());
+  }
+  syncSurfaceUI();
+
   $('csvBtn').addEventListener('click', downloadCSV);
   $('cppCode').textContent = DLAF_ADDPARTICLE;
 
@@ -513,7 +666,7 @@ window.snSaver = {
   async enter(opts = {}) {
     let plateBand = null;
     try { plateBand = (await import('../../lib/saver-clear.js')).plateBand; } catch (e) { /* no band: the full frame */ }
-    const keep = { grad: S.grad, rev: S.rev, colour: S.colour };
+    const keep = { grad: S.grad, rev: S.rev, colour: S.colour, surf: S.surf.on, material: S.surf.material };
     S.saverKeep = keep;
     document.documentElement.classList.add('saver');
     if (S.setOpen) S.setOpen(false);
@@ -536,7 +689,9 @@ window.snSaver = {
         S.grad = sh.grad; S.rev = false; S.colour = sh.mode;
         S.preset = sh.preset; S.params = Object.assign({}, DEFAULTS, presetById(sh.preset).params);
         S.dim = sh.dim || presetById(sh.preset).dim;
-        S.cam.yaw = rng(p.seed)() * 6.28; S.cam.pitch = 0.3; S.cam.idleAt = 0;
+        S.cam.yaw = rng(p.seed)() * 6.28; S.cam.pitch = sh.surface ? 0.42 : 0.3; S.cam.idleAt = 0;
+        S.surf.on = !!sh.surface && !S.surf.err;
+        if (sh.material) S.surf.material = sh.material;
         if (sh.walker) { S.mode = 'walk'; S.walk = null; startWalk(true, p.seed); S.walk.slow = 1; }
         else { S.mode = 'grow'; regrow(p.seed); S.target = sh.target; }
         S.viewInit = false; S.user.zoom = 1; S.user.panX = 0; S.user.panY = 0;
@@ -556,7 +711,9 @@ window.snSaver = {
         const p = sv.shot;
         if (!p || t > p.dur) { sv.next(); return; }
         if (!p.shot.walker) {
-          const m = S.m, want = paceTarget(p.shot.target, t, p.dur);
+          const m = S.m;
+          let want = paceTarget(p.shot.target, t, p.dur);
+          if (surfActive() && S.surf.sf) want = Math.min(want, surfaceLimit(m));
           if (m.count < want) m.growFor(11, want - m.count);
         }
         sv.label(false);
@@ -571,7 +728,8 @@ window.snSaver = {
     S.mode = 'grow'; S.target = 25000;
     const keep = S.saverKeep || { grad: 'inferno', rev: false, colour: 'age' };
     S.grad = keep.grad; S.rev = keep.rev;
-    selectPreset('classic'); setColour(keep.colour);
+    S.surf.on = keep.surf && !S.surf.err; S.surf.material = keep.material || S.surf.material;
+    selectPreset('classic'); setColour(keep.colour); syncSurfaceUI();
     if (S.setOpen) S.setOpen(!PHONE_Q.matches);
   },
 };

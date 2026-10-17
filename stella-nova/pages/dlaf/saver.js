@@ -8,7 +8,9 @@
 //  and the label info.
 //
 //  A shot is one fresh growth from a seed: a preset, a colour mode, a
-//  gradient, 2D or 3D, a particle target, or the walker close-up.
+//  gradient, 2D or 3D, a particle target, or the walker close-up. A shot
+//  with surface: true shows the smooth SDF surface in its material; its
+//  target is low, so the mesher keeps up in the 5 to 12 s of the shot.
 //
 //  grep -n targets
 //    shot list ............. "export const SHOTS"
@@ -32,6 +34,8 @@ export const SHOTS = Object.freeze([
   { id: 'forest', name: 'A line of seeds grows a forest', preset: 'line', mode: 'depth', grad: 'aurora', target: 9000 },
   { id: 'sticky', name: 'Low stickiness: dense branches', preset: 'sticky', mode: 'age', grad: 'ice', target: 7000 },
   { id: 'needle', name: 'PlaceParticle: straight needles', preset: 'needle', mode: 'flow', grad: 'turbo', target: 10000 },
+  { id: 'sdf-orbit', name: 'One smooth surface: the 3D cluster as a signed distance field', preset: 'three', mode: 'age', grad: 'magma', target: 3600, dim: 3, surface: true, material: 'porcelain' },
+  { id: 'copper-relief', name: 'A copper relief of a 2D cluster', preset: 'classic', mode: 'flow', grad: 'ember', target: 5000, surface: true, material: 'copper' },
 ]);
 
 // A seeded shuffle of the shots, n long, with no shot twice in a row, each
@@ -97,6 +101,7 @@ export function shotLabel(shot, m, code) {
     params,
     lines: [
       shot.walker ? 'Jump d − AttractionDistance, push back, join at ParticleSpacing' : `Hook: ${pr.hook} · colour by ${mode.label.toLowerCase()} · ${(GRADIENTS[shot.grad] || GRADIENTS.inferno).label}`,
+      ...(shot.surface ? ['Surface: round cones joined by a smooth minimum, meshed by surface nets'] : []),
       'dlaf by Michael Fogleman, MIT',
     ],
     eq: ['step = max(MinMoveDistance, d − AttractionDistance)'],

@@ -24,6 +24,14 @@
      camera.js    2D and 3D view maths, fit to the clear rect (no DOM)
      saver.js     screensaver shots, shuffle, pace, framing, label (no DOM)
      render.js    WebGL2: lines, dots, front glow, overlay, gradient LUT
+     surface-core.js    the SDF surface: lib/dla-sdf.js, pipe radii, AO (no DOM)
+     surface-worker.js  module worker around surface-core.js
+     surface.js         worker client, inline fallback
+     surface-render.js  WebGL2: brick arena, shadow and contact maps, PBR draw
+     surface-shaders.js GLSL ES 3.00 programs, materials, light rigs (no DOM)
+     surface-frame.js   lights, ground and map matrices of a frame (no DOM)
+     arena.js           slot allocator for the brick meshes (no DOM)
+     glsl-check.mjs     compiles the shaders with glslangValidator
      main.js      UI, frame loop, pointer input, window.snSaver
      tests.mjs    node tests of the DOM-free modules
      CREDITS.txt  the MIT licence of dlaf
@@ -99,6 +107,21 @@
   </div>
   <div class="hint" id="dimHint"></div>
 
+  <div class="sec-label">Surface</div>
+  <div class="modes">
+    <button id="surfOff" class="on">Lines and dots</button>
+    <button id="surfOn">Smooth SDF</button>
+  </div>
+  <div class="hint" id="surfHint">Each particle becomes a round cone to its parent. A smooth minimum joins the cones into one signed distance field, and surface nets meshes it brick by brick while the cluster grows (lib/dla-sdf.js).</div>
+  <div id="surfBox" hidden>
+    <div class="presets" id="materials"></div>
+    <div class="row"><label>Blend k</label><input type="range" id="surfBlend" min="0" max="1" step="0.05" aria-label="Blend k"><span class="val" id="surfBlendV"></span><span class="tip">Width of the smooth minimum. 0 gives a crease at each fork, 1 gives webs between near branches.</span></div>
+    <div class="row"><label>Thickness by flow</label><input type="range" id="surfFlow" min="0" max="1" step="0.05" aria-label="Thickness by flow"><span class="val" id="surfFlowV"></span><span class="tip">Pipe rule, r³ of a parent = sum of r³ of its kids (Murray). 0 gives one tube width.</span></div>
+    <div class="hint">Mesh resolution</div>
+    <div class="presets three" id="surfRes"></div>
+    <div class="hint" id="surfStat"></div>
+  </div>
+
   <div class="sec-label">Hook presets</div>
   <div class="presets" id="presets"></div>
   <div class="hook-name" id="hookName"></div>
@@ -159,6 +182,7 @@
 <nav id="dock" aria-label="Quick controls">
   <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
   <div id="dockColours" class="seg"></div>
+  <button id="dockSurf" aria-label="Smooth surface">SDF</button>
   <button id="dockRegrow" aria-label="Regrow">↻</button>
   <button id="dockPlay" aria-label="Pause">❚❚</button>
 </nav>

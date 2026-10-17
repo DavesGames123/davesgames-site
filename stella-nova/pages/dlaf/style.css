@@ -64,6 +64,9 @@ html.in-frame #panelClose{top:10px}
 
 .presets{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
 .presets.four{grid-template-columns:repeat(4,1fr)}
+.presets.three{grid-template-columns:repeat(3,1fr)}
+.presets button:disabled{opacity:0.4;cursor:default}
+#surfBox{margin-top:10px}
 .presets button{padding:8px 4px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.76rem;text-align:center}
 .presets button:hover{border-color:var(--line-b);color:var(--ink)}
 .presets button.on{border-color:var(--warm);background:rgba(249,140,10,0.08);color:var(--gold)}
@@ -153,6 +156,7 @@ html.in-frame #panelClose{top:10px}
     background:rgba(10,8,14,0.95);border-top:1px solid var(--line-b)}
   #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
   #dock > button.on{border-color:var(--warm);color:var(--gold)}
+  #dockSurf{font-size:0.72rem!important;font-weight:600}
   .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
   .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-family:inherit;font-size:0.76rem;cursor:pointer}
   .seg button:last-child{border-right:0}
