@@ -191,7 +191,7 @@ app.setCam = mode => {
   if (mode === 'drone') { app.drone('ridge'); return; }
   cam.setMode(mode, world); app.camMode = mode; ui.syncView();
 };
-app.drone = (kind, pickIndex) => {
+app.drone = (kind, pickIndex, high) => {
   const t = app.terrain || (tg && tg.view && tg.view.cpu);
   const list = t && (kind === 'river' ? t.rivers : t.ridges);
   if (!list || !list.length) { ui.toast(app.gen && app.gen.running ? 'The flight paths come when the terrain is done' : 'This terrain has no ' + kind + 's to follow'); return; }
@@ -200,10 +200,12 @@ app.drone = (kind, pickIndex) => {
   const k = pickIndex ?? app.drones[kind]++;
   const pick = sorted[k % Math.min(sorted.length, 8)];
   app.dronePick = { path: kind, pick: k % Math.min(sorted.length, 8) };
+  // high: the opening flight, well over the ridge, a wide look ahead
   cam.drone = dronePath(pick.pts, world, kind === 'river'
     ? { clearance: 45, lookAhead: 520, lookDown: 80, spacing: 70, window: 400, side: 420, sideK: 0.8 }
-    : { clearance: 110, lookAhead: 520, lookDown: 90, spacing: 90, window: 320 });
-  cam.droneS = 0; cam.droneSpeed = kind === 'river' ? 45 : 85;
+    : high ? { clearance: 380, lookAhead: 1600, lookDown: 120, spacing: 120, window: 900, side: 700, sideK: 0.5, pitchMin: -0.42, pitchMax: -0.16 }
+      : { clearance: 110, lookAhead: 520, lookDown: 90, spacing: 90, window: 320 });
+  cam.droneS = 0; cam.droneSpeed = kind === 'river' ? 45 : high ? 110 : 85;
   cam.droneKind = kind;
   cam.mode = 'drone'; app.camMode = 'drone';
   if (post) post.resetHistory();
@@ -418,7 +420,7 @@ function onWorker(m) {
     else if (app.pendingCam) { applyCam(app.pendingCam); app.pendingCam = null; }
     else if (app.opening && performance.now() - app.lastInput > 4000) {
       // the first terrain of a visit: a golden-hour drone flight on a ridge
-      app.drone('ridge', 0);
+      openingFlight();
     } else if (app.camMode === 'drone' && cam.droneKind) app.drone(cam.droneKind);
     app.opening = false;
   } else if (m.type === 'error') {
@@ -766,6 +768,26 @@ function saverExit() {
 window.snSaver = { enter: opts => saverEnter(opts || {}), exit: () => saverExit() };
 $('saverBtn').addEventListener('click', () => saverEnter({}));
 $('dockSaver').addEventListener('click', () => saverEnter({}));
+
+// the opening flight: from the first orbit view, a slow high drone pass
+// over the peaks toward the far side, so the fog seas in the valleys and
+// the lit ridges pass under the camera (the composition of the forming view)
+function openingFlight() {
+  const ws = world.size, p = cam.pos, f = cam.forward;
+  let dx = f[0], dz = f[2];
+  const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
+  const pts = [];
+  for (let i = 0; i <= 40; i++) {
+    const t = i / 40 * ws * 0.9;
+    const x = clamp(p[0] + dx * t, -ws * 0.48, ws * 0.48), z = clamp(p[2] + dz * t, -ws * 0.48, ws * 0.48);
+    pts.push(x, z);
+  }
+  cam.drone = dronePath(new Float32Array(pts), world, { clearance: Math.max(350, (tg.maxH - tg.minH) * 0.18), lookAhead: 2600, lookDown: 900, spacing: 150, window: 2200, side: 1500, sideK: 0.6, pitchMin: -0.38, pitchMax: -0.2 });
+  cam.droneS = 0; cam.droneSpeed = 120; cam.droneKind = 'ridge';
+  cam.mode = 'drone'; app.camMode = 'drone'; app.dronePick = null;
+  if (post) post.resetHistory();
+  ui.syncView();
+}
 
 // ── WORLD: the state of world-state.js, the hash, the camera shots ───────
 function weatherList() { return app.skyLib ? app.skyLib.WEATHER : SkyStub.WEATHER; }
