@@ -1,0 +1,59 @@
+Coral Reef Growth (stella-nova/pages/coral-reef) - credits and licences
+=====================================================================
+
+The page code (reef.js, colour.js, saver.js, scene.js, diagram.js,
+main.js, index.html, style.css, tests.mjs) is our own code. The coral
+species are hooks that we wrote for the engine below.
+
+
+1. Growth engine: dlaf
+----------------------
+lib/dla-engine.js is a JavaScript port of the Model class of dlaf
+(diffusion-limited aggregation) by Michael Fogleman.
+Upstream: https://github.com/fogleman/dlaf
+The page does not fetch anything from GitHub. The port is a local file.
+
+MIT License
+
+Copyright (C) 2019 Michael Fogleman
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+2. Rendering: three.js r160
+---------------------------
+stella-nova/vendor/three@0.160.0 (three.module.js and OrbitControls.js).
+MIT License, Copyright (C) 2010-2023 three.js authors. The full text is in
+stella-nova/vendor/three@0.160.0/LICENSE.
+
+
+3. Ideas (no code taken)
+------------------------
+- J. A. Kaandorp, C. P. Lowe, D. Frenkel and P. M. A. Sloot, "Effect of
+  nutrient diffusion and flow on coral morphology", Physical Review
+  Letters 77, 2328 (1996). The view of a coral as nutrient-limited
+  diffusion-limited aggregation in a flow.
+- J. A. Kaandorp and J. E. Kubler, "The Algorithmic Beauty of Seaweeds,
+  Sponges and Corals", Springer (2001). Accretive growth: the brain coral
+  hook lays each new polyp on the surface of a compact dome.
+- T. A. Witten and L. M. Sander, "Diffusion-limited aggregation, a
+  kinetic critical phenomenon", Physical Review Letters 47, 1400 (1981).
+
+The caustics, the water shading and the light shafts are our own GLSL.
