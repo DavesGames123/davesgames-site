@@ -9,6 +9,11 @@
 //   - a seed: Math.random is a seeded PRNG while generate() runs
 //   - an event log: the order in which the generator made each thing
 //   - building heights (our own rule: tall near the field centres)
+//   - terrain (opts.terrain): terrain.js grows a DLA world first; its sea,
+//     lakes and largest river replace upstream's random coast and river,
+//     steep ground is closed to roads and lots, a slope field turns the
+//     streets along the contours, parks favour steep or wet ground, and
+//     buildings are lower on slopes. Off, the city is as before.
 // No DOM. worker.js, main.js (fallback) and tests.mjs import it.
 //
 // generate(opts) -> Promise<city>
@@ -21,6 +26,10 @@
 //            parks, blocks, lots  ([polygon, ..])
 //            lotBlock  (Int32Array-like: the block of each lot)
 //            buildings: [{ lot, h }]   (h in map units, 1 unit = 1 m in 3D)
+//            terrain   (only with opts.terrain: terrain.js buildTerrain(), the
+//                       ground, snapshots, underlay, rings and river; the
+//                       sea is then an even-odd polygon of several rings,
+//                       coastlines lists every shore run)
 //            events: [{ k, i?, n? }]   (see EVENT KINDS)
 //            stats: { ms, ... } }
 // The coordinates are map units, y down (as upstream). The view is
@@ -28,13 +37,15 @@
 // its centre, as upstream does (Util.DRAW_INFLATE_AMOUNT), so roads run
 // off the edge.
 //
-// EVENT KINDS (in order): field, coast, river, road {cls, i}, parks {i},
-// block {i}, lots {block, from, n}, building {i}
+// EVENT KINDS (in order): terrain (terrain on only), field, coast, river,
+// road {cls, i}, parks {i}, block {i}, lots {block, from, n}, building {i}
 //
 // grep: export const SIZES  export function defaults  export async function generate
-//       function runStreamlines  function seeded  function fieldAt
+//       function runStreamlines  function seeded  function fieldAt  function terrainWater
+//       function pickParks  function familyOf
 
 import * as MG from '../../vendor/mapgenerator/mapgen.js';
+import { terrainDefaults, buildTerrain, makeSlopeField, groundAt, slopeAt, riverAt } from './terrain.js';
 
 export const VERSION = 1;
 export const SIZES = {
@@ -61,6 +72,7 @@ export function defaults() {
     lotArea: 50,        // PolygonFinder minArea for lots (upstream 50)
     noDivide: 0.05,     // chanceNoDivide (upstream 0.05)
     height: 1,          // building height scale (ours)
+    ...terrainDefaults(),   // terrain.js: off by default
   };
 }
 
@@ -95,22 +107,27 @@ export async function generate(input = {}) {
   const size = SIZES[o.size] || SIZES.city;
   const W = size.w, H = size.h;
   const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
+  // the terrain first, outside the seeded Math.random (the LIB has its own
+  // generator), so the city stream starts at the same place either way
+  const T = o.terrain ? await buildTerrain(o, W, H, input.onTerrain || null) : null;
+  delete o.onTerrain;
   const realRandom = Math.random;
   const rnd = seeded(o.seed);
   Math.random = rnd;
   try {
-    return await build(o, W, H, t0);
+    return await build(o, W, H, t0, T);
   } finally {
     Math.random = realRandom;
   }
 }
 
-async function build(o, W, H, t0) {
+async function build(o, W, H, t0, T = null) {
   const { Vector, TensorField, RK4Integrator, StreamlineGenerator, WaterGenerator, Graph, PolygonFinder } = MG;
   const INFLATE = 1.2;
   const origin = new Vector(-(INFLATE - 1) / 2 * W, -(INFLATE - 1) / 2 * H);
   const dims = new Vector(W * INFLATE, H * INFLATE);
   const events = [];
+  if (T) events.push({ k: 'terrain' });
 
   // ─── tensor field (tensor_field_gui.ts setRecommended) ───────────────────
   const noise = { globalNoise: false, noiseSizePark: 20, noiseAnglePark: 90, noiseSizeGlobal: 30, noiseAngleGlobal: 20 };
@@ -135,6 +152,8 @@ async function build(o, W, H, t0) {
     tf.addRadial(at, s, d);
     fields.push({ type: 'radial', x: at.x, y: at.y, size: s, decay: d });
   }
+  // terrain: the slope field goes last (see terrain.js makeSlopeField)
+  if (T) tf.addField(makeSlopeField(T, tf.basisFields.length, tf.smooth));
   events.push({ k: 'field' });
 
   // ─── parameters (main_gui.ts) ─────────────────────────────────────────────
@@ -155,14 +174,19 @@ async function build(o, W, H, t0) {
   tf.parks = []; tf.sea = []; tf.river = [];
   const water = new WaterGenerator(integrator, origin, dims, { ...coastParams, coastNoise: { ...coastParams.coastNoise }, riverNoise: { ...coastParams.riverNoise } }, tf);
   let coastRoadIdx = -1, riverRoadIdx = -1;
-  if (o.coast) {
+  let tw = null;
+  if (T) {
+    tw = terrainWater(T, tf, water, Vector);
+    if (tw.coast.length || T.water.length) events.push({ k: 'coast' });
+    if (T.river) events.push({ k: 'river' });
+  } else if (o.coast) {
     water.createCoast();
     coastRoadIdx = water.allStreamlinesSimple.length - 1;
     events.push({ k: 'coast' });
   } else {
     water.coastlineMajor = Math.random() < 0.5;   // createCoast would have set it
   }
-  if (o.river) {
+  if (o.river && !T) {
     const before = water.allStreamlinesSimple.length;
     water.createRiver();
     if (water.allStreamlinesSimple.length > before) riverRoadIdx = water.allStreamlinesSimple.length - 1;
@@ -195,7 +219,8 @@ async function build(o, W, H, t0) {
   let bigParks = [];
   {
     const polys = parkFinder(major.allStreamlinesSimple.concat(main.allStreamlinesSimple));
-    if (polys.length > o.bigParks) {
+    if (T) bigParks = pickParks(T, polys, o.bigParks);
+    else if (polys.length > o.bigParks) {
       for (let i = 0; i < o.bigParks; i++) bigParks.push(polys[Math.floor(Math.random() * polys.length)]);
     } else bigParks.push(...polys);
   }
@@ -205,7 +230,8 @@ async function build(o, W, H, t0) {
   let smallParks = [];
   if (o.smallParks > 0) {
     const polys = parkFinder(major.allStreamlinesSimple.concat(main.allStreamlinesSimple, minor.allStreamlinesSimple));
-    for (let i = 0; i < o.smallParks && polys.length; i++) smallParks.push(polys[Math.floor(Math.random() * polys.length)]);
+    if (T) smallParks = pickParks(T, polys, o.smallParks);
+    else for (let i = 0; i < o.smallParks && polys.length; i++) smallParks.push(polys[Math.floor(Math.random() * polys.length)]);
   }
   tf.parks = [...bigParks, ...smallParks];
 
@@ -224,22 +250,25 @@ async function build(o, W, H, t0) {
   const dividing = finder.divide(true);
   const lotBlockOrder = [];
   const lotsV = [];
-  if (blocksV.length) {
+  {
+    // (with no shrunk block, upstream divides the unshrunk faces: those
+    // lots have no block here, so they are dropped, but the queue is
+    // drained so that the divide promise resolves)
     let guard = 0;
     while (finder.toDivide.length > 0 && guard++ < 1e6) {
       const block = finder.toDivide.length - 1;
       const before = finder._dividedPolygons.length;
       finder.update();
       const after = finder._dividedPolygons.length;
-      for (let i = before; i < after; i++) { lotsV.push(finder._dividedPolygons[i]); lotBlockOrder.push(block); }
+      if (blocksV.length) for (let i = before; i < after; i++) { lotsV.push(finder._dividedPolygons[i]); lotBlockOrder.push(block); }
     }
   }
   await dividing;
 
   // ─── copy out ─────────────────────────────────────────────────────────────
   const roads = {
-    coast: coastRoadIdx >= 0 ? [line(water.allStreamlinesSimple[coastRoadIdx])] : [],
-    river: riverRoadIdx >= 0 ? [line(water.allStreamlinesSimple[riverRoadIdx])].concat(water.riverSecondaryRoad.length ? [line(water.riverSecondaryRoad)] : []) : [],
+    coast: tw ? tw.coast.map(line) : coastRoadIdx >= 0 ? [line(water.allStreamlinesSimple[coastRoadIdx])] : [],
+    river: tw ? tw.river.map(line) : riverRoadIdx >= 0 ? [line(water.allStreamlinesSimple[riverRoadIdx])].concat(water.riverSecondaryRoad.length ? [line(water.riverSecondaryRoad)] : []) : [],
     main: main.allStreamlinesSimple.map(line),
     major: major.allStreamlinesSimple.map(line),
     minor: minor.allStreamlinesSimple.map(line),
@@ -282,6 +311,8 @@ async function build(o, W, H, t0) {
     const u = Math.random();
     let h = 5 + 9 * u + 62 * Math.pow(core, 2.4) * (0.35 + 0.65 * Math.random());
     if (Math.random() < 0.015 + 0.08 * core) h *= 1.7;
+    // terrain: lower on slopes (a hillside of houses, towers on the flat)
+    if (T) h *= Math.min(1, Math.max(0.35, 1 - 0.65 * slopeAt(T, cx, cy) / T.grade));
     return { h: Math.round(h * o.height * 10) / 10 };
   });
   buildings.forEach((_, i) => events.push({ k: 'building', i }));
@@ -294,9 +325,9 @@ async function build(o, W, H, t0) {
     view: { w: W, h: H },
     domain: { x: origin.x, y: origin.y, w: dims.x, h: dims.y },
     fields,
-    sea: line(water.seaPolygon),
-    coastline: line(water.coastline),
-    river: line(water.riverPolygon),
+    sea: T ? T.water : line(water.seaPolygon),
+    coastline: T ? longest(tw.coast.map(line)) : line(water.coastline),
+    river: T ? (T.river ? T.river.poly : []) : line(water.riverPolygon),
     roads,
     roadFamily,
     roadParams: { main: { dsep: mainParams.dsep, dtest: mainParams.dtest, dlookahead: mainParams.dlookahead }, major: { dsep: majorParams.dsep, dtest: majorParams.dtest, dlookahead: majorParams.dlookahead }, minor: { dsep: minorParams.dsep, dtest: minorParams.dtest, dlookahead: minorParams.dlookahead } },
@@ -313,7 +344,79 @@ async function build(o, W, H, t0) {
       tallest: buildings.reduce((m, b) => Math.max(m, b.h), 0),
     },
   };
+  if (T) {
+    city.coastlines = tw.coast.map(line);
+    if (T.river) delete T.river.carved;
+    city.terrain = T;
+    city.stats.relief = T.stats.relief;
+    city.stats.terrainMs = T.stats.ms;
+  }
   return city;
+}
+
+const longest = (ls) => ls.reduce((b, l) => (l.length > b.length ? l : b), []);
+
+// The upstream family of a line: 1 if it runs mostly along the major
+// eigenvector of the field (sampled before the sea is set).
+function familyOf(tf, l, Vector) {
+  let a = 0, n = 0;
+  for (let i = 1; i < l.length; i += Math.max(1, l.length >> 5)) {
+    const dx = l[i][0] - l[i - 1][0], dy = l[i][1] - l[i - 1][1], L = Math.hypot(dx, dy);
+    if (!L) continue;
+    const m = tf.samplePoint(new Vector(l[i][0], l[i][1])).getMajor();
+    if (!m.x && !m.y) continue;
+    a += Math.abs(m.x * dx + m.y * dy) / L; n++;
+  }
+  return n ? a / n >= Math.SQRT1_2 : true;
+}
+
+// TERRAIN WATER. Upstream WaterGenerator.createCoast and createRiver grow a
+// noisy streamline and build their polygons from it; with terrain the
+// polygons come from terrain.js instead and go in through the upstream
+// public fields: tensorField.sea (water plus ground too steep for a road:
+// TensorField.onLand is false there, so no road, seed or lot), and
+// tensorField.river (the bank ring). The shore runs and the two banks
+// become roads through WaterGenerator.manuallyAddStreamline, the upstream
+// call for river roads, each in the family it runs along.
+function terrainWater(T, tf, water, Vector) {
+  const V = (l) => l.map((p) => new Vector(p[0], p[1]));
+  const coast = [], river = [];
+  const lines = [];
+  for (const l of T.coast) lines.push([l, coast]);
+  if (T.river) for (const l of T.river.banks) lines.push([l, river]);
+  const fam = lines.map(([l]) => familyOf(tf, l, Vector));
+  tf.sea = V(T.block);
+  if (T.river) tf.river = V(T.river.bank);
+  lines.forEach(([l, out], i) => {
+    const s = V(l);
+    water.manuallyAddStreamline(s, fam[i]);
+    out.push(s);
+  });
+  return { coast, river };
+}
+
+// Parks on terrain: a weighted pick of the faces, steep or wet ground first.
+function pickParks(T, polys, n) {
+  if (!polys.length || n <= 0) return [];
+  const w = polys.map((p) => {
+    let sl = 0, wet = 0;
+    for (const v of p) {
+      sl += slopeAt(T, v.x, v.y);
+      const g = groundAt(T, v.x, v.y);
+      const r = riverAt(T, v.x, v.y);
+      if ((T.hasSea && g < T.seaLevel + 3) || (r && r.d < T.river.halfW + 90)) wet++;
+    }
+    sl /= p.length; wet /= p.length;
+    return 0.15 + 2 * Math.min(1.5, sl / T.grade) + 1.5 * wet;
+  });
+  const total = w.reduce((a, b) => a + b, 0);
+  const out = [];
+  for (let k = 0; k < Math.min(n, polys.length); k++) {
+    let x = Math.random() * total, i = 0;
+    while (i < w.length - 1 && (x -= w[i]) > 0) i++;
+    out.push(polys[i]);
+  }
+  return out;
 }
 
 // The tensor field at a map point, for the field drawing: the major
@@ -323,11 +426,12 @@ export function fieldSampler(city) {
   const { Vector, TensorField } = MG;
   const tf = new TensorField({ globalNoise: false, noiseSizePark: 20, noiseAnglePark: 90, noiseSizeGlobal: 30, noiseAngleGlobal: 20 });
   tf.smooth = !!city.opts?.smooth;
-  tf.sea = city.sea.map((p) => new Vector(p[0], p[1]));
+  tf.sea = (city.terrain ? city.terrain.block : city.sea).map((p) => new Vector(p[0], p[1]));
   for (const f of city.fields) {
     if (f.type === 'grid') tf.addGrid(new Vector(f.x, f.y), f.size, f.decay, f.theta);
     else tf.addRadial(new Vector(f.x, f.y), f.size, f.decay);
   }
+  if (city.terrain) tf.addField(makeSlopeField(city.terrain, tf.basisFields.length, tf.smooth));
   return function fieldAt(x, y) {
     const t = tf.samplePoint(new Vector(x, y));
     const m = t.getMajor();

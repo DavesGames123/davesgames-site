@@ -7,6 +7,7 @@
 // the vertices) and the saver all play the same timeline.
 //
 // PHASES and their share of the time (s):
+//   terrain 7 (terrain on only: the LIB stage snapshots, terrain.js)
 //   field 2.2  coast 1.6  river 1.8  main 3.2  major 5  parks 1.4
 //   minor 8    blocks 2.6  lots 4.2  buildings 4.4
 // A road takes a time in proportion to its length, so it draws at about
@@ -14,17 +15,20 @@
 // start one after another and overlap.
 //
 // timeline(city) -> tl = { dur, phases: [{k, t0, t1}],
-//   field, coast, river: [t0, d],
+//   terrain (or null), field, coast, river: [t0, d],
 //   roads: { main|major|minor|coast|river: Float32Array [t0, d, ..] },
 //   parks, blocks, lots, buildings: Float32Array [t0, d, ..] }
 // prog(a, i, T)  0..1, the progress of item i at time T
 // frameAt(city, tl, T) -> what shows at T: { roads: {cls: [partial line]},
 //   parks, blocks, lots: [polygon], buildings: [{lot, h}], field: alpha,
-//   coast, river: 0..1, phase }  At T >= tl.dur it equals the city.
+//   coast, river: 0..1, phase, terrain: 0..1 (1 with no terrain),
+//   snap: the snapshot position 0..SNAP_COUNT-1 }  At T >= tl.dur it
+//   equals the city.
 //
 // grep: export const PHASES  export function timeline  export function frameAt  function cut
 
 export const PHASES = [
+  ['terrain', 7.0, 'terrain'],
   ['field', 2.2, 'tensor field'], ['coast', 1.6, 'coastline'], ['river', 1.8, 'river'],
   ['main', 3.2, 'main roads'], ['major', 5.0, 'major roads'], ['parks', 1.4, 'parks'],
   ['minor', 8.0, 'minor roads'], ['blocks', 2.6, 'blocks'], ['lots', 4.2, 'lots'],
@@ -63,11 +67,12 @@ export function timeline(city) {
     else if (e.k === 'coast') hasCoast = true;
     else if (e.k === 'river') hasRiver = true;
   }
-  const tl = { phases: [], roads: {} };
+  const tl = { phases: [], roads: {}, terrain: null };
   let t = 0;
   for (const [k, B] of PHASES) {
     const p0 = t;
-    if (k === 'field') tl.field = [p0, B];
+    if (k === 'terrain') { if (!city.terrain) continue; tl.terrain = [p0, B]; }
+    else if (k === 'field') tl.field = [p0, B];
     else if (k === 'coast') { if (!hasCoast) continue; tl.coast = [p0, B]; tl.roads.coast = spread(city.roads.coast.length, p0, B, null, 0.8, 0.8); }
     else if (k === 'river') { if (!hasRiver) continue; tl.river = [p0, B]; tl.roads.river = spread(city.roads.river.length, p0, B, null, 0.8, 0.8); }
     else if (k === 'main' || k === 'major' || k === 'minor') {
@@ -157,8 +162,17 @@ export function frameAt(city, tl, T) {
   // the field: in over its phase, then it fades while the roads draw
   const fp = Math.min(1, Math.max(0, (T - tl.field[0]) / tl.field[1]));
   const minorEnd = (tl.phases.find((p) => p.k === 'minor') || { t1: tl.dur }).t1;
-  const fade = Math.min(1, Math.max(0, (T - tl.field[1]) / Math.max(minorEnd - tl.field[1], 1e-3)));
+  const fEnd = tl.field[0] + tl.field[1];
+  const fade = Math.min(1, Math.max(0, (T - fEnd) / Math.max(minorEnd - fEnd, 1e-3)));
   f.field = T === Infinity ? 0 : fp * (1 - 0.85 * fade);
   f.phase = phaseAt(tl, T);
+  f.terrain = terrainAt(tl, T);
+  f.snap = f.terrain * (city.terrain ? city.terrain.snaps.length : 0);
   return f;
+}
+
+// The terrain forming: 0..1 over the terrain phase (1 with no terrain).
+export function terrainAt(tl, T) {
+  if (!tl.terrain) return 1;
+  return Math.min(1, Math.max(0, (T - tl.terrain[0]) / tl.terrain[1]));
 }
