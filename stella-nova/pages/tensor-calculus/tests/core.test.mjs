@@ -231,19 +231,35 @@ check('bad specs throw', () => {
 section('player');
 const PL = await import(join(ROOT, 'ui/player.js'));
 check('time line, easing and lock-step frames', () => {
-  const frames = [], stepsSeen = [];
+  const frames = [], stepsSeen = [], K = PL.MOTION_SCALE;
   const p = PL.createPlayer({ onFrame: (i, t, st, raw) => frames.push([i, t, raw]), onStep: i => stepsSeen.push(i), holdMs: 500 });
   p.load({ steps: [{ ms: 1000, label: 'a' }, { ms: 2000, label: 'b' }, { label: 'c' }] });
-  assert.equal(p.totalMs(), 1000 + 500 + 2000 + 500 + PL.DEFAULT_MS + 500);
-  assert.deepEqual(p.timeline().map(s => s.start), [0, 1500, 4000]);
+  assert.equal(p.totalMs(), 1000 * K + 500 + 2000 * K + 500 + PL.DEFAULT_MS * K + 500);
+  assert.deepEqual(p.timeline().map(s => s.start), [0, 1000 * K + 500, 3000 * K + 1000]);
   assert.deepEqual(stepsSeen, [0]);
   p.play();
-  p.tick(250); let f = frames.at(-1); assert.equal(f[0], 0); assert.ok(Math.abs(f[2] - 0.25) < 1e-9); assert.ok(Math.abs(f[1] - PL.ease(0.25)) < 1e-9);
-  p.tick(250); p.tick(250); p.tick(250); f = frames.at(-1); assert.equal(f[2], 1);
-  p.tick(250); p.tick(250); f = frames.at(-1); assert.equal(f[0], 1); assert.equal(f[2], 0);
+  const q = () => { p.tick(125 * K); p.tick(125 * K); };   // a quarter of the first step's motion (tick clamps at 250 ms)
+  q(); let f = frames.at(-1); assert.equal(f[0], 0); assert.ok(Math.abs(f[2] - 0.25) < 1e-9); assert.ok(Math.abs(f[1] - PL.ease(0.25)) < 1e-9);
+  q(); q(); q(); f = frames.at(-1); assert.ok(Math.abs(f[2] - 1) < 1e-9);
+  p.tick(250); p.tick(250); f = frames.at(-1); assert.equal(f[0], 1); assert.ok(Math.abs(f[2]) < 1e-9);
   assert.deepEqual(stepsSeen, [0, 1]);
-  p.setSpeed(2); p.tick(250); f = frames.at(-1); assert.ok(Math.abs(f[2] - 0.25) < 1e-9, 'speed 2 doubles the clock');
+  p.setSpeed(2); p.tick(125 * K); p.tick(125 * K); f = frames.at(-1); assert.ok(Math.abs(f[2] - 0.25) < 1e-9, 'speed 2 doubles the clock');
   p.tick(5000); assert.equal(p.position().playing, true, 'a long gap is clamped to 250 ms');
+});
+check('step mode stops on each result; play and next run the next step', () => {
+  let stepEnds = 0;
+  const p = PL.createPlayer({ holdMs: 3000, onStepEnd: () => stepEnds++ });
+  p.load({ steps: [{ ms: 1000 }, { ms: 1000 }, { ms: 1000 }] });
+  p.setStepPause(true); assert.equal(p.stepPause(), true);
+  p.play(); for (let k = 0; k < 40; k++) p.tick(200);
+  assert.deepEqual([p.position().index, p.position().raw, p.position().playing, stepEnds], [0, 1, false, 1], 'stops at the end of step 1 motion');
+  p.play(); assert.deepEqual([p.position().index, p.position().raw], [1, 0], 'play skips the hold to the start of step 2');
+  p.tick(200); assert.equal(p.position().index, 1, 'and runs step 2');
+  for (let k = 0; k < 40; k++) p.tick(200);
+  assert.deepEqual([p.position().index, p.position().playing, stepEnds], [1, false, 2]);
+  p.next(); assert.deepEqual([p.position().index, p.position().playing], [2, true], 'next animates the next step');
+  p.setStepPause(false); for (let k = 0; k < 60; k++) p.tick(200);
+  assert.equal(p.position().playing, false, 'without step mode it runs to the end');
 });
 check('seek, next, prev, scrub, end', () => {
   let ended = 0;
@@ -256,7 +272,7 @@ check('seek, next, prev, scrub, end', () => {
   p.prev(); assert.equal(p.position().index, 1);
   p.seekFrac(0.5); assert.equal(p.position().index, 1); assert.ok(Math.abs(p.position().raw - 0.5) < 1e-9);
   p.seekFrac(1); p.play(); assert.equal(p.position().frac, 0, 'play at the end starts again');
-  for (let k = 0; k < 20; k++) p.tick(200);
+  for (let k = 0; k < 40; k++) p.tick(200);
   assert.equal(ended, 1); assert.equal(p.position().playing, false);
   p.setLoop(true); p.play(); for (let k = 0; k < 20; k++) p.tick(200); assert.equal(p.position().playing, true);
 });
@@ -434,7 +450,11 @@ else {
     assert.equal(doc.getElementById('texStepLabel').textContent, 'rename');
     assert.ok(doc.getElementById('texBody').dataset.pulse.split(' ').length === 2, 'two indices pulse');
 
-    for (let k = 0; k < 10; k++) { clock += 200; rafFn(); }
+    // step mode is on by default: switch it off, then run on to step 2
+    const sp = doc.getElementById('pStepPause'); assert.ok(sp && sp.checked, 'step mode on by default');
+    sp.checked = false; sp.dispatchEvent(new win.Event('change'));
+    if (!(await api.state()).playing) doc.getElementById('pPlay').click();
+    for (let k = 0; k < 200 && (await api.state()).stepIndex < 1; k++) { clock += 200; rafFn(); }
     st = await api.state();
     assert.equal(st.stepIndex, 1);
     assert.equal(doc.getElementById('pCount').textContent, '2 / 2');

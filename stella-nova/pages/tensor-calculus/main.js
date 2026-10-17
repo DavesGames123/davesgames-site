@@ -191,7 +191,20 @@ export async function boot(opts = {}) {
       emit('tick', { index: i, t, raw });
     },
     onEnd() { syncPlay(); },
+    onStepEnd() { syncPlay(); },
   });
+  // Step mode: stop on each step's result so the reader can study it. On
+  // by default; the choice is kept per viewer.
+  el.stepPause = $('pStepPause');
+  const stepPauseOn = (() => { try { return localStorage.getItem('tc.stepPause') !== '0'; } catch (e) { return true; } })();
+  player.setStepPause(stepPauseOn);
+  if (el.stepPause) {
+    el.stepPause.checked = stepPauseOn;
+    el.stepPause.addEventListener('change', () => {
+      player.setStepPause(el.stepPause.checked);
+      try { localStorage.setItem('tc.stepPause', el.stepPause.checked ? '1' : '0'); } catch (e) { /* private mode */ }
+    });
+  }
   for (const s of SPEEDS) { const o = doc.createElement('option'); o.value = s; o.textContent = s + '×'; if (s === 1) o.selected = true; el.speed.appendChild(o); }
   el.speed.addEventListener('change', () => { S.speed = +el.speed.value; player.setSpeed(S.speed); });
   function syncPlay() {

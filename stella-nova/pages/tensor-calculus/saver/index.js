@@ -230,6 +230,7 @@ export function installSaver(api, internals, deps = {}) {
       scene: S.scene ? { id: S.scene.id, params: { ...(S.scene.params || {}) } } : null,
       vizFree: !!S.vizFree, index: pos.index >= 0 ? pos.index : 0, t: pos.t || 0,
       playing: !!pos.playing, speed: pos.speed || 1,
+      stepPause: !!safe(() => player.stepPause && player.stepPause(), false),
     };
   }
   function restore(s) {
@@ -242,6 +243,7 @@ export function installSaver(api, internals, deps = {}) {
     else if (s.trace) p = p.then(() => api.playTrace(s.trace, { autoplay: false }));
     return p.then(() => {
       safe(() => player.setSpeed(s.speed));
+      safe(() => player.setStepPause && player.setStepPause(s.stepPause));
       if (s.entryId || s.trace) { safe(() => player.seek(s.index, s.t)); if (s.playing) safe(() => player.play()); }
       if (s.vizFree && s.scene && s.scene.id) safe(() => api.setScene(s.scene.id, s.scene.params));
       const id = s.scene && s.scene.id;
@@ -278,6 +280,8 @@ export function installSaver(api, internals, deps = {}) {
         seed, channel, calm: clamp(opts.calm ?? 0.7, 0, 1), plan: [], k: 0, token: 0, shot: null,
         saved: snapshot(), band: null, frameKey: null, labelAt: now(), skip: false,
       };
+      // the saver plays steps without stopping; snapshot() kept the reader's choice
+      safe(() => player.setStepPause && player.setStepPause(false));
       run.plan = D.buildPlan(catalogNow(), { seed, channel, calm: run.calm });
       addStyle();
       root.classList.add('sn-saver', 'tc-saver');
