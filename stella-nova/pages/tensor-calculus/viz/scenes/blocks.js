@@ -90,13 +90,28 @@ export function cellPos(shape, variance, idx, c0 = [0, 0, 0], sp = SP) {
   if (r === 1) return variance[0] === 'u' ? add(c0, [0, -(idx[0] - h(shape[0])) * sp, 0]) : add(c0, [(idx[0] - h(shape[0])) * sp, 0, 0]);
   if (r === 2) return add(c0, [(idx[1] - h(shape[1])) * sp, -(idx[0] - h(shape[0])) * sp, 0]);
   if (r === 3) return add(c0, [(idx[1] - h(shape[1])) * sp, -(idx[0] - h(shape[0])) * sp, -(idx[2] - h(shape[2])) * sp]);
-  const big = sp * (shape[3] + 0.8), small = sp;
-  return add(c0, [(idx[1] - h(shape[1])) * big + (idx[3] - h(shape[3])) * small, -(idx[0] - h(shape[0])) * big - (idx[2] - h(shape[2])) * small, 0]);
+  // Rank 4 and up: slots nest on y (even slots, rows) and x (odd slots,
+  // columns). A slot steps by the span of the deeper slots on its axis.
+  let x = 0, y = 0;
+  for (let k = 0; k < r; k++) {
+    const d = (idx[k] - h(shape[k])) * slotStride(shape, k, sp);
+    if (k % 2) x += d; else y -= d;
+  }
+  return add(c0, [x, y, 0]);
+}
+// The step of slot k for rank 4 and up: sp times the padded size of each
+// deeper slot on the same axis (rank 4 gives the old big and small steps).
+function slotStride(shape, k, sp = SP) {
+  if (shape.length < 4) return sp;
+  let st = sp;
+  for (let t = k + 2; t < shape.length; t += 2) st *= shape[t] + 0.8;
+  return st;
 }
 // The direction of slot s in the layout (unit), for the rails.
 function slotDir(shape, variance, s) {
   const r = shape.length;
   if (r === 1) return variance[0] === 'u' ? [0, -1, 0] : [1, 0, 0];
+  if (r >= 4) return s % 2 ? [1, 0, 0] : [0, -1, 0];
   return [[0, -1, 0], [1, 0, 0], [0, 0, -1], [1, 0, 0]][s];
 }
 const maxAbs = c => { let m = 0; for (const v of c.data) m = Math.max(m, Math.abs(v)); return m || 1; };
@@ -126,10 +141,10 @@ export function drawBlock(dl, C, o = {}) {
   // rails
   const r = C.shape.length;
   for (let s = 0; s < r; s++) {
-    const d = slotDir(C.shape, C.variance, s), len0 = (C.shape[s] - 1) * sp * (r === 4 && s < 2 ? (C.shape[3] + 0.8) : 1) + sp;
+    const d = slotDir(C.shape, C.variance, s), len0 = (C.shape[s] - 1) * slotStride(C.shape, s, sp) + sp;
     const sym = syms[s] || DEFAULT_SYMS[s];
     // place the rail on the outside: rows on the left, columns on top, depth at the right base
-    const side = r === 1 ? (C.variance[0] === 'u' ? [-1, 0, 0] : [0, 1, 0]) : [[-1, 0, 0], [0, 1, 0], [1, -1, 0], [0, -1, 0]][s];
+    const side = r === 1 ? (C.variance[0] === 'u' ? [-1, 0, 0] : [0, 1, 0]) : [[-1, 0, 0], [0, 1, 0], [1, -1, 0], [0, -1, 0]][s % 4];
     const ext = halfExtent(C, sp);
     const base = add(c0, [side[0] * (ext[0] + sp * 0.45), side[1] * (ext[1] + sp * 0.45), 0]);
     const A = sub(base, scl(d, len0 / 2)), B = add(base, scl(d, len0 / 2));
