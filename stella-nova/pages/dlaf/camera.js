@@ -16,6 +16,9 @@
 //    3D matrix ............. "export function orbitMatrix"
 //    matrix product ........ "export function mul4"
 //    world to screen ....... "export function project"
+//    surface 2D matrix ..... "export function relief2D"
+//    eye of the orbit ...... "export function orbitEye"
+//    light and below maps .. "export function lightMatrix"
 // ============================================================================
 
 // The clear rectangle in CSS px: the canvas minus the occluded margins
@@ -110,3 +113,58 @@ export function orbitMatrix(cam, w, h, out = new Float32Array(16)) {
 
 // Ease a toward b with a time constant tau (s) over dt (s).
 export function ease(a, b, dt, tau = 0.5) { return a + (b - a) * (1 - Math.exp(-dt / Math.max(1e-3, tau))); }
+
+// The 2D view for the relief surface: ortho2D, with a real depth range so
+// the tubes (z up to +-zr) depth-test. Larger z is nearer the viewer.
+export function relief2D(view, w, h, zr = 64, out = new Float32Array(16)) {
+  ortho2D(view, w, h, out);
+  out[10] = -1 / zr;
+  return out;
+}
+
+// The eye position and the camera axes of an orbit camera (world space):
+// the rows of the rotation RX * RY that orbitMatrix uses.
+export function orbitEye(cam) {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  // RY then RX (rows of the view rotation)
+  const right = [cy, 0, sy];
+  const up = [sp * sy, cp, -sp * cy];
+  const back = [-cp * sy, sp, cp * cy];
+  return { eye: back.map(v => v * cam.dist), right, up, back };
+}
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const nrm3 = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+// An orthographic camera at eye that looks along dir: a box of half size
+// hs across and depth near..far. Column-major projection times view.
+export function orthoLook(eye, dir, upHint, hs, near, far, out = new Float32Array(16)) {
+  const f = nrm3(dir);
+  let up = Math.abs(dot3(f, upHint)) > 0.98 ? (Math.abs(f[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1]) : upHint;
+  const r = nrm3(cross(f, up)); up = cross(r, f);
+  const V = new Float32Array([r[0], up[0], -f[0], 0, r[1], up[1], -f[1], 0, r[2], up[2], -f[2], 0,
+    -dot3(r, eye), -dot3(up, eye), dot3(f, eye), 1]);
+  const P = new Float32Array(16);
+  P[0] = 1 / hs; P[5] = 1 / hs; P[10] = -2 / (far - near); P[14] = -(far + near) / (far - near); P[15] = 1;
+  return mul4(P, V, out);
+}
+
+// The key-light shadow map: an ortho box round the ball (centre c, radius r)
+// along the light L (unit, to the light). depth covers the ball and the
+// ground (gExtra more along L).
+export function lightMatrix(c, r, L, upHint, gExtra = 0, out) {
+  const d = r * 2 + gExtra;
+  const eye = [c[0] + L[0] * d, c[1] + L[1] * d, c[2] + L[2] * d];
+  return orthoLook(eye, [-L[0], -L[1], -L[2]], upHint, r * 1.04, Math.max(0.01, d - r * 1.1), d + r * 1.1 + gExtra * 2, out);
+}
+
+// The "below" map: from the ground plane (the point under c, height g along
+// up) looking up; depth 0..1 is the height 0..range over the ground.
+export function belowMatrix(c, up, g, hs, range, out) {
+  const t = dot3(c, up) - g;
+  const eye = [c[0] - up[0] * t, c[1] - up[1] * t, c[2] - up[2] * t];
+  const hint = Math.abs(up[1]) > 0.9 ? [0, 0, 1] : [0, 1, 0];
+  return orthoLook(eye, up, hint, hs, 0, range, out);
+}

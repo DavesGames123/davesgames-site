@@ -28,6 +28,8 @@
 //    colour values ......... "function setValues"
 //    gradient .............. "function setLUT"
 //    draw .................. "function draw"
+//  The surface view (surface-render.js) shares the context, the LUT texture
+//  (lut()) and the colour values (vals, valDirty: the id range that changed).
 // ============================================================================
 
 const VS = `#version 300 es
@@ -127,6 +129,9 @@ export function createRenderer(canvas) {
   if (!gl) return null;
   const prog = compile(gl, VS, FS), oprog = compile(gl, OVS, OFS);
   let cap = 0, synced = 0, model = null;
+  // ids whose colour value changed since the surface view last read them
+  const valDirty = { lo: Infinity, hi: 0 };
+  const markVals = (a, b) => { if (a < valDirty.lo) valDirty.lo = a; if (b > valDirty.hi) valDirty.hi = b; };
   let pos32 = new Float32Array(0), val32 = new Float32Array(0), id32 = new Float32Array(0), idx = new Uint32Array(0);
   const bPos = gl.createBuffer(), bVal = gl.createBuffer(), bId = gl.createBuffer(), bIdx = gl.createBuffer();
   const vao = gl.createVertexArray();
@@ -170,7 +175,7 @@ export function createRenderer(canvas) {
 
   // Use model m from now on (a regrow or the walk demo). Nothing is uploaded
   // until sync().
-  function setModel(m) { model = m; synced = 0; }
+  function setModel(m) { model = m; synced = 0; markVals(0, 0); valDirty.lo = 0; }
 
   // Upload the particles that joined since the last sync. valFn(i) gives the
   // colour value of a new particle.
@@ -190,6 +195,7 @@ export function createRenderer(canvas) {
     gl.bindBuffer(gl.ARRAY_BUFFER, bId); gl.bufferSubData(gl.ARRAY_BUFFER, a * 4, id32, a, n - a);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bIdx); gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, a * 8, idx, a * 2, (n - a) * 2);
     synced = n;
+    markVals(a, n);
     return n - a;
   }
 
@@ -199,6 +205,7 @@ export function createRenderer(canvas) {
     n = Math.min(n, synced);
     if (n <= 0) return;
     for (let i = 0; i < n; i++) val32[i] = vals[i];
+    markVals(0, n);
     gl.bindBuffer(gl.ARRAY_BUFFER, bVal); gl.bufferSubData(gl.ARRAY_BUFFER, 0, val32, 0, n);
   }
 
@@ -265,5 +272,8 @@ export function createRenderer(canvas) {
     }
   }
 
-  return { gl, canvas, ensure, setModel, sync, setValues, setLUT, resize, draw, get synced() { return synced; }, get model() { return model; } };
+  return {
+    gl, canvas, ensure, setModel, sync, setValues, setLUT, resize, draw, lut: () => tex, valDirty,
+    get vals() { return val32; }, get synced() { return synced; }, get model() { return model; },
+  };
 }
