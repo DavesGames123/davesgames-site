@@ -10,7 +10,7 @@
 //     models: [{ glb, textures: {uri: {file, w, h}}, offset: [x, y, z], yaw }],
 //     mode: 'impostor' | 'beauty',
 //     size,                       // pixels of one view (square)
-//     views: [{ eye, target, up, ortho: halfSize | null, fov, near, far }],
+//     views: [{ eye, target, up, ortho: halfWidth | null, orthoY: halfHeight, fov, near, far }],
 //     out: { albedo, normal } (impostor) or { color } (beauty), raw RGBA files,
 //     views side by side in one row (width = size * views.length)
 //   }]
@@ -147,8 +147,8 @@ function lookAt(eye, target, up) {
   const z = norm(sub(eye, target)), x = norm(cross(up, z)), y = cross(z, x);
   return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
 }
-function ortho(h, near, far) { // WebGPU depth 0..1
-  return [1 / h, 0, 0, 0, 0, 1 / h, 0, 0, 0, 0, -1 / (far - near), 0, 0, 0, -near / (far - near), 1];
+function ortho(h, near, far, hy = h) { // WebGPU depth 0..1; h = half width, hy = half height
+  return [1 / h, 0, 0, 0, 0, 1 / hy, 0, 0, 0, 0, -1 / (far - near), 0, 0, 0, -near / (far - near), 1];
 }
 function persp(fov, aspect, near, far) {
   const f = 1 / Math.tan(fov / 2);
@@ -261,7 +261,7 @@ for (const r of job.renders) {
     pass.setScissorRect(vi * size, 0, size, size);
     const view = lookAt(v.eye, v.target, v.up || [0, 1, 0]);
     const near = v.near ?? 0.01, far = v.far ?? 1000;
-    const proj = v.ortho ? ortho(v.ortho, near, far) : persp(v.fov || 0.6, 1, near, far);
+    const proj = v.ortho ? ortho(v.ortho, near, far, v.orthoY || v.ortho) : persp(v.fov || 0.6, 1, near, far);
     const vp = mul(proj, view);
     const sun = r.sun || [0.5, 0.8, 0.3];
     const mk = (model) => {

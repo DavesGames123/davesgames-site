@@ -170,13 +170,15 @@ export function decimateIslands(p, keepFrac, seed = 1, scaleCap = 1.8, box = nul
   const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
   const keep = new Uint8Array(count);
   for (let i = 0; i < count; i++) keep[i] = rnd() < keepFrac ? 1 : 0;
-  // Always keep the island with the top vertex, so the height stays.
-  let top = 0, topY = -Infinity;
+  // Always keep the islands with the top and the bottom vertex, so the
+  // height and the base stay.
+  let top = 0, topY = -Infinity, bot = 0, botY = Infinity;
   for (let t = 0; t < triIsland.length; t++) for (let k = 0; k < 3; k++) {
     const y = p.positions[p.indices[t * 3 + k] * 3 + 1];
     if (y > topY) { topY = y; top = triIsland[t]; }
+    if (y < botY) { botY = y; bot = triIsland[t]; }
   }
-  keep[top] = 1;
+  keep[top] = 1; keep[bot] = 1;
   const scale = Math.min(scaleCap, 1 / Math.sqrt(Math.max(keepFrac, 1e-3)));
   const I = [];
   for (let t = 0; t < triIsland.length; t++) if (keep[triIsland[t]]) I.push(p.indices[t * 3], p.indices[t * 3 + 1], p.indices[t * 3 + 2]);

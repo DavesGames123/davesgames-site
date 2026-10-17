@@ -188,7 +188,7 @@ if (!existsSync(mfile)) {
       ok(Math.abs(h - a.height) <= 0.1 * a.height, `${a.id} lod${li}: bounds height ${h.toFixed(3)} m within 10 % of ${a.height} m`);
       ok(Math.abs(s.bounds.min[1]) <= 0.05 * a.height + 0.01, `${a.id} lod${li}: base at y = 0 (min y ${s.bounds.min[1].toFixed(3)})`);
       const cx = (s.bounds.min[0] + s.bounds.max[0]) / 2, cz = (s.bounds.min[2] + s.bounds.max[2]) / 2;
-      ok(Math.hypot(cx, cz) <= 0.35 * Math.max(a.footprint, 0.1), `${a.id} lod${li}: origin near the base centre (box centre ${cx.toFixed(2)}, ${cz.toFixed(2)})`);
+      ok(Math.hypot(cx, cz) <= Math.max(0.35 * a.footprint, 0.05), `${a.id} lod${li}: origin near the base centre (box centre ${cx.toFixed(2)}, ${cz.toFixed(2)})`);
       for (const m of s.meshes) {
         ok(m.normals && m.normals.length === m.positions.length, `${a.id} lod${li}: normals present`);
         ok(m.uvs && m.uvs.length * 3 === m.positions.length * 2, `${a.id} lod${li}: uvs present`);

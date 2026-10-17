@@ -24,6 +24,7 @@ import { parseGLB } from '../../lib/glb-lite.js';
 import { SOURCES, GROUND, BIOME_KEYS } from './catalog.mjs';
 import { gltfToGLB, collectVariants, weld, compact, decimateIslands, islands, bounds, baseCentre, translate, writeGLB } from './mesh-ops.mjs';
 import { writeMaterialTextures, writeGroundSet } from './textures.mjs';
+import { foliageIslands, kmeans, makeCards, pickTiles, bakeTiles, cardsPart, crossCards } from './crown.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(here, '../../assets/nature');
@@ -38,6 +39,7 @@ await MeshoptSimplifier.ready;
 const REC = path.join(scratch, 'build', 'records');
 mkdirSync(REC, { recursive: true });
 const UPRIGHT = new Set(['tree', 'bush', 'fern', 'flower', 'grass', 'succulent', 'reed', 'cactus', 'mushroom', 'ground cover']);
+const CROWN = { name: 'crown' }; // material key of the crown card part
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
 function simplifyPart(p, target, foliage, seed, box) {
@@ -52,6 +54,10 @@ function simplifyPart(p, target, foliage, seed, box) {
     if (perIsland > 2.5) {
       const [I] = MeshoptSimplifier.simplify(p.indices, p.positions, 3, Math.max(isl * 2, target) * 3, 0.01, ['Permissive']);
       q = compact({ ...p, indices: I });
+      // The simplifier can collapse a small island to nothing. When that
+      // takes the top or the base of the plant, drop islands instead.
+      const b0 = bounds([p]), b1 = bounds([q]), h = b0.max[1] - b0.min[1];
+      if (b1.min[1] - b0.min[1] > 0.02 * h || b0.max[1] - b1.max[1] > 0.02 * h) q = p;
       tris = q.indices.length / 3;
     }
     if (tris <= target) return q;
@@ -87,6 +93,24 @@ function budgets(parts, target, isFoliage) {
   return out.map((v, i) => Math.max(Math.min(64, parts[i].indices.length / 3), v));
 }
 
+// Height of the crown centre: area-weighted mean height of the leaves.
+function crownCentreY(T, b) {
+  let s = 0, a = 0;
+  for (let i = 0; i < T.n; i++) { s += T.cy[i] * T.area[i]; a += T.area[i]; }
+  return a > 0 ? s / a : (b.min[1] + b.max[1]) / 2;
+}
+
+// WebP or PNG -> raw RGBA file for the Deno renderer (cached by path).
+async function rawTex(file) {
+  const dirR = path.join(scratch, 'build', 'raw');
+  mkdirSync(dirR, { recursive: true });
+  const key = file.replace(/[^a-zA-Z0-9]+/g, '_').slice(-120);
+  const out = path.join(dirR, key + '.rgba');
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  writeFileSync(out, data);
+  return { file: out, w: info.width, h: info.height };
+}
+
 function alphaFor(dir, srcId, matName, alphaMode, nMats) {
   const adir = path.join(dir, 'alpha');
   if (!existsSync(adir)) return null;
@@ -117,28 +141,59 @@ async function buildSource(src) {
     const b = bounds(v.parts);
     maxDim = Math.max(maxDim, b.max[1] - b.min[1], b.max[0] - b.min[0], b.max[2] - b.min[2]);
   }
-  const top = src.texTop || (maxDim >= 1.5 ? 1024 : 512);
+  // Bark and trunks of crown trees stay at 512: the crown atlas is the
+  // 1024 texture of a tree, and the pack budget is 120 MB.
+  const top = src.texTop || (src.crown ? 512 : maxDim >= 1.5 ? 1024 : 512);
   const sizes = [top, top / 2, top / 4];
 
   // Textures per material, shared by all variants.
   const texDir = path.join(OUT, 'tex', src.src);
+  const crownWork = path.join(scratch, 'build', 'crown', src.src);
   const matInfo = new Map();
   for (const m of new Set(variants.flatMap((v) => v.parts.map((p) => p.material)))) {
     const uri = (im) => im && im.uri ? path.join(dir, decodeURIComponent(im.uri)) : null;
     const alpha = alphaFor(dir, src.src, m.name, m.alphaMode, nMats);
     const base = slug(m.name.startsWith(src.src + '_') ? m.name.slice(src.src.length + 1) : m.name) || 'main';
-    const t = await writeMaterialTextures(sharp, { diff: uri(m.baseColor), nor: uri(m.normal), arm: uri(m.orm), alpha }, texDir, base, sizes, !!process.env.NATURE_FORCE);
+    // Crown sources: the leaf textures only feed the tile bake (scratch).
+    const dirFor = alpha && src.crown ? path.join(crownWork, 'src') : texDir;
+    const t = await writeMaterialTextures(sharp, { diff: uri(m.baseColor), nor: uri(m.normal), arm: uri(m.orm), alpha }, dirFor, base, sizes, !!process.env.NATURE_FORCE);
     matInfo.set(m, { base, t, foliage: t.alpha });
   }
 
+  // Crown cards: bake 16 spray tiles from the first variant, one atlas per source.
+  let crownTex = null, tiles = null;
+  const prepared = variants.map((v) => {
+    const parts = v.parts.map((p) => weld(p)).filter((p) => p.indices.length >= 3);
+    const o = baseCentre(parts, UPRIGHT.has(src.kind));
+    translate(parts, o);
+    return parts;
+  });
+  if (src.crown) {
+    const parts0 = prepared[0];
+    const fol = parts0.filter((p) => matInfo.get(p.material).foliage);
+    const T = foliageIslands(fol);
+    const b0 = bounds(parts0);
+    const crownY = crownCentreY(T, b0);
+    const cards = makeCards(T, kmeans(T, src.crown[1], 11), crownY);
+    const tileCards = pickTiles(cards, 16);
+    const mats = fol.map((p) => {
+      const mi = matInfo.get(p.material);
+      const rel = (f) => f ? path.relative(crownWork, f).split(path.sep).join('/') : null;
+      return { name: mi.base, alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true, maps: { baseColor: rel(mi.t.albedo[0]), normal: rel(mi.t.normal[0]), orm: rel(mi.t.orm[0]) } };
+    });
+    const atlas = await bakeTiles(sharp, fol, T, tileCards, mats, crownWork, path.join(here, 'render-deno.js'), rawTex);
+    tiles = atlas.tiles;
+    crownTex = await writeMaterialTextures(sharp, { diff: atlas.diff, nor: atlas.normal, arm: atlas.orm, alpha: atlas.alpha }, texDir, 'crown', [1024, 512, 256], true);
+    console.log('  crown atlas: 16 tiles, coverage', crownTex.coverage.toFixed(3));
+  }
+
   const records = [];
-  let vi = 0;
+  let vi = 0, crownArea0 = 1;
+  if (crownTex) matInfo.set(CROWN, { base: 'crown', t: crownTex, foliage: true });
   for (const v of variants) {
     const letter = String.fromCharCode(97 + vi++);
     const id = variants.length > 1 ? `${src.src}_${letter}` : src.src;
-    let parts = v.parts.map((p) => weld(p)).filter((p) => p.indices.length >= 3);
-    const o = baseCentre(parts, UPRIGHT.has(src.kind));
-    translate(parts, o);
+    const parts = prepared[vi - 1];
     const b = bounds(parts);
     const height = b.max[1] - b.min[1];
     if (height < 0.02) { console.log('  skip tiny variant', v.name); continue; }
@@ -149,12 +204,35 @@ async function buildSource(src) {
     // Small things get fewer triangles: scale the targets by size (1 m = full).
     const dim = Math.max(height, b.max[0] - b.min[0], b.max[2] - b.min[2]);
     const sizeK = src.kind === 'grass' || src.kind === 'flower' ? 1 : Math.min(1, Math.max(0.25, dim / 1.0));
+    // Crown sources: the cluster table of this variant, and the card count
+    // scaled by its leaf area against the first variant.
+    let T = null, crownY = 0, areaK = 1;
+    if (src.crown) {
+      T = foliageIslands(parts.filter((p, i) => isFol[i]));
+      crownY = crownCentreY(T, b);
+      const a = T.area.reduce((s, x) => s + x, 0);
+      if (vi === 1) crownArea0 = a;
+      areaK = Math.min(1.3, Math.max(0.35, Math.sqrt(a / crownArea0)));
+    }
     for (let li = 0; li < 3; li++) {
       const target = Math.min(Math.round(src.lods[li] * sizeK), li === 0 ? srcTris : lods[li - 1].tris);
-      const bud = budgets(prevParts, target, isFol);
-      const cap = (src.scaleCap || [2.2, 3.2, 4.5])[li];
-      const lp = prevParts.map((p, i) => simplifyPart(p, bud[i], isFol[i] ? { scaleCap: cap } : null, 1234 + li * 77 + vi, b));
-      prevParts = lp;
+      let lp;
+      if (src.crown) {
+        const K = Math.max(8, Math.round(src.crown[li] * areaK));
+        const opaque = prevParts.filter((p) => !matInfo.get(p.material).foliage);
+        const ob = budgets(opaque, Math.max(200, target - 4 * K), opaque.map(() => false));
+        lp = opaque.map((p, i) => simplifyPart(p, ob[i], null, 0, b));
+        const cards = crossCards(makeCards(T, kmeans(T, K, 100 + li), crownY));
+        const cp = cardsPart(cards, tiles, [0, crownY, 0], 1000 + li + vi * 13);
+        cp.material = CROWN;
+        lp.push(cp);
+        prevParts = lp.slice(0, -1).concat(prevParts.filter((p) => matInfo.get(p.material).foliage));
+      } else {
+        const bud = budgets(prevParts, target, isFol);
+        const cap = (src.scaleCap || [2.2, 3.2, 4.5])[li];
+        lp = prevParts.map((p, i) => simplifyPart(p, bud[i], isFol[i] ? { scaleCap: cap } : null, 1234 + li * 77 + vi, b));
+        prevParts = lp;
+      }
       const mats = lp.map((p) => {
         const mi = matInfo.get(p.material);
         const rel = (f) => f ? path.relative(path.join(OUT, 'models'), f).split(path.sep).join('/') : null;
@@ -186,7 +264,9 @@ async function buildSource(src) {
       bounds: { min: lb.min.map((x) => +x.toFixed(3)), max: lb.max.map((x) => +x.toFixed(3)) },
       sourceTris: srcTris,
       lods,
-      materials: parts.map((p) => ({ name: matInfo.get(p.material).base, foliage: matInfo.get(p.material).foliage, coverage: +matInfo.get(p.material).t.coverage.toFixed(4) })),
+      materials: (src.crown ? parts.filter((p) => !matInfo.get(p.material).foliage).map((p) => p.material).concat([CROWN]) : parts.map((p) => p.material))
+        .map((m) => ({ name: matInfo.get(m).base, foliage: matInfo.get(m).foliage, coverage: +matInfo.get(m).t.coverage.toFixed(4) })),
+      crown: src.crown ? { cards: lods.map((l, i) => Math.max(8, Math.round(src.crown[i] * areaK))), tiles: 16, note: 'foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)' } : undefined,
       wind: src.wind ?? 0,
       sink: ['rock', 'boulder', 'cliff'].includes(src.kind) ? 0.12 : src.kind === 'log' ? 0.05 : 0,
       default: !!src.default,

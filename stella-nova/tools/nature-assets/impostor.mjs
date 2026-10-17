@@ -86,19 +86,54 @@ function downsample(a, n, W, H, f) {
   return { a: oa, n: on, w, h };
 }
 
+// Leaf normals in a far view are noise. Blur them (5 x 5, alpha
+// weighted) and blend toward the normal of an ellipsoid that fills the
+// cell, so the impostor lights as a soft volume. Trunks (opaque, few
+// texels) get the same mix; the blend weight is 0.45.
+function softenNormals(ds, rec) {
+  const C = ds.h, w = ds.w;
+  const src = new Float32Array(w * C * 3);
+  for (let i = 0; i < w * C; i++) for (let c = 0; c < 3; c++) src[i * 3 + c] = ds.n[i * 4 + c] / 127.5 - 1;
+  for (let k = 0; k < 9; k++) {
+    const a = (k * Math.PI * 2) / 8;
+    const right = k < 8 ? [Math.cos(a), 0, -Math.sin(a)] : [1, 0, 0];
+    const up = k < 8 ? [0, 1, 0] : [0, 0, -1];
+    const fwd = k < 8 ? [Math.sin(a), 0, Math.cos(a)] : [0, 1, 0];
+    for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) {
+      const i = y * w + k * C + x;
+      if (ds.a[i * 4 + 3] < 8) continue;
+      let s0 = 0, s1 = 0, s2 = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= C || yy >= C) continue;
+        const j = yy * w + k * C + xx, al = ds.a[j * 4 + 3] / 255;
+        s0 += src[j * 3] * al; s1 += src[j * 3 + 1] * al; s2 += src[j * 3 + 2] * al;
+      }
+      const px = (x + 0.5) / C * 2 - 1, py = 1 - (y + 0.5) / C * 2;
+      const pz = Math.sqrt(Math.max(0.05, 1 - px * px - py * py));
+      const e = [right[0] * px + up[0] * py + fwd[0] * pz, right[1] * px + up[1] * py + fwd[1] * pz, right[2] * px + up[2] * py + fwd[2] * pz];
+      let l = Math.hypot(s0, s1, s2) || 1; const b = [s0 / l, s1 / l, s2 / l];
+      const el = Math.hypot(...e);
+      const n = [0, 1, 2].map((c) => 0.55 * b[c] + 0.45 * e[c] / el);
+      l = Math.hypot(...n) || 1;
+      for (let c = 0; c < 3; c++) ds.n[i * 4 + c] = Math.round((n[c] / l * 0.5 + 0.5) * 255);
+    }
+  }
+}
+
 async function bake(id) {
   const rec = loadRec(id);
   const lod = rec.lods[0];
   const m = await modelJob(lod.file);
   const H = rec.height, R = Math.max(rec.radius, 0.01);
-  const hs = Math.max(R, H / 2) * 1.03;          // half size of a side cell, metres
+  const hx = R * 1.03, hy = (H / 2) * 1.03;      // half width and half height of a side cell, metres
   const ht = R * 1.03;                             // half size of the top cell
   const c = [0, H / 2, 0];
-  const D = 4 * Math.max(hs, H) + 10;
+  const D = 4 * Math.max(hx, H) + 10;
   const views = [];
   for (let k = 0; k < 8; k++) {
     const a = (k * Math.PI * 2) / 8;
-    views.push({ eye: [c[0] + Math.sin(a) * D, c[1], c[2] + Math.cos(a) * D], target: c, up: [0, 1, 0], ortho: hs, near: D - R * 1.05, far: D + R * 1.05 });
+    views.push({ eye: [c[0] + Math.sin(a) * D, c[1], c[2] + Math.cos(a) * D], target: c, up: [0, 1, 0], ortho: hx, orthoY: hy, near: D - R * 1.05, far: D + R * 1.05 });
   }
   views.push({ eye: [0, H + D, 0], target: [0, 0, 0], up: [0, 0, -1], ortho: ht, near: D - 0.05, far: D + H + 0.05 });
   const size = CELL * SS;
@@ -108,6 +143,7 @@ async function bake(id) {
   rmSync(ra); rmSync(rn);
   const W = size * 9;
   const ds = downsample(A, N, W, size, SS);
+  softenNormals(ds, rec);
   // Lay the 9 cells out as a 3 x 3 atlas.
   const S = CELL * 3;
   const atA = new Uint8Array(S * S * 4), atN = new Uint8Array(S * S * 4);
@@ -139,8 +175,9 @@ async function bake(id) {
     albedo: 'impostors/' + id + '_albedo.webp', normal: 'impostors/' + id + '_normal.webp',
     layout: '3x3', size: S, cell: CELL,
     views: 'cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z',
-    centre: c.map((x) => +x.toFixed(3)), sideHalfSize: +hs.toFixed(3), topHalfSize: +ht.toFixed(3),
-    normal: 'world normal * 0.5 + 0.5 in rgb; a = depth in the view box (1 near, 0 far)',
+    centre: c.map((x) => +x.toFixed(3)), sideHalfSize: [+hx.toFixed(3), +hy.toFixed(3)], topHalfSize: +ht.toFixed(3),
+    billboard: 'a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize',
+    normalEncoding: 'world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)',
     coverage: cov.map((x) => +x.toFixed(3)),
   };
   writeFileSync(path.join(REC, id + '.json'), JSON.stringify(rec, null, 1));
