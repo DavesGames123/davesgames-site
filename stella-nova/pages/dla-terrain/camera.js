@@ -252,6 +252,14 @@ export function dronePath(poly, world, opts = {}) {
     len += Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]);
     table.push({ s: len, i, t: q / 8, p }); last = p;
   }
+  // composition: the drone always looks a little down (land in the lower
+  // two thirds, the horizon high), never up at an empty sky
+  const pMin = opts.pitchMin ?? -0.5, pMax = opts.pitchMax ?? -0.13;
+  const framePitch = (pos, look) => {
+    const dx = look[0] - pos[0], dz = look[2] - pos[2], h = Math.hypot(dx, dz) || 1;
+    const pitch = clamp(Math.atan2(look[1] - pos[1], h), pMin, pMax);
+    return [look[0], pos[1] + Math.tan(pitch) * h, look[2]];
+  };
   const posAt = s => {
     s = clamp(s, 0, len);
     let lo = 0, hi = table.length - 1;
@@ -268,9 +276,9 @@ export function dronePath(poly, world, opts = {}) {
         // past the end: keep the last heading
         const pb = posAt(Math.max(0, len - ahead));
         const d = [pos[0] - pb[0], pos[2] - pb[2]], l = Math.hypot(d[0], d[1]) || 1;
-        return { pos, look: [pos[0] + d[0] / l * ahead, hAt(pos[0], pos[2]) + clear - down, pos[2] + d[1] / l * ahead] };
+        return { pos, look: framePitch(pos, [pos[0] + d[0] / l * ahead, hAt(pos[0], pos[2]) + clear - down, pos[2] + d[1] / l * ahead]) };
       }
-      return { pos, look: [la[0], la[1] - clear * 0.4 - down, la[2]] };
+      return { pos, look: framePitch(pos, [la[0], la[1] - clear * 0.4 - down, la[2]]) };
     },
   };
 }
