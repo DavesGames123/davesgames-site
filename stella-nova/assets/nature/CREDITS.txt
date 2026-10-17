@@ -1,0 +1,80 @@
+Nature asset pack for davesgames.io (stella-nova/assets/nature)
+
+Every model and texture in this folder is a processed copy of a CC0 1.0
+Universal (public domain dedication) asset. CC0 needs no credit; we give
+it anyway. Processing: variants split, welded, re-centred, simplified to
+three levels of detail, textures resized and converted to WebP, leaf alpha
+merged into the albedo, impostor atlases rendered from the models.
+
+Licences:
+  Poly Haven: all assets CC0. https://polyhaven.com/license
+  ambientCG: all assets CC0 1.0. https://docs.ambientcg.com/license/
+  CC0 text: https://creativecommons.org/publicdomain/zero/1.0/
+
+Sources (source asset, authors, link -> ids in manifest.json):
+  boulder_01 (Poly Haven), by Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/boulder_01
+    -> boulder_01
+  brown_mud_02 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/brown_mud_02
+    -> ground_mud
+  dry_ground_01 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/dry_ground_01
+    -> ground_desert
+  fern_02 (Poly Haven), by Rob Tuytel, Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/fern_02
+    -> fern_02_a, fern_02_b, fern_02_c, fern_02_d
+  forest_leaves_02 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/forest_leaves_02
+    -> ground_forest_floor
+  forrest_ground_03 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/forrest_ground_03
+    -> ground_pine_floor
+  grass_ground (Poly Haven), by Charlotte Baglioni, CC0-1.0
+    https://polyhaven.com/a/grass_ground
+    -> ground_dry_grass
+  grass_medium_01 (Poly Haven), by Rob Tuytel, Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/grass_medium_01
+    -> grass_medium_01_a, grass_medium_01_b, grass_medium_01_c, grass_medium_01_d, grass_medium_01_e, grass_medium_01_f
+  Grass004 (ambientCG), by Lennart Demes (ambientCG), CC0-1.0
+    https://ambientcg.com/view?id=Grass004
+    -> ground_grass
+  Ground037 (ambientCG), by Lennart Demes (ambientCG), CC0-1.0
+    https://ambientcg.com/view?id=Ground037
+    -> ground_meadow
+  namaqualand_boulder_04 (Poly Haven), by Jenelle van Heerden, CC0-1.0
+    https://polyhaven.com/a/namaqualand_boulder_04
+    -> namaqualand_boulder_04
+  river_small_rocks (Poly Haven), by Rob Tuytel, Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/river_small_rocks
+    -> ground_gravel
+  rock_07 (Poly Haven), by Jenelle van Heerden, CC0-1.0
+    https://polyhaven.com/a/rock_07
+    -> rock_07
+  rock_face (Poly Haven), by Greg Zaal, Dario Barresi, CC0-1.0
+    https://polyhaven.com/a/rock_face
+    -> ground_cliff
+  rock_face_03 (Poly Haven), by Dario Barresi, Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/rock_face_03
+    -> ground_rock
+  rock_moss_set_01 (Poly Haven), by Kless Gyzen, CC0-1.0
+    https://polyhaven.com/a/rock_moss_set_01
+    -> rock_moss_set_01_a, rock_moss_set_01_b, rock_moss_set_01_c, rock_moss_set_01_d, rock_moss_set_01_e, rock_moss_set_01_f
+  rocks_ground_06 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/rocks_ground_06
+    -> ground_scree
+  sand_02 (Poly Haven), by Charlotte Baglioni, CC0-1.0
+    https://polyhaven.com/a/sand_02
+    -> ground_sand
+  shrub_02 (Poly Haven), by Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/shrub_02
+    -> shrub_02_a, shrub_02_b, shrub_02_c, shrub_02_d
+  snow_02 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/snow_02
+    -> ground_snow
+  stone_01 (Poly Haven), by Dario Barresi, Rico Cilliers, CC0-1.0
+    https://polyhaven.com/a/stone_01
+    -> stone_01
+  tree_stump_01 (Poly Haven), by Rob Tuytel, CC0-1.0
+    https://polyhaven.com/a/tree_stump_01
+    -> tree_stump_01

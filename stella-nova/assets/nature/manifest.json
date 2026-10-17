@@ -1,0 +1,2402 @@
+{
+ "version": 1,
+ "generated": "2026-10-17",
+ "units": "metres",
+ "up": "+y",
+ "origin": "base centre (y = 0 at the lowest vertex)",
+ "notes": [
+  "Every asset is CC0-1.0 (Poly Haven, ambientCG). See CREDITS.txt.",
+  "lods[0..2]: GLB files for lib/glb-lite.js. Textures are external WebP files in tex/, shared by the variants and LODs of a source; key GPU textures on the file URL.",
+  "Albedo WebP alpha is the cutoff mask (alphaMode MASK, cutoff 0.5). Colour under transparent texels is filled (push-pull). Smaller sizes keep the alpha coverage of the top size; coverage gives that share, so a renderer can keep it in its own mips.",
+  "Normals are int8 (KHR_mesh_quantization); normal maps are OpenGL (+y). ORM: r occlusion, g roughness, b metal (0).",
+  "sink: share of the height to push below the ground (rocks). wind: 0 rigid .. 1 very flexible.",
+  "impostor: 3 x 3 atlas (see impostor.views): albedo with alpha; normal file rgb = world normal * 0.5 + 0.5, a = depth in the view box.",
+  "biomes use BIOME_KEYS (snake case of the lib/dla-terrain.js BIOMES names)."
+ ],
+ "biomeKeys": [
+  "ocean",
+  "beach",
+  "desert",
+  "savanna",
+  "grassland",
+  "temperate_forest",
+  "rainforest",
+  "boreal_forest",
+  "tundra",
+  "bare_rock",
+  "snow",
+  "wetland",
+  "river",
+  "lake",
+  "scree",
+  "alpine_meadow"
+ ],
+ "groundLayers": [
+  "ground_grass",
+  "ground_meadow",
+  "ground_dry_grass",
+  "ground_forest_floor",
+  "ground_pine_floor",
+  "ground_rock",
+  "ground_cliff",
+  "ground_scree",
+  "ground_gravel",
+  "ground_sand",
+  "ground_desert",
+  "ground_snow",
+  "ground_mud"
+ ],
+ "totals": {
+  "assets": 38,
+  "kinds": {
+   "boulder": 2,
+   "bush": 4,
+   "fern": 4,
+   "grass": 6,
+   "rock": 8,
+   "stump": 1,
+   "ground texture": 13
+  },
+  "files": 195,
+  "bytes": 21079584,
+  "defaultBytes": 21079584
+ },
+ "assets": [
+  {
+   "id": "boulder_01",
+   "name": "Boulder",
+   "kind": "boulder",
+   "sub": "granite",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "alpine_meadow",
+    "scree",
+    "bare_rock",
+    "tundra",
+    "river"
+   ],
+   "height": 1.004,
+   "footprint": 1.83,
+   "radius": 0.982,
+   "bounds": {
+    "min": [
+     -0.636,
+     0,
+     -0.915
+    ],
+    "max": [
+     0.636,
+     1.004,
+     0.915
+    ]
+   },
+   "sourceTris": 66122,
+   "lods": [
+    {
+     "file": "models/boulder_01_lod0.glb",
+     "tris": 12082,
+     "bytes": 321952,
+     "texSize": 1024,
+     "textures": [
+      "tex/boulder_01/boulder_01_albedo_1024.webp",
+      "tex/boulder_01/boulder_01_normal_1024.webp",
+      "tex/boulder_01/boulder_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/boulder_01_lod1.glb",
+     "tris": 2425,
+     "bytes": 42692,
+     "texSize": 512,
+     "textures": [
+      "tex/boulder_01/boulder_01_albedo_512.webp",
+      "tex/boulder_01/boulder_01_normal_512.webp",
+      "tex/boulder_01/boulder_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/boulder_01_lod2.glb",
+     "tris": 489,
+     "bytes": 10352,
+     "texSize": 256,
+     "textures": [
+      "tex/boulder_01/boulder_01_albedo_256.webp",
+      "tex/boulder_01/boulder_01_normal_256.webp",
+      "tex/boulder_01/boulder_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "boulder_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rico Cilliers",
+   "source": "https://polyhaven.com/a/boulder_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "boulder_01",
+   "sourceVariant": "boulder_01"
+  },
+  {
+   "id": "namaqualand_boulder_04",
+   "name": "Granite boulder, round",
+   "kind": "boulder",
+   "sub": "granite",
+   "biomes": [
+    "desert",
+    "savanna",
+    "scree",
+    "bare_rock",
+    "grassland",
+    "alpine_meadow"
+   ],
+   "height": 1.9,
+   "footprint": 2.522,
+   "radius": 1.512,
+   "bounds": {
+    "min": [
+     -1.261,
+     0,
+     -1.248
+    ],
+    "max": [
+     1.261,
+     1.9,
+     1.248
+    ]
+   },
+   "sourceTris": 59066,
+   "lods": [
+    {
+     "file": "models/namaqualand_boulder_04_lod0.glb",
+     "tris": 12000,
+     "bytes": 225980,
+     "texSize": 1024,
+     "textures": [
+      "tex/namaqualand_boulder_04/boulder_04_albedo_1024.webp",
+      "tex/namaqualand_boulder_04/boulder_04_normal_1024.webp",
+      "tex/namaqualand_boulder_04/boulder_04_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/namaqualand_boulder_04_lod1.glb",
+     "tris": 2500,
+     "bytes": 50628,
+     "texSize": 512,
+     "textures": [
+      "tex/namaqualand_boulder_04/boulder_04_albedo_512.webp",
+      "tex/namaqualand_boulder_04/boulder_04_normal_512.webp",
+      "tex/namaqualand_boulder_04/boulder_04_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/namaqualand_boulder_04_lod2.glb",
+     "tris": 500,
+     "bytes": 12792,
+     "texSize": 256,
+     "textures": [
+      "tex/namaqualand_boulder_04/boulder_04_albedo_256.webp",
+      "tex/namaqualand_boulder_04/boulder_04_normal_256.webp",
+      "tex/namaqualand_boulder_04/boulder_04_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "boulder_04",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Jenelle van Heerden",
+   "source": "https://polyhaven.com/a/namaqualand_boulder_04",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "namaqualand_boulder_04",
+   "sourceVariant": "boulder_04"
+  },
+  {
+   "id": "shrub_02_a",
+   "name": "Shrub A",
+   "kind": "bush",
+   "sub": "shrub",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "boreal_forest",
+    "alpine_meadow"
+   ],
+   "height": 1.689,
+   "footprint": 1.641,
+   "radius": 0.921,
+   "bounds": {
+    "min": [
+     -0.575,
+     0,
+     -0.874
+    ],
+    "max": [
+     0.737,
+     1.689,
+     0.767
+    ]
+   },
+   "sourceTris": 7590,
+   "lods": [
+    {
+     "file": "models/shrub_02_a_lod0.glb",
+     "tris": 7590,
+     "bytes": 170484,
+     "texSize": 1024,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_1024.webp",
+      "tex/shrub_02/shrub_02_normal_1024.webp",
+      "tex/shrub_02/shrub_02_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_a_lod1.glb",
+     "tris": 1993,
+     "bytes": 57192,
+     "texSize": 512,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_512.webp",
+      "tex/shrub_02/shrub_02_normal_512.webp",
+      "tex/shrub_02/shrub_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_a_lod2.glb",
+     "tris": 500,
+     "bytes": 21824,
+     "texSize": 256,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_256.webp",
+      "tex/shrub_02/shrub_02_normal_256.webp",
+      "tex/shrub_02/shrub_02_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "shrub_02",
+     "foliage": true,
+     "coverage": 0.343
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rico Cilliers",
+   "source": "https://polyhaven.com/a/shrub_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "shrub_02",
+   "sourceVariant": "shrub_02_a"
+  },
+  {
+   "id": "shrub_02_b",
+   "name": "Shrub B",
+   "kind": "bush",
+   "sub": "shrub",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "boreal_forest",
+    "alpine_meadow"
+   ],
+   "height": 1.506,
+   "footprint": 1.28,
+   "radius": 0.99,
+   "bounds": {
+    "min": [
+     -0.597,
+     0,
+     -0.466
+    ],
+    "max": [
+     0.513,
+     1.506,
+     0.814
+    ]
+   },
+   "sourceTris": 5242,
+   "lods": [
+    {
+     "file": "models/shrub_02_b_lod0.glb",
+     "tris": 5242,
+     "bytes": 119796,
+     "texSize": 1024,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_1024.webp",
+      "tex/shrub_02/shrub_02_normal_1024.webp",
+      "tex/shrub_02/shrub_02_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_b_lod1.glb",
+     "tris": 1997,
+     "bytes": 55468,
+     "texSize": 512,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_512.webp",
+      "tex/shrub_02/shrub_02_normal_512.webp",
+      "tex/shrub_02/shrub_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_b_lod2.glb",
+     "tris": 498,
+     "bytes": 19816,
+     "texSize": 256,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_256.webp",
+      "tex/shrub_02/shrub_02_normal_256.webp",
+      "tex/shrub_02/shrub_02_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "shrub_02",
+     "foliage": true,
+     "coverage": 0.343
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rico Cilliers",
+   "source": "https://polyhaven.com/a/shrub_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "shrub_02",
+   "sourceVariant": "shrub_02_b"
+  },
+  {
+   "id": "shrub_02_c",
+   "name": "Shrub C",
+   "kind": "bush",
+   "sub": "shrub",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "boreal_forest",
+    "alpine_meadow"
+   ],
+   "height": 1.315,
+   "footprint": 2.285,
+   "radius": 1.191,
+   "bounds": {
+    "min": [
+     -0.724,
+     0,
+     -1.106
+    ],
+    "max": [
+     1.043,
+     1.315,
+     1.179
+    ]
+   },
+   "sourceTris": 9234,
+   "lods": [
+    {
+     "file": "models/shrub_02_c_lod0.glb",
+     "tris": 7999,
+     "bytes": 186788,
+     "texSize": 1024,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_1024.webp",
+      "tex/shrub_02/shrub_02_normal_1024.webp",
+      "tex/shrub_02/shrub_02_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_c_lod1.glb",
+     "tris": 1987,
+     "bytes": 59888,
+     "texSize": 512,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_512.webp",
+      "tex/shrub_02/shrub_02_normal_512.webp",
+      "tex/shrub_02/shrub_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_c_lod2.glb",
+     "tris": 500,
+     "bytes": 23668,
+     "texSize": 256,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_256.webp",
+      "tex/shrub_02/shrub_02_normal_256.webp",
+      "tex/shrub_02/shrub_02_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "shrub_02",
+     "foliage": true,
+     "coverage": 0.343
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rico Cilliers",
+   "source": "https://polyhaven.com/a/shrub_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "shrub_02",
+   "sourceVariant": "shrub_02_c"
+  },
+  {
+   "id": "shrub_02_d",
+   "name": "Shrub D",
+   "kind": "bush",
+   "sub": "shrub",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "boreal_forest",
+    "alpine_meadow"
+   ],
+   "height": 1.229,
+   "footprint": 1.098,
+   "radius": 0.887,
+   "bounds": {
+    "min": [
+     -0.438,
+     0,
+     -0.639
+    ],
+    "max": [
+     0.642,
+     1.229,
+     0.459
+    ]
+   },
+   "sourceTris": 5188,
+   "lods": [
+    {
+     "file": "models/shrub_02_d_lod0.glb",
+     "tris": 5188,
+     "bytes": 117744,
+     "texSize": 1024,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_1024.webp",
+      "tex/shrub_02/shrub_02_normal_1024.webp",
+      "tex/shrub_02/shrub_02_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_d_lod1.glb",
+     "tris": 1998,
+     "bytes": 55136,
+     "texSize": 512,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_512.webp",
+      "tex/shrub_02/shrub_02_normal_512.webp",
+      "tex/shrub_02/shrub_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/shrub_02_d_lod2.glb",
+     "tris": 498,
+     "bytes": 19604,
+     "texSize": 256,
+     "textures": [
+      "tex/shrub_02/shrub_02_albedo_256.webp",
+      "tex/shrub_02/shrub_02_normal_256.webp",
+      "tex/shrub_02/shrub_02_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "shrub_02",
+     "foliage": true,
+     "coverage": 0.343
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rico Cilliers",
+   "source": "https://polyhaven.com/a/shrub_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "shrub_02",
+   "sourceVariant": "shrub_02_d"
+  },
+  {
+   "id": "fern_02_a",
+   "name": "Fern A",
+   "kind": "fern",
+   "sub": "fern",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "boreal_forest",
+    "wetland"
+   ],
+   "height": 0.287,
+   "footprint": 0.613,
+   "radius": 0.351,
+   "bounds": {
+    "min": [
+     -0.276,
+     0,
+     -0.307
+    ],
+    "max": [
+     0.276,
+     0.287,
+     0.307
+    ]
+   },
+   "sourceTris": 784,
+   "lods": [
+    {
+     "file": "models/fern_02_a_lod0.glb",
+     "tris": 784,
+     "bytes": 19232,
+     "texSize": 512,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_512.webp",
+      "tex/fern_02/fern_02_normal_512.webp",
+      "tex/fern_02/fern_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_a_lod1.glb",
+     "tris": 784,
+     "bytes": 19232,
+     "texSize": 256,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_256.webp",
+      "tex/fern_02/fern_02_normal_256.webp",
+      "tex/fern_02/fern_02_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_a_lod2.glb",
+     "tris": 499,
+     "bytes": 13440,
+     "texSize": 128,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_128.webp",
+      "tex/fern_02/fern_02_normal_128.webp",
+      "tex/fern_02/fern_02_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "fern_02",
+     "foliage": true,
+     "coverage": 0.1536
+    }
+   ],
+   "wind": 0.7,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/fern_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "fern_02",
+   "sourceVariant": "fern_02_a"
+  },
+  {
+   "id": "fern_02_b",
+   "name": "Fern B",
+   "kind": "fern",
+   "sub": "fern",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "boreal_forest",
+    "wetland"
+   ],
+   "height": 0.428,
+   "footprint": 0.99,
+   "radius": 0.71,
+   "bounds": {
+    "min": [
+     -0.412,
+     0,
+     -0.431
+    ],
+    "max": [
+     0.578,
+     0.428,
+     0.462
+    ]
+   },
+   "sourceTris": 2384,
+   "lods": [
+    {
+     "file": "models/fern_02_b_lod0.glb",
+     "tris": 2384,
+     "bytes": 54396,
+     "texSize": 512,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_512.webp",
+      "tex/fern_02/fern_02_normal_512.webp",
+      "tex/fern_02/fern_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_b_lod1.glb",
+     "tris": 1999,
+     "bytes": 46496,
+     "texSize": 256,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_256.webp",
+      "tex/fern_02/fern_02_normal_256.webp",
+      "tex/fern_02/fern_02_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_b_lod2.glb",
+     "tris": 510,
+     "bytes": 15256,
+     "texSize": 128,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_128.webp",
+      "tex/fern_02/fern_02_normal_128.webp",
+      "tex/fern_02/fern_02_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "fern_02",
+     "foliage": true,
+     "coverage": 0.1536
+    }
+   ],
+   "wind": 0.7,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/fern_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "fern_02",
+   "sourceVariant": "fern_02_b"
+  },
+  {
+   "id": "fern_02_c",
+   "name": "Fern C",
+   "kind": "fern",
+   "sub": "fern",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "boreal_forest",
+    "wetland"
+   ],
+   "height": 0.349,
+   "footprint": 0.874,
+   "radius": 0.49,
+   "bounds": {
+    "min": [
+     -0.437,
+     0,
+     -0.383
+    ],
+    "max": [
+     0.437,
+     0.349,
+     0.383
+    ]
+   },
+   "sourceTris": 2248,
+   "lods": [
+    {
+     "file": "models/fern_02_c_lod0.glb",
+     "tris": 2248,
+     "bytes": 51420,
+     "texSize": 512,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_512.webp",
+      "tex/fern_02/fern_02_normal_512.webp",
+      "tex/fern_02/fern_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_c_lod1.glb",
+     "tris": 1999,
+     "bytes": 46352,
+     "texSize": 256,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_256.webp",
+      "tex/fern_02/fern_02_normal_256.webp",
+      "tex/fern_02/fern_02_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_c_lod2.glb",
+     "tris": 602,
+     "bytes": 17676,
+     "texSize": 128,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_128.webp",
+      "tex/fern_02/fern_02_normal_128.webp",
+      "tex/fern_02/fern_02_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "fern_02",
+     "foliage": true,
+     "coverage": 0.1536
+    }
+   ],
+   "wind": 0.7,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/fern_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "fern_02",
+   "sourceVariant": "fern_02_c"
+  },
+  {
+   "id": "fern_02_d",
+   "name": "Fern D",
+   "kind": "fern",
+   "sub": "fern",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "boreal_forest",
+    "wetland"
+   ],
+   "height": 0.213,
+   "footprint": 0.593,
+   "radius": 0.4,
+   "bounds": {
+    "min": [
+     -0.301,
+     0,
+     -0.349
+    ],
+    "max": [
+     0.272,
+     0.213,
+     0.244
+    ]
+   },
+   "sourceTris": 816,
+   "lods": [
+    {
+     "file": "models/fern_02_d_lod0.glb",
+     "tris": 816,
+     "bytes": 19900,
+     "texSize": 512,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_512.webp",
+      "tex/fern_02/fern_02_normal_512.webp",
+      "tex/fern_02/fern_02_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_d_lod1.glb",
+     "tris": 816,
+     "bytes": 19900,
+     "texSize": 256,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_256.webp",
+      "tex/fern_02/fern_02_normal_256.webp",
+      "tex/fern_02/fern_02_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/fern_02_d_lod2.glb",
+     "tris": 499,
+     "bytes": 13608,
+     "texSize": 128,
+     "textures": [
+      "tex/fern_02/fern_02_albedo_128.webp",
+      "tex/fern_02/fern_02_normal_128.webp",
+      "tex/fern_02/fern_02_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "fern_02",
+     "foliage": true,
+     "coverage": 0.1536
+    }
+   ],
+   "wind": 0.7,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/fern_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "fern_02",
+   "sourceVariant": "fern_02_d"
+  },
+  {
+   "id": "grass_medium_01_a",
+   "name": "Grass clump A",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.147,
+   "footprint": 0.327,
+   "radius": 0.194,
+   "bounds": {
+    "min": [
+     -0.134,
+     0,
+     -0.156
+    ],
+    "max": [
+     0.183,
+     0.147,
+     0.17
+    ]
+   },
+   "sourceTris": 6422,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_a_lod0.glb",
+     "tris": 6422,
+     "bytes": 209604,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_a_lod1.glb",
+     "tris": 2000,
+     "bytes": 76940,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_a_lod2.glb",
+     "tris": 547,
+     "bytes": 26648,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_large_a_LOD0"
+  },
+  {
+   "id": "grass_medium_01_b",
+   "name": "Grass clump B",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.169,
+   "footprint": 0.284,
+   "radius": 0.155,
+   "bounds": {
+    "min": [
+     -0.142,
+     0,
+     -0.138
+    ],
+    "max": [
+     0.142,
+     0.169,
+     0.138
+    ]
+   },
+   "sourceTris": 4626,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_b_lod0.glb",
+     "tris": 4626,
+     "bytes": 145524,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_b_lod1.glb",
+     "tris": 2000,
+     "bytes": 67888,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_b_lod2.glb",
+     "tris": 561,
+     "bytes": 21784,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_large_b_LOD0"
+  },
+  {
+   "id": "grass_medium_01_c",
+   "name": "Grass clump C",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.218,
+   "footprint": 0.221,
+   "radius": 0.131,
+   "bounds": {
+    "min": [
+     -0.108,
+     0,
+     -0.111
+    ],
+    "max": [
+     0.108,
+     0.218,
+     0.111
+    ]
+   },
+   "sourceTris": 2287,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_c_lod0.glb",
+     "tris": 2287,
+     "bytes": 77968,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_c_lod1.glb",
+     "tris": 2000,
+     "bytes": 69404,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_c_lod2.glb",
+     "tris": 549,
+     "bytes": 22816,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_mid_a_LOD0"
+  },
+  {
+   "id": "grass_medium_01_d",
+   "name": "Grass clump D",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.145,
+   "footprint": 0.203,
+   "radius": 0.117,
+   "bounds": {
+    "min": [
+     -0.096,
+     0,
+     -0.101
+    ],
+    "max": [
+     0.096,
+     0.145,
+     0.101
+    ]
+   },
+   "sourceTris": 1466,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_d_lod0.glb",
+     "tris": 1466,
+     "bytes": 48728,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_d_lod1.glb",
+     "tris": 1466,
+     "bytes": 48728,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_d_lod2.glb",
+     "tris": 500,
+     "bytes": 19952,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_mid_c_LOD0"
+  },
+  {
+   "id": "grass_medium_01_e",
+   "name": "Grass clump E",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.323,
+   "footprint": 0.161,
+   "radius": 0.087,
+   "bounds": {
+    "min": [
+     -0.081,
+     0,
+     -0.074
+    ],
+    "max": [
+     0.08,
+     0.323,
+     0.085
+    ]
+   },
+   "sourceTris": 290,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_e_lod0.glb",
+     "tris": 290,
+     "bytes": 11660,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_e_lod1.glb",
+     "tris": 290,
+     "bytes": 11660,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_e_lod2.glb",
+     "tris": 290,
+     "bytes": 11660,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_tall_a_LOD0"
+  },
+  {
+   "id": "grass_medium_01_f",
+   "name": "Grass clump F",
+   "kind": "grass",
+   "sub": "grass clump",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow",
+    "savanna",
+    "wetland"
+   ],
+   "height": 0.236,
+   "footprint": 0.153,
+   "radius": 0.094,
+   "bounds": {
+    "min": [
+     -0.065,
+     0,
+     -0.05
+    ],
+    "max": [
+     0.088,
+     0.236,
+     0.079
+    ]
+   },
+   "sourceTris": 340,
+   "lods": [
+    {
+     "file": "models/grass_medium_01_f_lod0.glb",
+     "tris": 340,
+     "bytes": 13500,
+     "texSize": 512,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_512.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_512.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_f_lod1.glb",
+     "tris": 340,
+     "bytes": 13500,
+     "texSize": 256,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_256.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_256.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/grass_medium_01_f_lod2.glb",
+     "tris": 340,
+     "bytes": 13500,
+     "texSize": 128,
+     "textures": [
+      "tex/grass_medium_01/grass_medium_01_albedo_128.webp",
+      "tex/grass_medium_01/grass_medium_01_normal_128.webp",
+      "tex/grass_medium_01/grass_medium_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "grass_medium_01",
+     "foliage": true,
+     "coverage": 0.1601
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/grass_medium_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_medium_01",
+   "sourceVariant": "grass_medium_01_tall_c_LOD0"
+  },
+  {
+   "id": "rock_07",
+   "name": "Rock",
+   "kind": "rock",
+   "sub": "stone",
+   "biomes": [
+    "scree",
+    "river",
+    "bare_rock",
+    "alpine_meadow",
+    "tundra",
+    "beach"
+   ],
+   "height": 0.144,
+   "footprint": 0.32,
+   "radius": 0.164,
+   "bounds": {
+    "min": [
+     -0.084,
+     0,
+     -0.16
+    ],
+    "max": [
+     0.084,
+     0.144,
+     0.16
+    ]
+   },
+   "sourceTris": 14844,
+   "lods": [
+    {
+     "file": "models/rock_07_lod0.glb",
+     "tris": 3838,
+     "bytes": 78552,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_07/rock_07_albedo_512.webp",
+      "tex/rock_07/rock_07_normal_512.webp",
+      "tex/rock_07/rock_07_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_07_lod1.glb",
+     "tris": 800,
+     "bytes": 19924,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_07/rock_07_albedo_256.webp",
+      "tex/rock_07/rock_07_normal_256.webp",
+      "tex/rock_07/rock_07_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/rock_07_lod2.glb",
+     "tris": 160,
+     "bytes": 6264,
+     "texSize": 128,
+     "textures": [
+      "tex/rock_07/rock_07_albedo_128.webp",
+      "tex/rock_07/rock_07_normal_128.webp",
+      "tex/rock_07/rock_07_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_07",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Jenelle van Heerden",
+   "source": "https://polyhaven.com/a/rock_07",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_07",
+   "sourceVariant": "rock_07"
+  },
+  {
+   "id": "rock_moss_set_01_a",
+   "name": "Mossy rock A",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.473,
+   "footprint": 3.369,
+   "radius": 1.943,
+   "bounds": {
+    "min": [
+     -1.119,
+     0,
+     -1.684
+    ],
+    "max": [
+     1.119,
+     1.473,
+     1.684
+    ]
+   },
+   "sourceTris": 11000,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_a_lod0.glb",
+     "tris": 11000,
+     "bytes": 213832,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_a_lod1.glb",
+     "tris": 2500,
+     "bytes": 55452,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_a_lod2.glb",
+     "tris": 500,
+     "bytes": 14304,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock01"
+  },
+  {
+   "id": "rock_moss_set_01_b",
+   "name": "Mossy rock B",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.262,
+   "footprint": 3.264,
+   "radius": 1.923,
+   "bounds": {
+    "min": [
+     -1.328,
+     0,
+     -1.632
+    ],
+    "max": [
+     1.328,
+     1.262,
+     1.632
+    ]
+   },
+   "sourceTris": 10996,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_b_lod0.glb",
+     "tris": 10996,
+     "bytes": 216544,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_b_lod1.glb",
+     "tris": 2496,
+     "bytes": 57324,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_b_lod2.glb",
+     "tris": 500,
+     "bytes": 15816,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock02"
+  },
+  {
+   "id": "rock_moss_set_01_c",
+   "name": "Mossy rock C",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.1,
+   "footprint": 2.109,
+   "radius": 1.421,
+   "bounds": {
+    "min": [
+     -1.054,
+     0,
+     -1.04
+    ],
+    "max": [
+     1.054,
+     1.1,
+     1.04
+    ]
+   },
+   "sourceTris": 5000,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_c_lod0.glb",
+     "tris": 5000,
+     "bytes": 97740,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_c_lod1.glb",
+     "tris": 2500,
+     "bytes": 52232,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_c_lod2.glb",
+     "tris": 500,
+     "bytes": 13820,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock03"
+  },
+  {
+   "id": "rock_moss_set_01_d",
+   "name": "Mossy rock D",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.768,
+   "footprint": 2.128,
+   "radius": 1.277,
+   "bounds": {
+    "min": [
+     -1.064,
+     0,
+     -0.982
+    ],
+    "max": [
+     1.064,
+     1.768,
+     0.982
+    ]
+   },
+   "sourceTris": 10589,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_d_lod0.glb",
+     "tris": 10589,
+     "bytes": 202080,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_d_lod1.glb",
+     "tris": 2500,
+     "bytes": 53140,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_d_lod2.glb",
+     "tris": 500,
+     "bytes": 13484,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock04"
+  },
+  {
+   "id": "rock_moss_set_01_e",
+   "name": "Mossy rock E",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.205,
+   "footprint": 2.999,
+   "radius": 1.515,
+   "bounds": {
+    "min": [
+     -0.909,
+     0,
+     -1.499
+    ],
+    "max": [
+     0.909,
+     1.205,
+     1.499
+    ]
+   },
+   "sourceTris": 16548,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_e_lod0.glb",
+     "tris": 12000,
+     "bytes": 224228,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_e_lod1.glb",
+     "tris": 2500,
+     "bytes": 50864,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_e_lod2.glb",
+     "tris": 500,
+     "bytes": 12236,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock05"
+  },
+  {
+   "id": "rock_moss_set_01_f",
+   "name": "Mossy rock F",
+   "kind": "rock",
+   "sub": "mossy rock",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 1.262,
+   "footprint": 2.757,
+   "radius": 1.485,
+   "bounds": {
+    "min": [
+     -1.063,
+     0,
+     -1.379
+    ],
+    "max": [
+     1.063,
+     1.262,
+     1.379
+    ]
+   },
+   "sourceTris": 8994,
+   "lods": [
+    {
+     "file": "models/rock_moss_set_01_f_lod0.glb",
+     "tris": 8994,
+     "bytes": 169876,
+     "texSize": 1024,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_1024.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_f_lod1.glb",
+     "tris": 2500,
+     "bytes": 51776,
+     "texSize": 512,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_512.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/rock_moss_set_01_f_lod2.glb",
+     "tris": 500,
+     "bytes": 13124,
+     "texSize": 256,
+     "textures": [
+      "tex/rock_moss_set_01/rock_moss_set_01_albedo_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_normal_256.webp",
+      "tex/rock_moss_set_01/rock_moss_set_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "rock_moss_set_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Kless Gyzen",
+   "source": "https://polyhaven.com/a/rock_moss_set_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_moss_set_01",
+   "sourceVariant": "rock_moss_set_01_rock06"
+  },
+  {
+   "id": "stone_01",
+   "name": "Stone",
+   "kind": "rock",
+   "sub": "stone",
+   "biomes": [
+    "river",
+    "beach",
+    "scree",
+    "grassland",
+    "temperate_forest"
+   ],
+   "height": 0.072,
+   "footprint": 0.147,
+   "radius": 0.079,
+   "bounds": {
+    "min": [
+     -0.073,
+     0,
+     -0.045
+    ],
+    "max": [
+     0.073,
+     0.072,
+     0.045
+    ]
+   },
+   "sourceTris": 53520,
+   "lods": [
+    {
+     "file": "models/stone_01_lod0.glb",
+     "tris": 3000,
+     "bytes": 62588,
+     "texSize": 512,
+     "textures": [
+      "tex/stone_01/stone_01_albedo_512.webp",
+      "tex/stone_01/stone_01_normal_512.webp",
+      "tex/stone_01/stone_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/stone_01_lod1.glb",
+     "tris": 624,
+     "bytes": 15972,
+     "texSize": 256,
+     "textures": [
+      "tex/stone_01/stone_01_albedo_256.webp",
+      "tex/stone_01/stone_01_normal_256.webp",
+      "tex/stone_01/stone_01_orm_256.webp"
+     ]
+    },
+    {
+     "file": "models/stone_01_lod2.glb",
+     "tris": 124,
+     "bytes": 5408,
+     "texSize": 128,
+     "textures": [
+      "tex/stone_01/stone_01_albedo_128.webp",
+      "tex/stone_01/stone_01_normal_128.webp",
+      "tex/stone_01/stone_01_orm_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "stone_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0.12,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Dario Barresi, Rico Cilliers",
+   "source": "https://polyhaven.com/a/stone_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "stone_01",
+   "sourceVariant": "stone_01"
+  },
+  {
+   "id": "tree_stump_01",
+   "name": "Tree stump",
+   "kind": "stump",
+   "sub": "mossy stump",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "wetland"
+   ],
+   "height": 0.573,
+   "footprint": 1.59,
+   "radius": 0.918,
+   "bounds": {
+    "min": [
+     -0.713,
+     0,
+     -0.795
+    ],
+    "max": [
+     0.713,
+     0.573,
+     0.795
+    ]
+   },
+   "sourceTris": 41046,
+   "lods": [
+    {
+     "file": "models/tree_stump_01_lod0.glb",
+     "tris": 11998,
+     "bytes": 249520,
+     "texSize": 1024,
+     "textures": [
+      "tex/tree_stump_01/tree_stump_01_albedo_1024.webp",
+      "tex/tree_stump_01/tree_stump_01_normal_1024.webp",
+      "tex/tree_stump_01/tree_stump_01_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/tree_stump_01_lod1.glb",
+     "tris": 2500,
+     "bytes": 60856,
+     "texSize": 512,
+     "textures": [
+      "tex/tree_stump_01/tree_stump_01_albedo_512.webp",
+      "tex/tree_stump_01/tree_stump_01_normal_512.webp",
+      "tex/tree_stump_01/tree_stump_01_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/tree_stump_01_lod2.glb",
+     "tris": 499,
+     "bytes": 16636,
+     "texSize": 256,
+     "textures": [
+      "tex/tree_stump_01/tree_stump_01_albedo_256.webp",
+      "tex/tree_stump_01/tree_stump_01_normal_256.webp",
+      "tex/tree_stump_01/tree_stump_01_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tree_stump_01",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/tree_stump_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "tree_stump_01",
+   "sourceVariant": "tree_stump_01"
+  },
+  {
+   "id": "ground_grass",
+   "name": "Dense grass",
+   "kind": "ground texture",
+   "biomes": [
+    "grassland",
+    "temperate_forest",
+    "alpine_meadow"
+   ],
+   "layer": 0,
+   "tile": 2,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/grass_albedo.webp",
+    "normal": "ground/grass_normal.webp",
+    "orm": "ground/grass_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Lennart Demes (ambientCG)",
+   "source": "https://ambientcg.com/view?id=Grass004",
+   "sourceName": "ambientCG",
+   "sourceAsset": "Grass004"
+  },
+  {
+   "id": "ground_meadow",
+   "name": "Damp forest grass",
+   "kind": "ground texture",
+   "biomes": [
+    "alpine_meadow",
+    "wetland",
+    "temperate_forest"
+   ],
+   "layer": 1,
+   "tile": 2,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/meadow_albedo.webp",
+    "normal": "ground/meadow_normal.webp",
+    "orm": "ground/meadow_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Lennart Demes (ambientCG)",
+   "source": "https://ambientcg.com/view?id=Ground037",
+   "sourceName": "ambientCG",
+   "sourceAsset": "Ground037"
+  },
+  {
+   "id": "ground_dry_grass",
+   "name": "Dry grass and dirt",
+   "kind": "ground texture",
+   "biomes": [
+    "savanna",
+    "grassland",
+    "tundra"
+   ],
+   "layer": 2,
+   "tile": 2.5,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/dry_grass_albedo.webp",
+    "normal": "ground/dry_grass_normal.webp",
+    "orm": "ground/dry_grass_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Charlotte Baglioni",
+   "source": "https://polyhaven.com/a/grass_ground",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "grass_ground"
+  },
+  {
+   "id": "ground_forest_floor",
+   "name": "Leaf litter with moss",
+   "kind": "ground texture",
+   "biomes": [
+    "temperate_forest",
+    "rainforest"
+   ],
+   "layer": 3,
+   "tile": 3,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/forest_floor_albedo.webp",
+    "normal": "ground/forest_floor_normal.webp",
+    "orm": "ground/forest_floor_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/forest_leaves_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "forest_leaves_02"
+  },
+  {
+   "id": "ground_pine_floor",
+   "name": "Pine needle floor",
+   "kind": "ground texture",
+   "biomes": [
+    "boreal_forest"
+   ],
+   "layer": 4,
+   "tile": 2,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/pine_floor_albedo.webp",
+    "normal": "ground/pine_floor_normal.webp",
+    "orm": "ground/pine_floor_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/forrest_ground_03",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "forrest_ground_03"
+  },
+  {
+   "id": "ground_rock",
+   "name": "Weathered rock face",
+   "kind": "ground texture",
+   "biomes": [
+    "bare_rock",
+    "scree",
+    "snow"
+   ],
+   "layer": 5,
+   "tile": 2.7,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/rock_albedo.webp",
+    "normal": "ground/rock_normal.webp",
+    "orm": "ground/rock_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Dario Barresi, Rico Cilliers",
+   "source": "https://polyhaven.com/a/rock_face_03",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_face_03"
+  },
+  {
+   "id": "ground_cliff",
+   "name": "Granite cliff",
+   "kind": "ground texture",
+   "biomes": [
+    "bare_rock",
+    "desert"
+   ],
+   "layer": 6,
+   "tile": 2.4,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/cliff_albedo.webp",
+    "normal": "ground/cliff_normal.webp",
+    "orm": "ground/cliff_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Greg Zaal, Dario Barresi",
+   "source": "https://polyhaven.com/a/rock_face",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rock_face"
+  },
+  {
+   "id": "ground_scree",
+   "name": "Broken scree",
+   "kind": "ground texture",
+   "biomes": [
+    "scree",
+    "tundra"
+   ],
+   "layer": 7,
+   "tile": 3,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/scree_albedo.webp",
+    "normal": "ground/scree_normal.webp",
+    "orm": "ground/scree_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/rocks_ground_06",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rocks_ground_06"
+  },
+  {
+   "id": "ground_gravel",
+   "name": "River pebbles",
+   "kind": "ground texture",
+   "biomes": [
+    "river",
+    "lake",
+    "beach"
+   ],
+   "layer": 8,
+   "tile": 2.9,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/gravel_albedo.webp",
+    "normal": "ground/gravel_normal.webp",
+    "orm": "ground/gravel_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel, Rico Cilliers",
+   "source": "https://polyhaven.com/a/river_small_rocks",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "river_small_rocks"
+  },
+  {
+   "id": "ground_sand",
+   "name": "Beach sand",
+   "kind": "ground texture",
+   "biomes": [
+    "beach",
+    "ocean"
+   ],
+   "layer": 9,
+   "tile": 2.1,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/sand_albedo.webp",
+    "normal": "ground/sand_normal.webp",
+    "orm": "ground/sand_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Charlotte Baglioni",
+   "source": "https://polyhaven.com/a/sand_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "sand_02"
+  },
+  {
+   "id": "ground_desert",
+   "name": "Cracked dry ground",
+   "kind": "ground texture",
+   "biomes": [
+    "desert",
+    "savanna"
+   ],
+   "layer": 10,
+   "tile": 4,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/desert_albedo.webp",
+    "normal": "ground/desert_normal.webp",
+    "orm": "ground/desert_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/dry_ground_01",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "dry_ground_01"
+  },
+  {
+   "id": "ground_snow",
+   "name": "Snow",
+   "kind": "ground texture",
+   "biomes": [
+    "snow",
+    "tundra"
+   ],
+   "layer": 11,
+   "tile": 2,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/snow_albedo.webp",
+    "normal": "ground/snow_normal.webp",
+    "orm": "ground/snow_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/snow_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "snow_02"
+  },
+  {
+   "id": "ground_mud",
+   "name": "Mud",
+   "kind": "ground texture",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake"
+   ],
+   "layer": 12,
+   "tile": 1.3,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/mud_albedo.webp",
+    "normal": "ground/mud_normal.webp",
+    "orm": "ground/mud_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/brown_mud_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "brown_mud_02"
+  }
+ ]
+}
