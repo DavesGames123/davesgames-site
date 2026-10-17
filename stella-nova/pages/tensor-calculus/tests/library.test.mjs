@@ -34,9 +34,7 @@ function ok(cond, name, detail = '') {
   if (cond) { pass++; console.log(`ok    ${current} :: ${name}${detail ? '  (' + detail + ')' : ''}`); }
   else { fail++; console.log(`FAIL  ${current} :: ${name}${detail ? '\n      ' + detail : ''}`); }
 }
-// First batch: algebra and geometry. The gate goes to 36 entries and all
-// eight fields when the other field files land.
-const MIN_ENTRIES = 20, ALL_FIELDS = false;
+const MIN_ENTRIES = 36, ALL_FIELDS = true;
 const FIELD_IDS = new Set(L.FIELDS.map(f => f.id));
 const KINDS = new Set(['product', 'contract', 'raise', 'lower', 'transform', 'symmetrize', 'antisymmetrize', 'partial', 'covariant', 'christoffel', 'trace', 'expandSum', 'substitute', 'relabel', 'evaluate']);
 const lib = L.LIBRARY;
