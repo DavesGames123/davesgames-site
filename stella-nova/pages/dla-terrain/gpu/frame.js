@@ -98,7 +98,8 @@ export function createFrameGraph(gpu, parts) {
 
   fg.resize = (cssW, cssH, dpr) => {
     fg.cssW = cssW; fg.cssH = cssH; fg.dpr = dpr;
-    const cap = gpu.qualityIndex >= 3 ? 2 : 1.5;
+    // device pixel ratio cap by quality: Low renders at 1x (phones)
+    const cap = [1, 1.25, 1.5, 2][gpu.qualityIndex] ?? 1.5;
     fg.outW = Math.max(16, Math.round(cssW * Math.min(dpr, cap)));
     fg.outH = Math.max(16, Math.round(cssH * Math.min(dpr, cap)));
     // 4K and up: keep the render under about 8.3 M px

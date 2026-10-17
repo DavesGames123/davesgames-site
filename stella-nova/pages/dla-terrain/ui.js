@@ -321,7 +321,7 @@ export function createUI(app, doc = globalThis.document) {
   const spText = v => { const r = todRate(v); if (r <= 0) return 'still'; const s = 1440 / r; return s >= 90 ? (s / 60).toFixed(1) + ' min / day' : s.toFixed(0) + ' s / day'; };
   sp.addEventListener('input', () => { app.todSpeed = +sp.value; $('todSpeedV').textContent = spText(+sp.value); });
   $('todPlay').addEventListener('click', () => app.setPlaying(!app.playing));
-  $('todGolden').addEventListener('click', () => app.setTod(app.tod < 0.5 ? 0.275 : 0.715));
+  $('todGolden').addEventListener('click', () => (app.goldenHour ? app.goldenHour() : app.setTod(app.tod < 0.5 ? 0.275 : 0.715)));
   const seasonNames = ['spring', 'summer', 'autumn', 'winter'];
   $('season').addEventListener('input', e => { app.setSeason ? app.setSeason(+e.target.value) : (app.season = +e.target.value); $('seasonV').textContent = seasonNames[Math.floor(((+e.target.value + 0.125) % 1) * 4)]; });
   $('latitude').addEventListener('input', e => { app.latitude = +e.target.value; $('latitudeV').textContent = (+e.target.value).toFixed(0) + '°'; });

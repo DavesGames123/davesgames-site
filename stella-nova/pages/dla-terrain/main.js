@@ -88,7 +88,7 @@ const app = {
   opts: {}, preset: null,
   tod: clamp(+(Q.get('tod') ?? 0.27), 0, 1), todSpeed: 0.07, playing: true,
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
-  qualityIndex: clamp(+(Q.get('q') ?? (coarse ? 1 : 2)), 0, 3),
+  qualityIndex: clamp(+(Q.get('q') ?? (coarse ? 0 : 2)), 0, 3),   // phones start on Low
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
   camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50 },
   terrain: null, gen: null, skyT: 0, skySpeed: 1, lastInput: -1e9,
@@ -164,6 +164,12 @@ app.copyLink = () => {
   catch { ui.toast('Copy the address bar: it holds this world'); }
 };
 app.setTod = v => { app.tod = ((v % 1) + 1) % 1; ui.syncSky(); hashSoon(); };
+// golden hour: the sun 5 degrees up (morning before noon, else evening)
+app.goldenHour = () => {
+  const sp = app.skyLib && app.skyLib.solarPosition;
+  const t = sp ? todForElevation(5, app.tod < 0.5, app.season, app.latitude, sp) : null;
+  app.setTod(t ?? (app.tod < 0.5 ? 0.275 : 0.715));
+};
 app.setPlaying = p => { app.playing = p; ui.syncSky(); hashSoon(); };
 app.setWeather = (id, reset) => {
   app.weatherId = id;
@@ -220,6 +226,7 @@ function applyQuality() {
   post.settings.taa = qp.taa; post.resetHistory();
   fg.maxScale = qp.scale; fg.setScale(qp.scale);
   for (const m of fg.modules) if (m.setQuality) try { m.setQuality(qp.q); } catch (e) { console.warn(e); }
+  resize();   // the pixel ratio cap follows the quality
 }
 
 // ── BOOT ────────────────────────────────────────────────────────────────
