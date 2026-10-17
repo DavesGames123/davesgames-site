@@ -12,7 +12,8 @@
 //  result. After attach(), each call goes to impl at once (the methods
 //  still return a promise, so a caller can always await them).
 //
-//  API  (every method returns a Promise)
+//  API  (each method returns a Promise; on() returns the unsubscribe
+//  function at once, before and after attach)
 //    openEntry(id)            open a LIBRARY entry: its TeX, scene, diagram,
 //                             story, vocab, params; loads its trace
 //    playTrace(trace, opts)   play an OpTrace in all three views in step;
@@ -63,6 +64,7 @@ export function installStub(win) {
   const api = { __core: true, version: 1 };
   for (const m of METHODS) {
     api[m] = (...args) => {
+      if (impl && m === 'on') return impl.on(...args);
       if (impl) return Promise.resolve().then(() => impl[m](...args));
       if (m === 'state') return Promise.resolve({ ready: false });
       if (m === 'on') {
