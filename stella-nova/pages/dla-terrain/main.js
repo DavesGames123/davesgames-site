@@ -247,7 +247,7 @@ async function bootGPU() {
   post.settings.ev = app.look.ev; post.settings.bloom = app.look.bloom;
   fg = createFrameGraph(gpu, { terrain: tg, post, shadows: sh });
   app.fg = fg;
-  fg.onModuleError = (m, what) => ui.notice(`${m.label || m.name || m.role}: ${what} failed, the page goes on without it`);
+  fg.onModuleError = (m, what) => { ui.notice(`${m.label || m.name || m.role}: ${what} failed, the page goes on without it`); wireModules(); };
   fg.fallbacks.ground = await createFallbackGround(gpu);
   fg.fallbacks.sky = await createFallbackSky(gpu);
   resize();
@@ -274,10 +274,23 @@ async function loadModules() {
     }
   }));
   fg.modules = results.filter(Boolean);
+  wireModules();
   const ctx = fg.ctx();
   for (const m of fg.modules) {
     try { if (m.resize) m.resize(fg.w, fg.h, ctx); } catch (e) { console.warn(e); }
     try { if (tg.view && m.setTerrain) m.setTerrain(tg.view); } catch (e) { console.warn(e); }
+  }
+}
+
+// cross-package wiring (NOTES.md): the sky haze replaces the ground's own
+// aerial perspective, and the cloud shadow of the sky reaches the ground
+function wireModules() {
+  const sky = fg.modules.find(m => m.role === 'sky' && !m.failed);
+  const ground = fg.modules.find(m => m.role === 'ground' && !m.failed);
+  gpu.cloudShadow = sky && sky.cloudShadow ? sky.cloudShadow : null;
+  gpu.skyView = sky && sky.skyView ? sky.skyView : null;
+  if (ground && ground.setAerial) {
+    try { ground.setAerial(!(sky && sky.drawVolumetric)); } catch (e) { console.warn(e); }
   }
 }
 
@@ -438,7 +451,7 @@ function loop(now) {
   const frame = {
     globals: G, g: GV, camera: m, time: now / 1000, dt, tod: app.tod, weather: st, sky: st,
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
-    cascade: -1, shadowDistance: far,
+    cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null,
   };
   for (const md of fg.active()) if (md.update) {
     try { md.update(frame); } catch (e) { console.warn(`dla-terrain: ${md.role} update failed`, e); md.failed = true; ui.notice(`${md.label || md.role}: update failed`); }
