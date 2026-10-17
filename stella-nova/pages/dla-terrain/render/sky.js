@@ -323,6 +323,9 @@ export async function createSky(gpu) {
       rect: () => [u[SKYU.shadow], u[SKYU.shadow + 1], u[SKYU.shadow + 2]],
       base: () => u[SKYU.cloud0],
     },
+    // the Hillaire sky-view LUT (192 x 108, radiance per unit sun), for
+    // reflections: see NOTES.md for the uv mapping; multiply by scale
+    skyView: { view: V.view, sampler: sClamp, scale: SUN_ILLUM },
     get uniformBuffer() { return ubo; },
     get readLayout() { return L.read; },
     get readBindGroup() { return BG.read; },
