@@ -65,10 +65,10 @@ export const ENTRIES = Object.freeze([
   'ricci-scalar', 'bianchi-identity', 'killing-equation', 'geodesic-deviation', 'divergence-theorem',
   'lorentz-boost', 'four-momentum', 'einstein-field-equations', 'schwarzschild-metric', 'flrw-metric',
   'perfect-fluid', 'energy-conservation', 'weyl-tensor',
-  // contract names that library/index.js did not hold at the last check
-  'maxwell-tensor',
-  'maxwell-equations', 'em-stress-energy', 'cauchy-stress', 'strain', 'hooke',
-  'inertia-tensor', 'quadrupole', 'einsum-attention',
+  'field-strength', 'maxwell-inhomogeneous', 'maxwell-homogeneous', 'em-stress-energy', 'lorentz-force',
+  'quadrupole-moment', 'cauchy-traction', 'principal-stress', 'strain-tensor', 'hooke-isotropic',
+  'cauchy-momentum', 'inertia-tensor', 'angular-momentum-bivector', 'kinetic-metric',
+  'einsum-matmul', 'attention-contraction', 'linear-layer-gradient', 'covariance-mahalanobis',
 ]);
 
 export const ENTRY_ALIAS = {};

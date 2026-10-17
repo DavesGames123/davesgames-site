@@ -41,7 +41,7 @@ export default {
         t`A symmetric tensor has a set of perpendicular principal axes where it is diagonal. For stress these are the directions of pure tension or compression; for the inertia tensor they are the axes a body spins about without wobble.`,
       ],
       tex: t`t_{i} = \sigma_{ij}\,n^{j},\qquad \sigma_{ij} = \sigma_{ji}`,
-      show: { view: 'all', scene: 'stress-cube', params: {}, entry: 'cauchy-stress' },
+      show: { view: 'all', scene: 'stress-cube', params: {}, entry: 'cauchy-traction' },
     },
     {
       title: 'The field strength is antisymmetric',
@@ -50,7 +50,7 @@ export default {
         t`It is built as an antisymmetrised derivative of the potential, which makes the antisymmetry automatic.`,
       ],
       tex: t`F_{\mu\nu} = \partial_{\mu}A_{\nu} - \partial_{\nu}A_{\mu} = 2\,\partial_{[\mu}A_{\nu]}`,
-      show: { view: 'all', scene: 'lorentz', params: { beta: 0.5 }, entry: 'maxwell-tensor', step: 'antisymmetrize' },
+      show: { view: 'all', scene: 'lorentz', params: { beta: 0.5 }, entry: 'field-strength', step: 'antisymmetrize' },
       widget: { type: 'count', n: 4, r: 2, kind: 'antisymmetric' },
     },
     {

@@ -60,7 +60,7 @@ export default {
         t`Raise the boost speed. The light cone stays put, and the electric and magnetic fields mix into each other: what one observer calls a pure electric field, another sees with a magnetic part.`,
       ],
       tex: t`F'^{\mu\nu} = \Lambda^{\mu}{}_{\alpha}\,\Lambda^{\nu}{}_{\beta}\,F^{\alpha\beta}`,
-      show: { view: 'all', scene: 'lorentz', params: { beta: 0.6 }, entry: 'maxwell-tensor', step: 'transform' },
+      show: { view: 'all', scene: 'lorentz', params: { beta: 0.6 }, entry: 'field-strength', step: 'transform' },
     },
     {
       title: 'Failing the test',

@@ -62,7 +62,7 @@ export default {
         t`Physics and machine learning use the same idea as tensor networks: matrix product states for quantum spin chains, and the einsum graphs of a neural network. Switch the diagram style to compare.`,
       ],
       tex: t`S_{ij} = Q_{ia}\,K_{ja}\quad\longleftrightarrow\quad Q\ \text{---}\ K`,
-      show: { view: 'diagram', entry: 'einsum-attention', style: 'network' },
+      show: { view: 'diagram', entry: 'attention-contraction', style: 'network' },
     },
     {
       title: 'Not Feynman diagrams',

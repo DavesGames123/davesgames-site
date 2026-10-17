@@ -13,7 +13,7 @@ export default {
         t`The rule is short: in one term, an index that appears once up and once down is summed over all its values. Nothing else is summed.`,
       ],
       tex: t`\sum_{i=1}^{n} v^{i}\,\vec e_{i}\ \equiv\ v^{i}\,\vec e_{i}`,
-      show: { view: 'all', expr: t`v^{i}\,e_{i}`, entry: 'einsum-attention', step: 'expandSum' },
+      show: { view: 'all', expr: t`v^{i}\,e_{i}`, entry: 'einsum-matmul', step: 'contract' },
     },
     {
       title: 'Free and dummy indices',
@@ -79,7 +79,7 @@ export default {
         t`Attention in a transformer is a contraction. The score of query $\I{i}$ against key $\I{j}$ is $Q_{ia}K_{ja}$, summed over the feature index $\I{a}$. Code does not track heights because it works in a fixed orthonormal basis, where upper and lower components are equal.`,
       ],
       tex: t`S_{ij} = Q_{ia}\,K_{ja}\quad\longleftrightarrow\quad \texttt{einsum('ia,ja->ij', Q, K)}`,
-      show: { view: 'all', entry: 'einsum-attention', style: 'network' },
+      show: { view: 'all', entry: 'attention-contraction', style: 'network' },
       deeper: {
         title: 'Summation is the natural pairing',
         text: t`The sum $\omega_{i}v^{i}$ is not a convention laid on top of the algebra. It is the only basis-free way to combine a vector and a covector into a number: the evaluation map $V^{*}\otimes V\to\mathbb{R}$. Every contraction in this page is that map applied to one upper and one lower slot.`,
