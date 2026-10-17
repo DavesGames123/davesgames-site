@@ -48,7 +48,8 @@ struct VegParams {
   proj: vec4f,      // x proj[0][0], y proj[1][1], z screen height px, w quality
   lodPx: vec4f,     // px: lod0 above x, lod1 above y, lod2 above z, cull below w
   sun: vec4f,       // xyz toward the sun, w 1 when shadows are on
-  counts: vec4f,    // x lists, y slots, z species, w 0
+  counts: vec4f,    // x lists, y slots, z species, w 1 = own aerial fog (0 when SKY haze does it)
+  cloud: vec4f,     // SKY cloud shadow: x0, z0, size m (0 = none), cloud base y
   layers: array<vec4f, 8>,  // near m, far m, band m, 0
 };
 // Per species: a = height m, radius m, lod count, flags (bit 0 impostor,
@@ -78,6 +79,8 @@ struct Bake { viewProj: mat4x4f, info: vec4f };   // info x view index
 @group(1) @binding(15) var tImpA: texture_2d_array<f32>;
 @group(1) @binding(16) var tImpN: texture_2d_array<f32>;
 @group(1) @binding(17) var<uniform> BK: Bake;
+@group(1) @binding(18) var tCloudSh: texture_2d<f32>;   // SKY module.cloudShadow.view (r: sun transmittance)
+@group(1) @binding(19) var sCloudSh: sampler;
 @group(3) @binding(0) var<uniform> D: Draw;
 
 const PAGE: u32 = 128u;      // render/vegetation.js PAGE
@@ -267,6 +270,7 @@ fn windOffset(root: vec3f, lp: vec3f, h: f32, wb: f32, wf: f32, sp: Species, see
 // -------------------------------------------------------------- shading --
 fn vegAerial(col: vec3f, world: vec3f) -> vec3f {
   // after GROUND shaders/ground.wgsl fn aerial (height falloff fog)
+  if (VP.counts.w < 0.5) { return col; }
   let cam = G.camPos.xyz;
   let dv = world - cam;
   let dist = length(dv);
@@ -311,14 +315,25 @@ fn hueTint(c: vec3f, t: f32) -> vec3f {
   return c * mix(cool, warm, t * 0.5 + 0.5) * (0.88 + 0.16 * t);
 }
 
-struct Lit { col: vec3f };
+// SKY's moving cloud shadows (NOTES.md SKY -> ALL, as GROUND fn
+// cloudShadowAt): project p along the sun to the cloud base. 1 = lit.
+fn vegCloud(p: vec3f) -> f32 {
+  if (VP.cloud.z <= 0.0) { return 1.0; }
+  let t = max(VP.cloud.w - p.y, 0.0) / max(G.sunDir.y, 0.08);
+  let q = p.xz + (G.sunDir.xz * t);
+  let uv = (q - VP.cloud.xy) / VP.cloud.z;
+  let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
+  let T = select(1.0 - (0.7 * G.weather.x), textureSampleLevel(tCloudSh, sCloudSh, uv, 0.0).r, inside);
+  return mix(1.0, T, smoothstep(-0.04, 0.03, G.sunDir.y));
+}
+
 fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, trans: f32, specK: f32) -> vec3f {
   let V = normalize(G.camPos.xyz - wp);
   var n = n0;
   let L = normalize(G.sunDir.xyz);
   let sunE = G.sunColor.rgb;   // radiance at ground (GROUND and WATER read it so)
   var sh = 1.0;
-  if (L.y > -0.05) { sh = sunShadow(wp, n); }
+  if (L.y > -0.05) { sh = sunShadow(wp, n) * vegCloud(wp); }
   sh *= smoothstep(-0.06, 0.05, L.y);
   let ndl = dot(n, L);
   var diff: f32;

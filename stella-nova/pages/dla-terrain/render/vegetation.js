@@ -1067,12 +1067,13 @@ export async function createVegetation(gpu) {
   const propsRL = device.createBindGroupLayout({ label: 'veg props render', entries: [
     ent(0, VF, uni), ent(1, VF, sto(true)), ent(10, VF, sto(true)), ent(11, VF, sto(true)), ent(12, VF, sto(true)),
     ent(13, VF, { texture: { viewDimension: '2d-array' } }), ent(14, VF, { sampler: {} }),
-    ent(15, VF, { texture: { viewDimension: '2d-array' } }), ent(16, VF, { texture: { viewDimension: '2d-array' } })] });
+    ent(15, VF, { texture: { viewDimension: '2d-array' } }), ent(16, VF, { texture: { viewDimension: '2d-array' } }),
+    ent(18, VF, { texture: {} }), ent(19, VF, { sampler: {} })] });
   const bakeL = device.createBindGroupLayout({ label: 'veg bake', entries: [
     ent(13, VF, { texture: { viewDimension: '2d-array' } }), ent(14, VF, { sampler: {} }), ent(17, VF, { buffer: { type: 'uniform', hasDynamicOffset: true } })] });
   const drawL = device.createBindGroupLayout({ label: 'veg draw', entries: [ent(0, VF, { buffer: { type: 'uniform', hasDynamicOffset: true } })] });
   const grassCL = device.createBindGroupLayout({ label: 'veg grass compute', entries: [ent(0, C, uni), ent(1, C, sto(false)), ent(2, C, sto(false))] });
-  const grassRL = device.createBindGroupLayout({ label: 'veg grass render', entries: [ent(0, VF, uni), ent(3, VF, sto(true))] });
+  const grassRL = device.createBindGroupLayout({ label: 'veg grass render', entries: [ent(0, VF, uni), ent(3, VF, sto(true)), ent(4, VF, { texture: {} }), ent(5, VF, { sampler: {} })] });
   const empty = gpu.emptyLayout || device.createBindGroupLayout({ entries: [] });
   const shadowSampleL = gpu.shadowSampleLayout, shadowPassL = gpu.shadowPassLayout;
 
@@ -1123,7 +1124,9 @@ export async function createVegetation(gpu) {
     tex.levels.forEach((mips, layer) => mips.forEach((m, lvl) => queue.writeTexture({ texture: t, mipLevel: lvl, origin: [0, 0, layer] }, m.data, { bytesPerRow: m.size * 4, rowsPerImage: m.size }, [m.size, m.size, 1])));
     extraBitmaps.forEach((bm, k) => {
       const layer = tex.levels.length + k;
-      queue.copyExternalImageToTexture({ source: bm }, { texture: t, origin: [0, 0, layer] }, [texSize, texSize, 1]);
+      // an ImageBitmap (browser) or raw { data: RGBA8 sRGB, width, height } (tests)
+      if (bm.data) queue.writeTexture({ texture: t, origin: [0, 0, layer] }, bm.data, { bytesPerRow: texSize * 4, rowsPerImage: texSize }, [texSize, texSize, 1]);
+      else queue.copyExternalImageToTexture({ source: bm }, { texture: t, origin: [0, 0, layer] }, [texSize, texSize, 1]);
       genMips(t, layer, 'rgba8unorm-srgb');
     });
     if (matTex) matTex.destroy();
@@ -1177,10 +1180,18 @@ export async function createVegetation(gpu) {
   const grassCap = Math.min(Math.floor(device.limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6));
   const bladeBuf = device.createBuffer({ label: 'veg blades', size: grassCap * 48, usage: BU.STORAGE });
   const gargsBuf = device.createBuffer({ label: 'veg grass args', size: 16, usage: BU.STORAGE | BU.INDIRECT | BU.COPY_DST });
-  const gparamBuf = device.createBuffer({ label: 'veg grass params', size: 128, usage: BU.UNIFORM | BU.COPY_DST });
-  const gparams = new Float32Array(32);
+  const gparamBuf = device.createBuffer({ label: 'veg grass params', size: 160, usage: BU.UNIFORM | BU.COPY_DST });
+  const gparams = new Float32Array(40);
   const grassCBG = device.createBindGroup({ layout: grassCL, entries: [{ binding: 0, resource: { buffer: gparamBuf } }, { binding: 1, resource: { buffer: bladeBuf } }, { binding: 2, resource: { buffer: gargsBuf } }] });
-  const grassRBG = device.createBindGroup({ layout: grassRL, entries: [{ binding: 0, resource: { buffer: gparamBuf } }, { binding: 3, resource: { buffer: bladeBuf } }] });
+  // SKY's cloud shadow map (NOTES.md SKY -> ALL): gpu.cloudShadow or
+  // frame.cloudShadow; a lit 1 x 1 stand-in until it is there
+  const litTex = device.createTexture({ label: 'veg lit', size: [1, 1], format: 'rgba8unorm', usage: TU.TEXTURE_BINDING | TU.COPY_DST });
+  queue.writeTexture({ texture: litTex }, new Uint8Array([255, 255, 255, 255]), { bytesPerRow: 4 }, [1, 1]);
+  const litSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+  let cloud = null;
+  const cloudEntries = (a, b) => [{ binding: a, resource: cloud ? cloud.view : litTex.createView() }, { binding: b, resource: cloud ? cloud.sampler : litSampler }];
+  const makeGrassRBG = () => device.createBindGroup({ layout: grassRL, entries: [{ binding: 0, resource: { buffer: gparamBuf } }, { binding: 3, resource: { buffer: bladeBuf } }, ...cloudEntries(4, 5)] });
+  let grassRBG = makeGrassRBG();
 
   // ---- instances, pages and the stream
   let field = null, stream = null, terrainView = null, terrainVersion = -1;
@@ -1231,11 +1242,13 @@ export async function createVegetation(gpu) {
       { binding: 0, resource: { buffer: paramBuf } }, { binding: 1, resource: { buffer: N.specBuf } }, { binding: 2, resource: { buffer: instBuf } },
       { binding: 3, resource: { buffer: N.countsBuf } }, { binding: 4, resource: { buffer: N.offsetsBuf } }, { binding: 5, resource: { buffer: visBuf } },
       { binding: 6, resource: { buffer: N.argsBuf } }, { binding: 7, resource: { buffer: N.slotBuf } }, { binding: 8, resource: { buffer: pagesBuf } }] });
-    N.renderBG = device.createBindGroup({ label: 'veg props render', layout: propsRL, entries: [
+    N.makeRenderBG = () => device.createBindGroup({ label: 'veg props render', layout: propsRL, entries: [
       { binding: 0, resource: { buffer: paramBuf } }, { binding: 1, resource: { buffer: N.specBuf } }, { binding: 10, resource: { buffer: instBuf } },
       { binding: 11, resource: { buffer: N.offsetsBuf } }, { binding: 12, resource: { buffer: visBuf } },
       { binding: 13, resource: matTex.createView({ dimension: '2d-array' }) }, { binding: 14, resource: sRep },
-      { binding: 15, resource: N.impA.createView({ dimension: '2d-array' }) }, { binding: 16, resource: N.impN.createView({ dimension: '2d-array' }) }] });
+      { binding: 15, resource: N.impA.createView({ dimension: '2d-array' }) }, { binding: 16, resource: N.impN.createView({ dimension: '2d-array' }) },
+      ...cloudEntries(18, 19)] });
+    N.renderBG = N.makeRenderBG();
     N.drawBG = device.createBindGroup({ label: 'veg draw', layout: drawL, entries: [{ binding: 0, resource: { buffer: N.drawBuf, size: 16 } }] });
     N.cameraSlots = []; N.shadowSlots = [];
     lib.slots.forEach((s, k) => (s.pass === 'camera' ? N.cameraSlots : N.shadowSlots).push({ k, kind: s.kind }));
@@ -1385,6 +1398,7 @@ export async function createVegetation(gpu) {
   const assetsReady = gpu.assets ? loadAssets() : Promise.resolve();
 
   // ---- per frame state
+  let aerialOn = true;
   let shadowsOn = 1, propsCount = 0, grassOn = true, propsOn = true, treesOn = true, propsOn2 = true, snapUntil = -1;
   const lodPx = [380, 150, 52, 2.5];
   const stats = { instances: 0, tiles: 0, pages: 0, grassCap, grassN, libMs: tLib, protos: () => L.lib.protos.length };
@@ -1394,7 +1408,11 @@ export async function createVegetation(gpu) {
     setTerrain(t) {
       terrainView = t;
       const cpu = t && t.cpu;
-      if (!cpu || !cpu.biome || !cpu.height) return;
+      if (!cpu || !cpu.biome || !cpu.height) {
+        // a new generation: the old plants would float on the new ground
+        if (field) { clearAll(); field = null; stream = null; }
+        return;
+      }
       if (field && field._src === cpu) { snapAll = true; return; }
       field = makeField({ ...cpu, origin: -cpu.worldSize / 2 }, { biomes: gpu.biomes || cpu.biomes || null });
       field._src = cpu;
@@ -1430,12 +1448,20 @@ export async function createVegetation(gpu) {
       params.set(lodPx, 12);
       const sd = [g[GO.sunDir], g[GO.sunDir + 1], g[GO.sunDir + 2]];
       params.set([sd[0], sd[1], sd[2], shadowsOn && sd[1] > -0.05 ? 1 : 0], 16);
-      params.set([L.lib.nLists, L.lib.slots.length, L.lib.protos.length, 0], 20);
+      params.set([L.lib.nLists, L.lib.slots.length, L.lib.protos.length, aerialOn ? 1 : 0], 20);
       LAYERS.forEach((lr, i) => {
         const fs = 0.5 + 0.5 * q;
         const on = lr.key.startsWith('canopy') ? treesOn : propsOn2;
-        params.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, 0], 24 + i * 4);
+        params.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, 0], 28 + i * 4);
       });
+      // cloud shadow: rect (x0, z0, size) and the cloud base y; size 0 = none
+      const cs = frame.cloudShadow || gpu.cloudShadow || null;
+      if (cs && cs.view) {
+        if (!cloud || cloud.view !== cs.view) { cloud = { view: cs.view, sampler: cs.sampler || litSampler }; L.renderBG = L.makeRenderBG(); grassRBG = makeGrassRBG(); }
+      } else if (cloud) { cloud = null; L.renderBG = L.makeRenderBG(); grassRBG = makeGrassRBG(); }
+      let cr = [0, 0, 0, 0];
+      if (cloud) { try { const r = cs.rect(); cr = [r[0], r[1], r[2], cs.base()]; } catch { cr = [0, 0, 0, 0]; } }
+      params.set(cr, 24);
       queue.writeBuffer(paramBuf, 0, params);
       // grass rings
       gparams.fill(0);
@@ -1447,6 +1473,8 @@ export async function createVegetation(gpu) {
       gparams.set([grassN, grassD, grassCap, q], 16);
       gparams.set([cam[0], cam[1], cam[2], g[GO.camPos + 3]], 20);
       gparams.set([1, 1, grassR0, shadowsOn], 24);
+      gparams.set([aerialOn ? 1 : 0, 0, 0, 0], 28);
+      gparams.set(cr, 32);
       queue.writeBuffer(gparamBuf, 0, gparams);
       queue.writeBuffer(gargsBuf, 0, new Uint32Array([11, 0, 0, 0]));
       if (snapAll) { snapList = []; for (let p = 0; p < highPage; p++) snapList.push(p); snapAll = false; }
@@ -1512,6 +1540,8 @@ export async function createVegetation(gpu) {
       }
     },
     resize() {},
+    // as GROUND: off when the SKY haze (drawVolumetric) does the aerial perspective
+    setAerial(on) { aerialOn = !!on; },
     setEnabled(o = {}) { if ('grass' in o) grassOn = !!o.grass; if ('props' in o) propsOn = !!o.props; },
     stats() { return { ...stats, protos: L.lib.protos.length, assets: assetsState, streamPending: stream ? stream.pending : 0 }; },
     dispose() {

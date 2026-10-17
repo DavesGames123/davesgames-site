@@ -41,6 +41,8 @@ struct GrassParams {
   grid: vec4f,             // x N, y fine spacing d m, z capacity, w quality
   cam: vec4f,              // xyz camera, w time s
   misc: vec4f,             // x width scale, y height scale, z R0 m, w shadows on
+  flags: vec4f,            // x 1 = own aerial fog (0 when SKY haze does it)
+  cloud: vec4f,            // SKY cloud shadow: x0, z0, size m (0 = none), cloud base y
 };
 struct Blade { a: vec4f, b: vec4f, c: vec4f };
   // a: xyz root, w height m; b: facing rad, width m, lean rad, seed; c: rgb, fade 0..1
@@ -49,6 +51,8 @@ struct Blade { a: vec4f, b: vec4f, c: vec4f };
 @group(1) @binding(1) var<storage, read_write> blades: array<Blade>;
 @group(1) @binding(2) var<storage, read_write> gargs: array<atomic<u32>>;
 @group(1) @binding(3) var<storage, read> bladesR: array<Blade>;
+@group(1) @binding(4) var tCloudSh: texture_2d<f32>;   // SKY module.cloudShadow.view
+@group(1) @binding(5) var sCloudSh: sampler;
 
 const SEG: u32 = 5u;
 
@@ -278,8 +282,20 @@ fn vs_grass(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
   return o;
 }
 
+// SKY's moving cloud shadows (as GROUND fn cloudShadowAt). 1 = lit.
+fn grassCloud(p: vec3f) -> f32 {
+  if (GP.cloud.z <= 0.0) { return 1.0; }
+  let t = max(GP.cloud.w - p.y, 0.0) / max(G.sunDir.y, 0.08);
+  let q = p.xz + (G.sunDir.xz * t);
+  let uv = (q - GP.cloud.xy) / GP.cloud.z;
+  let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
+  let T = select(1.0 - (0.7 * G.weather.x), textureSampleLevel(tCloudSh, sCloudSh, uv, 0.0).r, inside);
+  return mix(1.0, T, smoothstep(-0.04, 0.03, G.sunDir.y));
+}
+
 fn grassAerial(col: vec3f, world: vec3f) -> vec3f {
   // after GROUND shaders/ground.wgsl fn aerial (height falloff fog)
+  if (GP.flags.x < 0.5) { return col; }
   let cam = G.camPos.xyz;
   let dv = world - cam;
   let dist = length(dv);
@@ -318,6 +334,7 @@ fn fs_grass(o: GOut) -> @location(0) vec4f {
   let sunE = G.sunColor.rgb;   // radiance at ground (as GROUND and WATER)
   var sh = 1.0;
   if (GP.misc.w > 0.5 && L.y > -0.05) { sh = sunShadow(o.wp, tn); }
+  sh *= grassCloud(o.wp);
   sh *= smoothstep(-0.06, 0.05, L.y);
   // self shadow inside the sward: deep blades see less sun
   let ao = mix(0.25, 1.0, pow(o.t, 0.7)) * terrainAO(o.wp.xz);
