@@ -1,274 +1,154 @@
 // ============================================================================
 //  CORAL REEF  ·  the three.js scene (r160, ES module)
 // ----------------------------------------------------------------------------
-//  One instanced sphere per polyp. The instance matrix holds the place and
-//  the radius. Two instance attributes hold the rest:
-//    aInfo = (birth time s, global index, sway code, height over the base)
-//    aCol  = (natural r g b, colour t)
-//  The vertex shader scales a new polyp in from its birth time and sways
-//  soft corals and fans with the current. The fragment shader takes the
-//  colour from the natural rgb or from a gradient row texture (uLut), so a
-//  gradient change writes 256 texels and nothing else.
+//  What it draws, back to front:
+//    sky dome ...... the surface glow above, the fog colour at the horizon
+//    seabed ........ terrain.js groundGrid: the real lidar relief of the
+//                    Buck Island lagoon, sand and reef rock by the rock mask
+//                    (Poly Haven CC0 textures), turf and coralline algae
+//    rocks ......... SDF boulders under the colonies (terrain.js meshRock,
+//                    meshed in the worker), triplanar reef-rock texture
+//    models ........ scanned rocks and conch shells (assets.js, CC0)
+//    corals ........ the SDF meshes of coral-sdf.js: one group per colony
+//                    at its base, one mesh per chunk of 6^3 bricks, rebuilt
+//                    when a brick of it changes
+//    polyps ........ one instanced mesh per chunk: a cup and eight
+//                    tentacles that open, close and sway (shaders.js)
+//    snow, shafts .. marine snow that drifts with the current, light shafts
+//  The caustic map is a render target that the mesh-area pass of
+//  shaders.js fills each frame; every surface samples it.
 //
-//  The water: a gradient sky dome, depth fog (the fog colour gets darker
-//  with depth), animated caustics on the sand, the rocks and the corals,
-//  light shafts (camera-facing planes, additive) and marine snow (points
-//  that drift with the same current as the walkers of the growth model).
+//  Per-particle data lives in two float textures (128 x 128 = 16384
+//  particles): A = natural rgb, colour t; B = birth s, radius, sway level x
+//  2 + tip, height over the base. A colour change writes texels only.
 //
 //  grep -n targets
-//    shared GLSL (fog, caustics) ... "const WATER_GLSL"
-//    coral material ................ "function coralMaterial"
-//    sand and rocks ................ "function groundMaterial"
-//    rocks ......................... "function rockMesh"
-//    marine snow ................... "function makeSnow"
-//    light shafts .................. "function makeShafts"
-//    polyp buffers ................. "function writePolyp"
-//    the scene object .............. "export function createScene"
+//    caustic pass .......... "function makeCaustics"
+//    particle textures ..... "function setParticles"
+//    coral chunks .......... "function applyBricks"
+//    chunk rebuild ......... "function rebuildChunk"
+//    polyp template ........ "function polypTemplate"
+//    rocks ................. "function setRocks"
+//    scanned models ........ "function setDecor"
+//    the scene object ...... "export function createScene"
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { sandY } from './reef.js';
+import * as SH from './shaders.js';
+import { groundGrid } from './terrain.js';
 
-export const SURFACE_Y = 120;
+export const SURFACE_Y = SH.SURFACE_Y;
+export const PART_W = 128;          // particle texture width (and height)
+const SPECIES_CODE = { staghorn: 0, fan: 1, table: 2, boulder: 3, finger: 4 };
+// polyp look per species: size (units), how far the tentacles reach, tint, green fluorescence
+const POLYP_LOOK = {
+  staghorn: { size: 0.17, extend: 0.85, tint: [0.92, 0.86, 1.0], fluor: 0.7 },
+  fan: { size: 0.1, extend: 1.0, tint: [1.0, 0.95, 0.92], fluor: 0.15 },
+  table: { size: 0.15, extend: 0.7, tint: [0.85, 1.0, 0.82], fluor: 0.9 },
+  boulder: { size: 0.13, extend: 0.45, tint: [0.95, 0.9, 0.7], fluor: 0.5 },
+  finger: { size: 0.23, extend: 1.0, tint: [1.0, 0.94, 0.96], fluor: 0.12 },
+};
 
-const WATER_GLSL = /* glsl */`
-uniform float uTime, uCaust, uFogDen;
-uniform vec3 uFogDeep, uFogShallow;
-uniform vec2 uCur;
-// Caustics: a sine lattice, warped three times by itself. The light lines
-// are where the lattice product is near zero. Our own small function.
-float caustic(vec2 p, float t) {
-  float c = 0.0; vec2 q = p;
-  for (int i = 0; i < 3; i++) {
-    float fi = float(i);
-    q += vec2(sin(q.y * 0.9 + t * (0.55 + 0.2 * fi) + fi * 1.7), cos(q.x * 0.8 - t * (0.5 + 0.15 * fi) + fi * 2.3)) * 0.55;
-    vec2 s = sin(q * (1.3 + 0.35 * fi));
-    c += 0.07 / (abs(s.x * s.y) + 0.07);
-  }
-  c /= 3.0;
-  return c * c;
-}
-float causticAt(vec3 w, vec3 n) {
-  if (uCaust < 0.5) return 0.0;
-  vec2 drift = uCur * uTime * 0.6;
-  float a = caustic(w.xz * 0.11 + drift * 0.11 + w.y * 0.015, uTime * 0.9);
-  float up = clamp(n.y * 0.75 + 0.25, 0.0, 1.0);
-  float depth = clamp(1.0 - (${SURFACE_Y.toFixed(1)} - w.y) / 260.0, 0.25, 1.0);
-  return a * up * depth;
-}
-vec3 fogCol(float y) { return mix(uFogDeep, uFogShallow, clamp((y + 20.0) / 170.0, 0.0, 1.0)); }
-vec3 underwater(vec3 col, vec3 w) {
-  float d = length(w - cameraPosition);
-  col *= exp(-d * uFogDen * vec3(0.55, 0.2, 0.12));       // water takes the red first
-  float f = exp(-d * uFogDen);
-  return mix(fogCol(mix(w.y, cameraPosition.y, 0.5)), col, f);
-}`;
-
-function waterUniforms(U) {
+function sharedU(U) {
   return {
-    uTime: U.uTime, uCaust: U.uCaust, uFogDen: U.uFogDen, uFogDeep: U.uFogDeep, uFogShallow: U.uFogShallow, uCur: U.uCur,
+    uTime: U.uTime, uCaust: U.uCaust, uFogDen: U.uFogDen, uFogDeep: U.uFogDeep, uFogShallow: U.uFogShallow,
+    uCur: U.uCur, uSun: U.uSun, uCaustTex: U.uCaustTex, uCaustTile: U.uCaustTile, uCaustScale: U.uCaustScale,
   };
 }
 
-function coralMaterial(U) {
-  return new THREE.ShaderMaterial({
-    uniforms: Object.assign(waterUniforms(U), { uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK }),
-    vertexShader: /* glsl */`
-      attribute vec4 aInfo;
-      attribute vec4 aCol;
-      uniform float uTime, uCount, uMode, uSwayK;
-      uniform vec2 uCur;
-      varying vec3 vN, vW, vNat;
-      varying float vT, vGlow;
-      void main() {
-        float age = uTime - aInfo.x;
-        float g = clamp(age / 0.8, 0.0, 1.0);
-        float s = g * g * (3.0 - 2.0 * g) * (1.0 + 0.3 * sin(g * 3.14159));
-        vec4 w = modelMatrix * instanceMatrix * vec4(position * s, 1.0);
-        // sway: the code is floor(amplitude * 8) + phase / (2 pi)
-        float amp = floor(aInfo.z) / 8.0, ph = fract(aInfo.z) * 6.2832;
-        float h = aInfo.w;
-        float wave = sin(uTime * 1.05 + ph - h * 0.07) + 0.35 * sin(uTime * 2.3 + ph * 1.7 - h * 0.11);
-        vec2 dir = normalize(uCur + vec2(0.0001)) * 0.8 + vec2(cos(ph), sin(ph)) * 0.35;
-        w.xz += dir * wave * amp * uSwayK * pow(h * 0.045, 1.5);
-        vW = w.xyz;
-        vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-        vNat = pow(aCol.rgb, vec3(2.2));
-        vT = (uMode > 0.5 && uMode < 1.5) ? aInfo.y / max(1.0, uCount - 1.0) : aCol.w;
-        vGlow = exp(-max(age, 0.0) / 1.3);
-        gl_Position = projectionMatrix * viewMatrix * w;
-      }`,
-    fragmentShader: /* glsl */`
-      ${WATER_GLSL}
-      uniform sampler2D uLut;
-      uniform float uMode, uBleach;
-      varying vec3 vN, vW, vNat;
-      varying float vT, vGlow;
-      void main() {
-        vec3 n = normalize(vN);
-        vec3 lutC = texture2D(uLut, vec2(clamp(vT, 0.0, 1.0) * 0.992 + 0.004, 0.5)).rgb;
-        vec3 base = uMode < 0.5 ? vNat : lutC;
-        float bl = uMode < 0.5 ? uBleach : uBleach * 0.35;
-        base = mix(base, vec3(0.86, 0.86, 0.82), bl * 0.88);
-        vec3 L = normalize(vec3(0.25, 1.0, 0.18));
-        float dif = pow(clamp(dot(n, L) * 0.5 + 0.5, 0.0, 1.0), 1.6);
-        vec3 hemi = mix(vec3(0.05, 0.09, 0.13), vec3(0.32, 0.48, 0.58), n.y * 0.5 + 0.5);
-        float ca = causticAt(vW, n);
-        vec3 col = base * (hemi * 0.9 + dif * vec3(0.9, 0.97, 1.0) * 1.05 + ca * vec3(0.85, 1.0, 1.0) * 1.1);
-        vec3 V = normalize(cameraPosition - vW);
-        float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-        col += rim * 0.10 * vec3(0.45, 0.75, 0.85);
-        vec3 hot = uMode < 0.5 ? mix(vNat, vec3(1.0, 0.9, 0.75), 0.6) : texture2D(uLut, vec2(0.995, 0.5)).rgb;
-        col += hot * vGlow * 1.1 * (1.0 - uBleach);
-        gl_FragColor = vec4(underwater(col, vW), 1.0);
-        #include <colorspace_fragment>
-      }`,
+// ── caustic pass ────────────────────────────────────────────────────────────
+function makeCaustics(renderer, U, coarse) {
+  const R = coarse ? 256 : 512;
+  const half = renderer.capabilities.isWebGL2 && (renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float'));
+  const rt = new THREE.WebGLRenderTarget(R, R, {
+    type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat,
+    wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    depthBuffer: false, stencilBuffer: false,
   });
+  const G = coarse ? 110 : 180;
+  const uv = new Float32Array((G + 1) * (G + 1) * 2), idx = [];
+  for (let j = 0, k = 0; j <= G; j++) for (let i = 0; i <= G; i++) { uv[k++] = i / G; uv[k++] = j / G; }
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) { const a = j * (G + 1) + i, b = a + 1, c = a + G + 1, d = c + 1; idx.push(a, b, c, b, d, c); }
+  const geo = new THREE.InstancedBufferGeometry();
+  geo.setAttribute('aUv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  const off = [];
+  for (let y = -1; y <= 1; y++) for (let x = -1; x <= 1; x++) off.push(x, y);
+  geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(new Float32Array(off), 2));
+  geo.instanceCount = 9;
+  const A = 0.13;
+  const waves = [[3, 1, A, 0.3], [-1, 3, A * 0.9, 1.7], [2, -3, A * 0.7, 4.1], [4, 2, A * 0.45, 2.2], [-3, -2, A * 0.5, 5.3], [1, 5, A * 0.3, 0.9]]
+    .map(w => new THREE.Vector4(w[0], w[1], w[2], w[3]));
+  const mat = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: SH.CAUSTIC_VS, fragmentShader: SH.CAUSTIC_FS,
+    uniforms: { uWave: { value: waves }, uL: { value: 48 }, uD: { value: 110 }, uT: { value: 0 }, uSunDir: { value: new THREE.Vector3(0.2, -1, 0.15).normalize() }, uGain: { value: half ? 1 : 0.25 } },
+    blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false;
+  const sc = new THREE.Scene(); sc.add(mesh);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  U.uCaustTex.value = rt.texture;
+  U.uCaustTile.value = 48;
+  U.uCaustScale.value = half ? 1 : 4;
+  return {
+    rt, half,
+    render(t) {
+      mat.uniforms.uT.value = t;
+      const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
+      renderer.setRenderTarget(rt);
+      renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false);
+      renderer.render(sc, cam);
+      renderer.setRenderTarget(prev);
+      renderer.setClearColor(pc, pa);
+    },
+    // an unsigned byte target stores E / 4: the scene multiplies it back
+    scale: half ? 1 : 4,
+  };
 }
 
-function groundMaterial(U, rock) {
-  return new THREE.ShaderMaterial({
-    uniforms: waterUniforms(U),
-    vertexShader: /* glsl */`
-      varying vec3 vN, vW;
-      void main() {
-        vec4 w = modelMatrix * vec4(position, 1.0);
-        vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal);
-        gl_Position = projectionMatrix * viewMatrix * w;
-      }`,
-    fragmentShader: /* glsl */`
-      ${WATER_GLSL}
-      varying vec3 vN, vW;
-      float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float vnoise(vec2 p) {
-        vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
-      }
-      void main() {
-        vec3 n = normalize(vN);
-        float nz = vnoise(vW.xz * 0.35) * 0.6 + vnoise(vW.xz * 1.7) * 0.4;
-        ${rock ? `
-        float sp = vnoise(vW.xz * 2.3 + vW.y * 1.7) * 0.5 + vnoise(vec2(vW.x + vW.y, vW.z) * 0.6) * 0.5;
-        vec3 base = mix(vec3(0.16, 0.17, 0.15), vec3(0.36, 0.34, 0.28), sp);
-        base = mix(base, vec3(0.20, 0.28, 0.16), smoothstep(0.55, 0.9, n.y) * 0.6 * nz);  // turf algae on top
-        ` : `
-        float rip = sin(dot(vW.xz, vec2(0.62, 0.38)) * 1.6 + nz * 5.0) * 0.5 + 0.5;
-        vec3 base = mix(vec3(0.62, 0.56, 0.42), vec3(0.80, 0.74, 0.58), nz);
-        base *= 0.86 + 0.14 * rip;
-        `}
-        vec3 L = normalize(vec3(0.25, 1.0, 0.18));
-        float dif = clamp(dot(n, L), 0.0, 1.0);
-        float ca = causticAt(vW, n);
-        vec3 col = base * (vec3(0.16, 0.24, 0.30) + dif * vec3(0.62, 0.72, 0.76) + ca * vec3(0.9, 1.0, 1.0) * 1.25);
-        gl_FragColor = vec4(underwater(col, vW), 1.0);
-        #include <colorspace_fragment>
-      }`,
-  });
-}
-
-// A rock {x, z, r, h, base}: an ellipsoid with radii (r, h, r) at
-// (x, base, z), with some noise. Its top follows rockY of reef.js.
-function rockMesh(rk, mat, seed) {
-  const g = new THREE.IcosahedronGeometry(1, 3), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const k = 1 + 0.07 * Math.sin(x * 5.1 + seed) * Math.cos(z * 4.3 - seed) + 0.04 * Math.sin(y * 9.0 + x * 3.0);
-    p.setXYZ(i, x * k, y * (y > 0 ? Math.min(k, 1) : k), z * k);
+// ── polyp template: a cup (wall and top) and 8 tentacle ribbons ─────────────
+function polypTemplate() {
+  const T = [], I = [];
+  const v = (a, s, z, w) => { T.push(a, s, z, w); return T.length / 4 - 1; };
+  const S = 8;
+  for (let i = 0; i < S; i++) {          // wall: radius 0.7 at the base, 1 at the top
+    const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2;
+    const p = v(a0, 0, 0.7, 0), q = v(a1, 0, 0.7, 0), r = v(a1, 1, 1, 0), t = v(a0, 1, 1, 0);
+    I.push(p, r, q, p, t, r);
   }
-  g.computeVertexNormals();
-  const m = new THREE.Mesh(g, mat);
-  m.scale.set(rk.r, rk.h, rk.r); m.position.set(rk.x, rk.base, rk.z);
-  m.rotation.y = seed;
-  return m;
-}
-
-function makeSnow(U, n) {
-  const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), s = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    p[i * 3] = (Math.random() - 0.5) * 240; p[i * 3 + 1] = Math.random() * 130 - 5; p[i * 3 + 2] = (Math.random() - 0.5) * 240;
-    s[i] = 0.5 + Math.random() * Math.random() * 1.8;
+  for (let i = 0; i < S; i++) {          // top: the rim (z 1) to the mouth (z 0.42)
+    const a0 = i / S * Math.PI * 2, a1 = (i + 1) / S * Math.PI * 2;
+    const p = v(a0, 1, 1, 1), q = v(a1, 1, 1, 1), r = v(a1, 1, 0.42, 1), t = v(a0, 1, 0.42, 1);
+    I.push(p, q, r, p, r, t);
   }
-  g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-  g.setAttribute('aSize', new THREE.BufferAttribute(s, 1));
-  const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: Object.assign(waterUniforms(U), { uOff: U.uSnowOff, uScale: U.uPxScale }),
-    vertexShader: /* glsl */`
-      attribute float aSize;
-      uniform vec3 uOff; uniform float uTime, uScale;
-      varying float vA;
-      void main() {
-        vec3 box = vec3(240.0, 130.0, 240.0), lo = vec3(-120.0, -5.0, -120.0);
-        vec3 q = lo + mod(position + uOff - lo, box);
-        q.x += sin(uTime * 0.7 + position.y) * 0.6; q.z += cos(uTime * 0.6 + position.x) * 0.6;
-        vec4 mv = viewMatrix * vec4(q, 1.0);
-        gl_PointSize = aSize * uScale / max(1.0, -mv.z);
-        float d = length(mv.xyz);
-        vA = exp(-d * 0.008) * smoothstep(-5.0, 4.0, q.y) * smoothstep(125.0, 100.0, q.y);
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: /* glsl */`
-      varying float vA;
-      void main() {
-        vec2 c = gl_PointCoord - 0.5; float r = dot(c, c);
-        if (r > 0.25) discard;
-        gl_FragColor = vec4(vec3(0.75, 0.9, 0.95) * (1.0 - r * 4.0) * vA * 0.42, 1.0);
-      }`,
-  });
-  const pts = new THREE.Points(g, mat); pts.frustumCulled = false;
-  return pts;
-}
-
-function makeShafts(U, n) {
-  const grp = new THREE.Group();
-  const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uTime: U.uTime, uShaft: U.uShaft },
-    vertexShader: /* glsl */`
-      varying vec2 vUv; varying float vSeed;
-      void main() { vUv = uv; vSeed = instanceMatrix[3].x * 0.13 + instanceMatrix[3].z * 0.07; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */`
-      uniform float uTime, uShaft;
-      varying vec2 vUv; varying float vSeed;
-      void main() {
-        float x = vUv.x - 0.5;
-        float edge = exp(-x * x * 14.0);
-        float flick = 0.6 + 0.4 * sin(uTime * 0.45 + vSeed * 9.0) * sin(uTime * 0.31 + vSeed * 3.0 + vUv.x * 4.0);
-        float fade = smoothstep(0.0, 0.55, vUv.y) * smoothstep(1.0, 0.75, vUv.y);
-        gl_FragColor = vec4(vec3(0.42, 0.68, 0.72) * edge * fade * flick * 0.10 * uShaft, 1.0);
-      }`,
-  });
-  const geo = new THREE.PlaneGeometry(14, 170); geo.translate(0, 70, 0);
-  const inst = new THREE.InstancedMesh(geo, mat, n);
-  inst.frustumCulled = false;
-  const pos = [];
-  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + Math.random(), r = 20 + Math.random() * 70; pos.push([Math.cos(a) * r, Math.sin(a) * r, 0.7 + Math.random() * 0.8]); }
-  grp.add(inst);
-  return { grp, inst, pos };
-}
-
-// ── polyp buffers ───────────────────────────────────────────────────────────
-const M4 = new THREE.Matrix4();
-function writePolyp(C, g, x, y, z, r) {
-  M4.makeScale(r, r, r); M4.setPosition(x, y, z);
-  M4.toArray(C.mesh.instanceMatrix.array, g * 16);
+  for (let i = 0; i < S; i++) {          // tentacles: 3 segments, a ribbon (side -1, 1)
+    const a = (i + 0.5) / S * Math.PI * 2;
+    let prev = null;
+    for (let s = 0; s <= 3; s++) {
+      const l = v(a, s / 3, -1, 2), r = v(a, s / 3, 1, 2);
+      if (prev) I.push(prev[0], prev[1], r, prev[0], r, l);
+      prev = [l, r];
+    }
+  }
+  return { aT: new Float32Array(T), index: I };
 }
 
 export function createScene({ canvas, cap, coarse, onNoGL }) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: !coarse, powerPreference: 'high-performance' });
+    if (!renderer.capabilities.isWebGL2) throw new Error('WebGL2 needed');
   } catch (e) { if (onNoGL) onNoGL(e); return null; }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.75 : 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.6 : 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 1, 1400);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 1400);
   camera.position.set(110, 70, 120);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.target.set(0, 12, 0);
-  controls.minDistance = 25; controls.maxDistance = 420;
-  controls.maxPolarAngle = 1.5; controls.enablePan = true; controls.screenSpacePanning = true;
+  controls.minDistance = 8; controls.maxDistance = 420;
+  controls.maxPolarAngle = 1.52; controls.enablePan = true; controls.screenSpacePanning = true;
   controls.rotateSpeed = coarse ? 0.6 : 0.8;
 
   const lutData = new Uint8Array(256 * 4);
@@ -276,15 +156,23 @@ export function createScene({ canvas, cap, coarse, onNoGL }) {
   lutTex.colorSpace = THREE.SRGBColorSpace; lutTex.magFilter = THREE.LinearFilter; lutTex.minFilter = THREE.LinearFilter;
   lutTex.needsUpdate = true;
 
+  const NP = PART_W * PART_W;
+  const partA = new Float32Array(NP * 4), partB = new Float32Array(NP * 4);
+  const mkPart = (data) => { const t = new THREE.DataTexture(data, PART_W, PART_W, THREE.RGBAFormat, THREE.FloatType); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t; };
+  const texA = mkPart(partA), texB = mkPart(partB);
+
   const U = {
     uTime: { value: 0 }, uCaust: { value: 1 }, uFogDen: { value: 0.0042 },
     uFogDeep: { value: new THREE.Color('#02131f') }, uFogShallow: { value: new THREE.Color('#1d6f86') },
     uCur: { value: new THREE.Vector2(1, 0) }, uLut: { value: lutTex }, uMode: { value: 0 },
     uCount: { value: 1 }, uBleach: { value: 0 }, uSwayK: { value: 1 }, uSnowOff: { value: new THREE.Vector3() },
     uPxScale: { value: 300 }, uShaft: { value: 1 },
+    uSun: { value: new THREE.Vector3(0.2, -1, 0.15).normalize() }, uCaustTex: { value: null }, uCaustTile: { value: 48 }, uCaustScale: { value: 1 },
+    uPartA: { value: texA }, uPartB: { value: texB }, uDetail: { value: 1 }, uKeep: { value: 1 },
   };
+  const caus = makeCaustics(renderer, U, coarse);
 
-  // sky dome: the surface glow above, the fog colour at the horizon, deep below
+  // sky dome
   const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
     uniforms: { uFogDeep: U.uFogDeep, uFogShallow: U.uFogShallow, uTime: U.uTime },
@@ -295,68 +183,309 @@ export function createScene({ canvas, cap, coarse, onNoGL }) {
         float y = vD.y;
         vec3 c = mix(uFogDeep, uFogShallow, smoothstep(-0.35, 0.25, y));
         c = mix(c, vec3(0.42, 0.78, 0.86), smoothstep(0.35, 1.0, y) * 0.75);
-        float sun = pow(max(0.0, dot(vD, normalize(vec3(0.2, 1.0, 0.15)))), 24.0);
+        float sun = pow(max(0.0, dot(vD, normalize(vec3(-0.2, 1.0, -0.15)))), 24.0);
         c += vec3(0.5, 0.75, 0.75) * sun * (0.75 + 0.25 * sin(uTime * 0.8));
         gl_FragColor = vec4(c, 1.0);
         #include <colorspace_fragment>
       }`,
   }));
-  sky.renderOrder = -1;
+  sky.renderOrder = -1; sky.frustumCulled = false;
   scene.add(sky);
 
-  // seabed
-  const sandMat = groundMaterial(U, false), rockMat = groundMaterial(U, true);
-  const N = coarse ? 160 : 240, S = 1600;
-  const sg = new THREE.PlaneGeometry(S, S, N, N); sg.rotateX(-Math.PI / 2);
-  { const p = sg.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, sandY(p.getX(i), p.getZ(i))); sg.computeVertexNormals(); }
-  const sand = new THREE.Mesh(sg, sandMat);
-  scene.add(sand);
-  const rocks = new THREE.Group(); scene.add(rocks);
-
-  // polyps
-  const geo = new THREE.IcosahedronGeometry(1, coarse ? 1 : 2);
-  const mat = coralMaterial(U);
-  const mesh = new THREE.InstancedMesh(geo, mat, cap);
-  mesh.count = 0; mesh.frustumCulled = false;
-  const aInfo = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
-  const aCol = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4);
-  aInfo.setUsage(THREE.DynamicDrawUsage); aCol.setUsage(THREE.DynamicDrawUsage); mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  geo.setAttribute('aInfo', aInfo); geo.setAttribute('aCol', aCol);
-  scene.add(mesh);
-  const C = { mesh, aInfo, aCol };
-
-  const snow = makeSnow(U, coarse ? 900 : 2400); scene.add(snow);
-  const shafts = makeShafts(U, coarse ? 6 : 10); scene.add(shafts.grp);
-
-  function setRocks(list) {
-    for (const m of rocks.children.slice()) { rocks.remove(m); m.geometry.dispose(); }
-    list.forEach((rk, i) => rocks.add(rockMesh(rk, rockMat, i * 1.37 + rk.x * 0.01)));
+  // ── textures (CC0, assets/tex) ─────────────────────────────────────────────
+  const loader = new THREE.TextureLoader();
+  const TX = {};
+  const texU = { uTex: { value: 0 } };
+  let texLeft = 0;
+  function tex(name, srgb) {
+    texLeft++;
+    const t = loader.load(`assets/tex/${name}.jpg`, () => { if (--texLeft === 0) texU.uTex.value = 1; }, undefined, () => { /* keep the flat colours */ });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = coarse ? 2 : 8;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    TX[name] = t; return t;
   }
-  function addRock(rk) { rocks.add(rockMesh(rk, rockMat, rocks.children.length * 1.37)); }
+  const texSet = {
+    uSand: { value: tex('sand_diff', true) }, uSandN: { value: tex('sand_nor', false) },
+    uRock: { value: tex('reefrock_diff', true) }, uRockN: { value: tex('reefrock_nor', false) },
+    uGravel: { value: tex('gravel_diff', true) }, uGravelN: { value: tex('gravel_nor', false) },
+  };
+
+  // ── seabed ────────────────────────────────────────────────────────────────
+  const gg = groundGrid(coarse ? 150 : 230, 600, 2.1);
+  const groundGeo = new THREE.BufferGeometry();
+  groundGeo.setAttribute('position', new THREE.BufferAttribute(gg.positions, 3));
+  groundGeo.setAttribute('normal', new THREE.BufferAttribute(gg.normals, 3));
+  groundGeo.setAttribute('aMask', new THREE.BufferAttribute(gg.mask, 1));
+  groundGeo.setIndex(new THREE.BufferAttribute(gg.indices, 1));
+  groundGeo.computeBoundingSphere();
+  const groundMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: SH.GROUND_VS, fragmentShader: SH.GROUND_FS,
+    uniforms: Object.assign(sharedU(U), texSet, texU),
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  scene.add(ground);
+
+  const rockMat = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: SH.ROCK_VS, fragmentShader: SH.ROCK_FS,
+    uniforms: Object.assign(sharedU(U), { uRock: texSet.uRock, uRockN: texSet.uRockN }, texU),
+  });
+  const rocks = new THREE.Group(); scene.add(rocks);
+  const rockCache = new Map();        // rock key -> BufferGeometry
+  let rockGen = 0;
+  const rockKey = rk => `${rk.x.toFixed(3)},${rk.z.toFixed(3)},${rk.seed.toFixed(4)},${rk.rx.toFixed(3)}`;
+
+  // list: terrain.js rocks. meshRock(rk) -> Promise of { positions, normals, indices }.
+  function setRocks(list, meshRock) {
+    const gen = ++rockGen;
+    for (const m of rocks.children.slice()) rocks.remove(m);
+    for (const rk of list) addRock(rk, meshRock, gen);
+  }
+  function addRock(rk, meshRock, gen = rockGen) {
+    const key = rockKey(rk);
+    const put = (geo) => { if (gen !== rockGen) return; const m = new THREE.Mesh(geo, rockMat); m.userData.rock = rk; rocks.add(m); };
+    if (rockCache.has(key)) { put(rockCache.get(key)); return; }
+    meshRock(rk).then(r => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(r.positions, 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(r.normals, 3));
+      g.setIndex(new THREE.BufferAttribute(r.indices, 1));
+      g.computeBoundingSphere();
+      if (rockCache.size > 80) { const k0 = rockCache.keys().next().value; rockCache.get(k0).dispose(); rockCache.delete(k0); }
+      rockCache.set(key, g);
+      put(g);
+    }).catch(() => { /* no rock mesh: the colony still grows */ });
+  }
+
+  // ── scanned models ────────────────────────────────────────────────────────
+  const decor = new THREE.Group(); scene.add(decor);
+  const decorGeo = new Map();          // id -> BufferGeometry
+  function decorMat(hasMap, map) {
+    return new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: SH.DECOR_VS, fragmentShader: SH.DECOR_FS,
+      uniforms: Object.assign(sharedU(U), { uRock: texSet.uRock, uRockN: texSet.uRockN, uMap: { value: map || texSet.uRock.value }, uHasMap: { value: hasMap ? 1 : 0 } }, texU),
+    });
+  }
+  const shellMap = tex('shell_diff', true);
+  const decorRockMat = decorMat(false), decorShellMat = decorMat(true, shellMap);
+  // models: { id: parsed CRM }; places: scatterDecor() output; kinds: { id: 'rock' | 'shell' }
+  function setDecor(models, places, kinds) {
+    for (const m of decor.children.slice()) { decor.remove(m); m.dispose && m.dispose(); }
+    const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), P = new THREE.Vector3(), S = new THREE.Vector3();
+    for (const id of Object.keys(places)) {
+      const mod = models[id], list = places[id];
+      if (!mod || !list.length) continue;
+      let g = decorGeo.get(id);
+      if (!g) {
+        g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(mod.positions, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(mod.normals, 3));
+        if (mod.uv) g.setAttribute('uv', new THREE.BufferAttribute(mod.uv, 2));
+        g.setIndex(new THREE.BufferAttribute(mod.indices, 1));
+        g.computeBoundingSphere();
+        decorGeo.set(id, g);
+      }
+      const inst = new THREE.InstancedMesh(g, kinds[id] === 'shell' ? decorShellMat : decorRockMat, list.length);
+      list.forEach((p, i) => {
+        E.set(p.tx, p.ry, p.tz, 'YXZ'); Q.setFromEuler(E);
+        M4.compose(P.set(p.x, p.y, p.z), Q, S.set(p.s, p.s, p.s));
+        inst.setMatrixAt(i, M4);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      inst.computeBoundingSphere();
+      decor.add(inst);
+    }
+  }
+
+  // ── corals ────────────────────────────────────────────────────────────────
+  const coralMats = {}, polypMats = {};
+  for (const id of Object.keys(SPECIES_CODE)) {
+    coralMats[id] = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_VS, fragmentShader: SH.CORAL_FS, side: THREE.DoubleSide,
+      uniforms: Object.assign(sharedU(U), { uPartA: U.uPartA, uPartB: U.uPartB, uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK, uDetail: U.uDetail, uSpecies: { value: SPECIES_CODE[id] } }),
+    });
+    const L = POLYP_LOOK[id];
+    polypMats[id] = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: SH.POLYP_VS, fragmentShader: SH.POLYP_FS, side: THREE.DoubleSide,
+      uniforms: Object.assign(sharedU(U), { uPartA: U.uPartA, uPartB: U.uPartB, uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK, uKeep: U.uKeep,
+        uSize: { value: L.size }, uExtend: { value: L.extend }, uTint: { value: new THREE.Vector3(...L.tint) }, uFluor: { value: L.fluor } }),
+    });
+  }
+  const tpl = polypTemplate();
+  const tplAT = new THREE.BufferAttribute(tpl.aT, 4);
+  const tplPos = new THREE.BufferAttribute(new Float32Array(tpl.aT.length / 4 * 3), 3);
+  const tplIndex = new THREE.Uint16BufferAttribute(tpl.index, 1);
+
+  const coralRoot = new THREE.Group(); scene.add(coralRoot);
+  const colonies = new Map();          // k -> { group, id, chunks: Map }
+  const dirtyChunks = new Set();
+  let polypTotal = 0;
+  const polypBudget = coarse ? 9000 : 42000;
+
+  function clearColonies() {
+    for (const c of colonies.values()) for (const ch of c.chunks.values()) disposeChunk(ch);
+    colonies.clear(); dirtyChunks.clear(); polypTotal = 0;
+    for (const g of coralRoot.children.slice()) coralRoot.remove(g);
+  }
+  function addColonyGroup(k, id, base) {
+    const group = new THREE.Group(); group.position.set(base[0], base[1], base[2]);
+    coralRoot.add(group);
+    const c = { k, id, group, chunks: new Map() };
+    colonies.set(k, c);
+    return c;
+  }
+  function disposeChunk(ch) {
+    if (ch.mesh) { ch.mesh.geometry.dispose(); ch.mesh.parent && ch.mesh.parent.remove(ch.mesh); ch.mesh = null; }
+    if (ch.poly) { ch.poly.geometry.dispose(); ch.poly.parent && ch.poly.parent.remove(ch.poly); ch.poly = null; }
+    polypTotal -= ch.np || 0; ch.np = 0;
+  }
+
+  // Brick results from the mesher (worker or main): store by chunk.
+  function applyBricks(list) {
+    for (const r of list) {
+      const c = colonies.get(r.k); if (!c) continue;
+      let ch = c.chunks.get(r.chunk);
+      if (!ch) { ch = { key: r.chunk, col: c, bricks: new Map(), mesh: null, poly: null, np: 0, at: 0 }; c.chunks.set(r.chunk, ch); }
+      if (r.indices.length) ch.bricks.set(r.key, r); else ch.bricks.delete(r.key);
+      dirtyChunks.add(ch);
+    }
+  }
+
+  function rebuildChunk(ch) {
+    let nv = 0, ni = 0, npol = 0;
+    for (const b of ch.bricks.values()) { nv += b.positions.length / 3; ni += b.indices.length; npol += b.polyps.length / 8; }
+    const c = ch.col;
+    if (!nv) { disposeChunk(ch); c.chunks.delete(ch.key); return; }
+    const P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), G = new Float32Array(nv), I = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    const PP = new Float32Array(npol * 8);
+    let ov = 0, oi = 0, op = 0;
+    for (const b of ch.bricks.values()) {
+      P.set(b.positions, ov * 3); N.set(b.normals, ov * 3); G.set(b.gids, ov);
+      const bi = b.indices;
+      for (let i = 0; i < bi.length; i++) I[oi + i] = bi[i] + ov;
+      ov += b.positions.length / 3; oi += bi.length;
+      PP.set(b.polyps, op); op += b.polyps.length;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    geo.setAttribute('aGid', new THREE.BufferAttribute(G, 1));
+    geo.setIndex(new THREE.BufferAttribute(I, 1));
+    geo.computeBoundingSphere();
+    if (geo.boundingSphere) geo.boundingSphere.radius += 1.5;      // room for the sway
+    if (ch.mesh) { ch.mesh.geometry.dispose(); ch.mesh.geometry = geo; }
+    else { ch.mesh = new THREE.Mesh(geo, coralMats[c.id]); c.group.add(ch.mesh); }
+    // polyps
+    polypTotal -= ch.np; ch.np = npol; polypTotal += npol;
+    if (ch.poly) { ch.poly.geometry.dispose(); }
+    if (npol) {
+      const pg = new THREE.InstancedBufferGeometry();
+      pg.setAttribute('position', tplPos); pg.setAttribute('aT', tplAT); pg.setIndex(tplIndex);
+      const ib = new THREE.InstancedInterleavedBuffer(PP, 8, 1);
+      pg.setAttribute('iPos', new THREE.InterleavedBufferAttribute(ib, 3, 0));
+      pg.setAttribute('iNrm', new THREE.InterleavedBufferAttribute(ib, 3, 3));
+      pg.setAttribute('iData', new THREE.InterleavedBufferAttribute(ib, 2, 6));
+      pg.instanceCount = npol;
+      pg.boundingSphere = geo.boundingSphere ? geo.boundingSphere.clone() : null;
+      if (pg.boundingSphere) pg.boundingSphere.radius += 1;
+      if (ch.poly) ch.poly.geometry = pg;
+      else { ch.poly = new THREE.Mesh(pg, polypMats[c.id]); c.group.add(ch.poly); }
+    } else if (ch.poly) { ch.poly.parent && ch.poly.parent.remove(ch.poly); ch.poly = null; }
+  }
+
+  // Rebuild dirty chunks for about ms (each at most every minGap ms).
+  function flushChunks(ms = 3, nowMs = 0, minGap = 180) {
+    const t0 = performance.now();
+    for (const ch of dirtyChunks) {
+      if (nowMs - ch.at < minGap) continue;
+      dirtyChunks.delete(ch);
+      ch.at = nowMs;
+      rebuildChunk(ch);
+      if (performance.now() - t0 > ms) break;
+    }
+    U.uKeep.value = Math.min(1, polypBudget / Math.max(1, polypTotal));
+  }
+
+  // ── particle data ─────────────────────────────────────────────────────────
+  let texDirty = false;
+  // Write particles from..to. f(g, A4, B4) fills the 4 + 4 floats of particle g.
+  function setParticles(from, to, f) {
+    to = Math.min(to, NP);
+    for (let g = from; g < to; g++) f(g, partA, partB, g * 4);
+    texDirty = true;
+  }
+  function writeT(t, n) { n = Math.min(n, NP); for (let g = 0; g < n; g++) partA[g * 4 + 3] = t[g]; texDirty = true; }
+  let texAt = 0;
+  function uploadParticles(nowMs, force) {
+    if (!texDirty || (!force && nowMs - texAt < 60)) return;
+    texA.needsUpdate = true; texB.needsUpdate = true; texDirty = false; texAt = nowMs;
+  }
+
+  // ── marine snow and light shafts ─────────────────────────────────────────
+  function makeSnow(n) {
+    const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), s = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      p[i * 3] = (Math.random() - 0.5) * 240; p[i * 3 + 1] = Math.random() * 130 - 5; p[i * 3 + 2] = (Math.random() - 0.5) * 240;
+      s[i] = 0.5 + Math.random() * Math.random() * 1.8;
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    g.setAttribute('aSize', new THREE.BufferAttribute(s, 1));
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: U.uTime, uOff: U.uSnowOff, uScale: U.uPxScale },
+      vertexShader: /* glsl */`
+        attribute float aSize;
+        uniform vec3 uOff; uniform float uTime, uScale;
+        varying float vA;
+        void main() {
+          vec3 box = vec3(240.0, 130.0, 240.0), lo = vec3(-120.0, -5.0, -120.0);
+          vec3 q = lo + mod(position + uOff - lo, box);
+          q.x += sin(uTime * 0.7 + position.y) * 0.6; q.z += cos(uTime * 0.6 + position.x) * 0.6;
+          vec4 mv = viewMatrix * vec4(q, 1.0);
+          gl_PointSize = aSize * uScale / max(1.0, -mv.z);
+          float d = length(mv.xyz);
+          vA = exp(-d * 0.008) * smoothstep(-5.0, 4.0, q.y) * smoothstep(125.0, 100.0, q.y);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */`
+        varying float vA;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5; float r = dot(c, c);
+          if (r > 0.25) discard;
+          gl_FragColor = vec4(vec3(0.75, 0.9, 0.95) * (1.0 - r * 4.0) * vA * 0.42, 1.0);
+        }`,
+    });
+    const pts = new THREE.Points(g, mat); pts.frustumCulled = false;
+    return pts;
+  }
+  function makeShafts(n) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uTime: U.uTime, uShaft: U.uShaft },
+      vertexShader: /* glsl */`
+        varying vec2 vUv; varying float vSeed;
+        void main() { vUv = uv; vSeed = instanceMatrix[3].x * 0.13 + instanceMatrix[3].z * 0.07; gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0); }`,
+      fragmentShader: /* glsl */`
+        uniform float uTime, uShaft;
+        varying vec2 vUv; varying float vSeed;
+        void main() {
+          float x = vUv.x - 0.5;
+          float edge = exp(-x * x * 14.0);
+          float flick = 0.6 + 0.4 * sin(uTime * 0.45 + vSeed * 9.0) * sin(uTime * 0.31 + vSeed * 3.0 + vUv.x * 4.0);
+          float fade = smoothstep(0.0, 0.55, vUv.y) * smoothstep(1.0, 0.75, vUv.y);
+          gl_FragColor = vec4(vec3(0.42, 0.68, 0.72) * edge * fade * flick * 0.10 * uShaft, 1.0);
+        }`,
+    });
+    const geo = new THREE.PlaneGeometry(14, 170); geo.translate(0, 70, 0);
+    const inst = new THREE.InstancedMesh(geo, mat, n);
+    inst.frustumCulled = false;
+    const pos = [];
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + Math.random(), r = 20 + Math.random() * 70; pos.push([Math.cos(a) * r, Math.sin(a) * r, 0.7 + Math.random() * 0.8]); }
+    return { inst, pos };
+  }
+  const snow = makeSnow(coarse ? 900 : 2400); scene.add(snow);
+  const shafts = makeShafts(coarse ? 6 : 10); scene.add(shafts.inst);
 
   function setLut(bytes) { lutData.set(bytes); lutTex.needsUpdate = true; }
-
-  // Write polyps from..to: place, radius, birth, sway, height, colour.
-  // rad, nat, t: arrays in global order (nat rgb, may be null for a guess).
-  function writePolyps(reef, from, to, rad, nat, t, natGuess) {
-    const I = aInfo.array, K = aCol.array;
-    for (let g = from; g < to; g++) {
-      const c = reef.colonies[reef.col[g]];
-      writePolyp(C, g, reef.px[g], reef.py[g], reef.pz[g], rad[g]);
-      I[g * 4] = reef.birth[g] / 1000; I[g * 4 + 1] = g;
-      I[g * 4 + 2] = Math.floor(c.sp.sway * 8) + ((c.k * 0.381966) % 1) * 0.999;
-      I[g * 4 + 3] = reef.py[g] - c.user.by;
-      if (nat) { K[g * 4] = nat[g * 3]; K[g * 4 + 1] = nat[g * 3 + 1]; K[g * 4 + 2] = nat[g * 3 + 2]; }
-      else { const q = natGuess(c); K[g * 4] = q[0]; K[g * 4 + 1] = q[1]; K[g * 4 + 2] = q[2]; }
-      K[g * 4 + 3] = t[g];
-    }
-    mesh.count = reef.count;
-    mesh.instanceMatrix.needsUpdate = true; aInfo.needsUpdate = true; aCol.needsUpdate = true;
-  }
-  function writeT(t, n) {
-    const K = aCol.array; for (let g = 0; g < n; g++) K[g * 4 + 3] = t[g];
-    aCol.needsUpdate = true;
-  }
 
   const view = { ox: 0, oy: 0, tox: 0, toy: 0 };
   function resize() {
@@ -367,20 +496,29 @@ export function createScene({ canvas, cap, coarse, onNoGL }) {
     camera.updateProjectionMatrix();
   }
 
-  const tmpQ = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-  function render(dt) {
+  const M4 = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), V3 = new THREE.Vector3(), S3 = new THREE.Vector3();
+  let frameN = 0;
+  function render(dt, nowMs = performance.now()) {
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
     const k = 1 - Math.exp(-dt * 6);
     view.ox += (view.tox - view.ox) * k; view.oy += (view.toy - view.oy) * k;
     if (Math.abs(view.ox) > 0.5 || Math.abs(view.oy) > 0.5) camera.setViewOffset(w, h, view.ox, view.oy, w, h);
     else camera.clearViewOffset();
-    // shafts face the camera about the vertical axis
     const az = Math.atan2(camera.position.x, camera.position.z);
     tmpQ.setFromAxisAngle(up, az);
-    shafts.pos.forEach((p, i) => { M4.compose(new THREE.Vector3(p[0], -5, p[1]), tmpQ, new THREE.Vector3(p[2], 1, 1)); shafts.inst.setMatrixAt(i, M4); });
+    shafts.pos.forEach((p, i) => { M4.compose(V3.set(p[0], -5, p[1]), tmpQ, S3.set(p[2], 1, 1)); shafts.inst.setMatrixAt(i, M4); });
     shafts.inst.instanceMatrix.needsUpdate = true;
+    uploadParticles(nowMs);
+    if (U.uCaust.value > 0.5 && (!coarse || (frameN & 1) === 0)) caus.render(U.uTime.value);
+    frameN++;
     renderer.render(scene, camera);
   }
 
-  return { renderer, scene, camera, controls, U, sand, setRocks, addRock, setLut, writePolyps, writeT, resize, render, view, mesh, THREE };
+  return {
+    renderer, scene, camera, controls, U, THREE, view, ground, rocks, decor,
+    setRocks, addRock, setDecor, setLut, resize, render,
+    clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles,
+    get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; },
+    caustics: caus, PART_W,
+  };
 }
