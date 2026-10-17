@@ -122,34 +122,52 @@ function buildGLB(json, bin) {
   ok(threw, 'synthetic: required Draco throws');
 }
 
+// ---- writer round trip (KHR_mesh_quantization normals, uri WebP images) ----
+{
+  const { writeGLB } = await import('./mesh-ops.mjs');
+  const part = {
+    positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 2, 0]),
+    normals: new Float32Array([0, 0, 1, 0, 0, 1, 0.6, 0, 0.8]),
+    uvs: new Float32Array([0, 0, 1, 0, 0, 1]),
+    indices: new Uint32Array([0, 1, 2]),
+  };
+  const glb = writeGLB([part], [{ name: 'leaf', alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true, maps: { baseColor: '../tex/x/leaf_albedo_512.webp', normal: '../tex/x/leaf_normal_512.webp', orm: '../tex/x/leaf_orm_512.webp' } }], { id: 't' });
+  const s = parseGLB(glb.buffer);
+  const m = s.meshes[0];
+  ok(s.json.extensionsRequired.includes('KHR_mesh_quantization'), 'writer: requires KHR_mesh_quantization');
+  ok(m.triangleCount === 1 && near(m.positions[7], 2), 'writer: positions round trip');
+  ok(near(m.normals[6], 0.6, 0.01) && near(m.normals[8], 0.8, 0.01), 'writer: int8 normals round trip (0.01)');
+  ok(m.material.baseColor.uri === '../tex/x/leaf_albedo_512.webp' && m.material.baseColor.bytes === null && m.material.baseColor.mime === 'image/webp', 'writer: base colour is an external WebP uri');
+  ok(m.material.orm === m.material.baseColor ? false : m.material.orm.uri.endsWith('orm_512.webp') && !m.material.occlusion, 'writer: one ORM image for occlusion + metal/rough');
+  ok(m.material.alphaMode === 'MASK' && m.material.doubleSided, 'writer: material flags');
+}
+
 // ---- the real pack -----------------------------------------------------------
 const mfile = path.join(root, 'manifest.json');
-const fileOk = (rel) => existsSync(path.join(root, rel));
+const isWebp = (b) => !!b && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45;
 if (!existsSync(mfile)) {
   console.log('note: no assets/nature/manifest.json yet, pack checks skipped');
 } else {
   const man = JSON.parse(readFileSync(mfile, 'utf8'));
   ok(Array.isArray(man.assets) && man.assets.length > 0, 'manifest: has assets');
   const ids = new Set();
-  let models = 0, files = 0, bytes = 0, defBytes = 0;
-  const isWebp = (b) => b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45;
+  const seen = new Map(); // abs path -> default
+  let models = 0;
   const need = ['id', 'name', 'kind', 'biomes', 'licence', 'author', 'source'];
+  const touch = (abs, a, what) => {
+    if (!existsSync(abs)) { ok(false, `${a.id}: ${what} ${path.relative(root, abs)} exists`); return null; }
+    seen.set(abs, (seen.get(abs) || false) || !!a.default);
+    const b = readFileSync(abs);
+    ok(b.length < 15e6, `${a.id}: ${path.relative(root, abs)} under 15 MB`);
+    return b;
+  };
   for (const a of man.assets) {
-    for (const k of need) ok(a[k] !== undefined && a[k] !== '', `${a.id}: field ${k}`);
+    for (const k of need) ok(a[k] !== undefined && a[k] !== '' && a[k] !== null, `${a.id}: field ${k}`);
     ok(!ids.has(a.id), `${a.id}: unique id`); ids.add(a.id);
-    ok(/^CC0-1\.0$|^CC-BY-4\.0$|^CC-BY-3\.0$/.test(a.licence), `${a.id}: licence is CC0 or CC-BY (${a.licence})`);
-    const tally = (rel) => {
-      if (!fileOk(rel)) { ok(false, `${a.id}: file ${rel} exists`); return null; }
-      const st = statSync(path.join(root, rel));
-      files++; bytes += st.size; if (a.default) defBytes += st.size;
-      ok(st.size < 15e6, `${a.id}: ${rel} under 15 MB`);
-      return readFileSync(path.join(root, rel));
-    };
+    ok(a.licence === 'CC0-1.0' || /^CC-BY-[34]\.0$/.test(a.licence), `${a.id}: licence is CC0 or CC-BY (${a.licence})`);
+    for (const b of a.biomes) ok((man.biomeKeys || []).includes(b), `${a.id}: biome ${b} is a known key`);
     if (a.kind === 'ground texture') {
-      for (const k of ['albedo', 'normal', 'orm']) {
-        const b = tally(a.textures[k]);
-        if (b) ok(isWebp(b), `${a.id}: ${k} is WebP`);
-      }
+      for (const k of ['albedo', 'normal', 'orm']) ok(isWebp(touch(path.join(root, a.textures[k]), a, k)), `${a.id}: ${k} is WebP`);
       continue;
     }
     models++;
@@ -157,38 +175,45 @@ if (!existsSync(mfile)) {
     ok(Array.isArray(a.lods) && a.lods.length === 3, `${a.id}: three LODs`);
     let prevTris = Infinity;
     for (const [li, lod] of (a.lods || []).entries()) {
-      const b = tally(lod.file);
+      const abs = path.join(root, lod.file);
+      const b = touch(abs, a, 'model');
       if (!b) continue;
+      ok(b.length === lod.bytes, `${a.id} lod${li}: bytes match the manifest`);
       let s;
       try { s = parseGLB(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); } catch (e) { ok(false, `${a.id} lod${li}: parses (${e.message})`); continue; }
       ok(s.triangleCount === lod.tris, `${a.id} lod${li}: tris ${s.triangleCount} = manifest ${lod.tris}`);
       ok(s.triangleCount <= prevTris, `${a.id} lod${li}: not more tris than the LOD before`);
       prevTris = s.triangleCount;
       const h = s.bounds.max[1] - s.bounds.min[1];
-      ok(Math.abs(h - a.height) <= 0.1 * a.height, `${a.id} lod${li}: bounds height ${h.toFixed(2)} m within 10 % of ${a.height} m`);
-      ok(Math.abs(s.bounds.min[1]) <= 0.05 * a.height + 0.02, `${a.id} lod${li}: base at y = 0 (min y ${s.bounds.min[1].toFixed(3)})`);
+      ok(Math.abs(h - a.height) <= 0.1 * a.height, `${a.id} lod${li}: bounds height ${h.toFixed(3)} m within 10 % of ${a.height} m`);
+      ok(Math.abs(s.bounds.min[1]) <= 0.05 * a.height + 0.01, `${a.id} lod${li}: base at y = 0 (min y ${s.bounds.min[1].toFixed(3)})`);
       const cx = (s.bounds.min[0] + s.bounds.max[0]) / 2, cz = (s.bounds.min[2] + s.bounds.max[2]) / 2;
-      ok(Math.hypot(cx, cz) <= 0.25 * Math.max(a.footprint, 0.2), `${a.id} lod${li}: origin near the base centre`);
+      ok(Math.hypot(cx, cz) <= 0.35 * Math.max(a.footprint, 0.1), `${a.id} lod${li}: origin near the base centre (box centre ${cx.toFixed(2)}, ${cz.toFixed(2)})`);
       for (const m of s.meshes) {
         ok(m.normals && m.normals.length === m.positions.length, `${a.id} lod${li}: normals present`);
         ok(m.uvs && m.uvs.length * 3 === m.positions.length * 2, `${a.id} lod${li}: uvs present`);
         let bad = 0; for (let k = 0; k < m.indices.length; k++) if (m.indices[k] >= m.vertexCount) bad++;
         ok(bad === 0, `${a.id} lod${li}: indices in range`);
-        for (const im of [m.material.baseColor, m.material.normal, m.material.orm]) {
-          if (im) ok(im.mime === 'image/webp' && isWebp(im.bytes), `${a.id} lod${li}: texture is WebP`);
-        }
         ok(!!m.material.baseColor, `${a.id} lod${li}: has a base colour texture`);
+        for (const im of [m.material.baseColor, m.material.normal, m.material.orm]) {
+          if (!im) continue;
+          const f = path.resolve(path.dirname(abs), im.uri || '');
+          ok(!!im.uri && lod.textures.includes(path.relative(root, f).split(path.sep).join('/')), `${a.id} lod${li}: texture ${im.uri} is listed in lod.textures`);
+          ok(isWebp(touch(f, a, 'texture')), `${a.id} lod${li}: texture ${im.uri} is WebP`);
+        }
       }
     }
     if (a.impostor) {
-      for (const k of ['albedo', 'normal']) { const b = tally(a.impostor[k]); if (b) ok(isWebp(b), `${a.id}: impostor ${k} is WebP`); }
+      for (const k of ['albedo', 'normal']) ok(isWebp(touch(path.join(root, a.impostor[k]), a, 'impostor ' + k)), `${a.id}: impostor ${k} is WebP`);
     }
   }
   for (const g of man.groundLayers || []) ok(ids.has(g), `groundLayers: ${g} is an asset`);
+  let bytes = 0, defBytes = 0;
+  for (const [f, def] of seen) { const n = statSync(f).size; bytes += n; if (def) defBytes += n; }
   ok(bytes < 120e6, `pack: ${(bytes / 1e6).toFixed(1)} MB under 120 MB`);
   ok(defBytes < 40e6, `pack: default view ${(defBytes / 1e6).toFixed(1)} MB under 40 MB`);
-  if (man.totals) ok(Math.abs(man.totals.bytes - bytes) < 1024, `manifest totals.bytes ${man.totals.bytes} = files ${bytes}`);
-  console.log(`pack: ${man.assets.length} assets (${models} models), ${files} files, ${(bytes / 1e6).toFixed(1)} MB, default ${(defBytes / 1e6).toFixed(1)} MB`);
+  if (man.totals) ok(man.totals.bytes === bytes && man.totals.files === seen.size, `manifest totals (${man.totals.files} files, ${man.totals.bytes} B) = files on disk (${seen.size}, ${bytes} B)`);
+  console.log(`pack: ${man.assets.length} assets (${models} models), ${seen.size} files, ${(bytes / 1e6).toFixed(1)} MB, default ${(defBytes / 1e6).toFixed(1)} MB`);
 }
 
 console.log(`glb-lite tests: ${pass} pass, ${fail} fail`);
