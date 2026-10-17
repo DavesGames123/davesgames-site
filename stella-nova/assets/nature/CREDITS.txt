@@ -1,14 +1,20 @@
 Nature asset pack for davesgames.io (stella-nova/assets/nature)
 
 Every model and texture in this folder is a processed copy of a CC0 1.0
-Universal (public domain dedication) asset. CC0 needs no credit; we give
-it anyway. Processing: variants split, welded, re-centred, simplified to
-three levels of detail, textures resized and converted to WebP, leaf alpha
+Universal (public domain dedication) asset, or (where it says
+"procedural with CC0 textures") a mesh made by tools/nature-assets/proc.mjs
+that shows CC0 textures. CC0 needs no credit; we give it anyway.
+Processing: variants split, welded, re-centred, simplified to three
+levels of detail, textures resized and converted to WebP, leaf alpha
 merged into the albedo, impostor atlases rendered from the models.
 
 Licences:
   Poly Haven: all assets CC0. https://polyhaven.com/license
   ambientCG: all assets CC0 1.0. https://docs.ambientcg.com/license/
+  Mantissa (Midge Sinnaeve): "Public Domain (CC0) License",
+    https://mantissa.xyz/free.html and LICENSE-CC0.txt in each pack.
+  OpenGameArt: each page used here is marked CC0 (links below); the
+    Nobiax packs also ship a CC0 1.0 readme.
   CC0 text: https://creativecommons.org/publicdomain/zero/1.0/
 
 Sources (source asset, authors, link -> ids in manifest.json):
@@ -114,6 +120,22 @@ Sources (source asset, authors, link -> ids in manifest.json):
   leipoldtia_schultzei (Poly Haven), by Jenelle van Heerden, CC0-1.0
     https://polyhaven.com/a/leipoldtia_schultzei
     -> leipoldtia_schultzei_a, leipoldtia_schultzei_b, leipoldtia_schultzei_c
+  mantissa_birch (Mantissa CG Birch Tree Pack), by Midge Sinnaeve (mantissa.xyz), CC0-1.0
+    https://mantissa.xyz/free.html
+    what: real CG model (FBX) with the photo textures of the pack
+    -> mantissa_birch_a, mantissa_birch_b, mantissa_birch_c
+  mantissa_generic_furrowed (Mantissa CG Generic Tree Pack), by Midge Sinnaeve (mantissa.xyz); bark Bark001 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack, CC0-1.0
+    https://mantissa.xyz/free.html
+    what: real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark001, Mantissa birch leaves)
+    -> mantissa_generic_furrowed_a, mantissa_generic_furrowed_b
+  mantissa_generic_smooth (Mantissa CG Generic Tree Pack), by Midge Sinnaeve (mantissa.xyz); bark Bark010 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack, CC0-1.0
+    https://mantissa.xyz/free.html
+    what: real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark010, Mantissa birch leaves)
+    -> mantissa_generic_smooth_a, mantissa_generic_smooth_b
+  mantissa_japanese_maple (Mantissa CG Japanese Maple Pack), by Midge Sinnaeve (mantissa.xyz), CC0-1.0
+    https://mantissa.xyz/free.html
+    what: real CG model (FBX) with the photo textures of the pack
+    -> mantissa_japanese_maple_a, mantissa_japanese_maple_b
   moss_01 (Poly Haven), by Rob Tuytel, CC0-1.0
     https://polyhaven.com/a/moss_01
     -> moss_01_a, moss_01_b, moss_01_c, moss_01_d
@@ -144,6 +166,30 @@ Sources (source asset, authors, link -> ids in manifest.json):
   nettle_plant (Poly Haven), by Rob Tuytel, Rico Cilliers, CC0-1.0
     https://polyhaven.com/a/nettle_plant
     -> nettle_plant_a, nettle_plant_b, nettle_plant_c
+  nobiax_bamboo (OpenGameArt, Free Bamboo v1), by Nobiax (Yughues), CC0-1.0
+    https://opengameart.org/content/free-bamboo-v1
+    what: game model (OBJ) with its own texture, colour scaled by gain
+    -> nobiax_bamboo
+  nobiax_bushes (OpenGameArt, Bushes), by Nobiax (Yughues), CC0-1.0
+    https://opengameart.org/content/bushes
+    what: game models (OBJ) with their own textures, colour scaled by gain
+    -> nobiax_bushes_a, nobiax_bushes_b, nobiax_bushes_c, nobiax_bushes_d
+  nobiax_huge_tree (OpenGameArt, Freebies - Mundo commissions), by Nobiax (Yughues), made for R. Robles (Mundo), CC0-1.0
+    https://opengameart.org/content/freebies-mundo-commissions
+    what: game model (OBJ) with its own texture, colour scaled by gain
+    -> nobiax_huge_tree
+  nobiax_palm_trees (OpenGameArt, Free palm treeZ v3), by Nobiax (Yughues), CC0-1.0
+    https://opengameart.org/content/free-palm-treez-v3
+    what: game model (OBJ) with its own painted-photo texture, colour scaled by gain
+    -> nobiax_palm_trees_a, nobiax_palm_trees_b, nobiax_palm_trees_c, nobiax_palm_trees_d
+  nobiax_saguaro (OpenGameArt, Freebies - Mundo commissions), by Nobiax (Yughues), made for R. Robles (Mundo), CC0-1.0
+    https://opengameart.org/content/freebies-mundo-commissions
+    what: game model (OBJ) with its own texture, colour scaled by gain
+    -> nobiax_saguaro
+  nobiax_tropical_shrubs (OpenGameArt, Tropical shrubs), by Nobiax (Yughues), CC0-1.0
+    https://opengameart.org/content/tropical-shrubs
+    what: game models (OBJ) with their own textures, colour scaled by gain
+    -> nobiax_tropical_shrubs_a, nobiax_tropical_shrubs_b, nobiax_tropical_shrubs_c, nobiax_tropical_shrubs_d, nobiax_tropical_shrubs_e
   othonna_cerarioides (Poly Haven), by James Ray Cock, Jenelle van Heerden, CC0-1.0
     https://polyhaven.com/a/othonna_cerarioides
     -> othonna_cerarioides_a, othonna_cerarioides_b, othonna_cerarioides_c
@@ -162,6 +208,18 @@ Sources (source asset, authors, link -> ids in manifest.json):
   pine_tree_01 (Poly Haven), by Rob Tuytel, Rico Cilliers, CC0-1.0
     https://polyhaven.com/a/pine_tree_01
     -> pine_tree_01_a, pine_tree_01_b, pine_tree_01_c
+  proc_grass_tufts (procedural (tools/nature-assets/proc.mjs)), by davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0), CC0-1.0
+    https://opengameart.org/content/grass-pack-01
+    what: procedural crossed cards with CC0 textures
+    -> proc_grass_tufts_a, proc_grass_tufts_b, proc_grass_tufts_c, proc_grass_tufts_d, proc_grass_tufts_e, proc_grass_tufts_f
+  proc_reeds (procedural (tools/nature-assets/proc.mjs)), by davesgames.io (mesh); textures: Midge Sinnaeve (Mantissa birch leaf photo, a strip along the midrib), Lennart Demes (ambientCG Bark002, cattail heads), CC0-1.0
+    https://ambientcg.com/view?id=Bark002
+    what: procedural with CC0 textures
+    -> proc_reeds_a, proc_reeds_b, proc_reeds_c
+  proc_weeping_willow (procedural (tools/nature-assets/proc.mjs)), by davesgames.io (mesh); textures: Lennart Demes (ambientCG Bark002), Midge Sinnaeve (Mantissa birch leaf photo), CC0-1.0
+    https://ambientcg.com/view?id=Bark002
+    what: procedural with CC0 textures
+    -> proc_weeping_willow_a, proc_weeping_willow_b, proc_weeping_willow_c
   quiver_tree_01 (Poly Haven), by James Ray Cock, Dario Barresi, Rico Cilliers, CC0-1.0
     https://polyhaven.com/a/quiver_tree_01
     -> quiver_tree_01
@@ -201,6 +259,10 @@ Sources (source asset, authors, link -> ids in manifest.json):
   root_cluster_01 (Poly Haven), by Jenelle van Heerden, Rico Cilliers, CC0-1.0
     https://polyhaven.com/a/root_cluster_01
     -> root_cluster_01
+  rubberduck_mushrooms (OpenGameArt, free vegetation asset pack), by rubberduck, CC0-1.0
+    https://opengameart.org/content/free-vegetation-asset-pack
+    what: game models (.blend) with hand-painted textures, scaled to 11 to 17 cm
+    -> rubberduck_mushrooms_a, rubberduck_mushrooms_b, rubberduck_mushrooms_c
   sand_02 (Poly Haven), by Charlotte Baglioni, CC0-1.0
     https://polyhaven.com/a/sand_02
     -> ground_sand

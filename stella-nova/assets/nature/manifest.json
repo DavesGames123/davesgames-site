@@ -5,7 +5,7 @@
  "up": "+y",
  "origin": "base centre (y = 0 at the lowest vertex)",
  "notes": [
-  "Every asset is CC0-1.0 (Poly Haven, ambientCG). See CREDITS.txt.",
+  "Every asset is CC0-1.0 (Poly Haven, ambientCG, Mantissa, OpenGameArt). See CREDITS.txt. provenance says what each asset is: a real model, or a procedural mesh with CC0 textures.",
   "lods[0..2]: GLB files for lib/glb-lite.js. Textures are external WebP files in tex/, shared by the variants and LODs of a source; key GPU textures on the file URL.",
   "Albedo WebP alpha is the cutoff mask (alphaMode MASK, cutoff 0.5). Colour under transparent texels is filled (push-pull). Smaller sizes keep the alpha coverage of the top size; coverage gives that share, so a renderer can keep it in its own mips.",
   "Normals are int8 (KHR_mesh_quantization); normal maps are OpenGL (+y). ORM: r occlusion, g roughness, b metal (0).",
@@ -47,25 +47,28 @@
   "ground_mud"
  ],
  "totals": {
-  "assets": 162,
+  "assets": 202,
   "kinds": {
    "boulder": 7,
-   "bush": 14,
+   "bush": 24,
+   "cactus": 1,
    "cliff": 4,
    "fern": 4,
    "flower": 24,
-   "grass": 16,
+   "grass": 22,
    "ground cover": 10,
    "log": 8,
+   "mushroom": 3,
+   "reed": 3,
    "rock": 17,
    "stump": 2,
    "succulent": 12,
-   "tree": 31,
+   "tree": 48,
    "ground texture": 13
   },
-  "files": 1416,
-  "bytes": 111494908,
-  "defaultBytes": 37730284
+  "files": 1751,
+  "bytes": 140583134,
+  "defaultBytes": 44250606
  },
  "assets": [
   {
@@ -711,6 +714,805 @@
    "sourceName": "Poly Haven",
    "sourceAsset": "didelta_spinosa",
    "sourceVariant": "didelta_spinosa_large_LOD0"
+  },
+  {
+   "id": "nobiax_bamboo",
+   "name": "Bamboo",
+   "kind": "bush",
+   "sub": "bamboo clump",
+   "biomes": [
+    "rainforest",
+    "wetland",
+    "river"
+   ],
+   "height": 5.119,
+   "footprint": 2.294,
+   "radius": 1.259,
+   "bounds": {
+    "min": [
+     -1.147,
+     0,
+     -1.068
+    ],
+    "max": [
+     1.147,
+     5.119,
+     1.068
+    ]
+   },
+   "sourceTris": 1440,
+   "lods": [
+    {
+     "file": "models/nobiax_bamboo_lod0.glb",
+     "tris": 1440,
+     "bytes": 46860,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_bamboo/bamboo_albedo_1024.webp",
+      "tex/nobiax_bamboo/bamboo_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bamboo_lod1.glb",
+     "tris": 697,
+     "bytes": 27684,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_bamboo/bamboo_albedo_512.webp",
+      "tex/nobiax_bamboo/bamboo_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bamboo_lod2.glb",
+     "tris": 300,
+     "bytes": 15288,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_bamboo/bamboo_albedo_256.webp",
+      "tex/nobiax_bamboo/bamboo_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bamboo",
+     "foliage": true,
+     "coverage": 0.8358
+    }
+   ],
+   "wind": 0.7,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_bamboo_albedo.webp",
+    "normal": "impostors/nobiax_bamboo_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     2.559,
+     0
+    ],
+    "sideHalfSize": [
+     1.297,
+     2.636
+    ],
+    "topHalfSize": 1.297,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.055,
+     0.051,
+     0.057,
+     0.065,
+     0.055,
+     0.051,
+     0.057,
+     0.065,
+     0.165
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/free-bamboo-v1",
+   "sourceName": "OpenGameArt, Free Bamboo v1",
+   "sourceAsset": "nobiax_bamboo",
+   "sourceVariant": "bamboo",
+   "provenance": "game model (OBJ) with its own texture, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_bushes_a",
+   "name": "Leafy bush A",
+   "kind": "bush",
+   "sub": "shrub broadleaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.574,
+   "footprint": 1.387,
+   "radius": 0.85,
+   "bounds": {
+    "min": [
+     -0.693,
+     0,
+     -0.688
+    ],
+    "max": [
+     0.693,
+     1.574,
+     0.688
+    ]
+   },
+   "sourceTris": 556,
+   "lods": [
+    {
+     "file": "models/nobiax_bushes_a_lod0.glb",
+     "tris": 556,
+     "bytes": 19932,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_bushes/bush_01_albedo_1024.webp",
+      "tex/nobiax_bushes/bush_01_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_a_lod1.glb",
+     "tris": 556,
+     "bytes": 19932,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_bushes/bush_01_albedo_512.webp",
+      "tex/nobiax_bushes/bush_01_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_a_lod2.glb",
+     "tris": 243,
+     "bytes": 9820,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_bushes/bush_01_albedo_256.webp",
+      "tex/nobiax_bushes/bush_01_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bush_01",
+     "foliage": true,
+     "coverage": 0.2339
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/bushes",
+   "sourceName": "OpenGameArt, Bushes",
+   "sourceAsset": "nobiax_bushes",
+   "sourceVariant": "bush_01",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_bushes_b",
+   "name": "Leafy bush B",
+   "kind": "bush",
+   "sub": "shrub broadleaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.306,
+   "footprint": 1.447,
+   "radius": 0.845,
+   "bounds": {
+    "min": [
+     -0.644,
+     0,
+     -0.723
+    ],
+    "max": [
+     0.644,
+     1.306,
+     0.723
+    ]
+   },
+   "sourceTris": 384,
+   "lods": [
+    {
+     "file": "models/nobiax_bushes_b_lod0.glb",
+     "tris": 384,
+     "bytes": 14436,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_bushes/bush_02_albedo_1024.webp",
+      "tex/nobiax_bushes/bush_02_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_b_lod1.glb",
+     "tris": 384,
+     "bytes": 14436,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_bushes/bush_02_albedo_512.webp",
+      "tex/nobiax_bushes/bush_02_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_b_lod2.glb",
+     "tris": 317,
+     "bytes": 12352,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_bushes/bush_02_albedo_256.webp",
+      "tex/nobiax_bushes/bush_02_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bush_02",
+     "foliage": true,
+     "coverage": 0.3815
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/bushes",
+   "sourceName": "OpenGameArt, Bushes",
+   "sourceAsset": "nobiax_bushes",
+   "sourceVariant": "bush_02",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_bushes_c",
+   "name": "Leafy bush C",
+   "kind": "bush",
+   "sub": "shrub broadleaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.004,
+   "footprint": 1.11,
+   "radius": 0.734,
+   "bounds": {
+    "min": [
+     -0.555,
+     0,
+     -0.549
+    ],
+    "max": [
+     0.555,
+     1.004,
+     0.549
+    ]
+   },
+   "sourceTris": 500,
+   "lods": [
+    {
+     "file": "models/nobiax_bushes_c_lod0.glb",
+     "tris": 500,
+     "bytes": 15396,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_bushes/bush_04_albedo_1024.webp",
+      "tex/nobiax_bushes/bush_04_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_c_lod1.glb",
+     "tris": 500,
+     "bytes": 15396,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_bushes/bush_04_albedo_512.webp",
+      "tex/nobiax_bushes/bush_04_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_c_lod2.glb",
+     "tris": 488,
+     "bytes": 15156,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_bushes/bush_04_albedo_256.webp",
+      "tex/nobiax_bushes/bush_04_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bush_04",
+     "foliage": true,
+     "coverage": 0.1985
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/bushes",
+   "sourceName": "OpenGameArt, Bushes",
+   "sourceAsset": "nobiax_bushes",
+   "sourceVariant": "bush_04",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_bushes_d",
+   "name": "Leafy bush D",
+   "kind": "bush",
+   "sub": "shrub broadleaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.088,
+   "footprint": 1.31,
+   "radius": 0.796,
+   "bounds": {
+    "min": [
+     -0.654,
+     0,
+     -0.655
+    ],
+    "max": [
+     0.654,
+     1.088,
+     0.655
+    ]
+   },
+   "sourceTris": 880,
+   "lods": [
+    {
+     "file": "models/nobiax_bushes_d_lod0.glb",
+     "tris": 880,
+     "bytes": 27112,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_bushes/bush_05_albedo_1024.webp",
+      "tex/nobiax_bushes/bush_05_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_d_lod1.glb",
+     "tris": 647,
+     "bytes": 20332,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_bushes/bush_05_albedo_512.webp",
+      "tex/nobiax_bushes/bush_05_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_bushes_d_lod2.glb",
+     "tris": 272,
+     "bytes": 9584,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_bushes/bush_05_albedo_256.webp",
+      "tex/nobiax_bushes/bush_05_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bush_05",
+     "foliage": true,
+     "coverage": 0.1796
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/bushes",
+   "sourceName": "OpenGameArt, Bushes",
+   "sourceAsset": "nobiax_bushes",
+   "sourceVariant": "bush_05",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_tropical_shrubs_a",
+   "name": "Tropical shrub A",
+   "kind": "bush",
+   "sub": "tropical shrub bromeliad",
+   "biomes": [
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.678,
+   "footprint": 2.578,
+   "radius": 1.383,
+   "bounds": {
+    "min": [
+     -1.208,
+     0,
+     -1.377
+    ],
+    "max": [
+     1.273,
+     1.678,
+     1.201
+    ]
+   },
+   "sourceTris": 508,
+   "lods": [
+    {
+     "file": "models/nobiax_tropical_shrubs_a_lod0.glb",
+     "tris": 508,
+     "bytes": 18696,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_albedo_512.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_a_lod1.glb",
+     "tris": 499,
+     "bytes": 18524,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_albedo_256.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_normal_256.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_a_lod2.glb",
+     "tris": 269,
+     "bytes": 10852,
+     "texSize": 128,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_albedo_128.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_01_normal_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trop_shrub_01",
+     "foliage": true,
+     "coverage": 0.5594
+    }
+   ],
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/tropical-shrubs",
+   "sourceName": "OpenGameArt, Tropical shrubs",
+   "sourceAsset": "nobiax_tropical_shrubs",
+   "sourceVariant": "trop_shrub_01",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_tropical_shrubs_b",
+   "name": "Tropical shrub B",
+   "kind": "bush",
+   "sub": "tropical shrub bromeliad",
+   "biomes": [
+    "rainforest",
+    "wetland"
+   ],
+   "height": 0.851,
+   "footprint": 1.451,
+   "radius": 0.773,
+   "bounds": {
+    "min": [
+     -0.675,
+     0,
+     -0.686
+    ],
+    "max": [
+     0.705,
+     0.851,
+     0.765
+    ]
+   },
+   "sourceTris": 704,
+   "lods": [
+    {
+     "file": "models/nobiax_tropical_shrubs_b_lod0.glb",
+     "tris": 704,
+     "bytes": 22608,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_albedo_512.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_b_lod1.glb",
+     "tris": 511,
+     "bytes": 17800,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_albedo_256.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_normal_256.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_b_lod2.glb",
+     "tris": 224,
+     "bytes": 8900,
+     "texSize": 128,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_albedo_128.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_02_normal_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trop_shrub_02",
+     "foliage": true,
+     "coverage": 0.7082
+    }
+   ],
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/tropical-shrubs",
+   "sourceName": "OpenGameArt, Tropical shrubs",
+   "sourceAsset": "nobiax_tropical_shrubs",
+   "sourceVariant": "trop_shrub_02",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_tropical_shrubs_c",
+   "name": "Tropical shrub C",
+   "kind": "bush",
+   "sub": "tropical shrub bromeliad",
+   "biomes": [
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.942,
+   "footprint": 1.824,
+   "radius": 0.951,
+   "bounds": {
+    "min": [
+     -0.912,
+     0,
+     -0.846
+    ],
+    "max": [
+     0.912,
+     1.942,
+     0.846
+    ]
+   },
+   "sourceTris": 1443,
+   "lods": [
+    {
+     "file": "models/nobiax_tropical_shrubs_c_lod0.glb",
+     "tris": 999,
+     "bytes": 34420,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_albedo_512.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_c_lod1.glb",
+     "tris": 509,
+     "bytes": 18464,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_albedo_256.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_normal_256.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_c_lod2.glb",
+     "tris": 183,
+     "bytes": 7840,
+     "texSize": 128,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_albedo_128.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_03_normal_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trop_shrub_03",
+     "foliage": true,
+     "coverage": 0.6258
+    }
+   ],
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/tropical-shrubs",
+   "sourceName": "OpenGameArt, Tropical shrubs",
+   "sourceAsset": "nobiax_tropical_shrubs",
+   "sourceVariant": "trop_shrub_03",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_tropical_shrubs_d",
+   "name": "Tropical shrub D",
+   "kind": "bush",
+   "sub": "tropical shrub bromeliad",
+   "biomes": [
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.748,
+   "footprint": 1.84,
+   "radius": 0.926,
+   "bounds": {
+    "min": [
+     -0.689,
+     0,
+     -0.92
+    ],
+    "max": [
+     0.689,
+     1.748,
+     0.92
+    ]
+   },
+   "sourceTris": 472,
+   "lods": [
+    {
+     "file": "models/nobiax_tropical_shrubs_d_lod0.glb",
+     "tris": 472,
+     "bytes": 17184,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_albedo_512.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_d_lod1.glb",
+     "tris": 472,
+     "bytes": 17184,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_albedo_256.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_normal_256.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_d_lod2.glb",
+     "tris": 232,
+     "bytes": 9500,
+     "texSize": 128,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_albedo_128.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_04_normal_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trop_shrub_04",
+     "foliage": true,
+     "coverage": 0.6204
+    }
+   ],
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/tropical-shrubs",
+   "sourceName": "OpenGameArt, Tropical shrubs",
+   "sourceAsset": "nobiax_tropical_shrubs",
+   "sourceVariant": "trop_shrub_04",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_tropical_shrubs_e",
+   "name": "Tropical shrub E",
+   "kind": "bush",
+   "sub": "tropical shrub bromeliad",
+   "biomes": [
+    "rainforest",
+    "wetland"
+   ],
+   "height": 1.166,
+   "footprint": 1.934,
+   "radius": 0.997,
+   "bounds": {
+    "min": [
+     -0.964,
+     0,
+     -0.967
+    ],
+    "max": [
+     0.964,
+     1.166,
+     0.967
+    ]
+   },
+   "sourceTris": 608,
+   "lods": [
+    {
+     "file": "models/nobiax_tropical_shrubs_e_lod0.glb",
+     "tris": 608,
+     "bytes": 16868,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_albedo_512.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_e_lod1.glb",
+     "tris": 558,
+     "bytes": 15704,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_albedo_256.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_normal_256.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_tropical_shrubs_e_lod2.glb",
+     "tris": 366,
+     "bytes": 10948,
+     "texSize": 128,
+     "textures": [
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_albedo_128.webp",
+      "tex/nobiax_tropical_shrubs/trop_shrub_05_normal_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trop_shrub_05",
+     "foliage": true,
+     "coverage": 0.4082
+    }
+   ],
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/tropical-shrubs",
+   "sourceName": "OpenGameArt, Tropical shrubs",
+   "sourceAsset": "nobiax_tropical_shrubs",
+   "sourceVariant": "trop_shrub_05",
+   "provenance": "game models (OBJ) with their own textures, colour scaled by gain"
   },
   {
    "id": "shrub_01",
@@ -1827,6 +2629,110 @@
    "sourceName": "Poly Haven",
    "sourceAsset": "wild_rooibos_bush",
    "sourceVariant": "wild_rooibos_bush_e"
+  },
+  {
+   "id": "nobiax_saguaro",
+   "name": "Saguaro cactus",
+   "kind": "cactus",
+   "sub": "saguaro cactus",
+   "biomes": [
+    "desert",
+    "savanna",
+    "scree"
+   ],
+   "height": 4.584,
+   "footprint": 2.272,
+   "radius": 1.37,
+   "bounds": {
+    "min": [
+     -0.756,
+     0,
+     -1.369
+    ],
+    "max": [
+     1.066,
+     4.584,
+     0.903
+    ]
+   },
+   "sourceTris": 1012,
+   "lods": [
+    {
+     "file": "models/nobiax_saguaro_lod0.glb",
+     "tris": 1012,
+     "bytes": 38140,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_saguaro/saguaro_albedo_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_saguaro_lod1.glb",
+     "tris": 580,
+     "bytes": 25704,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_saguaro/saguaro_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_saguaro_lod2.glb",
+     "tris": 210,
+     "bytes": 9988,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_saguaro/saguaro_albedo_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "saguaro",
+     "foliage": true,
+     "coverage": 0.6307
+    }
+   ],
+   "wind": 0,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_saguaro_albedo.webp",
+    "normal": "impostors/nobiax_saguaro_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     2.292,
+     0
+    ],
+    "sideHalfSize": [
+     1.411,
+     2.361
+    ],
+    "topHalfSize": 1.411,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.267,
+     0.288,
+     0.308,
+     0.309,
+     0.267,
+     0.288,
+     0.308,
+     0.309,
+     0.145
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues), made for R. Robles (Mundo)",
+   "source": "https://opengameart.org/content/freebies-mundo-commissions",
+   "sourceName": "OpenGameArt, Freebies - Mundo commissions",
+   "sourceAsset": "nobiax_saguaro",
+   "sourceVariant": "saguaro",
+   "provenance": "game model (OBJ) with its own texture, colour scaled by gain"
   },
   {
    "id": "mountainside",
@@ -5644,6 +6550,462 @@
    "sourceVariant": "grass_medium_02_e"
   },
   {
+   "id": "proc_grass_tufts_a",
+   "name": "Grass tuft A",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.516,
+   "footprint": 0.594,
+   "radius": 0.299,
+   "bounds": {
+    "min": [
+     -0.293,
+     0,
+     -0.297
+    ],
+    "max": [
+     0.293,
+     0.516,
+     0.297
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_a_lod0.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_01_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_a_lod1.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_01_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_a_lod2.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_01_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_01",
+     "foliage": true,
+     "coverage": 0.1516
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_01",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
+   "id": "proc_grass_tufts_b",
+   "name": "Grass tuft B",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.494,
+   "footprint": 0.551,
+   "radius": 0.3,
+   "bounds": {
+    "min": [
+     -0.274,
+     0,
+     -0.275
+    ],
+    "max": [
+     0.274,
+     0.494,
+     0.275
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_b_lod0.glb",
+     "tris": 8,
+     "bytes": 2028,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_02_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_b_lod1.glb",
+     "tris": 8,
+     "bytes": 2028,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_02_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_b_lod2.glb",
+     "tris": 8,
+     "bytes": 2028,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_02_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_02",
+     "foliage": true,
+     "coverage": 0.199
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_02",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
+   "id": "proc_grass_tufts_c",
+   "name": "Grass tuft C",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.651,
+   "footprint": 0.749,
+   "radius": 0.379,
+   "bounds": {
+    "min": [
+     -0.374,
+     0,
+     -0.374
+    ],
+    "max": [
+     0.374,
+     0.651,
+     0.374
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_c_lod0.glb",
+     "tris": 8,
+     "bytes": 2036,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_03_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_c_lod1.glb",
+     "tris": 8,
+     "bytes": 2036,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_03_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_c_lod2.glb",
+     "tris": 8,
+     "bytes": 2036,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_03_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_03",
+     "foliage": true,
+     "coverage": 0.0737
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_03",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
+   "id": "proc_grass_tufts_d",
+   "name": "Grass tuft D",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.464,
+   "footprint": 0.531,
+   "radius": 0.276,
+   "bounds": {
+    "min": [
+     -0.263,
+     0,
+     -0.266
+    ],
+    "max": [
+     0.263,
+     0.464,
+     0.266
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_d_lod0.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_04_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_d_lod1.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_04_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_d_lod2.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_04_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_04",
+     "foliage": true,
+     "coverage": 0.1377
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_04",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
+   "id": "proc_grass_tufts_e",
+   "name": "Grass tuft E",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.651,
+   "footprint": 0.753,
+   "radius": 0.393,
+   "bounds": {
+    "min": [
+     -0.376,
+     0,
+     -0.375
+    ],
+    "max": [
+     0.376,
+     0.651,
+     0.375
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_e_lod0.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_05_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_e_lod1.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_05_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_e_lod2.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_05_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_05",
+     "foliage": true,
+     "coverage": 0.1588
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_05",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
+   "id": "proc_grass_tufts_f",
+   "name": "Grass tuft F",
+   "kind": "grass",
+   "sub": "grass tuft",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "alpine_meadow",
+    "temperate_forest",
+    "wetland"
+   ],
+   "height": 0.476,
+   "footprint": 0.55,
+   "radius": 0.284,
+   "bounds": {
+    "min": [
+     -0.275,
+     0,
+     -0.275
+    ],
+    "max": [
+     0.275,
+     0.476,
+     0.275
+    ]
+   },
+   "sourceTris": 8,
+   "lods": [
+    {
+     "file": "models/proc_grass_tufts_f_lod0.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_06_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_f_lod1.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_06_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_grass_tufts_f_lod2.glb",
+     "tris": 8,
+     "bytes": 2032,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_grass_tufts/tuft_06_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "tuft_06",
+     "foliage": true,
+     "coverage": 0.1173
+    }
+   ],
+   "wind": 1,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)",
+   "source": "https://opengameart.org/content/grass-pack-01",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_grass_tufts",
+   "sourceVariant": "tuft_06",
+   "provenance": "procedural crossed cards with CC0 textures"
+  },
+  {
    "id": "moss_01_a",
    "name": "Moss A",
    "kind": "ground cover",
@@ -7076,6 +8438,474 @@
    "sourceName": "Poly Haven",
    "sourceAsset": "root_cluster_01",
    "sourceVariant": "root_cluster_01"
+  },
+  {
+   "id": "rubberduck_mushrooms_a",
+   "name": "Mushroom A",
+   "kind": "mushroom",
+   "sub": "mushroom bolete",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest"
+   ],
+   "height": 0.121,
+   "footprint": 0.188,
+   "radius": 0.106,
+   "bounds": {
+    "min": [
+     -0.088,
+     0,
+     -0.099
+    ],
+    "max": [
+     0.1,
+     0.121,
+     0.086
+    ]
+   },
+   "sourceTris": 226,
+   "lods": [
+    {
+     "file": "models/rubberduck_mushrooms_a_lod0.glb",
+     "tris": 224,
+     "bytes": 6612,
+     "texSize": 512,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_a_lod1.glb",
+     "tris": 124,
+     "bytes": 4664,
+     "texSize": 256,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_a_lod2.glb",
+     "tris": 64,
+     "bytes": 3364,
+     "texSize": 128,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "mushroom1",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "rubberduck",
+   "source": "https://opengameart.org/content/free-vegetation-asset-pack",
+   "sourceName": "OpenGameArt, free vegetation asset pack",
+   "sourceAsset": "rubberduck_mushrooms",
+   "sourceVariant": "mushroom1",
+   "provenance": "game models (.blend) with hand-painted textures, scaled to 11 to 17 cm"
+  },
+  {
+   "id": "rubberduck_mushrooms_b",
+   "name": "Mushroom B",
+   "kind": "mushroom",
+   "sub": "mushroom bolete",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest"
+   ],
+   "height": 0.149,
+   "footprint": 0.171,
+   "radius": 0.095,
+   "bounds": {
+    "min": [
+     -0.094,
+     0,
+     -0.091
+    ],
+    "max": [
+     0.077,
+     0.149,
+     0.079
+    ]
+   },
+   "sourceTris": 226,
+   "lods": [
+    {
+     "file": "models/rubberduck_mushrooms_b_lod0.glb",
+     "tris": 224,
+     "bytes": 6612,
+     "texSize": 512,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_b_lod1.glb",
+     "tris": 125,
+     "bytes": 4672,
+     "texSize": 256,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_b_lod2.glb",
+     "tris": 64,
+     "bytes": 3316,
+     "texSize": 128,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "mushroom1",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "rubberduck",
+   "source": "https://opengameart.org/content/free-vegetation-asset-pack",
+   "sourceName": "OpenGameArt, free vegetation asset pack",
+   "sourceAsset": "rubberduck_mushrooms",
+   "sourceVariant": "mushroom2",
+   "provenance": "game models (.blend) with hand-painted textures, scaled to 11 to 17 cm"
+  },
+  {
+   "id": "rubberduck_mushrooms_c",
+   "name": "Mushroom C",
+   "kind": "mushroom",
+   "sub": "mushroom bolete",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "rainforest"
+   ],
+   "height": 0.164,
+   "footprint": 0.111,
+   "radius": 0.06,
+   "bounds": {
+    "min": [
+     -0.059,
+     0,
+     -0.059
+    ],
+    "max": [
+     0.052,
+     0.164,
+     0.049
+    ]
+   },
+   "sourceTris": 250,
+   "lods": [
+    {
+     "file": "models/rubberduck_mushrooms_c_lod0.glb",
+     "tris": 224,
+     "bytes": 6516,
+     "texSize": 512,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_c_lod1.glb",
+     "tris": 125,
+     "bytes": 4552,
+     "texSize": 256,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/rubberduck_mushrooms_c_lod2.glb",
+     "tris": 64,
+     "bytes": 3264,
+     "texSize": 128,
+     "textures": [
+      "tex/rubberduck_mushrooms/mushroom1_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "mushroom1",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0,
+   "sink": 0,
+   "default": false,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "rubberduck",
+   "source": "https://opengameart.org/content/free-vegetation-asset-pack",
+   "sourceName": "OpenGameArt, free vegetation asset pack",
+   "sourceAsset": "rubberduck_mushrooms",
+   "sourceVariant": "mushroom3",
+   "provenance": "game models (.blend) with hand-painted textures, scaled to 11 to 17 cm"
+  },
+  {
+   "id": "proc_reeds_a",
+   "name": "Reeds with cattails A",
+   "kind": "reed",
+   "sub": "reed cattail bulrush",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake"
+   ],
+   "height": 2.154,
+   "footprint": 3.457,
+   "radius": 1.962,
+   "bounds": {
+    "min": [
+     -1.957,
+     0,
+     -1.64
+    ],
+    "max": [
+     1.5,
+     2.154,
+     1.581
+    ]
+   },
+   "sourceTris": 1027,
+   "lods": [
+    {
+     "file": "models/proc_reeds_a_lod0.glb",
+     "tris": 1027,
+     "bytes": 32556,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_512.webp",
+      "tex/proc_reeds/head_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_a_lod1.glb",
+     "tris": 898,
+     "bytes": 29828,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_256.webp",
+      "tex/proc_reeds/head_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_a_lod2.glb",
+     "tris": 339,
+     "bytes": 14492,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_128.webp",
+      "tex/proc_reeds/head_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "blade",
+     "foliage": true,
+     "coverage": 1
+    },
+    {
+     "name": "head",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0.9,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Midge Sinnaeve (Mantissa birch leaf photo, a strip along the midrib), Lennart Demes (ambientCG Bark002, cattail heads)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_reeds",
+   "sourceVariant": "reeds_1",
+   "provenance": "procedural with CC0 textures"
+  },
+  {
+   "id": "proc_reeds_b",
+   "name": "Reeds with cattails B",
+   "kind": "reed",
+   "sub": "reed cattail bulrush",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake"
+   ],
+   "height": 2.155,
+   "footprint": 3.724,
+   "radius": 1.96,
+   "bounds": {
+    "min": [
+     -1.948,
+     0,
+     -1.372
+    ],
+    "max": [
+     1.776,
+     2.155,
+     1.615
+    ]
+   },
+   "sourceTris": 1188,
+   "lods": [
+    {
+     "file": "models/proc_reeds_b_lod0.glb",
+     "tris": 1188,
+     "bytes": 36544,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_512.webp",
+      "tex/proc_reeds/head_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_b_lod1.glb",
+     "tris": 899,
+     "bytes": 30104,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_256.webp",
+      "tex/proc_reeds/head_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_b_lod2.glb",
+     "tris": 377,
+     "bytes": 14052,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_128.webp",
+      "tex/proc_reeds/head_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "blade",
+     "foliage": true,
+     "coverage": 1
+    },
+    {
+     "name": "head",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0.9,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Midge Sinnaeve (Mantissa birch leaf photo, a strip along the midrib), Lennart Demes (ambientCG Bark002, cattail heads)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_reeds",
+   "sourceVariant": "reeds_2",
+   "provenance": "procedural with CC0 textures"
+  },
+  {
+   "id": "proc_reeds_c",
+   "name": "Reeds with cattails C",
+   "kind": "reed",
+   "sub": "reed cattail bulrush",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake"
+   ],
+   "height": 2.042,
+   "footprint": 3.04,
+   "radius": 1.825,
+   "bounds": {
+    "min": [
+     -1.529,
+     0,
+     -1.33
+    ],
+    "max": [
+     1.511,
+     2.042,
+     1.292
+    ]
+   },
+   "sourceTris": 1124,
+   "lods": [
+    {
+     "file": "models/proc_reeds_c_lod0.glb",
+     "tris": 1124,
+     "bytes": 34432,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_512.webp",
+      "tex/proc_reeds/head_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_c_lod1.glb",
+     "tris": 898,
+     "bytes": 29328,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_256.webp",
+      "tex/proc_reeds/head_albedo_256.webp"
+     ]
+    },
+    {
+     "file": "models/proc_reeds_c_lod2.glb",
+     "tris": 337,
+     "bytes": 14488,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_reeds/blade_albedo_128.webp",
+      "tex/proc_reeds/head_albedo_128.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "blade",
+     "foliage": true,
+     "coverage": 1
+    },
+    {
+     "name": "head",
+     "foliage": false,
+     "coverage": 1
+    }
+   ],
+   "wind": 0.9,
+   "sink": 0,
+   "default": true,
+   "impostor": null,
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Midge Sinnaeve (Mantissa birch leaf photo, a strip along the midrib), Lennart Demes (ambientCG Bark002, cattail heads)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_reeds",
+   "sourceVariant": "reeds_3",
+   "provenance": "procedural with CC0 textures"
   },
   {
    "id": "namaqualand_rocks_01_a",
@@ -10103,7 +11933,7 @@
    },
    "wind": 0.4,
    "sink": 0,
-   "default": true,
+   "default": false,
    "impostor": {
     "albedo": "impostors/fir_sapling_medium_a_albedo.webp",
     "normal": "impostors/fir_sapling_medium_a_normal.webp",
@@ -10249,7 +12079,7 @@
    },
    "wind": 0.4,
    "sink": 0,
-   "default": true,
+   "default": false,
    "impostor": {
     "albedo": "impostors/fir_sapling_medium_b_albedo.webp",
     "normal": "impostors/fir_sapling_medium_b_normal.webp",
@@ -10395,7 +12225,7 @@
    },
    "wind": 0.4,
    "sink": 0,
-   "default": true,
+   "default": false,
    "impostor": {
     "albedo": "impostors/fir_sapling_medium_c_albedo.webp",
     "normal": "impostors/fir_sapling_medium_c_normal.webp",
@@ -11499,6 +13329,1708 @@
    "sourceVariant": "jacaranda_tree_LOD0"
   },
   {
+   "id": "mantissa_birch_a",
+   "name": "Silver birch A",
+   "kind": "tree",
+   "sub": "broadleaf birch",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "grassland",
+    "tundra"
+   ],
+   "height": 11.183,
+   "footprint": 7.285,
+   "radius": 4.435,
+   "bounds": {
+    "min": [
+     -3.281,
+     0,
+     -3.514
+    ],
+    "max": [
+     3.751,
+     11.183,
+     3.771
+    ]
+   },
+   "sourceTris": 1771515,
+   "lods": [
+    {
+     "file": "models/mantissa_birch_a_lod0.glb",
+     "tris": 29994,
+     "bytes": 938620,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_512.webp",
+      "tex/mantissa_birch/crown_albedo_1024.webp",
+      "tex/mantissa_birch/crown_normal_1024.webp",
+      "tex/mantissa_birch/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_a_lod1.glb",
+     "tris": 7953,
+     "bytes": 285036,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_256.webp",
+      "tex/mantissa_birch/crown_albedo_512.webp",
+      "tex/mantissa_birch/crown_normal_512.webp",
+      "tex/mantissa_birch/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_a_lod2.glb",
+     "tris": 1980,
+     "bytes": 80024,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_128.webp",
+      "tex/mantissa_birch/crown_albedo_256.webp",
+      "tex/mantissa_birch/crown_normal_256.webp",
+      "tex/mantissa_birch/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7792
+    }
+   ],
+   "crown": {
+    "cards": [
+     2400,
+     800,
+     220
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.55,
+   "sink": 0,
+   "default": true,
+   "impostor": {
+    "albedo": "impostors/mantissa_birch_a_albedo.webp",
+    "normal": "impostors/mantissa_birch_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.591,
+     0
+    ],
+    "sideHalfSize": [
+     4.568,
+     5.759
+    ],
+    "topHalfSize": 4.568,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.359,
+     0.343,
+     0.33,
+     0.358,
+     0.359,
+     0.343,
+     0.33,
+     0.358,
+     0.325
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz)",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Birch Tree Pack",
+   "sourceAsset": "mantissa_birch",
+   "sourceVariant": "birch_1",
+   "provenance": "real CG model (FBX) with the photo textures of the pack"
+  },
+  {
+   "id": "mantissa_birch_b",
+   "name": "Silver birch B",
+   "kind": "tree",
+   "sub": "broadleaf birch",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "grassland",
+    "tundra"
+   ],
+   "height": 11.673,
+   "footprint": 7.17,
+   "radius": 4.029,
+   "bounds": {
+    "min": [
+     -3.33,
+     0,
+     -3.389
+    ],
+    "max": [
+     3.628,
+     11.673,
+     3.781
+    ]
+   },
+   "sourceTris": 1811735,
+   "lods": [
+    {
+     "file": "models/mantissa_birch_b_lod0.glb",
+     "tris": 29993,
+     "bytes": 944352,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_512.webp",
+      "tex/mantissa_birch/crown_albedo_1024.webp",
+      "tex/mantissa_birch/crown_normal_1024.webp",
+      "tex/mantissa_birch/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_b_lod1.glb",
+     "tris": 7926,
+     "bytes": 286572,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_256.webp",
+      "tex/mantissa_birch/crown_albedo_512.webp",
+      "tex/mantissa_birch/crown_normal_512.webp",
+      "tex/mantissa_birch/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_b_lod2.glb",
+     "tris": 1978,
+     "bytes": 80184,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_128.webp",
+      "tex/mantissa_birch/crown_albedo_256.webp",
+      "tex/mantissa_birch/crown_normal_256.webp",
+      "tex/mantissa_birch/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7792
+    }
+   ],
+   "crown": {
+    "cards": [
+     2427,
+     809,
+     222
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.55,
+   "sink": 0,
+   "default": true,
+   "impostor": {
+    "albedo": "impostors/mantissa_birch_b_albedo.webp",
+    "normal": "impostors/mantissa_birch_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.837,
+     0
+    ],
+    "sideHalfSize": [
+     4.15,
+     6.012
+    ],
+    "topHalfSize": 4.15,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.389,
+     0.414,
+     0.409,
+     0.391,
+     0.389,
+     0.414,
+     0.409,
+     0.391,
+     0.403
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz)",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Birch Tree Pack",
+   "sourceAsset": "mantissa_birch",
+   "sourceVariant": "birch_3",
+   "provenance": "real CG model (FBX) with the photo textures of the pack"
+  },
+  {
+   "id": "mantissa_birch_c",
+   "name": "Silver birch C",
+   "kind": "tree",
+   "sub": "broadleaf birch",
+   "biomes": [
+    "temperate_forest",
+    "boreal_forest",
+    "grassland",
+    "tundra"
+   ],
+   "height": 11.214,
+   "footprint": 6.865,
+   "radius": 4.033,
+   "bounds": {
+    "min": [
+     -3.544,
+     0,
+     -3.257
+    ],
+    "max": [
+     3.246,
+     11.214,
+     3.608
+    ]
+   },
+   "sourceTris": 1846113,
+   "lods": [
+    {
+     "file": "models/mantissa_birch_c_lod0.glb",
+     "tris": 29996,
+     "bytes": 946984,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_512.webp",
+      "tex/mantissa_birch/crown_albedo_1024.webp",
+      "tex/mantissa_birch/crown_normal_1024.webp",
+      "tex/mantissa_birch/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_c_lod1.glb",
+     "tris": 7949,
+     "bytes": 287552,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_256.webp",
+      "tex/mantissa_birch/crown_albedo_512.webp",
+      "tex/mantissa_birch/crown_normal_512.webp",
+      "tex/mantissa_birch/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_birch_c_lod2.glb",
+     "tris": 1976,
+     "bytes": 80528,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_birch/trunk_albedo_128.webp",
+      "tex/mantissa_birch/crown_albedo_256.webp",
+      "tex/mantissa_birch/crown_normal_256.webp",
+      "tex/mantissa_birch/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7792
+    }
+   ],
+   "crown": {
+    "cards": [
+     2449,
+     816,
+     224
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.55,
+   "sink": 0,
+   "default": true,
+   "impostor": {
+    "albedo": "impostors/mantissa_birch_c_albedo.webp",
+    "normal": "impostors/mantissa_birch_c_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.607,
+     0
+    ],
+    "sideHalfSize": [
+     4.154,
+     5.775
+    ],
+    "topHalfSize": 4.154,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.378,
+     0.369,
+     0.363,
+     0.394,
+     0.378,
+     0.369,
+     0.363,
+     0.394,
+     0.38
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz)",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Birch Tree Pack",
+   "sourceAsset": "mantissa_birch",
+   "sourceVariant": "birch_5",
+   "provenance": "real CG model (FBX) with the photo textures of the pack"
+  },
+  {
+   "id": "mantissa_generic_furrowed_a",
+   "name": "Broadleaf tree, furrowed bark A",
+   "kind": "tree",
+   "sub": "broadleaf deciduous furrowed bark",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "wetland",
+    "rainforest"
+   ],
+   "height": 12.386,
+   "footprint": 9.534,
+   "radius": 5.14,
+   "bounds": {
+    "min": [
+     -4.646,
+     0,
+     -4.781
+    ],
+    "max": [
+     4.888,
+     12.386,
+     4.64
+    ]
+   },
+   "sourceTris": 1658712,
+   "lods": [
+    {
+     "file": "models/mantissa_generic_furrowed_a_lod0.glb",
+     "tris": 24466,
+     "bytes": 825640,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_512.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_512.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_512.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_1024.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_1024.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_furrowed_a_lod1.glb",
+     "tris": 7986,
+     "bytes": 283656,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_256.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_256.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_256.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_512.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_512.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_furrowed_a_lod2.glb",
+     "tris": 1990,
+     "bytes": 80340,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_128.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_128.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_128.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_256.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_256.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7902
+    }
+   ],
+   "crown": {
+    "cards": [
+     2400,
+     800,
+     220
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.45,
+   "sink": 0,
+   "default": true,
+   "impostor": {
+    "albedo": "impostors/mantissa_generic_furrowed_a_albedo.webp",
+    "normal": "impostors/mantissa_generic_furrowed_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     6.193,
+     0
+    ],
+    "sideHalfSize": [
+     5.294,
+     6.379
+    ],
+    "topHalfSize": 5.294,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.386,
+     0.37,
+     0.394,
+     0.385,
+     0.386,
+     0.37,
+     0.394,
+     0.385,
+     0.478
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz); bark Bark001 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Generic Tree Pack",
+   "sourceAsset": "mantissa_generic_furrowed",
+   "sourceVariant": "generic_1",
+   "provenance": "real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark001, Mantissa birch leaves)"
+  },
+  {
+   "id": "mantissa_generic_furrowed_b",
+   "name": "Broadleaf tree, furrowed bark B",
+   "kind": "tree",
+   "sub": "broadleaf deciduous furrowed bark",
+   "biomes": [
+    "temperate_forest",
+    "grassland",
+    "wetland",
+    "rainforest"
+   ],
+   "height": 12.809,
+   "footprint": 9.596,
+   "radius": 5.055,
+   "bounds": {
+    "min": [
+     -5.008,
+     0,
+     -4.643
+    ],
+    "max": [
+     4.587,
+     12.809,
+     4.053
+    ]
+   },
+   "sourceTris": 1649790,
+   "lods": [
+    {
+     "file": "models/mantissa_generic_furrowed_b_lod0.glb",
+     "tris": 24598,
+     "bytes": 828136,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_512.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_512.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_512.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_1024.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_1024.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_furrowed_b_lod1.glb",
+     "tris": 7981,
+     "bytes": 283728,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_256.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_256.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_256.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_512.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_512.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_furrowed_b_lod2.glb",
+     "tris": 1988,
+     "bytes": 80040,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_generic_furrowed/trunk_albedo_128.webp",
+      "tex/mantissa_generic_furrowed/trunk_normal_128.webp",
+      "tex/mantissa_generic_furrowed/trunk_orm_128.webp",
+      "tex/mantissa_generic_furrowed/crown_albedo_256.webp",
+      "tex/mantissa_generic_furrowed/crown_normal_256.webp",
+      "tex/mantissa_generic_furrowed/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7902
+    }
+   ],
+   "crown": {
+    "cards": [
+     2398,
+     799,
+     220
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.45,
+   "sink": 0,
+   "default": true,
+   "impostor": {
+    "albedo": "impostors/mantissa_generic_furrowed_b_albedo.webp",
+    "normal": "impostors/mantissa_generic_furrowed_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     6.404,
+     0
+    ],
+    "sideHalfSize": [
+     5.207,
+     6.597
+    ],
+    "topHalfSize": 5.207,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.39,
+     0.401,
+     0.379,
+     0.367,
+     0.39,
+     0.401,
+     0.379,
+     0.367,
+     0.498
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz); bark Bark001 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Generic Tree Pack",
+   "sourceAsset": "mantissa_generic_furrowed",
+   "sourceVariant": "generic_4",
+   "provenance": "real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark001, Mantissa birch leaves)"
+  },
+  {
+   "id": "mantissa_generic_smooth_a",
+   "name": "Broadleaf tree, smooth bark A",
+   "kind": "tree",
+   "sub": "broadleaf deciduous smooth bark",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "grassland"
+   ],
+   "height": 12.548,
+   "footprint": 9.571,
+   "radius": 5.429,
+   "bounds": {
+    "min": [
+     -4.7,
+     0,
+     -5.057
+    ],
+    "max": [
+     4.457,
+     12.548,
+     4.514
+    ]
+   },
+   "sourceTris": 1624701,
+   "lods": [
+    {
+     "file": "models/mantissa_generic_smooth_a_lod0.glb",
+     "tris": 24574,
+     "bytes": 827708,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_512.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_512.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_512.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_1024.webp",
+      "tex/mantissa_generic_smooth/crown_normal_1024.webp",
+      "tex/mantissa_generic_smooth/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_smooth_a_lod1.glb",
+     "tris": 8000,
+     "bytes": 283388,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_256.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_256.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_256.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_512.webp",
+      "tex/mantissa_generic_smooth/crown_normal_512.webp",
+      "tex/mantissa_generic_smooth/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_smooth_a_lod2.glb",
+     "tris": 1987,
+     "bytes": 79412,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_128.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_128.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_128.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_256.webp",
+      "tex/mantissa_generic_smooth/crown_normal_256.webp",
+      "tex/mantissa_generic_smooth/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7733
+    }
+   ],
+   "crown": {
+    "cards": [
+     2400,
+     800,
+     220
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.45,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/mantissa_generic_smooth_a_albedo.webp",
+    "normal": "impostors/mantissa_generic_smooth_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     6.274,
+     0
+    ],
+    "sideHalfSize": [
+     5.592,
+     6.462
+    ],
+    "topHalfSize": 5.592,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.369,
+     0.378,
+     0.354,
+     0.366,
+     0.369,
+     0.378,
+     0.354,
+     0.366,
+     0.427
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz); bark Bark010 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Generic Tree Pack",
+   "sourceAsset": "mantissa_generic_smooth",
+   "sourceVariant": "generic_7",
+   "provenance": "real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark010, Mantissa birch leaves)"
+  },
+  {
+   "id": "mantissa_generic_smooth_b",
+   "name": "Broadleaf tree, smooth bark B",
+   "kind": "tree",
+   "sub": "broadleaf deciduous smooth bark",
+   "biomes": [
+    "temperate_forest",
+    "rainforest",
+    "grassland"
+   ],
+   "height": 12.375,
+   "footprint": 9.43,
+   "radius": 5.059,
+   "bounds": {
+    "min": [
+     -4.799,
+     0,
+     -4.752
+    ],
+    "max": [
+     4.63,
+     12.375,
+     4.178
+    ]
+   },
+   "sourceTris": 1738126,
+   "lods": [
+    {
+     "file": "models/mantissa_generic_smooth_b_lod0.glb",
+     "tris": 25209,
+     "bytes": 852448,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_512.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_512.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_512.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_1024.webp",
+      "tex/mantissa_generic_smooth/crown_normal_1024.webp",
+      "tex/mantissa_generic_smooth/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_smooth_b_lod1.glb",
+     "tris": 7977,
+     "bytes": 287692,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_256.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_256.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_256.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_512.webp",
+      "tex/mantissa_generic_smooth/crown_normal_512.webp",
+      "tex/mantissa_generic_smooth/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_generic_smooth_b_lod2.glb",
+     "tris": 1980,
+     "bytes": 80716,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_generic_smooth/trunk_albedo_128.webp",
+      "tex/mantissa_generic_smooth/trunk_normal_128.webp",
+      "tex/mantissa_generic_smooth/trunk_orm_128.webp",
+      "tex/mantissa_generic_smooth/crown_albedo_256.webp",
+      "tex/mantissa_generic_smooth/crown_normal_256.webp",
+      "tex/mantissa_generic_smooth/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7733
+    }
+   ],
+   "crown": {
+    "cards": [
+     2488,
+     829,
+     228
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.45,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/mantissa_generic_smooth_b_albedo.webp",
+    "normal": "impostors/mantissa_generic_smooth_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     6.188,
+     0
+    ],
+    "sideHalfSize": [
+     5.211,
+     6.373
+    ],
+    "topHalfSize": 5.211,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.424,
+     0.418,
+     0.422,
+     0.436,
+     0.424,
+     0.418,
+     0.422,
+     0.436,
+     0.466
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz); bark Bark010 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Generic Tree Pack",
+   "sourceAsset": "mantissa_generic_smooth",
+   "sourceVariant": "generic_9",
+   "provenance": "real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark010, Mantissa birch leaves)"
+  },
+  {
+   "id": "mantissa_japanese_maple_a",
+   "name": "Japanese maple A",
+   "kind": "tree",
+   "sub": "broadleaf maple red leaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland"
+   ],
+   "height": 5.487,
+   "footprint": 4.478,
+   "radius": 2.602,
+   "bounds": {
+    "min": [
+     -2.137,
+     0,
+     -2.026
+    ],
+    "max": [
+     2.251,
+     5.487,
+     2.452
+    ]
+   },
+   "sourceTris": 2525083,
+   "lods": [
+    {
+     "file": "models/mantissa_japanese_maple_a_lod0.glb",
+     "tris": 30000,
+     "bytes": 931688,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_512.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_1024.webp",
+      "tex/mantissa_japanese_maple/crown_normal_1024.webp",
+      "tex/mantissa_japanese_maple/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_japanese_maple_a_lod1.glb",
+     "tris": 7954,
+     "bytes": 284500,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_256.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_512.webp",
+      "tex/mantissa_japanese_maple/crown_normal_512.webp",
+      "tex/mantissa_japanese_maple/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_japanese_maple_a_lod2.glb",
+     "tris": 1985,
+     "bytes": 78964,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_128.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_256.webp",
+      "tex/mantissa_japanese_maple/crown_normal_256.webp",
+      "tex/mantissa_japanese_maple/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7346
+    }
+   ],
+   "crown": {
+    "cards": [
+     2400,
+     800,
+     220
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/mantissa_japanese_maple_a_albedo.webp",
+    "normal": "impostors/mantissa_japanese_maple_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     2.744,
+     0
+    ],
+    "sideHalfSize": [
+     2.68,
+     2.826
+    ],
+    "topHalfSize": 2.68,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.356,
+     0.35,
+     0.361,
+     0.378,
+     0.356,
+     0.35,
+     0.361,
+     0.378,
+     0.406
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz)",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Japanese Maple Pack",
+   "sourceAsset": "mantissa_japanese_maple",
+   "sourceVariant": "maple_1",
+   "provenance": "real CG model (FBX) with the photo textures of the pack"
+  },
+  {
+   "id": "mantissa_japanese_maple_b",
+   "name": "Japanese maple B",
+   "kind": "tree",
+   "sub": "broadleaf maple red leaf",
+   "biomes": [
+    "temperate_forest",
+    "grassland"
+   ],
+   "height": 5.324,
+   "footprint": 4.117,
+   "radius": 2.574,
+   "bounds": {
+    "min": [
+     -1.926,
+     0,
+     -2.472
+    ],
+    "max": [
+     2.19,
+     5.324,
+     1.527
+    ]
+   },
+   "sourceTris": 2409015,
+   "lods": [
+    {
+     "file": "models/mantissa_japanese_maple_b_lod0.glb",
+     "tris": 29997,
+     "bytes": 939880,
+     "texSize": 512,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_512.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_1024.webp",
+      "tex/mantissa_japanese_maple/crown_normal_1024.webp",
+      "tex/mantissa_japanese_maple/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_japanese_maple_b_lod1.glb",
+     "tris": 7945,
+     "bytes": 287472,
+     "texSize": 256,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_256.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_512.webp",
+      "tex/mantissa_japanese_maple/crown_normal_512.webp",
+      "tex/mantissa_japanese_maple/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/mantissa_japanese_maple_b_lod2.glb",
+     "tris": 1976,
+     "bytes": 79820,
+     "texSize": 128,
+     "textures": [
+      "tex/mantissa_japanese_maple/trunk_albedo_128.webp",
+      "tex/mantissa_japanese_maple/crown_albedo_256.webp",
+      "tex/mantissa_japanese_maple/crown_normal_256.webp",
+      "tex/mantissa_japanese_maple/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "trunk",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.7346
+    }
+   ],
+   "crown": {
+    "cards": [
+     2425,
+     808,
+     222
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.5,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/mantissa_japanese_maple_b_albedo.webp",
+    "normal": "impostors/mantissa_japanese_maple_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     2.662,
+     0
+    ],
+    "sideHalfSize": [
+     2.651,
+     2.742
+    ],
+    "topHalfSize": 2.651,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.307,
+     0.314,
+     0.324,
+     0.326,
+     0.307,
+     0.314,
+     0.324,
+     0.326,
+     0.352
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Midge Sinnaeve (mantissa.xyz)",
+   "source": "https://mantissa.xyz/free.html",
+   "sourceName": "Mantissa CG Japanese Maple Pack",
+   "sourceAsset": "mantissa_japanese_maple",
+   "sourceVariant": "maple_4",
+   "provenance": "real CG model (FBX) with the photo textures of the pack"
+  },
+  {
+   "id": "nobiax_huge_tree",
+   "name": "Wide canopy tree",
+   "kind": "tree",
+   "sub": "broadleaf wide canopy acacia-like",
+   "biomes": [
+    "savanna",
+    "grassland",
+    "rainforest"
+   ],
+   "height": 10.074,
+   "footprint": 12.173,
+   "radius": 6.816,
+   "bounds": {
+    "min": [
+     -5.774,
+     0,
+     -6.145
+    ],
+    "max": [
+     5.776,
+     10.074,
+     6.028
+    ]
+   },
+   "sourceTris": 1080,
+   "lods": [
+    {
+     "file": "models/nobiax_huge_tree_lod0.glb",
+     "tris": 1080,
+     "bytes": 44968,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_huge_tree/huge_tree_albedo_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_huge_tree_lod1.glb",
+     "tris": 670,
+     "bytes": 36072,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_huge_tree/huge_tree_albedo_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_huge_tree_lod2.glb",
+     "tris": 384,
+     "bytes": 21052,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_huge_tree/huge_tree_albedo_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "huge_tree",
+     "foliage": true,
+     "coverage": 0.6116
+    }
+   ],
+   "wind": 0.4,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_huge_tree_albedo.webp",
+    "normal": "impostors/nobiax_huge_tree_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.037,
+     0
+    ],
+    "sideHalfSize": [
+     7.02,
+     5.188
+    ],
+    "topHalfSize": 7.02,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.331,
+     0.307,
+     0.334,
+     0.348,
+     0.331,
+     0.307,
+     0.334,
+     0.348,
+     0.391
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues), made for R. Robles (Mundo)",
+   "source": "https://opengameart.org/content/freebies-mundo-commissions",
+   "sourceName": "OpenGameArt, Freebies - Mundo commissions",
+   "sourceAsset": "nobiax_huge_tree",
+   "sourceVariant": "huge_tree",
+   "provenance": "game model (OBJ) with its own texture, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_palm_trees_a",
+   "name": "Palm tree A",
+   "kind": "tree",
+   "sub": "palm",
+   "biomes": [
+    "beach",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 8.996,
+   "footprint": 7.488,
+   "radius": 7.32,
+   "bounds": {
+    "min": [
+     -0.291,
+     0,
+     -3.375
+    ],
+    "max": [
+     7.197,
+     8.996,
+     1.847
+    ]
+   },
+   "sourceTris": 940,
+   "lods": [
+    {
+     "file": "models/nobiax_palm_trees_a_lod0.glb",
+     "tris": 940,
+     "bytes": 25152,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_1024.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_a_lod1.glb",
+     "tris": 940,
+     "bytes": 25152,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_512.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_a_lod2.glb",
+     "tris": 629,
+     "bytes": 18728,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_256.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "palm_straight",
+     "foliage": true,
+     "coverage": 0.7193
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_palm_trees_a_albedo.webp",
+    "normal": "impostors/nobiax_palm_trees_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     4.498,
+     0
+    ],
+    "sideHalfSize": [
+     7.54,
+     4.633
+    ],
+    "topHalfSize": 7.54,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.132,
+     0.125,
+     0.121,
+     0.127,
+     0.132,
+     0.125,
+     0.121,
+     0.127,
+     0.073
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/free-palm-treez-v3",
+   "sourceName": "OpenGameArt, Free palm treeZ v3",
+   "sourceAsset": "nobiax_palm_trees",
+   "sourceVariant": "palm_bend",
+   "provenance": "game model (OBJ) with its own painted-photo texture, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_palm_trees_b",
+   "name": "Palm tree B",
+   "kind": "tree",
+   "sub": "palm",
+   "biomes": [
+    "beach",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 10.64,
+   "footprint": 6.059,
+   "radius": 4.131,
+   "bounds": {
+    "min": [
+     -3,
+     0,
+     -2.072
+    ],
+    "max": [
+     3.059,
+     10.64,
+     3.714
+    ]
+   },
+   "sourceTris": 1880,
+   "lods": [
+    {
+     "file": "models/nobiax_palm_trees_b_lod0.glb",
+     "tris": 1880,
+     "bytes": 48512,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_1024.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_b_lod1.glb",
+     "tris": 1399,
+     "bytes": 39192,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_512.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_b_lod2.glb",
+     "tris": 679,
+     "bytes": 20848,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_256.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "palm_straight",
+     "foliage": true,
+     "coverage": 0.7193
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_palm_trees_b_albedo.webp",
+    "normal": "impostors/nobiax_palm_trees_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.32,
+     0
+    ],
+    "sideHalfSize": [
+     4.255,
+     5.48
+    ],
+    "topHalfSize": 4.255,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.26,
+     0.272,
+     0.26,
+     0.266,
+     0.26,
+     0.272,
+     0.26,
+     0.266,
+     0.269
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/free-palm-treez-v3",
+   "sourceName": "OpenGameArt, Free palm treeZ v3",
+   "sourceAsset": "nobiax_palm_trees",
+   "sourceVariant": "palm_dual",
+   "provenance": "game model (OBJ) with its own painted-photo texture, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_palm_trees_c",
+   "name": "Palm tree C",
+   "kind": "tree",
+   "sub": "palm",
+   "biomes": [
+    "beach",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 10.689,
+   "footprint": 5.296,
+   "radius": 3.28,
+   "bounds": {
+    "min": [
+     -2.651,
+     0,
+     -2.553
+    ],
+    "max": [
+     2.645,
+     10.689,
+     2.67
+    ]
+   },
+   "sourceTris": 940,
+   "lods": [
+    {
+     "file": "models/nobiax_palm_trees_c_lod0.glb",
+     "tris": 940,
+     "bytes": 25156,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_1024.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_c_lod1.glb",
+     "tris": 940,
+     "bytes": 25152,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_512.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_c_lod2.glb",
+     "tris": 600,
+     "bytes": 18408,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_256.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "palm_straight",
+     "foliage": true,
+     "coverage": 0.7193
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_palm_trees_c_albedo.webp",
+    "normal": "impostors/nobiax_palm_trees_c_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.345,
+     0
+    ],
+    "sideHalfSize": [
+     3.378,
+     5.505
+    ],
+    "topHalfSize": 3.378,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.247,
+     0.235,
+     0.231,
+     0.243,
+     0.247,
+     0.235,
+     0.231,
+     0.243,
+     0.339
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/free-palm-treez-v3",
+   "sourceName": "OpenGameArt, Free palm treeZ v3",
+   "sourceAsset": "nobiax_palm_trees",
+   "sourceVariant": "palm_straight",
+   "provenance": "game model (OBJ) with its own painted-photo texture, colour scaled by gain"
+  },
+  {
+   "id": "nobiax_palm_trees_d",
+   "name": "Palm tree D",
+   "kind": "tree",
+   "sub": "palm",
+   "biomes": [
+    "beach",
+    "rainforest",
+    "wetland"
+   ],
+   "height": 10.321,
+   "footprint": 9.567,
+   "radius": 5.896,
+   "bounds": {
+    "min": [
+     -4.26,
+     0,
+     -5.12
+    ],
+    "max": [
+     5.013,
+     10.321,
+     4.447
+    ]
+   },
+   "sourceTris": 2820,
+   "lods": [
+    {
+     "file": "models/nobiax_palm_trees_d_lod0.glb",
+     "tris": 2820,
+     "bytes": 71864,
+     "texSize": 1024,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_1024.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_1024.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_d_lod1.glb",
+     "tris": 1715,
+     "bytes": 48432,
+     "texSize": 512,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_512.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_512.webp"
+     ]
+    },
+    {
+     "file": "models/nobiax_palm_trees_d_lod2.glb",
+     "tris": 408,
+     "bytes": 13172,
+     "texSize": 256,
+     "textures": [
+      "tex/nobiax_palm_trees/palm_straight_albedo_256.webp",
+      "tex/nobiax_palm_trees/palm_straight_normal_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "palm_straight",
+     "foliage": true,
+     "coverage": 0.7193
+    }
+   ],
+   "wind": 0.6,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/nobiax_palm_trees_d_albedo.webp",
+    "normal": "impostors/nobiax_palm_trees_d_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     5.16,
+     0
+    ],
+    "sideHalfSize": [
+     6.073,
+     5.315
+    ],
+    "topHalfSize": 6.073,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.283,
+     0.306,
+     0.294,
+     0.298,
+     0.283,
+     0.306,
+     0.294,
+     0.298,
+     0.286
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "Nobiax (Yughues)",
+   "source": "https://opengameart.org/content/free-palm-treez-v3",
+   "sourceName": "OpenGameArt, Free palm treeZ v3",
+   "sourceAsset": "nobiax_palm_trees",
+   "sourceVariant": "palm_trio",
+   "provenance": "game model (OBJ) with its own painted-photo texture, colour scaled by gain"
+  },
+  {
    "id": "pine_sapling_medium_a",
    "name": "Young pine A",
    "kind": "tree",
@@ -12572,6 +16104,408 @@
    "sourceName": "Poly Haven",
    "sourceAsset": "pine_tree_01",
    "sourceVariant": "pine_tree_01_c_LOD0"
+  },
+  {
+   "id": "proc_weeping_willow_a",
+   "name": "Weeping willow A",
+   "kind": "tree",
+   "sub": "broadleaf willow weeping",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake",
+    "temperate_forest"
+   ],
+   "height": 8.138,
+   "footprint": 13.859,
+   "radius": 8.631,
+   "bounds": {
+    "min": [
+     -7.105,
+     0,
+     -7.518
+    ],
+    "max": [
+     6.559,
+     8.138,
+     6.341
+    ]
+   },
+   "sourceTris": 527695,
+   "lods": [
+    {
+     "file": "models/proc_weeping_willow_a_lod0.glb",
+     "tris": 9787,
+     "bytes": 450792,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_512.webp",
+      "tex/proc_weeping_willow/bark_normal_512.webp",
+      "tex/proc_weeping_willow/bark_orm_512.webp",
+      "tex/proc_weeping_willow/crown_albedo_1024.webp",
+      "tex/proc_weeping_willow/crown_normal_1024.webp",
+      "tex/proc_weeping_willow/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_a_lod1.glb",
+     "tris": 4987,
+     "bytes": 191588,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_256.webp",
+      "tex/proc_weeping_willow/bark_normal_256.webp",
+      "tex/proc_weeping_willow/bark_orm_256.webp",
+      "tex/proc_weeping_willow/crown_albedo_512.webp",
+      "tex/proc_weeping_willow/crown_normal_512.webp",
+      "tex/proc_weeping_willow/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_a_lod2.glb",
+     "tris": 1599,
+     "bytes": 68264,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_128.webp",
+      "tex/proc_weeping_willow/bark_normal_128.webp",
+      "tex/proc_weeping_willow/bark_orm_128.webp",
+      "tex/proc_weeping_willow/crown_albedo_256.webp",
+      "tex/proc_weeping_willow/crown_normal_256.webp",
+      "tex/proc_weeping_willow/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bark",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.5212
+    }
+   ],
+   "crown": {
+    "cards": [
+     1800,
+     600,
+     180
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.9,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/proc_weeping_willow_a_albedo.webp",
+    "normal": "impostors/proc_weeping_willow_a_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     4.069,
+     0
+    ],
+    "sideHalfSize": [
+     8.89,
+     4.191
+    ],
+    "topHalfSize": 8.89,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.382,
+     0.374,
+     0.372,
+     0.392,
+     0.382,
+     0.374,
+     0.372,
+     0.392,
+     0.156
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Lennart Demes (ambientCG Bark002), Midge Sinnaeve (Mantissa birch leaf photo)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_weeping_willow",
+   "sourceVariant": "willow_1",
+   "provenance": "procedural with CC0 textures"
+  },
+  {
+   "id": "proc_weeping_willow_b",
+   "name": "Weeping willow B",
+   "kind": "tree",
+   "sub": "broadleaf willow weeping",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake",
+    "temperate_forest"
+   ],
+   "height": 8.653,
+   "footprint": 14.586,
+   "radius": 8.299,
+   "bounds": {
+    "min": [
+     -7.737,
+     0,
+     -7.626
+    ],
+    "max": [
+     6.123,
+     8.653,
+     6.96
+    ]
+   },
+   "sourceTris": 434776,
+   "lods": [
+    {
+     "file": "models/proc_weeping_willow_b_lod0.glb",
+     "tris": 8556,
+     "bytes": 402628,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_512.webp",
+      "tex/proc_weeping_willow/bark_normal_512.webp",
+      "tex/proc_weeping_willow/bark_orm_512.webp",
+      "tex/proc_weeping_willow/crown_albedo_1024.webp",
+      "tex/proc_weeping_willow/crown_normal_1024.webp",
+      "tex/proc_weeping_willow/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_b_lod1.glb",
+     "tris": 4184,
+     "bytes": 166528,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_256.webp",
+      "tex/proc_weeping_willow/bark_normal_256.webp",
+      "tex/proc_weeping_willow/bark_orm_256.webp",
+      "tex/proc_weeping_willow/crown_albedo_512.webp",
+      "tex/proc_weeping_willow/crown_normal_512.webp",
+      "tex/proc_weeping_willow/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_b_lod2.glb",
+     "tris": 1522,
+     "bytes": 62588,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_128.webp",
+      "tex/proc_weeping_willow/bark_normal_128.webp",
+      "tex/proc_weeping_willow/bark_orm_128.webp",
+      "tex/proc_weeping_willow/crown_albedo_256.webp",
+      "tex/proc_weeping_willow/crown_normal_256.webp",
+      "tex/proc_weeping_willow/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bark",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.5212
+    }
+   ],
+   "crown": {
+    "cards": [
+     1639,
+     546,
+     164
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.9,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/proc_weeping_willow_b_albedo.webp",
+    "normal": "impostors/proc_weeping_willow_b_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     4.327,
+     0
+    ],
+    "sideHalfSize": [
+     8.548,
+     4.456
+    ],
+    "topHalfSize": 8.548,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.391,
+     0.37,
+     0.39,
+     0.374,
+     0.391,
+     0.37,
+     0.39,
+     0.374,
+     0.14
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Lennart Demes (ambientCG Bark002), Midge Sinnaeve (Mantissa birch leaf photo)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_weeping_willow",
+   "sourceVariant": "willow_2",
+   "provenance": "procedural with CC0 textures"
+  },
+  {
+   "id": "proc_weeping_willow_c",
+   "name": "Weeping willow C",
+   "kind": "tree",
+   "sub": "broadleaf willow weeping",
+   "biomes": [
+    "wetland",
+    "river",
+    "lake",
+    "temperate_forest"
+   ],
+   "height": 8.152,
+   "footprint": 15.99,
+   "radius": 10.07,
+   "bounds": {
+    "min": [
+     -6.658,
+     0,
+     -7.225
+    ],
+    "max": [
+     9.332,
+     8.152,
+     7.077
+    ]
+   },
+   "sourceTris": 605142,
+   "lods": [
+    {
+     "file": "models/proc_weeping_willow_c_lod0.glb",
+     "tris": 10678,
+     "bytes": 487216,
+     "texSize": 512,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_512.webp",
+      "tex/proc_weeping_willow/bark_normal_512.webp",
+      "tex/proc_weeping_willow/bark_orm_512.webp",
+      "tex/proc_weeping_willow/crown_albedo_1024.webp",
+      "tex/proc_weeping_willow/crown_normal_1024.webp",
+      "tex/proc_weeping_willow/crown_orm_1024.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_c_lod1.glb",
+     "tris": 5530,
+     "bytes": 209216,
+     "texSize": 256,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_256.webp",
+      "tex/proc_weeping_willow/bark_normal_256.webp",
+      "tex/proc_weeping_willow/bark_orm_256.webp",
+      "tex/proc_weeping_willow/crown_albedo_512.webp",
+      "tex/proc_weeping_willow/crown_normal_512.webp",
+      "tex/proc_weeping_willow/crown_orm_512.webp"
+     ]
+    },
+    {
+     "file": "models/proc_weeping_willow_c_lod2.glb",
+     "tris": 1536,
+     "bytes": 68696,
+     "texSize": 128,
+     "textures": [
+      "tex/proc_weeping_willow/bark_albedo_128.webp",
+      "tex/proc_weeping_willow/bark_normal_128.webp",
+      "tex/proc_weeping_willow/bark_orm_128.webp",
+      "tex/proc_weeping_willow/crown_albedo_256.webp",
+      "tex/proc_weeping_willow/crown_normal_256.webp",
+      "tex/proc_weeping_willow/crown_orm_256.webp"
+     ]
+    }
+   ],
+   "materials": [
+    {
+     "name": "bark",
+     "foliage": false,
+     "coverage": 1
+    },
+    {
+     "name": "crown",
+     "foliage": true,
+     "coverage": 0.5212
+    }
+   ],
+   "crown": {
+    "cards": [
+     1930,
+     643,
+     193
+    ],
+    "tiles": 16,
+    "note": "foliage is clustered into K crossed card pairs (2 cards, 4 triangles each) that show baked leaf spray tiles (tex/<source>/crown_*)"
+   },
+   "wind": 0.9,
+   "sink": 0,
+   "default": false,
+   "impostor": {
+    "albedo": "impostors/proc_weeping_willow_c_albedo.webp",
+    "normal": "impostors/proc_weeping_willow_c_normal.webp",
+    "layout": "3x3",
+    "size": 768,
+    "cell": 256,
+    "views": "cells row-major from the top-left; cell k < 8 is a side view with the camera at azimuth k*45 deg, at centre + (sin a, 0, cos a) * d, looking at the centre; cell 8 is the top view, camera on +y, image up = -z",
+    "centre": [
+     0,
+     4.076,
+     0
+    ],
+    "sideHalfSize": [
+     10.372,
+     4.198
+    ],
+    "topHalfSize": 10.372,
+    "billboard": "a side cell maps to a quad 2 * sideHalfSize[0] wide and 2 * sideHalfSize[1] high, centred at centre; the top cell to a square 2 * topHalfSize",
+    "normalEncoding": "world normal * 0.5 + 0.5 in rgb (blurred and blended 45 % toward an ellipsoid normal for soft far light); a = depth in the view box (1 near, 0 far)",
+    "coverage": [
+     0.386,
+     0.379,
+     0.344,
+     0.39,
+     0.387,
+     0.379,
+     0.344,
+     0.39,
+     0.145
+    ]
+   },
+   "licence": "CC0-1.0",
+   "author": "davesgames.io (mesh); textures: Lennart Demes (ambientCG Bark002), Midge Sinnaeve (Mantissa birch leaf photo)",
+   "source": "https://ambientcg.com/view?id=Bark002",
+   "sourceName": "procedural (tools/nature-assets/proc.mjs)",
+   "sourceAsset": "proc_weeping_willow",
+   "sourceVariant": "willow_3",
+   "provenance": "procedural with CC0 textures"
   },
   {
    "id": "quiver_tree_01",
