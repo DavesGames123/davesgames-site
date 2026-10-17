@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-224 registered pages in 5 regions and 20 constellations.
+227 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -194,6 +194,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `neuron-network` | Neural Network | Life Sciences > Neuroscience | SIM | A cortical column of spiking cells in a gamma rhythm. |  | shown | hook, tier 3, default | yes |
 | `ancient-earth` | Ancient Earth | Life Sciences > Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
 | `outbreak` | Outbreak | Life Sciences > Epidemiology | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
+| `plant-growth` | Plant Growth | Life Sciences > Growth | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `coral-reef` | Coral Reef Growth | Life Sciences > Growth | 3D | Coral colonies grow live as marine snow sticks to their tips. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
 | `fluidlab` | Stable Fluids | Fluids > Flow | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
 | `wind-tunnel` | Wind Tunnel | Fluids > Flow | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
 | `euler-fluid` | Euler Fluid | Fluids > Flow | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
@@ -236,6 +238,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ulam-spiral` | Ulam Spiral | Patterns & Chaos > Number Theory | GPU | Primes form lines in the Ulam spiral and 21 more layouts. |  | shown | hook, tier 3, default | yes |
 | `ramanujan-pi` | Ramanujan–Sato Series | Patterns & Chaos > Number Theory | MATH | Race Ramanujan-Sato series for pi, digit by digit. |  | shown | hook, tier 3, default | yes |
 | `hopf-fibration` | Hopf Fibration | Patterns & Chaos > Geometry & Topology | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
+| `dlaf` | Diffusion-Limited Aggregation | Patterns & Chaos > Fractal Growth | SIM | Grow diffusion-limited aggregation live after fogleman/dlaf, and colour the growth front with heatmaps. | dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
 | `dice` | Dice Lab | Patterns & Chaos > Probability | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |

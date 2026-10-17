@@ -152,6 +152,10 @@ w.SN_NAV = [
     ] },
     { h: "Epidemiology", p: [
       ["outbreak", "Outbreak", "SIM"]
+    ] },
+    { h: "Growth", p: [
+      ["plant-growth", "Plant Growth", "3D"],
+      ["coral-reef", "Coral Reef Growth", "3D"]
     ] }
   ] },
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
@@ -222,6 +226,9 @@ w.SN_NAV = [
     ]},
     { h: "Geometry & Topology", p: [
       ["hopf-fibration", "Hopf Fibration", "GPU"]
+    ] },
+    { h: "Fractal Growth", p: [
+      ["dlaf", "Diffusion-Limited Aggregation", "SIM"]
     ] },
     { h: "Probability", p: [
       ["dice", "Dice Lab", "3D"]

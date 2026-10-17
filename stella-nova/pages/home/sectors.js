@@ -70,6 +70,9 @@ const SEARCH_WORDS = {
   'stem-splitter': 'stem separation source separation demucs htdemucs vocal remover karaoke instrumental acapella isolate vocals drums bass guitar piano unmix split stems ai music offline',
   'weather-map': 'weather forecast weather map live weather radar doppler nexrad satellite clouds cold front warm front stationary front occluded front isobars high pressure low pressure temperature fahrenheit celsius rain snow storm meteorology meteorologist tv weather news weatherman united states usa us map forecast 10 day hourly wpc nws noaa open-meteo screensaver',
   'thermal-convection': 'thermal convection heat convection rayleigh benard rayleigh-benard benard cells marangoni hexagons soup pot boiling buoyancy boussinesq navier stokes heat equation rayleigh number prandtl nusselt plumes solar granulation sun surface granules plasma voronoi cross section temperature gradient',
+  dlaf: 'dla diffusion-limited aggregation diffusion limited aggregation fogleman dlaf fractal random walk brownian motion cluster growth lichtenberg crystal dendrite snowflake heatmap gradient 3d csv particles branching',
+  'plant-growth': 'plant tree growth grow a tree space colonisation colonization runions l-system botany oak conifer pine willow fern cherry blossom flowers roots dla dlaf pipe model heatmap gradient garden procedural',
+  'coral-reef': 'coral reef coral reefs dla diffusion-limited aggregation dlaf fogleman marine snow staghorn sea fan gorgonian table coral brain coral bleaching ocean current caustics underwater growth heatmap kaandorp',
 };
 
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
@@ -90,6 +93,9 @@ const CREDITS = {
   'holocloth': 'Holocloth by Dmitry Kurash (MIT)',
   'sdf-clouds': 'SDF Clouds by Alex Foulon',
   'refraction-table': 'optics after quick-liquid (MIT)',
+  dlaf: 'dlaf by Michael Fogleman (MIT)',
+  'plant-growth': 'roots grown with a port of dlaf by Michael Fogleman (MIT)',
+  'coral-reef': 'coral grown with a port of dlaf by Michael Fogleman (MIT)',
   'thinking-orbs': 'thinking-orbs by RareFormLabs (MIT)',
   'fractal-flames': 'flam3 by Scott Draves (GPL-3.0)',
   'line-art': 'ln by Michael Fogleman (MIT)',
@@ -405,6 +411,9 @@ const BLURBS = {
   'pbf-boundary': 'Position based particles with moving walls and friction.',
   'fire-simulation': 'Fire from a grid fluid: heat and smoke rise and swirl.',
   'thermal-convection': 'Hot fluid rising in cells: the surface and the cut beneath.',
+  dlaf: 'Grow diffusion-limited aggregation live after fogleman/dlaf, and colour the growth front with heatmaps.',
+  'plant-growth': 'Oaks, conifers, willows and ferns grow live by space colonisation.',
+  'coral-reef': 'Coral colonies grow live as marine snow sticks to their tips.',
   'julia-fractals': 'Julia and Mandelbrot sets, zoom and explore.',
   'sci-tools': 'Units, constants, statistics, fits and chemistry in one offline page.',
 };

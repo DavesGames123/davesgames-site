@@ -18,7 +18,7 @@ User request (2026-10-17), verbatim:
 
 | Key / folder | Label | Nav (coordinator registers) | Badge |
 |---|---|---|---|
-| `dlaf` | Diffusion-Limited Aggregation | Patterns & Chaos > Emergence | SIM |
+| `dlaf` | Diffusion-Limited Aggregation | Patterns & Chaos > Fractal Growth | SIM |
 | `plant-growth` | Plant Growth | Life Sciences > Growth (new group) | 3D |
 | `coral-reef` | Coral Reef Growth | Life Sciences > Growth (new group) | 3D |
 
