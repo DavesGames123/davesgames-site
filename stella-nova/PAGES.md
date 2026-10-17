@@ -241,7 +241,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ramanujan-pi` | Ramanujan–Sato Series | Mathematics > Numbers & Chance | MATH | Race Ramanujan-Sato series for pi, digit by digit. |  | shown | hook, tier 3, default | yes |
 | `dice` | Dice Lab | Mathematics > Numbers & Chance | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
 | `hopf-fibration` | Hopf Fibration | Mathematics > Geometry & Tensors | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
-| `tensor-calculus` | Tensor Calculus | Mathematics > Geometry & Tensors | 3D | Tensor calculus in three linked views: the index equation, a 3D picture and its Penrose diagram, played step by step. |  | shown | hook, tier 4, default | no |
+| `tensor-calculus` | Tensor Calculus | Mathematics > Geometry & Tensors | 3D | Tensor calculus in three linked views: the index equation, a 3D picture and its Penrose diagram, played step by step. |  | shown | hook, tier 4, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |

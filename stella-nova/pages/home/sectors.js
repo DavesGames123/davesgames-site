@@ -149,7 +149,7 @@ const SECTOR_TEXT = {
     blurb: 'Magnets, currents and Maxwell’s equations, then light itself: aperture diffraction, the double slit and circular polarization.' },
   patterns: { at: [470, 215], tilt: -25, lead: 'attractorlab',
     blurb: 'Simple rules, rich results: strange attractors, vector fields, reaction-diffusion, Lenia, the Game of Life, Julia sets and diffusion-limited aggregation.' },
-  maths: { at: [461, 366], tilt: -8, lead: 'hopf-fibration',
+  maths: { at: [461, 366], tilt: -8, lead: 'tensor-calculus',
     blurb: 'Mathematics you can turn in your hands: the Ulam spiral, Ramanujan’s series for pi, fair and loaded dice, the Hopf fibration, and tensor calculus in three linked views.' },
   sound: { at: [650, 401], tilt: 60, lead: 'chordlab',
     blurb: 'Hear the maths. A live chord detector, harmony wheels, and resonance figures and drums that turn vibration into shapes you can see.' },
