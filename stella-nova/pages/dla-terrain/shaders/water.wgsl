@@ -533,8 +533,13 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   var foam = smoothstep(0.85, 0.35, J + (capN - 0.5) * 0.4) * WU.oceanAbs.w;
   // shore foam: a band that follows the water line plus breaker crests
   let shoreN = wFbm(P.xz * 0.6 + vec2f(0.0, WU.misc.x * 0.15));
-  let band = 1.0 - smoothstep(0.0, 0.35 + WU.slopeVar.w * 0.2, depth + (shoreN - 0.5) * 0.6);
-  let br = wBreaker(v.shore.x, WU.misc.x - 0.25, v.base);
+  // distance to the water line ~ depth / bed slope: a band some metres wide
+  // on a beach, almost none on a wide flat (no waves break there)
+  let tn = terrainNormal(P.xz);
+  let bedSlope = max(length(tn.xz) / max(tn.y, 0.05), 0.002);
+  let dShore = max(depth, 0.0) / bedSlope;
+  let band = (1.0 - smoothstep(0.0, 4.0 + WU.slopeVar.w * 5.0, dShore + (shoreN - 0.5) * 6.0)) * (1.0 - smoothstep(0.6, 1.4, depth));
+  let br = wBreaker(v.shore.x, WU.misc.x - 0.25, v.base) * smoothstep(0.004, 0.025, bedSlope);
   foam = max(foam, (band * 0.9 + br * 0.85 * smoothstep(0.35, 0.75, shoreN + 0.2)) * WU.oceanSca.w);
   // lace: foam breaks into cells and threads as it thins
   let lace = wFbm(P.xz * 1.7 + vec2f(WU.misc.x * 0.07)) + 0.35 * wNoise(P.xz * 6.0 - vec2f(WU.misc.x * 0.2, 0.0));
@@ -717,17 +722,17 @@ fn vsMist(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32, mi: 
   let dirv = vec3f(mi.size.z, 0.0, mi.size.w);
   let side = vec3f(-mi.size.w, 0.0, mi.size.z);
   let across = (seed2 - 0.5) * mi.size.x * 1.1;
-  var c = mi.base + side * across + dirv * (life * drop * 0.5 + 1.0);
-  c.y += life * drop * (0.25 + 0.35 * seed) + 0.5;
+  var c = mi.base + side * across + dirv * (life * min(drop, 30.0) * 0.4 + 0.5);
+  c.y += life * min(drop, 30.0) * (0.15 + 0.3 * seed) + 0.3;
   c += vec3f(G.wind.x, 0.0, G.wind.y) * (life * 1.5);
-  let radius = (0.15 + 0.85 * life) * (2.0 + drop * 0.35);
+  let radius = (0.2 + 0.8 * life) * clamp(mi.size.x * 0.45 + drop * 0.05, 1.2, 12.0);
   let camR = vec3f(G.view[0][0], G.view[1][0], G.view[2][0]);
   let camU = vec3f(G.view[0][1], G.view[1][1], G.view[2][1]);
   let p = c + (camR * corner.x + camU * corner.y) * radius;
   var o: MistOut;
   o.pos = G.viewProj * vec4f(p, 1.0);
   o.uv = corner;
-  o.a = vec2f(sin(life * W_PI) * 0.16 * clamp(drop / 10.0, 0.4, 1.0), seed);
+  o.a = vec2f(sin(life * W_PI) * 0.1 * clamp(drop / 12.0, 0.3, 1.0), seed);
   o.world = p;
   return o;
 }
@@ -736,8 +741,8 @@ fn vsMist(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32, mi: 
 fn fsMist(v: MistOut) -> @location(0) vec4f {
   let r = length(v.uv);
   if (r > 1.0) { discard; }
-  let n = wNoise(v.uv * 2.5 + v.a.y * 30.0);
-  var a = (1.0 - r * r) * (0.55 + 0.45 * n) * v.a.x;
+  let n = wFbm(v.uv * 1.8 + v.a.y * 30.0);
+  var a = pow(1.0 - r * r, 2.0) * smoothstep(0.2, 0.75, n) * v.a.x;
   // soft against the ground
   let uv = v.pos.xy * G.screen.zw;
   let dS = wDepthAt(uv);

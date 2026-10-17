@@ -233,7 +233,8 @@ export function buildRiverRibbons(t, o = {}) {
   const widthScale = o.widthScale ?? 1;
   const bankOverlap = o.bankOverlap ?? 1.3;
   const minWidth = o.minWidth ?? 2;
-  const fallMin = o.fallMin ?? 2.5;
+  const fallMin = o.fallMin ?? 6;
+  const fallSlope = o.fallSlope ?? 1.0;
   const seaLevel = o.oceanOn ? (t.seaLevel ?? 0) : null;
   const rivers = [];
   const all = t.rivers || [];
@@ -316,7 +317,7 @@ export function buildRiverRibbons(t, o = {}) {
     for (let i = 1; i < n; i++) {
       const dist = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]) || 1;
       const drop = surf[i - 1] - surf[i];
-      if (drop > fallMin && drop / dist > 0.7) fall[i] = true;
+      if (drop > fallMin && drop / dist > fallSlope) fall[i] = true;
     }
     // gentle smoothing of the surface between falls, kept monotone and above the bed
     for (let pass = 0; pass < 2; pass++) {
@@ -722,9 +723,11 @@ export async function createWater(gpu) {
     if (inds.length) surf = { vb: upload(verts, GPUBufferUsage.VERTEX), ib: upload(inds, GPUBufferUsage.INDEX), count: inds.length };
     destroyAll(mist); mist = null;
     if (rb.falls.length) {
-      const fd = new Float32Array(rb.falls.length * 7);
-      rb.falls.forEach((f, i) => fd.set([f.x, f.y, f.z, f.width, f.drop, f.dx, f.dz], i * 7));
-      mist = { vb: upload(fd, GPUBufferUsage.VERTEX), count: rb.falls.length };
+      // mist for the biggest falls only
+      const fl = rb.falls.slice().sort((a, b) => b.drop * b.width - a.drop * a.width).slice(0, 48);
+      const fd = new Float32Array(fl.length * 7);
+      fl.forEach((f, i) => fd.set([f.x, f.y, f.z, f.width, f.drop, f.dx, f.dz], i * 7));
+      mist = { vb: upload(fd, GPUBufferUsage.VERTEX), count: fl.length };
     }
     stats.rivers = rb.rivers.filter(Boolean).length; stats.riverVerts = nv;
     stats.lakes = lb.lakes.length; stats.lakeTris = lb.indices.length / 3; stats.falls = rb.falls.length;
@@ -758,7 +761,7 @@ export async function createWater(gpu) {
     U.set([Math.floor(cam[0] / snapS) * snapS, Math.floor(cam[2] / snapS) * snapS, 30000, 2 / (p11 * screenH)], 8);
     U.set([modes.slopeVar[0], modes.slopeVar[1], modes.slopeVar[2], modes.hs], 12);
     U.set([0.32, 0.075, 0.048, clamp((ws - 5) * 0.08 + storm * 0.6, 0, 1.4)], 16);    // ocean absorption, whitecaps
-    U.set([0.035, 0.085, 0.10, 1.0], 20);                                                     // ocean scatter, shore foam
+    U.set([0.03, 0.085, 0.125, 1.0], 20);                                                     // ocean scatter, shore foam
     U.set([0.42, 0.26, 0.21, 0.5], 24);                                                       // river absorption
     U.set([0.05, 0.065, 0.035, 1.6], 28);                                                      // river scatter, flow period
     U.set([0.36, 0.11, 0.075, 1.0], 32);                                                      // lake absorption, ripple scale
