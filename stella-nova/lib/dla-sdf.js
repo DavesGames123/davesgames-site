@@ -89,7 +89,7 @@
 //    weld and edge counts ... "export function meshStats"
 // ============================================================================
 
-const OFF = 2048, KS = 4096;   // brick coordinates -2048..2047 per axis
+const OFF = 512, KS = 1024;    // brick coordinates -512..511 per axis (a small-integer key)
 const bkey = (x, y, z) => ((x + OFF) * KS + (y + OFF)) * KS + (z + OFF);
 
 // The polynomial smooth minimum (Quilez). k = 0 gives min.
@@ -147,7 +147,7 @@ export function createSdf(opts = {}) {
   let P = new Float64Array(PS * 256), nPrim = 0;
   const bricks = new Map();
   const dirty = new Set();                   // brick keys that need a mesh (insertion order = FIFO)
-  const pending = new Map();                 // brick key -> local box [x0, y0, z0, x1, y1, z1] to recompute
+  const pending = new Set();                 // bricks with a local box b.pend [x0, y0, z0, x1, y1, z1] to recompute
   const stats = { prims: 0, bricks: 0, applied: 0, recomputed: 0, meshed: 0 };
 
   function brickAt(bx, by, bz, make) {
@@ -221,7 +221,7 @@ export function createSdf(opts = {}) {
             if (!b.s) alloc(b);
             const j = (lz * B + ly) * B + lx, q0 = b.s[j], s0 = q0 * QS;
             const q = quant(smin(s0, d, k));
-            if (d < s0) b.id[j] = c + 1;
+            if (d < s0 || b.id[j] === 0) b.id[j] = c + 1;
             if (q !== q0) {
               b.s[j] = q;
               if (lx < cx0) cx0 = lx; if (lx > cx1) cx1 = lx;
@@ -232,9 +232,7 @@ export function createSdf(opts = {}) {
         }
       }
       if (b) {
-        const L = b.prims;
-        if (!L.length || L[L.length - 1] < c) L.push(c);
-        else if (!L.includes(c)) { L.push(c); L.sort((p, q) => p - q); }
+        insertSorted(b.prims, c);
         if (cx1 >= 0) markDirty(b, cx0, cy0, cz0, cx1, cy1, cz1);
       }
       stats.applied++;
@@ -263,7 +261,7 @@ export function createSdf(opts = {}) {
             const d = coneDist(P, o, x, y, z);
             if (d >= reach) continue;
             const v = qv * QS;
-            if (d < v) id = c + 1;
+            if (d < v || id === 0) id = c + 1;
             qv = quant(smin(v, d, k));
           }
           const j = (lz * B + ly) * B + lx;
@@ -289,10 +287,17 @@ export function createSdf(opts = {}) {
     for (let bz = bz0; bz <= bz1; bz++) for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++) {
       const b = brickAt(bx, by, bz, false); if (!b) continue;
       const ox = bx * B, oy = by * B, oz = bz * B;
-      const q = [Math.max(0, gx0 - ox), Math.max(0, gy0 - oy), Math.max(0, gz0 - oz), Math.min(B - 1, gx1 - ox), Math.min(B - 1, gy1 - oy), Math.min(B - 1, gz1 - oz)];
-      const r = pending.get(b.key);
-      if (!r) pending.set(b.key, q);
-      else { for (let i = 0; i < 3; i++) { if (q[i] < r[i]) r[i] = q[i]; if (q[i + 3] > r[i + 3]) r[i + 3] = q[i + 3]; } }
+      const x0 = Math.max(0, gx0 - ox), y0 = Math.max(0, gy0 - oy), z0 = Math.max(0, gz0 - oz);
+      const x1 = Math.min(B - 1, gx1 - ox), y1 = Math.min(B - 1, gy1 - oy), z1 = Math.min(B - 1, gz1 - oz);
+      if (!pending.has(b)) {
+        const r = b.pend || (b.pend = new Int8Array(6));
+        r[0] = x0; r[1] = y0; r[2] = z0; r[3] = x1; r[4] = y1; r[5] = z1;
+        pending.add(b);
+      } else {
+        const r = b.pend;
+        if (x0 < r[0]) r[0] = x0; if (y0 < r[1]) r[1] = y0; if (z0 < r[2]) r[2] = z0;
+        if (x1 > r[3]) r[3] = x1; if (y1 > r[4]) r[4] = y1; if (z1 > r[5]) r[5] = z1;
+      }
     }
   }
 
@@ -340,13 +345,21 @@ export function createSdf(opts = {}) {
         if (!hit) continue;
         b = brickAt(bx, by, bz, true);
       }
-      const L = b.prims;
-      if (!L.includes(c)) { L.push(c); if (L.length > 1 && L[L.length - 2] > c) L.sort((p, q) => p - q); }
+      insertSorted(b.prims, c);
     }
   }
 
+  // Put c in the sorted list L once.
+  function insertSorted(L, c) {
+    const n = L.length;
+    if (!n || L[n - 1] < c) { L.push(c); return; }
+    let lo = 0, hi = n;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (L[mid] < c) lo = mid + 1; else hi = mid; }
+    if (L[lo] !== c) L.splice(lo, 0, c);
+  }
+
   function flushPending() {
-    for (const [key, q] of pending) { const b = bricks.get(key); if (b) recompute(b, q[0], q[1], q[2], q[3], q[4], q[5]); }
+    for (const b of pending) { const q = b.pend; recompute(b, q[0], q[1], q[2], q[3], q[4], q[5]); }
     pending.clear();
   }
 
@@ -479,13 +492,14 @@ export function createSdf(opts = {}) {
   // changes: a busy trunk brick is recomputed once, not once per change.
   function update(ms = Infinity, out = []) {
     const t0 = now();
-    for (const [key, q] of pending) {
-      pending.delete(key);
-      const b = bricks.get(key); if (b) recompute(b, q[0], q[1], q[2], q[3], q[4], q[5]);
+    for (const b of pending) {
+      pending.delete(b);
+      const q = b.pend; recompute(b, q[0], q[1], q[2], q[3], q[4], q[5]);
       if (now() - t0 > ms * 0.5) break;
     }
     for (const key of dirty) {
-      if (pending.has(key)) continue;
+      const pb = bricks.get(key);
+      if (pb && pending.has(pb)) continue;
       dirty.delete(key);
       const b = bricks.get(key);
       if (b) out.push(meshBrick(b));
@@ -541,6 +555,7 @@ export function createTreeSdf(opts = {}) {
   let cap = 1024, n = 0;
   let X = new Float64Array(cap * 3), par = new Int32Array(cap), sub = new Int32Array(cap), rad = new Float32Array(cap);
   let kids = [];
+  let mark = new Int32Array(cap), stamp = 0, CH = new Int32Array(4096);
 
   function grow() {
     cap *= 2;
@@ -548,6 +563,7 @@ export function createTreeSdf(opts = {}) {
     const p = new Int32Array(cap); p.set(par); par = p;
     const s = new Int32Array(cap); s.set(sub); sub = s;
     const r = new Float32Array(cap); r.set(rad); rad = r;
+    const mk = new Int32Array(cap); mk.set(mark); mark = mk;
   }
 
   function cone(i) {
@@ -560,22 +576,29 @@ export function createTreeSdf(opts = {}) {
   function add(i, x, y, z, p) {
     if (i !== n) throw new Error(`dla-sdf: tree ids must come in order (got ${i}, want ${n})`);
     if (n === cap) grow();
+    if (CH.length < n + 1) CH = new Int32Array(CH.length * 2);
     n++;
     X[i * 3] = x; X[i * 3 + 1] = y; X[i * 3 + 2] = z; par[i] = p; sub[i] = 1;
     rad[i] = pipeRadius(1, rTip, pipe, rMax, quant, sub0);
     kids.push(null);
     if (p >= 0) (kids[p] || (kids[p] = [])).push(i);
     cone(i);
-    // the subtree of each ancestor grows by one: resize the cones of a
-    // particle whose quantised radius changes (its own and its kids')
+    // the subtree of each ancestor grows by one: collect the particles
+    // whose quantised radius changes, then reset each cone once (the cone
+    // of a changed particle and the cones of its kids)
+    let nch = 0;
     for (let a = p; a >= 0; a = par[a]) {
       sub[a]++;
       const r = pipeRadius(sub[a], rTip, pipe, rMax, quant, sub0);
-      if (r !== rad[a]) {
-        rad[a] = r;
-        cone(a);
-        const K = kids[a]; if (K) for (const c of K) cone(c);
-      }
+      if (r !== rad[a]) { rad[a] = r; CH[nch++] = a; }
+    }
+    if (!nch) return;
+    stamp++;
+    for (let q = 0; q < nch; q++) {
+      const a = CH[q];
+      if (mark[a] !== stamp) { mark[a] = stamp; cone(a); }
+      const K = kids[a];
+      if (K) for (const c of K) if (mark[c] !== stamp) { mark[c] = stamp; cone(c); }
     }
   }
 
