@@ -215,7 +215,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `city-atlas` | City Atlas | Earth & Weather > Maps & Cities | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
 | `map-generator` | City Generator | Earth & Weather > Maps & Cities | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
 | `map-projections` | Map Projections | Earth & Weather > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
-| `dla-terrain` | DLA Terrain | Earth & Weather > Land & Deep Time | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | no |
+| `dla-terrain` | DLA Terrain | Earth & Weather > Land & Deep Time | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | yes |
 | `ancient-earth` | Ancient Earth | Earth & Weather > Land & Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
