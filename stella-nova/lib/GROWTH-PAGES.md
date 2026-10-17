@@ -136,3 +136,72 @@ with node only:
   new files one line each, and the real validation output. End with
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Do not push.
+
+# Phase 2 (2026-10-17, later the same day)
+
+User request, verbatim:
+
+> dlaf objects should be represented as signed distance fields and smooth
+> meshes for the coral reef structures. coral reef structures should have
+> smooth surfaces with polyps and also grow on procedurally generated rocky
+> terrain based on real underwater meshes. I'd also like another page on
+> simulating terrain using dlaf, and build this into our city generator for
+> terrain. there should be plenty of terrain randomization options,
+> combining both DLAF for terrain generation and branched flow for river
+> and erosion effects, generating vast procedural terrains on this page.
+> this page should be pretty fucking awesome. that tree looks hella
+> vibecoded. it looks like no effort was put into it and looks like a
+> oneproompter, barely even simulating growith over time just kind of
+> showing the final result. the leaves look like shit and everything is not
+> dense enough
+
+The bar is high: the user judged the first pass as low effort. Every
+package must look and behave like careful, dense, physically motivated
+work, and must show growth over time, not a finished result.
+
+## Packages and ownership
+
+| Package | Owns | Phase |
+|---|---|---|
+| CORAL | `pages/coral-reef/**`, `lib/dla-sdf.js` (new) | 1 |
+| PLANT | `pages/plant-growth/**` | 1 |
+| TERRAIN-LIB | `lib/dla-terrain.js` (new), `lib/dla-terrain-worker.js` (new), `tools/dla-terrain-check.mjs` (new) | 1 |
+| TERRAIN-PAGE | `pages/dla-terrain/**` (new page) | 2 |
+| CITY | `pages/map-generator/**` (never `vendor/mapgenerator/`) | 2 |
+| DLAF-SDF | `pages/dlaf/**` | 2 |
+
+The coordinator still owns nav, catalog, home, thumbnails and PAGES.md.
+
+## lib/dla-sdf.js (CORAL writes it, DLAF-SDF and others read it)
+
+DOM-free. Turns a DLA particle tree (positions, parents, radii from
+subtree size) into a signed distance field: capsules along parent links,
+joined with a smooth minimum (polynomial smin, blend k), on a sparse
+brick grid that is updated only near new particles, so growth stays
+incremental. A mesher (surface nets or marching cubes, smooth normals
+from the SDF gradient) gives indexed triangle meshes per brick. Only the
+bricks that changed are re-meshed. API names and shapes are written in
+the file header; other packages build against that header.
+
+## lib/dla-terrain.js (TERRAIN-LIB writes it, TERRAIN-PAGE and CITY read it)
+
+DOM-free, deterministic from a seed, runs in node and in the worker
+`lib/dla-terrain-worker.js`. It must give:
+- DLA ridges: a DLA tree grown on a coarse grid with lib/dla-engine.js,
+  then upsampled level by level, each level blurred and given new detail
+  (the DLA upscale method), so mountain ranges have dendritic ridges and
+  valleys. Many options: seed layout (point, line, ring, scatter, coast),
+  branch density, stickiness, ridge sharpness, levels, domain warp, noise
+  blend, plateau and terracing, island or continent masks.
+- Branched flow: rays traced through a smooth random potential (see
+  pages/cube_branched_flow/flow.js for the site's branched-flow idea)
+  give branching channel density; it carves river valleys and deltas.
+  Plus flow routing (D8 or D-infinity), flow accumulation, hydraulic
+  erosion (stream power or particle), thermal erosion (talus), and
+  sediment deposition.
+- Outputs: height, flow accumulation, river mask and polylines, lakes,
+  sea level, moisture, biome ids, ridge polylines, stats; progress events
+  per stage so a page can show the terrain forming stage by stage.
+- Vast terrain: a coarse global map plus a detail function so a page can
+  stream tiles at several LODs with no seams.
+API names and shapes are written in the file header.
