@@ -2,212 +2,336 @@
 //  PLANT GROWTH  ·  node tests for the DOM-free modules
 // ----------------------------------------------------------------------------
 //  Run: node stella-nova/pages/plant-growth/tests.mjs   (exit 1 on a failure)
-//  Covers grow.js (colonisation step, pipe model, species envelopes,
-//  flowers), roots.js (DLA roots grow down), pose.js (colour modes, the
-//  frame pass) and saver.js (shot list, framing maths, code extract).
+//  Covers grow.js (growth over time, buds, Borchert-Honda, shedding in
+//  shade, pipe model, leaf counts, competition), season.js (the calendar
+//  and its GLSL copy), pose.js (packing, frames, the CPU twin), mesh.js,
+//  ground.js, roots.js (DLA roots and their GPU rows) and saver.js.
+//  Set PG_QUICK=1 to skip the full lives of all species.
 // ============================================================================
-import { SPECIES, SPECIES_IDS, createPlant, growFull, envelopeBounds, envelopeSphere, insideEnvelope, plantSegments, LEAF_STRIDE } from './grow.js';
-import { createRoots } from './roots.js';
-import { COLOUR_MODES, COLOUR_IDS, colourT, plantView, rootsView, createPoser } from './pose.js';
-import { makeShots, shotRate, bandFrame, fitDistance, projectedRadius, codeExtract } from './saver.js';
+import { SPECIES, SPECIES_IDS, TREE_IDS, createSim, growLife, standLayout, internode, LEAF_STRIDE, OPEN, KIND } from './grow.js';
+import { CAL, leafState, seasonOf, snowCover, girthPhase, deathDrop, deathFade, SEASON_GLSL } from './season.js';
+import { COLOUR_MODES, COLOUR_IDS, createHistory, addToHistory, packYear, nodeFrames, nodeShown, leafPose, quatRotate, frameQuat, CELLS, cellIndex, speciesTables, TEX_W } from './pose.js';
+import { plantMesh } from './mesh.js';
+import { groundY, FLAT_R, grassField, inCutaway, GROUND_GLSL } from './ground.js';
+import { createRoots, packRoots } from './roots.js';
+import { makeShots, shotPlan, bandFrame, fitDistance, projectedRadius, codeExtract, SHOT_KINDS } from './saver.js';
+import { ATLAS_CELLS } from './atlas.js';
+import { LOOK, BARKS } from './look.js';
 import { rng } from '../../lib/dla-engine.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
-const finite = a => { for (let i = 0; i < a.length; i++) if (!Number.isFinite(a[i])) return false; return true; };
+const finite = (a, n = a.length) => { for (let i = 0; i < n; i++) if (!Number.isFinite(a[i])) return false; return true; };
+const QUICK = !!process.env.PG_QUICK;
 
-// --- colonisation step ------------------------------------------------------
+// --- one oak, year by year ---------------------------------------------------
+const oak = createSim({ species: 'oak', seed: 11 });
+const oakYears = [];
 {
-  const p = createPlant({ species: 'oak', seed: 11 });
-  const a0 = p.aliveCount;
-  let guard = 0;
-  while (!p.reached && guard++ < 100) p.step();
-  ok(p.reached, 'the trunk reaches the crown');
-  // the node with the most pulls: its next child points along the mean pull
-  let best = -1, pulls = [];
-  for (let v = 0; v < p.count; v++) { const q = p.pullsOf(v); if (q.length > pulls.length) { pulls = q; best = v; } }
-  ok(best >= 0 && pulls.length > 0, 'some node has attractors in its influence radius');
-  const m = [0, 0, 0];
-  for (const a of pulls) {
-    const dx = p.attractors[a * 3] - p.pos[best * 3], dy = p.attractors[a * 3 + 1] - p.pos[best * 3 + 1], dz = p.attractors[a * 3 + 2] - p.pos[best * 3 + 2];
-    const l = Math.hypot(dx, dy, dz); m[0] += dx / l; m[1] += dy / l; m[2] += dz / l;
+  let prevCount = 0, prevH = 0, monoCount = true, monoH = true;
+  while (!oak.done) {
+    oak.stepYear();
+    const Y = oak.year - 1, st = oak.stats[Y];
+    let h = 0; for (let i = 0; i < oak.count; i++) if (!oak.dead[i]) h = Math.max(h, oak.py[i]);
+    oakYears.push({ Y, count: oak.count, live: st.live, h, leaves: st.leaves, buds: st.buds, shed: st.shed });
+    if (oak.count < prevCount) monoCount = false;
+    if (h < prevH - 0.3) monoH = false;      // shedding may drop a stray top twig
+    prevCount = oak.count; prevH = Math.max(prevH, h);
   }
-  const ml = Math.hypot(...m);
-  const n0 = p.count; p.step();
-  let child = -1; for (let i = n0; i < p.count; i++) if (p.parent[i] === best) child = i;
-  ok(child > 0, 'the pulled node grows a child');
-  if (child > 0) {
-    const cx = p.pos[child * 3] - p.pos[best * 3], cy = p.pos[child * 3 + 1] - p.pos[best * 3 + 1], cz = p.pos[child * 3 + 2] - p.pos[best * 3 + 2];
-    const cl = Math.hypot(cx, cy, cz);
-    ok(Math.abs(cl - p.D) < 1e-4 || cy === 0, `the child is D away (${cl.toFixed(4)} vs ${p.D})`);
-    const dot = (cx * m[0] + cy * m[1] + cz * m[2]) / (cl * ml);
-    ok(dot > 0.8, `the child grows toward its attractors (cos ${dot.toFixed(3)})`);
+  ok(monoCount, 'growth over time: the node count never falls');
+  ok(monoH, 'growth over time: the height never falls by more than a twig');
+  const y5 = oakYears[5], y15 = oakYears[15], yEnd = oakYears[oakYears.length - 1];
+  ok(oakYears[0].h < 0.4 && oakYears[0].count < 12, `year 1 is a seedling (${oakYears[0].h.toFixed(2)} m, ${oakYears[0].count} nodes)`);
+  ok(y5.h > oakYears[1].h && y15.h > y5.h * 1.6 && yEnd.h >= y15.h, `the oak grows taller (${oakYears[1].h.toFixed(2)}, ${y5.h.toFixed(2)}, ${y15.h.toFixed(2)}, ${yEnd.h.toFixed(2)} m)`);
+  ok(yEnd.h > 8 && yEnd.h < SPECIES.oak.size.h * 1.3, `a mature oak is tree sized (${yEnd.h.toFixed(1)} m)`);
+  ok(oakYears.every(r => r.buds > 0), 'there are buds every year');
+  let maxLeaves = 0; for (const r of oakYears) maxLeaves = Math.max(maxLeaves, r.leaves);
+  ok(maxLeaves >= 40000, `tens of thousands of leaves at maturity (${maxLeaves})`);
+  let branches = 0; for (let i = 0; i < oak.count; i++) if (!oak.dead[i] && oak.order[i] >= 1) branches++;
+  ok(branches > 5000, `many live lateral branches (${branches} metamers of order >= 1)`);
+  const shedTotal = oakYears.reduce((a, r) => a + r.shed, 0);
+  ok(shedTotal > 100, `branches are shed (${shedTotal})`);
+  // radius per year: never shrinks; parent never thinner than child
+  let mono = true;
+  for (let y = 1; y < oak.radHist.length; y++) {
+    const a = oak.radHist[y - 1], b = oak.radHist[y];
+    for (let i = 0; i < a.length; i += 7) if (b[i] + 1e-7 < a[i]) { mono = false; break; }
   }
-  while (!p.done && guard++ < 1000) p.step();
-  ok(p.done, 'the oak finishes');
-  ok(p.aliveCount < a0 * 0.1, `attractors are consumed (${a0} -> ${p.aliveCount})`);
-  ok(finite(p.pos.subarray(0, p.count * 3)) && finite(p.radius.subarray(0, p.count)), 'no NaN in positions or radii');
-  let mono = true, tipsOk = true;
-  for (let i = 1; i < p.count; i++) {
-    const q = p.parent[i];
-    if (p.radius[q] + 1e-7 < p.radius[i]) mono = false;
-    if (p.tips[q] < p.tips[i]) tipsOk = false;
-  }
-  ok(mono, 'pipe radius never falls toward the root');
-  ok(tipsOk, 'tip counts never fall toward the root');
-  ok(p.tips[0] === p.tipCount, `the root carries every tip (${p.tips[0]} = ${p.tipCount})`);
-  const expect = Math.pow(p.tipCount * Math.pow(p.r0, SPECIES.oak.pipe), 1 / SPECIES.oak.pipe);
-  ok(Math.abs(p.radius[0] - expect) / expect < 1e-4, `root radius follows r^p = N r0^p (${p.radius[0].toFixed(4)})`);
-  // a node is never on top of another
-  let minD = Infinity;
-  for (let i = 1; i < Math.min(p.count, 600); i++) for (let j = 0; j < i; j++) {
-    const d = Math.hypot(p.pos[i * 3] - p.pos[j * 3], p.pos[i * 3 + 1] - p.pos[j * 3 + 1], p.pos[i * 3 + 2] - p.pos[j * 3 + 2]);
-    if (d < minD) minD = d;
-  }
-  ok(minD > 0.3 * p.D, `nodes keep apart (min ${minD.toFixed(3)})`);
-  const b = createPlant({ species: 'oak', seed: 11 }); while (!b.done) b.step();
-  ok(b.count === p.count && b.pos[b.count * 3 - 1] === p.pos[p.count * 3 - 1], 'the same seed gives the same plant');
+  ok(mono, 'secondary growth: no radius ever shrinks from one year to the next');
+  let pipeOk = true;
+  for (let i = 1; i < oak.count; i++) { const p = oak.parent[i]; if (!oak.dead[i] && oak.radius[p] + 1e-7 < oak.radius[i]) { pipeOk = false; break; } }
+  ok(pipeOk, 'pipe model: a parent is never thinner than its child');
+  ok(finite(oak.px, oak.count) && finite(oak.py, oak.count) && finite(oak.radius, oak.count), 'no NaN in positions and radii');
+  // metamers grow at the tip, one after another
+  let seq = true;
+  for (let i = 1; i < oak.count; i++) { const p = oak.parent[i]; if (oak.born[i] + 1e-6 < oak.born[p]) { seq = false; break; } }
+  ok(seq, 'a metamer is never born before its parent');
+  const b2 = createSim({ species: 'oak', seed: 11 }); while (!b2.done) b2.stepYear();
+  ok(b2.count === oak.count && b2.px[b2.count - 1] === oak.px[oak.count - 1], 'the same seed gives the same plant');
 }
 
-// --- species presets --------------------------------------------------------
-for (const id of SPECIES_IDS) {
-  const p = growFull(id, { seed: 5 });
-  const B = envelopeBounds(p.env), m = p.di + p.D;
-  let inside = true, attrIn = true;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.pos[i * 3], y = p.pos[i * 3 + 1], z = p.pos[i * 3 + 2];
-    const stem = Math.hypot(x, z) < 2 * p.D * 3 && y <= B[4];
-    if (!stem && (x < B[0] - m || x > B[3] + m || z < B[2] - m || z > B[5] + m || y > B[4] + m || y < 0)) inside = false;
+// --- Borchert-Honda and the light grid ---------------------------------------
+{
+  const s = createSim({ species: 'maple', seed: 4 });
+  for (let k = 0; k < 9; k++) s.stepYear();
+  s.allocate();
+  const buds = s.buds(), root = s.plants[0].root;
+  let sumV = 0; for (const b of buds) sumV += b.v;
+  const vBase = s.vigor[root];
+  ok(Math.abs(sumV - vBase) / vBase < 1e-3, `allocation conserves the resource (${sumV.toFixed(2)} of ${vBase.toFixed(2)})`);
+  // the leader bud gets more than the average lateral bud (apical dominance)
+  let lead = null; for (const b of buds) if (b.term && s.order[b.node] === 0) lead = b;
+  const lat = buds.filter(b => !b.term && b.q > 0.2);
+  const meanLat = lat.reduce((a, b) => a + b.v, 0) / Math.max(1, lat.length);
+  ok(lead && lead.v > meanLat * 2, `the leader gets more resource (${lead && lead.v.toFixed(2)} vs mean lateral ${meanLat.toFixed(2)})`);
+  // light: the top is bright, deep inside is dark
+  let top = 0; for (let i = 0; i < s.count; i++) if (!s.dead[i] && s.py[i] > s.py[top]) top = i;
+  let lo = 1; for (let i = 0; i < s.count; i++) if (!s.dead[i]) lo = Math.min(lo, s.light[i]);
+  ok(s.light[top] > 0.6 && lo < 0.3, `light: top ${s.light[top].toFixed(2)}, inside ${lo.toFixed(2)}`);
+  ok(s.exposure(0, 50, 0, 0) === 1, 'light above the crown is full');
+}
+// shedding happens in shade: the shed branches had less light than the rest
+{
+  const s = createSim({ species: 'oak', seed: 2 });
+  let shedLight = 0, shedN = 0, liveLight = 0, liveN = 0;
+  for (let y = 0; y < 22; y++) {
+    const before = new Uint8Array(s.count); for (let i = 0; i < s.count; i++) before[i] = s.dead[i];
+    const lt = s.light.slice(0, s.count);
+    s.stepYear();
+    for (let i = 0; i < before.length; i++) {
+      if (before[i]) continue;
+      if (s.dead[i]) { shedLight += lt[i]; shedN++; } else { liveLight += lt[i]; liveN++; }
+    }
   }
-  for (let a = 0; a < p.nAttractors; a++) if (!insideEnvelope(p.env, p.attractors[a * 3], p.attractors[a * 3 + 1], p.attractors[a * 3 + 2])) attrIn = false;
-  ok(attrIn, `${id}: attractors are in the envelope`);
-  ok(inside, `${id}: nodes stay within the envelope plus di + D`);
-  ok(p.done && p.count > 150 && p.count <= p.maxNodes, `${id}: grows and stops (${p.count} nodes, ${p.iter} steps)`);
-  ok(p.maxY > B[4] * 0.75, `${id}: fills the crown height (${p.maxY.toFixed(2)} of ${B[4].toFixed(2)})`);
-  ok(p.leafCount > 50, `${id}: has leaves (${p.leafCount})`);
-  let flowers = 0;
-  for (let k = 0; k < p.leafCount; k++) if (p.leaves[k * LEAF_STRIDE + 5] === 1) flowers++;
-  ok(SPECIES[id].flower ? flowers > 5 : flowers === 0, `${id}: flowers ${flowers}`);
-  const S = envelopeSphere(p.env);
-  let out = 0;
-  for (let i = 0; i < p.count; i++) if (Math.hypot(p.pos[i * 3] - S.c[0], p.pos[i * 3 + 1] - S.c[1], p.pos[i * 3 + 2] - S.c[2]) > S.r + p.di + p.D) out++;
-  ok(out === 0, `${id}: the framing sphere holds the plant (${out} out)`);
-  const est = p.estIters();
-  ok(est > p.iter * 0.5 && est < p.iter * 3, `${id}: step estimate ${est} near ${p.iter}`);
+  ok(shedN > 50, `branches were shed (${shedN} metamers)`);
+  ok(shedLight / shedN < 0.6 * liveLight / liveN, `shed metamers were in shade (light ${(shedLight / shedN).toFixed(3)} vs ${(liveLight / liveN).toFixed(3)})`);
+}
+
+// --- species --------------------------------------------------------------------
+const lives = {};
+for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECIES_IDS) {
+  const s = growLife(id, { seed: 5 });
+  lives[id] = s;
+  const sp = SPECIES[id];
+  let h = 0, w = 0;
+  for (let i = 0; i < s.count; i++) if (!s.dead[i]) { h = Math.max(h, s.py[i]); w = Math.max(w, Math.hypot(s.px[i], s.pz[i])); }
+  let maxLeaves = 0; for (const st of s.stats) maxLeaves = Math.max(maxLeaves, st.leaves);
+  const target = sp.form === 'tree' ? 25000 : sp.form === 'shrub' ? 15000 : 400;
+  ok(s.done && s.year === sp.years, `${id}: lives ${sp.years} years`);
+  ok(maxLeaves >= target, `${id}: leaves reach ${target} (${maxLeaves})`);
+  ok(h > sp.size.h * 0.55 && h < sp.size.h * 1.35, `${id}: height ${h.toFixed(1)} m near ${sp.size.h} m`);
+  ok(finite(s.px, s.count) && finite(s.radius, s.count), `${id}: no NaN`);
+  ok(s.stats.every(st => st.live <= 60000 * 1.35), `${id}: live metamers stay near the budget`);
+  if (sp.flower) {
+    let fl = 0; for (let k = 0; k < s.leafCount; k++) if ((s.leaves[k * LEAF_STRIDE + 7] & 3) === KIND.flower) fl++;
+    ok(fl > 50, `${id}: flowers (${fl})`);
+  }
+  let coty = 0; for (let k = 0; k < s.leafCount; k++) if ((s.leaves[k * LEAF_STRIDE + 7] & 3) === KIND.cotyledon) coty++;
+  ok(sp.form === 'fern' ? coty === 0 : coty >= 2, `${id}: cotyledons ${coty}`);
+  ok(s.yearOff.length === sp.years + 1 && s.yearOff[sp.years] === s.count, `${id}: node ids grow year by year`);
 }
 {
-  // form checks: the conifer is slender, the willow hangs, the fern is a tuft
-  const width = p => { let w = 0; for (let i = 0; i < p.count; i++) w = Math.max(w, Math.hypot(p.pos[i * 3], p.pos[i * 3 + 2])); return w; };
-  const c = growFull('conifer', { seed: 2 }), o = growFull('oak', { seed: 2 }), w = growFull('willow', { seed: 2 }), f = growFull('fern', { seed: 2 });
-  ok(c.maxY / width(c) > o.maxY / width(o) * 1.4, 'conifer is more slender than oak');
-  let low = 0; for (let i = 0; i < w.count; i++) if (w.pos[i * 3 + 1] < 2.5 && Math.hypot(w.pos[i * 3], w.pos[i * 3 + 2]) > 2) low++;
-  ok(low > 50, `willow shoots hang low at the rim (${low} nodes)`);
-  let stems = 0; for (let i = 1; i < f.count; i++) if (f.parent[i] === 0) stems++;
-  ok(stems >= 6, `fern grows from ${stems} stems`);
-  const fl = createPlant({ species: 'oak', seed: 3, flat: true }); while (!fl.done) fl.step();
-  let z0 = true; for (let i = 0; i < fl.count; i++) if (fl.pos[i * 3 + 2] !== 0) z0 = false;
-  ok(z0 && fl.count > 50, 'a flat plant stays in z = 0');
-  const segs = plantSegments(o, i => o.radius[i]);
-  ok(segs.segments.length === o.count - 1 && segs.leaves.length === o.leafCount, 'plantSegments gives one segment per node');
+  // the crown radius: the 90th percentile reach of the leafy metamers
+  const width = s => { const r = []; let h = 0; for (let i = 0; i < s.count; i++) if (!s.dead[i]) { if (s.leafy[i]) r.push(Math.hypot(s.px[i], s.pz[i])); h = Math.max(h, s.py[i]); } r.sort((a, b) => a - b); return { w: r[Math.floor(r.length * 0.9)] || 1, h }; };
+  const c = width(lives.conifer), wl = lives.willow;
+  ok(c.h / c.w > 1.8, `spruce is slender (h / crown radius ${(c.h / c.w).toFixed(2)})`);
+  let hang = 0; for (let i = 0; i < wl.count; i++) if (!wl.dead[i] && wl.dy[i] < -0.8) hang++;
+  ok(hang > 2000, `willow shoots hang (${hang} downward metamers)`);
+  const f = lives.fern; let fronds = 0; for (let i = 0; i < f.count; i++) if (f.parent[i] === f.plants[0].root && f.year0[i] === f.year - 1) fronds++;
+  ok(fronds >= 10, `fern grows ${fronds} fronds from one crown`);
+  const bush = lives.bush; let stems = 0; for (let i = 0; i < bush.count; i++) if (bush.parent[i] === bush.plants[0].root && !bush.dead[i]) stems++;
+  ok(stems >= 4, `azalea has ${stems} stems from the base`);
+}
+// competition: a grove shares one light grid; the plants shade each other
+{
+  const lay = standLayout('grove', 'birch', 3);
+  ok(lay.length === 5 && lay[0].x === 0, 'a grove has five plants');
+  const mix = standLayout('mixed', 'oak', 3);
+  ok(mix.length === 9 && new Set(mix.map(p => p.species)).size >= 3, 'a woodland edge mixes species');
+  const g = createSim({ species: 'birch', stand: 'grove', seed: 3, years: 18 });
+  while (!g.done) g.stepYear();
+  const solo = createSim({ species: 'birch', seed: g.plants[0].rand ? 3 : 3, years: 18, plants: [{ species: 'birch', x: 0, z: 0, seed: lay[0].seed }] });
+  while (!solo.done) solo.stepYear();
+  const width0 = s => { let w = 0; for (let i = 0; i < s.count; i++) if (!s.dead[i] && s.plant[i] === 0) w = Math.max(w, Math.hypot(s.px[i], s.pz[i])); return w; };
+  ok(width0(g) < width0(solo), `a tree in a grove has a narrower crown (${width0(g).toFixed(2)} vs ${width0(solo).toFixed(2)} m)`);
 }
 
-// --- roots by DLA -----------------------------------------------------------
+// --- the calendar ------------------------------------------------------------
+{
+  const ph = SPECIES.oak.pheno, rec = { kind: 0, y0: 3, y1: OPEN, rand: 0.5, nodeBorn: 3.28, ever: false, falls: true };
+  const at = t => leafState(ph, rec, t, {});
+  ok(at(3.1).show === 0, 'winter before the bud break: no leaf');
+  ok(at(3.31).show > 0 && at(3.31).show < 1, 'spring: the leaf unfolds');
+  ok(at(3.5).show === 1 && at(3.5).colour === 0 && at(3.5).fall < 0, 'summer: a full green leaf on the twig');
+  const au = at(3 + ph.col + 0.06);
+  ok(au.colour > 0.3 && au.fall < 0, 'autumn: the colour turns before the leaf falls');
+  const fa = at(3 + ph.fall + CAL.FALL_SPREAD * 0.5 + CAL.FALL_DUR * 0.5);
+  ok(fa.fall > 0 && fa.fall < 1, 'leaf fall: the leaf is in the air');
+  const gr = at(3.95);
+  ok(gr.fall === 1 && gr.litter === 1, 'late autumn: the leaf lies on the ground');
+  const sp4 = at(4.1);
+  ok(sp4.fall === 1 && sp4.litter > 0 && sp4.litter <= 1, 'next winter: last year\'s litter still lies there');
+  ok(at(4.24).litter === 0 || at(4.24).fall < 0, 'next spring: the litter has rotted');
+  ok(at(4.5).show === 1 && at(4.5).fall < 0, 'the next summer the node leafs again');
+  const ever = { kind: 0, y0: 3, y1: 8, rand: 0.3, nodeBorn: 3.3, ever: true, falls: false };
+  const pe = SPECIES.conifer.pheno;
+  ok(leafState(pe, ever, 5.05, {}).show === 1 && leafState(pe, ever, 5.9, {}).fall < 0, 'a needle stays through winter');
+  ok(leafState(pe, ever, 8.95, {}).fall > 0 || leafState(pe, ever, 8.85, {}).colour > 0, 'an old needle browns and falls in its last year');
+  const fl = { kind: 1, y0: 5, y1: 5, rand: 0.4, nodeBorn: 3.2, ever: false, falls: true }, pc = SPECIES.cherry.pheno;
+  ok(leafState(pc, fl, 5 + pc.bloom + 0.05, {}).show > 0.8, 'cherry blossom opens in spring');
+  ok(leafState(pc, fl, 5 + pc.bloom + 0.05, {}).show > 0 && leafState(SPECIES.cherry.pheno, { ...rec, y0: 5, nodeBorn: 4.2 }, 5 + pc.bloom + 0.05, {}).show === 0, 'blossom opens before the leaves');
+  ok(leafState(pc, fl, 5 + pc.bloomEnd + 0.03, {}).fall > 0, 'petals fall at the end of the bloom');
+  const co = { kind: 2, y0: 0, y1: 1, rand: 0.5, nodeBorn: 0.2, ever: false, falls: true };
+  ok(leafState(pc, co, 0.3, {}).show === 1 && leafState(pc, co, 1.8, {}).show === 0, 'cotyledons open, then wither in the second summer');
+  ok(seasonOf(0.5).season === 'summer' && seasonOf(2.05).season === 'winter' && seasonOf(7.3).season === 'spring' && seasonOf(1.8).season === 'autumn', 'season names');
+  ok(seasonOf(3.5).month === 'July' && seasonOf(3.5).year === 3, 'month and year');
+  ok(snowCover(4.0) === 1 && snowCover(4.5) === 0 && snowCover(4.96) > 0.9, 'snow in winter only');
+  ok(girthPhase(0.1) === 0 && girthPhase(0.9) === 1, 'girth grows in the season');
+  ok(deathDrop(0.05, 5, 0) === 5 - 0.02 && deathDrop(0, 5, 0) === 0 && deathFade(1, 0) === 0, 'a dead branch falls and rots');
+  // the GLSL copy uses the same constants
+  for (const k of Object.keys(CAL)) ok(SEASON_GLSL.includes(`const float ${k} = ${CAL[k].toFixed(4)};`), `GLSL constant ${k}`);
+  ok(GROUND_GLSL.includes(`FLAT_R = ${FLAT_R.toFixed(1)}`), 'GLSL ground radius');
+}
+
+// --- packing and the CPU twin ---------------------------------------------------
+{
+  const s = createSim({ species: 'cherry', seed: 9 }), hist = createHistory();
+  for (let y = 0; y < 12; y++) { s.stepYear(); addToHistory(hist, s.snapshot()); }
+  const snap = s.snapshot();
+  const pk = packYear(snap, hist, 10, { mode: 'order' });
+  ok(pk.n > 1000 && pk.leafN > 3000, `pack: ${pk.n} nodes, ${pk.leafN} leaves for year 11`);
+  let parentsOk = true, fin = true;
+  for (let j = 0; j < pk.n; j++) {
+    const pe = pk.T[1][j * 4 + 2], q = pe >= 0 ? pe : -pe - 1;
+    if (q > j || q < 0) parentsOk = false;
+    for (let k = 0; k < 5; k++) for (let c = 0; c < 4; c++) if (!Number.isFinite(pk.T[k][j * 4 + c])) fin = false;
+  }
+  ok(parentsOk, 'pack: a parent comes before its child');
+  ok(fin, 'pack: all rows finite');
+  ok(pk.T[0].length % (TEX_W * 4) === 0, 'pack: whole texture rows');
+  let leavesOk = true; for (let k = 0; k < pk.leafN; k++) { const j = pk.leaves[k * 8]; if (j < 0 || j >= pk.n || (pk.leaves[k * 8 + 7] >> 2) >= CELLS.length) leavesOk = false; }
+  ok(leavesOk, 'pack: every leaf points at a packed node and a real atlas cell');
+  let born = true; for (let j = 0; j < pk.n; j++) if (pk.T[0][j * 4 + 3] >= 11) born = false;
+  ok(born, 'pack: only nodes born by the end of the year');
+  // frames are orthonormal, and the quaternion gives the tangent back
+  const fr = nodeFrames(snap);
+  let orth = true, quat = true;
+  const q = new Float32Array(4), v = [0, 0, 0];
+  for (let i = 0; i < snap.count; i += 13) {
+    const t = [fr.tan[i * 3], fr.tan[i * 3 + 1], fr.tan[i * 3 + 2]], n = [fr.nrm[i * 3], fr.nrm[i * 3 + 1], fr.nrm[i * 3 + 2]];
+    if (Math.abs(Math.hypot(...t) - 1) > 1e-4 || Math.abs(Math.hypot(...n) - 1) > 1e-4 || Math.abs(t[0] * n[0] + t[1] * n[1] + t[2] * n[2]) > 1e-4) orth = false;
+    frameQuat(t[0], t[1], t[2], n[0], n[1], n[2], q, 0);
+    quatRotate(q, 0, 0, 1, 0, v);
+    if (Math.hypot(v[0] - t[0], v[1] - t[1], v[2] - t[2]) > 1e-3) quat = false;
+  }
+  ok(orth, 'frames: unit tangent and normal at right angles');
+  ok(quat, 'frames: the quaternion turns +y onto the tangent');
+  // a shoot grows from its parent: at born it has length 0, after dur its full length
+  let j = -1; for (let k = pk.n - 1; k >= 0; k--) { if (pk.T[1][k * 4 + 2] >= 0 && pk.T[0][k * 4 + 3] > 10.2) { j = k; break; } }
+  ok(j > 0, 'a node born in year 11');
+  if (j > 0) {
+    const pe = pk.T[1][j * 4 + 2], b = pk.T[0][j * 4 + 3], A = nodeShown(pk, pe, b + 0.5, null), B0 = nodeShown(pk, j, b, null), B1 = nodeShown(pk, j, b + 0.05, null);
+    ok(Math.hypot(B0[0] - A[0], B0[1] - A[1], B0[2] - A[2]) < 1e-6, 'twin: a new metamer starts at its parent');
+    const full = Math.hypot(pk.T[0][j * 4] - pk.T[0][pe * 4], pk.T[0][j * 4 + 1] - pk.T[0][pe * 4 + 1], pk.T[0][j * 4 + 2] - pk.T[0][pe * 4 + 2]);
+    ok(Math.abs(Math.hypot(B1[0] - A[0], B1[1] - A[1], B1[2] - A[2]) - full) < 1e-5, 'twin: it reaches its full length');
+  }
+  // the root of the plant does not move in the wind; a twig does
+  const still = nodeShown(pk, 0, 10.5, null).slice(), windy = nodeShown(pk, 0, 10.5, { k: 1, time: 3 });
+  ok(Math.hypot(still[0] - windy[0], still[2] - windy[2]) < 1e-9, 'wind: the root stays');
+  let tw = 0; for (let k = pk.n - 1; k > pk.n - 200; k--) { const a = nodeShown(pk, k, 10.6, null).slice(), b = nodeShown(pk, k, 10.6, { k: 1, time: 3 }); tw = Math.max(tw, Math.hypot(a[0] - b[0], a[2] - b[2])); }
+  ok(tw > 0.01, `wind: twigs move (${tw.toFixed(3)} m)`);
+  // leaves: in summer on the tree, in late autumn on the ground
+  const summer = [], late = [];
+  for (let k = 0; k < pk.leafN; k += 17) { const a = leafPose(pk, k, 10.55); if (a) summer.push(a); const b = leafPose(pk, k, 10.97); if (b) late.push(b); }
+  ok(summer.length > 100 && summer.every(l => l.fall < 0), 'twin: summer leaves hang on the tree');
+  ok(late.length > 50 && late.filter(l => l.kind === 0).every(l => l.fall === 1 && Math.abs(l.o[1] - groundY(l.o[0], l.o[2])) < 0.03), 'twin: in late autumn the leaves lie on the ground');
+  ok(summer.every(l => Math.abs(l.nL[0] * l.dL[0] + l.nL[1] * l.dL[1] + l.nL[2] * l.dL[2]) < 1e-3), 'twin: a leaf normal is at right angles to its blade');
+  // colour modes
+  ok(COLOUR_IDS[0] === 'natural' && COLOUR_MODES.length === 7, 'seven colour modes, natural first');
+  for (const mode of ['order', 'flow', 'vigour', 'light']) {
+    const p2 = packYear(snap, hist, 10, { mode });
+    let lo = 1, hi = 0; for (let j2 = 0; j2 < p2.n; j2++) { const v2 = p2.T[3][j2 * 4 + 3]; lo = Math.min(lo, v2); hi = Math.max(hi, v2); }
+    ok(lo >= 0 && hi <= 1 && hi - lo > 0.3, `${mode}: spans the gradient (${lo.toFixed(2)}..${hi.toFixed(2)})`);
+  }
+  // atlas and looks
+  for (const id of SPECIES_IDS) {
+    const L = LOOK[id]; const k = SPECIES_IDS.indexOf(id);
+    ok(ATLAS_CELLS[L.leaf] && ATLAS_CELLS[L.coty] && (!L.flower || ATLAS_CELLS[L.flower]) && BARKS.includes(L.bark), `${id}: atlas cells and bark exist`);
+    ok(cellIndex(k, 0, 9) < CELLS.length, `${id}: cell index in range`);
+  }
+  const tab = speciesTables();
+  ok(tab.n === SPECIES_IDS.length && finite(tab.pheno) && finite(tab.leafA), 'species tables');
+  // a mesh for a thumbnail
+  const m = plantMesh(s, { t: 11.5 });
+  ok(m.branches.idx.length > 3000 && m.leaves.idx.length > 3000 && finite(m.branches.pos) && finite(m.leaves.pos), `mesh: ${m.branches.idx.length / 3} tube and ${m.leaves.idx.length / 3} leaf triangles`);
+}
+
+// --- ground and grass ---------------------------------------------------------
+{
+  ok(groundY(3, 4) === 0 && groundY(0, FLAT_R) === 0, 'the garden is flat');
+  ok(groundY(60, 10) !== 0 && Number.isFinite(groundY(200, -300)), 'hills beyond');
+  const f = grassField({ n: 5000, seed: 2, avoid: [{ x: 0, z: 0, r: 0.5 }], cut: 2 });
+  let bad = 0; for (let k = 0; k < f.length; k += 4) if (Math.hypot(f[k], f[k + 1]) < 0.5 || inCutaway(f[k], f[k + 1], 2)) bad++;
+  ok(f.length / 4 > 4000 && bad === 0, 'grass keeps off the trunk and the cut-away');
+}
+
+// --- roots by DLA ---------------------------------------------------------------
 {
   const r = createRoots({ seed: 4, max: 900, scale: 0.08 });
   r.grow(900); r.stamp(3);
   const m = r.model;
   let maxY = -Infinity, depth = 0, lat = 0;
-  for (let i = 1; i < m.count; i++) {
-    maxY = Math.max(maxY, m.pos[i * 3 + 1]); depth = Math.max(depth, -m.pos[i * 3 + 1]); lat = Math.max(lat, Math.hypot(m.pos[i * 3], m.pos[i * 3 + 2]));
-  }
+  for (let i = 1; i < m.count; i++) { maxY = Math.max(maxY, m.pos[i * 3 + 1]); depth = Math.max(depth, -m.pos[i * 3 + 1]); lat = Math.max(lat, Math.hypot(m.pos[i * 3], m.pos[i * 3 + 2])); }
   ok(m.count === 900, 'roots reach the cap');
   ok(maxY < 0, `roots stay under the ground (top ${maxY.toFixed(2)})`);
   ok(depth > lat * 1.2, `roots grow down (depth ${depth.toFixed(1)} vs lateral ${lat.toFixed(1)})`);
   let mono = true; for (let i = 1; i < m.count; i++) if (r.radius[m.parent[i]] < r.radius[i]) mono = false;
   ok(mono, 'root radius never falls toward the crown');
-  ok(Math.abs(r.depth - depth * 0.08) < 1e-6, 'depth in metres');
   ok(r.grow(10) === 0, 'roots stop at the cap');
+  const rp = packRoots(r, { x: 1, z: 2, spIndex: 0, mode: 'flow' });
+  let fin = true, under = true; for (let i = 0; i < rp.n; i++) { if (!finite(rp.T[0].subarray(i * 4, i * 4 + 4))) fin = false; if (i > 0 && rp.T[0][i * 4 + 1] > 0) under = false; }
+  ok(rp.n === 900 && fin && under, 'root rows: finite, under the ground');
+  ok(Math.abs(rp.T[0][0] - 1) < 1e-6 && Math.abs(rp.T[0][2] - 2) < 1e-6, 'root rows: at the plant');
+  let mains = 0; for (let i = 1; i < rp.n; i++) if (rp.T[1][i * 4 + 2] >= 0) mains++;
+  ok(mains > rp.n * 0.4 && mains < rp.n, `root rows: main axes and laterals (${mains} main)`);
 }
 
-// --- colour modes -----------------------------------------------------------
+// --- saver --------------------------------------------------------------------
 {
-  const p = growFull('bush', { seed: 9 }), v = plantView(p), clock = p.iter;
-  const range = { yMin: -1, yMax: p.maxY };
-  ok(COLOUR_IDS[0] === 'natural' && COLOUR_MODES.length === 6, 'six colour modes, natural first');
-  for (const mode of COLOUR_IDS) {
-    let lo = Infinity, hi = -Infinity, bad = false;
-    for (let i = 0; i < p.count; i++) { const t = colourT(v, i, mode, clock, range); if (!(t >= 0 && t <= 1)) bad = true; lo = Math.min(lo, t); hi = Math.max(hi, t); }
-    ok(!bad, `${mode}: t in 0..1`);
-    if (mode !== 'natural' && mode !== 'light') ok(hi - lo > 0.3, `${mode}: spans the gradient (${lo.toFixed(2)}..${hi.toFixed(2)})`);
-  }
-  let newest = 0; for (let i = 0; i < p.count; i++) if (p.born[i] > p.born[newest]) newest = i;
-  ok(Math.abs(colourT(v, newest, 'age', p.born[newest]) - 1) < 1e-9, 'age: the newest node is at the hot end');
-  ok(colourT(v, 0, 'age', clock) === 0, 'age: the seed node is at the cold end');
-  ok(colourT(v, 0, 'flow', clock) === 1, 'flow: the root node carries the most');
-  let top = 0; for (let i = 0; i < p.count; i++) if (p.pos[i * 3 + 1] > p.pos[top * 3 + 1]) top = i;
-  ok(Math.abs(colourT(v, top, 'height', clock, range) - 1) < 1e-6, 'height: the top node is 1');
-  let lmin = 1; for (let i = 0; i < p.count; i++) lmin = Math.min(lmin, p.light[i]);
-  ok(lmin < 0.6 && p.light[top] > 0.9, `light: shade inside the crown (${lmin.toFixed(2)}), sun at the top (${p.light[top].toFixed(2)})`);
-  const r = createRoots({ seed: 2, max: 300, scale: 0.05 }); r.grow(300); r.stamp(5);
-  const rv = rootsView(r);
-  ok(colourT(rv, 10, 'light', 5) === 0 && colourT(rv, 0, 'flow', 5) === 1, 'roots: no light, the crown carries the flow');
-  ok(colourT(rv, 299, 'height', 5, { yMin: -r.depth, yMax: 2 }) < colourT(v, top, 'height', clock, { yMin: -r.depth, yMax: 2 }), 'roots sit under the crown in height');
-}
-
-// --- frame pass -------------------------------------------------------------
-{
-  const p = createPlant({ species: 'sapling', seed: 3 });
-  for (let k = 0; k < 12; k++) p.step();
-  const v = plantView(p), ps = createPoser();
-  const P = new Float32Array(p.count * 4), C = new Float32Array(p.count * 4);
-  const last = p.count - 1, clock = p.born[last];       // the newest segment has length 0
-  ps.fill(v, { clock, time: 3, dt: 0.016, wind: 0, mode: 'age', range: { yMin: 0, yMax: 4 } }, P, C);
-  ok(finite(P) && finite(C), 'pose: no NaN');
-  const q = p.parent[last];
-  ok(Math.hypot(P[last * 4] - P[q * 4], P[last * 4 + 1] - P[q * 4 + 1], P[last * 4 + 2] - P[q * 4 + 2]) < 1e-6, 'pose: a new segment starts at its parent');
-  ok(C[last * 4 + 2] === q && C[last * 4 + 3] === 0, 'pose: col row holds the parent id and growth 0');
-  ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 0, mode: 'age' }, P, C);
-  const L = Math.hypot(P[last * 4] - P[q * 4], P[last * 4 + 1] - P[q * 4 + 1], P[last * 4 + 2] - P[q * 4 + 2]);
-  ok(Math.abs(L - p.D) < 1e-5 && C[last * 4 + 3] === 1, `pose: grown after one step (${L.toFixed(4)})`);
-  ps.fill(v, { clock: clock + 20, time: 3, dt: 0.016, wind: 0, mode: 'age', ageRef: clock }, P, C);
-  ok(Math.abs(C[last * 4] - 1) < 1e-6, 'pose: ageRef keeps the newest node at the hot end after the clock runs on');
-  ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 0, mode: 'age' }, P, C);
-  const still = P.slice();
-  ps.fill(v, { clock: clock + 1, time: 3, dt: 0.016, wind: 1, mode: 'age' }, P, C);
-  let d0 = Math.hypot(P[0] - still[0], P[1] - still[1], P[2] - still[2]), tipMove = 0;
-  for (let i = 1; i < p.count; i++) if (p.kids[i] === 0) tipMove = Math.max(tipMove, Math.hypot(P[i * 4] - still[i * 4], P[i * 4 + 2] - still[i * 4 + 2]));
-  ok(d0 === 0 && tipMove > 0.005, `wind: the root stays, tips move (${tipMove.toFixed(3)} m)`);
-}
-
-// --- saver ------------------------------------------------------------------
-{
-  const a = makeShots(rng(42), 18), b = makeShots(rng(42), 18), c = makeShots(rng(43), 18);
+  const a = makeShots(rng(42), 21), b = makeShots(rng(42), 21), c = makeShots(rng(43), 21);
   ok(JSON.stringify(a) === JSON.stringify(b), 'shots: the same seed gives the same list');
   ok(JSON.stringify(a) !== JSON.stringify(c), 'shots: another seed gives another list');
   ok(a.every(s => s.dur >= 5 && s.dur <= 12), 'shots: 5 to 12 s each');
   ok(a.every((s, i) => i === 0 || s.species !== a[i - 1].species), 'shots: no species twice in a row');
-  ok(new Set(a.slice(0, 6).map(s => s.species)).size === 6, 'shots: every species in the first round');
-  ok(new Set(a.map(s => s.mode)).size >= 3 && new Set(a.map(s => s.gradient)).size >= 3, 'shots: modes and gradients vary');
-  ok(shotRate(40, 10) > 5 && shotRate(40, 10) < 6 && shotRate(1, 10) === 3 && shotRate(1e4, 5) === 40, 'shot rate');
+  ok(SHOT_KINDS.every(k => a.some(s => s.kind === k)), 'shots: every kind (life, autumn, grove, spring, heat, winter, summer)');
+  ok(a.filter(s => s.kind === 'autumn' || s.kind === 'winter' || s.kind === 'grove').every(s => SPECIES[s.species].form === 'tree'), 'shots: autumn, winter and grove shots show trees');
+  for (const s of a) {
+    const p = shotPlan(s), years = SPECIES[s.species].years;
+    if (!(p.t0 >= 0 && p.t1 > p.t0 && p.t1 <= years && p.rate > 0 && p.rate * s.dur >= (p.t1 - p.t0) * 0.99)) { ok(false, `plan ${s.kind} ${s.species} ${JSON.stringify(p)}`); break; }
+  }
+  const life = a.find(s => s.kind === 'life'), lp = shotPlan(life);
+  ok(lp.t0 < 0.5 && lp.t1 > SPECIES[life.species].years - 1, 'a life shot runs from the seed to the last year');
+  const au = a.find(s => s.kind === 'autumn'), ap = shotPlan(au), ph = SPECIES[au.species].pheno;
+  ok(ap.t0 - Math.floor(ap.t0) < ph.col && ap.t1 - Math.floor(ap.t0) > ph.fall, 'an autumn shot spans the colour and the fall');
   const fov = 40;
   for (const [w, h] of [[1920, 1080], [1080, 1920], [390, 844]]) {
     const band = { t: h * 0.24, b: h * 0.3, w };
     const f = bandFrame(band, w, h);
     ok(Math.abs(f.offY - (band.b - band.t) / 2) < 1e-9 && f.offY > 0, `${w}x${h}: offset puts the band centre at the image centre`);
-    for (const id of SPECIES_IDS) {
-      const S = envelopeSphere(growFull(id, { seed: 1 }).env);
-      const d = fitDistance(S.r, fov, w / h, f.hFrac, f.wFrac, 0.82);
-      const pr = projectedRadius(S.r, d, fov, h);
-      const bandH = h - f.t - f.b;
-      ok(2 * pr <= bandH * 0.83 + 1e-6 && 2 * pr <= w * 0.83 + 1e-6 && 2 * pr > Math.min(bandH, w) * 0.7, `${w}x${h} ${id}: fits the band (${(2 * pr).toFixed(0)} px of ${bandH.toFixed(0)} x ${w})`);
+    for (const r of [0.2, 3, 9]) {
+      const d = fitDistance(r, fov, w / h, f.hFrac, f.wFrac, 0.8);
+      const pr = projectedRadius(r, d, fov, h), bandH = h - f.t - f.b;
+      ok(2 * pr <= bandH * 0.81 && 2 * pr <= w * 0.81 && 2 * pr > Math.min(bandH, w) * 0.7, `${w}x${h} r ${r}: fits the band (${(2 * pr).toFixed(0)} px of ${bandH.toFixed(0)} x ${w})`);
     }
   }
   ok(bandFrame(null, 100, 100).hFrac === 1, 'no band: the full frame');
-  const big = bandFrame({ t: 900, b: 900 }, 1000, 1000);
-  ok(big.hFrac >= 0.16 && big.t <= 420, 'a tall plate keeps a band');
-  const src = createPlant({ species: 'oak' }).step.toString(), code = codeExtract(src);
-  ok(code.startsWith('// 1. each live attractor') && code.includes('nearestNode') && code.includes('dk') && code.split('\n').length === 12, 'code extract is the real colonisation step');
+  const code = codeExtract(createSim.toString(), '// apical dominance eases', 13);
+  ok(code.startsWith('// apical dominance eases') && code.includes('lam * Qm[i]') && code.split('\n').length === 13, 'code extract is the real allocation');
 }
+
+// --- misc ---------------------------------------------------------------------
+ok(internode(SPECIES.oak, 0) === SPECIES.oak.L[0] && internode(SPECIES.oak, 99) === SPECIES.oak.L[1], 'internode length ramps from seedling to mature');
+ok(TREE_IDS.length === 6 && SPECIES_IDS.length === 8, 'eight species, six of them trees');
 
 console.log(`plant-growth tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
