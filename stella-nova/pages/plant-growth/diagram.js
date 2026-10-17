@@ -1,28 +1,27 @@
 // ============================================================================
-//  PLANT GROWTH  ·  the 2D diagram of space colonisation (#diagram)
+//  PLANT GROWTH  ·  the 2D diagram of the model (#diagram)
 // ----------------------------------------------------------------------------
-//  A flat plant (grow.js, flat: true) grows one step at a time on a 2D
-//  canvas. Each step shows, for the node with the most attractors: the
-//  influence radius d_i (dashed), the lines to its attractors, the mean
-//  direction (an arrow), and the kill distance d_k round the new nodes.
-//  Then the step runs, the new segments draw in, and the dead attractors
-//  fade. When the plant stops, a new seed starts after a pause.
-//  It draws only while the drawer is open (setOn).
+//  A flat tree (grow.js, flat: true) grows one year per beat on a 2D canvas.
+//  The diagram shows the parts of the model:
+//    - the shadow grid: each voxel is shaded by the shadow s that the leafy
+//      nodes above it cast (a pyramid that spreads and fades with depth);
+//    - the buds: a dot per bud, sized and coloured by the resource v the
+//      Borchert-Honda pass gave it (a bright, large dot grows a long shoot);
+//    - the shoots of the year in a lighter wood colour as they grow;
+//    - shed branches: they flash red and fall away.
+//  A new seed starts after the last year. It draws only while the drawer is
+//  open (setOn).
 // ============================================================================
-import { createPlant } from './grow.js';
+import { createSim } from './grow.js';
 
 export function createDiagram(canvas) {
   const g = canvas.getContext('2d');
-  let on = false, raf = 0, seed = 3, plant = null, phase = 0, t0 = 0, focus = -1, pulls = [], born = 0, dead = new Map();
-  const PH = [1100, 700];   // ms: show the pulls, then grow
+  let on = false, raf = 0, seed = 3, sim = null, t0 = 0, buds = [], prevDead = null, flash = [];
+  const BEAT = 1300;
   function reset() {
-    plant = createPlant({ species: 'oak', seed: seed++, flat: true, n: 150, crown: 1, D: 0.45, di: 2.3, dk: 0.7, maxNodes: 900 });
-    phase = 0; t0 = performance.now(); dead.clear(); pick();
-  }
-  function pick() {
-    focus = -1; pulls = [];
-    if (!plant.reached) return;
-    for (let v = 0; v < plant.count; v++) { const q = plant.pullsOf(v); if (q.length > pulls.length) { pulls = q; focus = v; } }
+    sim = createSim({ species: 'oak', seed: seed++, flat: true, maxNodes: 2600, years: 16 });
+    sim.stepYear(); sim.allocate(); buds = sim.buds(); prevDead = new Uint8Array(sim.count); flash = [];
+    t0 = performance.now();
   }
   function size() {
     const r = canvas.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
@@ -32,71 +31,74 @@ export function createDiagram(canvas) {
   }
   function draw(now) {
     raf = on ? requestAnimationFrame(draw) : 0;
-    if (!plant) reset();
+    if (!sim) reset();
     const { w, h, d } = size();
-    const sc = Math.min(w / 11.5, h / 11), ox = w / 2, oy = h - 0.4 * sc;
-    const X = x => ox + x * sc, Y = y => oy - y * sc;
     const el = now - t0;
-    if (phase === 0 && el > (plant.reached ? PH[0] : 160)) {
-      const before = new Uint8Array(plant.alive);
-      born = plant.count; plant.step();
-      for (let a = 0; a < plant.nAttractors; a++) if (before[a] && !plant.alive[a]) dead.set(a, now);
-      phase = 1; t0 = now;
-    } else if (phase === 1 && el > (plant.reached ? PH[1] : 160)) {
-      if (plant.done) { phase = 2; t0 = now; } else { phase = 0; t0 = now; pick(); }
-    } else if (phase === 2 && el > 2600) reset();
-    const k = phase === 1 ? Math.min(1, el / (PH[1] * 0.8)) : 1;
-
-    g.fillStyle = '#f2efe6'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#dfe6cf'; g.fillRect(0, oy, w, h - oy);
-    // attractors
-    const A = plant.attractors;
-    for (let a = 0; a < plant.nAttractors; a++) {
-      let al = 1;
-      if (!plant.alive[a]) { const td = dead.get(a); al = td ? Math.max(0, 1 - (now - td) / 900) : 0; if (al <= 0) continue; }
-      g.globalAlpha = al; g.fillStyle = plant.alive[a] ? '#7a8a6a' : '#c84a3a';
-      g.beginPath(); g.arc(X(A[a * 3]), Y(A[a * 3 + 1]), 2.6 * d, 0, 7); g.fill();
-    }
-    g.globalAlpha = 1;
-    // branches (pipe radius, drawn at least 1 px)
-    g.lineCap = 'round'; g.strokeStyle = '#5b4636';
-    for (let i = 1; i < plant.count; i++) {
-      const p = plant.parent[i], f = i >= born && phase === 1 ? k : 1;
-      const x0 = X(plant.pos[p * 3]), y0 = Y(plant.pos[p * 3 + 1]);
-      const x1 = X(plant.pos[i * 3]), y1 = Y(plant.pos[i * 3 + 1]);
-      g.lineWidth = Math.max(1.2 * d, plant.radius[i] * sc * 2.2);
-      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f); g.stroke();
-    }
-    // the kill distance round the new nodes
-    if (phase === 1) {
-      g.fillStyle = 'rgba(220,70,60,0.16)'; g.strokeStyle = 'rgba(200,74,58,0.6)'; g.lineWidth = d;
-      for (let i = born; i < plant.count; i++) { g.beginPath(); g.arc(X(plant.pos[i * 3]), Y(plant.pos[i * 3 + 1]), plant.dk * sc * k, 0, 7); g.fill(); g.stroke(); }
-    }
-    // the focus node: influence radius, pulls, mean direction
-    if (phase === 0 && focus >= 0) {
-      const fx = X(plant.pos[focus * 3]), fy = Y(plant.pos[focus * 3 + 1]);
-      const show = Math.min(1, el / 400);
-      g.setLineDash([6 * d, 5 * d]); g.strokeStyle = '#4a8ad0'; g.lineWidth = 1.6 * d;
-      g.beginPath(); g.arc(fx, fy, plant.di * sc * show, 0, 7); g.stroke(); g.setLineDash([]);
-      g.strokeStyle = 'rgba(74,138,208,0.75)'; g.lineWidth = 1.2 * d;
-      let mx = 0, my = 0;
-      for (const a of pulls) {
-        const ax = A[a * 3] - plant.pos[focus * 3], ay = A[a * 3 + 1] - plant.pos[focus * 3 + 1], l = Math.hypot(ax, ay) || 1;
-        mx += ax / l; my += ay / l;
-        g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx + ax * sc * show, fy - ay * sc * show); g.stroke();
+    if (el > BEAT) {
+      if (sim.done) { if (el > BEAT * 3) reset(); }
+      else {
+        const before = sim.count;
+        sim.stepYear(); sim.allocate();
+        buds = sim.buds();
+        for (let i = 0; i < before; i++) if (sim.dead[i] && !prevDead[i] && sim.died[i] < 1e3) flash.push({ i, at: now });
+        prevDead = new Uint8Array(sim.count); for (let i = 0; i < sim.count; i++) prevDead[i] = sim.dead[i];
+        t0 = now;
       }
-      const ml = Math.hypot(mx, my) || 1, L = plant.D * sc * 2.4 * show;
-      const ex = fx + mx / ml * L, ey = fy - my / ml * L;
-      g.strokeStyle = '#e0602a'; g.fillStyle = '#e0602a'; g.lineWidth = 3 * d;
-      g.beginPath(); g.moveTo(fx, fy); g.lineTo(ex, ey); g.stroke();
-      const an = Math.atan2(ey - fy, ex - fx), hs = 9 * d;
-      g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex - hs * Math.cos(an - 0.45), ey - hs * Math.sin(an - 0.45)); g.lineTo(ex - hs * Math.cos(an + 0.45), ey - hs * Math.sin(an + 0.45)); g.fill();
-      g.fillStyle = '#2a3a1a'; g.beginPath(); g.arc(fx, fy, 4 * d, 0, 7); g.fill();
     }
-    g.fillStyle = '#4a5a3a'; g.font = `${12 * d}px Inter, system-ui, sans-serif`;
-    g.fillText(`step ${plant.iter} · ${plant.count} nodes · ${plant.aliveCount} attractors`, 10 * d, 18 * d);
+    const grow = Math.min(1, (now - t0) / (BEAT * 0.7));
+    // fit the tree: the grid box
+    const Gd = sim.grid, vox = Gd.vox;
+    let x0 = Infinity, x1 = -Infinity, y1 = 0.5;
+    for (let i = 0; i < sim.count; i++) { if (sim.dead[i]) continue; x0 = Math.min(x0, sim.px[i]); x1 = Math.max(x1, sim.px[i]); y1 = Math.max(y1, sim.py[i]); }
+    const span = Math.max(1.2, x1 - x0, y1) * 1.18;
+    const sc = Math.min(w / span, (h * 0.9) / span), ox = w / 2 - (x0 + x1) / 2 * sc, oy = h - 0.06 * h;
+    const X = x => ox + x * sc, Y = y => oy - y * sc;
+    g.fillStyle = '#eef0e6'; g.fillRect(0, 0, w, h);
+    // the shadow grid
+    const G = Gd.G, NX = Gd.NX, NY = Gd.NY;
+    for (let iy = 0; iy < NY; iy++) for (let ix = 0; ix < NX; ix++) {
+      const s = G[iy * NX + ix]; if (s < 0.05) continue;
+      const k = Math.min(1, s / sim.shadow.C);
+      g.fillStyle = `rgba(40,60,90,${(k * 0.55).toFixed(3)})`;
+      const xx = X(Gd.x0 + ix * vox), yy = Y((iy + 1) * vox);
+      g.fillRect(xx, yy, vox * sc + 0.5, vox * sc + 0.5);
+    }
+    g.fillStyle = '#d6dcc4'; g.fillRect(0, oy, w, h - oy);
+    // branches: pipe radius, this year's shoots grow in
+    const Y0 = sim.year - 1;
+    g.lineCap = 'round';
+    for (let i = 1; i < sim.count; i++) {
+      const p = sim.parent[i]; if (p < 0 || sim.dead[i]) continue;
+      const young = sim.year0[i] === Y0;
+      const f = young ? grow : 1;
+      g.strokeStyle = young ? '#a87a46' : '#5b4636';
+      g.lineWidth = Math.max(1.1 * d, sim.radius[i] * sc * 2);
+      const ax = X(sim.px[p]), ay = Y(sim.py[p]);
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(ax + (X(sim.px[i]) - ax) * f, ay + (Y(sim.py[i]) - ay) * f); g.stroke();
+    }
+    // shed branches flash and fall
+    for (const fl of flash) {
+      const a = (now - fl.at) / 1100; if (a > 1) continue;
+      const i = fl.i, p = sim.parent[i]; if (p < 0) continue;
+      g.strokeStyle = `rgba(200,60,40,${(1 - a).toFixed(3)})`; g.lineWidth = 1.5 * d;
+      const dy = a * a * 60 * d;
+      g.beginPath(); g.moveTo(X(sim.px[p]), Y(sim.py[p]) + dy); g.lineTo(X(sim.px[i]), Y(sim.py[i]) + dy); g.stroke();
+    }
+    flash = flash.filter(fl => now - fl.at < 1100);
+    // leafy nodes
+    g.fillStyle = 'rgba(80,140,50,0.75)';
+    for (let i = 0; i < sim.count; i++) if (sim.leafy[i] && !sim.dead[i]) { g.beginPath(); g.arc(X(sim.px[i]), Y(sim.py[i]), 2.2 * d, 0, 7); g.fill(); }
+    // buds by resource
+    let vmax = 1; for (const b of buds) if (b.v > vmax) vmax = b.v;
+    for (const b of buds) {
+      if (b.v <= 0) continue;
+      const k = Math.min(1, b.v / vmax);
+      g.fillStyle = `rgb(${Math.round(240 * k + 60)},${Math.round(120 + 80 * k)},${Math.round(40)})`;
+      g.beginPath(); g.arc(X(sim.px[b.node]), Y(sim.py[b.node]), (1.6 + 4 * Math.sqrt(k)) * d, 0, 7); g.fill();
+    }
+    g.fillStyle = '#3a4a2a'; g.font = `${12 * d}px Inter, system-ui, sans-serif`;
+    const st = sim.stats[sim.year - 1];
+    g.fillText(`year ${sim.year} · ${st ? st.live : 0} metamers · ${buds.length} buds · ${st ? st.shed : 0} branches shed`, 10 * d, 18 * d);
   }
-  return {
-    setOn(v) { on = !!v; if (on && !raf) raf = requestAnimationFrame(draw); },
-  };
+  return { setOn(v) { on = !!v; if (on && !raf) raf = requestAnimationFrame(draw); } };
 }

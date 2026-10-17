@@ -58,6 +58,7 @@ html.in-frame #panel{padding-top:24px}
 .sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:18px 0 9px}
 .sec-label:first-of-type{margin-top:0}
 .presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.presets.four{grid-template-columns:repeat(4,1fr)}
 .presets button{padding:8px 4px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:6px;cursor:pointer;font-size:0.76rem;text-align:center;line-height:1.25}
 .presets button:hover{border-color:var(--line-b);color:var(--ink)}
 .presets button.on{border-color:var(--warm);background:rgba(198,226,122,0.08);color:var(--warm)}
@@ -87,10 +88,12 @@ html.in-frame #panel{padding-top:24px}
 .credit{font-size:0.74rem;line-height:1.55;color:var(--dim);margin-top:14px}
 
 #status{
-  position:fixed;left:0;bottom:0;z-index:25;display:flex;gap:16px;align-items:center;padding:9px 18px;
-  font-size:0.78rem;color:var(--ink);background:rgba(12,17,11,0.82);border-top-right-radius:10px;max-width:calc(100% - var(--panel-w))}
+  position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;gap:16px;align-items:center;padding:9px 18px;
+  font-size:0.78rem;color:var(--ink);background:rgba(12,17,11,0.82)}
+#status span{white-space:nowrap}
 #status .fn{color:var(--warm)}
 #status .right{color:var(--dim);font-family:var(--sci-mono)}
+#timeline{flex:1;min-width:80px;accent-color:var(--warm);height:3px}
 
 #legend{
   position:fixed;right:18px;bottom:18px;z-index:20;padding:9px 11px 7px;width:210px;
@@ -112,10 +115,10 @@ html.in-frame #panel{padding-top:24px}
 #diagram{display:block;width:100%;aspect-ratio:1.15;border-radius:8px;background:#f2efe6}
 .dg-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px;font-size:0.74rem;color:var(--dim)}
 .dg-key i{display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-2px;border-radius:50%}
-.k-attr{background:#7a8a6a}
-.k-di{border:2px dashed #4a8ad0}
-.k-dir{background:#e0602a;border-radius:2px!important;height:4px!important;vertical-align:2px!important}
-.k-dk{background:rgba(220,70,60,0.35);border:1px solid #c84a3a}
+.k-shade{background:rgba(40,60,90,0.45);border-radius:2px!important}
+.k-bud{background:#f0b828}
+.k-leaf{background:rgba(80,140,50,0.75)}
+.k-shed{background:#c83c28;border-radius:2px!important;height:4px!important;vertical-align:2px!important}
 
 @media(min-width:769px){
   #status{left:var(--panel-w)}

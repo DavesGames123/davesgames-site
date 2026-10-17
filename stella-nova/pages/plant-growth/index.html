@@ -6,17 +6,19 @@
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="Grow a garden live in 3D: oak, conifer, weeping willow, cherry, fern and a flowering bush by space colonisation, with DLA roots after fogleman/dlaf and heatmap gradients for age, branch order, flow, height and light.">
+<meta name="description" content="Watch a plant grow from a seed over decades in 3D: a self-organising tree model (Palubicki et al. 2009) with buds, light from a shadow grid, Borchert-Honda resource allocation, branch shedding and pipe-model girth; scanned leaves and bark; seasons with blossom, autumn colour, leaf fall and snow; DLA roots after fogleman/dlaf; heatmap gradients for age, order, flow, resource and light.">
 <meta name="color-scheme" content="light dark">
 <title>Plant Growth — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    PLANT GROWTH  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. A garden plant grows live in 3D by space
-   colonisation (Runions, Lane and Prusinkiewicz 2007), and its roots grow
-   under a cut-away soil block by diffusion-limited aggregation with
-   lib/dla-engine.js (our port of fogleman/dlaf, MIT).
+   Static markup only. A seed grows into a mature plant over simulated
+   years and seasons in 3D, by the self-organising tree model of Palubicki
+   et al. 2009 (buds, a shadow-propagation light grid, Borchert-Honda
+   allocation, shedding, the pipe model). The roots grow under a soil
+   cut-away by diffusion-limited aggregation with lib/dla-engine.js (our
+   port of fogleman/dlaf, MIT).
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
@@ -24,19 +26,25 @@
      3. importmap for three r160, then main.js as a module (end of body)
 
    MODULES
-     grow.js     the space colonisation model (no DOM)
-     roots.js    DLA roots on the dlaf hooks (no DOM)
-     pose.js     colour modes and the frame pass (no DOM)
-     saver.js    screensaver shots and framing maths (no DOM)
-     render.js   three.js scene: branches, leaves, roots, plinth, sky
-     diagram.js  the 2D diagram of one colonisation step (#diagram)
-     main.js     controls, the frame loop, the screensaver hook
+     grow.js        the model, one year per step (no DOM)
+     season.js      the calendar: leaf life, fall, snow (JS and GLSL)
+     sim-worker.js  grow.js in a module worker
+     pose.js        GPU rows per year, colour modes, the CPU twin (no DOM)
+     look.js        leaf cells, colours and bark per species (no DOM)
+     atlas.js       the leaf atlas cells (written by tools/build-atlas.py)
+     ground.js      ground height, grass field, cut-away (JS and GLSL)
+     roots.js       DLA roots on the dlaf hooks, and their GPU rows
+     mesh.js        a CPU mesh of a plant at one moment (thumbnails, tests)
+     saver.js       screensaver shots and framing maths (no DOM)
+     render.js      three.js: tubes, leaves, sky, ground, grass, shadows
+     diagram.js     the 2D diagram of the model (#diagram)
+     main.js        the time-lapse, the controls, the screensaver hook
 
    LAYOUT  (# marks an element id main.js binds to)
      desktop ... #panel at the left, #gl fills the frame, #legend at the
-                 lower right, #status at the base, #explain a drawer at
-                 the right ("How it grows").
-     phone ..... #dock at the base: panel, three colour modes, regrow,
+                 lower right, #status at the base with the #timeline,
+                 #explain a drawer at the right ("How it grows").
+     phone ..... #dock at the base: panel, three colour modes, sow again,
                  play. #panel is a bottom sheet in portrait and a right
                  drawer in landscape. #explain is a full sheet.
   ═══════════════════════════════════════════════════════════════════════════
@@ -53,9 +61,9 @@
   <div class="pagetitle">Plant growth</div>
 </div>
 
-<canvas id="gl" aria-label="A plant that grows in 3D"></canvas>
+<canvas id="gl" aria-label="A plant that grows from a seed over many years"></canvas>
 <div id="nogl" hidden>This page needs WebGL 2. The plant cannot render in this browser.</div>
-<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to frame the plant</div>
+<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to follow the plant again</div>
 <button id="gear" type="button" aria-label="Controls">☰</button>
 
 <div id="legend" hidden>
@@ -69,33 +77,41 @@
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
 
   <div class="sec-label">Species</div>
-  <div class="presets" id="speciesBtns"></div>
+  <div class="presets four" id="speciesBtns"></div>
   <div class="hint" id="speciesHint"></div>
 
-  <div class="sec-label">Growth</div>
+  <div class="sec-label">Stand</div>
+  <div class="modes" id="standBtns">
+    <button type="button" data-stand="single">One plant</button>
+    <button type="button" data-stand="grove">Grove</button>
+    <button type="button" data-stand="mixed">Woodland</button>
+  </div>
+  <div class="hint">A grove and a woodland edge share one light grid, so the plants compete: shaded limbs die and a suppressed plant stops growing.</div>
+
+  <div class="sec-label">Time</div>
   <div class="modes">
     <button id="playBtn" type="button">Pause</button>
-    <button id="regrowBtn" type="button">Regrow</button>
+    <button id="sowBtn" type="button">Sow again</button>
+    <button id="followBtn" type="button" class="on">Follow on</button>
   </div>
-  <div class="row"><label>Growth speed</label><input type="range" id="speed" min="0.25" max="4" step="0.05" value="1"><span class="val" id="speedV"></span></div>
+  <div class="row"><label>One year takes</label><input type="range" id="spy" min="2" max="40" step="1" value="8"><span class="val" id="spyV"></span></div>
   <div class="seedrow">
     <label for="seed">Seed</label>
     <input type="number" id="seed" min="1" max="999999" step="1" value="7" inputmode="numeric">
     <button id="seedBtn" type="button" aria-label="Random seed">Random</button>
   </div>
 
-  <div class="sec-label">Shape</div>
-  <div class="row"><label>Crown size</label><input type="range" id="crown" min="0.6" max="1.5" step="0.05" value="1"><span class="val" id="crownV"></span></div>
-  <div class="row"><label><span class="m2">d<sub>i</sub></span> <span class="w">influence radius</span></label><input type="range" id="di" min="0.3" max="4" step="0.05" value="2.4"><span class="val" id="diV"></span></div>
-  <div class="row"><label><span class="m3">d<sub>k</sub></span> <span class="w">kill distance</span></label><input type="range" id="dk" min="0.08" max="1.4" step="0.01" value="0.62"><span class="val" id="dkV"></span></div>
-  <div class="row"><label><span class="m1">D</span> <span class="w">segment length</span></label><input type="range" id="D" min="0.06" max="0.6" step="0.01" value="0.32"><span class="val" id="DV"></span></div>
-  <div class="row"><label>Tropism strength</label><input type="range" id="trop" min="0" max="2.5" step="0.05" value="1"><span class="val" id="tropV"></span></div>
-  <div class="hint">A change to the shape grows the plant again from the same seed. Tropism also acts on the growth that is still to come.</div>
+  <div class="sec-label">Model</div>
+  <div class="row"><label><span class="m2">λ</span> <span class="w">apical dominance</span></label><input type="range" id="lam" min="0.8" max="1.25" step="0.01" value="1"><span class="val" id="lamV"></span></div>
+  <div class="row"><label><span class="m1">α</span> <span class="w">resource</span></label><input type="range" id="alp" min="0.6" max="1.4" step="0.01" value="1"><span class="val" id="alpV"></span></div>
+  <div class="row"><label><span class="m3">ξ</span> <span class="w">light seeking</span></label><input type="range" id="xi" min="0" max="3" step="0.05" value="1"><span class="val" id="xiV"></span></div>
+  <div class="hint">Multipliers on the species presets. A change sows the plant again from the same seed.</div>
 
   <div class="sec-label">Show</div>
   <div class="modes">
     <button id="leavesBtn" type="button" class="on">Leaves on</button>
-    <button id="rootsBtn" type="button" class="on">Roots on</button>
+    <button id="rootsBtn" type="button">Roots off</button>
+    <button id="snowBtn" type="button" class="on">Snow on</button>
   </div>
   <div class="row"><label>Wind</label><input type="range" id="wind" min="0" max="1" step="0.01" value="0.35"><span class="val" id="windV"></span></div>
 
@@ -106,46 +122,54 @@
 
   <div class="sec-label">Readout</div>
   <table class="readout">
-    <tr><td>Nodes</td><td id="rdNodes"></td></tr>
-    <tr><td>Tips</td><td id="rdTips"></td></tr>
+    <tr><td>Time</td><td id="rdYear"></td></tr>
+    <tr><td>Season</td><td id="rdSeason"></td></tr>
     <tr><td>Height</td><td id="rdHeight"></td></tr>
-    <tr><td>Age</td><td id="rdAge"></td></tr>
-    <tr><td>Attractors left</td><td id="rdLeft"></td></tr>
+    <tr><td>Trunk diameter</td><td id="rdTrunk"></td></tr>
+    <tr><td>Live metamers</td><td id="rdNodes"></td></tr>
+    <tr><td>Buds</td><td id="rdBuds"></td></tr>
+    <tr><td>Leaves drawn</td><td id="rdLeaves"></td></tr>
+    <tr><td>Branches shed this year</td><td id="rdShed"></td></tr>
+    <tr><td>Years simulated</td><td id="rdSim"></td></tr>
     <tr><td>Root particles</td><td id="rdRoots"></td></tr>
   </table>
 
   <div class="modes" style="margin-top:14px"><button id="explainBtn" type="button">How it grows</button></div>
-  <p class="credit">Space colonisation after Runions, Lane and Prusinkiewicz (2007). Roots: DLA engine after <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman, MIT. Our own code.</p>
+  <p class="credit">Self-organising tree model after Palubicki et al. (SIGGRAPH 2009). Leaves: ambientCG scans, bark and ground: Poly Haven scans, all CC0. Roots: DLA engine after <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman, MIT. Our own code.</p>
 </div>
 
 <section id="explain" aria-label="How it grows" hidden>
   <button id="explainClose" type="button" aria-label="Close">✕</button>
   <h2>How it grows</h2>
-  <canvas id="diagram" aria-label="One colonisation step in 2D"></canvas>
+  <canvas id="diagram" aria-label="The model in 2D: the shadow grid, buds by resource, shed branches"></canvas>
   <div class="dg-key">
-    <span><i class="k-attr"></i>attractor</span>
-    <span><i class="k-di"></i>influence radius d<sub>i</sub></span>
-    <span><i class="k-dir"></i>mean direction</span>
-    <span><i class="k-dk"></i>kill distance d<sub>k</sub></span>
+    <span><i class="k-shade"></i>shadow in a voxel</span>
+    <span><i class="k-bud"></i>bud, size by resource v</span>
+    <span><i class="k-leaf"></i>leafy node</span>
+    <span><i class="k-shed"></i>shed branch</span>
   </div>
-  <h3>Space colonisation</h3>
-  <p>The plant competes for space. First, attractor points fill the shape of the crown: an ellipsoid for the oak, a cone for the conifer, a hollow dome for the willow, a vase for the fern.</p>
-  <p>In each step, each attractor finds the nearest node of the plant. It pulls that node only when the node is nearer than the influence radius d<sub>i</sub>. Each pulled node adds one segment of length D. The direction is the mean of the unit vectors to its attractors, plus small tropism terms: up to the light, level for the whorls of a conifer, down for the shoots of a willow.</p>
-  <p>When a node comes nearer than the kill distance d<sub>k</sub>, the attractor dies. The crown fills, the attractors run out, and the growth stops. Branches never cross, because two branches cannot take the same space.</p>
-  <h3>Thickness: the pipe model</h3>
-  <p>Each tip is a thin pipe that runs down to the root. A branch carries all the pipes of the branches above it, so r<sub>parent</sub><sup>p</sup> = Σ r<sub>child</sub><sup>p</sup>, with p near 2.5. The trunk gets thicker each time a new tip grows. The "Flow" colour shows how many tips each branch carries.</p>
+  <h3>A plant is made of metamers</h3>
+  <p>A shoot is a chain of metamers: an internode, a leaf, and a bud in the axil of the leaf. The tip of each shoot carries a terminal bud. Each spring some buds break and grow new shoots; the others stay dormant, and die after a few years. The page follows the model of Palubicki, Horel, Longay, Runions, Lane, Měch and Prusinkiewicz, <i>Self-organizing tree models for image synthesis</i> (SIGGRAPH 2009), year by year.</p>
+  <h3>Light from a shadow grid</h3>
+  <p>Space is cut into voxels the size of an internode. Each leafy node casts shadow down into a pyramid: a voxel k layers below gets a·b<sup>−k</sup>, spread over (2k+1)² voxels. A bud gets the light Q = (C − s + a)/C from the shadow s in its voxel. Deep in the crown Q is near zero. In a grove all plants share one grid, so they shade each other.</p>
+  <h3>The resource: Borchert and Honda</h3>
+  <p>The light flows down from the buds to the base (the basipetal pass). The base gets the resource v = αQ, and v flows back up (the acropetal pass). At each branch point the main axis gets v<sub>m</sub> = v·λQ<sub>m</sub>/(λQ<sub>m</sub> + (1−λ)Q<sub>l</sub>) and the laterals share the rest. λ is the apical dominance: a spruce has a high λ and a strong leader, an azalea a low λ and many equal stems. A bud with v ≥ 1 grows a shoot of ⌊v⌋ metamers.</p>
+  <h3>Direction, shedding, girth</h3>
+  <p>Each new metamer turns toward the least shade near it (the optimal direction), up (strongest on the leader), level (spruce laterals) or down (willow and birch twigs hang). A branch that gets too little light per metamer dies and falls in the late winter, so the crown is a shell of leaves round bare limbs. Each year the pipe model sets the girth: r<sup>n</sup> = Σ r<sub>child</sub><sup>n</sup>, and a trunk never gets thinner.</p>
+  <h3>The year</h3>
+  <p>The seed germinates in spring: a short stem with cotyledons, then the first true leaves. Each later spring the buds break and the shoots extend one metamer after the other. Leaves unfold, take the autumn colour of their species, detach, tumble down and lie as litter until the next spring. Cherry blossom opens before its leaves and its petals drift down. Snow lies on the ground and on the upper side of the limbs in winter. The trunk swells through the summer.</p>
   <h3>Roots: diffusion-limited aggregation</h3>
-  <p>Roots and dendrites look like DLA. The roots grow with the engine of the Diffusion-Limited Aggregation page, a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a>. Particles start on a sphere in the soil below the plant and walk at random. They join the roots where they first touch them. dlaf lets a program change the walk with hooks. This page sets three: <code>randomStartingPosition</code> starts each walker deep in the soil, <code>motionVector</code> adds a small drift toward the root crown, and <code>shouldReset</code> sends back a walker that leaves the soil. The walkers come from below, so the deep tips catch them first and the roots grow down.</p>
+  <p>With roots on, a quarter of the soil is cut away. The roots grow with the engine of the Diffusion-Limited Aggregation page, a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a>: particles walk at random in the soil and join the roots where they first touch them. The hooks <code>randomStartingPosition</code>, <code>motionVector</code> and <code>shouldReset</code> start the walkers deep and make them drift to the root crown, so the roots grow down. They grow as the plant does.</p>
   <h3>Colours</h3>
-  <p>Natural shows bark and leaves. The heatmaps colour each node by age (the growing tips glow), branch order, flow, height or a light estimate (the nodes above a node shade it). A gradient change recolours the plant at once.</p>
+  <p>Natural shows the scanned bark and leaves. The heatmaps colour each metamer by age (the growing tips glow), branch order, pipe flow, the resource of this year, light, or height. A gradient change recolours the plant at once.</p>
   <h3>Credits</h3>
-  <p>A. Runions, B. Lane, P. Prusinkiewicz. Modeling trees with a space colonization algorithm. Eurographics Workshop on Natural Phenomena, 2007. Our own code from the paper.</p>
-  <p>dlaf by Michael Fogleman, MIT licence, <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. The roots use our JavaScript port of its model (lib/dla-engine.js).</p>
-  <p>three.js r160, MIT licence. See CREDITS.txt in this folder.</p>
+  <p>W. Palubicki et al., Self-organizing tree models for image synthesis, ACM TOG 28(3), 2009; M. Borchert and H. Honda, 1984; K. Shinozaki et al., the pipe model, 1964. Our own code from the papers.</p>
+  <p>Leaf scans: ambientCG LeafSet005, 010, 016, 019, 023, 024 (CC0). Bark and ground: Poly Haven (CC0). dlaf by Michael Fogleman, MIT licence, <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. three.js r160, MIT. See CREDITS.txt in this folder.</p>
 </section>
 
 <div id="status">
   <span id="stMain" class="fn"></span>
+  <input type="range" id="timeline" min="0" max="40" step="0.001" value="0" aria-label="Time in years">
   <span class="right" id="stRight"></span>
 </div>
 
@@ -154,9 +178,9 @@
   <div id="dockColours" class="seg">
     <button type="button" data-mode="natural" class="on">Natural</button>
     <button type="button" data-mode="age">Age</button>
-    <button type="button" data-mode="flow">Flow</button>
+    <button type="button" data-mode="light">Light</button>
   </div>
-  <button id="dockRegrow" type="button" aria-label="Regrow">↻</button>
+  <button id="dockSow" type="button" aria-label="Sow a new seed">↻</button>
   <button id="dockPlay" type="button" aria-label="Pause">❚❚</button>
 </nav>
 
