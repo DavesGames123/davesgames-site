@@ -67,12 +67,14 @@ fn vol_medium(p: vec3f) -> VolMedium {
   // noise banks that drift with the wind
   let wind = vec3f(G.wind.x, 0.0, G.wind.y) * G.camPos.w;
   let n1 = textureSampleLevel(tNoiseBase, sRepeat, (p - wind) / 1400.0, 0.0);
-  let n2 = textureSampleLevel(tNoiseDetail, sRepeat, (p - wind * 1.7) / 260.0, 0.0);
-  let bank = clamp(n1.r * 1.3 - 0.25 + (n2.a - 0.5) * 0.4, 0.0, 1.5);
+  // the detail tile is 32 texels: at 260 m its cells read as a dotted grid
+  // on a fog top seen at a grazing angle, so it is large and weak here
+  let n2 = textureSampleLevel(tNoiseDetail, sRepeat, (p - wind * 1.7) / 900.0, 0.0);
+  let bank = clamp(n1.r * 1.3 - 0.25 + (n2.a - 0.5) * 0.25, 0.0, 1.5);
   // ground haze: a thin layer on the ground and a deep layer above the sea
-  let haze = S.vol1.z * (0.45 * exp(-hG / 140.0) + 0.55 * exp(-hSea / 1300.0)) * (0.55 + 0.6 * bank);
+  let haze = S.vol1.z * (0.45 * exp(-hG / 140.0) + 0.55 * exp(-hSea / 1700.0)) * (0.55 + 0.6 * bank);
   // valley fog: a lake of fog under the fog top, ragged top edge
-  let top = S.vol0.w + (n1.g - 0.5) * 70.0 + (n2.r - 0.5) * 25.0;
+  let top = S.vol0.w + (n1.g - 0.5) * 80.0 + (n2.r - 0.5) * 15.0;
   let valley = S.precip.w * S.vol0.z * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
   // rain and snow under the cloud base
   let below = sk_ss(S.cloud0.x + 200.0, S.cloud0.x - 300.0, p.y);
@@ -181,6 +183,8 @@ fn csFroxIntegrate(@builtin(global_invocation_id) id: vec3u) {
 @group(1) @binding(10) var tDepth: texture_depth_2d;
 @group(1) @binding(13) var tVolume: texture_3d<f32>;
 @group(1) @binding(15) var tLossSky: texture_2d<f32>;
+// the cloud accumulation of clouds.wgsl (a = transmittance through the clouds)
+@group(1) @binding(11) var tCloudAcc: texture_2d<f32>;
 
 struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
 
@@ -235,7 +239,7 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
   let far = textureSampleLevel(tVolume, sClamp, vec3f(i.uv, 1.0 - 0.5 / n), 0.0);
   let fogCol = far.rgb / max(1.0 - far.a, 1e-3);
   let h0 = max(G.camPos.y - G.terrain.z, 0.0);
-  let H = 1300.0;
+  let H = 1700.0;
   let dy = max(rd.y, 0.0);
   let path = min(H / max(dy, 1e-3), 120000.0);
   let tauHaze = S.vol1.z * 0.55 * exp(-h0 / H) * path * (1.0 - exp(-path * dy / H)) / max(path * dy / H, 1e-3);
@@ -245,7 +249,10 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
   // shafts across the sky: take off the in-scatter that ridges and cloud
   // shadows remove (at most most of the sky radiance there)
   let skyL = textureSampleLevel(tSkyView, sClamp, sk_skyViewUV(S.radii.w, rd, G.sunDir.xyz), 0.0).rgb * S.sun.y;
-  let lossSky = min(textureSampleLevel(tLossSky, sClamp, i.uv, 0.0).rgb, skyL * 0.8) * Tf;
+  // only the clear sky part of the pixel loses it: a cloud in front is a
+  // grey surface, and the blue part taken off it would turn it olive
+  let clearSky = textureSampleLevel(tCloudAcc, sClamp, i.uv, 0.0).a;
+  let lossSky = min(textureSampleLevel(tLossSky, sClamp, i.uv, 0.0).rgb, skyL * 0.8) * Tf * clearSky;
   L -= lossSky;
   L += vol_rainbow(rd);
   L += S.bolt.w * vec3f(0.5, 0.55, 0.7) * 0.2 * sk_ss(-0.1, 0.4, rd.y);

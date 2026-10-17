@@ -167,7 +167,12 @@ fn sk_sunRadiance(p: vec3f) -> vec3f {
   return S.sun.y * sk_transmittance(sk_rKm(p.y), G.sunDir.y);
 }
 fn sk_moonRadiance(p: vec3f) -> vec3f {
-  return S.moon.w * vec3f(0.85, 0.9, 1.0) * sk_transmittance(sk_rKm(p.y), S.moon.y);
+  // the eye sees moonlight as a cool grey (Purkinje shift): keep only a
+  // third of the reddening of a low moon, so a moonrise does not paint
+  // the clouds and the haze orange
+  let T = sk_transmittance(sk_rKm(p.y), S.moon.y);
+  let Tl = dot(T, vec3f(0.2126, 0.7152, 0.0722));
+  return S.moon.w * vec3f(0.85, 0.9, 1.0) * mix(vec3f(Tl), T, 0.35);
 }
 
 // Sky-view LUT mapping (Hillaire 2020, sec. 5.3): u from the azimuth to

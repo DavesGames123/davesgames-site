@@ -35,7 +35,8 @@
 //
 //  grep -n targets
 //    "export const WEATHER", "export const ATMO", "export const GLOBALS",
-//    "export function solarPosition", "export function moonPosition",
+//    "export function solarPosition", "export function todForSunElevation",
+//    "export function moonPosition",
 //    "export function sunTransmittance", "function presetVec",
 //    "export function skyState", "function lightning",
 //    "export function writeSkyGlobals", "export function createSky"
@@ -58,17 +59,17 @@ export const ATMO = Object.freeze({
 // 0 (flat stratus) .. 1 (towers), cirrus 0..1, mie = aerosol scale of the
 // atmosphere, temp = offset in C, valley = morning valley fog gain.
 export const WEATHER = Object.freeze([
-  { id: 'clear',        label: 'Clear',            cover: 0.04, rain: 0,    snow: 0,   storm: 0,    fog: 1.5e-5, wind: 3,  cumulus: 0.8, cirrus: 0.25, mie: 0.8, temp: 2,  valley: 1.0 },
-  { id: 'fair',         label: 'Fair weather',     cover: 0.30, rain: 0,    snow: 0,   storm: 0,    fog: 2.5e-5, wind: 4,  cumulus: 1.0, cirrus: 0.35, mie: 1.0, temp: 1,  valley: 0.8 },
-  { id: 'cloudy',       label: 'Cloudy',           cover: 0.58, rain: 0,    snow: 0,   storm: 0.05, fog: 4e-5,   wind: 6,  cumulus: 0.75, cirrus: 0.5, mie: 1.3, temp: 0,  valley: 0.5 },
-  { id: 'overcast',     label: 'Overcast',         cover: 0.92, rain: 0,    snow: 0,   storm: 0.1,  fog: 7e-5,   wind: 6,  cumulus: 0.2, cirrus: 0.2,  mie: 2.0, temp: -2, valley: 0.3 },
+  { id: 'clear',        label: 'Clear',            cover: 0.04, rain: 0,    snow: 0,   storm: 0,    fog: 2.4e-5, wind: 3,  cumulus: 0.8, cirrus: 0.25, mie: 0.8, temp: 2,  valley: 1.0 },
+  { id: 'fair',         label: 'Fair weather',     cover: 0.30, rain: 0,    snow: 0,   storm: 0,    fog: 4e-5,   wind: 4,  cumulus: 1.0, cirrus: 0.35, mie: 1.0, temp: 1,  valley: 0.8 },
+  { id: 'cloudy',       label: 'Cloudy',           cover: 0.58, rain: 0,    snow: 0,   storm: 0.05, fog: 5.5e-5, wind: 6,  cumulus: 0.75, cirrus: 0.5, mie: 1.3, temp: 0,  valley: 0.5 },
+  { id: 'overcast',     label: 'Overcast',         cover: 0.92, rain: 0,    snow: 0,   storm: 0.1,  fog: 9e-5,   wind: 6,  cumulus: 0.2, cirrus: 0.2,  mie: 2.0, temp: -2, valley: 0.3 },
   { id: 'fog',          label: 'Fog',              cover: 0.7,  rain: 0,    snow: 0,   storm: 0,    fog: 6e-3,   wind: 1,  cumulus: 0.0, cirrus: 0.0,  mie: 4.0, temp: -3, valley: 1.6 },
   { id: 'drizzle',      label: 'Drizzle',          cover: 0.88, rain: 0.25, snow: 0,   storm: 0.1,  fog: 1.3e-4, wind: 5,  cumulus: 0.25, cirrus: 0.1, mie: 2.5, temp: -3, valley: 0.6 },
   { id: 'rain',         label: 'Rain',             cover: 0.95, rain: 0.75, snow: 0,   storm: 0.3,  fog: 1.6e-4, wind: 8,  cumulus: 0.45, cirrus: 0.1, mie: 2.5, temp: -4, valley: 0.3 },
   { id: 'thunderstorm', label: 'Thunderstorm',     cover: 0.9,  rain: 1.0,  snow: 0,   storm: 1.0,  fog: 1.8e-4,   wind: 13, cumulus: 1.0, cirrus: 0.6,  mie: 2.2, temp: -5, valley: 0.2 },
   { id: 'snow',         label: 'Snow',             cover: 0.9,  rain: 0,    snow: 0.6, storm: 0.1,  fog: 2.6e-4,   wind: 4,  cumulus: 0.3, cirrus: 0.1,  mie: 2.0, temp: -14, valley: 0.4 },
   { id: 'blizzard',     label: 'Blizzard',         cover: 1.0,  rain: 0,    snow: 1.0, storm: 0.5,  fog: 1.6e-3, wind: 17, cumulus: 0.4, cirrus: 0.0,  mie: 3.0, temp: -20, valley: 0.0 },
-  { id: 'golden-haze',  label: 'Golden hour haze', cover: 0.18, rain: 0,    snow: 0,   storm: 0,    fog: 1.1e-4, wind: 2,  cumulus: 0.9, cirrus: 0.6,  mie: 3.5, temp: 3,  valley: 1.2 },
+  { id: 'golden-haze',  label: 'Golden hour haze', cover: 0.18, rain: 0,    snow: 0,   storm: 0,    fog: 1.6e-4, wind: 2,  cumulus: 0.9, cirrus: 0.6,  mie: 3.5, temp: 3,  valley: 1.2 },
 ]);
 const BY_ID = new Map(WEATHER.map((w) => [w.id, w]));
 const KEYS = ['cover', 'rain', 'snow', 'storm', 'fog', 'wind', 'cumulus', 'cirrus', 'mie', 'temp', 'valley'];
@@ -107,6 +108,24 @@ export function solarPosition(tod, season, latitude) {
   const H = (tod - 0.5) * 2 * Math.PI;
   const dir = altAz(dec, H, latitude * D2R);
   return { dir, elevation: Math.asin(clamp(dir[1], -1, 1)) / D2R, declination: dec / D2R };
+}
+
+// The time of day (0..1) when the sun stands at elevDeg, in the morning
+// (evening false) or the evening. Golden hour is about 2 .. 6 deg; the
+// clock time of it moves with the season and the latitude, so a fixed tod
+// is golden in one season and plain daylight in another. Returns null when
+// the sun never reaches that height that day (polar day or night).
+export function todForSunElevation(elevDeg, season, latitude, evening = false) {
+  const el = (tod) => solarPosition(tod, season, latitude).elevation;
+  // noon is the highest point: bisect on the rising or the falling half
+  let a = evening ? 0.5 : 0.0, b = evening ? 1.0 : 0.5;
+  const fa = el(a) - elevDeg, fb = el(b) - elevDeg;
+  if (fa * fb > 0) return null;
+  for (let i = 0; i < 40; i++) {
+    const m = (a + b) / 2, fm = el(m) - elevDeg;
+    if ((fm > 0) === (fa > 0)) a = m; else b = m;
+  }
+  return (a + b) / 2;
 }
 
 export function moonPosition(tod, season, latitude) {

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   skyState, createSky, WEATHER, GLOBALS, ATMO, FRONT_S, solarPosition, moonPosition,
-  sunTransmittance, writeSkyGlobals, lightning,
+  sunTransmittance, writeSkyGlobals, lightning, todForSunElevation,
 } from '../sky-state.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -179,6 +179,19 @@ check('the DLA bolt reaches down and has one main channel', () => {
   assert.equal(W.boltSegments(g2.model).count, b.count, 'seeded');
 });
 const SK = await import('../render/sky.js');
+check('todForSunElevation finds golden hour for the season and latitude', () => {
+  for (const [season, lat] of [[0.35, 46], [0.85, 46], [0.0, 10], [0.5, -35]]) {
+    const am = todForSunElevation(4, season, lat, false), pm = todForSunElevation(4, season, lat, true);
+    assert.ok(am > 0.15 && am < 0.5 && pm > 0.5 && pm < 0.85, `${season} ${lat}: ${am} ${pm}`);
+    assert.ok(Math.abs(solarPosition(am, season, lat).elevation - 4) < 0.01);
+    assert.ok(Math.abs(solarPosition(pm, season, lat).elevation - 4) < 0.01);
+  }
+  // summer mornings at 46 N are golden earlier than winter mornings
+  assert.ok(todForSunElevation(4, 0.25, 46) < todForSunElevation(4, 0.75, 46));
+  // polar night: the sun never reaches 4 deg
+  assert.equal(todForSunElevation(4, 0.75, 80), null);
+});
+
 check('cloud layer sits over the valleys, storms bring it down', () => {
   const t = { seaLevel: 0, heightScale: 2000 };
   const fair = SK.cloudLayer(t, { cover: 0.3, cumulus: 1, storm: 0, rain: 0, fog: 2e-5 });
