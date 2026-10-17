@@ -15,6 +15,10 @@
 //  CORE calls setActive(syms). The letters then get free slots in order of
 //  appearance, and indexColor() gives the same result in every view until
 //  the next setActive(). A letter with no home slot gets a hash slot.
+//  A letter that is already active keeps its slot in the next setActive(),
+//  so shared letters keep their colour from one expression to the next.
+//  setActive() fires 'tensor:palette' on window; a view that typeset TeX
+//  earlier can listen and typeset it again.
 //
 //  NAMES. A sym is a TeX name or a letter: 'mu', '\\mu', 'i', "a'" are all
 //  legal. norm() removes the backslash, the braces and the primes, so
@@ -83,9 +87,16 @@ export function setActive(syms) {
   const order = [];
   for (const raw of syms || []) { const s = norm(raw); if (s && !order.includes(s)) order.push(s); }
   const used = new Set(), out = new Map();
-  // First pass: home slots that are free. Second pass: the next free slot.
-  const later = [];
+  // Pass 0: a letter that is active now keeps its slot, so a colour does
+  // not jump when the next expression (a LEARN beat, the next entry)
+  // shares letters with this one. Pass 1: free home slots. Pass 2: the
+  // next free slot.
+  const later = [], rest = [];
   for (const s of order) {
+    const k = active.get(s);
+    if (k != null && !used.has(k)) { used.add(k); out.set(s, k); } else rest.push(s);
+  }
+  for (const s of rest) {
     const h = homeSlot(s);
     if (!used.has(h)) { used.add(h); out.set(s, h); } else later.push(s);
   }

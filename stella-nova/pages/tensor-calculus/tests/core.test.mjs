@@ -95,6 +95,15 @@ check('setActive gives distinct slots and indexColor follows it', () => {
   P.setActive([]);
   assert.equal(P.indexColor('i'), P.indexColor('a'));
 });
+check('setActive keeps the slot of a letter that stays active', () => {
+  P.setActive([]);
+  const m1 = P.setActive(['a', 'i']);           // i moves off its home slot 0
+  const m2 = P.setActive(['i', 'j']);           // i stays active: same slot
+  assert.equal(m2.get('i'), m1.get('i'));
+  assert.notEqual(m2.get('i'), m2.get('j'));
+  P.setActive([]); P.setActive([]);
+  assert.equal(P.indexSlot('i'), P.homeSlot('i'), 'empty set clears');
+});
 check('indexRGB and indexClass', () => {
   const rgb = P.indexRGB('mu');
   assert.equal(rgb.length, 3); rgb.forEach(v => assert.ok(v >= 0 && v <= 1));
