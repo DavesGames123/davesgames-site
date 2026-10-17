@@ -397,6 +397,20 @@ function pickSpecies(f, L, x, z, u) {
 }
 
 // ---------------------------------------------------------------- tiles
+// Is there a canopy candidate (a live cell of the canopy grid, a superset
+// of the real trees) within rad of (x, z)? Deterministic, seam free.
+function treeNear(f, x, z, rad) {
+  const L = LAYERS[LAYER_INDEX.canopy], c = L.r / Math.SQRT2;
+  const salt = (L.salt * 131 + f.seed * 7) | 0;
+  const gi = Math.floor((x - f.origin) / c), gj = Math.floor((z - f.origin) / c), m = Math.ceil(rad / c);
+  for (let j = gj - m; j <= gj + m; j++) for (let i = gi - m; i <= gi + m; i++) {
+    const px = f.origin + (i + cellRand(i, j, salt, 0)) * c, pz = f.origin + (j + cellRand(i, j, salt, 1)) * c;
+    if ((px - x) ** 2 + (pz - z) ** 2 > rad * rad) continue;
+    if (cellRand(i, j, salt, 3) < layerDensity(f, L, px, pz)) return true;
+  }
+  return false;
+}
+
 // One tile of one layer. tx, tz: tile indices (tile origin = origin +
 // tx * L.tile). Returns { data: Float32Array, count, layer }.
 export function scatterTile(f, layerKey, tx, tz, opts = {}) {
@@ -441,6 +455,8 @@ export function scatterTile(f, layerKey, tx, tz, opts = {}) {
     if (sp < 0) continue;
     const S = SPECIES[sp];
     if (S.kind === 'tree' && f.slopeAt(x, z) > SLOPE_TREE) continue;
+    // rocks, logs and stumps keep clear of tree trunks
+    if (L.key === 'rocks' && treeNear(f, x, z, S.key === 'boulder' ? 3.2 : 1.6)) continue;
     // scale: species jitter, larger in moist lowland, smaller in the cold
     const moist = f.moistureAt(x, z), cold = f.coldAt(x, z);
     let s = 0.72 + 0.56 * cellRand(gi, gj, salt, 5);

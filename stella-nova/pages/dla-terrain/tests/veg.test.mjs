@@ -209,6 +209,22 @@ const perBiome = {};
   check('species: rock fields round the mountain foot', base > flat * 0.2 && base > 50, base + ' at the foot, ' + flat + ' on far grass');
 }
 
+// 6b rocks keep clear of tree trunks (boulders 3.2 m, others 1.6 m)
+{
+  const rk = world.rocks, c = world.canopy;
+  const grid = new Map(), cell = 8;
+  for (let i = 0; i < c.count; i++) { const k = Math.floor(c.data[i * STRIDE] / cell) + ',' + Math.floor(c.data[i * STRIDE + 2] / cell); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
+  let bad = 0;
+  for (let i = 0; i < rk.count; i++) {
+    const x = rk.data[i * STRIDE], z = rk.data[i * STRIDE + 2], rad = SPECIES[rk.data[i * STRIDE + 5]].key === 'boulder' ? 3.2 : 1.6;
+    const gx = Math.floor(x / cell), gz = Math.floor(z / cell);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) for (const k of grid.get((gx + dx) + ',' + (gz + dz)) || []) {
+      if (Math.hypot(c.data[k * STRIDE] - x, c.data[k * STRIDE + 2] - z) < rad) bad++;
+    }
+  }
+  check('rocks: no rock, log or stump inside a tree trunk', bad === 0 && rk.count > 0, rk.count + ' rocks, ' + bad + ' too near');
+}
+
 // 7 the stream: bands and budget
 {
   const tl = tilesFor(f, 0, 0);
