@@ -17,6 +17,8 @@
 //    terrain ...... the lidar crop, the ground, knolls, rock SDFs
 //    assets ....... the CRM1 models parse; models keep off rocks
 //    glsl ......... every program of shaders.js passes naga (GLSL 450 form)
+//    worker ....... mesh-worker.js in this process: messages cloned with
+//                   their transfer lists, bricks and a rock come back
 // ============================================================================
 import { createReef, growPreset, shapeOf, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, sandY, bleachLevel, speciesHook } from './reef.js';
 import { groundY, rockSdf } from './terrain.js';
@@ -324,6 +326,30 @@ function colony(id, o = {}) {
     console.log('glsl: ' + res.map(r => `${r.name} ${r.ok ? 'ok' : 'FAIL'}`).join(', '));
     for (const r of res) ok(r.ok, `glsl: ${r.name} passes naga`, r.log);
   }
+}
+
+// ── worker (mesh-worker.js, in this process) ────────────────────────────────
+{
+  const out = [];
+  globalThis.self = globalThis;
+  globalThis.postMessage = (m, tr) => { out.push(structuredClone(m, { transfer: tr || [] })); };
+  await import('./mesh-worker.js');
+  const r = createReef({ seed: 4 }); r.loadPreset('mixed'); r.growAll(800);
+  const send = (m, tr) => self.onmessage({ data: structuredClone(m, { transfer: tr || [] }) });
+  send({ type: 'reset', polyps: 1 });
+  for (const c of r.colonies) send({ type: 'colony', k: c.k, id: c.id, normal: c.user.normal, stalk: c.sp.stalk });
+  const d = new Float32Array(r.count * 7);
+  for (let g = 0; g < r.count; g++) { const c = r.colonies[r.col[g]], i = r.loc[g]; d.set([c.k, i, c.model.parent[i], c.model.pos[i * 3], c.model.pos[i * 3 + 1], c.model.pos[i * 3 + 2], g], g * 7); }
+  send({ type: 'add', data: d }, [d.buffer]);
+  send({ type: 'rock', id: 7, rock: r.rocks[0], cell: 0.5 });
+  const t0 = Date.now();
+  await new Promise(res => { const iv = setInterval(() => { if (out.some(m => m.type === 'idle') || Date.now() - t0 > 90000) { clearInterval(iv); res(); } }, 20); });
+  const list = out.filter(m => m.type === 'bricks').flatMap(m => m.list), rock = out.find(m => m.type === 'rock');
+  const gids = new Set(); for (const b of list) for (const g of b.gids) gids.add(g);
+  console.log(`worker: ${r.count} particles -> ${list.length} brick meshes, ${list.reduce((a, b) => a + b.indices.length / 3, 0)} triangles, ${list.reduce((a, b) => a + b.polyps.length / 8, 0)} polyps, rock ${rock ? rock.indices.length / 3 : 0} tris, ${Date.now() - t0} ms`);
+  ok(out.some(m => m.type === 'idle') && list.length > 50 && list.every(b => b.positions.length === b.normals.length && b.gids.length * 3 === b.positions.length), 'worker: brick meshes come back whole, then idle');
+  ok(list.every(b => b.indices.length === 0 || b.indices.length % 3 === 0) && gids.size > r.count * 0.5, 'worker: the meshes carry the particle ids', gids.size);
+  ok(rock && rock.id === 7 && rock.indices.length > 300, 'worker: a rock mesh comes back with its id');
 }
 
 console.log(`${pass} passed, ${fail} failed`);

@@ -41,7 +41,7 @@ function tick() {
 }
 function schedule() { if (!timer) timer = setTimeout(tick, 4); }
 
-onmessage = (e) => {
+self.onmessage = (e) => {
   const m = e.data;
   if (m.type === 'reset') { M = createCoralMesher({ polyps: m.polyps ?? 1 }); gen++; idleSent = false; return; }
   if (m.type === 'colony') { M.addColony(m); return; }
