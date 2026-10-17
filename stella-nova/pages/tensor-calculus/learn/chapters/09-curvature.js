@@ -76,7 +76,7 @@ export default {
         t`Outside a star there is no matter, so $T_{\mu\nu} = 0$ and the Ricci tensor vanishes. The Riemann tensor does not: the tidal part survives in the Weyl tensor. The Schwarzschild metric is the exact solution, and its spatial slice can be drawn as the Flamm paraboloid.`,
       ],
       tex: t`\mathrm{d}s^{2} = -\Big(1-\frac{r_{\mathrm{s}}}{r}\Big)\mathrm{d}t^{2} + \Big(1-\frac{r_{\mathrm{s}}}{r}\Big)^{-1}\mathrm{d}r^{2} + r^{2}\,\mathrm{d}\Omega^{2},\qquad R_{\mu\nu} = 0`,
-      show: { view: 'all', scene: 'flamm', params: {}, entry: 'schwarzschild' },
+      show: { view: 'all', scene: 'flamm', params: {}, entry: 'schwarzschild-metric' },
       deeper: {
         title: 'Curvature as a 2-form',
         text: t`For fixed $\rho$ and $\sigma$, $R^{\rho}{}_{\sigma\mu\nu}$ is antisymmetric in $\mu\nu$: a 2-form, something you integrate over a small surface. The curvature of a connection is an endomorphism-valued 2-form $\Omega = \mathrm{d}\omega + \omega\wedge\omega$, and the holonomy round a small loop is $1 + \Omega(\text{loop}) + \cdots$. Gauss's Theorema Egregium is the statement that this curvature depends on the metric alone.`,

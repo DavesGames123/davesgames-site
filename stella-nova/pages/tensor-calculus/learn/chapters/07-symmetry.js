@@ -50,7 +50,7 @@ export default {
         t`It is built as an antisymmetrised derivative of the potential, which makes the antisymmetry automatic.`,
       ],
       tex: t`F_{\mu\nu} = \partial_{\mu}A_{\nu} - \partial_{\nu}A_{\mu} = 2\,\partial_{[\mu}A_{\nu]}`,
-      show: { view: 'all', scene: 'lorentz', params: { field: true }, entry: 'maxwell-tensor', step: 'antisymmetrize' },
+      show: { view: 'all', scene: 'lorentz', params: { beta: 0.5 }, entry: 'maxwell-tensor', step: 'antisymmetrize' },
       widget: { type: 'count', n: 4, r: 2, kind: 'antisymmetric' },
     },
     {

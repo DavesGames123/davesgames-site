@@ -59,7 +59,7 @@ export default {
         t`Lowering an index flips the sign of the time component. The four-momentum $p^{\mu} = (E, \vec p\,)$ becomes $p_{\mu} = (-E, \vec p\,)$, and the contraction $p_{\mu}p^{\mu} = -E^{2} + |\vec p\,|^{2} = -m^{2}$ is the same for every observer (units with $c=1$).`,
       ],
       tex: t`\eta_{\mu\nu} = \mathrm{diag}(-1,1,1,1),\qquad p_{\mu}p^{\mu} = -m^{2}`,
-      show: { view: 'all', scene: 'lorentz', params: { beta: 0 }, entry: 'lorentz-transformation' },
+      show: { view: 'all', scene: 'lorentz', params: { beta: 0 }, entry: 'four-momentum' },
     },
     {
       title: 'The metric of a sphere',
