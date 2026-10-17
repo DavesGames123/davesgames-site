@@ -25,7 +25,7 @@ const NAGA = [path.join(os.homedir(), '.cargo/bin/naga'), '/opt/homebrew/bin/nag
 
 function split(decl) {
   // "vec3 a, b[2], c" -> [[type, name], ...]
-  const m = decl.trim().match(/^(\w+)\s+(.+)$/);
+  const m = decl.trim().replace(/^(highp|mediump|lowp)\s+/, '').match(/^(\w+)\s+(.+)$/);
   if (!m) return [];
   return m[2].split(',').map(n => [m[1], n.trim()]);
 }

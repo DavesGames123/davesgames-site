@@ -6,6 +6,10 @@
 //  and position / normal / uv. tests.mjs wraps each shader as Vulkan
 //  GLSL 450 and checks it with naga (no browser on this machine).
 //
+//  Float textures are declared highp (particle data) or mediump (the
+//  caustic map, values up to 24): the GLSL ES 3.00 default for a
+//  sampler2D is lowp, which a phone GPU can honour.
+//
 //  The water (WATER): fog that takes the red first, the caustic map (a
 //  render target from CAUSTIC_VS / CAUSTIC_FS: the mesh-area method of
 //  pages/photon-caustics, a grid of sun rays refracted by a tiled sum of
@@ -96,7 +100,7 @@ export const WATER = /* glsl */`
 uniform float uTime, uCaust, uFogDen, uCaustTile, uCaustScale;
 uniform vec3 uFogDeep, uFogShallow, uSun;
 uniform vec2 uCur;
-uniform sampler2D uCaustTex;
+uniform mediump sampler2D uCaustTex;
 // The caustic map: light ratio E (mean about 1) at a floor point. A
 // little chromatic spread (the map is sampled three times).
 vec3 causticAt(vec3 w, vec3 n) {
@@ -165,7 +169,7 @@ void main() {
 export const PART = /* glsl */`
 uniform float uTime;
 uniform vec2 uCur;
-uniform sampler2D uPartA, uPartB;
+uniform highp sampler2D uPartA, uPartB;
 ivec2 partCoord(float g) { float gg = max(g, 0.0); return ivec2(int(mod(gg, 128.0)), int(floor(gg / 128.0))); }`;
 
 export const CORAL_VS = /* glsl */`
