@@ -347,8 +347,8 @@ fn biomeBase(id: u32) -> BW {
     case 1u: { b.w0 = vec4f(0.0); b.w1 = vec4f(1.0, 0.0, 0.0, 0.08); }
     case 2u: { b.w0 = vec4f(0.18, 0.0, 0.0, 0.0); b.w1 = vec4f(1.0, 0.0, 0.0, 0.25); b.kind = vec2f(0.0, 1.0);
                b.grass = vec3f(0.30, 0.22, 0.11); }
-    case 3u: { b.w0 = vec4f(0.04, 0.0, 0.85, 0.0); b.w1 = vec4f(0.30, 0.0, 0.0, 0.05);
-               b.grass = vec3f(0.26, 0.205, 0.085); }
+    case 3u: { b.w0 = vec4f(0.04, 0.0, 0.95, 0.0); b.w1 = vec4f(0.12, 0.0, 0.0, 0.05);
+               b.grass = vec3f(0.215, 0.185, 0.072); }
     case 4u: { b.w0 = vec4f(0.0, 0.0, 1.0, 0.0); b.w1 = vec4f(0.0, 0.0, 0.04, 0.02);
                b.grass = vec3f(0.098, 0.128, 0.043); }
     case 5u: { b.w0 = vec4f(0.0, 0.0, 0.35, 1.0); b.w1 = vec4f(0.0, 0.0, 0.08, 0.0);
@@ -1199,6 +1199,21 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let mac2 = fbm2((xz * 0.011) + 4.7, 3);
   alb *= 0.86 + (0.22 * mac) + (0.10 * mac2 * (1.0 - snowF));
   alb = mix(alb, alb * vec3f(1.06, 0.98, 0.90), clamp(mac2, 0.0, 1.0) * 0.3 * (1.0 - snowF));
+  // ---- far forest canopy: VEG streams trees to about 7 km (the scatter
+  // stream maxDist); past that the forest biomes show their crowns here,
+  // a clumped green with dark gaps, tinted by the season (deciduous only)
+  let canopyF = wa[3] * smoothstep(4500.0, 7000.0, dist) * (1.0 - snowF);
+  if (canopyF > 0.01) {
+    let cl = fbm2(xz * 0.045, 3);
+    let cl2 = fbm2((xz * 0.011) + 9.1, 3);
+    var cc = mix(vec3f(0.030, 0.052, 0.020), vec3f(0.062, 0.092, 0.034), clamp(0.5 + (cl * 0.8), 0.0, 1.0));
+    cc = mix(cc, cc * vec3f(0.85, 0.95, 1.1), clamp(bw.kind.x, 0.0, 1.0));       // boreal: bluer
+    let autumn = smoothstep(0.38, 0.5, G.weather2.w) * (1.0 - smoothstep(0.62, 0.72, G.weather2.w));
+    cc = mix(cc, cc * vec3f(2.4, 1.3, 0.6), autumn * (1.0 - bw.kind.x) * clamp(0.5 + cl2, 0.0, 1.0) * 0.7);
+    cc *= 0.8 + (0.4 * clamp(0.5 + cl2, 0.0, 1.0));
+    alb = mix(alb, cc, canopyF);
+    rough = mix(rough, 0.9, canopyF);
+  }
   let farT = smoothstep(2500.0, 14000.0, dist);
   let lum = dot(alb, vec3f(0.3, 0.59, 0.11));
   alb = mix(alb, mix(vec3f(lum), alb, 0.8), farT);

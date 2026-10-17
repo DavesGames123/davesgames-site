@@ -251,7 +251,7 @@ for (const q of [1.0, 0.3]) {
   ok(dry[0] > 5 && dry[2] > 0, 'far ring: a world with no sea gets a low land floor with relief', dry.join(','));
   ok(wet[0] < 0 && wet[2] === 0, 'far ring: a world with a sea sinks the ring under the sea', wet.join(','));
   const M = 32, K = 8, g = farRingMesh(20000, M, K);
-  const P = 4 * M, R = K + 2;
+  const P = 4 * M, R = K + 3;   // skirt, edge, K rings, the flat band to 2000 km
   ok(g.pos.length === R * P * 3 && g.idx.length === (R - 1) * P * 6, 'far ring mesh: vertex and index counts');
   let inside = 0, maxIdx = 0, onEdge = 0;
   for (let v = 0; v < R * P; v++) {
@@ -261,6 +261,7 @@ for (const q of [1.0, 0.3]) {
   }
   for (const i of g.idx) maxIdx = Math.max(maxIdx, i);
   ok(inside === P && onEdge === P && maxIdx < R * P, 'far ring mesh: one skirt ring inside, one ring on the world edge', `${inside} ${onEdge}`);
+  ok(Math.abs(g.pos[(R - 1) * P * 3 + 1]) >= 2e6, 'far ring mesh: the last ring is 2000 km out (the land reaches the horizon)');
 }
 
 console.log(`# ground: ${pass} passed, ${fail} failed`);

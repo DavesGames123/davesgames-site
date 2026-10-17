@@ -370,11 +370,15 @@ export function farRingParams(t, hMin, hMax) {
 // per side. Ring 0 is a skirt just inside the edge, 200 m down (it hides
 // the hairline between the CDLOD edge and the ring). Ring 1 lies on the
 // edge, then the rings spread out (power 2.2) to the half size plus
-// max(5 x world, 80 km). Vertex = x, z, drop m; index uint32.
+// max(5 x world, 80 km), and one flat band on to 2000 km. Vertex = x, z,
+// drop m; index uint32.
 export function farRingMesh(ws, M = 160, K = 56) {
   const half = ws / 2, rMax = half + Math.max(ws * 5, 80000);
   const radii = [half - Math.min(2, ws * 1e-4), half];
   for (let k = 1; k <= K; k++) radii.push(half + (rMax - half) * Math.pow(k / K, 2.2));
+  // one flat band on to 2000 km: the land plane reaches the horizon line
+  // (with no sea, the end of the ring showed as a line under the horizon)
+  radii.push(half + Math.max(2e6, rMax * 4));
   const P = 4 * M, R = radii.length;
   const pos = new Float32Array(R * P * 3);
   for (let r = 0; r < R; r++) {
