@@ -338,7 +338,7 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
     flash, bolt: flashObj.bolt,
     // a linear exposure that maps this light to mid grey; night is kept
     // darker than day (capped), so a moonlit scene still reads as night
-    exposureHint: Math.min(0.55 / ((amb[0] + 2 * amb[1] + amb[2]) / 4 * 0.9 + 0.02 * sunColor[1] + 1e-4), 45),
+    exposureHint: Math.min(0.55 / ((amb[0] + 2 * amb[1] + amb[2]) / 4 * 0.9 + 0.02 * sunColor[1] + 1e-4), 45) * (0.35 + 0.65 * day),
   };
   // the names of gpu/globals.js packGlobals (CORE)
   Object.assign(out, {

@@ -350,7 +350,9 @@ fn cl_cirrus(ro: vec3f, rd: vec3f, cosT: f32) -> vec4f {
   let uv = vec2f(q.x / 52000.0, q.y / 9000.0);
   let n = textureSampleLevel(tNoise2D, sRepeat, uv, 0.0).b;
   let n2 = textureSampleLevel(tNoise2D, sRepeat, uv * 3.1 + vec2f(0.4, 0.1), 0.0).b;
-  let a = clamp(sk_ss(0.62 - 0.2 * S.cloud1.y, 0.98, n * 0.6 + n2 * 0.4) * S.cloud1.y * 0.8, 0.0, 0.55);
+  // patches of cirrus, not a sheet: a large mask over the streaks
+  let mask = sk_ss(0.35, 0.75, textureSampleLevel(tNoise2D, sRepeat, p.xz / 140000.0 + vec2f(0.17, 0.53), 0.0).a + 0.25 * S.cloud1.y);
+  let a = clamp(sk_ss(0.62 - 0.2 * S.cloud1.y, 0.98, n * 0.6 + n2 * 0.4) * S.cloud1.y * 0.8 * mask, 0.0, 0.55);
   if (a <= 0.0) { return vec4f(0.0); }
   let li = cl_light(p);
   let ph = sk_hg(cosT, 0.6) * 0.8 + 0.2 / (4.0 * SK_PI);

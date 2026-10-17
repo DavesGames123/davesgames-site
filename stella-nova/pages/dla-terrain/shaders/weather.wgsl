@@ -191,7 +191,7 @@ fn vol_rainbow(rd: vec3f) -> vec3f {
   // supernumerary glow inside the bow
   let inner = sk_ss(42.0, 30.0, a) * 0.12;
   let bow = (b1 + b2 + vec3f(inner)) * sk_ss(-0.02, 0.06, rd.y + 0.04);
-  return bow * S.misc.w * G.sunColor.rgb * 0.015;
+  return bow * S.misc.w * G.sunColor.rgb * 0.011;
 }
 
 @fragment

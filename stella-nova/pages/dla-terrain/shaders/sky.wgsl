@@ -565,7 +565,7 @@ fn sk_moon(d: vec3f, m: vec3f) -> vec4f {
   let lit = max(dot(n, G.sunDir.xyz), 0.0);
   let mare = sk_ss(0.1, 0.5, sk_fbm(n * 3.0 + vec3f(5.0), 4) * 0.5 + 0.5);
   let crater = sk_worley(n * 9.0).x;
-  let albedo = (0.16 - 0.07 * mare) * (0.85 + 0.3 * sk_ss(0.05, 0.4, crater));
+  let albedo = (0.17 - 0.09 * mare) * (0.85 + 0.3 * sk_ss(0.05, 0.4, crater));
   let earthshine = 0.004;
   let edge = sk_ss(1.0, 0.9, x);
   return vec4f(vec3f(1.0, 0.97, 0.92) * albedo * (lit * 9.0 + earthshine) * edge, edge);
@@ -600,7 +600,8 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
     // are faint next to it)
     let mo = sk_moon(d, S.moon.xyz);
     if (mo.w > 0.0) {
-      L += mo.rgb * Tv * (0.4 + S.moon.w * 10.0) * sk_ss(-0.01, 0.02, S.moon.y);
+      // dimmer than nature, so the maria read at a night exposure
+      L += mo.rgb * Tv * 0.07 * sk_ss(-0.01, 0.02, S.moon.y);
     }
   }
   return L;
