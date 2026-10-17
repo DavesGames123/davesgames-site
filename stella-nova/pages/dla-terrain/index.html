@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#06080a">
+<title>DLA Terrain — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DLA TERRAIN  ·  page shell (package CORE)
+  ───────────────────────────────────────────────────────────────────────────
+   Vast procedural terrain: ridges grown by diffusion-limited aggregation
+   (lib/dla-engine.js, after dlaf by Michael Fogleman, MIT), rivers and
+   valleys from branched flow, then erosion, climate and biomes
+   (lib/dla-terrain.js). A raw WebGPU frame graph draws the ground, the
+   sky, clouds, water, grass and forests, with a day-night cycle and
+   weather. CONTRACT.md is the spec.
+
+   LOAD ORDER
+     head: gpu-guard, wishlist, stats-beacon (in that order), the viewport
+           and description metas, style.css, lib/sci.css.
+     body end: main.js (an ES module). main.js imports ui.js, camera.js,
+           saver.js and gpu/*, then loads lib/dla-terrain.js, sky-state.js
+           and the render/ modules with import() and a try/catch each.
+
+   LAYOUT  (# marks an element id that main.js or ui.js binds to)
+     #stage     the WebGPU canvas #view fills the window
+     #progress  the generation stages, top centre, while a terrain forms
+     #map       the 2D map inset (height, biomes, rivers, camera); a click
+                or tap flies the camera there
+     #panel     the controls: a left column on a wide screen, a bottom sheet
+                on a phone in portrait, a right drawer in landscape
+     #status    fps, render size, terrain readout
+     #dock      the phone dock: panel, generate, randomise, time, camera, saver
+     #notice    a module that did not load
+     #credits   the credits drawer
+     #nogpu     the message when WebGPU is missing
+
+   GREP MAP
+     grep -n 'id="panel'     controls (ui.js fills #optGroups, #wxChips ...)
+     grep -n 'id="progress'  stage bar
+     grep -n 'id="map'       map inset
+     grep -n 'id="dock'      phone dock
+     grep -n 'id="credits'   credits drawer
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Vast procedural terrain grown from diffusion-limited aggregation: DLA ridges, rivers carved by branched flow, erosion, biomes, forests, grass, water, weather and a day-night cycle, in WebGPU.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header class="topbar" data-saver-hide>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">DLA terrain</div>
+  <button id="saverBtn" class="pill" type="button" title="Screensaver (P)">Screensaver</button>
+</header>
+
+<main id="stage">
+  <canvas id="view" tabindex="0" aria-label="The terrain in 3D. Drag to turn, scroll or pinch to zoom. F flies, O orbits, G starts a drone flight."></canvas>
+  <div id="progress" data-saver-hide hidden>
+    <div class="pg-head"><span id="pgLabel">Growing DLA ridges</span><span id="pgPct"></span></div>
+    <div class="pg-bar"><div id="pgFill"></div></div>
+    <ol id="pgStages"></ol>
+  </div>
+  <figure id="map" data-saver-hide>
+    <canvas id="mapCanvas" width="256" height="256" aria-label="Map of the terrain. Click to fly there."></canvas>
+    <figcaption id="mapCap">Map</figcaption>
+    <button id="mapToggle" type="button" aria-label="Hide the map">–</button>
+  </figure>
+  <div id="hint" data-saver-hide>Drag to turn · scroll to zoom · F fly · O orbit · G drone</div>
+  <div id="notice" data-saver-hide role="status" aria-live="polite" hidden></div>
+  <div id="toast" data-saver-hide role="status" aria-live="polite" hidden></div>
+  <div id="nogpu" hidden>
+    <h2>WebGPU is not available</h2>
+    <p>This page draws the terrain with WebGPU. Use a recent Chrome, Edge or Safari to see it. The controls and the map still work.</p>
+  </div>
+</main>
+
+<button id="gear" data-saver-hide type="button" aria-label="Show the controls">☰</button>
+
+<aside id="panel" data-saver-hide class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <div class="tabs" id="sheetTabs" role="tablist">
+    <button type="button" data-tab="terrain" class="on" role="tab">Terrain</button>
+    <button type="button" data-tab="sky" role="tab">Sky</button>
+    <button type="button" data-tab="view" role="tab">View</button>
+  </div>
+  <button id="panelClose" type="button" aria-label="Close the controls">✕</button>
+
+  <section class="tab" data-tab="terrain">
+    <div class="sec-label">Presets</div>
+    <div class="chips" id="presetChips"></div>
+    <div class="seedrow">
+      <label for="seedIn">Seed</label>
+      <input id="seedIn" type="number" min="1" max="999999" step="1" inputmode="numeric">
+      <button type="button" id="seedDice" class="dice" aria-label="New seed" title="New seed">⚄</button>
+    </div>
+    <div class="btns">
+      <button type="button" id="genBtn" class="primary">Generate</button>
+      <button type="button" id="randBtn" title="Randomise every option">Randomise</button>
+    </div>
+    <div id="optGroups"></div>
+  </section>
+
+  <section class="tab" data-tab="sky" hidden>
+    <div class="sec-label">Time of day</div>
+    <div class="row"><label for="tod">Time</label><input type="range" id="tod" min="0" max="1" step="0.001" value="0.35"><span class="val" id="todV"></span></div>
+    <div class="row"><label for="todSpeed">Day length</label><input type="range" id="todSpeed" min="0" max="1" step="0.01" value="0.25"><span class="val" id="todSpeedV"></span></div>
+    <div class="btns"><button type="button" id="todPlay">Play</button><button type="button" id="todGolden">Golden hour</button></div>
+    <div class="row"><label for="season">Season</label><input type="range" id="season" min="0" max="1" step="0.01" value="0.35"><span class="val" id="seasonV"></span></div>
+    <div class="row"><label for="latitude">Latitude</label><input type="range" id="latitude" min="-70" max="70" step="1" value="46"><span class="val" id="latitudeV"></span></div>
+    <div class="sec-label">Weather</div>
+    <div class="chips" id="wxChips"></div>
+    <div id="wxSliders"></div>
+    <div class="btns"><button type="button" id="wxReset">Weather from preset</button></div>
+  </section>
+
+  <section class="tab" data-tab="view" hidden>
+    <div class="sec-label">Camera</div>
+    <div class="seg" id="camSeg">
+      <button type="button" data-cam="orbit">Orbit</button>
+      <button type="button" data-cam="fly">Fly</button>
+      <button type="button" data-cam="drone">Drone</button>
+    </div>
+    <div class="btns"><button type="button" id="droneRidge">Fly a ridge</button><button type="button" id="droneRiver">Follow a river</button></div>
+    <div class="hint" id="camHint"></div>
+    <div class="sec-label">Quality</div>
+    <div class="seg" id="qualSeg"></div>
+    <div class="sec-label">Layers</div>
+    <div class="toggles" id="layerToggles"></div>
+    <div class="sec-label">Look</div>
+    <div class="row"><label for="ev">Exposure</label><input type="range" id="ev" min="-3" max="3" step="0.05" value="0"><span class="val" id="evV"></span></div>
+    <div class="row"><label for="bloom">Bloom</label><input type="range" id="bloom" min="0" max="0.2" step="0.005" value="0.045"><span class="val" id="bloomV"></span></div>
+    <div class="row"><label for="fov">Lens</label><input type="range" id="fov" min="25" max="90" step="1" value="50"><span class="val" id="fovV"></span></div>
+    <div class="sec-label">About</div>
+    <p class="about">Mountain ranges here grow like frost: <b>diffusion-limited aggregation</b> builds a branching tree, and each level of the tree is blurred and sharpened again, so ridges branch the way real drainage divides do. <b>Branched flow</b> (rays bent by a smooth random field) gathers into channels that cut valleys and deltas, then stream-power erosion, sediment, climate and biomes finish the land.</p>
+    <div class="btns"><button type="button" id="creditsBtn">Credits</button></div>
+  </section>
+</aside>
+
+<aside id="credits" data-saver-hide hidden aria-label="Credits">
+  <button id="creditsClose" type="button" aria-label="Close the credits">✕</button>
+  <h2>Credits</h2>
+  <p><b>dlaf</b> by Michael Fogleman, MIT licence: <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. lib/dla-engine.js is our JavaScript port of its model.</p>
+  <p>Terrain method: the DLA upscale method, branched flow (Heller, Nature 2016), priority flood (Barnes, Lehman and Mulla 2014), stream power (Braun and Willett 2013), deposition (Yuan et al. 2019). Our own code.</p>
+  <p>Post: AgX tone map (Troy Sobotka; polynomial fit by Benjamin Wrensch), dual filter bloom (Marius Bjørge 2015), FXAA (Timothy Lottes 2009), TAA variance clip (Salvi 2016).</p>
+  <h3>Site shaders reused</h3>
+  <ul id="creditsShaders">
+    <li>pages/color-table/shaders/pack.wgsl: the AgX curve</li>
+    <li>pages/galaxy/shaders/post.wgsl: the bloom mix that keeps the total light</li>
+    <li>pages/forge/shaders/sky.wgsl, atmo-common.wgsl: sky, stars, sun (SKY)</li>
+    <li>pages/weather-map/shaders/clouds.wgsl, pages/volume-noise: clouds (SKY)</li>
+    <li>pages/forge (Planet Forge) maps.js, rocky.js: biome colours (LIB, GROUND)</li>
+    <li>pages/cube_branched_flow/flow.js: the branched-flow idea (LIB)</li>
+    <li>pages/height-field-water, pages/tidal-currents: water ideas (WATER)</li>
+  </ul>
+  <h3>Models and textures</h3>
+  <pre id="creditsAssets">Loading assets/nature/CREDITS.txt …</pre>
+</aside>
+
+<footer id="status" data-saver-hide>
+  <span id="stMain"></span>
+  <span id="stRight"></span>
+</footer>
+
+<nav id="dock" data-saver-hide aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockGen" type="button" class="wide" title="Generate a new terrain"><span class="k">New</span><span class="v" id="dockGenV">terrain</span></button>
+  <button id="dockDice" type="button" aria-label="Randomise">⚄</button>
+  <button id="dockTime" type="button" title="Time of day"><span class="k">Time</span><span class="v" id="dockTimeV">–</span></button>
+  <button id="dockCam" type="button" title="Camera"><span class="k">Cam</span><span class="v" id="dockCamV">Orbit</span></button>
+  <button id="dockSaver" type="button" aria-label="Screensaver">◱</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
