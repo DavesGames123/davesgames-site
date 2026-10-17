@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Grow a garden live in 3D: oak, conifer, weeping willow, cherry, fern and a flowering bush by space colonisation, with DLA roots after fogleman/dlaf and heatmap gradients for age, branch order, flow, height and light.">
+<meta name="color-scheme" content="light dark">
+<title>Plant Growth — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PLANT GROWTH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A garden plant grows live in 3D by space
+   colonisation (Runions, Lane and Prusinkiewicz 2007), and its roots grow
+   under a cut-away soil block by diffusion-limited aggregation with
+   lib/dla-engine.js (our port of fogleman/dlaf, MIT).
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
+     2. style.css, lib/sci.css, lib/growth-gradients.css
+     3. importmap for three r160, then main.js as a module (end of body)
+
+   MODULES
+     grow.js     the space colonisation model (no DOM)
+     roots.js    DLA roots on the dlaf hooks (no DOM)
+     pose.js     colour modes and the frame pass (no DOM)
+     saver.js    screensaver shots and framing maths (no DOM)
+     render.js   three.js scene: branches, leaves, roots, plinth, sky
+     diagram.js  the 2D diagram of one colonisation step (#diagram)
+     main.js     controls, the frame loop, the screensaver hook
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #gl fills the frame, #legend at the
+                 lower right, #status at the base, #explain a drawer at
+                 the right ("How it grows").
+     phone ..... #dock at the base: panel, three colour modes, regrow,
+                 play. #panel is a bottom sheet in portrait and a right
+                 drawer in landscape. #explain is a full sheet.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../lib/growth-gradients.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Plant growth</div>
+</div>
+
+<canvas id="gl" aria-label="A plant that grows in 3D"></canvas>
+<div id="nogl" hidden>This page needs WebGL 2. The plant cannot render in this browser.</div>
+<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to frame the plant</div>
+<button id="gear" type="button" aria-label="Controls">☰</button>
+
+<div id="legend" hidden>
+  <div class="lg-title" id="lgTitle">Age</div>
+  <div id="lgBar"></div>
+  <div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div>
+</div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">Species</div>
+  <div class="presets" id="speciesBtns"></div>
+  <div class="hint" id="speciesHint"></div>
+
+  <div class="sec-label">Growth</div>
+  <div class="modes">
+    <button id="playBtn" type="button">Pause</button>
+    <button id="regrowBtn" type="button">Regrow</button>
+  </div>
+  <div class="row"><label>Growth speed</label><input type="range" id="speed" min="0.25" max="4" step="0.05" value="1"><span class="val" id="speedV"></span></div>
+  <div class="seedrow">
+    <label for="seed">Seed</label>
+    <input type="number" id="seed" min="1" max="999999" step="1" value="7" inputmode="numeric">
+    <button id="seedBtn" type="button" aria-label="Random seed">Random</button>
+  </div>
+
+  <div class="sec-label">Shape</div>
+  <div class="row"><label>Crown size</label><input type="range" id="crown" min="0.6" max="1.5" step="0.05" value="1"><span class="val" id="crownV"></span></div>
+  <div class="row"><label><span class="m2">d<sub>i</sub></span> <span class="w">influence radius</span></label><input type="range" id="di" min="0.3" max="4" step="0.05" value="2.4"><span class="val" id="diV"></span></div>
+  <div class="row"><label><span class="m3">d<sub>k</sub></span> <span class="w">kill distance</span></label><input type="range" id="dk" min="0.08" max="1.4" step="0.01" value="0.62"><span class="val" id="dkV"></span></div>
+  <div class="row"><label><span class="m1">D</span> <span class="w">segment length</span></label><input type="range" id="D" min="0.06" max="0.6" step="0.01" value="0.32"><span class="val" id="DV"></span></div>
+  <div class="row"><label>Tropism strength</label><input type="range" id="trop" min="0" max="2.5" step="0.05" value="1"><span class="val" id="tropV"></span></div>
+  <div class="hint">A change to the shape grows the plant again from the same seed. Tropism also acts on the growth that is still to come.</div>
+
+  <div class="sec-label">Show</div>
+  <div class="modes">
+    <button id="leavesBtn" type="button" class="on">Leaves on</button>
+    <button id="rootsBtn" type="button" class="on">Roots on</button>
+  </div>
+  <div class="row"><label>Wind</label><input type="range" id="wind" min="0" max="1" step="0.01" value="0.35"><span class="val" id="windV"></span></div>
+
+  <div class="sec-label">Colour by</div>
+  <div class="presets" id="colourBtns"></div>
+  <div class="hint" id="colourHint"></div>
+  <div id="gradPick"></div>
+
+  <div class="sec-label">Readout</div>
+  <table class="readout">
+    <tr><td>Nodes</td><td id="rdNodes"></td></tr>
+    <tr><td>Tips</td><td id="rdTips"></td></tr>
+    <tr><td>Height</td><td id="rdHeight"></td></tr>
+    <tr><td>Age</td><td id="rdAge"></td></tr>
+    <tr><td>Attractors left</td><td id="rdLeft"></td></tr>
+    <tr><td>Root particles</td><td id="rdRoots"></td></tr>
+  </table>
+
+  <div class="modes" style="margin-top:14px"><button id="explainBtn" type="button">How it grows</button></div>
+  <p class="credit">Space colonisation after Runions, Lane and Prusinkiewicz (2007). Roots: DLA engine after <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman, MIT. Our own code.</p>
+</div>
+
+<section id="explain" aria-label="How it grows" hidden>
+  <button id="explainClose" type="button" aria-label="Close">✕</button>
+  <h2>How it grows</h2>
+  <canvas id="diagram" aria-label="One colonisation step in 2D"></canvas>
+  <div class="dg-key">
+    <span><i class="k-attr"></i>attractor</span>
+    <span><i class="k-di"></i>influence radius d<sub>i</sub></span>
+    <span><i class="k-dir"></i>mean direction</span>
+    <span><i class="k-dk"></i>kill distance d<sub>k</sub></span>
+  </div>
+  <h3>Space colonisation</h3>
+  <p>The plant competes for space. First, attractor points fill the shape of the crown: an ellipsoid for the oak, a cone for the conifer, a hollow dome for the willow, a vase for the fern.</p>
+  <p>In each step, each attractor finds the nearest node of the plant. It pulls that node only when the node is nearer than the influence radius d<sub>i</sub>. Each pulled node adds one segment of length D. The direction is the mean of the unit vectors to its attractors, plus small tropism terms: up to the light, level for the whorls of a conifer, down for the shoots of a willow.</p>
+  <p>When a node comes nearer than the kill distance d<sub>k</sub>, the attractor dies. The crown fills, the attractors run out, and the growth stops. Branches never cross, because two branches cannot take the same space.</p>
+  <h3>Thickness: the pipe model</h3>
+  <p>Each tip is a thin pipe that runs down to the root. A branch carries all the pipes of the branches above it, so r<sub>parent</sub><sup>p</sup> = Σ r<sub>child</sub><sup>p</sup>, with p near 2.5. The trunk gets thicker each time a new tip grows. The "Flow" colour shows how many tips each branch carries.</p>
+  <h3>Roots: diffusion-limited aggregation</h3>
+  <p>Roots and dendrites look like DLA. The roots grow with the engine of the Diffusion-Limited Aggregation page, a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a>. Particles start on a sphere in the soil below the plant and walk at random. They join the roots where they first touch them. dlaf lets a program change the walk with hooks. This page sets three: <code>randomStartingPosition</code> starts each walker deep in the soil, <code>motionVector</code> adds a small drift toward the root crown, and <code>shouldReset</code> sends back a walker that leaves the soil. The walkers come from below, so the deep tips catch them first and the roots grow down.</p>
+  <h3>Colours</h3>
+  <p>Natural shows bark and leaves. The heatmaps colour each node by age (the growing tips glow), branch order, flow, height or a light estimate (the nodes above a node shade it). A gradient change recolours the plant at once.</p>
+  <h3>Credits</h3>
+  <p>A. Runions, B. Lane, P. Prusinkiewicz. Modeling trees with a space colonization algorithm. Eurographics Workshop on Natural Phenomena, 2007. Our own code from the paper.</p>
+  <p>dlaf by Michael Fogleman, MIT licence, <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. The roots use our JavaScript port of its model (lib/dla-engine.js).</p>
+  <p>three.js r160, MIT licence. See CREDITS.txt in this folder.</p>
+</section>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockColours" class="seg">
+    <button type="button" data-mode="natural" class="on">Natural</button>
+    <button type="button" data-mode="age">Age</button>
+    <button type="button" data-mode="flow">Flow</button>
+  </div>
+  <button id="dockRegrow" type="button" aria-label="Regrow">↻</button>
+  <button id="dockPlay" type="button" aria-label="Pause">❚❚</button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
