@@ -145,7 +145,21 @@ fn pcg3(v0: vec3u) -> vec3u {
   v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
   return v;
 }
-fn hash31(p: vec3i) -> f32 { return f32(pcg3(bitcast<vec3u>(p)).x) * (1.0 / 4294967296.0); }
+// scalar PCG on a mixed key: a quarter of the work of pcg3 when one value
+// is all that is needed (value noise)
+fn pcg1(v: u32) -> u32 {
+  let st = (v * 747796405u) + 2891336453u;
+  let w = ((st >> ((st >> 28u) + 4u)) ^ st) * 277803737u;
+  return (w >> 22u) ^ w;
+}
+fn hash31(p: vec3i) -> f32 {
+  let q = bitcast<vec3u>(p);
+  return f32(pcg1((q.x * 73856093u) ^ (q.y * 19349663u) ^ (q.z * 83492791u))) * (1.0 / 4294967296.0);
+}
+fn hash21(p: vec2i, k: u32) -> f32 {
+  let q = bitcast<vec2u>(p);
+  return f32(pcg1((q.x * 73856093u) ^ (q.y * 19349663u) ^ (k * 83492791u))) * (1.0 / 4294967296.0);
+}
 fn hash33(p: vec3i) -> vec3f { return vec3f(pcg3(bitcast<vec3u>(p))) * (1.0 / 4294967296.0); }
 fn hash22(p: vec2i) -> vec2f { return hash33(vec3i(p, 917)).xy; }
 
@@ -180,10 +194,10 @@ fn vnoise2(p: vec2f) -> f32 {
   let i = vec2i(fl);
   let f = p - fl;
   let u = f * f * (3.0 - 2.0 * f);
-  let a = hash33(vec3i(i, 3)).x;
-  let b = hash33(vec3i(i + vec2i(1, 0), 3)).x;
-  let c = hash33(vec3i(i + vec2i(0, 1), 3)).x;
-  let d = hash33(vec3i(i + vec2i(1, 1), 3)).x;
+  let a = hash21(i, 3u);
+  let b = hash21(i + vec2i(1, 0), 3u);
+  let c = hash21(i + vec2i(0, 1), 3u);
+  let d = hash21(i + vec2i(1, 1), 3u);
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y) * 2.0 - 1.0;
 }
 fn fbm2(p0: vec2f, oct: i32) -> f32 {
@@ -301,7 +315,7 @@ fn biomeBase(id: u32) -> BW {
 fn biomeMix(xz: vec2f) -> BW {
   let n = vec2i(textureDimensions(tBiome));
   let tex = G.terrain.x / f32(n.x);
-  let j = vec2f(fbm2(xz / (tex * 2.3), 3), fbm2((xz / (tex * 2.3)) + 31.7, 3)) * (tex * 0.9);
+  let j = vec2f(fbm2(xz / (tex * 2.3), 2), fbm2((xz / (tex * 2.3)) + 31.7, 2)) * (tex * 0.9);
   let g = (gUV(xz + j) * vec2f(n)) - 0.5;
   let fl = floor(g);
   let i = vec2i(fl);
@@ -343,10 +357,20 @@ fn seasonGrass(c: vec3f, season: f32, dry: f32) -> vec3f {
 fn streakNoise(p: vec3f, down: vec2f, f: f32, st: f32, seed: f32) -> vec4f {
   var acc = vec4f(0.0);
   var ws = 0.0;
-  for (var k = 0; k < 4; k++) {
+  // the two fixed directions on each side of the downhill line (an axis:
+  // angle mod pi), blended smoothly
+  var a0 = atan2(down.y, down.x);
+  a0 = a0 - (floor(a0 / 3.14159265) * 3.14159265);
+  let fk = a0 / 0.78539816;
+  let k0 = floor(fk);
+  let tb = smoothstep(0.0, 1.0, fk - k0);
+  for (var j = 0; j < 2; j++) {
+    let kk = k0 + f32(j);
+    let k = i32(kk) % 4;
+    // the angle of the wrapped index: k = 4 is the same field as k = 0
     let ang = f32(k) * 0.78539816;
     let d = vec2f(cos(ang), sin(ang));
-    let w = pow(abs(dot(down, d)), 6.0);
+    let w = select(1.0 - tb, tb, j == 1);
     if (w < 0.01) { continue; }
     let a = vec2f(-d.y, d.x);
     let q = vec3f(dot(p.xz, a) * f, dot(p.xz, d) * f * st, (p.y * f * 0.25) + seed + (f32(k) * 5.3));
@@ -366,7 +390,9 @@ fn macroErosion(p: vec3f, down: vec2f, steep: f32, fp: f32) -> vec2f {
   var g = vec2f(0.0);
   var wl = 90.0;
   var amp = 26.0;
+  let octs = select(3, 1, U.mat.w < 0.45);
   for (var i = 0; i < 3; i++) {
+    if (i >= octs) { break; }
     let fade = 1.0 - smoothstep(wl * 0.12, wl * 0.3, fp);
     if (fade <= 0.0) { break; }
     let n = streakNoise(p, down, 1.0 / wl, 0.12, f32(i) * 17.1);
@@ -419,7 +445,10 @@ fn worley3(p: vec3f) -> Cell3 {
 fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec2f, slope: f32) -> Mat {
   var m: Mat;
   let big = fbmd(p, 0.07, 3, 0.5, fp);
-  let fine = fbmd(p, 0.9, 6, 0.5, fp);
+  // grain: 4 octaves with the ASSETS textures on (they bring the fine grain)
+  let fine = fbmd(p, 0.9, select(6, 4, U.mat.x > 0.5), 0.5, fp);
+  // one mid-scale field for the mottle, the lichen and the weathering
+  let midN = fbmd(p, 0.3, 3, 0.55, fp).x;
   // plain fbm for the grain (a ridged |n| drew worm lines all over)
   let ridged = fine.x * 0.5 + 0.5;
   var h = 0.42 + (0.24 * big.x) + (0.16 * fine.x);
@@ -429,10 +458,13 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   // does not read as paving
   let bs = mix(9.0, 5.0, cliff);
   let wq = (p / bs) + vec3f(big.x * 0.6, big.x * 0.3, -big.x * 0.5);
-  let cw = worley3(wq * vec3f(1.0, mix(1.0, 1.6, cliff), 1.0));
-  let edge = cw.f2 - cw.f1;
   let open = smoothstep(-0.05, 0.35, fbm2((p.xz * 0.11) + (p.y * 0.07), 3) + (cliff * 0.25));
   let fadeJ = (1.0 - smoothstep(0.08 * bs, 0.3 * bs, fp)) * open;
+  // the 27-cell Worley only where joints show
+  var cw: Cell3;
+  cw.f1 = 0.0; cw.f2 = 1.0; cw.g = vec3f(0.0); cw.id = 0.5;
+  if (fadeJ > 0.001) { cw = worley3(wq * vec3f(1.0, mix(1.0, 1.6, cliff), 1.0)); }
+  let edge = cw.f2 - cw.f1;
   let cwid = 0.07;
   let crack = (1.0 - smoothstep(0.0, cwid, edge)) * fadeJ;
   let dcrack = -select(0.0, 1.0 / cwid, edge < cwid) * fadeJ;
@@ -462,7 +494,7 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   let strat = smoothstep(0.5, 0.7, slope) * mix(0.2, 1.0, region.y);
   let bandA = (1.0 - smoothstep(1.5, 4.0, fp)) * strat;
   let band = mix(0.5, sin((p.y + warpY) * 0.55) * 0.5 + 0.5, bandA);
-  let mott = fbmd(p * vec3f(1.0, 0.6, 1.0), 0.18, 3, 0.5, fp).x * 0.5 + 0.5;
+  let mott = (big.x * 0.6) + (midN * 0.4) + 0.5;
   let band2 = mix(mott, sin((p.y + warpY * 1.7) * 1.3) * 0.5 + 0.5, (1.0 - smoothstep(0.5, 1.5, fp)) * strat * 0.7);
   let blockTint = mix(0.92, 1.08, cw.id);
   let granite = mix(vec3f(0.155, 0.150, 0.142), vec3f(0.235, 0.226, 0.212), band2) * mix(1.0, blockTint, fadeJ);
@@ -475,12 +507,12 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   c *= 1.0 - (cliff * 0.30 * smoothstep(0.1, 0.8, streak));
   c *= 1.0 - (gully * 0.35);
   // lichen: grey-green and ochre crusts on the block tops
-  let lichN = fbmd(p, 0.45, 3, 0.5, fp).x;
+  let lichN = (midN * 0.8) + (fine.x * 0.3);
   let lich = smoothstep(0.1, 0.55, lichN + (moist - 0.45)) * (1.0 - crack);
   c = mix(c, mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, lichN)), lich * 0.4 * (1.0 - (region.y * 0.8)));
   // cracks dark, block tops a little lighter
   // weathering: tone patches at 1..6 m, so a face is not one flat grey
-  let wz = fbmd(p, 0.35, 3, 0.55, fp).x;
+  let wz = midN;
   c *= mix(0.68, 1.18, smoothstep(-0.55, 0.55, wz));
   c *= mix(1.0, 0.5, crack) * mix(0.86, 1.06, clamp(h, 0.0, 1.0));
   // ledge undercuts shade dark, ledge tops catch light
@@ -757,7 +789,7 @@ fn skyColour(d: vec3f) -> vec3f {
 // fn terrainShadow). Soft penumbra from the closest miss. 1 = lit.
 fn marchShadow(world: vec3f, l: vec3f, fp: f32) -> f32 {
   if (U.shadow.y < 0.5 || l.y <= -0.05) { return select(1.0, 0.0, l.y <= -0.05); }
-  let steps = select(14, 28, U.mat.w > 0.5);
+  let steps = select(12, 22, U.mat.w > 0.5);
   var t = max(G.terrain.w * 1.5, 4.0);
   let tmax = U.shadow.z;
   let grow = pow(tmax / t, 1.0 / f32(steps));
@@ -854,10 +886,17 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let nA = nrmAt(xz);
   let nb = normalize(nA.xyz + vec3f(0.0, 1e-4, 0.0));
   let gB = -nb.xz / max(nb.y, 0.08);
-  let e = clamp(fp * 0.75, 0.1, G.terrain.w * 0.5);
-  let dx = detailHeight(xz + vec2f(e, 0.0)) - detailHeight(xz - vec2f(e, 0.0));
-  let dz = detailHeight(xz + vec2f(0.0, e)) - detailHeight(xz - vec2f(0.0, e));
-  let gD = gB + (vec2f(dx, dz) / (2.0 * e));
+  // (detailHeight costs ~30 texel loads: four calls only where its slope
+  // shows, at quality 0.5 and up within 900 m)
+  var gD = gB;
+  if ((q >= 0.5) && (dist < 900.0)) {
+    // forward differences: three calls, not four
+    let e = clamp(fp * 0.6, 0.08, G.terrain.w * 0.4);
+    let d0 = detailHeight(xz);
+    let dx = detailHeight(xz + vec2f(e, 0.0)) - d0;
+    let dz = detailHeight(xz + vec2f(0.0, e)) - d0;
+    gD += (vec2f(dx, dz) / e) * (1.0 - smoothstep(600.0, 900.0, dist));
+  }
   let down0 = normalize(gD + vec2f(1e-5, 0.0));
   let steep0 = smoothstep(0.18, 0.7, length(gB));
   let gE = macroErosion(p, down0, steep0 * (0.5 + (0.5 * q)), fp);
@@ -904,7 +943,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   w1.w += (1.0 - tree) * 0.4 * soft;
   // beaches near the sea: sand on low flat ground, wet sand below the
   // swash line (forge planet.wgsl shore idea)
-  let beach = (1.0 - smoothstep(1.5, 5.0 + (jit * 3.0), hAbove)) * soft;
+  let beach = (1.0 - smoothstep(1.5, max(5.0 + (jit * 3.0), 2.5), hAbove)) * soft;
   w1.x += beach * 2.0;
   w0.z *= 1.0 - (beach * 0.9);
   w0.w *= 1.0 - beach;
@@ -950,11 +989,14 @@ fn fs(v: VOut) -> @location(0) vec4f {
   wsum = max(wsum, 1e-3);
   var mats = array<Mat, 8>();
   var hmax = -10.0;
+  var rockM: Mat;
+  var rockDone = false;
+  let cliffShare = wa[1] / max(wa[0] + wa[1], 1e-4);
   // asset textures: full near, gone past ~260 m (the procedural layers and
   // the macro terms carry the far ground)
   let texF = U.mat.x * (1.0 - smoothstep(110.0, 260.0, dist));
   let farMix = smoothstep(10.0, 45.0, dist) * 0.5;
-  let triOn = slope > 0.28;
+  let triOn = slope > 0.4;
   let sg = seasonGrass(bw.grass, G.weather2.w, 0.0);
   // texture position with a slow warp (in m): the tile rows do not line up
   let pw = p + vec3f(fbm2(xz * 0.045, 2), 0.0, fbm2((xz * 0.045) + 19.1, 2)) * 1.6;
@@ -973,8 +1015,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
     let hasTex = hasSet && (texF > 0.01);
     if ((i <= 1u) || !hasSet) {
       switch (i) {
-        case 0u: { m = layerRock(p, fp, 0.0, moist, region, down, slope); }
-        case 1u: { m = layerRock(p, fp, 1.0, moist, region, down, slope); }
+        // rock and cliff share one evaluation (cliff share = the blend of
+        // the two weights): it is the most costly layer
+        case 0u: { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope); rockDone = true; m = rockM; }
+        case 1u: {
+          if (!rockDone) { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope); rockDone = true; }
+          m = rockM;
+        }
         case 2u: { m = layerGrass(p, fp, bw.grass, moist); }
         case 3u: { m = layerForest(p, fp, bw.litter, moist); }
         case 4u: { m = layerSand(p, fp, region, slope); }
@@ -987,13 +1034,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
     m.tn = vec3f(0.0);
     m.ao = 1.0;
     if (hasSet) {
-      let tri = triOn && (i <= 1u);
+      let tri = triOn && (i == 1u);
       // far: the mean of the set (its 1 x 1 mip), so the colour does not
       // change where the texture fades out
       // target colours of the roles (tuned with the procedural palettes)
       var tgtP = rockMean(region);
       var tgtA = vec3f(0.23, 0.22, 0.20);
-      var rmin = 0.6;
+      var rmin = 0.72;
       switch (i) {
         case 1u: { tgtP = rockMean(region) * 0.9; tgtA = rockMean(region); }
         case 2u: { tgtP = sg; tgtA = seasonGrass(vec3f(0.20, 0.155, 0.075), G.weather2.w, 0.0); rmin = 0.8; }
@@ -1111,8 +1158,14 @@ fn fs(v: VOut) -> @location(0) vec4f {
     sh = sunShadow(p, nGeo);
     // the march starts on the base surface: detail relief under the base
     // would shadow itself in the bilinear field
-    let ms = marchShadow(vec3f(p.x, max(p.y, baseH(xz)) + 0.5, p.z), L, fp);
-    sh = min(sh, ms);
+    // the cascades hold the terrain casters out to their far split; the
+    // march covers the ground past them (or all of it with no cascades)
+    let nc = i32(cascades.params.x);
+    let cFar = select(0.0, cascades.splits[max(nc - 1, 0)], nc > 0);
+    if (dist > cFar * 0.75) {
+      let ms = marchShadow(vec3f(p.x, max(p.y, baseH(xz)) + 0.5, p.z), L, fp);
+      sh = min(sh, mix(1.0, ms, smoothstep(cFar * 0.75, cFar * 0.95 + 1.0, dist)));
+    }
     // the ground's own normal turns away from the sun
     sh *= smoothstep(-0.02, 0.08, dot(nGeo, L) + 0.03);
     sh *= cloudShadowAt(p);

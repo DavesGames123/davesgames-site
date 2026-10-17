@@ -228,6 +228,8 @@ for (const q of [1.0, 0.3]) {
   };
   const bad = code.map((l, i) => [l, i + 1]).filter(([l]) => mixed(l, '&&', '||') || (/\^/.test(l) && mixed(l.replace(/\*\*/g, ''), '*', '^')));
   ok(bad.length === 0, 'ground.wgsl: no unparenthesised mixed && / || or * / ^', bad.map(([, n]) => n).join(','));
+  const falling = [...src.matchAll(/smoothstep\(\s*(-?[0-9.]+)\s*,\s*(-?[0-9.]+)\s*,/g)].filter((m) => +m[1] >= +m[2]).map((m) => m[0]);
+  ok(falling.length === 0, 'ground.wgsl: no smoothstep with falling or equal edges (undefined on Metal)', falling.join(' '));
   ok(/fn vs\(/.test(src) && /fn vsShadow\(/.test(src) && /fn fs\(/.test(src), 'ground.wgsl has the vs, vsShadow and fs entry points');
   ok(!/@group\(0\)/.test(src), 'ground.wgsl declares no group 0 binding (common.wgsl owns group 0)');
 }
