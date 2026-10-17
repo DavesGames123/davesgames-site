@@ -7,8 +7,11 @@
 //    cascaded sun shadow at group 2) then csFroxIntegrate, each frame in
 //    compute(). Grid by quality: 160 x 90 x 64, 128 x 72 x 48, 96 x 54 x 32.
 //    The inject target is a ping-pong pair: last frame's froxels are the
-//    history of the temporal blend. fsHaze applies the volume in CORE's
-//    volumetric pass.
+//    history of the temporal blend. A second pair holds the sun in-scatter
+//    that the shadows take away; the integrate pass sums it per column into
+//    a 2D texture (tLossSky), and fsHaze takes it off the sky pixels, so
+//    shafts from ridges and cloud gaps cross the sky too. fsHaze applies
+//    the volume in CORE's volumetric pass.
 //    Group 2 for the inject pass: CORE's shadow sample bind group when it
 //    is given (frame.shadowBindGroup, gpu.shadowSampleBindGroup or
 //    gpu.shadows.sampleBindGroup), else a stand-in with no cascades (lit).
@@ -152,10 +155,14 @@ export async function createWeather(gpu, shared) {
     inject: device.createBindGroupLayout({ label: 'frox inject', entries: [
       { binding: 0, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } },
       { binding: 1, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 4, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } },
+      { binding: 5, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
     ] }),
     integ: device.createBindGroupLayout({ label: 'frox integrate', entries: [
       { binding: 2, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
       { binding: 3, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } },
+      { binding: 6, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 7, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float' } },
     ] }),
   };
   const premul = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
@@ -185,13 +192,16 @@ export async function createWeather(gpu, shared) {
   function makeVolumes() {
     if (vt) for (const t of vt.all) t.destroy();
     const mk = (label) => device.createTexture({ label, size: grid, dimension: '3d', format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING });
-    vt = { inj: [mk('frox inject 0'), mk('frox inject 1'), ], vol: mk('frox volume') };
-    vt.all = [...vt.inj, vt.vol];
-    vt.v = { inj: vt.inj.map((t) => t.createView()), vol: vt.vol.createView() };
+    const lossSky = device.createTexture({ label: 'frox sky loss', size: [grid[0], grid[1]], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING });
+    vt = { inj: [mk('frox inject 0'), mk('frox inject 1')], loss: [mk('frox loss 0'), mk('frox loss 1')], vol: mk('frox volume'), lossSky };
+    vt.all = [...vt.inj, ...vt.loss, vt.vol, lossSky];
+    vt.v = { inj: vt.inj.map((t) => t.createView()), loss: vt.loss.map((t) => t.createView()), vol: vt.vol.createView(), lossSky: lossSky.createView() };
     vt.injectBG = [0, 1].map((i) => device.createBindGroup({ layout: G3.inject, entries: [
-      { binding: 0, resource: vt.v.inj[i] }, { binding: 1, resource: vt.v.inj[1 - i] }] }));
+      { binding: 0, resource: vt.v.inj[i] }, { binding: 1, resource: vt.v.inj[1 - i] },
+      { binding: 4, resource: vt.v.loss[i] }, { binding: 5, resource: vt.v.loss[1 - i] }] }));
     vt.integBG = [0, 1].map((i) => device.createBindGroup({ layout: G3.integ, entries: [
-      { binding: 2, resource: vt.v.inj[i] }, { binding: 3, resource: vt.v.vol }] }));
+      { binding: 2, resource: vt.v.inj[i] }, { binding: 3, resource: vt.v.vol },
+      { binding: 6, resource: vt.v.loss[i] }, { binding: 7, resource: vt.v.lossSky }] }));
     vt.ping = 0;
     stamp++;
   }
@@ -284,7 +294,7 @@ export async function createWeather(gpu, shared) {
       pass.end();
     },
 
-    drawResources() { return { volumeView: vt.v.vol, boltBuffer, stamp }; },
+    drawResources() { return { volumeView: vt.v.vol, lossView: vt.v.lossSky, boltBuffer, stamp }; },
 
     draw(pass, frame, g1) {
       pass.setPipeline(pHaze);

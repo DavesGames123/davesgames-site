@@ -27,7 +27,8 @@
 //    group 1 READ   bindings 0..9 of sky.wgsl (uniform, LUTs, cloud shadow,
 //                   noise, samplers): the compute passes that only read
 //    group 1 DRAW   READ + 10 scene depth, 11 cloud accum, 12 cloud depth,
-//                   13 froxel volume, 14 bolt segments: the draw passes.
+//                   13 froxel volume, 14 bolt segments, 15 sky shaft loss:
+//                   the draw passes.
 //                   Draw pipelines use 2 groups only, so CORE's group 2 in
 //                   the volumetric pass stays as it is.
 //    group 1 small  per writer pass, only what it reads (no usage clash)
@@ -103,6 +104,7 @@ function makeLayouts(device, gpu) {
     { binding: 10, visibility: SS.VERTEX | SS.FRAGMENT, texture: { sampleType: 'depth' } },
     tex(11), tex(12), tex(13, { viewDimension: '3d' }),
     { binding: 14, visibility: SS.VERTEX | SS.FRAGMENT, buffer: { type: 'read-only-storage' } },
+    tex(15),
   ]);
   const sub = (ids) => device.createBindGroupLayout({ label: 'sky g1 ' + ids.join(','), entries: read.filter((e) => ids.includes(e.binding)) });
   return {
@@ -233,7 +235,7 @@ export async function createSky(gpu) {
     let g = tg.drawBG.get(key);
     const vb = weather.drawResources();
     if (g && g.stamp === vb.stamp && g.ping === tg.ping) return g.bg;
-    const e = readEntries.concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }]]);
+    const e = readEntries.concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }], [15, vb.lossView]]);
     g = { bg: bg(L.draw, e, 'sky draw'), stamp: vb.stamp, ping: tg.ping };
     tg.drawBG.set(key, g);
     if (tg.drawBG.size > 8) tg.drawBG.delete(tg.drawBG.keys().next().value);

@@ -21,7 +21,9 @@
 //    fsHaze         applies the volume to the scene (and to water, which
 //                   is in the scene colour by then). Sky pixels get the
 //                   fog part only, by a closed form height-fog integral
-//                   coloured by the far slice. Rainbows: primary at 42 deg
+//                   coloured by the far slice, and the shafts: the sky LUT
+//                   has no shadows, so the in-scatter that shadows remove
+//                   (outLoss, integrated into tLossSky) comes off the sky. Rainbows: primary at 42 deg
 //                   and secondary at 51 deg round the anti-solar point,
 //                   with Alexander's dark band, when S.misc.w > 0.
 //    The height-fog idea and the sun in-scatter follow the city fog of
@@ -82,6 +84,10 @@ fn vol_medium(p: vec3f) -> VolMedium {
 
 @group(3) @binding(0) var outInject: texture_storage_3d<rgba16float, write>;
 @group(3) @binding(1) var histInject: texture_3d<f32>;
+// the sun in-scatter that the shadows take away (rgb), for the shafts
+// across the sky: the sky LUT has no shadows, so fsHaze takes this off it
+@group(3) @binding(4) var outLoss: texture_storage_3d<rgba16float, write>;
+@group(3) @binding(5) var histLoss: texture_3d<f32>;
 
 // in-scatter and extinction are stored per km (x 1000) so fp16 keeps them
 const VOL_K: f32 = 1000.0;
@@ -103,8 +109,12 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   // fog droplets: forward peak plus a broad part
   let pF = mix(sk_hg(cosT, 0.72), 1.0 / (4.0 * SK_PI), 0.35);
   let sun = sk_sunRadiance(p);
-  var vis = cloudShadow(p);
+  let cvis = cloudShadow(p);
+  var vis = cvis;
   if (vis > 0.001 && G.sunDir.y > -0.05) { vis *= sunShadow(p, vec3f(0.0)); }
+  // the loss counts the air only (the Rayleigh and Mie of the sky LUT);
+  // under a full deck there is no clear-sky shaft to take away
+  var loss = sun * (1.0 - vis) * (m.sR * pR + vec3f(m.sM * pM)) * (1.0 - S.cloud0.z * 0.8);
   let rKm = sk_rKm(p.y);
   let ms = sk_multi(rKm, G.sunDir.y) * S.sun.y;
   var Ls = sun * vis * (m.sR * pR + vec3f(m.sM * pM + m.sF * pF)) + ms * (m.sR + vec3f(m.sM + m.sF * 0.5));
@@ -117,6 +127,7 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   let bd = length(p - S.bolt.xyz);
   Ls += S.bolt.w * vec3f(0.7, 0.78, 1.0) * (m.sF + m.sM + 2e-5) * (0.6 + 30.0 * exp(-bd / 1200.0));
   var cur = vec4f(Ls * VOL_K, m.ext * VOL_K);
+  var curLoss = vec4f(loss * VOL_K, 1.0);
 
   // temporal reprojection
   let pc = G.prevViewProj * vec4f(p, 1.0);
@@ -127,32 +138,41 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
     if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0)) && pz > 0.0 && pz < 1.0) {
       let h = textureSampleLevel(histInject, sClamp, vec3f(puv, pz), 0.0);
       cur = mix(cur, h, S.vol2.w);
+      let hl = textureSampleLevel(histLoss, sClamp, vec3f(puv, pz), 0.0);
+      curLoss = mix(curLoss, hl, S.vol2.w);
     }
   }
   textureStore(outInject, id, cur);
+  textureStore(outLoss, id, curLoss);
 }
 
 @group(3) @binding(2) var inInject: texture_3d<f32>;
 @group(3) @binding(3) var outVolume: texture_storage_3d<rgba16float, write>;
+@group(3) @binding(6) var inLoss: texture_3d<f32>;
+@group(3) @binding(7) var outLossSky: texture_storage_2d<rgba16float, write>;
 
 @compute @workgroup_size(8, 8, 1)
 fn csFroxIntegrate(@builtin(global_invocation_id) id: vec3u) {
   let gd = vol_grid();
   if (id.x >= gd.x || id.y >= gd.y) { return; }
   var L = vec3f(0.0);
+  var Lo = vec3f(0.0);
   var T = 1.0;
   var dPrev = 0.0;
   for (var z = 0u; z < gd.z; z++) {
     let v = textureLoad(inInject, vec3u(id.xy, z), 0) / VOL_K;
+    let lo = textureLoad(inLoss, vec3u(id.xy, z), 0).rgb / VOL_K;
     let dEnd = vol_sliceDist(f32(z) + 1.0);
     let dt = dEnd - dPrev;
     dPrev = dEnd;
     let ext = max(v.a, 1e-9);
     let Ts = exp(-ext * dt);
     L += T * (v.rgb - v.rgb * Ts) / ext;
+    Lo += T * (lo - lo * Ts) / ext;
     T *= Ts;
     textureStore(outVolume, vec3u(id.xy, z), vec4f(L, T));
   }
+  textureStore(outLossSky, vec2u(id.xy), vec4f(Lo, T));
 }
 
 // ── apply ────────────────────────────────────────────────────────────────────
@@ -160,6 +180,7 @@ fn csFroxIntegrate(@builtin(global_invocation_id) id: vec3u) {
 // (10 scene depth, 11 and 12 the cloud targets of clouds.wgsl, 13, 14)
 @group(1) @binding(10) var tDepth: texture_depth_2d;
 @group(1) @binding(13) var tVolume: texture_3d<f32>;
+@group(1) @binding(15) var tLossSky: texture_2d<f32>;
 
 struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
 
@@ -221,6 +242,11 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
   let tauPrec = (S.vol1.x * 1.2e-4 + S.vol1.y * 3.5e-4) * min(max(S.cloud0.x - G.camPos.y, 0.0) / max(dy, 0.05), 6000.0);
   let Tf = exp(-(tauHaze * 0.6 + tauPrec));
   var L = fogCol * (1.0 - Tf);
+  // shafts across the sky: take off the in-scatter that ridges and cloud
+  // shadows remove (at most most of the sky radiance there)
+  let skyL = textureSampleLevel(tSkyView, sClamp, sk_skyViewUV(S.radii.w, rd, G.sunDir.xyz), 0.0).rgb * S.sun.y;
+  let lossSky = min(textureSampleLevel(tLossSky, sClamp, i.uv, 0.0).rgb, skyL * 0.8) * Tf;
+  L -= lossSky;
   L += vol_rainbow(rd);
   L += S.bolt.w * vec3f(0.5, 0.55, 0.7) * 0.2 * sk_ss(-0.1, 0.4, rd.y);
   return vec4f(L, 1.0 - Tf);
