@@ -548,6 +548,43 @@ else {
     b.stop();
   });
 
+  check('real LEARN: every beat of every chapter drives the page with no error', async () => {
+    let LEARN = null;
+    try { LEARN = await import(join(ROOT, 'learn/index.js')); } catch (e) { console.log('     skip: learn did not load'); return; }
+    if (!LEARN.createLearn) { console.log('     skip: no createLearn'); return; }
+    const { win, doc } = makeDom();
+    const warns = [];
+    win.console = { info() {}, log() {}, warn: (...a) => warns.push(a.map(String).join(' ')), error: (...a) => warns.push(a.map(String).join(' ')) };
+    // createLearn and its widgets use the globals document, location and
+    // history. Set them for this check only.
+    const keep = {};
+    for (const k of ['document', 'location', 'history', 'window']) { keep[k] = Object.getOwnPropertyDescriptor(globalThis, k); Object.defineProperty(globalThis, k, { value: win[k === 'window' ? 'window' : k], configurable: true, writable: true }); }
+    win.__TC_NO_AUTOBOOT = true;
+    try {
+      let rafFn = null, clock = 0;
+      const b = await MAIN.boot({ doc, win, typeset: (el, t) => { el.textContent = t; return Promise.resolve(true); }, raf: fn => { rafFn = fn; }, now: () => clock, noAnimate: true, saver: false });
+      let entries = 0;
+      b.api.on('entry', () => entries++);
+      doc.querySelectorAll('#learnMenu .chapter-row')[0].click();
+      const ctl = b.learnMenu.ctl();
+      assert.ok(ctl, 'LEARN started on the first chapter tap');
+      await ctl.ready;
+      let beats = 0;
+      for (const ch of LEARN.CHAPTERS) for (let i = 0; i < ch.beats.length; i++) {
+        await ctl.go(ch.id, i); beats++;
+        for (let f = 0; f < 10; f++) { clock += 200; rafFn(); }
+      }
+      const st = await win.tensorPage.state();
+      assert.equal(st.chapter, LEARN.CHAPTERS.at(-1).id);
+      assert.match(win.location.hash, /^#learn\//);
+      assert.deepEqual(warns, [], 'no view or widget threw');
+      console.log(`     learn: ${beats} beats in ${LEARN.CHAPTERS.length} chapters drove the page; ${entries} entries opened; no error`);
+      b.stop();
+    } finally {
+      for (const k of Object.keys(keep)) { if (keep[k]) Object.defineProperty(globalThis, k, keep[k]); else delete globalThis[k]; }
+    }
+  });
+
   check('boot with the real packages on disk (what has landed)', async () => {
     const { win, doc } = makeDom();
     const warns = [];
