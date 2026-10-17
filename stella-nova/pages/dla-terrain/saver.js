@@ -87,7 +87,7 @@ export function buildShotPlan(seed, n = 12) {
       case 'sunrise': Object.assign(shot, { tod: 0.2, todEnd: 0.33, weather: r() < 0.5 ? 'fair' : 'clear', season: 0.35, cam: { type: 'orbit', distK: 0.55 + r() * 0.2, pitch: -0.2 - r() * 0.12, yaw: Math.PI * 0.5 + (r() - 0.5) * 0.8, yawRate: 0.012 } }); break;
       case 'storm': Object.assign(shot, { tod: 0.45 + r() * 0.15, weather: 'fair', weatherEnd: 'thunderstorm', skySpeed: 5, season: 0.4, cam: { type: 'orbit', distK: 0.45 + r() * 0.2, pitch: -0.16 - r() * 0.1, yaw: r() * 6.28, yawRate: 0.01 } }); break;
       case 'snow': Object.assign(shot, { tod: 0.42 + r() * 0.12, weather: r() < 0.7 ? 'snow' : 'blizzard', season: 0.78, cam: { type: 'orbit', distK: 0.18 + r() * 0.15, pitch: -0.12 - r() * 0.1, yaw: r() * 6.28, yawRate: 0.02 } }); break;
-      case 'forming': Object.assign(shot, { tod: 0.36 + r() * 0.1, weather: 'fair', season: 0.35, regen: true, cam: { type: 'orbit', distK: 0.85, pitch: -0.55, yaw: r() * 6.28, yawRate: 0.03 } }); break;
+      case 'forming': Object.assign(shot, { tod: 0.36 + r() * 0.1, weather: 'fair', season: 0.35, regen: true, cam: { type: 'orbit', distK: 0.6, pitch: -0.4, yaw: r() * 6.28, yawRate: 0.03 } }); break;
       case 'vista': Object.assign(shot, { tod: 0.4 + r() * 0.2, weather: r() < 0.5 ? 'fair' : 'cloudy', season: 0.3 + r() * 0.3, cam: { type: 'orbit', distK: 0.7 + r() * 0.3, pitch: -0.3 - r() * 0.15, yaw: r() * 6.28, yawRate: 0.015 } }); break;
       case 'night': Object.assign(shot, { tod: 0.95 + r() * 0.08, weather: 'clear', season: r(), cam: { type: 'orbit', distK: 0.5, pitch: -0.25, yaw: r() * 6.28, yawRate: 0.01 } }); break;
     }

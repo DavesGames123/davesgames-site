@@ -20,6 +20,7 @@
 //  cam.flyTo(x, z, world)       a smooth move of the orbit target (map click)
 //  cam.frameWorld(world, k)     the orbit that shows the whole terrain
 //  dronePath(polyline, world, opts) -> { pts, len, at(s) -> { pos, look } }
+//            opts.side / sideK: sample the ground across the path too
 //            centripetal Catmull-Rom through resampled points, the height a
 //            windowed max of the ground + clearance, arc-length table
 //  bandShift(band, H) -> NDC y shift that centres the subject in the band
@@ -219,10 +220,23 @@ export function dronePath(poly, world, opts = {}) {
   const hAt = (x, z) => Math.max(world.heightAt ? world.heightAt(x, z) : 0, world.seaLevel ?? -Infinity);
   const k = Math.max(1, Math.round(win / spacing));
   const ground = pts.map(p => hAt(p[0], p[1]));
-  const P = pts.map((p, i) => {
+  // side: also sample the ground across the path (a river runs at the
+  // floor of its valley; the camera rises toward the banks by sideK)
+  const side = opts.side || 0, sideK = opts.sideK ?? 0.7;
+  const across = pts.map((p, i) => {
+    if (!side) return -Infinity;
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = b[0] - a[0], tz = b[1] - a[1];
+    const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
     let m = -Infinity;
-    for (let j = Math.max(0, i - k); j <= Math.min(pts.length - 1, i + k); j++) m = Math.max(m, ground[j]);
-    return [p[0], m + clear, p[1]];
+    for (const s of [-1, -0.5, 0.5, 1]) m = Math.max(m, hAt(p[0] - tz * side * s, p[1] + tx * side * s));
+    return m;
+  });
+  const P = pts.map((p, i) => {
+    let m = -Infinity, sm = -Infinity;
+    for (let j = Math.max(0, i - k); j <= Math.min(pts.length - 1, i + k); j++) { m = Math.max(m, ground[j]); sm = Math.max(sm, across[j]); }
+    const y = side ? Math.max(m, m + (sm - m) * sideK) : m;
+    return [p[0], y + clear, p[1]];
   });
   // centripetal Catmull-Rom between P[i] and P[i+1]
   const seg = (i, t) => {
