@@ -35,7 +35,7 @@
 import { createScene } from './scene.js';
 import { createReef, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, polypRadius, sandY, speciesHook } from './reef.js';
 import { MODES, colourT, naturalRGB, radiiOf, fieldsOf } from './colour.js';
-import { createCoralMesher } from './coral-sdf.js';
+import { createCoralMesher, groove } from './coral-sdf.js';
 import { meshRock } from './terrain.js';
 import { DECOR, parseCRM, scatterDecor } from './assets.js';
 import { shotList, frameFit } from './saver.js';
@@ -57,7 +57,7 @@ const G = {
   preset: 'mixed', seed: 1, mode: 'natural', gradient: 'reef', rev: false,
   playing: true, speed: 1, dir: 20, cur: 0.5, nutrient: 1, temp: 27,
   caust: true, snow: true, shaft: true, orbit: false, plant: 'staghorn', spSel: 'staghorn',
-  polyps: true, detail: true,
+  polyps: true, detail: !COARSE,
 };
 let saverOn = false, saver = null;
 
@@ -560,6 +560,7 @@ window.snSaver = {
       const mix = s.kind === 'reef' ? P.mix : [s.species];
       const hookSp = s.kind === 'reef' ? mix[(s.seed >>> 3) % mix.length] : s.species;
       const H = speciesHook(hookSp);
+      const brain = s.kind === 'colony' && s.species === 'boulder';
       const modeLbl = (MODES.find(m => m.id === s.mode) || MODES[0]).label;
       return {
         title: s.kind === 'reef' ? P.label : sp.label,
@@ -573,8 +574,10 @@ window.snSaver = {
         tex: [String.raw`\mathbf{v} = \boldsymbol{\xi} + d\,\mathbf{u} - f\,\hat{\mathbf{y}}`],
         eq: ['v = ξ + d u − f ŷ'],
         rules: [['\\mathbf{u}', 'm2'], ['\\Phi', 'm3'], ['N', 'm1']],
-        lines: ['Marine snow falls with the current and joins the coral it touches: the tips catch the most.'],
-        code: { lang: 'js', name: `reef.js · ${SPECIES[hookSp].label.toLowerCase()} · ${H.name}`, text: H.fn.toString() },
+        lines: ['Marine snow falls with the current and joins the coral it touches: the tips catch the most.',
+          'Each particle is a round cone to its parent; a smooth minimum joins them into one surface.'],
+        code: brain ? { lang: 'js', name: 'coral-sdf.js · brain coral valleys · groove', text: groove.toString() }
+          : { lang: 'js', name: `reef.js · ${SPECIES[hookSp].label.toLowerCase()} · ${H.name}`, text: H.fn.toString() },
       };
     }
 
@@ -620,11 +623,12 @@ window.snSaver = {
       for (let g = n - k; g < n; g++) { fx += reef.px[g]; fy += reef.py[g]; fz += reef.pz[g]; }
       if (k) { fx /= k; fy /= k; fz /= k; }
       const e = 1 - Math.exp(-dt * 0.5);
-      const gx = 0.65 * center.x + 0.35 * fx, gy = 0.65 * center.y + 0.35 * fy, gz = 0.65 * center.z + 0.35 * fz;
+      const wf = s.kind === 'colony' ? 0.5 : 0.35;      // a close shot aims more at the growth front
+      const gx = (1 - wf) * center.x + wf * fx, gy = (1 - wf) * center.y + wf * fy, gz = (1 - wf) * center.z + wf * fz;
       st.tgt.x += (gx - st.tgt.x) * e; st.tgt.y += (gy - st.tgt.y) * e; st.tgt.z += (gz - st.tgt.z) * e;
       st.az += s.spin * dt * (1 - 0.5 * calm);
       const f = fitNow();
-      st.dist += (f.dist - st.dist) * (1 - Math.exp(-dt * 2));
+      st.dist += (f.dist * (s.zoom || 1) - st.dist) * (1 - Math.exp(-dt * 2));
       S.view.tox = f.ox; S.view.toy = f.oy;
       const ce = Math.cos(s.elev), cam = S.camera;
       cam.position.set(st.tgt.x + Math.sin(st.az) * ce * st.dist, st.tgt.y + Math.sin(s.elev) * st.dist, st.tgt.z + Math.cos(st.az) * ce * st.dist);

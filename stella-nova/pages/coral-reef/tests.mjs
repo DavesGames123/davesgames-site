@@ -152,6 +152,7 @@ function colony(id, o = {}) {
   ok(new Set(a.map(s => s.seed)).size === a.length, 'shot list: every shot grows from a new seed');
   ok(a.some(s => s.kind === 'colony') && a.some(s => s.kind === 'reef'), 'shot list: reef shots and colony shots');
   ok(a.every(s => Math.abs(s.spin) < 0.07 && s.elev > 0.15 && s.elev < 0.5), 'shot list: calm camera moves');
+  ok(a.every(s => s.kind === 'colony' ? s.zoom >= 0.5 && s.zoom <= 0.8 : s.zoom >= 0.92 && s.zoom <= 1), 'shot list: colony shots come closer, reef shots keep the fit');
   ok(SAVER_GRADIENTS.every(g => GRADIENTS[g]), 'saver gradients exist');
 
   const R = PRESETS.mixed.R + 18;

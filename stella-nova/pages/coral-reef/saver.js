@@ -4,7 +4,8 @@
 //  shotList(seed, n) gives a seeded shuffle of shots. Each shot grows a new
 //  reef (a preset) or one new colony from its own seed, with its own
 //  gradient, colour mode, hold time (5 to 12 s) and camera path. Two shots
-//  in a row never share a preset or a colour mode.
+//  in a row never share a preset or a colour mode. A colony shot comes
+//  closer (zoom 0.5 to 0.8 of the fit distance) to show the polyps.
 //
 //  frameFit() gives the camera distance and the view offset that put a
 //  sphere (the reef) in the middle of the clear part of the canvas: the
@@ -57,6 +58,8 @@ export function shotList(seed = 1, n = 12) {
       spin: (rand() < 0.5 ? -1 : 1) * (0.025 + rand() * 0.035), // rad/s, calm
       elev: 0.2 + rand() * 0.22,               // radians above the horizon
       current: Math.floor(rand() * 360),
+      // a colony shot comes closer, so the polyps and the surface show
+      zoom: kind === 'colony' ? 0.5 + rand() * 0.3 : 0.92 + rand() * 0.08,
     });
   }
   return out;
