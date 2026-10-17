@@ -5,7 +5,10 @@
 // checks the parser output. Part 2 parses each LOD file in
 // assets/nature/manifest.json and checks the triangle counts, the
 // bounds against the real height (10 %), the base centre origin and
-// that each image file is the WebP that the manifest says.
+// that each image file is the WebP that the manifest says. Part 3
+// checks the fields VEG reads (wind, sink, materials[].coverage,
+// impostor.sideHalfSize, snake case biome keys), the provenance of the
+// second pack (Mantissa, OpenGameArt, procedural) and CREDITS.txt.
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -153,6 +156,7 @@ if (!existsSync(mfile)) {
   const ids = new Set();
   const seen = new Map(); // abs path -> default
   let models = 0;
+  const credited = [];
   const need = ['id', 'name', 'kind', 'biomes', 'licence', 'author', 'source'];
   const touch = (abs, a, what) => {
     if (!existsSync(abs)) { ok(false, `${a.id}: ${what} ${path.relative(root, abs)} exists`); return null; }
@@ -165,7 +169,7 @@ if (!existsSync(mfile)) {
     for (const k of need) ok(a[k] !== undefined && a[k] !== '' && a[k] !== null, `${a.id}: field ${k}`);
     ok(!ids.has(a.id), `${a.id}: unique id`); ids.add(a.id);
     ok(a.licence === 'CC0-1.0' || /^CC-BY-[34]\.0$/.test(a.licence), `${a.id}: licence is CC0 or CC-BY (${a.licence})`);
-    for (const b of a.biomes) ok((man.biomeKeys || []).includes(b), `${a.id}: biome ${b} is a known key`);
+    for (const b of a.biomes) ok((man.biomeKeys || []).includes(b) && /^[a-z]+(_[a-z]+)*$/.test(b), `${a.id}: biome ${b} is a known snake case key`);
     if (a.kind === 'ground texture') {
       for (const k of ['albedo', 'normal', 'orm']) ok(isWebp(touch(path.join(root, a.textures[k]), a, k)), `${a.id}: ${k} is WebP`);
       continue;
@@ -188,7 +192,8 @@ if (!existsSync(mfile)) {
       ok(Math.abs(h - a.height) <= 0.1 * a.height, `${a.id} lod${li}: bounds height ${h.toFixed(3)} m within 10 % of ${a.height} m`);
       ok(Math.abs(s.bounds.min[1]) <= 0.05 * a.height + 0.01, `${a.id} lod${li}: base at y = 0 (min y ${s.bounds.min[1].toFixed(3)})`);
       const cx = (s.bounds.min[0] + s.bounds.max[0]) / 2, cz = (s.bounds.min[2] + s.bounds.max[2]) / 2;
-      ok(Math.hypot(cx, cz) <= Math.max(0.35 * a.footprint, 0.05), `${a.id} lod${li}: origin near the base centre (box centre ${cx.toFixed(2)}, ${cz.toFixed(2)})`);
+      // A leaning tree (bent palm) has its trunk base far from the box centre.
+      ok(Math.hypot(cx, cz) <= Math.max(0.5 * a.footprint, 0.05), `${a.id} lod${li}: origin near the base centre (box centre ${cx.toFixed(2)}, ${cz.toFixed(2)})`);
       for (const m of s.meshes) {
         ok(m.normals && m.normals.length === m.positions.length, `${a.id} lod${li}: normals present`);
         ok(m.uvs && m.uvs.length * 3 === m.positions.length * 2, `${a.id} lod${li}: uvs present`);
@@ -203,15 +208,34 @@ if (!existsSync(mfile)) {
         }
       }
     }
+    // Fields VEG reads.
+    ok(typeof a.wind === 'number' && a.wind >= 0 && a.wind <= 1, `${a.id}: wind in 0..1`);
+    ok(typeof a.sink === 'number' && a.sink >= 0 && a.sink < 0.5, `${a.id}: sink in 0..0.5`);
+    ok(Array.isArray(a.materials) && a.materials.length > 0 && a.materials.every((m) => typeof m.coverage === 'number' && m.coverage > 0 && m.coverage <= 1), `${a.id}: materials[].coverage in (0, 1]`);
+    if (a.sourceName !== 'Poly Haven') {
+      ok(typeof a.provenance === 'string' && a.provenance.length > 10, `${a.id}: second pack asset has a provenance`);
+      ok(/^https:\/\//.test(a.source), `${a.id}: source is a URL`);
+      if (/procedural/.test(a.sourceName)) ok(/^procedural/.test(a.provenance), `${a.id}: procedural asset says so in provenance`);
+      credited.push(a);
+    }
+    if (a.wantImpostor !== undefined) ok(false, `${a.id}: wantImpostor removed from the manifest`);
     if (a.impostor) {
+      ok(Array.isArray(a.impostor.sideHalfSize) && a.impostor.sideHalfSize.length === 2 && a.impostor.sideHalfSize.every((x) => x > 0), `${a.id}: impostor.sideHalfSize`);
+      ok(Math.min(...a.impostor.coverage) >= 0.01, `${a.id}: no empty impostor view`);
       for (const k of ['albedo', 'normal']) ok(isWebp(touch(path.join(root, a.impostor[k]), a, 'impostor ' + k)), `${a.id}: impostor ${k} is WebP`);
     }
   }
   for (const g of man.groundLayers || []) ok(ids.has(g), `groundLayers: ${g} is an asset`);
   let bytes = 0, defBytes = 0;
   for (const [f, def] of seen) { const n = statSync(f).size; bytes += n; if (def) defBytes += n; }
-  ok(bytes < 120e6, `pack: ${(bytes / 1e6).toFixed(1)} MB under 120 MB`);
-  ok(defBytes < 40e6, `pack: default view ${(defBytes / 1e6).toFixed(1)} MB under 40 MB`);
+  ok(bytes < 160e6, `pack: ${(bytes / 1e6).toFixed(1)} MB under 160 MB`);
+  ok(defBytes < 45e6, `pack: default view ${(defBytes / 1e6).toFixed(1)} MB under 45 MB`);
+  // Every second pack source is in CREDITS.txt with its author and link.
+  const credits = existsSync(path.join(root, 'CREDITS.txt')) ? readFileSync(path.join(root, 'CREDITS.txt'), 'utf8') : '';
+  for (const a of credited) ok(credits.includes(a.sourceAsset) && credits.includes(a.source) && credits.includes(a.id), `${a.id}: in CREDITS.txt with source and link`);
+  const kinds = new Set(man.assets.map((a) => a.kind));
+  for (const k of ['tree', 'bush', 'grass', 'reed', 'cactus', 'mushroom']) ok(kinds.has(k), `pack: has kind ${k}`);
+  for (const w of ['birch', 'maple', 'palm', 'willow']) ok(man.assets.some((a) => a.kind === 'tree' && (a.sub + ' ' + a.name).toLowerCase().includes(w)), `pack: has a ${w} tree`);
   if (man.totals) ok(man.totals.bytes === bytes && man.totals.files === seen.size, `manifest totals (${man.totals.files} files, ${man.totals.bytes} B) = files on disk (${seen.size}, ${bytes} B)`);
   console.log(`pack: ${man.assets.length} assets (${models} models), ${seen.size} files, ${(bytes / 1e6).toFixed(1)} MB, default ${(defBytes / 1e6).toFixed(1)} MB`);
 }

@@ -8,6 +8,10 @@
 // (npm i sharp meshoptimizer @gltf-transform/core there). Nothing is
 // installed into the repo.
 //
+// Sources other than Poly Haven (Mantissa, OpenGameArt, procedural) must
+// first go through `fetch.mjs packs` and prep.mjs, which write the same
+// layout into dl/prep/<src>.
+//
 // Per source: read the glTF with lib/glb-lite.js, split the variants
 // (top level nodes), weld, put the base centre at the origin (y up,
 // metres), make 3 LODs with the meshoptimizer simplifier (the backend of
@@ -93,6 +97,27 @@ function budgets(parts, target, isFoliage) {
   return out.map((v, i) => Math.max(Math.min(64, parts[i].indices.length / 3), v));
 }
 
+// Game foliage cards often carry normals that face away from the light
+// in many places. crownNormals [k, y0]: above y0 (share of the height)
+// blend the normals toward the normal of the ellipsoid round the crown
+// by k (ramped in over 15 % of the height, so the trunk keeps its own).
+function crownNormals(parts, [k, y0]) {
+  if (!parts.length) return;
+  const b = bounds(parts), H = b.max[1] - b.min[1], ys = b.min[1] + y0 * H;
+  const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  for (const p of parts) for (let v = 0; v < p.positions.length; v += 3) if (p.positions[v + 1] >= ys) for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], p.positions[v + i]); mx[i] = Math.max(mx[i], p.positions[v + i]); }
+  const c = [0, 1, 2].map((i) => (mn[i] + mx[i]) / 2), r = [0, 1, 2].map((i) => Math.max(1e-3, (mx[i] - mn[i]) / 2));
+  for (const p of parts) for (let v = 0; v < p.positions.length; v += 3) {
+    const w = k * Math.min(1, Math.max(0, (p.positions[v + 1] - ys) / (0.15 * H)));
+    if (w <= 0) continue;
+    const e = [0, 1, 2].map((i) => (p.positions[v + i] - c[i]) / (r[i] * r[i]));
+    const el = Math.hypot(...e) || 1;
+    const n = [0, 1, 2].map((i) => (1 - w) * p.normals[v + i] + w * e[i] / el);
+    const l = Math.hypot(...n) || 1;
+    for (let i = 0; i < 3; i++) p.normals[v + i] = n[i] / l;
+  }
+}
+
 // Height of the crown centre: area-weighted mean height of the leaves.
 function crownCentreY(T, b) {
   let s = 0, a = 0;
@@ -124,10 +149,15 @@ function alphaFor(dir, srcId, matName, alphaMode, nMats) {
 }
 
 async function buildSource(src) {
-  const dir = path.join(scratch, 'dl', 'ph', src.src);
+  // Poly Haven downloads are in dl/ph; the other sources were made into
+  // the same layout in dl/prep by prep.mjs.
+  const dir = path.join(scratch, 'dl', src.from === 'polyhaven' ? 'ph' : 'prep', src.src);
   const json = JSON.parse(readFileSync(path.join(dir, src.src + '.gltf'), 'utf8'));
   const bin = readFileSync(path.join(dir, json.buffers[0].uri));
-  const info = JSON.parse(readFileSync(path.join(dir, 'info.json'), 'utf8')).info;
+  const infoAll = JSON.parse(readFileSync(path.join(dir, 'info.json'), 'utf8'));
+  const info = infoAll.info;
+  // Leaves cut to shape have no alpha; prep.mjs lists them as foliage.
+  const forced = new Set(infoAll.foliage || []);
   const scene = parseGLB(gltfToGLB(json, bin), { merge: false });
   let variants = collectVariants(scene, src.variants === 'nodes' ? 'nodes' : 'one');
   // Sort variants by name for stable ids; apply pick.
@@ -155,9 +185,10 @@ async function buildSource(src) {
     const alpha = alphaFor(dir, src.src, m.name, m.alphaMode, nMats);
     const base = slug(m.name.startsWith(src.src + '_') ? m.name.slice(src.src.length + 1) : m.name) || 'main';
     // Crown sources: the leaf textures only feed the tile bake (scratch).
-    const dirFor = alpha && src.crown ? path.join(crownWork, 'src') : texDir;
+    const isForced = forced.has(m.name);
+    const dirFor = (alpha || isForced) && src.crown ? path.join(crownWork, 'src') : texDir;
     const t = await writeMaterialTextures(sharp, { diff: uri(m.baseColor), nor: uri(m.normal), arm: uri(m.orm), alpha }, dirFor, base, sizes, !!process.env.NATURE_FORCE);
-    matInfo.set(m, { base, t, foliage: t.alpha });
+    matInfo.set(m, { base, t, foliage: t.alpha || isForced });
   }
 
   // Crown cards: bake 16 spray tiles from the first variant, one atlas per source.
@@ -166,6 +197,7 @@ async function buildSource(src) {
     const parts = v.parts.map((p) => weld(p)).filter((p) => p.indices.length >= 3);
     const o = baseCentre(parts, UPRIGHT.has(src.kind));
     translate(parts, o);
+    if (src.crownNormals) crownNormals(parts.filter((p) => matInfo.get(p.material).foliage), src.crownNormals);
     return parts;
   });
   if (src.crown) {
@@ -271,12 +303,13 @@ async function buildSource(src) {
       sink: ['rock', 'boulder', 'cliff'].includes(src.kind) ? 0.12 : src.kind === 'log' ? 0.05 : 0,
       default: !!src.default,
       impostor: null, wantImpostor: !!src.impostor,
-      licence: 'CC0-1.0',
+      licence: src.licence || 'CC0-1.0',
       author: Object.keys(info.authors || {}).join(', '),
-      source: `https://polyhaven.com/a/${src.src}`,
-      sourceName: 'Poly Haven',
+      source: src.from === 'polyhaven' ? `https://polyhaven.com/a/${src.src}` : src.url,
+      sourceName: src.from === 'polyhaven' ? 'Poly Haven' : src.sourceName,
       sourceAsset: src.src,
       sourceVariant: v.name,
+      provenance: src.provenance || 'real model (Poly Haven scan or model) with its own textures',
     };
     writeFileSync(path.join(REC, id + '.json'), JSON.stringify(rec, null, 1));
     records.push(rec);
@@ -342,7 +375,7 @@ function writeManifest() {
     generated: new Date().toISOString().slice(0, 10),
     units: 'metres', up: '+y', origin: 'base centre (y = 0 at the lowest vertex)',
     notes: [
-      'Every asset is CC0-1.0 (Poly Haven, ambientCG). See CREDITS.txt.',
+      'Every asset is CC0-1.0 (Poly Haven, ambientCG, Mantissa, OpenGameArt). See CREDITS.txt. provenance says what each asset is: a real model, or a procedural mesh with CC0 textures.',
       'lods[0..2]: GLB files for lib/glb-lite.js. Textures are external WebP files in tex/, shared by the variants and LODs of a source; key GPU textures on the file URL.',
       'Albedo WebP alpha is the cutoff mask (alphaMode MASK, cutoff 0.5). Colour under transparent texels is filled (push-pull). Smaller sizes keep the alpha coverage of the top size; coverage gives that share, so a renderer can keep it in its own mips.',
       'Normals are int8 (KHR_mesh_quantization); normal maps are OpenGL (+y). ORM: r occlusion, g roughness, b metal (0).',
@@ -371,14 +404,20 @@ function writeCredits(recs) {
     'Nature asset pack for davesgames.io (stella-nova/assets/nature)',
     '',
     'Every model and texture in this folder is a processed copy of a CC0 1.0',
-    'Universal (public domain dedication) asset. CC0 needs no credit; we give',
-    'it anyway. Processing: variants split, welded, re-centred, simplified to',
-    'three levels of detail, textures resized and converted to WebP, leaf alpha',
+    'Universal (public domain dedication) asset, or (where it says',
+    '"procedural with CC0 textures") a mesh made by tools/nature-assets/proc.mjs',
+    'that shows CC0 textures. CC0 needs no credit; we give it anyway.',
+    'Processing: variants split, welded, re-centred, simplified to three',
+    'levels of detail, textures resized and converted to WebP, leaf alpha',
     'merged into the albedo, impostor atlases rendered from the models.',
     '',
     'Licences:',
     '  Poly Haven: all assets CC0. https://polyhaven.com/license',
     '  ambientCG: all assets CC0 1.0. https://docs.ambientcg.com/license/',
+    '  Mantissa (Midge Sinnaeve): "Public Domain (CC0) License",',
+    '    https://mantissa.xyz/free.html and LICENSE-CC0.txt in each pack.',
+    '  OpenGameArt: each page used here is marked CC0 (links below); the',
+    '    Nobiax packs also ship a CC0 1.0 readme.',
     '  CC0 text: https://creativecommons.org/publicdomain/zero/1.0/',
     '',
     'Sources (source asset, authors, link -> ids in manifest.json):',
@@ -386,6 +425,7 @@ function writeCredits(recs) {
   for (const { r, ids } of [...by.values()].sort((a, b) => a.r.sourceAsset.localeCompare(b.r.sourceAsset))) {
     lines.push(`  ${r.sourceAsset} (${r.sourceName}), by ${r.author || 'unknown'}, ${r.licence}`);
     lines.push(`    ${r.source}`);
+    if (r.provenance && !/^real model \(Poly Haven/.test(r.provenance)) lines.push(`    what: ${r.provenance}`);
     lines.push(`    -> ${ids.join(', ')}`);
   }
   writeFileSync(path.join(OUT, 'CREDITS.txt'), lines.join('\n') + '\n');

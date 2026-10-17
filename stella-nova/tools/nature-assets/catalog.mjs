@@ -19,6 +19,9 @@
 //   impostor true = bake an impostor atlas for the far LOD
 //   default  true = in the default-view subset (the 40 MB budget)
 //   wind     0 rigid .. 1 very flexible (a hint for VEG sway)
+//   crownNormals [k, y0]: above y0 (share of height) blend foliage normals
+//            toward a crown ellipsoid by k
+//   gain     colour scale for dark game textures (prep.mjs)
 //   crown    [K0, K1, K2] = crown card counts per LOD (crown.mjs): the
 //            dense leaf cards become K clustered cards with baked tiles
 
@@ -29,6 +32,9 @@ export const BIOME_KEYS = [
 ];
 
 const PH = 'polyhaven';
+const MAN = 'mantissa';     // CC0, LICENSE-CC0.txt in each pack
+const OGA = 'opengameart';  // CC0 per page; licence recorded per source
+const PROC = 'procedural';  // our mesh, CC0 textures
 const TREE_L = [60000, 12000, 2500];
 const BIG_TREE_L = [90000, 18000, 3500];
 const PLANT_L = [8000, 2000, 500];
@@ -40,7 +46,7 @@ export const SOURCES = [
   { from: PH, src: 'fir_tree_01', crown: [2400, 800, 220], lods: [30000, 8000, 2000], kind: 'tree', sub: 'conifer', name: 'Fir tree', biomes: ['boreal_forest', 'temperate_forest', 'alpine_meadow'], variants: 'nodes', impostor: true, default: true, wind: 0.3 },
   { from: PH, src: 'pine_tree_01', crown: [2400, 800, 220], lods: [30000, 8000, 2000], kind: 'tree', sub: 'conifer', name: 'Scots pine', biomes: ['boreal_forest', 'temperate_forest'], variants: 'nodes', impostor: true, default: false, wind: 0.3 },
   { from: PH, src: 'pine_sapling_medium', pick: [0, 1], crown: [1500, 500, 150], lods: [18000, 5000, 1300], kind: 'tree', sub: 'conifer young', name: 'Young pine', biomes: ['boreal_forest', 'temperate_forest', 'alpine_meadow'], variants: 'nodes', impostor: true, default: false, wind: 0.4 },
-  { from: PH, src: 'fir_sapling_medium', crown: [1500, 500, 150], lods: [18000, 5000, 1300], kind: 'tree', sub: 'conifer young', name: 'Young fir', biomes: ['boreal_forest', 'alpine_meadow', 'tundra'], variants: 'nodes', impostor: true, default: true, wind: 0.4 },
+  { from: PH, src: 'fir_sapling_medium', crown: [1500, 500, 150], lods: [18000, 5000, 1300], kind: 'tree', sub: 'conifer young', name: 'Young fir', biomes: ['boreal_forest', 'alpine_meadow', 'tundra'], variants: 'nodes', impostor: true, default: false, wind: 0.4 },
   { from: PH, src: 'pine_sapling_small', crown: [700, 240, 80], lods: [7000, 2000, 600], kind: 'tree', sub: 'sapling', name: 'Pine sapling', biomes: ['boreal_forest', 'temperate_forest', 'alpine_meadow'], variants: 'nodes', default: false, wind: 0.6 },
   { from: PH, src: 'fir_sapling', crown: [700, 240, 80], lods: [7000, 2000, 600], kind: 'tree', sub: 'sapling', name: 'Fir sapling', biomes: ['boreal_forest', 'alpine_meadow', 'tundra'], variants: 'nodes', default: false, wind: 0.6 },
   // ---- trees: broadleaf
@@ -108,6 +114,131 @@ export const SOURCES = [
   { from: PH, src: 'root_cluster_01', kind: 'log', sub: 'root cluster', name: 'Root cluster', biomes: ['river', 'wetland', 'rainforest'], variants: 'nodes', lods: ROCK_L, default: false, wind: 0 },
   { from: PH, src: 'pine_roots', kind: 'log', sub: 'roots', name: 'Pine roots', biomes: ['boreal_forest', 'temperate_forest'], variants: 'nodes', lods: ROCK_L, default: false, wind: 0 },
   { from: PH, src: 'dry_branches_medium_01', kind: 'log', sub: 'dry branches', name: 'Dry branches', biomes: ['savanna', 'desert', 'temperate_forest', 'boreal_forest'], variants: 'nodes', lods: PLANT_L, default: false, wind: 0 },
+  // ---- second pack (ASSETS2): sources other than Poly Haven. prep.mjs
+  // turns each one into a glTF in dl/prep/<src> (Blender for FBX, OBJ and
+  // .blend files, proc.mjs for the procedural ones). Texture paths are
+  // relative to the dl folder. `tex` rules match material names (regex,
+  // first match wins): diff, nor (OpenGL normal), ao + rough (packed to
+  // ARM), alpha (a file) or alphaFromDiff (the diffuse alpha channel),
+  // foliage (leaf geometry cut to shape: crown and wind treat it as
+  // foliage although it has no alpha). Input `drop` deletes the faces of
+  // those materials (the Mantissa roots are below the ground plane).
+  // ---- broadleaf trees: Mantissa (Midge Sinnaeve), CC0, real-scale FBX
+  { from: MAN, src: 'mantissa_birch', pack: 'birch', kind: 'tree', sub: 'broadleaf birch', name: 'Silver birch', biomes: ['temperate_forest', 'boreal_forest', 'grassland', 'tundra'], variants: 'nodes', impostor: true, default: true, wind: 0.55,
+    inputs: [1, 3, 5].map((k) => ({ file: `mantissa/birch/Mantissa_Birch_00${k}.FBX`, name: `birch_${k}`, drop: ['Roots'] })),
+    crown: [2400, 800, 220], lods: [30000, 8000, 2000],
+    tex: [
+      { match: '^Leaf_0([123])', diff: 'mantissa/birch/Textures/Birch_Leaf_Front_512_DIFF_0$1.jpg', foliage: true },
+      { match: '^(Twigs|Stems|Branches_SMALL)', diff: 'mantissa/birch/Textures/Birch_Bark_2K_DIFF.jpg', foliage: true },
+      { match: '.', diff: 'mantissa/birch/Textures/Birch_Bark_2K_DIFF.jpg' },
+    ],
+    author: 'Midge Sinnaeve (mantissa.xyz)', url: 'https://mantissa.xyz/free.html', sourceName: 'Mantissa CG Birch Tree Pack',
+    provenance: 'real CG model (FBX) with the photo textures of the pack' },
+  { from: MAN, src: 'mantissa_japanese_maple', pack: 'maple', kind: 'tree', sub: 'broadleaf maple red leaf', name: 'Japanese maple', biomes: ['temperate_forest', 'grassland'], variants: 'nodes', impostor: true, default: false, wind: 0.5,
+    inputs: [1, 4].map((k) => ({ file: `mantissa/maple/Mantissa_Japanese_Maple_00${k}.FBX`, name: `maple_${k}`, drop: ['Roots'] })),
+    crown: [2400, 800, 220], lods: [30000, 8000, 2000],
+    tex: [
+      { match: '^Leaf_0([123])', diff: 'mantissa/maple/Textures/Leaf_0$1_DIFF.jpg', foliage: true },
+      { match: '^(Twigs|Stems|Branches_Small)', diff: 'mantissa/maple/Textures/Bark_DIFF.jpg', foliage: true },
+      { match: '.', diff: 'mantissa/maple/Textures/Bark_DIFF.jpg' },
+    ],
+    author: 'Midge Sinnaeve (mantissa.xyz)', url: 'https://mantissa.xyz/free.html', sourceName: 'Mantissa CG Japanese Maple Pack',
+    provenance: 'real CG model (FBX) with the photo textures of the pack' },
+  // The generic pack has no textures: furrowed or smooth bark from
+  // ambientCG and the Mantissa birch leaf photos. The models are 4.7 to
+  // 6 m high; x2.6 gives 12 to 16 m canopy trees.
+  { from: MAN, src: 'mantissa_generic_furrowed', pack: 'generic', kind: 'tree', sub: 'broadleaf deciduous furrowed bark', name: 'Broadleaf tree, furrowed bark', biomes: ['temperate_forest', 'grassland', 'wetland', 'rainforest'], variants: 'nodes', impostor: true, default: true, wind: 0.45,
+    inputs: [1, 4].map((k) => ({ file: `mantissa/generic/Mantissa_Generic_Tree_00${k}.FBX`, name: `generic_${k}`, scale: 2.6, drop: ['Roots'] })),
+    crown: [2400, 800, 220], lods: [30000, 8000, 2000],
+    tex: [
+      { match: '^Leaf_0([123])', diff: 'mantissa/birch/Textures/Birch_Leaf_Front_512_DIFF_0$1.jpg', foliage: true },
+      { match: '^(Twigs|Branches_SMALL)', diff: 'acg/Bark001/Bark001_1K-JPG_Color.jpg', foliage: true },
+      { match: '.', diff: 'acg/Bark001/Bark001_1K-JPG_Color.jpg', nor: 'acg/Bark001/Bark001_1K-JPG_NormalGL.jpg', rough: 'acg/Bark001/Bark001_1K-JPG_Roughness.jpg' },
+    ],
+    author: 'Midge Sinnaeve (mantissa.xyz); bark Bark001 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack', url: 'https://mantissa.xyz/free.html', sourceName: 'Mantissa CG Generic Tree Pack',
+    provenance: 'real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark001, Mantissa birch leaves)' },
+  { from: MAN, src: 'mantissa_generic_smooth', pack: 'generic', kind: 'tree', sub: 'broadleaf deciduous smooth bark', name: 'Broadleaf tree, smooth bark', biomes: ['temperate_forest', 'rainforest', 'grassland'], variants: 'nodes', impostor: true, default: false, wind: 0.45,
+    inputs: [7, 9].map((k) => ({ file: `mantissa/generic/Mantissa_Generic_Tree_00${k}.FBX`, name: `generic_${k}`, scale: 2.6, drop: ['Roots'] })),
+    crown: [2400, 800, 220], lods: [30000, 8000, 2000],
+    tex: [
+      { match: '^Leaf_0([123])', diff: 'mantissa/birch/Textures/Birch_Leaf_Front_512_DIFF_0$1.jpg', foliage: true },
+      { match: '^(Twigs|Branches_SMALL)', diff: 'acg/Bark010/Bark010_1K-JPG_Color.jpg', foliage: true },
+      { match: '.', diff: 'acg/Bark010/Bark010_1K-JPG_Color.jpg', nor: 'acg/Bark010/Bark010_1K-JPG_NormalGL.jpg', rough: 'acg/Bark010/Bark010_1K-JPG_Roughness.jpg' },
+    ],
+    author: 'Midge Sinnaeve (mantissa.xyz); bark Bark010 by Lennart Demes (ambientCG); leaf photos from the Mantissa birch pack', url: 'https://mantissa.xyz/free.html', sourceName: 'Mantissa CG Generic Tree Pack',
+    provenance: 'real CG model (FBX, untextured in the pack), scaled x2.6, with CC0 photo textures (ambientCG Bark010, Mantissa birch leaves)' },
+  // ---- Nobiax / Yughues (OpenGameArt, CC0): game models, one texture each.
+  // The OBJ files are in centimetres (scale 0.01); palm x0.05 gives 9 to
+  // 11 m, saguaro x0.015 gives 4.6 m, bamboo x0.025 gives 5 m.
+  { from: OGA, src: 'nobiax_palm_trees', gain: 1.8, crownNormals: [0.5, 0.7], pack: 'palmv3', kind: 'tree', sub: 'palm', name: 'Palm tree', biomes: ['beach', 'rainforest', 'wetland'], variants: 'nodes', impostor: true, default: false, wind: 0.6,
+    inputs: ['palm_straight', 'palm_bend', 'palm_dual', 'palm_trio'].map((n) => ({ file: `oga/palmv3/${n}.obj`, name: n, scale: 0.05 })),
+    lods: [3000, 1400, 600], texTop: 1024,
+    tex: [{ match: '.', diff: 'oga/palmv3/diffuse.tga', alphaFromDiff: true, nor: 'oga/palmv3/normal.tga' }],
+    author: 'Nobiax (Yughues)', url: 'https://opengameart.org/content/free-palm-treez-v3', sourceName: 'OpenGameArt, Free palm treeZ v3',
+    provenance: 'game model (OBJ) with its own painted-photo texture, colour scaled by gain' },
+  { from: OGA, src: 'nobiax_huge_tree', gain: 2.4, crownNormals: [0.8, 0.45], pack: 'mundo', kind: 'tree', sub: 'broadleaf wide canopy acacia-like', name: 'Wide canopy tree', biomes: ['savanna', 'grassland', 'rainforest'], variants: 'one', impostor: true, default: false, wind: 0.4,
+    inputs: [{ file: 'oga/mundo/huge tree/huge_tree.obj', name: 'huge_tree', scale: 0.01 }],
+    lods: [1100, 700, 350], texTop: 1024,
+    tex: [{ match: '.', diff: 'oga/mundo/huge tree/diffuse.tga', alphaFromDiff: true }],
+    author: 'Nobiax (Yughues), made for R. Robles (Mundo)', url: 'https://opengameart.org/content/freebies-mundo-commissions', sourceName: 'OpenGameArt, Freebies - Mundo commissions',
+    provenance: 'game model (OBJ) with its own texture, colour scaled by gain' },
+  { from: OGA, src: 'nobiax_saguaro', gain: 2.2, pack: 'mundo', kind: 'cactus', sub: 'saguaro cactus', name: 'Saguaro cactus', biomes: ['desert', 'savanna', 'scree'], variants: 'one', impostor: true, default: false, wind: 0.0,
+    inputs: [{ file: 'oga/mundo/cactus/cactus.obj', name: 'saguaro', scale: 0.015 }],
+    lods: [1100, 500, 200], texTop: 1024,
+    tex: [{ match: '.', diff: 'oga/mundo/cactus/diffuse.tga', alphaFromDiff: true }],
+    author: 'Nobiax (Yughues), made for R. Robles (Mundo)', url: 'https://opengameart.org/content/freebies-mundo-commissions', sourceName: 'OpenGameArt, Freebies - Mundo commissions',
+    provenance: 'game model (OBJ) with its own texture, colour scaled by gain' },
+  { from: OGA, src: 'nobiax_bushes', gain: 1.6, pack: 'bushes', kind: 'bush', sub: 'shrub broadleaf', name: 'Leafy bush', biomes: ['temperate_forest', 'grassland', 'rainforest', 'wetland'], variants: 'nodes', default: false, wind: 0.6,
+    inputs: [1, 2, 4, 5].map((k) => ({ file: `oga/bushes/0${k}/bush_0${k}.obj`, name: `bush_0${k}`, scale: 0.01 })),
+    lods: [1200, 600, 250], texTop: 1024,
+    tex: [1, 2, 4, 5].map((k) => ({ match: `bush_0${k}`, diff: `oga/bushes/0${k}/diffuse.tga`, alphaFromDiff: true, nor: `oga/bushes/0${k}/normal.tga` })),
+    author: 'Nobiax (Yughues)', url: 'https://opengameart.org/content/bushes', sourceName: 'OpenGameArt, Bushes',
+    provenance: 'game models (OBJ) with their own textures, colour scaled by gain' },
+  { from: OGA, src: 'nobiax_tropical_shrubs', gain: 1.5, pack: 'tropshrubs', kind: 'bush', sub: 'tropical shrub bromeliad', name: 'Tropical shrub', biomes: ['rainforest', 'wetland'], variants: 'nodes', default: false, wind: 0.5,
+    inputs: [1, 2, 3, 4, 5].map((k) => ({ file: `oga/tropshrubs/0${k}/trop_shrub_0${k}.obj`, name: `trop_shrub_0${k}`, scale: 0.01 })),
+    lods: [1000, 500, 200], texTop: 512,
+    tex: [1, 2, 3, 4, 5].map((k) => ({ match: `trop_shrub_0${k}`, diff: `oga/tropshrubs/0${k}/diffuse.tga`, alphaFromDiff: true, nor: `oga/tropshrubs/0${k}/normal.tga` })),
+    author: 'Nobiax (Yughues)', url: 'https://opengameart.org/content/tropical-shrubs', sourceName: 'OpenGameArt, Tropical shrubs',
+    provenance: 'game models (OBJ) with their own textures, colour scaled by gain' },
+  { from: OGA, src: 'nobiax_bamboo', gain: 1.6, pack: 'bamboo', kind: 'bush', sub: 'bamboo clump', name: 'Bamboo', biomes: ['rainforest', 'wetland', 'river'], variants: 'one', impostor: true, default: false, wind: 0.7,
+    inputs: [{ file: 'oga/bamboo/Bamboo 01.obj', name: 'bamboo', scale: 0.025 }],
+    lods: [1500, 700, 300], texTop: 1024,
+    tex: [{ match: '.', diff: 'oga/bamboo/diffuse.tga', alphaFromDiff: true, nor: 'oga/bamboo/normal.tga' }],
+    author: 'Nobiax (Yughues)', url: 'https://opengameart.org/content/free-bamboo-v1', sourceName: 'OpenGameArt, Free Bamboo v1',
+    provenance: 'game model (OBJ) with its own texture, colour scaled by gain' },
+  // ---- mushrooms: rubberduck (OpenGameArt, CC0), hand-painted textures; the .blend units are not metres
+  { from: OGA, src: 'rubberduck_mushrooms', pack: 'vegpack', kind: 'mushroom', sub: 'mushroom bolete', name: 'Mushroom', biomes: ['temperate_forest', 'boreal_forest', 'rainforest'], variants: 'nodes', default: false, wind: 0.0,
+    inputs: [['mushroom1_higher', 0.05], ['mushroom2_higher', 0.045], ['mushroom3_higher', 0.05]].map(([o, s]) => ({ file: 'oga/vegpack/free_vegetation_pack.blend', objects: [o], name: o.replace('_higher', ''), scale: s })),
+    lods: [900, 500, 240], texTop: 512,
+    tex: [{ match: '.', diff: 'oga/vegpack/textures/mushroom.jpg' }],
+    author: 'rubberduck', url: 'https://opengameart.org/content/free-vegetation-asset-pack', sourceName: 'OpenGameArt, free vegetation asset pack',
+    provenance: 'game models (.blend) with hand-painted textures, scaled to 11 to 17 cm' },
+  // ---- procedural meshes with real CC0 textures (no acceptable real model found)
+  { from: PROC, src: 'proc_weeping_willow', gen: 'willow', kind: 'tree', sub: 'broadleaf willow weeping', name: 'Weeping willow', biomes: ['wetland', 'river', 'lake', 'temperate_forest'], variants: 'nodes', impostor: true, default: false, wind: 0.9,
+    inputs: [11, 12, 13].map((seed) => ({ name: `willow_${seed - 10}`, seed })),
+    crown: [1800, 600, 180], lods: [24000, 6000, 1600],
+    tex: [
+      { match: '^leaf', diff: 'mantissa/birch/Textures/Birch_Leaf_Front_512_DIFF_02.jpg', foliage: true },
+      { match: '^twig', diff: 'acg/Bark002/Bark002_1K-JPG_Color.jpg', foliage: true },
+      { match: '.', diff: 'acg/Bark002/Bark002_1K-JPG_Color.jpg', nor: 'acg/Bark002/Bark002_1K-JPG_NormalGL.jpg', ao: 'acg/Bark002/Bark002_1K-JPG_AmbientOcclusion.jpg', rough: 'acg/Bark002/Bark002_1K-JPG_Roughness.jpg' },
+    ],
+    author: 'davesgames.io (mesh); textures: Lennart Demes (ambientCG Bark002), Midge Sinnaeve (Mantissa birch leaf photo)', url: 'https://ambientcg.com/view?id=Bark002', sourceName: 'procedural (tools/nature-assets/proc.mjs)',
+    provenance: 'procedural with CC0 textures' },
+  { from: PROC, src: 'proc_reeds', gen: 'reeds', kind: 'reed', sub: 'reed cattail bulrush', name: 'Reeds with cattails', biomes: ['wetland', 'river', 'lake'], variants: 'nodes', default: true, wind: 0.9,
+    inputs: [21, 22, 23].map((seed) => ({ name: `reeds_${seed - 20}`, seed })),
+    lods: [2400, 900, 300], texTop: 512,
+    tex: [
+      { match: '^blade', diff: 'mantissa/birch/Textures/Birch_Leaf_Front_512_DIFF_02.jpg', foliage: true },
+      { match: '.', diff: 'acg/Bark002/Bark002_1K-JPG_Color.jpg' },
+    ],
+    author: 'davesgames.io (mesh); textures: Midge Sinnaeve (Mantissa birch leaf photo, a strip along the midrib), Lennart Demes (ambientCG Bark002, cattail heads)', url: 'https://ambientcg.com/view?id=Bark002', sourceName: 'procedural (tools/nature-assets/proc.mjs)',
+    provenance: 'procedural with CC0 textures' },
+  { from: PROC, src: 'proc_grass_tufts', gen: 'tufts', kind: 'grass', sub: 'grass tuft', name: 'Grass tuft', biomes: ['grassland', 'savanna', 'alpine_meadow', 'temperate_forest', 'wetland'], variants: 'nodes', default: true, wind: 1.0,
+    inputs: [1, 2, 3, 4, 5, 6].map((k) => ({ name: `tuft_0${k}`, seed: 30 + k, tex: k })),
+    lods: [8, 6, 4], texTop: 512,
+    tex: [1, 2, 3, 4, 5, 6].map((k) => ({ match: `^tuft_0${k}`, diff: `oga/grass0${k <= 3 ? 1 : 2}/grass_0${k}/diffus.tga`, alpha: `oga/grass0${k <= 3 ? 1 : 2}/grass_0${k}/opacity.tga` })),
+    author: 'davesgames.io (crossed cards); textures: Nobiax (Yughues, Grass Pack #01 and #02, CC0)', url: 'https://opengameart.org/content/grass-pack-01', sourceName: 'procedural (tools/nature-assets/proc.mjs)',
+    provenance: 'procedural crossed cards with CC0 textures' },
 ];
 
 // Ground PBR sets, in texture array layer order. tile = metres per
@@ -127,4 +258,23 @@ export const GROUND = [
   { id: 'desert', from: PH, src: 'dry_ground_01', name: 'Cracked dry ground', tile: 4.0, biomes: ['desert', 'savanna'] },
   { id: 'snow', from: PH, src: 'snow_02', name: 'Snow', tile: 2.0, biomes: ['snow', 'tundra'] },
   { id: 'mud', from: PH, src: 'brown_mud_02', name: 'Mud', tile: 1.3, biomes: ['wetland', 'river', 'lake'] },
+];
+
+// Archives for the second pack. fetch.mjs downloads each into
+// dl/<dir>/ and unpacks it with bsdtar (zip and 7z). Sizes are the
+// archive sizes on 2026-10-17. lic = the page that states the licence.
+const OGAF = 'https://opengameart.org/sites/default/files/';
+export const PACKS = [
+  { dir: 'mantissa/birch', url: 'https://ftp.mantissa.xyz/resources/trees/mantissa_birch_tree_pack.zip', mb: 887, lic: 'https://mantissa.xyz/free.html (Public Domain (CC0) License; LICENSE-CC0.txt in the zip)' },
+  { dir: 'mantissa/maple', url: 'https://ftp.mantissa.xyz/resources/trees/mantissa_japanese_maple_pack.zip', mb: 438, lic: 'https://mantissa.xyz/free.html (Public Domain (CC0) License; LICENSE-CC0.txt in the zip)' },
+  { dir: 'mantissa/generic', url: 'https://ftp.mantissa.xyz/resources/trees/mantissa_generic_tree_pack_fbx.zip', mb: 1326, lic: 'https://mantissa.xyz/free.html (Public Domain (CC0) License; LICENSE-CC0.txt in the zip)' },
+  { dir: 'oga/palmv3', url: OGAF + 'PACK%20V3_0.7z', mb: 34, lic: 'https://opengameart.org/content/free-palm-treez-v3 (CC0; readme.txt CC0 1.0)' },
+  { dir: 'oga/mundo', url: OGAF + 'Mundo.7z', mb: 50, lic: 'https://opengameart.org/content/freebies-mundo-commissions (CC0)' },
+  { dir: 'oga/bushes', url: OGAF + 'bushes.7z', mb: 40, lic: 'https://opengameart.org/content/bushes (CC0; readme.txt CC0 1.0)' },
+  { dir: 'oga/tropshrubs', url: OGAF + 'tropical%20shrubs.7z', mb: 6, lic: 'https://opengameart.org/content/tropical-shrubs (CC0; readme.txt CC0 1.0)' },
+  { dir: 'oga/bamboo', url: OGAF + 'bamboo%20v1.7z', mb: 2, lic: 'https://opengameart.org/content/free-bamboo-v1 (CC0; readme.txt CC0 1.0)' },
+  { dir: 'oga/grass01', url: OGAF + 'grass_01.7z', mb: 7, lic: 'https://opengameart.org/content/grass-pack-01 (CC0)' },
+  { dir: 'oga/grass02', url: OGAF + 'grass_02.7z', mb: 7, lic: 'https://opengameart.org/content/grass-pack-02 (CC0)' },
+  { dir: 'oga/vegpack', url: OGAF + 'free_vegetation_pack.zip', mb: 13, lic: 'https://opengameart.org/content/free-vegetation-asset-pack (CC0)' },
+  ...['Bark001', 'Bark002', 'Bark010'].map((id) => ({ dir: 'acg/' + id, url: `https://ambientcg.com/get?file=${id}_1K-JPG.zip`, mb: 10, lic: 'https://docs.ambientcg.com/license/ (CC0 1.0)' })),
 ];
