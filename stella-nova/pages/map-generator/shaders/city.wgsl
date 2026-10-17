@@ -14,13 +14,22 @@
 //   kind 3 building  a 0.5 m pad when its lot shows, then it rises to h
 //   kind 4 sea       a disc from the middle of the coastline grows over it
 //   kind 5, 6        park, river: they fade in from the ground colour
+//   kind 7           still water (the terrain sea plane), always shown
 // A part that has not started goes outside the clip volume (vertex) or is
-// discarded (fragment).
+// discarded (fragment). ext.w is added to every z: the ground under the
+// vertex when the city stands on terrain, 0 on the flat.
+//
+// TERRAIN (vsTerrain, fsTerrain; terrain3d.js vertices). Each vertex has 8
+// heights: 7 stages of the LIB terrain and the graded city ground. G.terr.x
+// (0..7) runs through them over the terrain phase, so the world forms
+// first. Lit with the same shade() as the city, so building shadows fall on
+// it; facet normals from the derivatives while it moves, the vertex normal
+// at rest. Parks are a colour of the ground (TIn.park: t0, dur).
 //
 // Reversed depth (1 near, 0 far), depth test 'greater'.
 //
 // grep: struct Frame  fn place  fn vs  fn fs  fn vsShadow  fn vsSky  fn fsSky
-//       fn vsField  fn fsField  fn shadowAt  fn heightColour
+//       fn vsField  fn fsField  fn shadowAt  fn heightColour  fn vsTerrain  fn fsTerrain  fn terrainZ
 
 struct Frame {
   viewProj: mat4x4f,
@@ -32,6 +41,7 @@ struct Frame {
   misc: vec4f,       // x wall clock (s), y shadows on, z 0, w 0
   invViewProj: mat4x4f,
   lightVP: mat4x4f,  // sun shadow map: orthographic, depth 0 near the sun
+  terr: vec4f,       // x terrain stage 0..7, y last stage (7), z sea level (m), w 1 with terrain
 };
 
 @group(0) @binding(0) var<uniform> G: Frame;
@@ -101,6 +111,7 @@ fn place(v: VIn) -> Placed {
     o.show = select(0.0, 1.0, p > 0.0);
     o.k = p;
   }
+  o.p.z += v.ext.w;
   return o;
 }
 
@@ -200,6 +211,8 @@ fn fs(v: VOut) -> @location(0) vec4f {
   } else if (kind == 4) {
     if (distance(v.world.xy, v.road) > v.s * ease(v.info.y)) { discard; }
     col = water(v.col, v.world);
+  } else if (kind == 7) {
+    col = water(v.col, v.world);
   } else if (kind == 6) {
     col = mix(shade(GROUND, N, v.world), water(v.col, v.world), v.info.y);
   } else if (kind == 5) {
@@ -282,4 +295,66 @@ fn vsField(@location(0) p: vec3f) -> @builtin(position) vec4f {
 fn fsField() -> @location(0) vec4f {
   let a = G.skyZ.w * 0.6;
   return vec4f(vec3f(0.59, 0.73, 0.86) * a, a);
+}
+
+// ─── terrain ────────────────────────────────────────────────────────────────
+struct TIn {
+  @location(0) xy: vec2f,
+  @location(1) ha: vec4f,     // heights 0..3
+  @location(2) hb: vec4f,     // heights 4..7 (7: the final ground)
+  @location(3) nrm: vec4f,
+  @location(4) col: vec4f,
+  @location(5) park: vec2f,   // t0, dur (dur 0: no park)
+};
+
+struct TOut {
+  @builtin(position) pos: vec4f,
+  @location(0) world: vec3f,
+  @location(1) n: vec3f,
+  @location(2) col: vec3f,
+  @location(3) park: vec2f,
+};
+
+const PARK = vec3f(0.24, 0.36, 0.19);
+
+fn terrainZ(v: TIn) -> f32 {
+  let s = clamp(G.terr.x, 0.0, 7.0);
+  var hs = array<f32, 8>(v.ha.x, v.ha.y, v.ha.z, v.ha.w, v.hb.x, v.hb.y, v.hb.z, v.hb.w);
+  let i = min(u32(floor(s)), 7u);
+  let j = min(i + 1u, 7u);
+  return mix(hs[i], hs[j], s - floor(s));
+}
+
+@vertex
+fn vsTerrain(v: TIn) -> TOut {
+  var o: TOut;
+  o.world = vec3f(v.xy, terrainZ(v));
+  o.pos = G.viewProj * vec4f(o.world, 1.0);
+  o.n = v.nrm.xyz;
+  o.col = v.col.rgb;
+  o.park = v.park;
+  return o;
+}
+
+@fragment
+fn fsTerrain(v: TOut) -> @location(0) vec4f {
+  // facet normal (while the ground moves), vertex normal at rest
+  var fnrm = normalize(cross(dpdx(v.world), dpdy(v.world)));
+  if (fnrm.z < 0.0) { fnrm = -fnrm; }
+  let rest = smoothstep(G.terr.y - 1.0, G.terr.y, G.terr.x);
+  let N = normalize(mix(fnrm, normalize(v.n), rest));
+  // a height tint while it forms, the biome colour at rest
+  let up = clamp((v.world.z - G.terr.z) / 600.0, 0.0, 1.0);
+  let tint = mix(vec3f(0.20, 0.23, 0.20), vec3f(0.46, 0.44, 0.41), up);
+  var alb = mix(tint, v.col, rest);
+  if (v.park.y > 0.0) {
+    let p = prog(v.park.x, v.park.y);
+    alb = mix(alb, PARK, p);
+  }
+  // wet ground at the shore
+  let wet = 1.0 - smoothstep(0.0, 2.5, v.world.z - G.terr.z);
+  alb *= 1.0 - 0.25 * wet * G.terr.w;
+  var col = shade(alb, N, v.world);
+  col = fogMix(col, distance(G.eye.xyz, v.world));
+  return vec4f(col, 1.0);
 }

@@ -16,14 +16,19 @@
 //
 // Passes per frame: the shadow map (the buildings from the sun)
 // when the time, the light or the city changed; then the main pass: sky,
-// opaque layers (ground, water, parks, blocks, buildings), roads (depth
-// test, no depth write, minor first), field crosses (blended).
+// the terrain (with city.terrain: terrain3d.js mesh, its 8 stage heights
+// morphed by the playback time over the terrain phase), opaque layers
+// (ground, water, parks, blocks, buildings), roads (depth test, no depth
+// write, minor first), field crosses (blended). With terrain the camera
+// looks at the ground under the centre, toward the high ground (mesh
+// groundZ, homeYaw), and the fog reaches out to the world size.
 //
 // grep: export async function createView3D  const LIGHTS  function lightFor  function sunMatrix
 //       function bindOrbit  function frame  function setCity  function size
 
 import { viewProj, lookAt, mul, project as proj, orbitEye } from './camera.js';
 import { STRIDE } from './mesh3d.js';
+import { TSTRIDE } from './terrain3d.js';
 
 // The light presets of City Atlas (pages/city-atlas/renderer.js LIGHTS).
 export const LIGHTS = {
@@ -90,9 +95,17 @@ export async function createView3D(canvas, opts = {}) {
     { shaderLocation: 3, offset: 20, format: 'float32x4' },
     { shaderLocation: 4, offset: 36, format: 'float32x4' },
   ] }];
+  const tbuf = [{ arrayStride: TSTRIDE, attributes: [
+    { shaderLocation: 0, offset: 0, format: 'float32x2' },
+    { shaderLocation: 1, offset: 8, format: 'float32x4' },
+    { shaderLocation: 2, offset: 24, format: 'float32x4' },
+    { shaderLocation: 3, offset: 40, format: 'snorm8x4' },
+    { shaderLocation: 4, offset: 44, format: 'unorm8x4' },
+    { shaderLocation: 5, offset: 48, format: 'float32x2' },
+  ] }];
   const depthFormat = 'depth32float';
   const ms = { count: sampleCount };
-  const [pSky, pOpaque, pRoads, pField, pShadow] = await Promise.all([
+  const [pSky, pOpaque, pRoads, pField, pShadow, pTerrain] = await Promise.all([
     device.createRenderPipelineAsync({ layout, vertex: { module: mod, entryPoint: 'vsSky' }, fragment: { module: mod, entryPoint: 'fsSky', targets: [{ format }] },
       depthStencil: { format: depthFormat, depthWriteEnabled: false, depthCompare: 'always' }, multisample: ms }),
     device.createRenderPipelineAsync({ layout, vertex: { module: mod, entryPoint: 'vs', buffers: vbuf }, fragment: { module: mod, entryPoint: 'fs', targets: [{ format }] },
@@ -108,11 +121,14 @@ export async function createView3D(canvas, opts = {}) {
     device.createRenderPipelineAsync({ layout: layoutShadow, vertex: { module: mod, entryPoint: 'vsShadow', buffers: vbuf },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: 2, depthBiasSlopeScale: 1.5 } }),
+    device.createRenderPipelineAsync({ layout, vertex: { module: mod, entryPoint: 'vsTerrain', buffers: tbuf }, fragment: { module: mod, entryPoint: 'fsTerrain', targets: [{ format }] },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: depthFormat, depthWriteEnabled: true, depthCompare: 'greater' }, multisample: ms }),
   ]);
 
   const T_ = GPUTextureUsage;
-  const frameBuf = device.createBuffer({ size: 72 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  const frameRaw = new Float32Array(72);
+  const frameBuf = device.createBuffer({ size: 76 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const frameRaw = new Float32Array(76);
   const shadowT = device.createTexture({ size: [SHADOW_N, SHADOW_N], format: 'depth32float', usage: T_.RENDER_ATTACHMENT | T_.TEXTURE_BINDING });
   const shadowView = shadowT.createView();
   const cmp = device.createSampler({ compare: 'less', magFilter: 'linear', minFilter: 'linear' });
@@ -141,7 +157,7 @@ export async function createView3D(canvas, opts = {}) {
   // ─── city ──────────────────────────────────────────────────────────────────
   let cur = null;          // { vb, ib, ranges, fb, nField, R, mesh }
   function setCity(_city, tl, mesh, field) {
-    if (cur) { cur.vb.destroy(); cur.ib.destroy(); cur.fb?.destroy(); }
+    if (cur) { cur.vb.destroy(); cur.ib.destroy(); cur.fb?.destroy(); cur.terr?.vb.destroy(); cur.terr?.ib.destroy(); }
     const vb = device.createBuffer({ size: Math.max(4, mesh.vertices.byteLength), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(vb, 0, mesh.vertices);
     const ib = device.createBuffer({ size: Math.max(4, mesh.indices.byteLength), usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
@@ -151,9 +167,19 @@ export async function createView3D(canvas, opts = {}) {
       fb = device.createBuffer({ size: field.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
       device.queue.writeBuffer(fb, 0, field);
     }
+    let terr = null;
+    if (mesh.terrain) {
+      const t = mesh.terrain;
+      const tvb = device.createBuffer({ size: Math.max(4, t.vertices.byteLength), usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(tvb, 0, t.vertices);
+      const tib = device.createBuffer({ size: Math.max(4, t.indices.byteLength), usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+      device.queue.writeBuffer(tib, 0, t.indices.buffer, t.indices.byteOffset, t.indices.byteLength);
+      terr = { vb: tvb, ib: tib, n: t.indices.length, K: t.K, sea: _city.terrain.seaLevel, hasSea: _city.terrain.hasSea };
+    }
     const R = Math.hypot(mesh.domain.w, mesh.domain.h) / 2;
     const fresh = !cur;
-    cur = { vb, ib, fb, nField: field ? field.length / 3 : 0, ranges: mesh.ranges, R, half: mesh.half, tl, dur: tl.dur, tallest: mesh.tallest };
+    cur = { vb, ib, fb, nField: field ? field.length / 3 : 0, ranges: mesh.ranges, R, half: mesh.half, tl, dur: tl.dur, tallest: mesh.tallest,
+      terr, groundZ: mesh.groundZ || 0, homeYaw: mesh.homeYaw, world: mesh.worldSize || 0 };
     shadowKey = '';
     if (fresh) Object.assign(cam, home());
   }
@@ -167,7 +193,8 @@ export async function createView3D(canvas, opts = {}) {
     const R = cur ? Math.max(cur.half[0], cur.half[1]) : 900;
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
     const k = Math.max(1, Math.pow(1.4 / aspect, 0.75));
-    return { target: [0, 0, 0], yaw: 200 * Math.PI / 180, pitch: 0.55, dist: R * 1.9 * k };
+    const yaw = cur && cur.homeYaw != null ? cur.homeYaw : 200 * Math.PI / 180;
+    return { target: [0, 0, cur ? cur.groundZ : 0], yaw, pitch: cur && cur.terr ? 0.42 : 0.55, dist: R * 1.9 * k };
   }
   function bindOrbit() {
     const pts = new Map();
@@ -244,6 +271,16 @@ export async function createView3D(canvas, opts = {}) {
       if (Math.abs(dy) < 1e-3 && Math.abs(goalCam.dist / cam.dist - 1) < 1e-3) goalCam = null;
     } else if (view.auto && performance.now() - lastInput > 6000) {
       cam.yaw += dt * 0.035;
+      // terrain: a high wide view while the world forms, down to the home
+      // view as the terrain phase ends
+      const tt = cur.terr && cur.tl.terrain;
+      if (tt && st.T < tt[0] + tt[1]) {
+        const u = clamp((st.T - tt[0]) / tt[1], 0, 1), e = u < 0.55 ? 0 : ((u - 0.55) / 0.45) ** 2 * (3 - 2 * (u - 0.55) / 0.45);
+        const h = home(), far = Math.max(1, cur.world * 0.42 / h.dist);
+        cam.dist = h.dist * (far + (1 - far) * e);
+        cam.pitch = 0.85 + (h.pitch - 0.85) * e;
+        cam.target[0] = h.target[0]; cam.target[1] = h.target[1]; cam.target[2] = h.target[2];
+      }
     }
     const lt = lightFor(st.light || 'golden', 210);
     const aspect = W / H;
@@ -254,12 +291,17 @@ export async function createView3D(canvas, opts = {}) {
     f.set([eye[0], eye[1], eye[2], st.T], 16);
     f.set([lt.sun[0], lt.sun[1], lt.sun[2], lt.night], 20);
     f.set([lt.sunCol[0], lt.sunCol[1], lt.sunCol[2], lt.amb], 24);
-    const fog = Math.max(cur.R * 3.2, cam.dist * 2.2);
+    const fog = Math.max(cur.R * 3.2, cam.dist * 2.2, cur.world * 0.6);
     f.set([lt.hor[0], lt.hor[1], lt.hor[2], fog], 28);
     f.set([lt.zen[0], lt.zen[1], lt.zen[2], clamp(st.field || 0, 0, 1)], 32);
     f.set([clock, 1, 0, 0], 36);
     f.set(inv, 40);
     f.set(sunMatrix(lt.sun, cur.R * 1.08), 56);
+    if (cur.terr) {
+      const K1 = cur.terr.K - 1, tt = cur.tl.terrain;
+      const sT = tt ? clamp((st.T - tt[0]) / tt[1], 0, 1) * K1 : K1;
+      f.set([sT, K1, cur.terr.hasSea ? cur.terr.sea : -1e4, 1], 72);
+    } else f.set([7, 7, -1e4, 0], 72);
     device.queue.writeBuffer(frameBuf, 0, f);
 
     const enc = device.createCommandEncoder();
@@ -283,6 +325,12 @@ export async function createView3D(canvas, opts = {}) {
     pass.setBindGroup(0, group);
     pass.setPipeline(pSky);
     pass.draw(3);
+    if (cur.terr) {
+      pass.setPipeline(pTerrain);
+      pass.setVertexBuffer(0, cur.terr.vb);
+      pass.setIndexBuffer(cur.terr.ib, 'uint32');
+      pass.drawIndexed(cur.terr.n);
+    }
     pass.setVertexBuffer(0, cur.vb);
     pass.setIndexBuffer(cur.ib, 'uint32');
     const o = cur.ranges.opaque, r = cur.ranges.roads;
@@ -296,7 +344,7 @@ export async function createView3D(canvas, opts = {}) {
     }
     pass.end();
     device.queue.submit([enc.finish()]);
-    info.tris = (o[1] + r[1]) / 3; info.w = W; info.h = H;
+    info.tris = (o[1] + r[1] + (cur.terr ? cur.terr.n : 0)) / 3; info.w = W; info.h = H;
   }
 
   return Object.assign(view, {

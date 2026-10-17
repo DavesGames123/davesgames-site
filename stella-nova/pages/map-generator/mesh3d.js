@@ -6,7 +6,8 @@
 //   ranges: { opaque: [first, count], buildings: [first, count], roads: [first, count] }
 //     (index ranges: opaque = ground, water, parks, blocks, buildings;
 //      buildings = the shadow casters; roads = drawn after, no depth write)
-//   seaCentre, seaR, half: [hx, hy] of the city view, domain, ext, tallest, transfer }
+//   seaCentre, seaR, half: [hx, hy] of the city view, domain, ext, tallest, transfer,
+//   terrain: terrain3d.js buildTerrainMesh() or null, groundZ, homeYaw }
 // fieldLines(city, fieldAt) -> Float32Array line list of the field crosses
 // The playback times of playback.js are in the vertices, so the shader
 // grows the city with one uniform (the time T) and no re-upload.
@@ -18,10 +19,22 @@
 //  12  snorm8x4   normal xyz, 0
 //  16  unorm8x4   albedo rgb, roof 1 / wall 0
 //  20  float32x4  anim: t0, dur, s (road: share of length; wall: u along the wall), kind
-//  36  float32x4  ext: building (h, t0 rise, dur rise, 0); sea (cx, cy, R, 0)
+//  36  float32x4  ext: building (h, t0 rise, dur rise, base); sea (cx, cy, R, base)
+//                 base (w) is added to z: the ground under the vertex with
+//                 terrain, 0 without
 // KINDS 0 ground (static), 1 road, 2 block (rises to BLOCK_H), 3 building
 //   (a pad when its lot shows, then it rises), 4 sea (a disc reveal from the
-//   coast), 5 park (fades in), 6 river (fades in, water shading)
+//   coast), 5 park (fades in), 6 river (fades in, water shading),
+//   7 still water (always shown: the terrain sea plane)
+//
+// TERRAIN (city.terrain). No flat ground: terrain3d.js gives the ground
+// mesh. Each city vertex keeps its layer z and takes base = the ground
+// under it plus LIFT (0.5 m); roads are cut to 6 m steps so they follow the
+// ground, and rise to a deck over the river. Block and lot tops follow the
+// ground at their corners plus a bump for the ground inside; their feet go
+// 1.5 m under the lowest corner. The sea is a plane at the sea level, the
+// river a ribbon at its surface, lakes and the other LIB rivers quads at
+// theirs. Parks are a colour of the ground mesh, not polygons.
 //
 // FLAT LAYERS (z, m): ground 0, river 0.06, sea 0.08, park 0.12, road 0.2,
 // field 0.3, block top 0.6, building roofs 0.6 + 0.5 or more. Each layer
@@ -31,9 +44,12 @@
 //
 // grep: export const STRIDE  export const Z  export function buildMesh  export function toSTL
 //       export function extent  export function trimRoads  export function earcut  export function fieldLines  function seaApron  function ribbon  function prism
+//       function terrainBases  function riverRibbon
 
 import { heightColour } from './draw2d.js';
 import { prog } from './playback.js';
+import { buildTerrainMesh, waterQuads } from './terrain3d.js';
+import { groundAt, riverAt, LIFT } from './terrain.js';
 
 export const STRIDE = 52;
 export const Z = { ground: 0, river: 0.06, sea: 0.08, park: 0.12, road: 0.2, field: 0.3, block: 0.6, pad: 0.5 };
@@ -103,13 +119,13 @@ function writer(capV) {
   return {
     get nv() { return nv; }, get ni() { return ni; },
     reserve(v, i) { grow(nv + v, ni + i); },
-    v(x, y, z, nx, ny, nz, col, roof, a0, a1, a2, kind, e0 = 0, e1 = 0, e2 = 0) {
+    v(x, y, z, nx, ny, nz, col, roof, a0, a1, a2, kind, e0 = 0, e1 = 0, e2 = 0, e3 = 0) {
       const o = nv * STRIDE, f = o / 4;
       f32[f] = x; f32[f + 1] = y; f32[f + 2] = z;
       i8[o + 12] = Math.round(nx * 127); i8[o + 13] = Math.round(ny * 127); i8[o + 14] = Math.round(nz * 127); i8[o + 15] = 0;
       u8[o + 16] = Math.round(col[0] * 255); u8[o + 17] = Math.round(col[1] * 255); u8[o + 18] = Math.round(col[2] * 255); u8[o + 19] = roof ? 255 : 0;
       f32[f + 5] = a0; f32[f + 6] = a1; f32[f + 7] = a2; f32[f + 8] = kind;
-      f32[f + 9] = e0; f32[f + 10] = e1; f32[f + 11] = e2; f32[f + 12] = 0;
+      f32[f + 9] = e0; f32[f + 10] = e1; f32[f + 11] = e2; f32[f + 12] = e3;
       return nv++;
     },
     t(a, b, c) { idx[ni++] = a; idx[ni++] = b; idx[ni++] = c; },
@@ -118,34 +134,36 @@ function writer(capV) {
 }
 
 // a flat polygon at height z (pts already in world x, y)
-function flat(W, pts, z, col, kind, t0, dur, e = [0, 0, 0]) {
+function flat(W, pts, z, col, kind, t0, dur, e = [0, 0, 0], ground = null) {
   const tri = earcut(pts);
   if (!tri.length) return;
   W.reserve(pts.length, tri.length);
   const base = W.nv;
-  for (const q of pts) W.v(q[0], q[1], z, 0, 0, 1, col, 1, t0, dur, 0, kind, e[0], e[1], e[2]);
+  for (const q of pts) W.v(q[0], q[1], z, 0, 0, 1, col, 1, t0, dur, 0, kind, e[0], e[1], e[2], ground ? ground(q) : 0);
   for (let i = 0; i < tri.length; i += 3) W.t(base + tri[i], base + tri[i + 1], base + tri[i + 2]);
 }
 
 // a prism over pts (counter-clockwise); z of the vertices is 0 (foot) or 1
 // (top): the shader scales it (kinds 2 and 3)
-function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0]) {
+// base: null, or [top bases per point, foot base] (terrain)
+function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0], bases = null) {
   const tri = earcut(pts);
   if (!tri.length) return 0;
   const n = pts.length;
   W.reserve(n + 4 * n, tri.length + 6 * n);
   const base = W.nv;
-  for (const q of pts) W.v(q[0], q[1], 1, 0, 0, 1, col, 1, t0, dur, 0, kind, e[0], e[1], e[2]);
+  const top = (i) => (bases ? bases[0][i] : 0), foot = bases ? bases[1] : 0;
+  pts.forEach((q, i) => W.v(q[0], q[1], 1, 0, 0, 1, col, 1, t0, dur, 0, kind, e[0], e[1], e[2], top(i)));
   for (let i = 0; i < tri.length; i += 3) W.t(base + tri[i], base + tri[i + 1], base + tri[i + 2]);
   let u = 0;
   for (let i = 0; i < n; i++) {
     const a = pts[i], b = pts[(i + 1) % n];
     const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
     const nx = dy / L, ny = -dx / L;    // outward for a counter-clockwise ring
-    const q0 = W.v(a[0], a[1], 0, nx, ny, 0, col, 0, t0, dur, u, kind, e[0], e[1], e[2]);
-    const q1 = W.v(b[0], b[1], 0, nx, ny, 0, col, 0, t0, dur, u + L, kind, e[0], e[1], e[2]);
-    const q2 = W.v(b[0], b[1], 1, nx, ny, 0, col, 0, t0, dur, u + L, kind, e[0], e[1], e[2]);
-    const q3 = W.v(a[0], a[1], 1, nx, ny, 0, col, 0, t0, dur, u, kind, e[0], e[1], e[2]);
+    const q0 = W.v(a[0], a[1], 0, nx, ny, 0, col, 0, t0, dur, u, kind, e[0], e[1], e[2], foot);
+    const q1 = W.v(b[0], b[1], 0, nx, ny, 0, col, 0, t0, dur, u + L, kind, e[0], e[1], e[2], foot);
+    const q2 = W.v(b[0], b[1], 1, nx, ny, 0, col, 0, t0, dur, u + L, kind, e[0], e[1], e[2], top((i + 1) % n));
+    const q3 = W.v(a[0], a[1], 1, nx, ny, 0, col, 0, t0, dur, u, kind, e[0], e[1], e[2], top(i));
     W.t(q0, q1, q2); W.t(q0, q2, q3);
     u += L;
   }
@@ -153,7 +171,7 @@ function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0]) {
 }
 
 // a road ribbon of width w along line l (world x, y), s = share of length
-function ribbon(W, l, w, col, t0, dur, s0 = 0, total = 0) {
+function ribbon(W, l, w, col, t0, dur, s0 = 0, total = 0, ground = null) {
   const n = l.length;
   if (n < 2) return;
   const cum = [0];
@@ -176,8 +194,9 @@ function ribbon(W, l, w, col, t0, dur, s0 = 0, total = 0) {
     }
     nx *= h * k; ny *= h * k;
     const s = (s0 + cum[i]) / L;
-    W.v(l[i][0] + nx, l[i][1] + ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1);
-    W.v(l[i][0] - nx, l[i][1] - ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1);
+    const g = ground ? ground(l[i]) : 0;
+    W.v(l[i][0] + nx, l[i][1] + ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1, 0, 0, 0, g);
+    W.v(l[i][0] - nx, l[i][1] - ny, Z.road, 0, 0, 1, col, 1, t0, dur, s, 1, 0, 0, 0, g);
   }
   for (let i = 0; i < n - 1; i++) {
     const a = base + 2 * i;
@@ -230,22 +249,42 @@ export function buildMesh(city, tl) {
   const dW = { x: d.x - cx, y: cy - (d.y + d.h), w: d.w, h: d.h };   // domain in world x, y
   const ext = Math.max(d.w, d.h) * 3;
   const W = writer(1 << 16);
+  const TER = city.terrain || null;
+  const tb = TER ? terrainBases(city, T) : null;
 
   // ── opaque: ground, water, parks, blocks ──
   const g = [[dW.x - ext, dW.y - ext], [dW.x + dW.w + ext, dW.y - ext], [dW.x + dW.w + ext, dW.y + dW.h + ext], [dW.x - ext, dW.y + dW.h + ext]];
-  flat(W, g, Z.ground, COL.ground, 0, 0, 0);
-  if (city.river.length > 2 && tl.river) flat(W, ccwOf(city.river.map(T)), Z.river, COL.river, 6, tl.river[0], tl.river[1]);
+  if (!TER) flat(W, g, Z.ground, COL.ground, 0, 0, 0);
+  if (TER) {
+    const ws = TER.worldSize * 2.5, sea = TER.seaLevel;
+    if (TER.hasSea) flat(W, [[-ws, -ws], [ws, -ws], [ws, ws], [-ws, ws]], 0, COL.sea, 7, 0, 0, [0, 0, 0], () => sea);
+    // lakes and the other LIB rivers: in at the end of the terrain phase
+    const tEnd = tl.terrain ? tl.terrain[0] + tl.terrain[1] : 0;
+    const quads = [];
+    waterQuads(city, (p) => quads.push(p));
+    W.reserve(quads.length, quads.length);
+    for (let i = 0; i < quads.length; i += 3) {
+      const b0 = W.nv;
+      for (let k = 0; k < 3; k++) { const [x, y] = T(quads[i + k]); W.v(x, y, 0, 0, 0, 1, COL.river, 1, tEnd - 0.8, 0.8, 0, 6, 0, 0, 0, quads[i + k][2]); }
+      W.t(b0, b0 + 1, b0 + 2);
+    }
+    if (TER.river && tl.river) riverRibbon(W, TER.river, T, tl.river);
+  } else if (city.river.length > 2 && tl.river) flat(W, ccwOf(city.river.map(T)), Z.river, COL.river, 6, tl.river[0], tl.river[1]);
   let seaCentre = [0, 0], seaR = 1;
-  if (city.sea.length > 2 && tl.coast) {
+  if (!TER && city.sea.length > 2 && tl.coast) {
     const mid = city.coastline.length ? T(city.coastline[city.coastline.length >> 1]) : [0, 0];
     seaCentre = mid; seaR = Math.hypot(d.w, d.h);
     const dMap = { x: d.x, y: d.y, w: d.w, h: d.h };
     flat(W, ccwOf(city.sea.map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR]);
     for (const r of seaApron(city.sea, dMap, ext)) flat(W, ccwOf(r.map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR * 4]);
   }
-  city.parks.forEach((p, i) => flat(W, ccwOf(p.map(T)), Z.park, COL.park, 5, tl.parks[2 * i], tl.parks[2 * i + 1]));
+  if (!TER) city.parks.forEach((p, i) => flat(W, ccwOf(p.map(T)), Z.park, COL.park, 5, tl.parks[2 * i], tl.parks[2 * i + 1]));
   const kept = extent(city);
-  city.blocks.forEach((b, i) => { if (kept.block[i]) prism(W, ccwOf(b.map(T)), COL.block, 2, tl.blocks[2 * i], tl.blocks[2 * i + 1]); });
+  city.blocks.forEach((b, i) => {
+    if (!kept.block[i]) return;
+    const pts = ccwOf(b.map(T));
+    prism(W, pts, COL.block, 2, tl.blocks[2 * i], tl.blocks[2 * i + 1], [0, 0, 0], tb ? tb.block(pts, i) : null);
+  });
   // ── buildings (the shadow casters) ──
   const bFirst = W.ni;
   let tallest = 0;
@@ -254,7 +293,8 @@ export function buildMesh(city, tl) {
     const h = city.buildings[i].h;
     tallest = Math.max(tallest, h);
     const col = heightColour(h);
-    prism(W, ccwOf(inset(l.map(T), INSET)), col, 3, tl.lots[2 * i], tl.lots[2 * i + 1], [h, tl.buildings[2 * i], tl.buildings[2 * i + 1]]);
+    const pts = ccwOf(inset(l.map(T), INSET));
+    prism(W, pts, col, 3, tl.lots[2 * i], tl.lots[2 * i + 1], [h, tl.buildings[2 * i], tl.buildings[2 * i + 1]], tb ? tb.lot(pts, city.lotBlock[i]) : null);
   });
   const bEnd = W.ni;
   // ── roads, minor first, so the main roads draw on top ──
@@ -262,17 +302,93 @@ export function buildMesh(city, tl) {
   const trimmed = trimRoads(city);
   for (const cls of ['minor', 'river', 'major', 'coast', 'main']) {
     const a = tl.roads[cls] || [];
-    trimmed[cls].forEach((r, i) => { if (r) ribbon(W, r.line.map(T), ROAD_W[cls], ROAD_COL[cls], a[2 * i] || 0, a[2 * i + 1] || 1e-3, r.a, r.L); });
+    trimmed[cls].forEach((r, i) => {
+      if (!r) return;
+      const l = tb ? densify(r.line.map(T), 6) : r.line.map(T);
+      ribbon(W, l, ROAD_W[cls], ROAD_COL[cls], a[2 * i] || 0, a[2 * i + 1] || 1e-3, r.a, r.L, tb ? tb.road : null);
+    });
   }
   const rEnd = W.ni;
   const out = W.done();
 
+  const terrain = TER ? buildTerrainMesh(city, tl) : null;
+  const transfer = [out.vertices, out.indices.buffer];
+  if (terrain) transfer.push(terrain.vertices, terrain.indices.buffer);
+  let homeYaw = null;
+  if (TER && Math.hypot(TER.home.x, TER.home.y) > 1e-6) homeYaw = Math.atan2(-TER.home.x, -TER.home.y);
   return {
     vertices: out.vertices, indices: out.indices,
     ranges: { opaque: [0, bEnd], buildings: [bFirst, bEnd - bFirst], roads: [bEnd, rEnd - bEnd] },
     seaCentre, seaR, half: [cx, cy], domain: dW, ext, tallest,
-    transfer: [out.vertices, out.indices.buffer],
+    terrain, groundZ: TER ? Math.max(groundAt(TER, cx, cy), TER.hasSea ? TER.seaLevel : -Infinity) : 0, homeYaw, worldSize: TER ? TER.worldSize : 0,
+    transfer,
   };
+}
+
+// a line (world x, y) cut so no step is longer than m
+function densify(l, m) {
+  const out = [l[0]];
+  for (let i = 1; i < l.length; i++) {
+    const [ax, ay] = l[i - 1], [bx, by] = l[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / m));
+    for (let k = 1; k <= n; k++) out.push([ax + (bx - ax) * k / n, ay + (by - ay) * k / n]);
+  }
+  return out;
+}
+
+// TERRAIN BASES: the ground under the city layers (see the header).
+// pts are world x, y; the terrain lookups take map x, y.
+function terrainBases(city, T) {
+  const TER = city.terrain, cx = city.view.w / 2, cy = city.view.h / 2;
+  const gm = (p) => groundAt(TER, p[0] + cx, cy - p[1]);
+  const rv = TER.river;
+  const road = (p) => {
+    let gr = gm(p);
+    if (rv) {
+      const r = riverAt(TER, p[0] + cx, cy - p[1]);
+      if (r && r.d < rv.halfW + 25) gr = Math.max(gr, r.surf + 3.5 - 0.15 * Math.max(0, r.d - rv.halfW));
+    }
+    return gr + LIFT;
+  };
+  // the ground inside a polygon over its corners: centroid and midpoints
+  const bump = (pts, gs) => {
+    const c = cen(pts), mean = gs.reduce((a, b) => a + b, 0) / gs.length;
+    let mx = gm(c);
+    for (const q of pts) mx = Math.max(mx, gm([(q[0] + c[0]) / 2, (q[1] + c[1]) / 2]));
+    return Math.max(0, mx - mean);
+  };
+  const bumps = new Map();
+  return {
+    road,
+    block(pts, i) {
+      const gs = pts.map(gm), b = bump(pts, gs);
+      bumps.set(i, b);
+      return [gs.map((g) => g + LIFT + b), Math.min(...gs) - 1.5];
+    },
+    lot(pts, bi) {
+      const gs = pts.map(gm), b = Math.max(bumps.get(bi) || 0, bump(pts, gs));
+      const top = Math.max(...gs) + LIFT + b;
+      return [gs.map(() => top), Math.min(...gs) - 1.5 + LIFT];
+    },
+  };
+}
+
+// The city river as a ribbon at its water surface (kind 6), a little wider
+// than the water polygon, over the carved bed.
+function riverRibbon(W, rv, T, tr) {
+  const l = rv.line.map(T), n = l.length, h = rv.halfW + 1.5;
+  if (n < 2) return;
+  W.reserve(2 * n, 6 * (n - 1));
+  const base = W.nv;
+  for (let i = 0; i < n; i++) {
+    const p = l[Math.max(0, i - 1)], q = l[Math.min(n - 1, i + 1)];
+    let dx = q[0] - p[0], dy = q[1] - p[1];
+    const d = Math.hypot(dx, dy) || 1;
+    dx /= d; dy /= d;
+    W.v(l[i][0] - dy * h, l[i][1] + dx * h, Z.river, 0, 0, 1, COL.river, 1, tr[0], tr[1], 0, 6, 0, 0, 0, rv.surf[i]);
+    W.v(l[i][0] + dy * h, l[i][1] - dx * h, Z.river, 0, 0, 1, COL.river, 1, tr[0], tr[1], 0, 6, 0, 0, 0, rv.surf[i]);
+  }
+  for (let i = 0; i < n - 1; i++) { const a = base + 2 * i; W.t(a, a + 1, a + 3); W.t(a, a + 3, a + 2); }
 }
 
 // EXTENT. The generator works on the view grown 1.2 times (as upstream),
@@ -362,6 +478,7 @@ function insidePoly(p, poly) {
 // fieldAt is gen.js fieldSampler(city) (map coordinates, y down).
 export function fieldLines(city, fieldAt, step = 24) {
   const cx = city.view.w / 2, cy = city.view.h / 2, d = city.domain;
+  const TER = city.terrain;
   const out = [];
   const hl = step * 0.36;
   for (let y = d.y + step / 2; y < d.y + d.h; y += step) {
@@ -369,8 +486,9 @@ export function fieldLines(city, fieldAt, step = 24) {
       const v = fieldAt(x, y);
       if (!v) continue;
       const X = x - cx, Y = cy - y, ux = v[0], uy = -v[1];
-      out.push(X - ux * hl, Y - uy * hl, Z.field, X + ux * hl, Y + uy * hl, Z.field);
-      out.push(X + uy * hl, Y - ux * hl, Z.field, X - uy * hl, Y + ux * hl, Z.field);
+      const z = TER ? groundAt(TER, x, y) + LIFT + Z.field : Z.field;
+      out.push(X - ux * hl, Y - uy * hl, z, X + ux * hl, Y + uy * hl, z);
+      out.push(X + uy * hl, Y - ux * hl, z, X - uy * hl, Y + ux * hl, z);
     }
   }
   return new Float32Array(out);
@@ -400,10 +518,17 @@ export function toSTL(city) {
     }
   };
   const v = city.view;
-  solid([T([0, 0]), T([v.w, 0]), T([v.w, v.h]), T([0, v.h])], -2, 0);
   const kept = extent(city);
-  city.blocks.forEach((b, i) => { if (kept.block[i]) solid(b.map(T), 0, Z.block); });
-  city.lots.forEach((l, i) => kept.lot[i] && solid(inset(l.map(T), INSET), Z.block, Z.block + city.buildings[i].h));
+  if (city.terrain) {
+    // terrain: each block and building on its own ground (no base plate)
+    const gm = (p) => groundAt(city.terrain, p[0], p[1]);
+    city.blocks.forEach((b, i) => { if (kept.block[i]) { const g = b.map(gm); solid(b.map(T), Math.min(...g) - 2, Math.max(...g) + Z.block); } });
+    city.lots.forEach((l, i) => { if (kept.lot[i]) { const g = l.map(gm); solid(inset(l.map(T), INSET), Math.min(...g) - 2, Math.max(...g) + Z.block + city.buildings[i].h); } });
+  } else {
+    solid([T([0, 0]), T([v.w, 0]), T([v.w, v.h]), T([0, v.h])], -2, 0);
+    city.blocks.forEach((b, i) => { if (kept.block[i]) solid(b.map(T), 0, Z.block); });
+    city.lots.forEach((l, i) => kept.lot[i] && solid(inset(l.map(T), INSET), Z.block, Z.block + city.buildings[i].h));
+  }
   const buf = new ArrayBuffer(84 + tris.length * 50);
   const dv = new DataView(buf);
   const head = 'City Generator, davesgames.io. Streets and lots: MapGenerator by ProbableTrain, LGPL-3.0';
