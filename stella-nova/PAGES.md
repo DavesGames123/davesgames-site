@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-227 registered pages in 5 regions and 20 constellations.
+228 registered pages in 5 regions and 20 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -196,6 +196,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `outbreak` | Outbreak | Life Sciences > Epidemiology | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
 | `plant-growth` | Plant Growth | Life Sciences > Growth | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
 | `coral-reef` | Coral Reef Growth | Life Sciences > Growth | 3D | Coral colonies grow live as marine snow sticks to their tips. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `dla-terrain` | DLA Terrain | Life Sciences > Growth | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | no |
 | `fluidlab` | Stable Fluids | Fluids > Flow | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
 | `wind-tunnel` | Wind Tunnel | Fluids > Flow | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
 | `euler-fluid` | Euler Fluid | Fluids > Flow | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |

@@ -73,6 +73,7 @@ const SEARCH_WORDS = {
   dlaf: 'dla diffusion-limited aggregation diffusion limited aggregation fogleman dlaf fractal random walk brownian motion cluster growth lichtenberg crystal dendrite snowflake heatmap gradient 3d csv particles branching',
   'plant-growth': 'plant tree growth grow a tree space colonisation colonization runions l-system botany oak conifer pine willow fern cherry blossom flowers roots dla dlaf pipe model heatmap gradient garden procedural',
   'coral-reef': 'coral reef coral reefs dla diffusion-limited aggregation dlaf fogleman marine snow staghorn sea fan gorgonian table coral brain coral bleaching ocean current caustics underwater growth heatmap kaandorp',
+  'dla-terrain': 'terrain generator procedural terrain landscape world generator mountains ridges dla diffusion-limited aggregation dlaf branched flow erosion rivers lakes fjords islands biomes forests grass weather day night cycle sunset storm snow fog volumetric haze clouds drone webgpu',
 };
 
 const DIRECTORY_ONLY = new Set(['qave', 'origami']);
@@ -96,6 +97,7 @@ const CREDITS = {
   dlaf: 'dlaf by Michael Fogleman (MIT)',
   'plant-growth': 'roots grown with a port of dlaf by Michael Fogleman (MIT)',
   'coral-reef': 'coral grown with a port of dlaf by Michael Fogleman (MIT)',
+  'dla-terrain': 'ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG',
   'thinking-orbs': 'thinking-orbs by RareFormLabs (MIT)',
   'fractal-flames': 'flam3 by Scott Draves (GPL-3.0)',
   'line-art': 'ln by Michael Fogleman (MIT)',
@@ -414,6 +416,7 @@ const BLURBS = {
   dlaf: 'Grow diffusion-limited aggregation live after fogleman/dlaf, and colour the growth front with heatmaps.',
   'plant-growth': 'Oaks, conifers, willows and ferns grow live by space colonisation.',
   'coral-reef': 'Coral colonies grow live as marine snow sticks to their tips.',
+  'dla-terrain': 'Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle.',
   'julia-fractals': 'Julia and Mandelbrot sets, zoom and explore.',
   'sci-tools': 'Units, constants, statistics, fits and chemistry in one offline page.',
 };

@@ -155,7 +155,8 @@ w.SN_NAV = [
     ] },
     { h: "Growth", p: [
       ["plant-growth", "Plant Growth", "3D"],
-      ["coral-reef", "Coral Reef Growth", "3D"]
+      ["coral-reef", "Coral Reef Growth", "3D"],
+      ["dla-terrain", "DLA Terrain", "3D"]
     ] }
   ] },
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
