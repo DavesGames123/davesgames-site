@@ -197,7 +197,7 @@ fn agxOut(v: vec3f) -> vec3f {
   a = a * P.p5.rgb + P.p4.rgb * (vec3f(1.0) - a);
   // vignette
   let r = (v.uv - vec2f(0.5)) * vec2f(P.p6.z / max(P.p6.w, 1.0), 1.0);
-  a *= mix(1.0, smoothstep(1.25, 0.25, length(r)), P.p1.x);
+  a *= mix(1.0, 1.0 - smoothstep(0.25, 1.25, length(r)), P.p1.x);
   // grain: luma-weighted, fine, moving
   let g = cm_hash12(v.pos.xy + vec2f(fract(G.camPos.w * 7.13) * 917.0, fract(G.camPos.w * 3.7) * 413.0)) - 0.5;
   a += vec3f(g * P.p1.y * (0.35 + 0.65 * (1.0 - lum)));

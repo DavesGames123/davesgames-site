@@ -66,7 +66,7 @@ fn biomeColor(b: u32) -> vec3f {
   }
   let slope = 1.0 - n.y;
   alb = mix(alb, vec3f(0.36, 0.33, 0.3), smoothstep(0.3, 0.55, slope));
-  alb = mix(alb, vec3f(0.92, 0.94, 0.97), smoothstep(0.75, 0.85, h01) * smoothstep(0.5, 0.3, slope));
+  alb = mix(alb, vec3f(0.92, 0.94, 0.97), smoothstep(0.75, 0.85, h01) * (1.0 - smoothstep(0.3, 0.5, slope)));
   alb = mix(alb, vec3f(0.18, 0.24, 0.24), clamp(aux.g, 0.0, 1.0) * 0.7);
   if (v.wp.y < G.terrain.z) { alb = mix(alb, vec3f(0.04, 0.1, 0.16), clamp((G.terrain.z - v.wp.y) * 0.05, 0.0, 0.9)); }
   let sh = sunShadow(v.wp, n);
@@ -94,6 +94,6 @@ struct SOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   let mu = dot(d, s);
   c += G.sunColor.rgb * 40.0 * smoothstep(0.99995, 0.99999, mu);
   c += G.sunColor.rgb * 0.15 * pow(max(mu, 0.0), 64.0);
-  if (d.y < 0.0) { c = mix(c, G.fog.rgb, smoothstep(0.0, -0.1, d.y)); }
+  if (d.y < 0.0) { c = mix(c, G.fog.rgb, (1.0 - smoothstep(-0.1, 0.0, d.y))); }
   return vec4f(c, 1.0);
 }
