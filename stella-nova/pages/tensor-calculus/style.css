@@ -1,0 +1,18 @@
+/* ============================================================================
+   TENSOR CALCULUS  ·  style.css  (CORE)
+   ----------------------------------------------------------------------------
+   INDEX COLOURS. .i0 to .i7 colour one index letter in HTML text and in the
+   MathJax SVG (\class{iN}{...}). The values match INDEX_COLORS in
+   palette.js. tests/core.test.mjs checks that the two lists agree.
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* INDEX */
+:root{
+  --i0:#56b4e9; --i1:#e69f00; --i2:#5fe0b0; --i3:#f0e442;
+  --i4:#d97bb8; --i5:#ff6f4a; --i6:#b083ff; --i7:#eceef2;
+}
+.i0{color:var(--i0)} .i1{color:var(--i1)} .i2{color:var(--i2)} .i3{color:var(--i3)}
+.i4{color:var(--i4)} .i5{color:var(--i5)} .i6{color:var(--i6)} .i7{color:var(--i7)}
+svg .i0{fill:var(--i0)} svg .i1{fill:var(--i1)} svg .i2{fill:var(--i2)} svg .i3{fill:var(--i3)}
+svg .i4{fill:var(--i4)} svg .i5{fill:var(--i5)} svg .i6{fill:var(--i6)} svg .i7{fill:var(--i7)}
