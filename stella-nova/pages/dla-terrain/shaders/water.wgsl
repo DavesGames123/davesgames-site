@@ -564,12 +564,25 @@ fn wBreaker(depth: f32, t: f32, xz: vec2f) -> f32 {
   return pow(s, 6.0) * band;
 }
 
+// the sea floor for the ocean: the terrain inside the world; past the
+// edge it sinks to 50 m under the sea within 8% of the world size (as the
+// GROUND far ring does), so the clamped edge texels do not make foam
+// stripes and shallow bands out to the horizon
+fn wSeaFloor(xz: vec2f) -> f32 {
+  let ws = G.terrain.x;
+  let c = G.terrainOrigin.xy + vec2f(ws * 0.5);
+  let out = max(abs(xz.x - c.x), abs(xz.y - c.y)) - ws * 0.5;
+  let h = terrainHeight(xz);
+  if (out <= 0.0) { return h; }
+  return mix(h, G.terrain.z - 50.0, smoothstep(0.0, ws * 0.08, out));
+}
+
 @vertex
 fn vsOcean(@location(0) g: vec2f) -> OceanOut {
   let r = g.x;
   let dir = vec2f(cos(g.y), sin(g.y));
   let base = WU.snap.xy + dir * r;
-  let ground = terrainHeight(base);
+  let ground = wSeaFloor(base);
   let depth = WU.misc.y - ground;
   let amp = mix(0.25, 1.0, smoothstep(0.0, 14.0, depth));
   let horiz = smoothstep(-1.0, 6.0, depth);
@@ -608,7 +621,7 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
     N = normalize(N + vec3f(-rs.x, 0.0, -rs.y));
   }
   // water depth under this point (displaced)
-  let ground = terrainHeight(P.xz);
+  let ground = wSeaFloor(P.xz);
   let depth = P.y - ground;
   // whitecaps from the folding of the surface (Jacobian below one)
   let J = wJacobian(s);
