@@ -53,7 +53,7 @@ svg .i4{stroke:var(--i4)} svg .i5{stroke:var(--i5)} svg .i6{stroke:var(--i6)} sv
 .tex-body[data-pick]:not([data-pick="i2"]) svg .i2,.tex-body[data-pick]:not([data-pick="i3"]) svg .i3,
 .tex-body[data-pick]:not([data-pick="i4"]) svg .i4,.tex-body[data-pick]:not([data-pick="i5"]) svg .i5,
 .tex-body[data-pick]:not([data-pick="i6"]) svg .i6,.tex-body[data-pick]:not([data-pick="i7"]) svg .i7{opacity:0.25}
-@media (prefers-reduced-motion:reduce){.tex-body svg [class^="i"]{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.tex-body svg g{animation:none!important}}
 
 /* SHELL */
 :root{

@@ -475,6 +475,8 @@ export async function boot(opts = {}) {
     doc.addEventListener('keydown', e => {
       const tag = (e.target && e.target.tagName) || '';
       if (/INPUT|TEXTAREA|SELECT/.test(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // The chapter panel has its own arrow keys (back and next beat).
+      if (e.target && e.target.closest && e.target.closest('.learn')) return;
       if (e.key === ' ') { e.preventDefault(); togglePlay(); }
       else if (e.key === 'ArrowRight') { player.pause(); player.next(); syncPlay(); }
       else if (e.key === 'ArrowLeft') { player.pause(); player.prev(); syncPlay(); }
@@ -484,6 +486,17 @@ export async function boot(opts = {}) {
   }
   bindKeys();
   if (win.addEventListener) win.addEventListener('resize', () => safe('viz.resize', () => viz.resize()));
+  // A pane can change size with no window resize: the panel opens or
+  // closes, a layout moves, the phone sheet moves. One observer per pane.
+  if (typeof win.ResizeObserver === 'function') {
+    const ro = new win.ResizeObserver(entries => {
+      for (const en of entries) {
+        if (en.target === panes.viz) safe('viz.resize', () => viz.resize());
+        if (en.target === panes.diagram) safe('diagram.resize', () => diagram.resize && diagram.resize());
+      }
+    });
+    ro.observe(panes.viz); ro.observe(panes.diagram);
+  }
 
   // ---------------------------------------------------------------- frame
   const raf = opts.raf || (fn => win.requestAnimationFrame(fn));

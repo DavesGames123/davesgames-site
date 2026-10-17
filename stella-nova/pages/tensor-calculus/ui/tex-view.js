@@ -147,6 +147,8 @@ export function createTexView(els, deps) {
       if (els.label) els.label.textContent = '';
       if (els.op) els.op.hidden = true;
       setTex(els.before, '');
+      // play() left the step styles on the boxes; a still expression has none.
+      for (const e of [els.before, els.after]) if (e) { e.style.opacity = ''; e.style.transform = ''; }
       const p = setTex(els.after, exprTex(expr, math));
       pulse([]);
       info(expr);

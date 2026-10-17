@@ -525,6 +525,68 @@ else {
 }
 
 // ============================================================================
+section('mathjax');
+// MathJax 3.2.2 (npm mathjax-full, from MATHJAX_DIR or NODE_PATH) typesets
+// every TeX string that CORE writes: the coloured TeX of each step of each
+// LIBRARY trace, the written-out sums, and the playground results. A TeX
+// error or an undefined macro fails the check. Without the package, a
+// skip line prints.
+function findMathJax() {
+  const dirs = [process.env.MATHJAX_DIR, process.env.JSDOM_DIR, ...(process.env.NODE_PATH || '').split(':')].filter(Boolean);
+  for (const d of dirs) for (const base of [join(d, 'x.js'), join(d, '..', 'x.js')]) {
+    try {
+      const req = createRequire(base);
+      const { mathjax } = req('mathjax-full/js/mathjax.js');
+      const { TeX } = req('mathjax-full/js/input/tex.js');
+      const { SVG } = req('mathjax-full/js/output/svg.js');
+      const { liteAdaptor } = req('mathjax-full/js/adaptors/liteAdaptor.js');
+      const { RegisterHTMLHandler } = req('mathjax-full/js/handlers/html.js');
+      const { AllPackages } = req('mathjax-full/js/input/tex/AllPackages.js');
+      const adaptor = liteAdaptor(); RegisterHTMLHandler(adaptor);
+      const doc = mathjax.document('', { InputJax: new TeX({ packages: AllPackages.filter(p => p !== 'bussproofs'), formatError: (jax, err) => { throw err; } }), OutputJax: new SVG({ fontCache: 'none' }) });
+      return tex => { const node = doc.convert(tex, { display: true }); const out = adaptor.outerHTML(node); if (/data-mjx-error|merror|fill="red"/.test(out)) throw new Error('TeX error in ' + tex); return out; };
+    } catch (e) { /* next */ }
+  }
+  return null;
+}
+const mj = findMathJax();
+if (!mj) console.log('skip mathjax: mathjax-full not found (set MATHJAX_DIR)');
+else {
+  const TV = await import(join(ROOT, 'ui/tex-view.js'));
+  check('library traces: every step TeX and sum typesets', async () => {
+    let lib = null;
+    try { lib = await import(join(ROOT, 'library/index.js')); } catch (e) { console.log('     skip: library did not load'); return; }
+    const list = lib.LIBRARY || lib.ENTRIES || [];
+    let n = 0;
+    for (const e of list) {
+      let tr; try { tr = e.trace({}); } catch (err) { continue; }
+      P.setActive((await import(join(ROOT, 'main.js'))).traceSyms(tr, MATH));
+      for (const st of tr.steps) {
+        for (const x of [st.before, st.after]) { mj(TV.exprTex(x, MATH)); n++; }
+        if (st.sums && st.sums.length) { mj(TV.sumsTex(TV.exprTex(st.before, MATH, { colors: false }), st.sums)); n++; }
+      }
+    }
+    console.log(`     mathjax: ${n} step strings from ${list.length} entries`);
+  });
+  if (MATH) check('playground results typeset', async () => {
+    const OPS = await import(join(ROOT, 'ui/ops.js'));
+    let n = 0;
+    for (const [tex, op, args] of [['T^{\\mu}{}_{\\nu}', 'contract'], ['T^{\\mu}{}_{\\nu}', 'raise'], ['T^{\\mu}{}_{\\nu}', 'transform'], ['T_{\\mu\\nu}', 'symmetrize'], ['T_{ab}', 'antisymmetrize'], ['T^{\\mu}{}_{\\nu}', 'covariant'], ['u^{i}', 'product', { tex: 'w_{j}' }], ['v^{i} w_{i}', 'expandSum'], ['\\epsilon_{ijk} a^{j} b^{k}', 'expandSum']]) {
+      const tr = OPS.buildOpTrace(MATH, MATH.parseIndexTex(tex), op, args || {}, { dim: 3 });
+      P.setActive((await import(join(ROOT, 'main.js'))).traceSyms(tr, MATH));
+      for (const st of tr.steps) {
+        mj(TV.exprTex(st.before, MATH)); mj(TV.exprTex(st.after, MATH)); n += 2;
+        if (st.sums.length) { mj(TV.sumsTex(TV.exprTex(st.before, MATH, { colors: false }), st.sums)); n++; }
+      }
+    }
+    console.log(`     mathjax: ${n} playground strings`);
+  });
+  check('string TeX through colorIndexTex typesets', () => {
+    for (const t of ['R^{\\rho}{}_{\\sigma\\mu\\nu}', '\\partial_\\mu F^{\\mu\\nu} = J^\\nu', '\\Gamma^\\lambda_{\\mu\\nu} = \\tfrac12 g^{\\lambda\\sigma}(\\partial_\\mu g_{\\sigma\\nu})', 'T_{(ab)} + T_{[ab]}', "x'^{\\mu'}"]) mj(TC.colorIndexTex(t, s => P.indexClass(s)));
+  });
+}
+
+// ============================================================================
 await drain();
 console.log(`core: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);
