@@ -1,8 +1,10 @@
 Coral Reef Growth (stella-nova/pages/coral-reef) - credits and licences
 =====================================================================
 
-The page code (reef.js, colour.js, saver.js, scene.js, diagram.js,
-main.js, index.html, style.css, tests.mjs) is our own code. The coral
+The page code (reef.js, colour.js, saver.js, scene.js, shaders.js,
+terrain.js, coral-sdf.js, mesh-worker.js, assets.js, raster.js,
+thumb.mjs, glsl-check.mjs, diagram.js, main.js, index.html, style.css,
+tests.mjs) and stella-nova/lib/dla-sdf.js are our own code. The coral
 species are hooks that we wrote for the engine below.
 
 
@@ -44,7 +46,64 @@ MIT License, Copyright (C) 2010-2023 three.js authors. The full text is in
 stella-nova/vendor/three@0.160.0/LICENSE.
 
 
-3. Ideas (no code taken)
+3. Seabed: NOAA NCEI lidar bathymetry (seabed-data.js)
+-----------------------------------------------------
+Source: NOAA National Centers for Environmental Information (NCEI),
+Continuously Updated Digital Elevation Model (CUDEM), 1/9 arc-second
+topobathy tile ncei19_n18x00_w064x75_2019v1 (St. Croix, US Virgin
+Islands). DOI 10.25921/ds9v-ky35 (on 2026-10-17 it redirects to an NCEI page).
+Read on 2026-10-17 with OPeNDAP:
+  https://www.ngdc.noaa.gov/thredds/dodsC/tiles/tiled_19as/ncei19_n18x00_w064x75_2019v1.nc
+  variable z, lat index 1314..1473, lon index 4224..4383
+  (17.7904 N to 17.7953 N, 64.6198 W to 64.6149 W)
+The place is the lagoon of Buck Island Reef National Monument: sand with
+patch reefs and the back-reef ridge. seabed-data.js stores the 160 x 160
+depths in centimetres. terrain.js scales the relief to the reef (the
+scene is not to scale) and adds procedural ripples, rubble and rocks.
+Licence: a work of the US Government (NOAA). It is not subject to
+copyright in the United States (public domain). The NCEI coastal DEM
+metadata states: "Produced by the NOAA National Geophysical Data Center.
+Not subject to copyright protection within the United States." It is not
+for navigation.
+
+
+4. Scanned models and textures: Poly Haven (assets/)
+----------------------------------------------------
+All CC0 1.0 Universal (public domain dedication): https://polyhaven.com/license
+CC0 text: https://creativecommons.org/publicdomain/zero/1.0/
+Fetched on 2026-10-17 from api.polyhaven.com (1k glTF and 1k JPEG).
+We made the models small (vertex clustering for the rocks, quantised
+positions and normals: the CRM1 files in assets/models) and resized the
+textures to 512 px.
+  assets/models/lambis_shell.bin, assets/tex/shell_diff.jpg, shell_nor.jpg
+      "Lambis Shell" by Kuutti Siitonen, https://polyhaven.com/a/lambis_shell
+  assets/models/moon_rock_01.bin .. moon_rock_07.bin
+      "Moon Rock 01".."Moon Rock 07" by Greg Zaal, Rico Cilliers,
+      Jenelle van Heerden (01 also Dario Barresi),
+      https://polyhaven.com/a/moon_rock_01 (and _02 .. _07)
+  assets/models/rock_09.bin
+      "Rock 09" by Jenelle van Heerden, https://polyhaven.com/a/rock_09
+  assets/tex/reefrock_diff.jpg, reefrock_nor.jpg
+      "Coral Ground 02" by Rob Tuytel, https://polyhaven.com/a/coral_ground_02
+  assets/tex/gravel_diff.jpg, gravel_nor.jpg
+      "Coral Gravel" by Rob Tuytel, https://polyhaven.com/a/coral_gravel
+  assets/tex/sand_diff.jpg, sand_nor.jpg
+      "Sand 01" by Rob Tuytel, https://polyhaven.com/a/sand_01
+
+
+5. Code ideas with credit
+-------------------------
+- lib/dla-sdf.js: the round cone distance and the polynomial smooth
+  minimum follow the formulas of Inigo Quilez (iquilezles.org articles
+  "distance functions" and "smooth minimum"; MIT). Surface nets after
+  S. F. F. Gibson, "Constrained elastic surface nets" (1998). Our code.
+- shaders.js: the caustic map uses the mesh-area method of our own page
+  stella-nova/pages/photon-caustics (topview.js). Bump mapping from
+  screen derivatives after M. Mikkelsen, "Bump mapping unparametrized
+  surfaces on the GPU" (2010).
+
+
+6. Ideas (no code taken)
 ------------------------
 - J. A. Kaandorp, C. P. Lowe, D. Frenkel and P. M. A. Sloot, "Effect of
   nutrient diffusion and flow on coral morphology", Physical Review
@@ -56,4 +115,5 @@ stella-nova/vendor/three@0.160.0/LICENSE.
 - T. A. Witten and L. M. Sander, "Diffusion-limited aggregation, a
   kinetic critical phenomenon", Physical Review Letters 47, 1400 (1981).
 
-The caustics, the water shading and the light shafts are our own GLSL.
+The caustics, the water shading, the coral and polyp shading and the
+light shafts are our own GLSL.
