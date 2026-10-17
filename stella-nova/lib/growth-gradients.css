@@ -1,0 +1,20 @@
+/* ============================================================================
+   GROWTH GRADIENTS  ·  the "choose a gradient" picker (lib/growth-gradients.js)
+   ----------------------------------------------------------------------------
+   A wrapped row of swatch buttons and a reverse toggle. Colours come from the
+   page through --gg-accent (the ring of the chosen swatch) and --gg-dim.
+   Coarse pointers get 44px targets.
+   ========================================================================== */
+.gg-picker{display:flex;flex-direction:column;gap:6px}
+.gg-head{display:flex;justify-content:space-between;align-items:baseline;font-size:0.74rem;color:var(--gg-dim,#8d9a9f)}
+.gg-name{color:var(--gg-accent,#ffd66e)}
+.gg-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px}
+.gg-sw{height:20px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);padding:0;cursor:pointer;outline-offset:2px}
+.gg-sw.on{box-shadow:0 0 0 2px var(--gg-accent,#ffd66e)}
+.gg-sw:focus-visible{outline:1px solid var(--gg-accent,#ffd66e)}
+.gg-rev{display:flex;align-items:center;gap:6px;font-size:0.74rem;color:var(--gg-dim,#8d9a9f);cursor:pointer}
+@media (pointer:coarse){
+  .gg-row{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}
+  .gg-sw{height:44px}
+  .gg-rev{min-height:44px}
+}
