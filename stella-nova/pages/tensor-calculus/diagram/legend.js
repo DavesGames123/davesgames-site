@@ -70,7 +70,7 @@ export function legendItems(style = 'penrose', opts = {}) {
   const list = GLYPHS[style] || GLYPHS.penrose;
   return list.map(([tex, title, text]) => {
     const scene = layoutExpr(parseStub(tex), { style, indexColor: opts.indexColor, maxWidth: 400 });
-    return { tex, title, text, svg: toSvgString(scene, { style, theme: opts.theme, background: false, scale: 0.6 }), scene };
+    return { tex, title, text, svg: toSvgString(scene, { style, theme: opts.theme, background: false, scale: 0.7 }), scene };
   });
 }
 

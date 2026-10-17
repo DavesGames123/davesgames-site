@@ -140,6 +140,7 @@ export function einsumOf(term, isDeriv) {
   for (const { f, ix } of all) {
     const str = ix.map(i => letter(i.sym)).join('');
     if (isDeriv(f)) { pendingD += str; continue; }
+    if (!str && !pendingD) continue; // a scalar factor only scales
     ops.push(pendingD + str);
     names.push((pendingD ? '∂' : '') + nameText(f.tex || f.name));
     pendingD = '';

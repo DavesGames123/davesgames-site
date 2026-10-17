@@ -42,6 +42,36 @@ export function ease(t) {
 const L = (a, b, t) => a + (b - a) * t;
 const LP = (P, Q, t) => P.map((p, i) => [L(p[0], Q[i][0], t), L(p[1], Q[i][1], t)]);
 
+// Leg interpolation that keeps the leg a curve of about the same length:
+// lerp the start point, the first direction, each turn angle and each
+// segment length. A straight leg then swings round its slot to its new
+// shape instead of shrinking through the middle.
+function swing(P, Q, t) {
+  if (t <= 0) return P.map(p => p.slice());
+  if (t >= 1) return Q.map(p => p.slice());
+  const polar = R => {
+    const ang = [], len = [];
+    for (let i = 0; i < R.length - 1; i++) {
+      const dx = R[i + 1][0] - R[i][0], dy = R[i + 1][1] - R[i][1];
+      len.push(Math.hypot(dx, dy)); ang.push(Math.atan2(dy, dx));
+    }
+    // Zero-length segments keep the previous direction.
+    for (let i = 0; i < ang.length; i++) if (len[i] < 1e-9) ang[i] = i ? ang[i - 1] : (ang.find((a, k) => len[k] >= 1e-9) ?? 0);
+    const turn = ang.map((a, i) => (i ? wrap(a - ang[i - 1]) : a));
+    return { turn, len };
+  };
+  const a = polar(P), b = polar(Q);
+  const out = [[L(P[0][0], Q[0][0], t), L(P[0][1], Q[0][1], t)]];
+  let dir = a.turn[0] + wrap(b.turn[0] - a.turn[0]) * t;
+  for (let i = 0; i < a.len.length; i++) {
+    if (i) dir += L(a.turn[i], b.turn[i], t);
+    const l = L(a.len[i], b.len[i], t), p = out[i];
+    out.push([p[0] + Math.cos(dir) * l, p[1] + Math.sin(dir) * l]);
+  }
+  return out;
+}
+function wrap(x) { while (x > Math.PI) x -= 2 * Math.PI; while (x < -Math.PI) x += 2 * Math.PI; return x; }
+
 function termInfo(scene) {
   const by = new Map();
   for (const it of scene.items) {
@@ -141,11 +171,17 @@ function lerpItem(a, b, t) {
       o.x = L(a.x, b.x, t); o.y = L(a.y, b.y, t);
       break;
     case 'leg': {
-      o.pts = LP(a.pts, b.pts, t);
+      // Mostly swing, part straight blend: long reroutes do not fly wide.
+      const sw = swing(a.pts, b.pts, t), li = LP(a.pts, b.pts, t);
+      o.pts = sw.map((p, i) => [p[0] * 0.7 + li[i][0] * 0.3, p[1] * 0.7 + li[i][1] * 0.3]);
       o.slot = o.pts[0]; o.end = o.pts[o.pts.length - 1];
       o.color = lerpColor(a.color, b.color, t);
       o.label = t < 0.5 ? a.label : b.label;
-      if (a.free && b.free) { o.labelX = L(a.labelX, b.labelX, t); o.labelY = L(a.labelY, b.labelY, t); o.labelO = 1; }
+      if (a.free && b.free) {
+        o.labelX = o.end[0] + L(a.labelX - a.end[0], b.labelX - b.end[0], t);
+        o.labelY = o.end[1] + L(a.labelY - a.end[1], b.labelY - b.end[1], t);
+        o.labelO = 1;
+      }
       else if (a.free) { o.labelX = a.labelX + (o.end[0] - a.end[0]); o.labelY = a.labelY + (o.end[1] - a.end[1]); o.labelO = 1 - t; o.label = a.label; }
       else if (b.free) { o.labelX = b.labelX + (o.end[0] - b.end[0]); o.labelY = b.labelY + (o.end[1] - b.end[1]); o.labelO = t; }
       o.free = t < 0.5 ? a.free : b.free;
@@ -207,6 +243,8 @@ function appear(it, e) {
     const d = [it.spawn[0] * (1 - e), it.spawn[1] * (1 - e)];
     return { ...shifted(it, d), o: (it.o ?? 1) * e, labelO: e };
   }
+  // New legs grow after their node or ring has mostly appeared.
+  if (it.type === 'leg') return grow(it, Math.min(1, Math.max(0, (e - 0.35) / 0.65)));
   return grow(it, e);
 }
 
@@ -228,7 +266,22 @@ export function lerpScene(A, B, e) {
     }
     items.push(grow(a, 1 - e));
   }
-  for (const b of B.items) if (!amap.has(b.key) || amap.get(b.key).type !== b.type) items.push(appear(b, e));
+  const born = [];
+  for (const b of B.items) if (!amap.has(b.key) || amap.get(b.key).type !== b.type) { const it = appear(b, e); items.push(it); born.push([b, it]); }
+  // A new leg on a new ring rides on the ring while the ring grows.
+  for (const [b, it] of born) {
+    if (it.type !== 'leg' || b.role !== 'deriv' || b.spawn) continue;
+    const ring = born.find(([r]) => r.type === 'circle' && r.unit === b.unit);
+    if (!ring) continue;
+    const r = ring[0], cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+    const dx = (cx + (b.pts[0][0] - cx) * e) - b.pts[0][0], dy = (cy + (b.pts[0][1] - cy) * e) - b.pts[0][1];
+    it.pts = it.pts.map(p => [p[0] + dx, p[1] + dy]);
+    it.slot = it.pts[0]; it.end = it.pts[it.pts.length - 1];
+    if (it.labelX !== undefined) { it.labelX += dx; it.labelY += dy; }
+  }
+  // Keep every leg inside the frame.
+  const W = L(A.width, B.width, e), H = L(A.height, B.height, e);
+  for (const it of items) if (it.type === 'leg') it.pts = it.pts.map(p => [Math.min(W - 3, Math.max(3, p[0])), Math.min(H - 3, Math.max(3, p[1]))]);
   return {
     ...B, items,
     width: L(A.width, B.width, e), height: L(A.height, B.height, e),

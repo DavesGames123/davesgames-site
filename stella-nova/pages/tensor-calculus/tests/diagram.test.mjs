@@ -61,6 +61,8 @@ for (const style of STYLES) {
         }
       }
     });
+    const outside = legs.filter(l => l.pts.some(p => p[0] < 0 || p[1] < 0 || p[0] > sc.width || p[1] > sc.height));
+    check(`${tag} legs inside the frame`, outside.length === 0, outside.map(l => l.key).join());
     check(`${tag} crossings reported`, Number.isFinite(sc.crossings) && sc.crossings >= 0);
     crossTotals[style] += sc.crossings;
     const svg = toSvgString(sc, { style });

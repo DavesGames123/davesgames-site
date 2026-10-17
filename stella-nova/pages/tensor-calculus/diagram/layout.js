@@ -313,7 +313,7 @@ function placeUnit(u, x0, cy, net, freeSet, pairs) {
   if (net) {
     const iw = u.netIw;
     const nSide = pairs ? Math.max(0, ...['left', 'right'].map(k => u._sides ? u._sides[k].length : 0)) : 0;
-    const ih = Math.max(u.ih, nSide * 11 + 12);
+    const ih = Math.max(u.kind === 'scalar' ? u.ih : 30, nSide * 11 + 12);
     u.ix0 = x0 + d * pad; u.ix1 = u.ix0 + iw; u.iy0 = cy - ih / 2; u.iy1 = cy + ih / 2;
     u.rings = u.layers.map((L, i) => ({ L, x0: x0 + i * pad, x1: x0 + u.W - i * pad, y0: cy - ih / 2 - (d - i) * pad, y1: cy + ih / 2 + (d - i) * pad }));
     const top = u.slots.filter(s => freeSet.has(s) && s.up), bot = u.slots.filter(s => freeSet.has(s) && !s.up);
@@ -478,7 +478,9 @@ function termGeometry(T, order, top, bottom, coarse) {
   for (const w of wires) len += Math.abs(w.p.a.x - w.p.b.x);
   let disp = 0;
   order.forEach((u, i) => { disp += Math.abs(i - u.orig); });
-  return { width, wires, freeLegs, crossings, cost: crossings * 1000 + len * 0.06 + disp * 6 };
+  let xmin = 0, xmax = width;
+  for (const w of wires) for (const p of w.dense) { xmin = Math.min(xmin, p[0] - 4); xmax = Math.max(xmax, p[0] + 4); }
+  return { width: xmax - xmin, xmin, wires, freeLegs, crossings, cost: crossings * 1000 + len * 0.06 + disp * 6 };
 }
 
 function permutations(arr) {
@@ -634,7 +636,7 @@ export function layoutExpr(expr, opts = {}) {
       const g = termGeometry(T, T.order, R.top - oy, R.bottom - oy, false);
       crossings += g.crossings;
       perTerm[T.key] = g.crossings;
-      emitTerm(items, T, g, x, oy, { color, net, dim, style });
+      emitTerm(items, T, g, x - g.xmin, oy, { color, net, dim, style });
       if (net && T.einsum) {
         const li = R.ein.indexOf(T);
         items.push({ type: 'text', key: `${T.key}|einsum`, x: sceneW / 2, y: R.bottom + M.labelPad + 18 + 18 * li, text: `einsum('${T.einsum.spec}', ${T.einsum.names.join(', ')})`, size: 12, role: 'einsum', anchor: 'middle' });
