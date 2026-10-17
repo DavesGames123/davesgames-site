@@ -52,7 +52,7 @@
 //    grep -n 'function syncTiles'       stream -> instance pages
 //    grep -n 'export async function createVegetation'
 // ============================================================================
-import { makeField, createScatterStream, SPECIES, LAYERS, LAYER_INDEX, STRIDE } from './scatter.js';
+import { makeField, createScatterStream, SPECIES, LAYERS, LAYER_INDEX, STRIDE, BIOME_KEYS, normKey } from './scatter.js';
 
 export const PAGE = 128;               // instances per page (props.wgsl PAGE)
 const LODS = 4;                         // camera lists per prototype
@@ -905,15 +905,18 @@ const SPEC_GPU = {
 };
 // ASSETS: words in the asset name or id that fit a species (kind first)
 const PROTO_WORDS = {
-  oak: ['oak'], beech: ['beech', 'maple', 'lime', 'broadleaf', 'deciduous'], birch: ['birch', 'aspen'],
-  spruce: ['spruce', 'fir_tree', 'fir tree'], pine: ['pine', 'scots'], jungle: ['jungle', 'tropical', 'kapok'],
-  palm: ['palm', 'island'], acacia: ['acacia'], willow: ['willow'], deadtree: ['dead', 'snag', 'bare'],
-  bush: ['bush', 'shrub'], 'conifer-young': ['sapling'], dryshrub: ['dry', 'sage'], cactus: ['cactus', 'saguaro'],
-  fern: ['fern'], flower: ['flower', 'daisy', 'poppy', 'lupin'], mushroom: ['mushroom', 'toadstool'],
+  oak: ['oak', 'tree_small'], beech: ['beech', 'maple', 'lime', 'deciduous'], birch: ['birch', 'aspen'],
+  spruce: ['spruce', 'fir_tree', 'fir tree'], pine: ['pine_tree', 'scots'], jungle: ['jungle', 'tropical', 'kapok', 'jacaranda', 'island_tree'],
+  palm: ['palm'], acacia: ['acacia', 'searsia'], willow: ['willow'], deadtree: ['dead', 'snag'],
+  bush: ['shrub_0', 'bush'], 'conifer-young': ['sapling'], dryshrub: ['fynbos', 'rooibos', 'didelta', 'sage'], cactus: ['cactus', 'saguaro', 'quiver_tree', 'othonna'],
+  fern: ['fern'], flower: ['flower', 'daisy', 'poppy', 'dandelion', 'celandine', 'periwinkle'], mushroom: ['mushroom', 'toadstool'],
   pebble: ['pebble', 'stone', 'rock'], reed: ['reed', 'cattail', 'rush'], rock: ['rock', 'stone', 'boulder'], boulder: ['boulder', 'rock'],
-  log: ['log', 'trunk'], stump: ['stump'],
+  log: ['log', 'trunk', 'branches'], stump: ['stump'],
 };
-const SIZE_BAND = { pebble: [0, 0.4], rock: [0.4, 2.2], boulder: [1.2, 99], fern: [0.15, 3], bush: [0.5, 6] };
+// asset kinds that can stand in for a species besides its own kind
+const KIND_ALSO = { cactus: ['tree', 'succulent'], dryshrub: ['bush'], deadtree: ['tree'] };
+const VARIANTS = (key) => (KIND_OF[key] === 'tree' ? 3 : ['rock', 'boulder', 'pebble'].includes(key) ? 9 : 6);
+const SIZE_BAND = { pebble: [0, 0.4], rock: [0.4, 2.2], boulder: [1.2, 99], fern: [0.15, 3], bush: [0.5, 6], cactus: [0.8, 12], 'conifer-young': [0.7, 12], log: [0.12, 3] };
 const KIND_OF = Object.fromEntries(SPECIES.map((s) => [s.key, s.kind]));
 
 // ------------------------------------------------------------ assets
@@ -925,32 +928,38 @@ async function defaultBitmap(url, size) {
 }
 
 // The asset prototypes per species: { key: [ { lods: [[parts]], height, radius, wind, sink, textures: Map name -> url } ] }
-async function loadAssetProtos(lib, texSize, log) {
+export async function loadAssetProtos(lib, texSize, log) {
   const out = {};
   if (!lib || !lib.manifest) return out;
   const assets = lib.manifest.assets || [];
   for (const sp of SPECIES) {
     const words = PROTO_WORDS[sp.key] || [];
-    const kindOk = (a) => a.kind === sp.kind || (sp.key === 'boulder' && a.kind === 'rock') || (sp.key === 'rock' && a.kind === 'boulder');
+    const kindOk = (a) => a.kind === sp.kind || (KIND_ALSO[sp.key] || []).includes(a.kind) || (sp.key === 'boulder' && a.kind === 'rock') || (sp.key === 'rock' && a.kind === 'boulder');
     const fits = assets.filter((a) => kindOk(a) && a.lods?.length && (words.some((w) => (String(a.sub || '') + ' ' + a.name + ' ' + a.id).toLowerCase().includes(w)) || (sp.kind !== 'tree' && sp.kind !== 'bush' && a.kind === sp.kind)));
     // size bands: small stones are pebbles, big rocks are boulders
     const band = SIZE_BAND[sp.key];
-    const sized = band ? fits.filter((a) => (a.height ?? 1) >= band[0] && (a.height ?? 1) <= band[1]) : fits;
+    const sized = band ? fits.filter((a) => (a.height ?? 1) >= band[0] && (a.height ?? 1) <= band[1]) : fits.slice();
     if (!sized.length) continue;
     fits.length = 0; fits.push(...sized);
     const list = [];
-    for (const a of fits.slice(0, 6)) {
+    // variety: one per sub (source) first, then the rest
+    const pick = [], seen = new Set();
+    for (const a of fits) { const k = a.sourceAsset || a.sub || a.id; if (!seen.has(k)) { seen.add(k); pick.push(a); } }
+    for (const a of fits) if (!pick.includes(a)) pick.push(a);
+    for (const a of pick.slice(0, VARIANTS(sp.key))) {
       try {
-        const lods = [];
+        const lods = [], matUrl = new Map();
         for (let l = 0; l < Math.min(3, a.lods.length); l++) {
           const got = await lib.loadAsset(a.id, l);
-          const tl = a.lods[0].textures || [];
-          const alb = tl.find((t) => /albedo|diff|color/i.test(t)) || tl[0];
-          const albedoUrl = alb ? lib.url(alb) : null;
           const parts = [];
           for (const m of got.scene.meshes) {
             const fol = m.material?.alphaMode === 'MASK' || (a.materials || []).some((mm) => mm.foliage && mm.name === m.material?.name);
-            const p = new Part(albedoUrl ? 'url:' + albedoUrl : 'rock', fol ? 'leaf' : 'bark');
+            // the base colour file of this material; all LODs use the LOD0 file
+            const mname = m.material?.name || '';
+            let url = m.material?.baseColor?.url || null;
+            if (l === 0) matUrl.set(mname, url); else url = matUrl.get(mname) || url;
+            if (!url) { const tl = a.lods[0].textures || []; const t = tl.find((x) => /albedo|diff|color/i.test(x)); url = t ? lib.url(t) : null; }
+            const p = new Part(url ? 'url:' + url : 'rock', fol ? 'leaf' : 'bark');
             const H = a.height || 1, R = a.radius || 1, n = m.vertexCount;
             for (let i = 0; i < n; i++) {
               const x = m.positions[i * 3], y = m.positions[i * 3 + 1], z = m.positions[i * 3 + 2];
@@ -965,7 +974,7 @@ async function loadAssetProtos(lib, texSize, log) {
           }
           lods.push(parts);
         }
-        list.push({ lods, height: a.height, radius: a.radius, wind: a.wind ?? 0.5, sink: a.sink ?? 0, id: a.id });
+        list.push({ lods, height: a.height, radius: a.radius, wind: a.wind ?? 0.5, sink: a.sink ?? 0, id: a.id, biomes: a.biomes || null });
       } catch (e) { log('veg: asset ' + a.id + ' failed: ' + (e.message || e)); }
     }
     if (list.length) out[sp.key] = list;
@@ -984,7 +993,7 @@ function buildLibrary(protoSets, texNames) {
     const ids = [];
     for (const pr of set) {
       ids.push(protos.length);
-      protos.push({ species: si, key: sp.key, lods: pr.lods, height: pr.height, radius: pr.radius, flags: g.f,
+      protos.push({ species: si, key: sp.key, lods: pr.lods, height: pr.height, radius: pr.radius, flags: pr.id ? g.f & ~FLAG.flower : g.f, biomes: pr.biomes ? new Set(pr.biomes.map(normKey)) : null,
         bend: g.bend * (pr.wind != null ? 0.4 + pr.wind : 1), flutter: g.flutter, sink: pr.sink ?? g.sink ?? 0, lean: g.lean, asset: pr.id || null });
     }
     speciesProtos.push(ids);
@@ -1120,7 +1129,7 @@ export async function createVegetation(gpu) {
   function makeMatTex(extraBitmaps) {
     const nL = tex.levels.length + extraBitmaps.length;
     const t = device.createTexture({ label: 'veg materials', size: [texSize, texSize, nL], format: 'rgba8unorm-srgb', mipLevelCount: mipCount,
-      usage: TU.TEXTURE_BINDING | TU.COPY_DST | TU.RENDER_ATTACHMENT });
+      usage: TU.TEXTURE_BINDING | TU.COPY_DST | TU.COPY_SRC | TU.RENDER_ATTACHMENT });
     tex.levels.forEach((mips, layer) => mips.forEach((m, lvl) => queue.writeTexture({ texture: t, mipLevel: lvl, origin: [0, 0, layer] }, m.data, { bytesPerRow: m.size * 4, rowsPerImage: m.size }, [m.size, m.size, 1])));
     extraBitmaps.forEach((bm, k) => {
       const layer = tex.levels.length + k;
@@ -1327,8 +1336,17 @@ export async function createVegetation(gpu) {
 
   // ---- instances, pages and the stream (state is declared above)
 
-  function protoFor(si, seed) {
-    const ids = L.lib.speciesProtos[si];
+  // the variant: by the instance seed, among the prototypes whose asset
+  // biome tags hold the biome of the instance (stand-ins fit all biomes)
+  function protoFor(si, seed, x, z) {
+    let ids = L.lib.speciesProtos[si];
+    if (field && ids.length > 1) {
+      const bk = BIOME_KEYS[field.biomeAt(x, z)];
+      const tagged = ids.filter((i) => L.lib.protos[i].biomes?.has(bk));
+      // assets tagged for this biome first, else the stand-ins, else any
+      const free = ids.filter((i) => !L.lib.protos[i].biomes);
+      ids = tagged.length ? tagged.concat(free.slice(0, Math.max(0, tagged.length >> 1))) : free.length ? free : ids;
+    }
     return ids[Math.min(ids.length - 1, Math.floor(seed * 7919 % 1 * ids.length))] ?? ids[0];
   }
   function writeTile(key, t) {
@@ -1339,7 +1357,7 @@ export async function createVegetation(gpu) {
     const buf = new Float32Array(need * PAGE * 8);
     for (let i = 0; i < t.count; i++) {
       const o = i * STRIDE, si = t.data[o + 5], seed = t.data[o + 7];
-      const pi = protoFor(si, seed), pr = L.lib.protos[pi];
+      const pi = protoFor(si, seed, t.data[o], t.data[o + 2]), pr = L.lib.protos[pi];
       // scatter scale is relative to the species height; assets keep their own size
       let s = t.data[o + 3];
       if (pr.asset) s *= Math.max(0.35, Math.min(2.5, SPECIES[si].h / pr.top)) ** 0.5;
@@ -1388,8 +1406,8 @@ export async function createVegetation(gpu) {
       for (const u of urls) { try { bitmaps.push(await loader(u, texSize)); urlLayers.set(u, bitmaps.length - 1); } catch (e) { log('veg: texture ' + u + ': ' + (e.message || e)); } }
       const base = standIns();
       for (const k in sets) {
-        // trees: keep one stand-in variant among the assets when there is only one asset
-        base[k] = sets[k].length >= 2 || KIND_OF[k] !== 'tree' ? sets[k] : [...sets[k], base[k][0]];
+        // one stand-in stays: it fills the biomes that no asset is tagged for
+        base[k] = [...sets[k], base[k][0]];
       }
       installLibrary(base, bitmaps);
       assetsState = 'loaded ' + Object.keys(sets).map((k) => k + ' ' + sets[k].length).join(', ');
@@ -1549,7 +1567,7 @@ export async function createVegetation(gpu) {
       for (const b of [instBuf, visBuf, pagesBuf, paramBuf, bladeBuf, gargsBuf, gparamBuf]) b.destroy();
     },
     // for tests and the Deno render check
-    _internal: { get L() { return L; }, tiles, get field() { return field; } },
+    _internal: { get L() { return L; }, get matTex() { return matTex; }, urlLayers, tiles, get field() { return field; } },
   };
   return mod;
 }

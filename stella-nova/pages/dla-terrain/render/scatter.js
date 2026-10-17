@@ -277,7 +277,7 @@ const LAYER_BIOME = {
   canopy: { temperateforest: 0.85, rainforest: 1, borealforest: 0.9, savanna: 0.03, grassland: 0.018, wetland: 0.2, beach: 0.03, tundra: 0.02, alpinemeadow: 0.05, desert: 0.0012 },
   understory: { temperateforest: 0.45, rainforest: 0.7, borealforest: 0.35, savanna: 0.25, grassland: 0.08, wetland: 0.3, desert: 0.12, tundra: 0.25, alpinemeadow: 0.18, beach: 0.04, barerock: 0.02, scree: 0.03 },
   rocks: { barerock: 0.5, scree: 0.85, tundra: 0.22, alpinemeadow: 0.22, desert: 0.12, grassland: 0.03, temperateforest: 0.12, borealforest: 0.16, rainforest: 0.06, savanna: 0.05, beach: 0.06, snow: 0.08, wetland: 0.02 },
-  ground: { temperateforest: 0.5, rainforest: 0.7, borealforest: 0.35, grassland: 0.3, alpinemeadow: 0.55, savanna: 0.08, wetland: 0.25, desert: 0.05, tundra: 0.15, beach: 0.12, barerock: 0.18, scree: 0.55, river: 0.1 },
+  ground: { temperateforest: 0.5, rainforest: 0.7, borealforest: 0.35, grassland: 0.14, alpinemeadow: 0.3, savanna: 0.08, wetland: 0.25, desert: 0.05, tundra: 0.15, beach: 0.12, barerock: 0.18, scree: 0.55, river: 0.1 },
   reeds: {},
 };
 
