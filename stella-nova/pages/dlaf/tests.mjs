@@ -7,7 +7,9 @@
 //  replay indexing, the walker record, the saver shot list and the framing
 //  maths for 16:9 and 9:16. The last part boots main.js on a stub DOM and a
 //  stub WebGL2 context: it finds wiring errors (a bad id, a missing name),
-//  not render errors. Browser checks do not run here.
+//  not render errors. Browser checks do not run here. The surface part
+//  checks the SDF mesher (incremental = full rebuild), the vertex colours,
+//  the arena, the frame maths, the saver shots and the GLSL (glslang).
 //
 //  grep -n targets: "section(" opens each group.
 // ============================================================================
@@ -18,6 +20,12 @@ import { clearRect, bandRect, fit2D, ortho2D, project, fit3D, orbitMatrix } from
 import { SHOTS, planShots, paceTarget, frameShot, shotLabel } from './saver.js';
 import { GRADIENTS } from '../../lib/growth-gradients.js';
 import { readFileSync } from 'node:fs';
+import { createSurfaceCore, surfaceOptions, surfaceCap, vertexT, RESOLUTIONS } from './surface-core.js';
+import { createArena } from './arena.js';
+import { MATERIALS, PROGRAMS, RIGS, materialById } from './surface-shaders.js';
+import { surfaceFrame } from './surface-frame.js';
+import { checkPrograms } from './glsl-check.mjs';
+import { meshStats, pipeRadius } from '../../lib/dla-sdf.js';
 
 let pass = 0, fail = 0, cur = '';
 function section(s) { cur = s; console.log('\n# ' + s); }
@@ -307,6 +315,137 @@ section('saver shots and framing');
   ok(lab.params.find(p => p.name === 'particles').value === String(grown.classic.count), 'label: live particle count');
   ok(lab.code.text.includes('attractionDistance') && lab.code.text.split('\n').length >= 6, 'label: code is a real engine extract');
   ok(lab.lines.some(l => l.includes('Fogleman')), 'label: credit line');
+  for (const id of ['sdf-orbit', 'copper-relief']) {
+    const sh = SHOTS.find(x => x.id === id);
+    ok(sh && sh.surface && MATERIALS.some(m => m.id === sh.material), `surface shot ${id} has a real material`);
+    ok(new Set(a.slice(0, SHOTS.length).map(x => x.shot.id)).has(id), `the first round of the plan shows ${id}`);
+  }
+  ok(SHOTS.find(x => x.id === 'sdf-orbit').dim === 3 && SHOTS.find(x => x.id === 'copper-relief').material === 'copper' && !SHOTS.find(x => x.id === 'copper-relief').dim, 'sdf-orbit is 3D, copper-relief is a 2D copper relief');
+  ok(shotLabel(SHOTS.find(x => x.id === 'sdf-orbit'), grown.three, 'x').lines.some(l => l.includes('smooth minimum')), 'surface shot label names the SDF');
+}
+
+// ---------------------------------------------------------------- surface
+section('surface: SDF mesh, incremental = full rebuild');
+function buildSurface(m, chunk, sliceMs) {
+  const core = createSurfaceCore(surfaceOptions({ res: 'low' }));
+  const recs = new Map();
+  const take = list => { for (const r of list) { if (r.indices.length) recs.set(r.key, r); else recs.delete(r.key); } };
+  for (let a = 0; a < m.count; a += chunk) { core.add(m.pos, m.parent, a, Math.min(m.count, a + chunk)); take(core.update(sliceMs)); }
+  take(core.drain());
+  return { core, recs };
+}
+const sameArr = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+for (const [id, n] of [['classic', 1200], ['three', 900]]) {
+  const m = createSim({ preset: id, seed: 5 }); m.grow(n);
+  const inc = buildSurface(m, 37, 2), full = buildSurface(m, m.count, Infinity);
+  const ki = [...inc.recs.keys()].sort(), kf = [...full.recs.keys()].sort();
+  ok(sameArr(ki, kf), `${id}: same bricks (${ki.length} incremental, ${kf.length} full)`);
+  let diff = 0, aoDiff = 0;
+  for (const k of kf) {
+    const a = inc.recs.get(k), b = full.recs.get(k); if (!a) { diff++; continue; }
+    if (!sameArr(a.positions, b.positions) || !sameArr(a.normals, b.normals) || !sameArr(a.ids, b.ids) || !sameArr(a.indices, b.indices)) diff++;
+    for (let v = 0; v < b.ao.length; v++) aoDiff = Math.max(aoDiff, Math.abs(a.ao[v] - b.ao[v]));
+  }
+  ok(diff === 0, `${id}: incremental meshes equal the full build bit for bit (${diff} differ)`);
+  ok(aoDiff < 1e-6, `${id}: incremental AO equals the full build (max diff ${aoDiff.toExponential(1)})`);
+  // the lib's own full rebuild of the same primitives gives the same meshes
+  inc.core.sdf.rebuildAll();
+  const lib = new Map(inc.core.sdf.meshAll().map(r => [r.key, r]));
+  let libDiff = 0;
+  for (const k of kf) { const a = lib.get(k), b = inc.recs.get(k); if (!a || !sameArr(a.positions, b.positions) || !sameArr(a.indices, b.indices) || !sameArr(a.ids, b.ids)) libDiff++; }
+  ok(libDiff === 0 && lib.size === kf.length, `${id}: lib rebuildAll + meshAll equals the live meshes (${libDiff} differ)`);
+  const o = inc.core.opts;
+  let badR = 0;
+  for (let i = 0; i < m.count; i++) if (inc.core.radius(i) !== Math.fround(pipeRadius(inc.core.sub(i), o.rTip, o.pipe, o.rMax, o.quant, o.sub0))) badR++;
+  ok(badR === 0, `${id}: after finish every radius follows the pipe rule (${badR} off)`);
+  const st = meshStats([...inc.recs.values()]);
+  ok(st.boundaryEdges === 0, `${id}: closed surface (${st.tris} tris, ${st.boundaryEdges} boundary edges, ${st.nonManifold} non-manifold)`);
+  console.log(`  ${id.padEnd(8)} n ${m.count} bricks ${kf.length} verts ${inc.core.stats.verts} tris ${inc.core.stats.tris} flushes ${inc.core.stats.flushes} cone resets ${inc.core.stats.coneResets}`);
+  // colour per vertex: every id is a particle, every t is in [floor, 1]
+  let badId = 0, badT = 0, badAO = 0, badN = 0, nv = 0;
+  for (const c of COLOUR_MODES) {
+    const vals = fillValues(c.id, m, new Float32Array(m.count)), max = maxOf(c.id, m);
+    for (const r of inc.recs.values()) for (let v = 0; v < r.ids.length; v++) {
+      const t = vertexT(vals, r.ids, v, max, c.floor, c.gamma);
+      if (!(t >= c.floor - 1e-6 && t <= 1 + 1e-6)) badT++;
+      if (c.id === 'age') {
+        nv++;
+        if (!(r.ids[v] >= 0 && r.ids[v] < m.count && Number.isInteger(r.ids[v]))) badId++;
+        if (!(r.ao[v] >= 0 && r.ao[v] <= 1)) badAO++;
+        if (Math.abs(Math.hypot(r.normals[v * 3], r.normals[v * 3 + 1], r.normals[v * 3 + 2]) - 1) > 1e-3) badN++;
+      }
+    }
+  }
+  ok(badId === 0, `${id}: every vertex id is a particle (${nv} vertices, ${badId} bad)`);
+  ok(badT === 0, `${id}: every vertex colour t is in [floor, 1] for all ${COLOUR_MODES.length} modes (${badT} bad)`);
+  ok(badAO === 0 && badN === 0, `${id}: AO in 0..1 and unit normals (${badAO}, ${badN} bad)`);
+}
+{
+  // the newest particles own vertices at the front: the age glow has a target
+  const m = createSim({ preset: 'three', seed: 9 }); m.grow(600);
+  const { recs } = buildSurface(m, 50, 3);
+  let front = 0; for (const r of recs.values()) for (const id of r.ids) if (id >= m.count - 24) front++;
+  ok(front > 0, `the 24 newest particles own ${front} vertices (the growth-front glow shows)`);
+  // a vertex near a branch tip in a crevice is darker than one on the outside
+  let lo = 1, hi = 0; for (const r of recs.values()) for (const a of r.ao) { lo = Math.min(lo, a); hi = Math.max(hi, a); }
+  ok(lo < 0.6 && hi > 0.95, `AO spans crevices to open tips (${lo.toFixed(2)}..${hi.toFixed(2)})`);
+}
+
+section('surface: worker protocol (worker module on stub globals)');
+await (async () => {
+  const got = [];
+  globalThis.postMessage = (m) => got.push(m);
+  await import('./surface-worker.js');
+  const m = createSim({ preset: 'three', seed: 4 }); m.grow(300);
+  const opts = surfaceOptions({ res: 'low' });
+  globalThis.onmessage({ data: { type: 'reset', gen: 3, opts } });
+  globalThis.onmessage({ data: { type: 'add', gen: 3, from: 0, pos: new Float32Array(m.pos.subarray(0, 450)), parent: new Int32Array(m.parent.subarray(0, 150)) } });
+  globalThis.onmessage({ data: { type: 'add', gen: 2, from: 150, pos: new Float32Array(3), parent: new Int32Array(1) } });   // an old gen: dropped
+  globalThis.onmessage({ data: { type: 'add', gen: 3, from: 150, pos: new Float32Array(m.pos.subarray(450, m.count * 3)), parent: new Int32Array(m.parent.subarray(150, m.count)) } });
+  globalThis.onmessage({ data: { type: 'finish', gen: 3 } });
+  for (let i = 0; i < 400 && !(got.length && got[got.length - 1].busy === false); i++) await new Promise(r => setTimeout(r, 5));
+  const last = got[got.length - 1];
+  ok(last && last.gen === 3 && last.applied === m.count && last.busy === false, `worker meshes all ${m.count} particles and goes idle (${got.length} messages)`);
+  const keys = new Map(); for (const g of got) for (const r of g.list) { if (r.indices.length) keys.set(r.key, r); else keys.delete(r.key); }
+  const ref = createSurfaceCore(opts); ref.add(m.pos, m.parent, 0, m.count); ref.drain();
+  let d = 0; for (const [k, r] of ref.meshes) { const a = keys.get(k); if (!a || a.indices.length !== r.indices.length) d++; }
+  ok(d === 0 && keys.size === ref.meshes.size, `worker bricks match an inline core (${keys.size} bricks, ${d} differ)`);
+  delete globalThis.postMessage; delete globalThis.onmessage;
+})();
+
+section('surface: options, arena, frame, shaders');
+{
+  const d = surfaceOptions({}), ph = surfaceOptions({ res: 'high', phone: true });
+  ok(ph.res === 'medium' && ph.cell > surfaceOptions({ res: 'high' }).cell, 'phones cap the resolution at medium');
+  ok(RESOLUTIONS.every((r, i) => i === 0 || r.cell < RESOLUTIONS[i - 1].cell), 'resolutions get finer in order');
+  ok(surfaceOptions({ flow: 0 }).rMax === d.rTip && surfaceOptions({ flow: 1 }).rMax > d.rMax, 'flow 0 gives one tube width, flow 1 the thickest trunks');
+  ok(surfaceOptions({ blend: 0 }).k > 0 && surfaceOptions({ blend: 1 }).k > d.k, 'blend k stays above 0 and grows');
+  ok(surfaceCap(2, true) < surfaceCap(2, false) && surfaceCap(3, true) < surfaceCap(3, false), 'phones stop the surface growth earlier');
+  const A = createArena(64), slots = [];
+  for (let i = 0; i < 200; i++) slots.push(A.alloc(1 + (i * 37) % 300));
+  for (let i = 0; i < 200; i += 3) A.free(slots[i]);
+  for (let i = 0; i < 80; i++) slots.push(A.alloc(1 + (i * 53) % 300));
+  const live = slots.filter((s, i) => !(i < 200 && i % 3 === 0)).sort((a, b) => a.off - b.off);
+  let overlap = 0; for (let i = 1; i < live.length; i++) if (live[i].off < live[i - 1].off + live[i - 1].size) overlap++;
+  ok(overlap === 0 && live.every(s => s.off + s.size <= A.top && A.top <= A.cap), `arena: ${live.length} live slots, no overlap, top ${A.top} <= cap ${A.cap}`);
+  ok(A.live === live.length, 'arena: live count');
+  ok(MATERIALS.length === 4 && ['porcelain', 'glass', 'copper', 'bio'].every(id => materialById(id).id === id && RIGS[id]), 'four materials with light rigs');
+  const opts = surfaceOptions({});
+  for (const dim of [2, 3]) {
+    const f = surfaceFrame({ dim, mat: new Float32Array(16), cam: { yaw: 0.7, pitch: 0.4, dist: 120 }, center: [0, 0, 0], radius: 60, minUp: -58, opts, material: 'copper', w: 800, h: 600, max: 1, floor: 0.1, gamma: 1, count: 10 });
+    const pr = (M, p) => { const x = M[0] * p[0] + M[4] * p[1] + M[8] * p[2] + M[12], y = M[1] * p[0] + M[5] * p[1] + M[9] * p[2] + M[13], z = M[2] * p[0] + M[6] * p[1] + M[10] * p[2] + M[14]; return [x, y, z]; };
+    let inside = true;
+    for (const p of [[60, 0, 0], [-60, 0, 0], [0, 60, 0], [0, -60, 0], [0, 0, 60], [0, 0, -60]]) { const q = pr(f.light, p); if (q.some(v => Math.abs(v) > 1)) inside = false; }
+    ok(inside, `${dim}D: the shadow map holds the cluster ball`);
+    const g = f.ground.height, gp = dim === 3 ? [5, g, 5] : [5, 5, g];
+    ok(Math.abs(pr(f.below, gp)[2] + 1) < 1e-4, `${dim}D: the below map puts the ground at depth 0`);
+    const up = f.up, Lup = f.L[0] * up[0] + f.L[1] * up[1] + f.L[2] * up[2];
+    ok(Lup > 0.3 && Lup < 0.9, `${dim}D: key light above the ground (sin elevation ${Lup.toFixed(2)})`);
+    ok(dim === 3 ? g < -58 : g < 0 && g > -opts.rTip, `${dim}D: ground under the cluster (${g.toFixed(2)})`);
+  }
+  const res = checkPrograms(PROGRAMS);
+  if (!res) console.log('  glslangValidator not found: GLSL compile check skipped');
+  else for (const r of res) ok(r.ok, `GLSL ES 3.00 compiles and links (glslang): ${r.name}${r.ok ? '' : ' ' + r.log.slice(0, 300)}`);
 }
 
 // ---------------------------------------------------------------- files
@@ -322,7 +461,7 @@ section('page files');
   const ids = [...html.matchAll(/id="([^"]+)"[^>]*\shidden\b|\shidden\b[^>]*id="([^"]+)"/g)].map(x => x[1] || x[2]);
   for (const id of ids) ok(!new RegExp('#' + id + '\\s*\\{[^}]*display\\s*:\\s*(?!none)').test(css), `#${id} has hidden and no display rule`);
   ok(!/https?:\/\/(?!github\.com\/fogleman\/dlaf)/.test(html.replace(/<!--[\s\S]*?-->/g, '')), 'no external URL but the dlaf link');
-  for (const f of ['main.js', 'sim.js', 'walk.js', 'camera.js', 'saver.js', 'render.js']) {
+  for (const f of ['main.js', 'sim.js', 'walk.js', 'camera.js', 'saver.js', 'render.js', 'surface.js', 'surface-core.js', 'surface-worker.js', 'surface-render.js', 'surface-shaders.js', 'surface-frame.js', 'arena.js']) {
     const s = readFileSync(new URL(f, dir), 'utf8');
     ok(!/fetch\(|XMLHttpRequest|https?:\/\/(?!github\.com\/fogleman\/dlaf)/.test(s.replace(/\/\/.*$/gm, '')), `${f}: no network call`);
   }
@@ -387,6 +526,13 @@ await (async () => {
     fire('replayPlay'); step(5); fire('replayLive'); step(2);
     ok(!S.replay, 'live again');
     fire('csvBtn'); fire('regrowBtn'); fire('pauseBtn'); step(3); fire('pauseBtn');
+    fire('surfOn'); step(40);
+    ok(S.surf.on && !S.surf.err && S.surf.sf && S.surf.sf.mode === 'inline', `surface on, inline core in node (${S.surf.err || 'no error'})`);
+    ok(S.surf.sf.applied > 0 && S.surf.SR.bricks > 0, `surface grows and uploads (${S.surf.sf.applied} particles meshed, ${S.surf.SR.bricks} bricks, ${S.surf.SR.verts} verts)`);
+    ok(S.m.count <= S.surf.sf.applied + 400, `growth waits for the mesher (${S.m.count} grown, ${S.surf.sf.applied} meshed)`);
+    fire('dim3'); step(20);
+    ok(S.surf.sf.applied > 0 && S.m.dim === 3, `3D surface after a regrow (${S.surf.sf.applied} meshed)`);
+    fire('surfOff'); step(2); fire('dim2'); step(2);
     const labels = [];
     const ret = await window.snSaver.enter({ seed: 5, calm: 0.7, label: i => labels.push(i) });
     ok(ret.canvas === els.get('gl'), 'snSaver.enter returns the page canvas');
