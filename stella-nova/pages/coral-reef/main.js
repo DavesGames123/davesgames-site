@@ -2,8 +2,12 @@
 //  CORAL REEF GROWTH  ·  main script (ES module, three r160)
 // ----------------------------------------------------------------------------
 //  reef.js grows the colonies in a time budget each frame. This script
-//  sends the new polyps to the GPU buffers of scene.js, refreshes the radii
-//  and the colours a few times a second, and binds the controls.
+//  sends each new particle to the mesh worker (mesh-worker.js: the coral
+//  SDF of coral-sdf.js and lib/dla-sdf.js), puts the brick meshes that
+//  come back into the scene (scene.js applyBricks), writes the
+//  per-particle data textures (colour, birth, radius), refreshes the
+//  colours a few times a second, and binds the controls. With no module
+//  worker, the same mesher runs here in a small time budget.
 //
 //  CLOCK. nowMs = performance.now() - T0. The reef stamps each polyp with
 //  nowMs (reef.birth), and the shader gets nowMs / 1000 as uTime, so a new
@@ -16,7 +20,9 @@
 //
 //  GREP MAP
 //    grep -n 'function loadPreset'   regrow a preset
-//    grep -n 'function syncPolyps'   new polyps to the GPU buffers
+//    grep -n 'function syncPolyps'   new particles to the mesher and the data textures
+//    grep -n 'function startMesher'  the mesh worker (or the main-thread mesher)
+//    grep -n 'function loadDecor'    the scanned models (assets.js)
 //    grep -n 'function refresh'      radii, natural colours and t of all polyps
 //    grep -n 'function setMode'      colour by
 //    grep -n 'function clearArea'    the parts of the canvas under overlays
@@ -29,6 +35,9 @@
 import { createScene } from './scene.js';
 import { createReef, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, polypRadius, sandY, speciesHook } from './reef.js';
 import { MODES, colourT, naturalRGB, radiiOf, fieldsOf } from './colour.js';
+import { createCoralMesher } from './coral-sdf.js';
+import { meshRock } from './terrain.js';
+import { DECOR, parseCRM, scatterDecor } from './assets.js';
 import { shotList, frameFit } from './saver.js';
 import { lut, cssGradient, mountGradientPicker, GRADIENTS } from '../../lib/growth-gradients.js';
 import { PARAM_INFO } from '../../lib/dla-engine.js';
@@ -38,8 +47,9 @@ const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const CAP = COARSE ? 6000 : 16000;          // polyps on the whole reef
-const BUDGET = COARSE ? 5 : 8;              // ms of growth per frame
+const CAP = COARSE ? 6000 : 16000;          // particles (polyps) on the whole reef
+const BUDGET = COARSE ? 4 : 6;              // ms of growth per frame
+const RATE = COARSE ? 260 : 520;            // particles per second at speed 1
 const FOV = 40;
 const T0 = performance.now();
 
@@ -47,6 +57,7 @@ const G = {
   preset: 'mixed', seed: 1, mode: 'natural', gradient: 'reef', rev: false,
   playing: true, speed: 1, dir: 20, cur: 0.5, nutrient: 1, temp: 27,
   caust: true, snow: true, shaft: true, orbit: false, plant: 'staghorn', spSel: 'staghorn',
+  polyps: true, detail: true,
 };
 let saverOn = false, saver = null;
 
@@ -55,9 +66,56 @@ const canvas = $('view');
 const S = createScene({ canvas, cap: CAP, coarse: COARSE, onNoGL: () => { $('nogl').hidden = false; } });
 const reef = createReef({ seed: G.seed, capTotal: CAP });
 const radBuf = new Float32Array(CAP), tBuf = new Float32Array(CAP), natBuf = new Float32Array(CAP * 3);
-let synced = 0, refreshAt = 0, hMax = 0, dirty = true;
+let synced = 0, refreshAt = 0, hMax = 0, dirty = true, registered = 0;
 
 const nowMs = () => performance.now() - T0;
+
+// ── the mesher: a module worker, or the same code here ─────────────────────
+let worker = null, local = null, gen = 0, rockId = 0;
+const rockWait = new Map();
+function startMesher() {
+  try {
+    worker = new Worker(new URL('./mesh-worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = (e) => {
+      const m = e.data;
+      if (m.type === 'bricks') { if (m.gen === gen && S) S.applyBricks(m.list); }
+      else if (m.type === 'rock') { const f = rockWait.get(m.id); rockWait.delete(m.id); if (f) f(m); }
+    };
+    worker.onerror = () => { worker = null; useLocal(); };
+    worker.postMessage({ type: 'budget', ms: COARSE ? 9 : 12 });
+  } catch (e) { worker = null; useLocal(); }
+}
+function useLocal() {
+  if (local) return;
+  local = createCoralMesher({ polyps: COARSE ? 0.35 : 1 });
+  for (const f of rockWait.values()) f(null);
+  rockWait.clear();
+  registered = 0; synced = 0;           // send the reef again to the local mesher
+  if (S) { S.clearColonies(); }
+}
+// A rock mesh, in the worker when there is one.
+function meshRockAsync(rk) {
+  if (!worker) return Promise.resolve(meshRock(rk, COARSE ? 0.5 : 0.4));
+  const id = ++rockId;
+  return new Promise((res) => {
+    rockWait.set(id, m => res(m || meshRock(rk, COARSE ? 0.5 : 0.4)));
+    worker.postMessage({ type: 'rock', id, rock: rk, cell: COARSE ? 0.5 : 0.4 });
+  });
+}
+function mesherReset() {
+  gen++;
+  if (worker) worker.postMessage({ type: 'reset', polyps: COARSE ? 0.35 : 1 });
+  if (local) local = createCoralMesher({ polyps: COARSE ? 0.35 : 1 });
+  registered = 0;
+}
+function registerColonies() {
+  for (; registered < reef.colonies.length; registered++) {
+    const c = reef.colonies[registered], u = c.user;
+    const d = { type: 'colony', k: c.k, id: c.id, normal: u.normal.slice(), stalk: c.sp.stalk };
+    if (worker) worker.postMessage(d); else if (local) local.addColony(d);
+    if (S) S.addColonyGroup(c.k, c.id, [u.bx, u.by, u.bz]);
+  }
+}
 
 // The reef as a wide, low ellipse: half sizes across (rx) and up (ry) the
 // screen, for frameFit.
@@ -76,39 +134,75 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = true) {
 }
 function afterReset(fit) {
   synced = 0; hMax = 0; refreshAt = 0;
+  mesherReset();
   if (!S) return;
-  S.mesh.count = 0;
-  S.setRocks(reef.rocks);
+  S.clearColonies();
+  S.setRocks(reef.rocks, meshRockAsync);
+  placeDecor();
   syncPolyps(); refresh();
   if (fit) fitCamera(true);
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.id === reef.preset));
 }
 
-// A natural colour for a polyp before the next refresh: the tip colour.
-const natGuess = c => c.sp.tip;
-
-// New polyps (synced..count) to the GPU buffers, with a radius and a t
-// that the next refresh corrects.
+// New particles (synced..count): to the mesher (local frame of the
+// colony), and into the data textures with a radius, a t and a natural
+// colour that the next refresh corrects.
+const SWAY = id => Math.round((SPECIES[id].sway || 0) * 4);
 function syncPolyps() {
+  registerColonies();
   const n = reef.count; if (n <= synced) return;
-  for (let g = synced; g < n; g++) {
-    const c = reef.colonies[reef.col[g]];
+  const data = new Float32Array((n - synced) * 7);
+  for (let g = synced, o = 0; g < n; g++, o += 7) {
+    const c = reef.colonies[reef.col[g]], i = reef.loc[g], P = c.model.pos;
+    data[o] = c.k; data[o + 1] = i; data[o + 2] = c.model.parent[i];
+    data[o + 3] = P[i * 3]; data[o + 4] = P[i * 3 + 1]; data[o + 5] = P[i * 3 + 2]; data[o + 6] = g;
     radBuf[g] = polypRadius(c.sp, 1);
     const h = reef.py[g] - sandY(reef.px[g], reef.pz[g]); if (h > hMax) hMax = h;
     tBuf[g] = G.mode === 'flow' ? 0 : G.mode === 'colony' ? (reef.col[g] * 0.618034 + 0.12) % 1 : G.mode === 'height' ? h / Math.max(1, hMax) : 1;
     const q = c.sp.tip; natBuf[g * 3] = q[0]; natBuf[g * 3 + 1] = q[1]; natBuf[g * 3 + 2] = q[2];
   }
-  S.writePolyps(reef, synced, n, radBuf, natBuf, tBuf, natGuess);
+  if (worker) worker.postMessage({ type: 'add', data }, [data.buffer]);
+  else if (local) for (let o = 0; o < data.length; o += 7) local.add(data[o], data[o + 1], data[o + 2], data[o + 3], data[o + 4], data[o + 5], data[o + 6]);
+  writeParticles(synced, n, null);
   synced = n;
 }
 
-// All polyps: radii from subtree sizes, natural colours, t of the mode.
+// Data textures of particles from..to (sub: subtree sizes or null).
+function writeParticles(from, to, F) {
+  if (!S) return;
+  S.setParticles(from, to, (g, A, B, o) => {
+    const c = reef.colonies[reef.col[g]];
+    A[o] = natBuf[g * 3]; A[o + 1] = natBuf[g * 3 + 1]; A[o + 2] = natBuf[g * 3 + 2]; A[o + 3] = tBuf[g];
+    const tip = F ? Math.max(0, Math.min(0.999, 1 - Math.log2(F.sub[g]) / 5)) : 0.999;
+    B[o] = reef.birth[g] / 1000; B[o + 1] = radBuf[g]; B[o + 2] = SWAY(c.id) * 2 + tip; B[o + 3] = reef.py[g] - c.user.by;
+  });
+}
+
+// All particles: radii from subtree sizes, natural colours, t of the mode.
 function refresh() {
   if (!S) return;
   const F = fieldsOf(reef);
   radiiOf(reef, radBuf, F); naturalRGB(reef, natBuf, F); colourT(reef, G.mode, tBuf, F);
-  S.writePolyps(reef, 0, reef.count, radBuf, natBuf, tBuf, natGuess);
-  synced = reef.count; dirty = false;
+  writeParticles(0, reef.count, F);
+  dirty = false;
+}
+
+// ── scanned models ──────────────────────────────────────────────────────────
+let models = null;
+async function loadDecor() {
+  const out = {};
+  await Promise.all(DECOR.map(async d => {
+    try { const r = await fetch(`assets/models/${d.id}.bin`); if (r.ok) out[d.id] = parseCRM(await r.arrayBuffer()); } catch (e) { /* skip this model */ }
+  }));
+  models = out;
+  placeDecor();
+}
+function placeDecor() {
+  if (!S || !models) return;
+  const keep = (x, z, r) => !reef.rocks.some(q => Math.hypot(q.x - x, q.z - z) < Math.max(q.rx, q.rz) + r + 1.5)
+    && !reef.colonies.some(c => Math.hypot(c.user.bx - x, c.user.bz - z) < 16 + r);
+  const kinds = {}; for (const d of DECOR) kinds[d.id] = d.kind;
+  S.setDecor(models, scatterDecor(G.seed, keep, COARSE ? 0.5 : 1), kinds);
 }
 
 // ── colour ──────────────────────────────────────────────────────────────────
@@ -215,15 +309,16 @@ async function plantAt(cx, cy) {
   const r = canvas.getBoundingClientRect();
   const v = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(v, S.camera);
-  const hit = ray.intersectObject(S.sand, false)[0];
+  // the nearest hit on a rock or the seabed: a rock hit plants on that rock
+  const hit = ray.intersectObjects([S.ground, ...S.rocks.children], false)[0];
   if (!hit) return;
-  const x = hit.point.x, z = hit.point.z;
+  const x = hit.point.x, z = hit.point.z, onRock = hit.object.userData.rock || null;
   if (Math.hypot(x, z) > 140) return flash('Plant nearer to the reef.');
-  if (reef.colonies.some(c => Math.hypot(c.user.bx - x, c.user.bz - z) < 10)) return flash('Too near a colony: tap open sand.');
-  if (reef.count >= CAP - 60) return flash('The reef is at its polyp cap. Regrow to plant again.');
-  const c = reef.addColony(G.plant, x, z, { share: Math.max(6, reef.colonies.length + 1) });
+  if (reef.colonies.some(c => Math.hypot(c.user.bx - x, c.user.bz - z) < 10)) return flash('Too near a colony: tap open rock or sand.');
+  if (reef.count >= reef.limit - 60) return flash('The reef is at its polyp cap. Regrow to plant again.');
+  const c = reef.addColony(G.plant, x, z, onRock ? { share: Math.max(6, reef.colonies.length + 1), rock: onRock, at: [x, hit.point.y, z] } : { share: Math.max(6, reef.colonies.length + 1) });
   if (!c) return;
-  S.addRock(c.user.rock);
+  if (!onRock) S.addRock(c.user.rock, meshRockAsync);
   syncPolyps();
   flash(`Planted: ${SPECIES[G.plant].label}`);
 }
@@ -303,6 +398,8 @@ function buildUI() {
   tog('tSnow', 'snow', () => {});
   tog('tShaft', 'shaft', v => { if (S) S.U.uShaft.value = v ? 1 : 0; });
   tog('tOrbit', 'orbit', v => { if (S) S.controls.autoRotate = v; });
+  tog('tPolyps', 'polyps', () => {});
+  tog('tDetail', 'detail', () => {});
 
   $('bPlay').addEventListener('click', () => setPlaying(!G.playing));
   $('dockPlay').addEventListener('click', () => setPlaying(!G.playing));
@@ -383,16 +480,23 @@ function frame(t) {
   const dtMs = Math.min(100, t - last); last = t; const dt = dtMs / 1000;
   const now = nowMs();
   if (G.playing && !reef.done()) {
-    const n = saverOn && saver ? reef.step(dtMs, BUDGET, now, saver.base) : reef.step(dtMs, BUDGET, now);
+    const n = saverOn && saver ? reef.step(dtMs, BUDGET, now, saver.base) : reef.step(dtMs, BUDGET, now, RATE);
     if (n) { syncPolyps(); dirty = true; }
   }
   if (dirty && now > refreshAt) { refresh(); refreshAt = now + (reef.count > 8000 ? 600 : 350); }
+  if (S) {
+    if (local) S.applyBricks(local.update(COARSE ? 3 : 4));
+    S.flushChunks(COARSE ? 2.5 : 3.5, now);
+  }
   if (saverOn && saver) saver.tick(dt, now);
   readout(dt);
   if (!S) return;
   S.U.uTime.value = now / 1000;
   S.U.uCount.value = reef.count;
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
+  S.U.uCaust.value = G.caust ? 1 : 0;
+  S.U.uDetail.value = G.detail ? 1 : 0;
+  S.scene.traverse && polypVis(S, G.polyps);
   // fog follows the camera distance, so the reef reads at any zoom
   const camD = S.camera.position.distanceTo(saverOn && saver ? S.camera.userData.tgt || S.controls.target : S.controls.target);
   S.U.uFogDen.value = Math.min(0.006, Math.max(0.0011, 0.45 / Math.max(60, camD)));
@@ -403,7 +507,15 @@ function frame(t) {
     if ((frameN++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
     S.controls.update();
   }
-  S.render(dt);
+  S.render(dt, now);
+}
+
+// Show or hide the polyp meshes (cheap: the flag only changes on a toggle).
+let polypShown = true;
+function polypVis(S, on) {
+  if (on === polypShown && !S.dirtyChunks) return;
+  polypShown = on;
+  S.scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.isInstancedBufferGeometry && o.geometry.attributes.iPos) o.visible = on; });
 }
 
 function onResize() { if (S) { S.resize(); fitCamera(false); } }
@@ -415,7 +527,8 @@ setGradient(G.gradient, G.rev);
 setMode(G.mode);
 setCurrent();
 setTemp(G.temp);
-if (S) { S.resize(); loadPreset(G.preset, G.seed, true); requestAnimationFrame(frame); }
+startMesher();
+if (S) { S.resize(); loadPreset(G.preset, G.seed, true); loadDecor(); requestAnimationFrame(frame); }
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // A seeded shuffle of shots (saver.js shotList). Each shot regrows a reef
@@ -469,13 +582,15 @@ window.snSaver = {
       st.shot = s; st.t = 0;
       G.dir = s.current; G.cur = 0.35 + 0.4 * (1 - calm) + 0.2 * ((s.seed % 7) / 7); setCurrent();
       setGradient(s.gradient, s.reversed);
+      // smaller reefs than the page, so the mesher keeps up with a 5 to 12 s shot
+      reef.limit = COARSE ? 3600 : 9000;
       if (s.kind === 'reef') { reef.reset(s.seed); reef.loadPreset(s.preset); }
-      else { reef.reset(s.seed); reef.preset = null; reef.addColony(s.species, 0, 0, { cap: Math.min(CAP, SPECIES[s.species].cap) }); }
+      else { reef.reset(s.seed); reef.preset = null; reef.addColony(s.species, 0, 0, { cap: Math.min(reef.limit, SPECIES[s.species].cap) }); }
       // a quarter of the growth while the canvas is dark
       const total = reef.colonies.reduce((a, c) => a + c.cap, 0);
       reef.now = nowMs() - 8000;
-      reef.growAll(Math.floor(total * 0.25));
-      saver.base = Math.max(200, (total - reef.count) / (s.hold * 0.9));
+      reef.growAll(Math.floor(total * 0.3));
+      saver.base = Math.min(COARSE ? 450 : 950, Math.max(200, (total - reef.count) / (s.hold * 1.05)));
       reef.env.speed = 1; reef.env.nutrient = 1;
       center.y = s.kind === 'reef' ? 12 : 10;
       st.tgt = { x: 0, y: center.y, z: 0 };
@@ -528,6 +643,7 @@ window.snSaver = {
     const sv = saver && saver.saved; saver = null;
     if (S) { S.controls.enabled = true; S.controls.autoRotate = G.orbit; }
     if (sv) {
+      reef.limit = CAP;
       G.dir = sv.dir; G.cur = sv.cur; setCurrent(); setTemp(sv.temp);
       reef.env.speed = sv.speed; reef.env.nutrient = sv.nutrient;
       setGradient(sv.gradient, sv.rev);
