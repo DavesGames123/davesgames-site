@@ -1,16 +1,20 @@
 Plant Growth (stella-nova/pages/plant-growth)
 ==============================================
 
-All code in this folder is our own. It uses ideas and one engine from the
-sources below.
+All code in this folder is our own. It uses ideas, one engine, scanned
+textures and one library from the sources below.
 
-1. Space colonisation (the branches)
-   A. Runions, B. Lane, P. Prusinkiewicz.
-   "Modeling Trees with a Space Colonization Algorithm".
-   Eurographics Workshop on Natural Phenomena, 2007.
-   grow.js is our own code from the description in the paper: attractor
-   points in a crown envelope, an influence radius, a kill distance, the
-   mean direction to the attractors, and the pipe model for the radii.
+1. The tree model (grow.js)
+   W. Palubicki, K. Horel, S. Longay, A. Runions, B. Lane, R. Mech,
+   P. Prusinkiewicz. "Self-organizing tree models for image synthesis".
+   ACM Transactions on Graphics 28(3), Proc. SIGGRAPH 2009.
+   Our own code from the description in the paper: buds and metamers, the
+   shadow-propagation light grid, the Borchert-Honda resource allocation
+   (M. Borchert, H. Honda 1984), the optimal growth direction, tropisms,
+   branch shedding, and the pipe model (K. Shinozaki et al. 1964). Our
+   additions: leaves add their light to the sums, a soft node budget, a
+   hydraulic height limit, weeping shoots, fronds for the fern, and the
+   calendar of seasons (season.js).
 
 2. dlaf (the roots)
    Michael Fogleman, https://github.com/fogleman/dlaf
@@ -38,9 +42,33 @@ sources below.
    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
    USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-3. three.js r160 (the 3D render)
+3. Leaf scans (assets/leaf-color.jpg, leaf-alpha.png, leaf-normal.jpg)
+   ambientCG, https://ambientcg.com, CC0 1.0 (public domain).
+   LeafSet016 (oak), LeafSet010 (maple), LeafSet024 (birch), LeafSet005
+   (cherry), LeafSet023 (azalea), LeafSet019 (spruce sprays), 1K-JPG sets.
+   tools/build-atlas.py cut each leaf out by its opacity map, turned it so
+   the petiole points down, scaled it into a 256 px cell and set its mean
+   colour. The willow leaf, the fern pinna, the cherry blossom, the azalea
+   flower and the cotyledons are our own drawings in the same script.
+
+4. Bark and ground (assets/bark-*.jpg, assets/ground-*.jpg)
+   Poly Haven, https://polyhaven.com, CC0 1.0 (public domain).
+     bark-oak ...... Bark Brown 02 (Rob Tuytel)
+     bark-maple .... Trident Maple Bark (Charlotte Baglioni)
+     bark-spruce ... Pine Bark (Dimitrios Savva)
+     bark-willow ... Bark Willow (Dario Barresi, Dimitrios Savva)
+     bark-cherry ... Sakura Bark (Charlotte Baglioni)
+     bark-bush ..... Jolcham Oak Bark 01 (Charlotte Baglioni), squashed 2:1
+     ground-grass .. Forrest Ground 01 (Rob Tuytel)
+     ground-meadow . Leafy Grass (Charlotte Baglioni)
+     ground-litter . Forest Leaves 02 (Rob Tuytel)
+   1k diffuse and OpenGL normal maps, resized by tools/prep-textures.py
+   (colour 1024 px, normal 512 px). bark-birch and bark-fern are drawn by
+   that script (our own).
+
+5. three.js r160 (the 3D render)
    https://threejs.org, MIT licence, Copyright 2010-2023 three.js authors.
    Loaded from stella-nova/vendor/three@0.160.0.
 
-The leaf, flower, grass and soil textures are drawn at run time on a
-canvas by render.js. The page makes no network calls.
+The soil of the cut-away is drawn at run time on a canvas by render.js.
+The page fetches only its own files; it makes no other network calls.
