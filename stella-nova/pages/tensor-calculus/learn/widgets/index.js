@@ -397,7 +397,8 @@ function w_rotateRank2(host, spec, ctx) {
       ["<i>T</i>′<sub>11</sub>", f2(Tp[0][0])], ["<i>T</i>′<sub>12</sub>", f2(Tp[0][1])], ["<i>T</i>′<sub>22</sub>", f2(Tp[1][1])],
       ['trace', f2(Tp[0][0] + Tp[1][1]), 'lw-inv'], ['det', f2(W.det(Tp)), 'lw-inv'],
     ]);
-    send({ angle: ang });
+    // VIZ turns the frame by 1.1 u radians, u in 0..1.
+    send({ mode: 'passive', kind: 'rotate', u: Math.min(1, Math.abs(ang) / 1.1) });
   };
   slider(host, { label: 'frame angle', min: -3.14, max: 3.14, step: 0.01, value: 0, fmt: x => Math.round(x * DEG) + '°' }, draw);
   draw(0);
