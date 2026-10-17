@@ -168,17 +168,27 @@ function weylFrom(c) {
   return C;
 }
 
+const isComp = a => a && a.shape && a.data;
 export function riemann(metric, x, params) { return curvatureAt(metric, x, params).Riemann; }
-// ricci(metric, x, params) or ricci(riemannTensor).
+// ricci(metric, x, params), ricci(metric, x, riemannTensor) or ricci(riemannTensor).
 export function ricci(metric, x, params) {
-  if (metric instanceof Tensor) {
-    const Rm = metric, n = Rm.shape[0], out = new Tensor([n, n], ['d', 'd']);
-    for (let s = 0; s < n; s++) for (let nu = 0; nu < n; nu++) { let v = 0; for (let r = 0; r < n; r++) v += Rm.get(r, s, r, nu); out.set(v, s, nu); }
+  const Rm = isComp(metric) ? metric : isComp(params) ? params : null;
+  if (Rm) {
+    const R4 = Tensor.from(Rm), n = R4.shape[0], out = new Tensor([n, n], ['d', 'd']);
+    for (let s = 0; s < n; s++) for (let nu = 0; nu < n; nu++) { let v = 0; for (let r = 0; r < n; r++) v += R4.get(r, s, r, nu); out.set(v, s, nu); }
     return out;
   }
   return curvatureAt(metric, x, params).Ricci;
 }
-export function scalarCurvature(metric, x, params) { return curvatureAt(metric, x, params).R; }
+// scalarCurvature(metric, x, params) or scalarCurvature(metric, x, ricciTensor).
+export function scalarCurvature(metric, x, params) {
+  if (isComp(params)) {
+    const gi = matInverse(metricAt(metric, x)), Rc = Tensor.from(params), n = gi.length;
+    let s = 0; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) s += gi[i][j] * Rc.data[i * n + j];
+    return s;
+  }
+  return curvatureAt(metric, x, params).R;
+}
 export function einsteinTensor(metric, x, params) { return curvatureAt(metric, x, params).Einstein; }
 export function weyl(metric, x, params) { return curvatureAt(metric, x, params).Weyl; }
 
@@ -257,14 +267,14 @@ export function parallelTransport(metric, curve, v0, opts = {}) {
     v = v.map((vi, i) => vi + (ds / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
     S.push(s + ds); X.push(C.x(s + ds)); V.push(v.slice());
   }
-  return { s: S, x: X, v: V, final: v };
+  return { s: S, x: X, v: V, final: v, V: v, Vs: V };
 }
 
 // geodesic(metric, x0, v0, { params, steps, ds | length, stop(x, v) }).
 // x'' = -Gamma^a_{bc} x'^b x'^c, RK4 on (x, v). Gives { s, x, v, final }.
 export function geodesic(metric, x0, v0, opts = {}) {
   const m = getMetric(metric), p = paramsOf(m, opts.params), n = m.dim;
-  const steps = opts.steps ?? 400, ds = opts.ds ?? (opts.length ?? 1) / steps;
+  const steps = opts.steps ?? 400, ds = opts.ds ?? opts.dt ?? (opts.length ?? 1) / steps;
   const f = (x, v) => {
     const G = gammaNested(m, x, p), a = new Array(n).fill(0);
     for (let i = 0; i < n; i++) for (let b = 0; b < n; b++) { if (!v[b]) continue; for (let c = 0; c < n; c++) a[i] -= G[i][b][c] * v[b] * v[c]; }
@@ -282,7 +292,7 @@ export function geodesic(metric, x0, v0, opts = {}) {
     S.push((k + 1) * ds); X.push(x.slice()); V.push(v.slice());
     if (opts.stop && opts.stop(x, v)) break;
   }
-  return { s: S, x: X, v: V, final: { x, v } };
+  return { s: S, x: X, v: V, final: { x, v }, xs: X, vs: V };
 }
 
 // g(u, v) at x, and the signed angle from u to v in a 2D metric.

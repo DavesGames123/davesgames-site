@@ -9,11 +9,14 @@
 //      Factor  = { name, tex, indices: [Index], kind, deriv?: [Index],
 //                  derivKind?: 'partial'|'nabla', derivStyle?: 'prefix'|'comma'|'semicolon',
 //                  sym?: [{ type: 'sym'|'antisym', slots: [k, ...] }],
+//                  (slots index factorIndices(f): the indices, then deriv)
 //                  power?: number, stagger?: boolean }
 //      Term    = { coeff: number | string, factors: [Factor], side?: 0|1 }
 //      TensorExpr = { terms, free, dummies, tex, rel?: '=', lhs?, rhs? }
 //  An equation has rel '=', lhs and rhs (each a TensorExpr), and terms =
-//  lhs terms (side 0) then rhs terms (side 1). free is the lhs free list.
+//  lhs terms (side 0) then rhs terms (side 1). free is the lhs free list,
+//  in written order (a prefix derivative index comes first). Numeric
+//  bindings of a derivative factor put the derivative slots last.
 //
 //  Grammar of parseIndexTex (restricted TeX):
 //      equation := sum [ '=' sum ]
@@ -26,6 +29,8 @@
 //      derivative := \partial script | \nabla script   (applies to the next factor)
 //  A bracket ( sum ) is multiplied out, so a(b+c) becomes ab + ac.
 //  Spacing commands (\, \; \! \quad), \left, \right, \cdot and \otimes are skipped.
+//  A digit in braces is a component index (A^{0}, g_{01}); a power is c^4
+//  (no braces) or ^{-1}, ^{1.5} (with a sign or a point).
 //
 //  toTex colours each index with \class{iN}{...}. N is the order of first
 //  appearance of the sym in the printed expression, modulo 8 (stable).
@@ -50,7 +55,7 @@ export const GREEK = new Set(['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'var
   'lambda', 'mu', 'nu', 'xi', 'pi', 'varpi', 'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
   'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega']);
 const SKIP = new Set([',', ';', '!', ':', ' ', 'quad', 'qquad', 'left', 'right', 'cdot', 'otimes', 'displaystyle', 'big', 'Big', 'bigl', 'bigr']);
-const DECOR = new Set(['tilde', 'hat', 'bar', 'mathcal', 'mathbf', 'mathrm', 'boldsymbol', 'mathbb', 'operatorname', 'check', 'breve', 'vec', 'mathsf']);
+const DECOR = new Set(['tilde', 'hat', 'bar', 'mathcal', 'mathbf', 'mathrm', 'boldsymbol', 'mathbb', 'operatorname', 'check', 'breve', 'vec', 'mathsf', 'dot', 'ddot']);
 
 // ---- tokenizer -------------------------------------------------------------
 function tokenize(src) {
@@ -112,19 +117,25 @@ export function parseIndexTex(src) {
   }
 
   // One script after ^ or _. Gives { idx: [Index], marks: [{type, from, to}], deriv: [{Index}], dkind }.
+  // Bracket marks may span index groups and a prefix derivative
+  // (\partial_{[\lambda} F_{\mu\nu]}), so they live in one context per
+  // factor: positions count the indices in written order.
+  let mctx = null;
+  const newCtx = () => ({ stack: [], marks: [], count: 0 });
   function script(up) {
-    const out = { idx: [], marks: [], deriv: [], dkind: null };
-    const push = ix => { ix.up = up; if (!ix.fixed) delete ix.fixed; (out.dkind ? out.deriv : out.idx).push(ix); };
+    if (!mctx) mctx = newCtx();
+    const out = { idx: [], deriv: [], dkind: null };
+    const push = ix => { ix.up = up; if (!ix.fixed) delete ix.fixed; (out.dkind ? out.deriv : out.idx).push(ix); mctx.count++; };
     if (peek() && peek().t === '{') {
       p++;
-      const stack = [];
+      const stack = mctx.stack;
       while (peek() && peek().t !== '}') {
         const k = peek();
-        if (k.t === '(' || k.t === '[') { stack.push({ type: k.t === '(' ? 'sym' : 'antisym', from: out.idx.length, close: k.t === '(' ? ')' : ']' }); p++; continue; }
+        if (k.t === '(' || k.t === '[') { stack.push({ type: k.t === '(' ? 'sym' : 'antisym', from: mctx.count, close: k.t === '(' ? ')' : ']' }); p++; continue; }
         if (k.t === ')' || k.t === ']') {
           const s = stack.pop();
           if (!s || s.close !== k.t) err(`'${k.t}' does not close a group`);
-          out.marks.push({ type: s.type, from: s.from, to: out.idx.length });
+          mctx.marks.push({ type: s.type, from: s.from, to: mctx.count });
           p++; continue;
         }
         if (k.t === ',' || k.t === ';') { out.dkind = k.t === ',' ? 'partial' : 'nabla'; out.dstyle = k.t === ',' ? 'comma' : 'semicolon'; p++; continue; }
@@ -132,7 +143,6 @@ export function parseIndexTex(src) {
         if (k.t === 'num' && /^[0-9]{2,}$/.test(k.v)) { for (const d of k.v) push({ sym: d, fixed: true }); p++; continue; }
         push(indexToken());
       }
-      if (stack.length) err('a ( or [ in the indices has no match');
       expect('}');
     } else {
       push(indexToken());
@@ -140,15 +150,18 @@ export function parseIndexTex(src) {
     return out;
   }
 
-  // Scalar power: ^2, ^{2}, ^{-1}.
+  // Scalar power. A digit in braces is a component index (A^{0}), so a
+  // power is an unbraced number (c^4, r^2) or a braced number with a sign
+  // or a decimal point (^{-1}, ^{1.5}), and no index script follows it.
   function tryPower() {
     if (!peek() || peek().t !== '^') return null;
     const a = peek(1);
-    if (a && a.t === 'num') { p += 2; return +a.v; }
+    const noScript = q => !toks[q] || (toks[q].t !== '_' && toks[q].t !== '^');
+    if (a && a.t === 'num' && noScript(p + 2)) { p += 2; return +a.v; }
     if (a && a.t === '{') {
       let q = p + 2, s = '';
       if (toks[q] && toks[q].t === '-') { s = '-'; q++; }
-      if (toks[q] && toks[q].t === 'num' && toks[q + 1] && toks[q + 1].t === '}') { p = q + 2; return +(s + toks[q].v); }
+      if (toks[q] && toks[q].t === 'num' && toks[q + 1] && toks[q + 1].t === '}' && (s || toks[q].v.includes('.')) && noScript(q + 2)) { p = q + 2; return +(s + toks[q].v); }
     }
     return null;
   }
@@ -175,14 +188,13 @@ export function parseIndexTex(src) {
     return 'tensor';
   }
 
-  function factor() {
-    const nm = nameToken();
+  function factor(pre) {
+    const nm = pre || nameToken();
     if (!nm) err(`'${peek().v}' cannot start a factor`);
     const f = { name: nm.name, tex: nm.tex, indices: [], kind: 'tensor' };
     while (peek() && peek().t === "'") { f.tex += "'"; f.name += "'"; p++; }
     const pw = tryPower();
     if (pw != null) { f.indices = []; f.kind = 'scalar'; f.power = pw; return f; }
-    const marks = [];
     let deriv = [], dkind = null, dstyle = null, groups = 0, spacer = false;
     for (;;) {
       const k = peek();
@@ -191,12 +203,10 @@ export function parseIndexTex(src) {
       if (k.t !== '^' && k.t !== '_') break;
       p++;
       const s = script(k.t === '^');
-      for (const m of s.marks) marks.push({ type: m.type, from: f.indices.length + m.from, to: f.indices.length + m.to });
       f.indices.push(...s.idx);
       if (s.deriv.length) { deriv = deriv.concat(s.deriv); dkind = s.dkind; dstyle = s.dstyle; }
       groups++;
     }
-    if (marks.length) f.sym = marks.map(m => ({ type: m.type, slots: range(m.from, m.to) }));
     if (deriv.length) { f.deriv = deriv; f.derivKind = dkind; f.derivStyle = dstyle; }
     if (spacer) f.stagger = true;
     f.kind = kindOf(f.name, f.indices);
@@ -219,15 +229,28 @@ export function parseIndexTex(src) {
     let any = false;
     for (;;) {
       const k = peek();
-      if (!k || k.t === '+' || k.t === '-' || k.t === '=' || k.t === ')' || k.t === '}') break;
+      if (!k || k.t === '+' || k.t === '-' || k.t === '=' || k.t === ')' || k.t === '}') {
+        if (k && k.t === '=' && !any && p > 0 && toks[p - 1].t === '=') err('only one = is supported');
+        break;
+      }
       any = true;
       if (k.t === 'num') { p++; const pw = tryPower(); acc = mulTerms(acc, [{ coeff: pw != null ? (+k.v) ** pw : +k.v, factors: [] }]); continue; }
       if (k.t === '*' || k.t === '/') err(`use \\frac{a}{b} or a juxtaposed product, not '${k.t}'`);
       if (k.t === '(' || (k.t === 'cmd' && k.v === 'lbrack')) {
         if (pendingDeriv.length) err('a derivative before a bracket is not supported; write the product rule out, or put the derivative next to one tensor');
-        p++;
+        const open = toks[p++];
         const inner = sum();
-        expect(')');
+        const close = expect(')');
+        // (J^{-1})^{a}{}_{b}: a bracketed name that takes indices.
+        if (peek() && (peek().t === '^' || peek().t === '_') && inner.length === 1 && inner[0].coeff === 1 && inner[0].factors.length === 1 && !inner[0].factors[0].indices.length) {
+          const tex = src.slice(open.pos, close.end);
+          mctx = newCtx();
+          const f = factor({ name: tex, tex });
+          if (mctx.stack.length) err('a ( or [ in the indices has no match');
+          mctx = null;
+          acc = mulTerms(acc, [{ coeff: 1, factors: [f] }]);
+          continue;
+        }
         acc = mulTerms(acc, inner);
         continue;
       }
@@ -252,6 +275,7 @@ export function parseIndexTex(src) {
       if (k.t === 'cmd' && (k.v === 'partial' || k.v === 'nabla')) {
         p++;
         const kind = k.v;
+        if (!pendingDeriv.length) mctx = newCtx();
         if (peek() && (peek().t === '_' || peek().t === '^')) {
           const up = toks[p++].t === '^';
           const s = script(up);
@@ -262,6 +286,8 @@ export function parseIndexTex(src) {
         const isDerivNext = nx && nx.t === 'cmd' && (nx.v === 'partial' || nx.v === 'nabla');
         if (!isFactorNext && !isDerivNext) {
           // Free-standing operator, for example the end of "\partial_\mu".
+          if (mctx.stack.length || mctx.marks.length) err('a ( or [ bracket over a derivative must close on the next factor');
+          mctx = null;
           for (const d of pendingDeriv) acc = mulTerms(acc, [{ coeff: 1, factors: [{ name: d.kind, tex: '\\' + d.kind, indices: [d.ix], kind: d.kind }] }]);
           pendingDeriv = [];
         }
@@ -273,7 +299,17 @@ export function parseIndexTex(src) {
         acc = mulTerms(acc, [{ coeff: 1, factors: [{ name: k.v, tex: '\\' + k.v, indices: [], kind: 'scalar' }] }]);
         continue;
       }
+      if (!pendingDeriv.length) mctx = newCtx();
+      const nPre = pendingDeriv.length;
       const f = factor();
+      if (mctx.stack.length) err('a ( or [ in the indices has no match');
+      if (mctx.marks.length) {
+        // written position -> position in factorIndices(f) (indices, then deriv)
+        const nI = f.indices.length;
+        const map = w => (w < nPre ? nI + w : (w - nPre < nI ? w - nPre : nI + nPre + (w - nPre - nI)));
+        f.sym = mctx.marks.map(m => ({ type: m.type, slots: range(m.from, m.to).map(map) }));
+      }
+      mctx = null;
       if (pendingDeriv.length) {
         const kinds = new Set(pendingDeriv.map(d => d.kind));
         if (kinds.size > 1) err('mixing \\partial and \\nabla on one factor is not supported');
@@ -357,9 +393,13 @@ export function cloneExpr(e) {
 // All indices of a factor in reading order (slots then derivative indices).
 export const factorIndices = f => f.indices.concat(f.deriv || []);
 
+// Indices of a factor in written order: a prefix derivative comes first.
+export const writtenIndices = f => (f.deriv && (f.derivStyle || 'prefix') === 'prefix' ? f.deriv.concat(f.indices) : factorIndices(f));
+
+// Free indices keep their written order: \nabla_\mu V^\nu has free [mu, nu].
 function termIndexInfo(t) {
   const seen = new Map();
-  for (const f of t.factors) for (const ix of factorIndices(f)) {
+  for (const f of t.factors) for (const ix of writtenIndices(f)) {
     if (ix.fixed) continue;
     if (!seen.has(ix.sym)) seen.set(ix.sym, []);
     seen.get(ix.sym).push(ix);
@@ -421,40 +461,55 @@ export function fmtNum(x) {
   return String(+x.toPrecision(6));
 }
 
-function printFactor(f, cmap, colors) {
+// factorTex(f, { colors, colorMap, subst }) prints one factor. subst maps
+// an index sym to a TeX label (a component value such as 0 or \theta); the
+// label keeps the colour of its index.
+export function factorTex(f, opts = {}) {
+  const cmap = opts.colorMap || indexColorMap({ terms: [{ coeff: 1, factors: [f] }] });
+  return printFactor(f, cmap, opts.colors !== false, opts.subst);
+}
+
+function printFactor(f, cmap, colors, subst) {
   const c = ix => {
-    const s = symTex(ix.sym);
+    const s = subst && subst[ix.sym] != null ? String(subst[ix.sym]) : symTex(ix.sym);
     if (!colors || ix.fixed || !cmap.has(ix.sym)) return s;
     return `\\class{i${cmap.get(ix.sym)}}{${s}}`;
   };
   let out = '';
   const style = f.derivStyle || 'prefix';
+  const n = f.indices.length, nd = (f.deriv || []).length;
+  // Bracket marks: slots index factorIndices(f); open before the slot that
+  // is written first, close after the slot that is written last.
+  const written = style === 'prefix' && nd ? [...Array(nd).keys()].map(j => n + j).concat([...Array(n).keys()]) : [...Array(n + nd).keys()];
+  const wpos = new Map(written.map((q, w) => [q, w]));
+  const open = new Map(), close = new Map();
+  for (const s of f.sym || []) {
+    const ws = s.slots.map(q => wpos.get(q)).filter(w => w != null);
+    if (!ws.length) continue;
+    const a = written[Math.min(...ws)], b = written[Math.max(...ws)];
+    open.set(a, (open.get(a) || '') + (s.type === 'sym' ? '(' : '['));
+    close.set(b, (s.type === 'sym' ? ')' : ']') + (close.get(b) || ''));
+  }
+  const cw = (ix, q) => (open.get(q) || '') + c(ix) + (close.get(q) || '');
   if (f.deriv && style === 'prefix') {
     const op = f.derivKind === 'partial' ? '\\partial' : '\\nabla';
-    for (const d of f.deriv) out += `${op}${d.up ? '^' : '_'}{${c(d)}} `;
+    f.deriv.forEach((d, j) => { out += `${op}${d.up ? '^' : '_'}{${cw(d, n + j)}} `; });
   }
   if (f.kind === 'partial' || f.kind === 'nabla') {
     const ix = f.indices[0];
     return `\\${f.kind}${ix.up ? '^' : '_'}{${c(ix)}}`;
   }
   out += f.tex;
-  if (f.power != null && !f.indices.length) out += `^{${f.power}}`;
-  const n = f.indices.length;
-  const open = new Map(), close = new Map();
-  for (const s of f.sym || []) {
-    const a = Math.min(...s.slots), b = Math.max(...s.slots);
-    open.set(a, (open.get(a) || '') + (s.type === 'sym' ? '(' : '['));
-    close.set(b, (close.get(b) || '') + (s.type === 'sym' ? ')' : ']'));
-  }
+  if (f.power != null && !f.indices.length) out += Number.isInteger(f.power) && f.power >= 0 && f.power < 10 ? `^${f.power}` : `^{${f.power}}`;
   const mixed = f.indices.some(i => i.up) && f.indices.some(i => !i.up);
   const stagger = f.stagger ?? (mixed && f.kind !== 'christoffel' && f.kind !== 'delta');
   const groups = [];
   for (let k = 0; k < n; k++) {
     const ix = f.indices[k];
     if (!groups.length || groups[groups.length - 1].up !== ix.up) groups.push({ up: ix.up, s: '' });
-    groups[groups.length - 1].s += (open.get(k) || '') + c(ix) + (close.get(k) || '');
+    groups[groups.length - 1].s += cw(ix, k);
   }
-  const suffix = f.deriv && style !== 'prefix' ? (style === 'comma' ? ',' : ';') + f.deriv.map(c).join('') : '';
+  const suffix = f.deriv && style !== 'prefix' ? (style === 'comma' ? ',' : ';') + f.deriv.map((d, j) => cw(d, n + j)).join('') : '';
   if (suffix) {
     const last = groups[groups.length - 1];
     if (last && !last.up && !f.deriv.some(d => d.up)) last.s += suffix;
@@ -515,9 +570,10 @@ export function validate(expr, opts = {}) {
           errors.push({ msg: `In ${where}, ${show(sym)} appears twice as ${list[0].up ? 'an upper' : 'a lower'} index. The Einstein rule sums one upper and one lower index; use the metric to ${list[0].up ? 'lower' : 'raise'} one of them.`, term: k, sym });
       }
       for (const f of t.factors) {
+        const fi = factorIndices(f);
         for (const s of f.sym || []) {
-          const vs = new Set(s.slots.map(q => f.indices[q] && f.indices[q].up));
-          if (s.slots.some(q => !f.indices[q])) errors.push({ msg: `In ${where}, a (anti)symmetrization bracket on ${f.tex} has no index inside it.`, term: k });
+          const vs = new Set(s.slots.map(q => fi[q] && fi[q].up));
+          if (s.slots.some(q => !fi[q])) errors.push({ msg: `In ${where}, a (anti)symmetrization bracket on ${f.tex} has no index inside it.`, term: k });
           else if (vs.size > 1) errors.push({ msg: `In ${where}, the bracket on ${f.tex} mixes upper and lower indices. Symmetrize indices of one kind only.`, term: k });
         }
         if (f.kind === 'delta' && f.indices.length === 2 && f.indices[0].up === f.indices[1].up)

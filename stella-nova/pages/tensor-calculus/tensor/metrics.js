@@ -4,7 +4,8 @@
 //  Each metric is
 //      { id, label, dim, coords: [sym], coordTex: [tex], line: TeX line element,
 //        params: { name: default }, paramInfo: [{ key, label, min, max, step }],
-//        signature: '+..' | '-+++', sample: [x], g(x, F, p), embed?(x, p) }
+//        signature: '+..' | '-+++', sample: [x], g(x, F, p), embed?(x, p),
+//        periodic?: [period or 0 per coordinate] }
 //  g(x, F, p) returns the n x n components g_ij written with the
 //  operations of F (see jet.js), so one formula gives the numbers and
 //  their exact first and second derivatives. Units: G = c = 1.
@@ -26,6 +27,7 @@
 import { NUM, jetOps, variables } from './jet.js';
 import { matInverse } from './tensor.js';
 
+const TAU = 2 * Math.PI;
 const diag = (F, ...d) => d.map((v, i) => d.map((_, j) => (i === j ? v : 0)));
 
 export const METRICS = {
@@ -42,32 +44,32 @@ export const METRICS = {
     embed: x => x.slice(),
   },
   polar: {
-    id: 'polar', label: 'Polar coordinates', dim: 2, coords: ['r', 'theta'], coordTex: ['r', '\\theta'],
+    id: 'polar', periodic: [0, TAU], label: 'Polar coordinates', dim: 2, coords: ['r', 'theta'], coordTex: ['r', '\\theta'],
     line: 'ds^2 = dr^2 + r^2\\,d\\theta^2', params: {}, signature: '++', sample: [1.5, 0.7],
     g: (x, F) => diag(F, 1, F.sq(x[0])),
     embed: x => [x[0] * Math.cos(x[1]), x[0] * Math.sin(x[1]), 0],
   },
   cylindrical: {
-    id: 'cylindrical', label: 'Cylindrical coordinates', dim: 3, coords: ['r', 'phi', 'z'], coordTex: ['r', '\\phi', 'z'],
+    id: 'cylindrical', periodic: [0, TAU, 0], label: 'Cylindrical coordinates', dim: 3, coords: ['r', 'phi', 'z'], coordTex: ['r', '\\phi', 'z'],
     line: 'ds^2 = dr^2 + r^2\\,d\\phi^2 + dz^2', params: {}, signature: '+++', sample: [1.2, 0.4, 0.3],
     g: (x, F) => diag(F, 1, F.sq(x[0]), 1),
     embed: x => [x[0] * Math.cos(x[1]), x[0] * Math.sin(x[1]), x[2]],
   },
   spherical: {
-    id: 'spherical', label: 'Spherical coordinates', dim: 3, coords: ['r', 'theta', 'phi'], coordTex: ['r', '\\theta', '\\phi'],
+    id: 'spherical', periodic: [0, 0, TAU], label: 'Spherical coordinates', dim: 3, coords: ['r', 'theta', 'phi'], coordTex: ['r', '\\theta', '\\phi'],
     line: 'ds^2 = dr^2 + r^2\\,d\\theta^2 + r^2\\sin^2\\theta\\,d\\phi^2', params: {}, signature: '+++', sample: [1.3, 0.9, 0.4],
     g: (x, F) => { const r2 = F.sq(x[0]); return diag(F, 1, r2, F.mul(r2, F.sq(F.sin(x[1])))); },
     embed: x => [x[0] * Math.sin(x[1]) * Math.cos(x[2]), x[0] * Math.sin(x[1]) * Math.sin(x[2]), x[0] * Math.cos(x[1])],
   },
   sphere: {
-    id: 'sphere', label: 'Sphere surface', dim: 2, coords: ['theta', 'phi'], coordTex: ['\\theta', '\\phi'],
+    id: 'sphere', periodic: [0, TAU], label: 'Sphere surface', dim: 2, coords: ['theta', 'phi'], coordTex: ['\\theta', '\\phi'],
     line: 'ds^2 = R^2\\,(d\\theta^2 + \\sin^2\\theta\\,d\\phi^2)', params: { R: 1 },
     paramInfo: [{ key: 'R', label: 'Radius R', min: 0.2, max: 4, step: 0.05 }], signature: '++', sample: [1.0, 0.5],
     g: (x, F, p) => { const R2 = p.R * p.R; return diag(F, R2, F.mul(R2, F.sq(F.sin(x[0])))); },
     embed: (x, p) => [p.R * Math.sin(x[0]) * Math.cos(x[1]), p.R * Math.sin(x[0]) * Math.sin(x[1]), p.R * Math.cos(x[0])],
   },
   torus: {
-    id: 'torus', label: 'Torus surface', dim: 2, coords: ['u', 'v'], coordTex: ['u', 'v'],
+    id: 'torus', periodic: [TAU, TAU], label: 'Torus surface', dim: 2, coords: ['u', 'v'], coordTex: ['u', 'v'],
     line: 'ds^2 = (R + a\\cos v)^2\\,du^2 + a^2\\,dv^2', params: { R: 2, a: 0.7 },
     paramInfo: [{ key: 'R', label: 'Main radius R', min: 0.5, max: 4, step: 0.05 }, { key: 'a', label: 'Tube radius a', min: 0.1, max: 2, step: 0.05 }],
     signature: '++', sample: [0.4, 0.9],
@@ -115,16 +117,56 @@ export const paramsOf = (m, p) => ({ ...(getMetric(m).params || {}), ...(p || {}
 
 const toNum = (F, A) => A.map(r => r.map(v => (typeof v === 'number' ? v : v.v)));
 
+// A metric object whose g takes only x (g(x) -> nested numbers) is a
+// plain numeric metric: the engine takes its derivatives by finite
+// differences (fdJet). A g with two or more parameters gets exact jets.
+const isPlain = m => m.g.length < 2 && !m.exact;
+
 // Numeric g_ij at x.
 export function metricAt(m, x, params) {
   m = getMetric(m);
+  if (isPlain(m)) return m.g(x);
   return toNum(NUM, m.g(x, NUM, paramsOf(m, params)));
+}
+
+// Fourth-order central differences for a plain metric g(x).
+function fdJet(m, x, order) {
+  const n = x.length, h = 1e-3 * Math.max(1, ...x.map(Math.abs));
+  const G = y => m.g(y);
+  const shift = (a, da, b, db) => { const y = x.slice(); y[a] += da; if (b != null) y[b] += db; return G(y); };
+  const W = [[-2, 1 / 12], [-1, -8 / 12], [1, 8 / 12], [2, -1 / 12]];
+  const g = G(x);
+  const dg = [];
+  for (let k = 0; k < n; k++) {
+    const acc = g.map(r => r.map(() => 0));
+    for (const [o, w] of W) { const s = shift(k, o * h); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) acc[i][j] += w * s[i][j] / h; }
+    dg.push(acc);
+  }
+  let d2g = null;
+  if (order >= 2) {
+    d2g = [];
+    for (let k = 0; k < n; k++) {
+      d2g.push([]);
+      for (let l = 0; l < n; l++) {
+        const acc = g.map(r => r.map(() => 0));
+        if (k === l) {
+          const C = [[-2, -1 / 12], [-1, 16 / 12], [0, -30 / 12], [1, 16 / 12], [2, -1 / 12]];
+          for (const [o, w] of C) { const s = o ? shift(k, o * h) : g; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) acc[i][j] += w * s[i][j] / (h * h); }
+        } else {
+          for (const [a, wa] of W) for (const [b, wb] of W) { const s = shift(k, a * h, l, b * h); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) acc[i][j] += wa * wb * s[i][j] / (h * h); }
+        }
+        d2g[k].push(acc);
+      }
+    }
+  }
+  return { g, dg, d2g };
 }
 export function inverseMetricAt(m, x, params) { return matInverse(metricAt(m, x, params)); }
 
 // { g, dg, d2g }: dg[k][i][j] = d_k g_ij, d2g[k][l][i][j] = d_k d_l g_ij.
 export function metricJet(m, x, params, order = 2) {
   m = getMetric(m);
+  if (isPlain(m)) return fdJet(m, x, order);
   const n = m.dim, F = jetOps(n, order);
   const G = m.g(variables(F, x), F, paramsOf(m, params));
   const g = [], dg = [], d2g = order >= 2 ? [] : null;

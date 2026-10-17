@@ -112,12 +112,12 @@ function sameShape(a, b, what) {
   if (a.shape.length !== b.shape.length || a.shape.some((n, i) => n !== b.shape[i]))
     throw new TensorError(`${what}: shapes [${a.shape}] and [${b.shape}] differ`);
 }
-const T = x => Tensor.from(x);
+const asT = x => Tensor.from(x);
 const slotName = v => v === 'u' ? 'upper' : 'lower';
 
 // Outer (tensor) product: shape and variance concatenate.
 export function product(a, b) {
-  a = T(a); b = T(b);
+  a = asT(a); b = asT(b);
   const out = new Tensor(a.shape.concat(b.shape), a.variance.concat(b.variance));
   const nb = b.data.length;
   for (let i = 0; i < a.data.length; i++) for (let j = 0; j < nb; j++) out.data[i * nb + j] = a.data[i] * b.data[j];
@@ -127,7 +127,7 @@ export function product(a, b) {
 // Contract slot i with slot j (one upper, one lower). opts.force allows
 // two slots of the same variance (Euclidean, orthonormal frame only).
 export function contract(t, i, j, opts = {}) {
-  t = T(t);
+  t = asT(t);
   if (i === j) throw new TensorError('contract needs two different slots');
   if (i < 0 || j < 0 || i >= t.rank || j >= t.rank) throw new TensorError(`slots ${i} and ${j} are not both in a rank ${t.rank} tensor`);
   if (t.shape[i] !== t.shape[j]) throw new TensorError(`slots ${i} and ${j} have different ranges (${t.shape[i]} and ${t.shape[j]})`);
@@ -148,7 +148,7 @@ export function contract(t, i, j, opts = {}) {
 
 // Move slot `slot` with a rank-2 matrix M: out[..a..] = sum_b M[a][b] t[..b..].
 function applyMatrixToSlot(t, slot, M, newVar) {
-  const m = T(M), n = t.shape[slot];
+  const m = asT(M), n = t.shape[slot];
   if (m.rank !== 2 || m.shape[0] !== n || m.shape[1] !== n) throw new TensorError(`slot ${slot} has range ${n} but the matrix is [${m.shape}]`);
   const out = new Tensor(t.shape, t.variance.map((v, k) => k === slot ? newVar : v));
   const idx2 = new Array(t.rank);
@@ -163,19 +163,19 @@ function applyMatrixToSlot(t, slot, M, newVar) {
 
 // raise(t, slot, gInv): T^a = g^{ab} T_b.  lower(t, slot, g): T_a = g_{ab} T^b.
 export function raise(t, slot, gInv) {
-  t = T(t);
+  t = asT(t);
   if (t.variance[slot] !== 'd') throw new TensorError(`slot ${slot} is already upper`);
   return applyMatrixToSlot(t, slot, gInv, 'u');
 }
 export function lower(t, slot, g) {
-  t = T(t);
+  t = asT(t);
   if (t.variance[slot] !== 'u') throw new TensorError(`slot ${slot} is already lower`);
   return applyMatrixToSlot(t, slot, g, 'd');
 }
 
 // transpose(t, perm): out slot k is input slot perm[k]. transpose(t, i, j) swaps two slots.
 export function transpose(t, perm, j) {
-  t = T(t);
+  t = asT(t);
   if (typeof perm === 'number') {
     const i = perm; perm = t.shape.map((_, k) => k);
     if (j == null) j = i + 1;
@@ -203,7 +203,7 @@ export function permutations(arr) {
 }
 
 function symCore(t, slots, anti) {
-  t = T(t);
+  t = asT(t);
   if (slots == null) slots = t.shape.map((_, k) => k);
   if (slots.length < 2) return t.clone();
   const v0 = t.variance[slots[0]];
@@ -229,7 +229,7 @@ export function antisymmetrize(t, slots) { return symCore(t, slots, true); }
 // trace(t) of a mixed rank-2 tensor. trace(t, i, j, metric) uses the metric
 // (g for two upper slots, gInv for two lower slots) when the variances match.
 export function trace(t, i = 0, j = 1, metric) {
-  t = T(t);
+  t = asT(t);
   if (t.variance[i] !== t.variance[j]) return contract(t, i, j);
   if (!metric) throw new TensorError(`slots ${i} and ${j} are both ${slotName(t.variance[i])}; give the metric to take the trace`);
   const u = t.variance[j] === 'd' ? raise(t, j, metric) : lower(t, j, metric);
@@ -245,7 +245,7 @@ export function trace(t, i = 0, j = 1, metric) {
 export function einsum(spec, ...args) {
   let opts = {};
   if (args.length && args[args.length - 1] && args[args.length - 1].strict !== undefined && !args[args.length - 1].shape && !Array.isArray(args[args.length - 1])) opts = args.pop();
-  const ts = args.map(a => T(a));
+  const ts = args.map(a => asT(a));
   spec = spec.replace(/\s+/g, '');
   let [lhs, rhs] = spec.split('->');
   const ins = lhs.split(',');
@@ -293,9 +293,9 @@ export function einsum(spec, ...args) {
 // Transform every slot. J[a][b] = dx'^a/dx^b. Upper slots use J, lower
 // slots use (J^-1) transposed. Jinv is optional (computed when absent).
 export function transform(t, J, Jinv) {
-  t = T(t);
-  const j = T(J);
-  const ji = Jinv ? T(Jinv) : Tensor.fromNested(matInverse(j.toNested()));
+  t = asT(t);
+  const j = asT(J);
+  const ji = Jinv ? asT(Jinv) : Tensor.fromNested(matInverse(j.toNested()));
   const jiT = transpose(ji, [1, 0]);
   let out = t;
   for (let s = 0; s < t.rank; s++) out = applyMatrixToSlot(out, s, t.variance[s] === 'u' ? j : jiT, t.variance[s]);
@@ -347,3 +347,20 @@ export function matDet(A) {
 export function matMul(A, B) {
   return A.map(r => B[0].map((_, j) => r.reduce((s, x, k) => s + x * B[k][j], 0)));
 }
+
+// ---- helpers with the names of library/stub-math.js (so LIBRARY can switch) --
+// T(x, variance) copies x (Tensor, Components, nested array or number) and
+// may set a new variance. zeros/get/toNested/maxAbs/sub/scale work on any Components.
+export function T(x, variance) {
+  if (typeof variance === 'string') variance = variance.split('');
+  const t = Tensor.from(x, variance).clone();
+  if (variance && (x instanceof Tensor || (x && x.shape))) t.variance = variance.slice();
+  return t;
+}
+export function zeros(shape, variance) { return new Tensor(shape, variance); }
+export function get(t, ...idx) { return asT(t).get(...idx); }
+export function toNested(t) { return asT(t).toNested(); }
+export function maxAbs(t) { let m = 0; for (const v of t.data) m = Math.max(m, Math.abs(v)); return m; }
+export function sub(a, b) { return asT(a).sub(asT(b)); }
+export function scale(a, k) { return asT(a).scale(k); }
+export function transposeM(A) { return A[0].map((_, j) => A.map(r => r[j])); }

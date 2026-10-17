@@ -19,7 +19,7 @@
 export const NUM = {
   c: x => x, add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, div: (a, b) => a / b,
   neg: a => -a, sin: Math.sin, cos: Math.cos, sqrt: Math.sqrt, exp: Math.exp, log: Math.log,
-  pow: (a, k) => a ** k, sq: a => a * a, val: a => a, tanh: Math.tanh, cosh: Math.cosh, sinh: Math.sinh,
+  pow: (a, k) => a ** k, sq: a => a * a, inv: a => 1 / a, val: a => a, tanh: Math.tanh, cosh: Math.cosh, sinh: Math.sinh,
 };
 
 export function jetOps(n, order = 2) {
