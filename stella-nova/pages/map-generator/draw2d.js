@@ -4,15 +4,20 @@
 // drawMap(ctx, city, frame, view)
 //   frame   playback.js frameAt(), or fullFrame(city) for the finished map
 //   view    { w, h (CSS px), dpr, s (px per map unit), ox, oy (px of map 0,0),
-//             fieldAt (gen.js fieldSampler) or null, layers: {field, lots} }
+//             fieldAt (gen.js fieldSampler) or null, layers: {field, lots, terrain},
+//             terrain: { a, b, k } or null: two images of the terrain under the
+//             domain (main.js makes them from terrain.js underlay and
+//             snapshotRaster) and the blend k of b over a }
 // toSVG(city, opts) -> string, the finished map in map units (y down)
 // toJSON(city) -> string, the city data with the credit line
 // heightColour(h) -> [r, g, b] 0..1, the colour ramp of city-atlas
 //   buildings.wgsl (grey blue, blue, sand, warm), so the 2D lots and the
 //   3D buildings agree.
 //
-// Layers, bottom to top: land, river, sea, coastline, parks, blocks, lots
-// (by height), roads (minor, major, main), field crosses.
+// Layers, bottom to top: land (or the terrain underlay: hillshade, biome
+// tint, then contour lines), river, sea, coastline, parks, blocks, lots
+// (by height), roads (minor, major, main), field crosses. A terrain sea is
+// an even-odd polygon of several rings (gen.js), so it fills 'evenodd'.
 //
 // grep: export const PAL  export function heightColour  export function drawMap
 //       export function toSVG  export function toJSON  export function fullFrame
@@ -87,6 +92,15 @@ export function drawMap(ctx, city, frame, view) {
   ctx.fillRect(d.x, d.y, d.w, d.h);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  const ter = city.terrain && layers.terrain !== false ? view.terrain : null;
+  if (ter && ter.a) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(ter.a, d.x, d.y, d.w, d.h);
+    if (ter.b && ter.k > 0) { ctx.globalAlpha = Math.min(1, ter.k); ctx.drawImage(ter.b, d.x, d.y, d.w, d.h); }
+    ctx.restore();
+  }
+  if (ter && (frame.terrain === undefined || frame.terrain >= 1)) drawContours(ctx, city.terrain.contours, px);
 
   // water: the river first, so the sea covers its mouth
   if (frame.river > 0 && city.river.length > 2) {
@@ -100,8 +114,17 @@ export function drawMap(ctx, city, frame, view) {
     ctx.save();
     if (frame.coast < 1) revealClip(ctx, city, frame.coast);
     ctx.fillStyle = PAL.sea;
-    ctx.beginPath(); poly(ctx, city.sea); ctx.fill();
-    if (city.coastline.length > 1) {
+    if (city.terrain) {
+      // the underlay already shades the depth: a tint over it
+      if (ter && ter.a) ctx.globalAlpha = 0.55;
+      ctx.beginPath(); poly(ctx, city.sea); ctx.fill('evenodd');
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = PAL.shore; ctx.lineWidth = 1.2 * px;
+      ctx.beginPath(); for (const r of city.terrain.waterRings) { poly(ctx, r); } ctx.stroke();
+    } else {
+      ctx.beginPath(); poly(ctx, city.sea); ctx.fill();
+    }
+    if (!city.terrain && city.coastline.length > 1) {
       ctx.strokeStyle = PAL.shore; ctx.lineWidth = 1.4 * px;
       ctx.beginPath(); path(ctx, city.coastline); ctx.stroke();
     }
@@ -168,6 +191,19 @@ export function drawMap(ctx, city, frame, view) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
+// Contour lines: minor faint, every fifth level brighter.
+function drawContours(ctx, c, px) {
+  if (!c) return;
+  for (const [segs, a, w] of [[c.minor, 0.09, 0.8], [c.major, 0.2, 1.1]]) {
+    if (!segs || !segs.length) continue;
+    ctx.strokeStyle = `rgba(226,220,200,${a})`;
+    ctx.lineWidth = w * px;
+    ctx.beginPath();
+    for (let i = 0; i < segs.length; i += 4) { ctx.moveTo(segs[i], segs[i + 1]); ctx.lineTo(segs[i + 2], segs[i + 3]); }
+    ctx.stroke();
+  }
+}
+
 // Fit the view rectangle [0, view.w] x [0, view.h] of the city into a
 // w x h box with a margin. Returns { s, ox, oy }.
 export function fitView(city, w, h, margin = 0, band = null) {
@@ -186,9 +222,14 @@ export function toSVG(city, opts = {}) {
   out.push(`<title>${opts.title || 'City'} (seed ${city.seed})</title>`);
   out.push(`<desc>${CREDIT}</desc>`);
   out.push(`<rect x="0" y="0" width="${w}" height="${h}" fill="${PAL.land}"/>`);
+  if (city.terrain) {
+    const c = city.terrain.contours, seg = (a) => { const o = []; for (let i = 0; i < a.length; i += 4) o.push(`M${n2(a[i])} ${n2(a[i + 1])}L${n2(a[i + 2])} ${n2(a[i + 3])}`); return o.join(''); };
+    out.push(`<g id="contours" fill="none" stroke="#e2dcc8" data-interval="${c.interval}"><path stroke-opacity="0.12" stroke-width="0.8" d="${seg(c.minor)}"/><path stroke-opacity="0.26" stroke-width="1.1" d="${seg(c.major)}"/></g>`);
+  }
   if (city.river.length > 2) out.push(`<polygon id="river" points="${pts(city.river)}" fill="${PAL.river}"/>`);
-  if (city.sea.length > 2) out.push(`<polygon id="sea" points="${pts(city.sea)}" fill="${PAL.sea}"/>`);
-  if (city.coastline.length > 1) out.push(`<polyline id="coastline" points="${pts(city.coastline)}" fill="none" stroke="${PAL.shore}" stroke-width="1.4"/>`);
+  if (city.sea.length > 2) out.push(`<polygon id="sea" points="${pts(city.sea)}" fill="${PAL.sea}"${city.terrain ? ' fill-rule="evenodd"' : ''}/>`);
+  if (city.terrain) for (const l of city.coastlines || []) out.push(`<polyline class="coastline" points="${pts(l)}" fill="none" stroke="${PAL.shore}" stroke-width="1.4"/>`);
+  else if (city.coastline.length > 1) out.push(`<polyline id="coastline" points="${pts(city.coastline)}" fill="none" stroke="${PAL.shore}" stroke-width="1.4"/>`);
   out.push(`<g id="parks" fill="${PAL.park}" stroke="${PAL.parkEdge}">${city.parks.map((p) => `<polygon points="${pts(p)}"/>`).join('')}</g>`);
   out.push(`<g id="blocks" fill="${PAL.block}">${city.blocks.map((p) => `<polygon points="${pts(p)}"/>`).join('')}</g>`);
   out.push(`<g id="lots" stroke="#14161a" stroke-width="0.8">${city.lots.map((p, i) => `<polygon points="${pts(p)}" fill="${css(heightColour(city.buildings[i].h))}" data-h="${city.buildings[i].h}"/>`).join('')}</g>`);
@@ -213,5 +254,11 @@ export function toJSON(c) {
     seed: c.seed, options: c.opts, view: c.view, domain: c.domain, fields: c.fields,
     sea: c.sea, coastline: c.coastline, river: c.river, roads: c.roads, parks: c.parks,
     blocks: c.blocks, lots: c.lots, lotBlock: c.lotBlock, buildings: c.buildings.map((b) => b.h), events: c.events,
+    terrain: c.terrain ? {
+      generator: 'lib/dla-terrain.js (DLA ridges after fogleman/dlaf, MIT; branched flow; erosion)',
+      preset: c.terrain.preset, options: c.terrain.opts, site: c.terrain.site, seaLevel: c.terrain.seaLevel,
+      grade: c.terrain.grade, river: c.terrain.river ? { line: c.terrain.river.line, halfWidth: c.terrain.river.halfW } : null,
+      coastlines: c.coastlines,
+    } : undefined,
   });
 }
