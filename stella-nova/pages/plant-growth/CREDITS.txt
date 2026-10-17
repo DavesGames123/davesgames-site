@@ -1,0 +1,46 @@
+Plant Growth (stella-nova/pages/plant-growth)
+==============================================
+
+All code in this folder is our own. It uses ideas and one engine from the
+sources below.
+
+1. Space colonisation (the branches)
+   A. Runions, B. Lane, P. Prusinkiewicz.
+   "Modeling Trees with a Space Colonization Algorithm".
+   Eurographics Workshop on Natural Phenomena, 2007.
+   grow.js is our own code from the description in the paper: attractor
+   points in a crown envelope, an influence radius, a kill distance, the
+   mean direction to the attractors, and the pipe model for the radii.
+
+2. dlaf (the roots)
+   Michael Fogleman, https://github.com/fogleman/dlaf
+   MIT licence, Copyright (C) 2019 Michael Fogleman.
+   roots.js grows the roots with lib/dla-engine.js, the JavaScript port of
+   the dlaf Model (its walk, join test, parameters and hooks). The MIT
+   notice is in the header of lib/dla-engine.js and is repeated here:
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to permit
+   persons to whom the Software is furnished to do so, subject to the
+   following conditions:
+
+   The above copyright notice and this permission notice shall be included
+   in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+   NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+   DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+   OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+3. three.js r160 (the 3D render)
+   https://threejs.org, MIT licence, Copyright 2010-2023 three.js authors.
+   Loaded from stella-nova/vendor/three@0.160.0.
+
+The leaf, flower, grass and soil textures are drawn at run time on a
+canvas by render.js. The page makes no network calls.
