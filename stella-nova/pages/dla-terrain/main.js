@@ -88,7 +88,7 @@ const app = {
   opts: {}, preset: null,
   tod: clamp(+(Q.get('tod') ?? 0.27), 0, 1), todSpeed: 0.07, playing: true,
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
-  qualityIndex: clamp(+(Q.get('q') ?? (coarse ? 0 : 2)), 0, 3),   // phones start on Low
+  qualityIndex: clamp(Math.round(+(Q.get('q') ?? (coarse ? 0 : 2))) || 0, 0, 3),   // phones start on Low; a bad ?q= is Low
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
   camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50 },
   terrain: null, gen: null, skyT: 0, skySpeed: 1, lastInput: -1e9,
@@ -386,6 +386,9 @@ app.generate = () => {
     cam.setMode('orbit', world); app.camMode = 'orbit';
     cam.frameWorld({ size: ws, midH: 0 }, FRAME_K);
     cam.orbit.pitch = FRAME_PITCH;
+    // big worlds: at most 15 km out, so the camera stays under most cloud
+    // tops and the land does not shrink to a strip under the horizon
+    cam.orbit.dist = Math.min(cam.orbit.dist, 15000);
     ui.syncView();
   }
   if (worker) worker.postMessage({ type: 'generate', id, opts: o });
