@@ -243,7 +243,7 @@ export function createScene({ canvas, cap, coarse, onNoGL }) {
   function addRock(rk, meshRock, gen = rockGen) {
     const key = rockKey(rk);
     const put = (geo) => { if (gen !== rockGen) return; const m = new THREE.Mesh(geo, rockMat); m.userData.rock = rk; rocks.add(m); };
-    if (rockCache.has(key)) { put(rockCache.get(key)); return; }
+    if (rockCache.has(key)) { const g0 = rockCache.get(key); rockCache.delete(key); rockCache.set(key, g0); put(g0); return; }
     meshRock(rk).then(r => {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(r.positions, 3));
@@ -379,7 +379,10 @@ export function createScene({ canvas, cap, coarse, onNoGL }) {
     if (ch.poly) { ch.poly.geometry.dispose(); }
     if (npol) {
       const pg = new THREE.InstancedBufferGeometry();
-      pg.setAttribute('position', tplPos); pg.setAttribute('aT', tplAT); pg.setIndex(tplIndex);
+      // own copies of the small template: three.js deletes the GPU buffers of
+      // every attribute of a disposed geometry, so a shared one would break
+      // the other chunks
+      pg.setAttribute('position', tplPos.clone()); pg.setAttribute('aT', tplAT.clone()); pg.setIndex(tplIndex.clone());
       const ib = new THREE.InstancedInterleavedBuffer(PP, 8, 1);
       pg.setAttribute('iPos', new THREE.InterleavedBufferAttribute(ib, 3, 0));
       pg.setAttribute('iNrm', new THREE.InterleavedBufferAttribute(ib, 3, 3));
