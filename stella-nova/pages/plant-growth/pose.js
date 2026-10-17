@@ -79,7 +79,8 @@ export function createPoser() {
   const WP = [-WD[2], 0, WD[0]];         // across the wind
   return {
     reset() { rShown.fill(0); },
-    // o: { clock, time (s), dt (s), wind 0..1, mode, range }. outPos and
+    // o: { clock, time (s), dt (s), wind 0..1, mode, range, ageRef (the
+    // clock of the newest node, for the age colour; default clock) }. outPos and
     // outCol are Float32Arrays of 4 floats per node.
     fill(v, o, outPos, outCol) {
       const n = v.count, P = v.pos, s = v.scale, par = v.parent, R = v.radius, born = v.born;
@@ -110,7 +111,7 @@ export function createPoser() {
           outPos[k + 2] = outPos[p * 4 + 2] + sz * e + bz;
         }
         outPos[k + 3] = g > 0 ? rShown[i] : 0;
-        outCol[k] = colourT(v, i, o.mode, o.clock, o.range);
+        outCol[k] = colourT(v, i, o.mode, o.ageRef ?? o.clock, o.range);
         outCol[k + 1] = v.light ? v.light[i] : 0;
         outCol[k + 2] = p < 0 ? i : p;
         outCol[k + 3] = g;
