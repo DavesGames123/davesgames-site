@@ -21,8 +21,13 @@
 //          values move from the old preset to the new one over FRONT_S
 //          seconds. Cloud comes first and rain follows it; rain stops first
 //          and the cloud breaks up after it. Pass the previous result as
-//          `prev` to get the transition. Without `prev` the result is the
-//          steady state of the preset.
+//          `prev` to get the transition. When the sixth argument is not a
+//          previous result, it is a set of overrides of the preset (for
+//          example { cover: 0.5 }), and the module keeps the last result
+//          itself: a call 0 .. 2 s after the last one continues its front.
+//          A call at the same t or after a jump gives the steady state.
+//  CORE    the result also has the field names of gpu/globals.js
+//          packGlobals (sunIlluminance, fogDensity, cover, rain, ...).
 //  GROUND  wetness builds up in rain and fog and dries in sun and wind.
 //          Snow cover builds up in snowfall and melts above 0 C.
 //  FLASH   lightning strokes come from a seeded hash of t, so a replay is
@@ -58,11 +63,11 @@ export const WEATHER = Object.freeze([
   { id: 'cloudy',       label: 'Cloudy',           cover: 0.58, rain: 0,    snow: 0,   storm: 0.05, fog: 4e-5,   wind: 6,  cumulus: 0.75, cirrus: 0.5, mie: 1.3, temp: 0,  valley: 0.5 },
   { id: 'overcast',     label: 'Overcast',         cover: 0.92, rain: 0,    snow: 0,   storm: 0.1,  fog: 7e-5,   wind: 6,  cumulus: 0.2, cirrus: 0.2,  mie: 2.0, temp: -2, valley: 0.3 },
   { id: 'fog',          label: 'Fog',              cover: 0.7,  rain: 0,    snow: 0,   storm: 0,    fog: 6e-3,   wind: 1,  cumulus: 0.0, cirrus: 0.0,  mie: 4.0, temp: -3, valley: 1.6 },
-  { id: 'drizzle',      label: 'Drizzle',          cover: 0.88, rain: 0.25, snow: 0,   storm: 0.1,  fog: 2.2e-4, wind: 5,  cumulus: 0.25, cirrus: 0.1, mie: 2.5, temp: -3, valley: 0.6 },
-  { id: 'rain',         label: 'Rain',             cover: 0.95, rain: 0.75, snow: 0,   storm: 0.3,  fog: 3.5e-4, wind: 8,  cumulus: 0.45, cirrus: 0.1, mie: 2.5, temp: -4, valley: 0.3 },
-  { id: 'thunderstorm', label: 'Thunderstorm',     cover: 0.9,  rain: 1.0,  snow: 0,   storm: 1.0,  fog: 4e-4,   wind: 13, cumulus: 1.0, cirrus: 0.6,  mie: 2.2, temp: -5, valley: 0.2 },
-  { id: 'snow',         label: 'Snow',             cover: 0.9,  rain: 0,    snow: 0.6, storm: 0.1,  fog: 4e-4,   wind: 4,  cumulus: 0.3, cirrus: 0.1,  mie: 2.0, temp: -14, valley: 0.4 },
-  { id: 'blizzard',     label: 'Blizzard',         cover: 1.0,  rain: 0,    snow: 1.0, storm: 0.5,  fog: 2.5e-3, wind: 17, cumulus: 0.4, cirrus: 0.0,  mie: 3.0, temp: -20, valley: 0.0 },
+  { id: 'drizzle',      label: 'Drizzle',          cover: 0.88, rain: 0.25, snow: 0,   storm: 0.1,  fog: 1.3e-4, wind: 5,  cumulus: 0.25, cirrus: 0.1, mie: 2.5, temp: -3, valley: 0.6 },
+  { id: 'rain',         label: 'Rain',             cover: 0.95, rain: 0.75, snow: 0,   storm: 0.3,  fog: 1.6e-4, wind: 8,  cumulus: 0.45, cirrus: 0.1, mie: 2.5, temp: -4, valley: 0.3 },
+  { id: 'thunderstorm', label: 'Thunderstorm',     cover: 0.9,  rain: 1.0,  snow: 0,   storm: 1.0,  fog: 1.8e-4,   wind: 13, cumulus: 1.0, cirrus: 0.6,  mie: 2.2, temp: -5, valley: 0.2 },
+  { id: 'snow',         label: 'Snow',             cover: 0.9,  rain: 0,    snow: 0.6, storm: 0.1,  fog: 2.6e-4,   wind: 4,  cumulus: 0.3, cirrus: 0.1,  mie: 2.0, temp: -14, valley: 0.4 },
+  { id: 'blizzard',     label: 'Blizzard',         cover: 1.0,  rain: 0,    snow: 1.0, storm: 0.5,  fog: 1.6e-3, wind: 17, cumulus: 0.4, cirrus: 0.0,  mie: 3.0, temp: -20, valley: 0.0 },
   { id: 'golden-haze',  label: 'Golden hour haze', cover: 0.18, rain: 0,    snow: 0,   storm: 0,    fog: 1.1e-4, wind: 2,  cumulus: 0.9, cirrus: 0.6,  mie: 3.5, temp: 3,  valley: 1.2 },
 ]);
 const BY_ID = new Map(WEATHER.map((w) => [w.id, w]));
@@ -222,14 +227,23 @@ function temperatureC(tod, season, latitude, wx, sunElev) {
 }
 
 // The whole SKY state. See the header for the arguments.
-export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, prev = null) {
+let LAST = null;   // the last result, for callers that do not pass prev
+
+export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, prevOrOver = null) {
   tod = ((tod % 1) + 1) % 1;
   season = ((season % 1) + 1) % 1;
   const id = BY_ID.has(weatherId) ? weatherId : 'clear';
+  let prev = null, over = null;
+  if (prevOrOver && prevOrOver.front && typeof prevOrOver.t === 'number') prev = prevOrOver;
+  else {
+    over = prevOrOver;
+    if (!(over && over.stateless) && LAST && t - LAST.t > 0 && t - LAST.t <= 2) prev = LAST;
+  }
   const dt = prev && t >= prev.t && t - prev.t < 600 ? t - prev.t : null;
 
   // ---- the front -----------------------------------------------------------
   let from, to = presetVec(id), progress = 1;
+  if (over) for (const k of KEYS) if (typeof over[k] === 'number') to[k] = over[k];
   if (dt !== null) {
     if (prev.weatherId !== id) {             // a new front starts from the values now
       from = { ...prev.wx };
@@ -306,7 +320,7 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
   const burn = 1 - smooth(4, 22, sun.elevation);
   const valleyFog = clamp(wx.valley * (0.25 + 0.75 * morning) * burn * (sun.elevation > -18 ? 1 : 0.6) * (1 - smooth(4, 12, speed)), 0, 1.5);
 
-  return {
+  const out = {
     t, tod, season, latitude, weatherId: id,
     label: (BY_ID.get(id) || {}).label,
     front: { from, to, progress },
@@ -322,8 +336,18 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
     wetness: wet, snowCover, temperature: tempC,
     valleyFog, hourDeg,
     flash, bolt: flashObj.bolt,
-    exposureHint: Math.log2(Math.max(1e-4, (amb[0] + amb[1] + amb[2]) / 3 + 0.1 * (sunColor[1]))),
+    // a linear exposure that maps this light to mid grey; night is kept
+    // darker than day (capped), so a moonlit scene still reads as night
+    exposureHint: Math.min(0.55 / ((amb[0] + 2 * amb[1] + amb[2]) / 4 * 0.9 + 0.02 * sunColor[1] + 1e-4), 45),
   };
+  // the names of gpu/globals.js packGlobals (CORE)
+  Object.assign(out, {
+    sunIlluminance: out.sunScale, moonIlluminance: moonScale, fogDensity: wx.fog,
+    gust, cover: wx.cover, rain: wx.rain, snow: wx.snow, lightning: flash,
+    storminess: wx.storm,
+  });
+  if (!over || !over.stateless) LAST = out;
+  return out;
 }
 
 // Copy the SKY fields into the Globals Float32Array. CORE owns the rest
@@ -347,7 +371,7 @@ export function createSky(opts = {}) {
   let prev = null;
   return {
     update(tod, weatherId, season, latitude, t) {
-      prev = skyState(tod, weatherId, season, latitude, t, prev);
+      prev = skyState(tod, weatherId, season, latitude, t, prev || { stateless: true });
       return prev;
     },
     get state() { return prev; },
