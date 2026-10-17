@@ -21,6 +21,10 @@
 //      colorIndexTex(tex, cls)  TeX with \class{iN}{..}; cls(sym) -> 'iN'
 //      expandSumTex(tex, sym, n, cls)
 //      substituteIndex(tex, sym, value, cls)
+//      remapClasses(tex, fromSlots, cls)  \class{iK} of another colour map
+//                               (MATH display TeX) -> the palette class
+//      plainLabel(text)         a step label with $TeX$ as plain Unicode,
+//                               for one-line HTML (player, step list)
 // ============================================================================
 
 const NOT_INDEX = new Set(['prime', 'cdots', 'ldots', 'dots', 'cdot', 'quad', 'qquad', ',', ';', ' ', '!', 'circ', 'ast', 'star', 'dagger', 'top', 'infty', 'partial', 'nabla']);
@@ -194,4 +198,30 @@ function expandSide(tex, sym, n, cls) {
     return `${sign}\\left(${parts.join(' + ')}\\right)`;
   });
   return out.join(' ').trim();
+}
+
+// fromSlots: Map(sym -> K) of the colour map that wrote the TeX (MATH
+// indexColorMap). Each \class{iK} becomes \class{cls(sym)} of the sym with
+// slot K. A K with no sym, or with two syms, stays.
+export function remapClasses(tex, fromSlots, cls) {
+  if (!tex || !fromSlots) return tex || '';
+  const bySlot = new Map();
+  for (const [sym, k] of fromSlots) { if (bySlot.has(k)) bySlot.set(k, null); else bySlot.set(k, sym); }
+  return tex.replace(/\\class\{i([0-7])\}/g, (m, k) => { const sym = bySlot.get(+k); return sym ? `\\class{${cls(sym)}}` : m; });
+}
+
+const GREEK_U = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ',
+  mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  partial: '∂', nabla: '∇', infty: '∞', cdot: '·', times: '×', otimes: '⊗', to: '→', le: '≤', ge: '≥', ne: '≠', approx: '≈', sum: 'Σ', int: '∫', prime: '′', ldots: '…', cdots: '⋯' };
+
+export function plainLabel(text) {
+  return String(text || '').replace(/\$\$?([^$]*)\$\$?/g, (m, t) => t
+    .replace(/\\class\{[^}]*\}/g, '')
+    .replace(/\\(?:frac|tfrac)\{([^}]*)\}\{([^}]*)\}/g, '$1/$2')
+    .replace(/\\(?:mathrm|text|operatorname|mathbf|vec|hat|tilde|bar)\{([^}]*)\}/g, '$1')
+    .replace(/\\([A-Za-z]+)/g, (q, n) => GREEK_U[n] || n)
+    .replace(/\\[,;:! ]/g, ' ')
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ').trim());
 }

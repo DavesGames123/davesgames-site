@@ -277,6 +277,13 @@ check('expand an Einstein sum', () => {
   assert.ok(long.includes('\\cdots') && long.includes('{767}') && long.startsWith('y_{i} ='));
 });
 
+check('remapClasses and plainLabel', () => {
+  const from = new Map([['j', 0], ['i', 1]]);
+  assert.equal(TC.remapClasses('A_{\\class{i0}{0}} B^{\\class{i1}{2}}', from, s => 'i' + (s === 'i' ? 5 : 6)), 'A_{\\class{i6}{0}} B^{\\class{i5}{2}}');
+  assert.equal(TC.plainLabel('The index $\\mu$ appears once in $T^{\\mu}{}_{\\nu}$.'), 'The index μ appears once in T^μ_ν.');
+  assert.equal(TC.plainLabel('Sum over $j$ from 0 to 1.'), 'Sum over j from 0 to 1.');
+});
+
 section('ops (playground)');
 let MATH = null;
 try { MATH = await import(join(ROOT, 'tensor/index.js')); } catch (e) { console.log('skip ops: MATH did not load: ' + e.message); }
@@ -309,6 +316,15 @@ if (MATH) {
     assert.equal(last(run('u^{i}', 'product', { tex: 'w_{j}' })), 'u^{i} w_{j}');
     assert.throws(() => run('v^{i}', 'expandSum'), /no summed index/);
     assert.equal(run('v^{i} w_{i}', 'expandSum').steps[0].sums[0].sym, 'i');
+  });
+  check('evaluate gives numbers through MATH traceEinstein', () => {
+    const tr = run('A^{i}{}_{j} v^{j}', 'evaluate');
+    assert.ok(tr.steps.length >= 2);
+    assert.ok(tr.steps.some(st => st.display && st.display.numeric), 'a step with numbers');
+    assert.ok(new Set(tr.steps.map(st => st.id)).size === tr.steps.length, 'unique step ids');
+    const tg = run('g_{ij} u^{i} w^{j}', 'evaluate');
+    assert.ok(tg.steps.length >= 2);
+    assert.throws(() => run('\\partial_{i} v^{i}', 'evaluate'), /no derivative/);
   });
   check('an equation is refused with a sentence', () => assert.throws(() => run('a_{i} = b_{i}', 'contract'), /Remove the =/));
 }
@@ -614,6 +630,7 @@ const mj = findMathJax();
 if (!mj) console.log('skip mathjax: mathjax-full not found (set MATHJAX_DIR)');
 else {
   const TV = await import(join(ROOT, 'ui/tex-view.js'));
+  const LB = await import(join(ROOT, 'ui/library-browser.js'));
   check('library traces: every step TeX and sum typesets', async () => {
     let lib = null;
     try { lib = await import(join(ROOT, 'library/index.js')); } catch (e) { console.log('     skip: library did not load'); return; }
@@ -625,14 +642,19 @@ else {
       for (const st of tr.steps) {
         for (const x of [st.before, st.after]) { mj(TV.exprTex(x, MATH)); n++; }
         if (st.sums && st.sums.length) { mj(TV.sumsTex(TV.exprTex(st.before, MATH, { colors: false }), st.sums)); n++; }
+        for (const part of LB.splitProse(st.label || '')) if (part.tex != null) { mj(TC.colorIndexTex(part.tex, s => P.indexClass(s))); n++; }
+        for (const key of ['expanded', 'numeric']) if (st.display && st.display[key]) {
+          const from = (() => { try { return MATH.indexColorMap(st.before); } catch (e) { return null; } })();
+          mj(TC.remapClasses(st.display[key], from, s => P.indexClass(s))); n++;
+        }
       }
     }
-    console.log(`     mathjax: ${n} step strings from ${list.length} entries`);
+    console.log(`     mathjax: ${n} step strings (expressions, sums, labels, MATH display) from ${list.length} entries`);
   });
   if (MATH) check('playground results typeset', async () => {
     const OPS = await import(join(ROOT, 'ui/ops.js'));
     let n = 0;
-    for (const [tex, op, args] of [['T^{\\mu}{}_{\\nu}', 'contract'], ['T^{\\mu}{}_{\\nu}', 'raise'], ['T^{\\mu}{}_{\\nu}', 'transform'], ['T_{\\mu\\nu}', 'symmetrize'], ['T_{ab}', 'antisymmetrize'], ['T^{\\mu}{}_{\\nu}', 'covariant'], ['u^{i}', 'product', { tex: 'w_{j}' }], ['v^{i} w_{i}', 'expandSum'], ['\\epsilon_{ijk} a^{j} b^{k}', 'expandSum']]) {
+    for (const [tex, op, args] of [['T^{\\mu}{}_{\\nu}', 'contract'], ['T^{\\mu}{}_{\\nu}', 'raise'], ['T^{\\mu}{}_{\\nu}', 'transform'], ['T_{\\mu\\nu}', 'symmetrize'], ['T_{ab}', 'antisymmetrize'], ['T^{\\mu}{}_{\\nu}', 'covariant'], ['u^{i}', 'product', { tex: 'w_{j}' }], ['v^{i} w_{i}', 'expandSum'], ['\\epsilon_{ijk} a^{j} b^{k}', 'expandSum'], ['A^{i}{}_{j} v^{j}', 'evaluate'], ['\\epsilon_{ijk} a^{j} b^{k}', 'evaluate']]) {
       const tr = OPS.buildOpTrace(MATH, MATH.parseIndexTex(tex), op, args || {}, { dim: 3 });
       P.setActive((await import(join(ROOT, 'main.js'))).traceSyms(tr, MATH));
       for (const st of tr.steps) {

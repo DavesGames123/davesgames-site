@@ -14,6 +14,11 @@
 //    sums        with "Write out sums" on, or for an expandSum step, the
 //                Einstein sums of the step (or of the expression) are
 //                written out term by term, values in the index colour.
+//                A MATH step with display.expanded uses that TeX (its
+//                colours are mapped to the palette with remapClasses).
+//    numbers     a MATH step with display.numeric shows the numbers of
+//                the step in one more line, for example (1)(5) + (2)(6) = 17.
+//    label       the step label is prose; its $TeX$ parts are typeset.
 //
 //  TeX SOURCE. An expression object goes through MATH toTex with a
 //  colorMap from palette.js, so the TeX colours match the diagram and 3D.
@@ -28,7 +33,8 @@
 //      createTexView(els, deps)    the view
 // ============================================================================
 import { indexSlot, indexClass } from '../palette.js';
-import { colorIndexTex, scriptIndices, expandSumTex } from './tex-color.js';
+import { colorIndexTex, scriptIndices, expandSumTex, remapClasses } from './tex-color.js';
+import { splitProse } from './library-browser.js';
 import { symLabel } from './lens.js';
 
 const isExpr = x => x && typeof x === 'object' && Array.isArray(x.terms);
@@ -81,7 +87,7 @@ const OP_NAMES = {
   substitute: 'substitute', relabel: 'rename indices', evaluate: 'evaluate',
 };
 
-// els: { label, before, op, opName, after, sum, info, caption, host }
+// els: { label, before, op, opName, after, sum, numeric, info, host }
 // deps: { typeset(el, tex, opts) -> Promise, math, dim() -> number }
 export function createTexView(els, deps) {
   const { typeset, math } = deps;
@@ -125,15 +131,45 @@ export function createTexView(els, deps) {
     return (expr && expr.dummies || []).map(s => ({ sym: typeof s === 'string' ? s : s.sym, range: [0, dim] }));
   }
 
+  // MATH display TeX was coloured with MATH's own map; recolour it.
+  function mathDisplay(step, key) {
+    const d = step && step.display && step.display[key];
+    if (!d) return '';
+    let from = null;
+    if (math && math.indexColorMap && isExpr(step.before)) { try { from = math.indexColorMap(step.before); } catch (e) { from = null; } }
+    return remapClasses(d, from, indexClass);
+  }
+
   function renderSums() {
     if (!els.sum) return;
     const want = sumsOn || (curStep && curStep.kind === 'expandSum');
+    if (want && curStep && curStep.display && curStep.display.expanded) { setTex(els.sum, mathDisplay(curStep, 'expanded')); return; }
     const src = curStep ? curStep.before : curExpr;
     const sums = want ? sumsFor(curStep, src) : [];
     if (!sums.length || !src) { setTex(els.sum, ''); return; }
     let tex = '';
     try { tex = sumsTex(plainTex(src), sums); } catch (e) { tex = ''; }
     setTex(els.sum, tex);
+  }
+
+  function renderNumeric() {
+    if (!els.numeric) return;
+    setTex(els.numeric, curStep ? mathDisplay(curStep, 'numeric') : '');
+  }
+
+  function renderLabel(text) {
+    if (!els.label) return;
+    els.label.replaceChildren();
+    const doc = els.label.ownerDocument;
+    for (const part of splitProse(text || '')) {
+      if (part.tex == null) { els.label.appendChild(doc.createTextNode(part.text)); continue; }
+      const span = doc.createElement('span');
+      span.className = 'sci-sym';
+      span.textContent = part.tex;
+      els.label.appendChild(span);
+      const t = part.tex.includes('\\class{i') ? part.tex : colorIndexTex(part.tex, indexClass);
+      Promise.resolve(typeset(span, t, { display: false })).catch(() => {});
+    }
   }
 
   function pulse(focus) {
@@ -144,7 +180,7 @@ export function createTexView(els, deps) {
     show(expr) {
       curStep = null; curExpr = expr;
       host.classList.remove('stepping');
-      if (els.label) els.label.textContent = '';
+      renderLabel('');
       if (els.op) els.op.hidden = true;
       setTex(els.before, '');
       // play() left the step styles on the boxes; a still expression has none.
@@ -153,13 +189,14 @@ export function createTexView(els, deps) {
       pulse([]);
       info(expr);
       renderSums();
+      renderNumeric();
       return p;
     },
     onStep(step) {
       curStep = step; curExpr = step ? step.after : curExpr;
       if (!step) return Promise.resolve();
       host.classList.add('stepping');
-      if (els.label) els.label.textContent = step.label || '';
+      renderLabel(step.label || '');
       if (els.op) els.op.hidden = false;
       if (els.opName) els.opName.textContent = OP_NAMES[step.kind] || step.kind || '';
       pulse(step.focus);
@@ -167,6 +204,7 @@ export function createTexView(els, deps) {
       const a = setTex(els.before, exprTex(step.before, math));
       const b = setTex(els.after, exprTex(step.after, math));
       renderSums();
+      renderNumeric();
       return Promise.all([a, b]);
     },
     play(step, t) {

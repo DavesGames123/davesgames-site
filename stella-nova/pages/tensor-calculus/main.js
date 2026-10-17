@@ -54,7 +54,7 @@ import { renderLens, symsFromSlot, symLabel } from './ui/lens.js';
 import { createPhone } from './ui/phone.js';
 import { renderCredits } from './ui/credits.js';
 import { createSceneControls } from './ui/scene-controls.js';
-import { scriptIndices } from './ui/tex-color.js';
+import { scriptIndices, plainLabel } from './ui/tex-color.js';
 import * as palette from './palette.js';
 
 // Scene ids that LIBRARY and LEARN use, and the VIZ id for each when the
@@ -130,7 +130,7 @@ export async function boot(opts = {}) {
   const stage = $('stage');
   const tex = createTexView({
     host: $('texBody'), label: $('texStepLabel'), before: $('texBefore'), op: $('texOp'), opName: $('texOpName'),
-    after: $('texAfter'), sum: $('texSum'), info: $('texIndexInfo'),
+    after: $('texAfter'), sum: $('texSum'), numeric: $('texNumeric'), info: $('texIndexInfo'),
   }, { typeset, math: M, dim: () => S.dim });
 
   const pickFromView = sym => pickIndex(sym && S.pickedIndex === palette.norm(sym) ? null : sym);
@@ -175,7 +175,7 @@ export async function boot(opts = {}) {
   const player = createPlayer({
     onStep(i, step) {
       el.count.textContent = `${i + 1} / ${player.steps().length}`;
-      el.label.textContent = step.label || step.kind || '';
+      el.label.textContent = plainLabel(step.label || step.kind || '');
       [...el.stepList.children].forEach((li, k) => li.classList.toggle('on', k === i));
       [...el.ticks.children].forEach((d, k) => { d.classList.toggle('on', k === i); d.classList.toggle('done', k < i); });
       // VIZ picks the scene of a step itself (play -> stepScene); playTrace
@@ -216,14 +216,14 @@ export async function boot(opts = {}) {
       const li = doc.createElement('li');
       const b = doc.createElement('button');
       b.type = 'button';
-      b.textContent = sp.label;
+      b.textContent = plainLabel(sp.label);
       b.addEventListener('click', () => { player.seek(k, 0); player.play(); syncPlay(); el.stepList.hidden = true; el.stepsBtn.setAttribute('aria-expanded', 'false'); });
       li.appendChild(b); el.stepList.appendChild(li);
       const d = doc.createElement('span');
       d.className = 'tick';
       d.style.left = (100 * sp.start / total).toFixed(3) + '%';
       d.style.width = (100 * (sp.motion + sp.hold) / total).toFixed(3) + '%';
-      d.title = `${k + 1}. ${sp.label}`;
+      d.title = `${k + 1}. ${plainLabel(sp.label)}`;
       el.ticks.appendChild(d);
     });
     const n = tl.length;

@@ -370,3 +370,4 @@ html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #player,html.sn-saver #
 .chapters-toggle{width:100%;text-align:left;padding:8px 10px}
 .scene-pop{left:10px;right:auto;top:10px;max-height:calc(100% - 20px);overflow:auto}
 .scene-pop .row-name{flex-basis:110px}
+.tex-line.numeric{font-size:1rem;color:#cdd5e6;opacity:.92}

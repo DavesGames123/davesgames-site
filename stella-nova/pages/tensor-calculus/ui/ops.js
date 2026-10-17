@@ -20,6 +20,7 @@
 //    covariant [d]            nabla_d T = partial_d T + Gamma terms
 //    product [tex]            the outer product with a second expression
 //    expandSum                write out each Einstein sum
+//    evaluate                 sample numbers, then MATH traceEinstein
 //  Each builder throws an OpError with a plain sentence when the
 //  operation does not apply (for example, raise on an upper index).
 //
@@ -28,6 +29,7 @@
 //
 //  EXPORTS   (grep -n "export" ui/ops.js)
 //      OPS, JACOBIANS, OpError, freeIndices(expr), freshSym(expr, prefer),
+//      sampleBindings(M, expr, dim),
 //      jacobianMatrix(id, dim, p), buildOpTrace(M, expr, op, args, opts)
 // ============================================================================
 
@@ -44,7 +46,30 @@ export const OPS = Object.freeze([
   { id: 'covariant', label: 'Covariant derivative', args: ['newsym'], blurb: 'Take nabla: the partial derivative plus a Christoffel term for each index.' },
   { id: 'product', label: 'Tensor product', args: ['tex'], blurb: 'Multiply by a second tensor; all slots are kept.' },
   { id: 'expandSum', label: 'Write out sums', args: [], blurb: 'Write each summed index as an explicit sum of components.' },
+  { id: 'evaluate', label: 'Evaluate with numbers', args: [], blurb: 'Give each tensor small sample components and work out one component of the result, product by product (MATH traceEinstein).' },
 ]);
+
+// Sample components for each named tensor of expr, for traceEinstein. The
+// metric g is diagonal and positive (lower slots, as MATH asks). delta and
+// epsilon come from MATH itself. Derivatives are refused.
+export function sampleBindings(M, expr, dim) {
+  const b = {};
+  let k = 1;
+  for (const t of expr.terms) for (const f of t.factors) {
+    if ((f.deriv && f.deriv.length) || f.kind === 'partial' || f.kind === 'nabla') throw new OpError('Evaluate works on products of tensors with no derivative. A derivative needs a field, not one set of numbers.');
+    if (f.kind === 'delta' || f.kind === 'epsilon' || f.name in b) continue;
+    if (f.kind === 'metric' || f.kind === 'inverseMetric' || f.name === 'g') {
+      const d = []; for (let r = 0; r < dim; r++) for (let c = 0; c < dim; c++) d.push(r === c ? 1 + r : 0);
+      b.g = new M.Tensor([dim, dim], ['d', 'd'], d); continue;
+    }
+    if (!f.indices.length) { b[f.name] = 2; continue; }
+    const n = f.indices.length, size = dim ** n, data = [];
+    for (let q = 0; q < size; q++) data.push(((q * 7 + k * 3) % 5) - 1);
+    b[f.name] = new M.Tensor(f.indices.map(() => dim), f.indices.map(i => (i.up ? 'u' : 'd')), data);
+    k++;
+  }
+  return b;
+}
 
 export const JACOBIANS = Object.freeze([
   { id: 'rotation', label: 'Rotation', params: [{ key: 'angle', label: 'angle', min: -3.1416, max: 3.1416, step: 0.01, def: 0.6 }] },
@@ -256,6 +281,12 @@ export function buildOpTrace(M, expr, op, args = {}, opts = {}) {
       const dummies = expr.dummies || [];
       if (!dummies.length) throw new OpError('The expression has no summed index. A summed index appears once up and once down.');
       steps.push(stepOf(id(), 'expandSum', `Write out the sum over ${dummies.join(' and ')}, one term for each value.`, expr, expr, { focus: dummies.slice(), sums: dummies.map(s => ({ sym: s, range: [0, dim] })), ms: 3200 }));
+      break;
+    }
+    case 'evaluate': {
+      if (!M.traceEinstein) throw new OpError('The tensor engine has no traceEinstein yet.');
+      const tr = M.traceEinstein(expr, sampleBindings(M, expr, dim), { dim, values: args.values });
+      for (const st of tr.steps) steps.push({ ...st, id: id() });
       break;
     }
     default: throw new OpError('Unknown operation ' + op);
