@@ -12,8 +12,11 @@
 //  tips catch more and grow more. This file has our own code, not theirs.
 //
 //  FRAMES. A colony model has its seed at its local origin, on the top of
-//  its rock. World = local + (bx, by, bz). y is up. The seabed is the sand
-//  height sandY(x, z) plus the dome of each rock (seabedY).
+//  its rock. World = local + (bx, by, bz). y is up. The seabed is
+//  terrain.js: real lidar relief (groundY, also exported as sandY) and a
+//  rock SDF under each colony. Walkers that enter the solid start again,
+//  or stick to the rock as a new root (encrust). No particle is placed
+//  inside the solid (outOfSolid).
 //
 //  SPECIES (grep -n 'export const SPECIES')
 //    staghorn ... low attraction, high stickiness, joins on busy or lower
@@ -31,7 +34,9 @@
 //    growPreset('table', 7) -> a reef grown to its caps (thumbnails, tests)
 //
 //  grep -n targets
-//    seabed height .............. "export function sandY"
+//    seabed height .............. "export const sandY"
+//    the solid near a colony ..... "function solidLocal"
+//    roots on the rock ........... "function encrust"
 //    shared hooks ............... "function snowStart"
 //    species table .............. "export const SPECIES"
 //    presets .................... "export const PRESETS"
@@ -44,37 +49,32 @@
 //    hook source (saver code) ... "export function speciesHook"
 // ============================================================================
 import { createModel, rng, randomInUnitSphere } from '../../lib/dla-engine.js';
+import { groundY, makeRock, rockSdf, rockTopY, solidAt, pushOut, knollSites } from './terrain.js';
 
 const TAU = Math.PI * 2;
 
 // ── seabed ──────────────────────────────────────────────────────────────────
-// Low dunes of sand. The page mesh, the rocks and the hooks use the same
-// function, so a walker sees the same floor that the eye sees.
-export function sandY(x, z) {
-  return 0.9 * Math.sin(x * 0.047 + 1.3) * Math.cos(z * 0.041 - 0.4)
-    + 0.45 * Math.sin((x + z) * 0.093 + 0.7)
-    + 14 * (1 - Math.exp(-(x * x + z * z) / 16000));   // a shallow basin
+// The floor is terrain.js: the real lidar relief of the Buck Island lagoon
+// (scaled) and a rock SDF under each colony. The page mesh, the hooks and
+// the tests use the same functions, so a walker meets the floor that the
+// eye sees. sandY is the old name of the ground height.
+export const sandY = groundY;
+
+// The solid around a colony in its local frame: the ground or its rock.
+// Cheap above u.solidTop (the highest solid point near the colony).
+function solidLocal(u, p) {
+  if (p[1] > u.solidTop) return false;
+  return solidAt(u.bx + p[0], u.by + p[1], u.bz + p[2], u.solids);
 }
 
-// The dome of a rock {x, z, r, h} at (x, z): 0 off the rock.
-export function rockY(rk, x, z) {
-  const dx = x - rk.x, dz = z - rk.z, q = 1 - (dx * dx + dz * dz) / (rk.r * rk.r);
-  return q > 0 ? rk.base + rk.h * Math.sqrt(q) : -Infinity;
-}
-
-// The floor in world space: the sand or the highest rock.
-export function seabedY(x, z, rocks) {
-  let y = sandY(x, z);
-  if (rocks) for (const rk of rocks) { const r = rockY(rk, x, z); if (r > y) y = r; }
-  return y;
-}
-
-// The floor in the local frame of a colony: the sand and its own rock.
-function floorLocal(u, x, z) {
-  const wx = u.bx + x, wz = u.bz + z;
-  let y = sandY(wx, wz);
-  const r = rockY(u.rock, wx, wz); if (r > y) y = r;
-  return y - u.by;
+// Move a local point out of the solid (pushOut in world space).
+const WP = [0, 0, 0];
+function outOfSolid(u, out) {
+  if (out[1] > u.solidTop) return out;
+  WP[0] = u.bx + out[0]; WP[1] = u.by + out[1]; WP[2] = u.bz + out[2];
+  pushOut(WP, u.solids, 0.06);
+  out[0] = WP[0] - u.bx; out[1] = WP[1] - u.by; out[2] = WP[2] - u.bz;
+  return out;
 }
 
 // ── shared hooks ────────────────────────────────────────────────────────────
@@ -99,11 +99,29 @@ function snowStart(m, out) {
 // Start again under the floor, over the snow disc, or out of the reef box.
 function snowReset(m, p) {
   const u = m.user, s = u.sp, e = u.env;
-  if (p[1] < floorLocal(u, p[0], p[2])) return true;
+  if (solidLocal(u, p)) { encrust(m, p); return true; }
   const lid = u.top + s.lift + m.params.attractionDistance + 6;
   if (p[1] > lid) return true;
   const R = u.ext + s.spread + 8 + e.strength * s.drift / s.fall * lid;
   return p[0] * p[0] + p[2] * p[2] > R * R;
+}
+
+// A walker that hits the rock or the ground near the base of the colony
+// can stick there: a new root (parent -1) of the same colony. So the
+// colony spreads over its rock (sp.encrust is the chance per hit, up to
+// sp.roots roots, inside sp.reach x the rock radius).
+const EQ = [0, 0, 0];
+function encrust(m, p) {
+  const u = m.user, s = u.sp;
+  if (!s.encrust || u.roots >= s.roots || !u.room()) return;
+  const rr = Math.max(u.rock.rx, u.rock.rz) * s.reach;
+  if (p[0] * p[0] + p[2] * p[2] > rr * rr) return;
+  if (m.random() > s.encrust) return;
+  EQ[0] = p[0]; EQ[1] = p[1]; EQ[2] = p[2];
+  outOfSolid(u, EQ);
+  if (EQ[1] > u.solidTop + 1) return;
+  u.roots++;
+  m.add(EQ, -1);
 }
 
 // A random step plus the fall and the current. The engine normalises it.
@@ -121,12 +139,10 @@ function dlafJoin(m, parent) {
   return m.random() <= m.params.stickiness;
 }
 
-// dlaf PlaceParticle, then no lower than the floor.
+// dlaf PlaceParticle, then out of the rock and the ground.
 function placeAbove(m, p, parent, out) {
   m.lerpFrom(parent, p, m.params.particleSpacing, out);
-  const f = floorLocal(m.user, out[0], out[2]);
-  if (out[1] < f) out[1] = f;
-  return out;
+  return outOfSolid(m.user, out);
 }
 
 const BASE = { randomStartingPosition: snowStart, shouldReset: snowReset, shouldJoin: (m, p, parent) => dlafJoin(m, parent), placeParticle: placeAbove, motionVector: snowMotion };
@@ -136,13 +152,15 @@ const BASE = { randomStartingPosition: snowStart, shouldReset: snowReset, should
 // drift: how much the current moves the walk. lift: the height of the snow
 // disc over the top of the colony. spread: the disc radius past the colony.
 // cap: the most polyps in one colony. r0, thick: polyp radius (polypRadius).
-// sway: soft corals and fans move with the water. base, tip: natural
-// colours (linear 0..1), tip at the growing ends.
+// sway: soft corals and fans move with the water. encrust, roots, reach:
+// a walker that hits the rock near the base sticks as a new root with
+// chance encrust, up to roots roots, inside reach x the rock radius.
+// base, tip: natural colours (linear 0..1), tip at the growing ends.
 export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
     params: { particleSpacing: 1, attractionDistance: 1.5, minMoveDistance: 0.8, stubbornness: 0, stickiness: 0.9 },
-    fall: 1.1, drift: 0.9, lift: 5, spread: 3, cap: 2200, r0: 0.5, thick: 0.17, sway: 0,
+    fall: 1.1, drift: 0.9, lift: 5, spread: 3, cap: 2200, r0: 0.5, thick: 0.17, sway: 0, encrust: 0.03, roots: 6, reach: 0.9,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
     hooks: {
       // Tips favoured: a busy particle, or a walker from the side or below,
@@ -159,7 +177,7 @@ export const SPECIES = {
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
     params: { particleSpacing: 0.5, attractionDistance: 0.9, minMoveDistance: 0.45, stubbornness: 0, stickiness: 0.7 },
-    fall: 0.12, drift: 0, lift: 5, spread: 4, cap: 850, r0: 0.2, thick: 0.1, sway: 1,
+    fall: 0.12, drift: 0, lift: 5, spread: 4, cap: 850, r0: 0.2, thick: 0.1, sway: 1, encrust: 0,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
     hooks: {
       // The walk stays in the vertical plane across the current. The snow
@@ -172,7 +190,7 @@ export const SPECIES = {
       },
       shouldReset(m, p) {
         const u = m.user, R = Math.max(u.top, u.ext) + u.sp.spread + 6;
-        return p[1] < floorLocal(u, p[0], p[2]) || p[0] * p[0] + p[1] * p[1] + p[2] * p[2] > R * R;
+        return solidLocal(u, p) || p[0] * p[0] + p[1] * p[1] + p[2] * p[2] > R * R;
       },
       motionVector(m, p, out) {
         const n = m.user.normal;
@@ -187,7 +205,7 @@ export const SPECIES = {
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
     params: { particleSpacing: 1, attractionDistance: 2, minMoveDistance: 0.8, stubbornness: 1, stickiness: 0.9 },
-    fall: 1.2, drift: 0.6, lift: 4, spread: 6, cap: 2400, r0: 0.5, thick: 0.12, sway: 0, stalk: 7,
+    fall: 1.2, drift: 0.6, lift: 4, spread: 6, cap: 2400, r0: 0.5, thick: 0.12, sway: 0, stalk: 7, encrust: 0,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
@@ -202,7 +220,8 @@ export const SPECIES = {
         placeAbove(m, p, parent, out);
         if (m.depth[parent] >= m.user.sp.stalk) {
           const y0 = m.pos[parent * 3 + 1];
-          out[1] = Math.max(y0 + (out[1] - y0) * 0.12, floorLocal(m.user, out[0], out[2]));
+          out[1] = y0 + (out[1] - y0) * 0.12;
+          outOfSolid(m.user, out);
         }
         return out;
       },
@@ -211,7 +230,7 @@ export const SPECIES = {
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
     params: { particleSpacing: 0.9, attractionDistance: 2.4, minMoveDistance: 0.7, stubbornness: 14, stickiness: 0.5 },
-    fall: 0.6, drift: 0.5, lift: 4, spread: 4, cap: 2600, r0: 0.62, thick: 0.03, sway: 0, density: 0.45,
+    fall: 0.6, drift: 0.5, lift: 4, spread: 4, cap: 2600, r0: 0.62, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
       // Accretive growth: the tissue lays each new polyp on the surface of
@@ -221,15 +240,14 @@ export const SPECIES = {
         const dome = Math.cbrt(3 * m.count / (TAU * m.user.sp.density)) + 0.3;
         const r = Math.hypot(out[0], out[1], out[2]);
         if (r > dome) { const k = dome / r; out[0] *= k; out[1] *= k; out[2] *= k; }
-        const f = floorLocal(m.user, out[0], out[2]); if (out[1] < f) out[1] = f;
-        return out;
+        return outOfSolid(m.user, out);
       },
     },
   },
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
     params: { particleSpacing: 1, attractionDistance: 2.6, minMoveDistance: 0.8, stubbornness: 3, stickiness: 0.2 },
-    fall: 0.5, drift: 0.7, lift: 4, spread: 3, cap: 1100, r0: 0.75, thick: 0.15, sway: 0.6,
+    fall: 0.5, drift: 0.7, lift: 4, spread: 3, cap: 1100, r0: 0.75, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 5, reach: 0.8,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
     hooks: {},
   },
@@ -268,7 +286,7 @@ export function createReef(opts = {}) {
   const params = {};   // per species: the live dlaf parameters (advanced panel)
   for (const id of SPECIES_IDS) params[id] = Object.assign({}, SPECIES[id].params);
   const R = {
-    env, params, capTotal, rocks: [], colonies: [], seed: opts.seed ?? 1,
+    env, params, capTotal, limit: capTotal, rocks: [], colonies: [], seed: opts.seed ?? 1,
     count: 0, now: 0, joined: 0, walks: 0,
     px: new Float32Array(capTotal), py: new Float32Array(capTotal), pz: new Float32Array(capTotal),
     col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), birth: new Float32Array(capTotal),
@@ -285,20 +303,34 @@ export function createReef(opts = {}) {
   }
 
   // The cap of one colony: its species cap, and a fair share of the total.
-  function colonyCap(sp, n) { return Math.max(60, Math.min(sp.cap, Math.floor(capTotal / Math.max(1, n)))); }
+  // R.limit (<= capTotal) is the live cap: the saver grows smaller reefs.
+  function colonyCap(sp, n) { return Math.max(60, Math.min(sp.cap, Math.floor(R.limit / Math.max(1, n)))); }
 
-  // A colony of species id on a rock at world (x, z). opts.rock overrides it.
+  // A colony of species id at world (x, z), on a new rock (or o.rock).
+  // o.at = [x, y, z] puts the seed at that surface point (tap to plant on
+  // a rock). The seed sits on the top of the rock.
   function addColony(id, x, z, o = {}) {
     const sp = SPECIES[id]; if (!sp) return null;
-    if (R.count >= capTotal) return null;
-    const rock = o.rock || { x, z, r: 4 + random() * 2.5, h: 1.6 + random() * 2.2, base: sandY(x, z) - 0.6 };
+    if (R.count >= R.limit) return null;
+    const rock = o.rock || makeRock(random, x, z, { r: o.rockR ?? 5 + random() * 2 });
     if (!o.rock) R.rocks.push(rock);
-    const by = Math.max(sandY(x, z), rockY(rock, x, z));
+    // the seed: on the top of the rock (or at o.at), out of every solid near
+    const solids = [rock].concat(R.rocks.filter(q => q !== rock && Math.hypot(q.x - x, q.z - z) < q.R + 45));
+    const seed = pushOut([x, o.at ? o.at[1] : rockTopY(rock, x, z), z], solids, 0.06);
+    const by = seed[1];
     const k = R.colonies.length;
+    // the highest solid point near the colony: the walkers test the solid only below it
+    let solidTop = 1;
+    for (let a = 0; a < 96; a++) {
+      const r = Math.sqrt((a + 0.5) / 96) * 42, t = a * 2.39996;
+      solidTop = Math.max(solidTop, groundY(x + Math.cos(t) * r, z + Math.sin(t) * r) + 0.5 - by);
+    }
+    for (const q of solids) solidTop = Math.max(solidTop, q.y + q.ry * (1 + q.ov) + q.amp * 1.2 + 1 - by);
     const user = {
-      sp, env, bx: x, by, bz: z, rock, top: 0, ext: 0, kids: [],
+      sp, env, bx: x, by, bz: z, rock, solids, top: 0, ext: 0, kids: [], roots: 1, solidTop,
       // a fan grows across the current: its plane normal is the current
       normal: [env.cur[0], env.cur[1]],
+      room: () => R.count < R.limit - 1 && colony.count < colony.cap - 1,
     };
     const colony = { k, id, sp, user, model: null, cap: o.cap ?? colonyCap(sp, o.share ?? Math.max(1, R.colonies.length + 1)), born: R.now, count: 0, ids: [] };
     colony.model = createModel({
@@ -320,28 +352,38 @@ export function createReef(opts = {}) {
   }
 
   // Rocks and colony seeds of a preset, placed by the seed of the reef.
+  // The colonies take the knolls of the real seabed first (their rock is
+  // large and sits on the knoll top), then open sand.
   function loadPreset(pid, o = {}) {
     reset();
     const P = PRESETS[pid] || PRESETS.mixed;
     const n = P.mix.length, pts = [];
+    const sites = knollSites(P.R);
+    const off = Math.floor(random() * 3);
+    for (let i = 0; i < sites.length && pts.length < Math.ceil(n * 0.7); i++) {
+      const s = sites[(i + off) % sites.length];
+      if (pts.every(q => Math.hypot(q[0] - s.x, q[1] - s.z) >= P.gap)) pts.push([s.x, s.z, 7 + random() * 2.5]);
+    }
     for (let tries = 0; pts.length < n && tries < 4000; tries++) {
       const a = random() * TAU, r = P.R * Math.sqrt(random()) * (pts.length === 0 ? 0.3 : 1);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (pts.every(q => Math.hypot(q[0] - x, q[1] - z) >= P.gap)) pts.push([x, z]);
+      if (pts.every(q => Math.hypot(q[0] - x, q[1] - z) >= P.gap)) pts.push([x, z, 5 + random() * 2]);
     }
-    pts.forEach((q, i) => addColony(P.mix[i], q[0], q[1], { share: n }));
-    // loose rocks with no coral, for the look
-    for (let i = 0; i < (o.loose ?? 14); i++) {
+    // the colony rocks, then loose rocks with no coral, then the colonies
+    // (each colony knows every rock near it)
+    const own = pts.map(q => { const rk = makeRock(random, q[0], q[1], { r: q[2] }); R.rocks.push(rk); return rk; });
+    for (let i = 0; i < (o.loose ?? 10); i++) {
       const a = random() * TAU, r = (0.4 + 0.9 * random()) * P.R * 1.25;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (R.rocks.some(q => Math.hypot(q.x - x, q.z - z) < q.r + 4)) continue;
-      R.rocks.push({ x, z, r: 1.5 + random() * 3, h: 0.8 + random() * 1.8, base: sandY(x, z) - 0.5, loose: true });
+      if (R.rocks.some(q => Math.hypot(q.x - x, q.z - z) < Math.max(q.rx, q.rz) + 4)) continue;
+      R.rocks.push(makeRock(random, x, z, { r: 2 + random() * 3.5, loose: true, holes: 0 }));
     }
+    pts.forEach((q, i) => addColony(P.mix[i], q[0], q[1], { share: n, rock: own[i] }));
     R.preset = pid;
     return R;
   }
 
-  function done() { return R.colonies.every(c => c.count >= c.cap) || R.count >= capTotal; }
+  function done() { return R.colonies.every(c => c.count >= c.cap) || R.count >= R.limit; }
 
   // Grow for at most budgetMs, at the rate of env (polyps per second:
   // 900 x speed x nutrient x (1 - bleach)). dtMs is the frame time. The
@@ -354,7 +396,7 @@ export function createReef(opts = {}) {
     const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
     const t0 = clock(); let n = 0, turn = R.turn || 0;
     const live = R.colonies.filter(c => c.count < c.cap);
-    while (R.allowance >= 1 && live.length && R.count < capTotal) {
+    while (R.allowance >= 1 && live.length && R.count < R.limit) {
       const c = live[turn++ % live.length];
       const w0 = c.model.walks;
       c.model.addParticle();
@@ -371,7 +413,7 @@ export function createReef(opts = {}) {
   function growAll(n = Infinity) {
     let k = 0;
     const live = R.colonies.filter(c => c.count < c.cap);
-    while (live.length && k < n && R.count < capTotal) {
+    while (live.length && k < n && R.count < R.limit) {
       for (let j = live.length - 1; j >= 0; j--) {
         const c = live[j];
         c.model.addParticle(); k++;
