@@ -53,6 +53,29 @@ fn fromYCoCg(c: vec3f) -> vec3f { return vec3f(c.x + c.y - c.z, c.x + c.z, c.x -
 fn tmw(c: vec3f) -> vec3f { return c / (1.0 + cm_luminance(c)); }
 fn itmw(c: vec3f) -> vec3f { return c / max(1.0 - cm_luminance(c), 1e-4); }
 
+// the history with a 5-tap Catmull-Rom filter (Jimenez 2016): a bilinear
+// fetch blurs the image a little more on each frame of camera motion
+fn historyCR(uv: vec2f, size: vec2f) -> vec3f {
+  let sp = uv * size;
+  let tc1 = floor(sp - vec2f(0.5)) + vec2f(0.5);
+  let f = sp - tc1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let tc0 = (tc1 - vec2f(1.0)) / size;
+  let tc3 = (tc1 + vec2f(2.0)) / size;
+  let tc12 = (tc1 + w2 / w12) / size;
+  var c = textureSampleLevel(tB, sL, vec2f(tc12.x, tc0.y), 0.0).rgb * (w12.x * w0.y);
+  c += textureSampleLevel(tB, sL, vec2f(tc0.x, tc12.y), 0.0).rgb * (w0.x * w12.y);
+  c += textureSampleLevel(tB, sL, vec2f(tc12.x, tc12.y), 0.0).rgb * (w12.x * w12.y);
+  c += textureSampleLevel(tB, sL, vec2f(tc3.x, tc12.y), 0.0).rgb * (w3.x * w12.y);
+  c += textureSampleLevel(tB, sL, vec2f(tc12.x, tc3.y), 0.0).rgb * (w12.x * w3.y);
+  let wsum = (w12.x * w0.y) + (w0.x * w12.y) + (w12.x * w12.y) + (w3.x * w12.y) + (w12.x * w3.y);
+  return c / max(wsum, 1e-4);
+}
+
 // ── TAA ── tA = this frame (HDR), tB = the history, tD = the depth
 @fragment fn fs_taa(v: VOut) -> @location(0) vec4f {
   let dims = vec2i(textureDimensions(tA));
@@ -84,7 +107,7 @@ fn itmw(c: vec3f) -> vec3f { return c / max(1.0 - cm_luminance(c), 1e-4); }
   let puv = prevClip.xy / prevClip.w * vec2f(0.5, -0.5) + vec2f(0.5);
   var a = P.p2.x;
   if (P.p2.y < 0.5 || prevClip.w <= 0.0 || any(puv < vec2f(0.0)) || any(puv > vec2f(1.0))) { a = 1.0; }
-  let hist = toYCoCg(tmw(max(textureSampleLevel(tB, sL, puv, 0.0).rgb, vec3f(0.0))));
+  let hist = toYCoCg(tmw(max(historyCR(puv, vec2f(textureDimensions(tB))), vec3f(0.0))));
   // variance clip toward the mean, inside the min/max box
   let mu = m1 / 9.0;
   let sig = sqrt(max(m2 / 9.0 - mu * mu, vec3f(0.0)));
@@ -180,6 +203,19 @@ fn agxOut(v: vec3f) -> vec3f {
 // tA = the resolved scene, tB = bloom level 0, tC = exposure (1 x 1)
 @fragment fn fs_composite(v: VOut) -> @location(0) vec4f {
   var c = textureSampleLevel(tA, sL, v.uv, 0.0).rgb;
+  var ke = textureLoad(tC, vec2i(0), 0).r;
+  if (P.p3.w > 0.0) { ke = P.p3.w; }
+  ke = ke * exp2(P.p0.y);
+  {
+    // light sharpen (a cross unsharp mask in tonemapped space, clamped):
+    // the TAA resolve and the render scale soften the image
+    let px = 1.0 / vec2f(textureDimensions(tA));
+    let n = tmw(ke * textureSampleLevel(tA, sL, v.uv + vec2f(0.0, -px.y), 0.0).rgb) + tmw(ke * textureSampleLevel(tA, sL, v.uv + vec2f(0.0, px.y), 0.0).rgb)
+      + tmw(ke * textureSampleLevel(tA, sL, v.uv + vec2f(-px.x, 0.0), 0.0).rgb) + tmw(ke * textureSampleLevel(tA, sL, v.uv + vec2f(px.x, 0.0), 0.0).rgb);
+    let tc = tmw(ke * c);
+    let sharp = clamp(tc + (tc - n * 0.25) * 0.45, tc * 0.6, tc * 1.6 + vec3f(0.02));
+    c = itmw(clamp(sharp, vec3f(0.0), vec3f(0.98))) / max(ke, 1e-6);
+  }
   let b = textureSampleLevel(tB, sL, v.uv, 0.0).rgb * P.p6.x;
   c = mix(c, b, P.p0.x);
   var e = textureLoad(tC, vec2i(0), 0).r;
