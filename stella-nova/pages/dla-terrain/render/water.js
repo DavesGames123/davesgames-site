@@ -750,7 +750,7 @@ export async function createWater(gpu) {
     if (oceanOn) {
       // far enough that its rim lies under the true horizon from a few km up
       // (a nearer rim shows the sky below the horizon as a dark line)
-      const og = buildOceanGrid(0.6, Math.max(160000, t.worldSize * 8), Math.round(165 + 70 * quality), Math.round(112 + 64 * quality));
+      const og = buildOceanGrid(0.6, Math.max(2e6, t.worldSize * 60), Math.round(190 + 70 * quality), Math.round(112 + 64 * quality));   // to 2000 km: a flat sea reaches the horizon line
       ocean = { vb: upload(og.vertices, GPUBufferUsage.VERTEX), ib: upload(og.indices, GPUBufferUsage.INDEX), count: og.indices.length };
     }
     // rivers and lakes: rebuild only when the LIB arrays change
