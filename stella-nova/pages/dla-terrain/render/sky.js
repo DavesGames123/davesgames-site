@@ -86,7 +86,9 @@ export function cloudLayer(terrain, wx) {
   const hs = terrain ? terrain.heightScale || 1500 : 1500;
   const base = sea + clamp(0.42 * hs + 700, 900, 2600) - 250 * (wx.fog > 1e-3 ? 1 : 0)
     - 350 * clamp(wx.storm ?? 0, 0, 1) - 200 * clamp(wx.rain ?? 0, 0, 1);
-  const thick = 500 + 2600 * clamp(wx.cumulus, 0, 1) * (0.4 + 0.6 * clamp(wx.cover, 0, 1));
+  // the slab holds the tallest cloud type of the weather: decks use its
+  // lower part, cumulus cores grow toward the top (shaders/clouds.wgsl)
+  const thick = 900 + 3400 * clamp(wx.cumulus, 0, 1) * Math.pow(clamp(wx.cover, 0, 1), 1.5);
   return { base, top: base + thick, anvil: base + 9500 };
 }
 
@@ -279,7 +281,7 @@ export async function createSky(gpu) {
     st.windOff[0] += g[GLOBALS.wind] * 2.5 * dt;
     st.windOff[1] += g[GLOBALS.wind + 1] * 2.5 * dt;
     put(SKYU.cloud1, clamp(wx.storm ?? 0, 0, 1), clamp(wx.cirrus ?? 0.3, 0, 1), -st.windOff[0], -st.windOff[1]);
-    const steps = Math.round(40 + 56 * clamp(q, 0, 1));
+    const steps = Math.round(40 + 56 * clamp(st.q ?? q, 0, 1));
     put(SKYU.cloud2, wx.cover > 0.85 ? 0.8 : 1.0, 1.0, cl.anvil, steps);
     // the bolt: a bearing and a distance from the camera, at the cloud base
     const flash = g[GLOBALS.weather + 3];
@@ -310,7 +312,7 @@ export async function createSky(gpu) {
     const sunEl = Math.asin(clamp(sunY, -1, 1)) * 180 / Math.PI;
     const rainbow = (s.rainbow ?? 1) * smooth(0.02, 0.25, wx.rain) * smooth(-1, 4, sunEl) * smooth(42, 30, sunEl) * (1 - smooth(0.88, 1.0, wx.cover) * 0.8);
     put(SKYU.misc, lat, s.moonPhase ?? 0.5, t, rainbow);
-    const cnt = weather.counts(wx, q, frame);
+    const cnt = st.rain === false ? { rain: 0, splash: 0, snow: 0, bolt: 0 } : weather.counts(wx, q, frame);
     put(SKYU.counts, cnt.rain, cnt.splash, cnt.snow, cnt.bolt);
     put(SKYU.precip, 32, 26, 1.8 / 60, 0.0026);
     put(SKYU.prevCam, st.prevCam[0], st.prevCam[1], st.prevCam[2], tg ? tg.k : 0.5);
@@ -337,6 +339,13 @@ export async function createSky(gpu) {
     setTerrain(t) { st.terrain = t; weather.setTerrain(t); },
 
     update(frame) {
+      // a phone (coarse pointer) runs the low path: a third-size cloud
+      // target and the small froxel grid
+      const qe = Math.min(frame.quality ?? st.q, frame.coarse ? 0.3 : 1);
+      if (tg && Math.abs(qe - st.q) > 1e-3) mod.setQuality(qe);
+      else st.q = qe;
+      st.clouds = !(frame.layers && frame.layers.clouds === false);
+      st.rain = !(frame.layers && frame.layers.rain === false);
       if (!tg) {
         const g = frame.globals;
         makeTargets(Math.max(16, g[GLOBALS.screen] | 0), Math.max(16, g[GLOBALS.screen + 1] | 0), frame.quality ?? 1);
@@ -385,9 +394,11 @@ export async function createSky(gpu) {
       };
       run(P.view, BG.skyView, BG.outView, 24, 14);
       run(P.shadow, BG.shadowRead, BG.outShadow, 64, 64);
-      run(P.march, BG.read, tg.march, Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
-      tg.ping = 1 - tg.ping;
-      run(P.resolve, BG.read, tg.resolve[tg.ping], Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
+      if (st.clouds) {
+        run(P.march, BG.read, tg.march, Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
+        tg.ping = 1 - tg.ping;
+        run(P.resolve, BG.read, tg.resolve[tg.ping], Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
+      }
       pass.end();
       weather.compute(enc, frame);
       st.frameNo++;
@@ -406,9 +417,8 @@ export async function createSky(gpu) {
       if (!tg || !ctx || !ctx.depthView) return;
       const g1 = drawGroup(ctx.depthView);
       pass.setBindGroup(0, gpu.globalsBindGroup);
-      pass.setPipeline(P.comp);
       pass.setBindGroup(1, g1);
-      pass.draw(3);
+      if (st.clouds) { pass.setPipeline(P.comp); pass.draw(3); }
       weather.draw(pass, frame, g1);
     },
 

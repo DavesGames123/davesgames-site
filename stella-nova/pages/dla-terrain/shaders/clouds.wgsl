@@ -186,8 +186,8 @@ fn csNoise2D(@builtin(global_invocation_id) id: vec3u) {
 
 // ── the cloud field ──────────────────────────────────────────────────────────
 const CL_MAP_M: f32 = 17000.0;     // one tile of the coverage map
-const CL_SHAPE_M: f32 = 5200.0;    // one tile of the shape noise
-const CL_DETAIL_M: f32 = 760.0;    // one tile of the detail noise
+const CL_SHAPE_M: f32 = 6800.0;    // one tile of the shape noise
+const CL_DETAIL_M: f32 = 560.0;    // one tile of the detail noise
 const CL_SIGMA: f32 = 0.045;       // extinction 1/m at density 1
 
 struct ClLayer { h0: f32, h1: f32 }
@@ -199,20 +199,36 @@ fn cl_layer() -> ClLayer {
   return l;
 }
 
-// Local coverage 0..1 at world xz (x: coverage, y: cumulus mix).
-fn cl_coverage(xz: vec2f) -> vec2f {
+// The weather map at world xz: x local coverage 0..1, y cloud type
+// (0 stratus and stratocumulus decks .. 1 towering cumulus), z base lift m
+// (the bases of separate cloud fields differ), w the dome 0..1 (the top).
+// Three scales: weather systems of about 90 km (decks and wide clear
+// gaps), the 17 km map, and cells of about 4 km (the clusters of a
+// cumulus field). The cumulus mix sets the grain: cumulus gather in cells,
+// stratus spread in broad sheets.
+fn cl_coverage(xz: vec2f) -> vec4f {
   let q = (xz + S.cloud1.zw) / CL_MAP_M;
   let m = textureSampleLevel(tNoise2D, sRepeat, q, 0.0);
-  let m2 = textureSampleLevel(tNoise2D, sRepeat, q * 0.23 + vec2f(0.31, 0.77), 0.0);
-  let cover = S.cloud0.z;
+  let big = textureSampleLevel(tNoise2D, sRepeat, q * 0.19 + vec2f(0.31, 0.77), 0.0);
+  let sm = textureSampleLevel(tNoise2D, sRepeat, q * 4.1 + vec2f(0.53, 0.11), 0.0);
   // the raw noise spans about 0.3 .. 0.85: stretch it to 0 .. 1
-  let field = clamp((m.r - 0.36) / 0.44, 0.0, 1.0) * 0.8 + clamp((m2.a - 0.3) / 0.4, 0.0, 1.0) * 0.2;
+  let nb = clamp((big.r - 0.36) / 0.44, 0.0, 1.0);
+  let nm = clamp((m.r - 0.36) / 0.44, 0.0, 1.0);
+  let ns = clamp((sm.r - 0.36) / 0.44, 0.0, 1.0);
+  let cover = S.cloud0.z;
+  let cum = clamp(S.cloud0.w + (m.g - 0.5) * 0.7 + (big.a - 0.5) * 0.4, 0.0, 1.0);
+  let grain = mix(0.12, 0.42, cum);
+  let field = nb * 0.42 + nm * (0.58 - grain) + ns * grain;
   // cover 0 -> no cloud, 1 -> all cloud; the threshold moves through the field
-  let lo = 1.0 - cover * 1.2 - 0.06;
-  let c = sk_ss(lo, lo + 0.24, field) * sk_ss(0.0, 0.06, cover);
-  let cum = clamp(S.cloud0.w + (m.g - 0.5) * 0.6, 0.0, 1.0);
+  let lo = 1.0 - cover * 1.15 - 0.05;
+  let c = sk_ss(lo, lo + mix(0.3, 0.15, cum), field) * sk_ss(0.0, 0.06, cover);
+  let lift = clamp((big.g - 0.3) / 0.55, 0.0, 1.0) * 450.0 * (1.0 - S.cloud1.x);
   // a full deck keeps some texture: the shape noise always cuts a little
-  return vec2f(min(c, 0.88 + 0.08 * field), cum);
+  // the dome: a wider ramp of the same field. The top of a cumulus follows
+  // it, so a cloud is low at its edge and tall at its core (a dome, not a
+  // pillar with walls).
+  let dome = sk_ss(lo - 0.05, lo + 0.45, field);
+  return vec4f(min(c, 0.9 + 0.08 * field), cum, lift, dome);
 }
 
 // A ragged base: the base height moves by up to a fifth of the layer.
@@ -226,21 +242,25 @@ fn cl_baseOffset(xz: vec2f) -> f32 {
 fn cl_density(p: vec3f, full: bool) -> f32 {
   let L = cl_layer();
   let h = sk_layerH(p);
-  var hf = (h - L.h0) / max(L.h1 - L.h0, 1.0);
-  if (hf <= 0.0 || hf >= 1.0) { return 0.0; }
-  // the ragged base: lift it where the offset noise is high
-  let off = max(cl_baseOffset(p.xz), 0.0) * (0.35 + 0.65 * S.cloud0.z) * (1.0 - 0.75 * S.cloud1.x * sk_ss(0.5, 0.9, hf));
-  hf = (hf - off) / max(1.0 - off, 0.05);
-  if (hf <= 0.0) { return 0.0; }
+  let thick = max(L.h1 - L.h0, 1.0);
+  if (h <= L.h0 || h >= L.h1) { return 0.0; }
   let cv = cl_coverage(p.xz);
   var cov = cv.x;
   if (cov < 0.01) { return 0.0; }
+  let tq = cv.y;
   let storm = S.cloud1.x;
-  // the vertical profile: stratus thin and flat, cumulus round with a flat base
-  let strat = sk_ss(0.0, 0.06, hf) * sk_ss(0.32, 0.12, hf);
-  let cumTop = mix(0.45, 1.0, cov);
-  let cum = sk_ss(0.0, 0.1, hf) * sk_ss(cumTop, cumTop * 0.55, hf);
-  var grad = mix(strat, cum, cv.y);
+  // separate fields sit at separate heights
+  var hf = (h - L.h0 - cv.z) / max(thick - cv.z, 1.0);
+  if (hf <= 0.0) { return 0.0; }
+  // the ragged base of the decks; cumulus keep a flat base
+  let off = max(cl_baseOffset(p.xz), 0.0) * (0.35 + 0.65 * S.cloud0.z) * mix(1.0, 0.3, tq) * (1.0 - 0.75 * storm * sk_ss(0.5, 0.9, hf));
+  hf = (hf - off) / max(1.0 - off, 0.05);
+  if (hf <= 0.0) { return 0.0; }
+  // the vertical profile by type. A deck: a thin layer at the base. A
+  // cumulus: a flat base and a round top; the top grows in the cores of
+  // the clusters (dense cover), so a field has small and tall clouds.
+  let topF = mix(0.3, 0.97, tq * tq) * mix(0.18, 1.0, cv.w * cv.w);
+  var grad = sk_ss(0.0, mix(0.12, 0.06, tq), hf) * (1.0 - sk_ss(topF * mix(0.55, 0.7, tq), topF, hf));
   if (storm > 0.01) {
     // cumulonimbus: a tall tower, the anvil spreads at the top
     let tower = sk_ss(0.0, 0.04, hf) * sk_ss(1.0, 0.93, hf);
@@ -248,12 +268,14 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
     cov = mix(cov, pow(cov, mix(1.0, 0.25, anvil)), storm);
     grad = mix(grad, tower * (0.6 + 0.4 * anvil), storm * sk_ss(0.4, 0.8, cov));
   }
+  if (grad <= 0.0) { return 0.0; }
   // base shape
   let sp = (p + vec3f(S.cloud1.z, 0.0, S.cloud1.w) * 0.2 + vec3f(0.0, -G.camPos.w * 0.6, 0.0)) / CL_SHAPE_M;
   let n = textureSampleLevel(tNoiseBase, sRepeat, sp, 0.0);
   let fbm = n.g * 0.625 + n.b * 0.25 + n.a * 0.125;
-  // the Perlin-Worley cut by the Worley FBM: billows of 300 .. 900 m
-  let shape = clamp(sk_remap(n.r, fbm * 0.8, 1.0, 0.0, 1.0), 0.0, 1.0);
+  // the Perlin-Worley cut by the Worley FBM: billows of 300 .. 900 m;
+  // decks take less of the cut, so they stay joined
+  let shape = clamp(sk_remap(n.r, fbm * mix(0.55, 1.0, tq), 1.0, 0.0, 1.0), 0.0, 1.0);
   var d = clamp(sk_remap(shape * grad, 1.0 - cov, 1.0, 0.0, 1.0), 0.0, 1.0) * sqrt(cov);
   if (d <= 0.0) { return 0.0; }
   if (full) {
@@ -262,7 +284,7 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
     let dn = textureSampleLevel(tNoiseDetail, sRepeat, dp, 0.0);
     let df = dn.r * 0.625 + dn.g * 0.25 + dn.b * 0.125;
     let m = mix(df, 1.0 - df, clamp(hf * 5.0, 0.0, 1.0));
-    d = clamp(sk_remap(d, m * 0.55 * S.cloud2.y, 1.0, 0.0, 1.0), 0.0, 1.0);
+    d = clamp(sk_remap(d, m * 0.68 * S.cloud2.y, 1.0, 0.0, 1.0), 0.0, 1.0);
   }
   // more mass in the core, softer near the base
   return d * sk_ss(0.0, 0.12, hf) * (0.45 + 0.55 * sk_ss(0.0, 0.45, hf)) * 2.2 * S.cloud2.x;
@@ -352,7 +374,10 @@ fn cl_cirrus(ro: vec3f, rd: vec3f, cosT: f32) -> vec4f {
   let n2 = textureSampleLevel(tNoise2D, sRepeat, uv * 3.1 + vec2f(0.4, 0.1), 0.0).b;
   // patches of cirrus, not a sheet: a large mask over the streaks
   let mask = sk_ss(0.35, 0.75, textureSampleLevel(tNoise2D, sRepeat, p.xz / 140000.0 + vec2f(0.17, 0.53), 0.0).a + 0.25 * S.cloud1.y);
-  let a = clamp(sk_ss(0.62 - 0.2 * S.cloud1.y, 0.98, n * 0.6 + n2 * 0.4) * S.cloud1.y * 0.8 * mask, 0.0, 0.55);
+  let streak = sk_ss(0.62 - 0.2 * S.cloud1.y, 0.98, n * 0.6 + n2 * 0.4) * S.cloud1.y * 0.8 * mask;
+  // cirrostratus: a thin milky veil ahead of a front (high cirrus, much cover)
+  let veil = S.cloud1.y * sk_ss(0.45, 0.9, S.cloud0.z) * (0.1 + 0.12 * n2) * (0.6 + 0.4 * mask);
+  let a = clamp(max(streak, veil), 0.0, 0.55);
   if (a <= 0.0) { return vec4f(0.0); }
   let li = cl_light(p);
   let ph = sk_hg(cosT, 0.6) * 0.8 + 0.2 / (4.0 * SK_PI);
@@ -417,10 +442,12 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
       // big steps in empty air, fine steps inside the cloud
       let p = ro + rd * t;
       let dc = cl_density(p, false);
-      var dt = base;
+      // the step grows with the distance (2 % of it, 50 m near), so a
+      // near cloud of 1 km gets many samples and the far deck few
+      var dt = min(base, 50.0 + t * 0.02);
       if (dc <= 0.0) {
         zeroRun++;
-        dt = base * select(1.0, 2.0, zeroRun > 2);
+        dt = dt * select(1.0, 2.0, zeroRun > 2);
       } else {
         zeroRun = 0;
         let d = cl_density(p, true);
