@@ -217,9 +217,8 @@ export class DL {
   box(p, h, c, o = {}) {
     const ax = o.axes || [[h[0], 0, 0], [0, h[1], 0], [0, 0, h[2]]];
     const C = this.col(c, o.sym, o.a ?? 1);
-    if (C[3] < 0.004) return;
     const B = o.glass || C[3] < 0.999 ? this.glass : this.solid;
-    for (let k = 0; k < 3; k++) for (const s of [-1, 1]) {
+    if (C[3] >= 0.004) for (let k = 0; k < 3; k++) for (const s of [-1, 1]) {
       const n = V.scl(ax[k], s), u = ax[(k + 1) % 3], v = ax[(k + 2) % 3];
       const cc = V.add(p, n), nn = unit(n);
       const q = [V.sub(V.sub(cc, u), v), V.sub(V.add(cc, u), v), V.add(V.add(cc, u), v), V.add(V.sub(cc, u), v)];

@@ -190,7 +190,7 @@ export const upperLower = {
     if (mAmt > 0.01) {
       // the sheets of v-flat: x . v = n, spacing 1/|v|; they grow out of v
       const vl = st.v, vlen = Math.hypot(vl[0], vl[1]);
-      sheets(dl, vl, scl3(vl, 0.5), Math.max(0.2, 1.4 + 2.2 * mAmt), LOOK.vec, { a: 0.16 * mAmt, sym: 'v', h: SHEET * mAmt,
+      sheets(dl, vl, scl3(vl, 0.5), Math.max(0.2, 0.6 + 1.0 * mAmt), LOOK.vec, { a: 0.12 * mAmt, sym: 'v', h: SHEET * mAmt,
         hiN: n => n >= 1 && n <= vlen * vlen });
       for (const q of pierce(vl, st.v)) dl.ball(W3(q[0], q[1]), 0.06, LOOK.vec, { a: mAmt });
       dl.label(W3(-1.9, 2.9, 1.2), `${tn('v', [], ['i'])} = ${tn('g', [], ['i', 'j'])}${tn('v', ['j'])}`, { c: LOOK.metric, size: 17, a: mAmt });
@@ -235,7 +235,7 @@ export const dualBasis = {
     { key: 'shear', label: 'shear', min: 0, max: 1, step: 0.01, def: null },
     { key: 'focus', label: 'focus on i', min: 0, max: 3, step: 1, def: null },
   ],
-  camera: { pos: [4.6, 3.4, 5.6], target: [1.05, 0.95, 0.95], fov: 40 },
+  camera: { pos: [7.4, 4.6, 3.6], target: [1.0, 0.9, 1.1], fov: 38 },
   fog: 0.04,
   frame(dl, S) {
     const p = S.p, T = S.time;

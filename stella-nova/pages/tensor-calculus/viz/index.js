@@ -60,7 +60,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { DL } from './dl.js';
 import { SCENES, SCENE_IDS, frameScene, paramsFor, sceneInfo } from './registry.js';
-import { SAVER_SHOTS } from './shots.js';
+import { SAVER_SHOTS, fitFov } from './shots.js';
 import { stepScene } from './trace-map.js';
 import { LOOK } from './look.js';
 
@@ -158,6 +158,7 @@ export function createViz(canvas, opts = {}) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(LOOK.fog, 0.035);
   const camera = new THREE.PerspectiveCamera(42, 1.6, 0.05, 200);
+  const view = { w: 1, h: 1, pr: 1, ox: 0, oy: 0, fov: 42 };
 
   // background: a vertical gradient
   {
@@ -177,9 +178,20 @@ export function createViz(canvas, opts = {}) {
   scene.environment = envTex;
   pmrem.dispose();
 
-  const solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.06, envMapIntensity: 0.45 });
-  const glassMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.0, envMapIntensity: 0.35,
-    transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  // The display list does not keep a triangle winding. Both materials are
+  // double-sided, and the shader turns each normal toward the eye.
+  const faceEye = mat => {
+    mat.onBeforeCompile = sh => {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>',
+        'float faceDirection = gl_FrontFacing ? 1.0 : -1.0;\nvec3 normal = normalize( vNormal );\n' +
+        'normal *= dot( normal, vViewPosition ) < 0.0 ? -1.0 : 1.0;\nvec3 nonPerturbedNormal = normal;');
+    };
+    mat.customProgramCacheKey = () => 'tc-face-eye';
+    return mat;
+  };
+  const solidMat = faceEye(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.38, metalness: 0.06, envMapIntensity: 0.45, side: THREE.DoubleSide }));
+  const glassMat = faceEye(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0.0, envMapIntensity: 0.35,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   const lineMat = new THREE.ShaderMaterial({
     vertexShader: LINE_VS, fragmentShader: LINE_FS, transparent: true, depthWrite: false,
     uniforms: { uRes: { value: new THREE.Vector2(1, 1) }, uPR: { value: 1 }, uFogColor: { value: new THREE.Color(LOOK.fog) }, uFogDensity: { value: 0.035 } },
@@ -299,10 +311,10 @@ export function createViz(canvas, opts = {}) {
 
   function setCamera(cam, ms = 1200) {
     if (!cam) return;
-    const to = { pos: new THREE.Vector3(...cam.pos), target: new THREE.Vector3(...cam.target), fov: cam.fov ?? camera.fov };
+    const to = { pos: new THREE.Vector3(...cam.pos), target: new THREE.Vector3(...cam.target), fov: cam.fov ?? view.fov };
     if (cam.orbit != null) setOrbit(cam.orbit);
-    if (!ms) { camera.position.copy(to.pos); controls.target.copy(to.target); camera.fov = to.fov; camera.updateProjectionMatrix(); glide = null; return; }
-    glide = { t0: performance.now(), ms, from: { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov }, to };
+    if (!ms) { camera.position.copy(to.pos); controls.target.copy(to.target); view.fov = to.fov; applyFov(); glide = null; return; }
+    glide = { t0: performance.now(), ms, from: { pos: camera.position.clone(), target: controls.target.clone(), fov: view.fov }, to };
   }
   function stepGlide(now) {
     if (!glide) return;
@@ -310,8 +322,8 @@ export function createViz(canvas, opts = {}) {
     u = u * u * (3 - 2 * u);
     camera.position.lerpVectors(glide.from.pos, glide.to.pos, u);
     controls.target.lerpVectors(glide.from.target, glide.to.target, u);
-    camera.fov = glide.from.fov + (glide.to.fov - glide.from.fov) * u;
-    camera.updateProjectionMatrix();
+    view.fov = glide.from.fov + (glide.to.fov - glide.from.fov) * u;
+    applyFov();
     if (u >= 1) glide = null;
   }
   function setOrbit(degPerSec) {
@@ -329,7 +341,12 @@ export function createViz(canvas, opts = {}) {
   if (opts.orbit) setOrbit(opts.orbit);
   const listeners = new Set();
 
-  const view = { w: 1, h: 1, pr: 1, ox: 0, oy: 0 };
+  // view.fov is the scene's vertical field of view; fitFov widens it on a
+  // tall view (phones, 9:16 saver)
+  function applyFov() {
+    const f = fitFov(view.fov, view.w / view.h);
+    if (Math.abs(f - camera.fov) > 1e-4) { camera.fov = f; camera.updateProjectionMatrix(); }
+  }
   function resize() {
     const w = Math.max(1, canvas.clientWidth || canvas.width || 1), h = Math.max(1, canvas.clientHeight || canvas.height || 1);
     const dpr = win.devicePixelRatio || 1;
@@ -341,6 +358,7 @@ export function createViz(canvas, opts = {}) {
     renderer.setSize(w, h, false);
     if (composer) { composer.setPixelRatio(pr); composer.setSize(w, h); }
     camera.aspect = w / h;
+    camera.fov = fitFov(view.fov, w / h);
     if (view.ox || view.oy) camera.setViewOffset(w, h, view.ox, view.oy, w, h); else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     lineMat.uniforms.uRes.value.set(w * pr, h * pr);
