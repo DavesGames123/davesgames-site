@@ -46,7 +46,14 @@
 //  derivatives); Lagarde 2013 (wet surfaces); Mikkelsen 2020 (surface
 //  gradient bump); Hillaire 2020 (aerial perspective idea).
 //
-//  grep -n targets: "struct GroundU", "fn vs", "fn vsShadow", "fn vnoised",
+//  FAR RING  fn vsRing draws render/ground.js farRingMesh. Past the world
+//  square every lookup folds into the world (fn foldXZ, a mirror), and fn
+//  ringHeight flattens the mirrored land to U.ring over U.ring.y metres.
+//  SNOW LINE  U.snow = the fit T = a + b h of the LIB temperature: the line
+//  is where T reaches -7 C (summer) .. +1 C (winter).
+//
+//  grep -n targets: "struct GroundU", "fn vs", "fn vsShadow", "fn vsRing",
+//  "fn foldXZ", "fn ringHeight", "climate snow line", "fn vnoised",
 //  "fn fbmd", "fn biomeMix", "fn layerRock", "fn layerGrass", "fn layerSand",
 //  "fn layerGravel", "fn marchShadow", "fn aerial", "fn fs"
 // ============================================================================
@@ -59,6 +66,8 @@ struct GroundU {
   tiles: array<vec4f, 4>,  // tile size m of texture array layer k: tiles[k / 4][k % 4]
   map: array<vec4f, 4>,    // [0..7] primary layer of logical layer l, [8..15] alternate (255: none)
   cloud: vec4f,   // SKY cloud shadow: xy rect origin (world xz), z rect size m, w cloud base y m
+  snow: vec4f,    // climate: x T at 0 m (C), y lapse dT/dh (C per m, < 0), z fit valid (0/1), w 0
+  ring: vec4f,    // far ring: x floor height m, y fade length m, z floor relief m, w 0
 };
 @group(1) @binding(0) var<uniform> U: GroundU;
 @group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // ASSETS ground sets, rgba8unorm-srgb
@@ -125,6 +134,34 @@ fn vs(@builtin(vertex_index) vid: u32, inst: Inst) -> VOut {
   o.pos = G.viewProj * vec4f(o.world, 1.0);
   o.level = inst.b.z;
   o.morph = m.z;
+  return o;
+}
+
+// Far ring height: the mirrored world (with a slow warp, so the mirror line
+// does not read as a fold) that flattens to a low floor with soft relief
+// (no-sea worlds) or sinks under the sea (worlds with a sea).
+fn ringHeight(xz: vec2f) -> f32 {
+  let d = outsideDist(xz);
+  let ws = G.terrain.x;
+  let wk = smoothstep(0.0, ws * 0.1, d);
+  let wq = xz / (ws * 0.18);
+  let warp = vec2f(fbm2(wq, 3), fbm2(wq + vec2f(41.3, 7.9), 3)) * (ws * 0.09 * wk);
+  let f = foldXZ(xz + warp);
+  let h = terrainHeight(f.xy);
+  let k = ringFade(xz);
+  let relief = fbm2(xz / (ws * 0.22), 4) * U.ring.z;
+  let flo = U.ring.x + relief + (abs(relief) * 0.6);
+  return mix(h, flo, k);
+}
+
+// The far ring mesh: a = (x, z, skirt drop m). Level -1 marks it in fs.
+@vertex
+fn vsRing(@location(0) a: vec3f) -> VOut {
+  var o: VOut;
+  o.world = vec3f(a.x, ringHeight(a.xy) - a.z, a.y);
+  o.pos = G.viewProj * vec4f(o.world, 1.0);
+  o.level = -1.0;
+  o.morph = 0.0;
   return o;
 }
 
@@ -246,10 +283,36 @@ fn voronoi2(p: vec2f) -> vec4f {
 
 // ------------------------------------------------------------ sampling --
 
-fn gUV(xz: vec2f) -> vec2f { return (xz - G.terrainOrigin.xy) / G.terrain.x; }
+// FAR RING: past the world square the ground mirrors the world (a
+// triangle wave in each axis), so the land goes on to the horizon with no
+// cut edge. foldXZ: xy the point folded into the square, zw the sign of
+// each axis (-1 where the fold mirrors it). Inside the square it is the
+// identity, so every lookup below is unchanged there.
+fn foldXZ(xz: vec2f) -> vec4f {
+  let ws = G.terrain.x;
+  let u = (xz - G.terrainOrigin.xy) / ws;
+  let t = u - (floor(u * 0.5) * 2.0);          // 0..2
+  let m = t > vec2f(1.0);
+  let f = select(t, vec2f(2.0) - t, m);
+  return vec4f(G.terrainOrigin.xy + (f * ws), select(vec2f(1.0), vec2f(-1.0), m));
+}
+// distance (m) of xz outside the world square (0 inside)
+fn outsideDist(xz: vec2f) -> f32 {
+  let half = G.terrain.x * 0.5;
+  let c = G.terrainOrigin.xy + vec2f(half);
+  return length(max(abs(xz - c) - vec2f(half), vec2f(0.0)));
+}
+// the flattening of the far ring: 0 at the world edge, 1 at U.ring.y out
+fn ringFade(xz: vec2f) -> f32 { return smoothstep(0.0, max(U.ring.y, 1.0), outsideDist(xz)); }
+
+fn gUV(xz: vec2f) -> vec2f { return (foldXZ(xz).xy - G.terrainOrigin.xy) / G.terrain.x; }
 
 fn auxAt(xz: vec2f) -> vec4f { return textureSampleLevel(tAux, sLinear, gUV(xz), 0.0); }
-fn nrmAt(xz: vec2f) -> vec4f { return textureSampleLevel(tNormal, sLinear, gUV(xz), 0.0); }
+fn nrmAt(xz: vec2f) -> vec4f {
+  let f = foldXZ(xz);
+  let s = textureSampleLevel(tNormal, sLinear, (f.xy - G.terrainOrigin.xy) / G.terrain.x, 0.0);
+  return vec4f(s.x * f.z, s.y, s.z * f.w, s.w);
+}
 
 // Base height (no detail): bilinear of tHeight. Used by the shadow march.
 fn baseH(xz: vec2f) -> f32 {
@@ -497,10 +560,14 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   let mott = (big.x * 0.6) + (midN * 0.4) + 0.5;
   let band2 = mix(mott, sin((p.y + warpY * 1.7) * 1.3) * 0.5 + 0.5, (1.0 - smoothstep(0.5, 1.5, fp)) * strat * 0.7);
   let blockTint = mix(0.92, 1.08, cw.id);
-  let granite = mix(vec3f(0.155, 0.150, 0.142), vec3f(0.235, 0.226, 0.212), band2) * mix(1.0, blockTint, fadeJ);
+  let granite = mix(vec3f(0.105, 0.097, 0.088), vec3f(0.180, 0.166, 0.148), band2) * mix(1.0, blockTint, fadeJ);
   let sandst = mix(vec3f(0.290, 0.150, 0.080), vec3f(0.400, 0.255, 0.150), band) * mix(1.0, blockTint, fadeJ);
   let basalt = mix(vec3f(0.060, 0.058, 0.056), vec3f(0.095, 0.088, 0.080), band2);
   var c = (granite * region.x) + (sandst * region.y) + (basalt * region.z);
+  // hue by rock body (0.5..2 km): warm iron-stained faces, cool grey-blue
+  // gneiss, so a range is not one grey
+  let body = fbm2((p.xz * 0.0011) + vec2f(p.y * 0.0004, 3.1), 3);
+  c *= mix(vec3f(1.12, 0.99, 0.84), vec3f(0.90, 0.97, 1.06), smoothstep(-0.35, 0.35, body));
   c = mix(c, c * mix(0.88, 1.1, band), cliff * 0.6);
   // water stains and desert varnish run down the cliffs
   let streak = vnoised(vec3f(p.x * 0.8, p.y * 0.05, p.z * 0.8)).x;
@@ -630,7 +697,7 @@ fn layerGravel(p: vec3f, fp: f32, region: vec3f) -> Mat {
   let g = vec3f(v.y, 0.0, v.z) * (2.0 * s / (r * r)) * step(0.0, 1.0 - ((v.x * v.x) / (r * r)));
   let n = fbmd(p, 0.6, 3, 0.5, fp);
   m.h = vec4f(mix(0.5, (0.35 * dome) + (0.25 * dome2) + 0.2, fade) + (0.1 * n.x), (g * 0.04 * fade) + (n.yzw * 0.1));
-  let stoneA = mix(vec3f(0.30, 0.28, 0.25), vec3f(0.36, 0.25, 0.17), region.y);
+  let stoneA = mix(vec3f(0.21, 0.195, 0.175), vec3f(0.36, 0.25, 0.17), region.y);
   let stoneB = mix(vec3f(0.16, 0.15, 0.14), vec3f(0.42, 0.40, 0.37), v.w);
   var c = mix(stoneA, stoneB, fade * 0.7);
   c *= mix(1.0, mix(0.55, 1.1, dome), fade);
@@ -752,7 +819,7 @@ fn mapIdx(i: u32) -> u32 { return u32(U.map[i >> 2u][i & 3u] + 0.5); }
 // mean albedo of the procedural rock palette (the ratio carries the cracks,
 // lichen, strata and weathering of the procedural rock onto the texture)
 fn rockMean(region: vec3f) -> vec3f {
-  return (vec3f(0.195, 0.188, 0.177) * region.x) + (vec3f(0.345, 0.2, 0.115) * region.y) + (vec3f(0.078, 0.073, 0.068) * region.z);
+  return (vec3f(0.142, 0.131, 0.118) * region.x) + (vec3f(0.345, 0.2, 0.115) * region.y) + (vec3f(0.078, 0.073, 0.068) * region.z);
 }
 
 // ---------------------------------------------------------------- light --
@@ -885,11 +952,14 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // with the footprint so far relief does not alias
   let nA = nrmAt(xz);
   let nb = normalize(nA.xyz + vec3f(0.0, 1e-4, 0.0));
-  let gB = -nb.xz / max(nb.y, 0.08);
+  // the far ring (level -1) flattens the mirrored world: so does its slope
+  let outside = v.level < -0.5;
+  let rk = select(0.0, ringFade(xz), outside);
+  let gB = (-nb.xz / max(nb.y, 0.08)) * (1.0 - rk);
   // (detailHeight costs ~30 texel loads: four calls only where its slope
   // shows, at quality 0.5 and up within 900 m)
   var gD = gB;
-  if ((q >= 0.5) && (dist < 900.0)) {
+  if ((q >= 0.5) && (dist < 900.0) && !outside) {
     // forward differences: three calls, not four
     let e = clamp(fp * 0.6, 0.08, G.terrain.w * 0.4);
     let d0 = detailHeight(xz);
@@ -930,16 +1000,17 @@ fn fs(v: VOut) -> @location(0) vec4f {
   var w1 = bw.w1;   // sand, snow, mud, gravel
   let jit = (fbm2(xz * 0.03, 3) * 1.4) + (fbm2((xz * 0.21) + 7.7, 2) * 0.6);
   // slope: grass and soil slide off, rock shows, cliffs above ~45 deg
-  let rockS = smoothstep(0.16 + (jit * 0.05), 0.30 + (jit * 0.05), slope);
-  let cliffS = smoothstep(0.34 + (jit * 0.06), 0.48 + (jit * 0.06), slope);
+  // (alpine turf holds on to ~40 deg: grass gives way from 37 to 50 deg)
+  let rockS = smoothstep(0.20 + (jit * 0.05), 0.36 + (jit * 0.05), slope);
+  let cliffS = smoothstep(0.40 + (jit * 0.06), 0.55 + (jit * 0.06), slope);
   let soft = 1.0 - rockS;
   w0 = vec4f(w0.x + (rockS * 1.4), cliffS * 2.5, w0.z * soft, w0.w * soft);
   w1 = vec4f(w1.x * soft, w1.y, w1.z * soft, w1.w * (1.0 - (cliffS * 0.8)));
   // height: above the tree line rock and scree take over
   let tree = 1.0 - smoothstep(0.62 + (jit * 0.08), 0.80 + (jit * 0.08), hRel);
   w0.w *= tree;
-  w0.z *= mix(0.35, 1.0, tree);
-  w0.x += (1.0 - tree) * 0.6;
+  w0.z *= mix(0.55, 1.0, tree);
+  w0.x += (1.0 - tree) * 0.4;
   w1.w += (1.0 - tree) * 0.4 * soft;
   // beaches near the sea: sand on low flat ground, wet sand below the
   // swash line (forge planet.wgsl shore idea)
@@ -971,14 +1042,21 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // frame: +z is south, so a north face has n.z < 0), less on steep
   // slopes; plus the snow biome
   let cover = clamp(G.weather2.y, 0.0, 1.0);
-  // cover 0: no snow; 0.5: the upper slopes; 1: down to the sea
-  let snowLine = mix(hMax + 300.0, sea - 150.0, pow(cover, 0.7));
+  // the climate snow line: the height where the LIB temperature (a linear
+  // fit T = a + b h, ground.js) falls to the season's limit: -7 C in
+  // summer, -3 C in spring and autumn, +1 C in winter (season 0 spring)
+  let tSnow = -3.0 + (4.0 * cos(6.2831853 * (G.weather2.w - 0.75)));
+  let fitOk = (U.snow.z > 0.5) && (U.snow.y < -1e-5);
+  let climLine = select(hMax + 300.0, (tSnow - U.snow.x) / min(U.snow.y, -1e-5), fitOk);
+  // weather cover pulls the line down: 0.5 the upper slopes, 1 to the sea
+  let snowLine = mix(min(climLine, hMax + 300.0), sea - 150.0, pow(cover, 0.7));
   let aspect = clamp(-nGeo.z * 2.0, -1.0, 1.0);
-  let snowN = fbm2(xz * 0.004, 4) * 120.0;
-  var snow = smoothstep(snowLine - 140.0, snowLine + 60.0, p.y + snowN + (aspect * 90.0));
+  let snowN = fbm2(xz * 0.004, 4) * 160.0;
+  var snow = smoothstep(snowLine - 160.0, snowLine + 80.0, p.y + snowN + (aspect * 120.0));
   // fresh snowfall dusts everything that is not too steep
   snow = max(snow, smoothstep(0.1, 0.8, G.weather.z) * 0.55);
-  snow *= 1.0 - smoothstep(0.30, 0.55, slope);
+  // steep faces shed snow: bare rock above ~60 deg, a full cover below ~45
+  snow *= 1.0 - smoothstep(0.32 + (jit * 0.04), 0.52 + (jit * 0.04), slope);
   snow = max(snow, w1.y * (1.0 - cliffS * 0.6));
   snow *= 1.0 - clamp(under + bed, 0.0, 1.0);
 
@@ -1048,7 +1126,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
         case 4u: { tgtP = mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y); tgtA = vec3f(0.40, 0.30, 0.19); rmin = 0.75; }
         case 5u: { tgtP = vec3f(0.82, 0.85, 0.90); rmin = 0.35; }
         case 6u: { tgtP = vec3f(0.085, 0.066, 0.045); rmin = 0.45; }
-        case 7u: { tgtP = vec3f(0.24, 0.215, 0.19); tgtA = vec3f(0.23, 0.22, 0.20); }
+        case 7u: { tgtP = vec3f(0.19, 0.172, 0.152); tgtA = vec3f(0.17, 0.16, 0.148); }
         default: {}
       }
       var t = texSetCal(kP, tgtP, pw, nGeo, tri, dpx, dpy, farMix, texF);
@@ -1162,7 +1240,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
     // march covers the ground past them (or all of it with no cascades)
     let nc = i32(cascades.params.x);
     let cFar = select(0.0, cascades.splits[max(nc - 1, 0)], nc > 0);
-    if (dist > cFar * 0.75) {
+    if ((dist > cFar * 0.75) && !outside) {
       let ms = marchShadow(vec3f(p.x, max(p.y, baseH(xz)) + 0.5, p.z), L, fp);
       sh = min(sh, mix(1.0, ms, smoothstep(cFar * 0.75, cFar * 0.95 + 1.0, dist)));
     }
@@ -1187,6 +1265,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let hemi = mix(0.35, 1.0, (n.y * 0.5) + 0.5) * (0.8 + (0.35 * dot(n, sunSide)));
   let bounce = alb * 0.25 * (1.0 - ((n.y * 0.5) + 0.5));
   col += alb * (G.ambient.rgb / GPI) * (hemi + bounce) * ao;
+  // terrain bounce: sunlit slopes across a valley light the shaded side
+  // (a fixed fraction: the mean ground albedo times the view of lit land)
+  col += alb * sunE * (clamp(L.y + 0.1, 0.0, 1.0) * 0.045 * (1.0 - (0.5 * n.y)) * ao);
   // sky reflection on wet ground, puddles and snow
   let R = reflect(-V, n);
   let ndv = max(dot(n, V), 0.0);

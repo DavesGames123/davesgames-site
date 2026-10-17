@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import {
   lodConfig, buildMinMax, nodeBounds, selectNodes, morphVertex, gridIndices,
   frustumPlanes, groundLayerMap, groundRecords, LAYERS, SKIP_SETS,
+  fitLapse, farRingParams, farRingMesh,
 } from '../render/ground.js';
 
 let pass = 0, fail = 0;
@@ -230,8 +231,36 @@ for (const q of [1.0, 0.3]) {
   ok(bad.length === 0, 'ground.wgsl: no unparenthesised mixed && / || or * / ^', bad.map(([, n]) => n).join(','));
   const falling = [...src.matchAll(/smoothstep\(\s*(-?[0-9.]+)\s*,\s*(-?[0-9.]+)\s*,/g)].filter((m) => +m[1] >= +m[2]).map((m) => m[0]);
   ok(falling.length === 0, 'ground.wgsl: no smoothstep with falling or equal edges (undefined on Metal)', falling.join(' '));
-  ok(/fn vs\(/.test(src) && /fn vsShadow\(/.test(src) && /fn fs\(/.test(src), 'ground.wgsl has the vs, vsShadow and fs entry points');
+  ok(/fn vs\(/.test(src) && /fn vsShadow\(/.test(src) && /fn vsRing\(/.test(src) && /fn fs\(/.test(src), 'ground.wgsl has the vs, vsShadow, vsRing and fs entry points');
   ok(!/@group\(0\)/.test(src), 'ground.wgsl declares no group 0 binding (common.wgsl owns group 0)');
+}
+
+// ---- the climate snow line fit and the far ring
+{
+  const N = 4096, h = new Float32Array(N), T = new Float32Array(N);
+  for (let i = 0; i < N; i++) { h[i] = (i % 64) * 50; T[i] = 8.2 - 0.0064 * h[i] + ((i * 7919) % 13 - 6) * 0.01; }
+  const f = fitLapse(h, T);
+  ok(f[2] === 1 && Math.abs(f[0] - 8.2) < 0.05 && Math.abs(f[1] + 0.0064) < 1e-4, 'fitLapse recovers T = a + b h', f.join(','));
+  // the snow line for summer (-7 C): (tSnow - a) / b, as in ground.wgsl
+  const line = (-7 - f[0]) / f[1];
+  ok(line > 2300 && line < 2450, 'the summer snow line of an alpine fit lies near 2.4 km', line.toFixed(0));
+  const flat = fitLapse(new Float32Array(100).fill(5), new Float32Array(100).fill(3));
+  ok(flat[2] === 0, 'fitLapse: a flat world gives no fit');
+  const dry = farRingParams({ worldSize: 20000, seaLevel: -100 }, 5, 3400);
+  const wet = farRingParams({ worldSize: 20000, seaLevel: 0 }, -180, 1400);
+  ok(dry[0] > 5 && dry[2] > 0, 'far ring: a world with no sea gets a low land floor with relief', dry.join(','));
+  ok(wet[0] < 0 && wet[2] === 0, 'far ring: a world with a sea sinks the ring under the sea', wet.join(','));
+  const M = 32, K = 8, g = farRingMesh(20000, M, K);
+  const P = 4 * M, R = K + 2;
+  ok(g.pos.length === R * P * 3 && g.idx.length === (R - 1) * P * 6, 'far ring mesh: vertex and index counts');
+  let inside = 0, maxIdx = 0, onEdge = 0;
+  for (let v = 0; v < R * P; v++) {
+    const x = g.pos[v * 3], z = g.pos[v * 3 + 1], c = Math.max(Math.abs(x), Math.abs(z));
+    if (c < 10000 - 1e-3) inside++;
+    if (Math.abs(c - 10000) < 1e-3 && g.pos[v * 3 + 2] === 0) onEdge++;
+  }
+  for (const i of g.idx) maxIdx = Math.max(maxIdx, i);
+  ok(inside === P && onEdge === P && maxIdx < R * P, 'far ring mesh: one skirt ring inside, one ring on the world edge', `${inside} ${onEdge}`);
 }
 
 console.log(`# ground: ${pass} passed, ${fail} failed`);

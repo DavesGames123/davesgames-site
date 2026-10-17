@@ -36,7 +36,20 @@
 //  height-field march in ground.wgsl adds long ridge shadows past the
 //  cascades.
 //
+//  FAR RING  farRingMesh: square rings round the world out to max(5 x
+//  world, 80 km) past the edge, drawn after the CDLOD mesh with the same
+//  fs (ground.wgsl fn vsRing). Past the edge the shader mirrors the world
+//  (fn foldXZ) and flattens it over farRingParams' fade length to a low
+//  floor (no sea) or under the sea (a world with a sea), so no cut edge
+//  shows. A skirt ring 200 m down hides the seam. setFarRing(on).
+//
+//  SNOW LINE  fitLapse fits T = a + b h to Terrain.temperature on each
+//  final terrain; ground.wgsl puts the snow line where T falls to the
+//  season's limit (-7 C summer, +1 C winter), lowered by G.weather2.y.
+//
 //  grep -n targets: "export function lodConfig", "export function buildMinMax",
+//  "export function fitLapse", "export function farRingParams",
+//  "export function farRingMesh", "function buildRing",
 //  "export function nodeBounds", "export function frustumPlanes",
 //  "export function selectNodes", "export function morphVertex",
 //  "export function gridIndices", "export function groundLayerMap",
@@ -319,6 +332,74 @@ export function groundRecords(manifest) {
   return g;
 }
 
+// ---------------------------------------------------- snow line and ring --
+
+// Least-squares fit T = a + b h of the LIB temperature (C) against the
+// height (m), on a stride of the grid. -> [a, b, valid, 0]. ground.wgsl
+// puts the snow line where T falls to the season's limit.
+export function fitLapse(height, temp) {
+  const n = Math.min(height.length, temp.length);
+  const step = Math.max(1, Math.floor(n / 65536));
+  let sx = 0, sy = 0, sxx = 0, sxy = 0, k = 0;
+  for (let i = 0; i < n; i += step) {
+    const x = height[i], y = temp[i];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    sx += x; sy += y; sxx += x * x; sxy += x * y; k++;
+  }
+  const den = k * sxx - sx * sx;
+  if (k < 16 || Math.abs(den) < 1e-6) return [0, 0, 0, 0];
+  const b = (k * sxy - sx * sy) / den, a = (sy - b * sx) / k;
+  // a flat or inverted fit (no relief) gives no climate snow line
+  if (!(b < -1e-5)) return [a, 0, 0, 0];
+  return [a, b, 1, 0];
+}
+
+// Far ring parameters: [floor height m, fade length m, floor relief m, 0].
+// A world with a sea sinks the ring under the sea; a world with no sea
+// (LIB seaLevel under the lowest land) flattens it to low rolling land.
+export function farRingParams(t, hMin, hMax) {
+  const ws = t.worldSize || 1;
+  const sea = t.seaLevel ?? 0;
+  const span = Math.max(1, hMax - Math.max(hMin, sea));
+  const hasSea = sea > hMin + 0.5;
+  if (hasSea) return [sea - 30 - span * 0.03, ws * 0.9, 0, 0];
+  return [hMin + span * 0.10, ws * 1.1, span * 0.10, 0];
+}
+
+// The far ring mesh: K + 2 square rings round the world square, M segments
+// per side. Ring 0 is a skirt just inside the edge, 200 m down (it hides
+// the hairline between the CDLOD edge and the ring). Ring 1 lies on the
+// edge, then the rings spread out (power 2.2) to the half size plus
+// max(5 x world, 80 km). Vertex = x, z, drop m; index uint32.
+export function farRingMesh(ws, M = 160, K = 56) {
+  const half = ws / 2, rMax = half + Math.max(ws * 5, 80000);
+  const radii = [half - Math.min(2, ws * 1e-4), half];
+  for (let k = 1; k <= K; k++) radii.push(half + (rMax - half) * Math.pow(k / K, 2.2));
+  const P = 4 * M, R = radii.length;
+  const pos = new Float32Array(R * P * 3);
+  for (let r = 0; r < R; r++) {
+    const h = radii[r];
+    for (let i = 0; i < P; i++) {
+      const side = Math.floor(i / M), f = (i % M) / M;
+      const s = -h + 2 * h * f;
+      // corners in order: bottom edge (+x), right (+z), top (-x), left (-z)
+      const xz = side === 0 ? [s, -h] : side === 1 ? [h, s] : side === 2 ? [-s, h] : [-h, -s];
+      const o = (r * P + i) * 3;
+      pos[o] = xz[0]; pos[o + 1] = xz[1]; pos[o + 2] = r === 0 ? 200 : 0;
+    }
+  }
+  const idx = new Uint32Array((R - 1) * P * 6);
+  let q = 0;
+  for (let r = 0; r < R - 1; r++) {
+    for (let i = 0; i < P; i++) {
+      const a = r * P + i, b = r * P + ((i + 1) % P), c = a + P, d = b + P;
+      idx[q++] = a; idx[q++] = b; idx[q++] = c;
+      idx[q++] = b; idx[q++] = d; idx[q++] = c;
+    }
+  }
+  return { pos, idx };
+}
+
 // ----------------------------------------------------------------- module --
 
 const MIP_WGSL = /* wgsl */`
@@ -358,8 +439,8 @@ export async function createGround(gpu) {
     ],
   });
   // the shadow pass reads U (group 1) too: the morph needs the terrain top
-  const uBuf = device.createBuffer({ size: 52 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
-  const uData = new Float32Array(52);
+  const uBuf = device.createBuffer({ size: 60 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
+  const uData = new Float32Array(60);
   // SKY's cloud shadow map (module.cloudShadow), when CORE hands it over as
   // gpu.cloudShadow or frame.cloudShadow; a lit 1 x 1 stand-in until then
   const litTex = device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, label: 'ground lit' });
@@ -406,6 +487,28 @@ export async function createGround(gpu) {
     primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
     depthStencil: gpu.depthState ? gpu.depthState(true, 'greater') : { format: depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
   });
+  // the far ring (ground.wgsl fn vsRing): the same material, no LOD
+  const ringPipe = await device.createRenderPipelineAsync({
+    label: 'ground far ring',
+    layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, groundLayout, gpu.shadowSampleLayout] }),
+    vertex: { module, entryPoint: 'vsRing', buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] }] },
+    fragment: { module, entryPoint: 'fs', targets: [{ format: hdrFormat }] },
+    primitive: { topology: 'triangle-list', cullMode: 'none' },
+    depthStencil: gpu.depthState ? gpu.depthState(true, 'greater') : { format: depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
+  });
+  let ring = null;   // { ws, vbuf, ibuf, count }
+  function buildRing(ws) {
+    if (ring && Math.abs(ring.ws - ws) < 1) return;
+    if (ring) { ring.vbuf.destroy(); ring.ibuf.destroy(); }
+    const g = farRingMesh(ws, gpu.coarse || quality < 0.45 ? 96 : 160, gpu.coarse || quality < 0.45 ? 40 : 56);
+    const vbuf = device.createBuffer({ size: g.pos.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, label: 'ground ring v' });
+    const ibuf = device.createBuffer({ size: g.idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST, label: 'ground ring i' });
+    queue.writeBuffer(vbuf, 0, g.pos); queue.writeBuffer(ibuf, 0, g.idx);
+    ring = { ws, vbuf, ibuf, count: g.idx.length };
+  }
+  const snowFit = new Float32Array(4);
+  const ringU = new Float32Array(4);
+
   const shadowPipe = await device.createRenderPipelineAsync({
     label: 'ground shadow',
     layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, groundLayout, gpu.shadowPassLayout] }),
@@ -439,6 +542,7 @@ export async function createGround(gpu) {
   let debug = 0;
   let aerialOn = gpu.groundAerial === false ? 0 : 1;
   let lastTime = 0;
+  let ringOn = true;
 
   // the min / max pyramid of the newest heights; during the stage blend
   // (gpu/terrain-gpu.js BLEND_S) the bounds are the union of old and new
@@ -457,6 +561,12 @@ export async function createGround(gpu) {
     }
     cfg = lodConfig(t.worldSize, quality, gpu.coarse);
     cfgSh = lodConfig(t.worldSize, quality, gpu.coarse, 0.55);
+    buildRing(t.worldSize);
+    // the climate snow line: T = a + b h over the final terrain (a stage
+    // snapshot with no temperature keeps the last fit)
+    const tc = t.cpu && t.cpu.temperature && t.cpu.height ? t.cpu : null;
+    if (tc) snowFit.set(fitLapse(tc.height, tc.temperature));
+    ringU.set(farRingParams(t, hMin, hMax));
   }
 
   const unionMM = {
@@ -508,6 +618,8 @@ export async function createGround(gpu) {
       frame.time || 0, hMin, hTop, 1]);
     uData.set(layerMap.tiles, 16);
     uData.set(layerMap.map, 32);
+    uData.set(snowFit, 52);
+    uData.set(ringU, 56);
     queue.writeBuffer(uBuf, 0, uData);
   }
 
@@ -532,6 +644,12 @@ export async function createGround(gpu) {
     pass.setPipeline(mainPipe);
     pass.setBindGroup(1, groundBG);
     drawList(pass, instBuf, sel, cfg);
+    if (ring && ringOn) {
+      pass.setPipeline(ringPipe);
+      pass.setVertexBuffer(0, ring.vbuf);
+      pass.setIndexBuffer(ring.ibuf, 'uint32');
+      pass.drawIndexed(ring.count);
+    }
   }
 
   // CORE has set group 0 and group 2 (SP of cascade frame.cascade)
@@ -652,10 +770,12 @@ export async function createGround(gpu) {
     texturesReady,
     setDebug(mode) { debug = mode | 0; },     // 0 lit, 1 layer weights, 2 normals, 3 LOD
     setAerial(on) { aerialOn = on ? 1 : 0; }, // off when SKY's volume does all of the haze
+    setFarRing(on) { ringOn = !!on; },          // the mirrored land past the world edge
     stats() { return { patches: sel.count, full: sel.full, half: sel.half, shadowPatches: shSel.count, levels: cfg?.levels, N: cfg?.N, textures: texOn }; },
     resize() {},
     dispose() {
       for (const b of [uBuf, instBuf, shInstBuf]) b.destroy();
+      if (ring) { ring.vbuf.destroy(); ring.ibuf.destroy(); }
       for (const k of Object.keys(idxBufs)) idxBufs[k].buf.destroy();
       texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy();
     },
