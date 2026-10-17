@@ -67,14 +67,13 @@ fn vol_medium(p: vec3f) -> VolMedium {
   // noise banks that drift with the wind
   let wind = vec3f(G.wind.x, 0.0, G.wind.y) * G.camPos.w;
   let n1 = textureSampleLevel(tNoiseBase, sRepeat, (p - wind) / 1400.0, 0.0);
-  // the detail tile is 32 texels: at 260 m its cells read as a dotted grid
-  // on a fog top seen at a grazing angle, so it is large and weak here
-  let n2 = textureSampleLevel(tNoiseDetail, sRepeat, (p - wind * 1.7) / 900.0, 0.0);
-  let bank = clamp(n1.r * 1.3 - 0.25 + (n2.a - 0.5) * 0.25, 0.0, 1.5);
+  // no detail tile here: its 32-texel cells read as a dotted grid of
+  // circles over the fog sea in far aerial views, even large and weak
+  let bank = clamp(n1.r * 1.3 - 0.25, 0.0, 1.5);
   // ground haze: a thin layer on the ground and a deep layer above the sea
   let haze = S.vol1.z * (0.45 * exp(-hG / 140.0) + 0.55 * exp(-hSea / 1700.0)) * (0.55 + 0.6 * bank);
   // valley fog: a lake of fog under the fog top, ragged top edge
-  let top = S.vol0.w + (n1.g - 0.5) * 80.0 + (n2.r - 0.5) * 15.0;
+  let top = S.vol0.w + (n1.g - 0.5) * 80.0 + (n1.b - 0.5) * 25.0;
   let valley = S.precip.w * S.vol0.z * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
   // rain and snow under the cloud base
   let below = sk_ss(S.cloud0.x + 200.0, S.cloud0.x - 300.0, p.y);
