@@ -5,18 +5,28 @@
 // then plays back how it was made (playback.js), in the 2D map (draw2d.js)
 // or in the 3D view (view3d.js, loaded on first use).
 //
+// TERRAIN (on by default on this page; gen.js defaults keep it off): the
+// city stands on a DLA world (terrain.js, lib/dla-terrain.js). The playback
+// starts with the terrain forming stage by stage; the 2D map has a
+// hillshade and contour underlay (chip "Terrain", key T). The dice rolls
+// the seed and every section that is not kept (the "Keep" switch of each
+// section); each section also has its own dice.
+//
 //   Space  play / pause     Left / Right  previous / next seed    R  new city
 //   E      skip to the end  X  speed      V  2D / 3D               F  field
+//   T      terrain underlay (2D)
 //   S      settings         D  export     I  about                 Esc  close
 //   2D: drag to pan, wheel or pinch to zoom, double-click to fit.
 //   #seed=..&size=.. in the URL picks a city (other options too).
 //
 // grep: function regenerate  function frame  function buildPanel  function bind2D
 //       function setView  function buildSave  function captionHTML  window.snSaver
-//       function draw2D  function fit2D  function hashOpts
+//       function draw2D  function fit2D  function hashOpts  function rollSection
+//       function terrainLayer  function terrainImage
 
 import { SIZES, defaults, generate, fieldSampler } from './gen.js';
 import { timeline, frameAt } from './playback.js';
+import { CITY_PRESETS, SITES, presetValues, rollTerrain, TERRAIN_NUM, TERRAIN_STR, snapshotRaster, groundAt } from './terrain.js';
 import { drawMap, fullFrame, fitView, toSVG, toJSON, CREDIT } from './draw2d.js';
 
 const $ = (id) => document.getElementById(id);
@@ -35,7 +45,8 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse = matchMedia('(pointer: coarse)');
 
 // ─── state ──────────────────────────────────────────────────────────────────
-let opts = defaults();
+const PAGE_DEFAULTS = { ...defaults(), terrain: true };
+let opts = { ...PAGE_DEFAULTS };
 let city = null, tl = null, fieldAt = null;
 let T = 0, playing = false, speedI = 0, scrubbing = false;
 let view = '2d';
@@ -50,6 +61,8 @@ let v3 = null, v3Loading = null, v3Failed = false;
 let meshFor = -1;            // genToken of the mesh in the 3D view
 let saver = false;
 let light = 'golden';
+let showTerrain = true;
+const keep = { field: false, roads: false, build: false, terrain: false };   // sections the dice leaves alone
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -76,22 +89,25 @@ function pageMark() {
 }
 
 // ─── URL options ────────────────────────────────────────────────────────────
-const NUM_KEYS = ['seed', 'grids', 'radials', 'fieldScale', 'mainSep', 'majorSep', 'minorSep', 'bigParks', 'lotArea', 'noDivide', 'height'];
-const BOOL_KEYS = ['coast', 'river', 'smooth'];
+const NUM_KEYS = ['seed', 'grids', 'radials', 'fieldScale', 'mainSep', 'majorSep', 'minorSep', 'bigParks', 'lotArea', 'noDivide', 'height', ...TERRAIN_NUM];
+const BOOL_KEYS = ['coast', 'river', 'smooth', 'terrain'];
+const STR_OK = { tPreset: (v) => CITY_PRESETS.some((p) => p[0] === v), tSite: (v) => SITES.some((p) => p[0] === v) };
 function hashOpts() {
   const q = new URLSearchParams(location.hash.slice(1));
   const o = {};
   for (const k of NUM_KEYS) if (q.has(k) && Number.isFinite(+q.get(k))) o[k] = +q.get(k);
   for (const k of BOOL_KEYS) if (q.has(k)) o[k] = q.get(k) === '1';
+  for (const k of TERRAIN_STR) if (q.has(k) && STR_OK[k](q.get(k))) o[k] = q.get(k);
   if (q.has('size') && SIZES[q.get('size')]) o.size = q.get('size');
   return o;
 }
 function writeHash() {
-  const d = defaults(), q = new URLSearchParams();
+  const d = PAGE_DEFAULTS, q = new URLSearchParams();
   q.set('seed', String(opts.seed));
   q.set('size', opts.size);
   for (const k of NUM_KEYS) if (k !== 'seed' && opts[k] !== d[k]) q.set(k, String(opts[k]));
   for (const k of BOOL_KEYS) if (opts[k] !== d[k]) q.set(k, opts[k] ? '1' : '0');
+  for (const k of TERRAIN_STR) if (opts[k] !== d[k]) q.set(k, opts[k]);
   try { history.replaceState(null, '', '#' + q.toString()); } catch { /* sandboxed */ }
 }
 
@@ -131,6 +147,7 @@ async function regenerate(patch = {}, { play = !reduced } = {}) {
   if (token !== genToken) return;
   loadingEl.hidden = true;
   city = c;
+  terrainImages = null;
   tl = timeline(city);
   fieldAt = fieldSampler(city);
   T = play ? 0 : tl.dur;
@@ -154,8 +171,9 @@ function fillParams() {
     param(`${fmt(s.blocks)}`, 'blocks'),
     param(`${fmt(s.lots)}`, 'buildings'),
     param(`<i class="sym">h</i><sub>max</sub> = ${fmt(s.tallest)} m`, 'tallest'),
-  ].join('');
-  $('sub').textContent = `Seed ${city.seed} · ${SIZES[opts.size].label} · ${fmt(city.view.w * 2 / 1000, 1)} × ${fmt(city.view.h * 2 / 1000, 1)} km`;
+  ].concat(city.terrain ? [param(`Δ<i class="sym">z</i> = ${fmt(s.relief)} m`, 'relief')] : []).join('');
+  const tName = city.terrain ? ` · ${(CITY_PRESETS.find((p) => p[0] === city.terrain.preset) || [0, 'Terrain'])[1]} terrain` : '';
+  $('sub').textContent = `Seed ${city.seed} · ${SIZES[opts.size].label} · ${fmt(city.view.w * 2 / 1000, 1)} × ${fmt(city.view.h * 2 / 1000, 1)} km${tName}`;
 }
 function syncSeed() {
   $('seedName').textContent = `Seed ${opts.seed}`;
@@ -163,9 +181,10 @@ function syncSeed() {
 }
 
 const PHASE_NOTE = {
+  terrain: (f) => `Terrain: ${city && city.terrain ? city.terrain.snaps[Math.min(city.terrain.snaps.length - 1, Math.floor(f ? f.snap : 0))].label.toLowerCase() : ''}. DLA ridges, branched-flow rivers, erosion`,
   field: () => `Tensor field: ${opts.grids} grid${opts.grids === 1 ? '' : 's'} and ${opts.radials} radial centre${opts.radials === 1 ? '' : 's'} set the street directions`,
-  coast: () => 'Coastline: a noisy streamline that crosses the map',
-  river: () => 'River: a streamline of the other direction, widened, a road on each bank',
+  coast: () => city && city.terrain ? 'Coastline: the terrain sea level, a road along the shore' : 'Coastline: a noisy streamline that crosses the map',
+  river: () => city && city.terrain ? 'River: the largest terrain river through the map, a road on each bank' : 'River: a streamline of the other direction, widened, a road on each bank',
   main: () => `Main roads: streamlines ${opts.mainSep} m apart`,
   major: () => `Major roads: streamlines ${opts.majorSep} m apart`,
   parks: () => 'Parks: faces of the major road grid',
@@ -178,9 +197,10 @@ const PHASE_NOTE = {
 let shownPhase = '';
 function syncPhase(f) {
   const k = f ? f.phase : 'done';
-  if (k === shownPhase) return;
-  shownPhase = k;
-  $('phase').textContent = (PHASE_NOTE[k] || PHASE_NOTE.done)();
+  const key = k === 'terrain' ? k + Math.floor(f.snap) : k;
+  if (key === shownPhase) return;
+  shownPhase = key;
+  $('phase').textContent = (PHASE_NOTE[k] || PHASE_NOTE.done)(f);
 }
 
 // ─── playback bar ───────────────────────────────────────────────────────────
@@ -271,7 +291,34 @@ function draw2D(fr) {
   const dpr = sizeCanvas2D();
   const f = fr || (tl ? frameAt(city, tl, T) : fullFrame(city));
   const fieldA = Math.max(f.field, showField ? 0.75 : 0);
-  drawMap(ctx2, city, { ...f, field: fieldA }, { w: window.innerWidth, h: window.innerHeight, dpr, ...v2, fieldAt, layers: {} });
+  drawMap(ctx2, city, { ...f, field: fieldA }, { w: window.innerWidth, h: window.innerHeight, dpr, ...v2, fieldAt, layers: { terrain: showTerrain }, terrain: terrainLayer(f) });
+}
+
+// The terrain underlay images: 0..6 the LIB stages (terrain.js
+// snapshotRaster), 7 the finished map (city.terrain.under). Made on first
+// use, for this city only. null where the browser has no ImageData.
+let terrainImages = null;
+function terrainImage(k) {
+  if (!city || !city.terrain || typeof ImageData === 'undefined') return null;
+  if (!terrainImages) terrainImages = [];
+  if (terrainImages[k] !== undefined) return terrainImages[k];
+  const r = k >= city.terrain.snaps.length ? city.terrain.under : snapshotRaster(city.terrain, k);
+  let img = null;
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = r.w; cv.height = r.h;
+    cv.getContext('2d').putImageData(new ImageData(r.data, r.w, r.h), 0, 0);
+    img = cv;
+  } catch { img = null; }
+  terrainImages[k] = img;
+  return img;
+}
+function terrainLayer(f) {
+  if (!city || !city.terrain || !showTerrain) return null;
+  const last = city.terrain.snaps.length;
+  if (!f || f.terrain === undefined || f.terrain >= 1) return { a: terrainImage(last), b: null, k: 0 };
+  const i = Math.min(last, Math.floor(f.snap));
+  return { a: terrainImage(i), b: terrainImage(Math.min(last, i + 1)), k: f.snap - i };
 }
 
 function bind2D() {
@@ -414,38 +461,77 @@ const SLIDERS = [
   ['sWhole', 'noDivide', 'Whole blocks', 0, 0.6, 0.01, (v) => `${fmt(v * 100)} %`],
   ['sHeight', 'height', 'Height', 0.3, 3, 0.05, (v) => `× ${fmt(v, 2)}`],
 ];
+// Terrain sliders (terrain.js options)
+const T_SLIDERS = [
+  ['sRelief', 'tRelief', 'Relief', 40, 1500, 10, (v) => `${v} m`],
+  ['sSea', 'tSea', 'Sea level', 0, 0.75, 0.01, (v) => `${fmt(v * 100)} %`],
+  ['sRiver', 'tRiver', 'Rivers', 0, 1, 0.01, (v) => `${fmt(v * 100)} %`],
+  ['sErosion', 'tErosion', 'Erosion', 0, 1, 0.01, (v) => `${fmt(v * 100)} %`],
+  ['sWorld', 'tWorld', 'World', 4, 24, 0.5, (v) => `${fmt(v, 1)} km`],
+  ['sRemix', 'tRemix', 'Remix', 0, 1, 0.01, (v) => `${fmt(v * 100)} %`],
+  ['sGrade', 'tGrade', 'Steepest', 0.08, 0.4, 0.01, (v) => `${fmt(v * 100)} %`],
+  ['sContour', 'tContour', 'Contours', 0, 1, 0.01, (v) => `${fmt(v * 100)} %`],
+];
+// The dice of one section (r: a 0..1 random source). Returns an opts patch.
+function rollSection(k, r) {
+  const pick = (a, b, st) => Math.round((a + (b - a) * r()) / st) * st;
+  const fix = (v, d) => +v.toFixed(d);
+  if (k === 'field') return { grids: pick(1, 6, 1), radials: pick(0, 2, 1), fieldScale: fix(pick(0.6, 1.6, 0.05), 2), smooth: r() < 0.25 };
+  if (k === 'roads') return { mainSep: pick(300, 600, 10), majorSep: pick(70, 160, 5), minorSep: pick(16, 32, 1), bigParks: pick(0, 5, 1) };
+  if (k === 'build') return { lotArea: pick(30, 160, 5), noDivide: fix(pick(0, 0.2, 0.01), 2), height: fix(pick(0.6, 1.8, 0.05), 2) };
+  if (k === 'terrain') return rollTerrain(r);
+  return {};
+}
 function buildPanel() {
-  const lg = (k, title, why, body) => `<section class="lg" data-k="${k}"><h3>${esc(title)}</h3><p class="why">${esc(why)}</p>${body}</section>`;
-  const S = (id) => { const s = SLIDERS.find((x) => x[0] === id); return range(s[0], s[2], s[3], s[4], s[5], opts[s[1]]); };
+  const lg = (k, title, why, body, roll = false) => `<section class="lg" data-k="${k}"><h3>${esc(title)}${roll ? `<button class="roll" type="button" data-roll="${k}" aria-label="Roll the ${esc(title.toLowerCase())}" title="Roll this section"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2.4" fill="none"/><circle cx="5.4" cy="5.4" r="1.1"/><circle cx="10.6" cy="10.6" r="1.1"/><circle cx="8" cy="8" r="1.1"/></svg></button><span class="keep">Keep</span>${sw('keep_' + k, keep[k], 'Keep this section when the dice rolls a new city')}` : ''}</h3><p class="why">${esc(why)}</p>${body}</section>`;
+  const S = (id) => { const s = SLIDERS.concat(T_SLIDERS).find((x) => x[0] === id); return range(s[0], s[2], s[3], s[4], s[5], opts[s[1]]); };
   $('panelBody').innerHTML = [
     lg('view', 'City', 'Every seed is a different city. The same seed and settings always give the same city.',
       `<label class="row two"><span>Seed</span><input id="seedIn" type="number" min="1" max="4294967295" step="1" value="${opts.seed}"></label>` +
       seg('sizeSeg', 'Size', Object.entries(SIZES).map(([k, v]) => [k, v.label]), opts.size) +
-      `<div class="row btns"><button class="btn" id="genBtn" type="button">Generate</button><button class="btn" id="rndBtn" type="button">Random seed</button></div>`),
-    lg('field', 'Tensor field', 'Grid centres pull the streets into straight grids at an angle. Radial centres make ring roads and spokes.',
+      `<div class="row btns"><button class="btn" id="genBtn" type="button">Generate</button><button class="btn" id="rndBtn" type="button">New city</button></div>`),
+    lg('terrain', 'Terrain', 'A DLA world under the city: ridges grown by diffusion-limited aggregation, rivers from branched flow, then erosion. Its sea, lakes and largest river set the water; steep ground takes no streets.',
+      `<div class="row two"><span>Terrain</span>${sw('swTerrain', opts.terrain, 'Terrain under the city')}</div>` +
+      `<label class="row two"><span>Preset</span><select id="tPresetSel">${CITY_PRESETS.map(([k, l]) => `<option value="${k}"${k === opts.tPreset ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>` +
+      `<label class="row two"><span>World seed</span><input id="tSeedIn" type="number" min="1" max="999999" step="1" value="${opts.tSeed}"></label>` +
+      seg('siteSeg', 'Site', SITES, opts.tSite) +
+      S('sRelief') + S('sSea') + S('sRiver') + S('sErosion') + S('sWorld') + S('sRemix') + S('sGrade') + S('sContour') +
+      `<p class="src">Terrain: lib/dla-terrain.js, DLA after ${LINK('https://github.com/fogleman/dlaf', 'fogleman/dlaf')} (MIT).</p>`, true),
+    lg('field', 'Tensor field', 'Grid centres pull the streets into straight grids at an angle. Radial centres make ring roads and spokes. On terrain a slope field turns the streets along the contours.',
       S('sGrids') + S('sRadials') + S('sScale') +
-      `<div class="row two"><span>Smooth</span>${sw('swSmooth', opts.smooth, 'Smooth the field')}</div>`),
-    lg('water', 'Water', 'A coastline and a river are streamlines too, with noise added.',
+      `<div class="row two"><span>Smooth</span>${sw('swSmooth', opts.smooth, 'Smooth the field')}</div>`, true),
+    lg('water', 'Water', 'A coastline and a river are streamlines too, with noise added. On terrain they come from the terrain; the switches then set the shore and bank roads.',
       `<div class="row two"><span>Coast</span>${sw('swCoast', opts.coast, 'Coastline')}</div><div class="row two"><span>River</span>${sw('swRiver', opts.river, 'River')}</div>`),
     lg('roads', 'Roads', 'The distance between two roads of a class that run side by side.',
-      S('sMain') + S('sMajor') + S('sMinor') + S('sParks')),
+      S('sMain') + S('sMajor') + S('sMinor') + S('sParks'), true),
     lg('build', 'Lots and buildings', 'Blocks are cut into lots no smaller than the lot size. Some blocks stay whole.',
-      S('sLot') + S('sWhole') + S('sHeight')),
+      S('sLot') + S('sWhole') + S('sHeight'), true),
     lg('view', '3D light', 'The light of the 3D view, as in City Atlas.',
       seg('lightSeg', 'Light', [['day', 'Day'], ['golden', 'Golden'], ['dusk', 'Dusk'], ['night', 'Night']], light)),
   ].join('');
-  for (const [id, key, , , , , f] of SLIDERS) {
+  for (const [id, key, , , , , f] of SLIDERS.concat(T_SLIDERS)) {
     const inp = $(id), out = $(id + 'O');
     out.textContent = f(+inp.value);
     inp.addEventListener('input', () => { out.textContent = f(+inp.value); });
     inp.addEventListener('change', () => regenerate({ [key]: +inp.value }));
+  }
+  $('tPresetSel').addEventListener('change', () => regenerate({ tPreset: $('tPresetSel').value, ...presetValues($('tPresetSel').value) }));
+  $('siteSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of $('siteSeg').children) x.setAttribute('aria-pressed', String(x === b));
+    regenerate({ tSite: b.dataset.v });
+  });
+  $('tSeedIn').addEventListener('change', () => regenerate({ tSeed: (+$('tSeedIn').value >>> 0) || 1 }));
+  for (const b of $('panelBody').querySelectorAll('[data-roll]')) b.addEventListener('click', () => regenerate(rollSection(b.dataset.roll, Math.random)));
+  for (const k of Object.keys(keep)) {
+    $('keep_' + k).addEventListener('click', () => { keep[k] = !keep[k]; $('keep_' + k).setAttribute('aria-checked', String(keep[k])); });
   }
   const swb = (id, key) => $(id).addEventListener('click', () => {
     const on = $(id).getAttribute('aria-checked') !== 'true';
     $(id).setAttribute('aria-checked', String(on));
     regenerate({ [key]: on });
   });
-  swb('swSmooth', 'smooth'); swb('swCoast', 'coast'); swb('swRiver', 'river');
+  swb('swSmooth', 'smooth'); swb('swCoast', 'coast'); swb('swRiver', 'river'); swb('swTerrain', 'terrain');
   $('sizeSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     for (const x of $('sizeSeg').children) x.setAttribute('aria-pressed', String(x === b));
@@ -463,13 +549,23 @@ function buildPanel() {
 function syncPanel() {
   if (!$('seedIn')) return;
   $('seedIn').value = opts.seed;
-  for (const [id, key, , , , , f] of SLIDERS) { $(id).value = opts[key]; $(id + 'O').textContent = f(opts[key]); }
+  for (const [id, key, , , , , f] of SLIDERS.concat(T_SLIDERS)) { $(id).value = opts[key]; $(id + 'O').textContent = f(opts[key]); }
   $('swSmooth').setAttribute('aria-checked', String(!!opts.smooth));
+  $('swTerrain').setAttribute('aria-checked', String(!!opts.terrain));
+  $('tPresetSel').value = opts.tPreset;
+  $('tSeedIn').value = opts.tSeed;
+  for (const x of $('siteSeg').children) x.setAttribute('aria-pressed', String(x.dataset.v === opts.tSite));
   $('swCoast').setAttribute('aria-checked', String(!!opts.coast));
   $('swRiver').setAttribute('aria-checked', String(!!opts.river));
   for (const x of $('sizeSeg').children) x.setAttribute('aria-pressed', String(x.dataset.v === opts.size));
 }
-function newCity() { regenerate({ seed: 1 + Math.floor(Math.random() * 999999) }); }
+// The dice: a new seed, and a roll of every section that is not kept.
+function newCity(r = Math.random) { regenerate(rollCity(r)); }
+function rollCity(r) {
+  const patch = { seed: 1 + Math.floor(r() * 999999) };
+  for (const k of Object.keys(keep)) if (!keep[k] && (k !== 'terrain' || opts.terrain)) Object.assign(patch, rollSection(k, r));
+  return patch;
+}
 
 // ─── exports ────────────────────────────────────────────────────────────────
 function download(blob, name) {
@@ -485,7 +581,7 @@ function exportPNG() {
   const k = 2, w = city.view.w * k, h = city.view.h * k;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
-  drawMap(c.getContext('2d'), city, fullFrame(city), { w, h, dpr: 1, s: k, ox: 0, oy: 0, fieldAt: null, layers: { field: false } });
+  drawMap(c.getContext('2d'), city, fullFrame(city), { w, h, dpr: 1, s: k, ox: 0, oy: 0, fieldAt: null, layers: { field: false, terrain: showTerrain }, terrain: terrainLayer(null) });
   c.toBlob((b) => b && download(b, baseName() + '.png'), 'image/png');
 }
 function exportSVG() { download(new Blob([toSVG(city, { title: `City, seed ${city.seed}` })], { type: 'image/svg+xml' }), baseName() + '.svg'); }
@@ -514,10 +610,12 @@ function captionHTML() {
   return `
 <p>A city from a seed. A <b>tensor field</b> gives every point of the map two directions at right angles. Roads are <b>streamlines</b> of that field: curves that follow one of the two directions, started at random points and stopped when they come too close to a road that runs the same way. Main roads are spaced widest, then major roads, then minor roads.</p>
 <p>The coastline and the river are streamlines with noise. The faces of the road graph become blocks, the blocks are cut into lots, and each lot gets a building. The page makes the whole city first, then plays back the order in which it was made.</p>
+<p>With <b>terrain</b> on, the city stands on a world grown first: <b>diffusion-limited aggregation</b> grows branching ridges, a coarse tree is upsampled and blurred level by level into mountains, rays through a random potential (<b>branched flow</b>) cut the river channels, and stream-power and talus <b>erosion</b> wear it down. The terrain sea level gives the coast, the largest river through the map gives the river, ground steeper than the street grade takes no road, a slope field turns the streets along the contour lines, parks go to steep or wet ground, and buildings are lower on slopes. The playback shows the terrain forming before the city grows on it.</p>
 <p>The 3D view uses the light, colours and camera of City Atlas. Building heights are an invented rule: taller near the centres of the field.</p>
 <section class="credits"><h3>Credits and licences</h3><ul>
 <li>City generation: ${LINK('https://github.com/probabletrain/mapgenerator', 'MapGenerator')} by <b>ProbableTrain</b> and contributors (${LINK('https://maps.probabletrain.com', 'documentation')}, ${LINK('https://probabletrain.itch.io/city-generator', 'the original app')}), ${LINK('https://www.gnu.org/licenses/lgpl-3.0.html', 'LGPL-3.0')}. Its generation code (tensor field, streamlines, water, graph, polygons) is used unchanged as a separate, replaceable module: ${LINK('../../vendor/mapgenerator/CREDITS.md', 'vendor/mapgenerator')}, with its ${LINK('../../vendor/mapgenerator/THIRD-PARTY.txt', 'bundled libraries')} (jsts, simplify-js, isect, d3-quadtree, polyk, simplex-noise, loglevel).</li>
 <li>Method: G. Chen, G. Esch, P. Wonka, P. Müller, E. Zhang, “Interactive Procedural Street Modeling”, ACM SIGGRAPH 2008.</li>
+<li>Terrain: our lib/dla-terrain.js. DLA through lib/dla-engine.js, a port of ${LINK('https://github.com/fogleman/dlaf', 'dlaf')} by <b>Michael Fogleman</b> (MIT). Branched flow after E. J. Heller (Nature 2016); priority flood after Barnes, Lehman and Mulla (2014); implicit stream power after Braun and Willett (2013). The glue that feeds it to the street generator (terrain.js) is ours; the upstream code takes the sea, river and slope through its public tensor field and water calls, unchanged.</li>
 <li>This page (controls, playback, 2D and 3D views, building heights, exports): Dave, for Stella Nova. The upstream app's interface is not used.</li>
 </ul></section>`;
 }
@@ -568,7 +666,7 @@ function bindInput() {
   $('play').addEventListener('click', () => setPlaying(!playing));
   $('speed').addEventListener('click', cycleSpeed);
   $('end').addEventListener('click', skipEnd);
-  $('dice').addEventListener('click', newCity);
+  $('dice').addEventListener('click', () => newCity());
   $('where').addEventListener('click', () => setSheet(panelEl, panelEl.hidden));
   $('settingsBtn').addEventListener('click', () => setSheet(panelEl, panelEl.hidden));
   $('saveBtn').addEventListener('click', () => setSheet(saveEl, saveEl.hidden));
@@ -576,6 +674,7 @@ function bindInput() {
   $('chip2d').addEventListener('click', () => setView('2d'));
   $('chip3d').addEventListener('click', () => setView('3d'));
   $('chipField').addEventListener('click', () => { showField = !showField; $('chipField').setAttribute('aria-pressed', String(showField)); dirty = true; });
+  $('chipTerrain').addEventListener('click', () => { showTerrain = !showTerrain; $('chipTerrain').setAttribute('aria-pressed', String(showTerrain)); dirty = true; });
   $('capClose').addEventListener('click', () => setCaption(false));
   $('panelClose').addEventListener('click', () => setSheet(panelEl, false));
   $('saveClose').addEventListener('click', () => setSheet(saveEl, false));
@@ -599,6 +698,7 @@ function bindInput() {
     else if (k === 'x') cycleSpeed();
     else if (k === 'v') setView(view === '2d' ? '3d' : '2d');
     else if (k === 'f') $('chipField').click();
+    else if (k === 't') $('chipTerrain').click();
     else if (k === 's') setSheet(panelEl, panelEl.hidden);
     else if (k === 'd') setSheet(saveEl, saveEl.hidden);
     else if (k === 'i') setCaption(captionEl.hidden);
@@ -653,6 +753,8 @@ function alongRoad(l, u) {
   return { p: [0, 0], dir: [1, 0], L };
 }
 function inView(x, y) { return Math.abs(x) < city.view.w * 0.45 && Math.abs(y) < city.view.h * 0.45; }
+// the ground under a 3D point (x east, y north), 0 with no terrain
+function gz(x, y) { return city && city.terrain ? groundAt(city.terrain, x + city.view.w / 2, city.view.h / 2 - y) : 0; }
 
 function nextShot() {
   const r = tour.rnd, h = v3.home();
@@ -664,11 +766,12 @@ function nextShot() {
     if (T < minorEnd) {
       // plan view: from above, turning slowly while the roads draw
       tour.shot = { k: 'plan', yaw0: r() * Math.PI * 2, spin: (r() < 0.5 ? -1 : 1) * 0.05, dist: h.dist * (0.75 + r() * 0.2) };
-      Object.assign(v3.cam, { target: [0, 0, 0], yaw: tour.shot.yaw0, pitch: 1.5, dist: tour.shot.dist });
+      Object.assign(v3.cam, { target: [0, 0, gz(0, 0)], yaw: tour.shot.yaw0, pitch: 1.5, dist: tour.shot.dist });
     } else {
       // tilt down while the blocks, lots and buildings come
       tour.shot = { k: 'tilt' };
-      v3.goal({ target: [(r() - 0.5) * city.view.w * 0.2, (r() - 0.5) * city.view.h * 0.2, 0], yaw: v3.cam.yaw + 0.6, pitch: 0.42 + r() * 0.15, dist: h.dist * (0.55 + r() * 0.2) }, 0.35);
+      const tx = (r() - 0.5) * city.view.w * 0.2, ty = (r() - 0.5) * city.view.h * 0.2;
+      v3.goal({ target: [tx, ty, gz(tx, ty)], yaw: v3.cam.yaw + 0.6, pitch: 0.42 + r() * 0.15, dist: h.dist * (0.55 + r() * 0.2) }, 0.35);
     }
     return;
   }
@@ -683,7 +786,7 @@ function nextShot() {
     const a = alongRoad(l, u0);
     tour.shot = { k, l, u: u0, speed: 26 / Math.max(a.L, 1), pitch: 0.1 + r() * 0.1, dist: 140 + r() * 120, side: (r() - 0.5) * 0.5 };
     if (!inView(a.p[0], a.p[1])) tour.shot.u = 0.5;
-    Object.assign(v3.cam, { target: [a.p[0], a.p[1], 10], yaw: Math.atan2(-a.dir[0], -a.dir[1]) + tour.shot.side, pitch: tour.shot.pitch, dist: tour.shot.dist });
+    Object.assign(v3.cam, { target: [a.p[0], a.p[1], gz(a.p[0], a.p[1]) + 10], yaw: Math.atan2(-a.dir[0], -a.dir[1]) + tour.shot.side, pitch: tour.shot.pitch, dist: tour.shot.dist });
   } else if (k === 'tower') {
     let best = 0;
     // the tallest tower inside the view (the 3D city drops the margin, mesh3d.js extent)
@@ -695,7 +798,7 @@ function nextShot() {
     const p = [c[0] - city.view.w / 2, city.view.h / 2 - c[1]];
     const hh = city.buildings[best].h;
     tour.shot = { k, spin: (r() < 0.5 ? -1 : 1) * 0.12 };
-    Object.assign(v3.cam, { target: [p[0], p[1], hh * 0.55], yaw: r() * Math.PI * 2, pitch: 0.25 + r() * 0.2, dist: Math.max(160, hh * 3.2) });
+    Object.assign(v3.cam, { target: [p[0], p[1], gz(p[0], p[1]) + hh * 0.55], yaw: r() * Math.PI * 2, pitch: 0.25 + r() * 0.2, dist: Math.max(160, hh * 3.2) });
   } else if (k === 'skyline') {
     tour.shot = { k, spin: (r() < 0.5 ? -1 : 1) * 0.03 };
     let yaw = r() * Math.PI * 2;
@@ -707,10 +810,11 @@ function nextShot() {
       const wx = sea[0] - city.view.w / 2, wy = city.view.h / 2 - sea[1];
       yaw = Math.atan2(wx - sx, wy - sy);
     }
-    Object.assign(v3.cam, { target: [0, 0, 20], yaw, pitch: 0.12 + r() * 0.08, dist: h.dist * (0.7 + r() * 0.2) });
+    Object.assign(v3.cam, { target: [0, 0, gz(0, 0) + 20], yaw, pitch: 0.12 + r() * 0.08, dist: h.dist * (0.7 + r() * 0.2) });
   } else {
     tour.shot = { k: 'high', spin: (r() < 0.5 ? -1 : 1) * 0.04 };
-    Object.assign(v3.cam, { target: [(r() - 0.5) * city.view.w * 0.3, (r() - 0.5) * city.view.h * 0.3, 0], yaw: r() * Math.PI * 2, pitch: 0.7 + r() * 0.3, dist: h.dist * (0.45 + r() * 0.2) });
+    const tx = (r() - 0.5) * city.view.w * 0.3, ty = (r() - 0.5) * city.view.h * 0.3;
+    Object.assign(v3.cam, { target: [tx, ty, gz(tx, ty)], yaw: r() * Math.PI * 2, pitch: 0.7 + r() * 0.3, dist: h.dist * (0.45 + r() * 0.2) });
   }
   if (r() < 0.35) tour.light = pickLight(r);
   light = tour.light;
@@ -721,7 +825,10 @@ async function saverCity() {
   tour.n = 0;
   tour.light = pickLight(tour.rnd);
   light = tour.light;
-  await regenerate({ seed: 1 + Math.floor(tour.rnd() * 999999) }, { play: true });
+  // a new world under each city when the terrain is on
+  const patch = { seed: 1 + Math.floor(tour.rnd() * 999999) };
+  if (opts.terrain) Object.assign(patch, rollSection('terrain', tour.rnd));
+  await regenerate(patch, { play: true });
   tour.shot = null;
   tour.busy = false;
 }
@@ -743,11 +850,11 @@ function saverPlate() {
       ],
       tex: [String.raw`\frac{d\mathbf{x}}{ds}=\mathbf{e}_{\mathrm{major}}(\mathbf{x}),\qquad T=R\begin{pmatrix}\cos 2\theta&\sin 2\theta\\ \sin 2\theta&-\cos 2\theta\end{pmatrix}`],
       eq: ['dx/ds = e_major(x),  T = R [cos 2θ, sin 2θ; sin 2θ, −cos 2θ]'],
-      lines: ['Streets are streamlines of a tensor field. Generator: MapGenerator by ProbableTrain (LGPL-3.0).'],
+      lines: ['Streets are streamlines of a tensor field. Generator: MapGenerator by ProbableTrain (LGPL-3.0).'].concat(city.terrain ? ['Terrain: DLA ridges (after fogleman/dlaf, MIT), branched-flow rivers and erosion.'] : []),
     });
   } catch { /* the plate is optional */ }
 }
-const PHASE_TITLE = { field: 'the tensor field', coast: 'the coastline', river: 'the river', main: 'main roads', major: 'major roads', parks: 'parks', minor: 'minor roads', blocks: 'blocks', lots: 'lots', buildings: 'buildings rise' };
+const PHASE_TITLE = { terrain: 'the terrain forms', field: 'the tensor field', coast: 'the coastline', river: 'the river', main: 'main roads', major: 'major roads', parks: 'parks', minor: 'minor roads', blocks: 'blocks', lots: 'lots', buildings: 'buildings rise' };
 
 let plateAt = -1e9, platePhase = '';
 saverTick = (dt, t) => {
@@ -776,6 +883,7 @@ saverTick = (dt, t) => {
     const k = 1 - Math.exp(-dt * 2);
     v3.cam.target[0] += (a.p[0] - v3.cam.target[0]) * k;
     v3.cam.target[1] += (a.p[1] - v3.cam.target[1]) * k;
+    v3.cam.target[2] += (gz(a.p[0], a.p[1]) + 10 - v3.cam.target[2]) * k;
     let want = Math.atan2(-a.dir[0], -a.dir[1]) + sh.side, d = want - v3.cam.yaw;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     v3.cam.yaw += d * (1 - Math.exp(-dt * 0.8));

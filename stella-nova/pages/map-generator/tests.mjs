@@ -5,6 +5,11 @@
 //   generator   determinism by seed, event log, roads and water, separation,
 //               blocks, lots, buildings
 //   playback    the last frame equals the map, the first frame is empty
+//   2D map and exports, 3D mesh (terrain off: the city as before)
+//   terrain     terrain on and off, determinism, coast and river from the
+//               terrain, no lot in water, road grades, the terrain phase,
+//               the 3D ground and city bases, the 2D underlay, exports
+//   page module main.js with DOM stubs (terrain on: the page default)
 
 import { generate, fieldSampler, SIZES } from './gen.js';
 import { timeline, frameAt, cut } from './playback.js';
@@ -387,6 +392,192 @@ section('3D mesh');
   let stlBad = 0;
   for (let i = 0; i < Math.min(nt, 20000); i++) for (let k = 0; k < 12; k++) if (!Number.isFinite(dv.getFloat32(84 + i * 50 + k * 4, true))) stlBad++;
   check('STL export parses: header, count, size, finite numbers', stl.byteLength === 84 + nt * 50 && nt > 0 && stlBad === 0, `${nt} triangles, ${(stl.byteLength / 1e6).toFixed(1)} MB`);
+}
+
+// ─── terrain ────────────────────────────────────────────────────────────────
+section('terrain');
+{
+  const { presetValues, groundAt, riverAt, snapshotRaster, CITY_PRESETS } = await import('./terrain.js');
+  const { buildMesh, STRIDE, toSTL, fieldLines } = await import('./mesh3d.js');
+  const { TSTRIDE } = await import('./terrain3d.js');
+  const { drawMap, fullFrame, fitView, toSVG, toJSON } = await import('./draw2d.js');
+  const opt = (p, extra = {}) => ({ seed: 7, size: 'town', terrain: true, tPreset: p, ...presetValues(p), tSeed: 3, ...extra });
+  // a hash of the city with its typed arrays (JSON of 20 MB is slow)
+  const hash = (c) => {
+    let h = 2166136261 >>> 0;
+    const mix = (x) => { h = Math.imul(h ^ x, 16777619) >>> 0; };
+    const walk = (v) => {
+      if (v == null) { mix(1); return; }
+      if (ArrayBuffer.isView(v)) { const b = new Uint8Array(v.buffer, v.byteOffset, v.byteLength); for (let i = 0; i < b.length; i++) mix(b[i]); return; }
+      if (Array.isArray(v)) { mix(v.length); for (const x of v) walk(x); return; }
+      if (typeof v === 'object') { for (const k of Object.keys(v).sort()) { if (k === 'ms' || k === 'terrainMs') continue; for (let i = 0; i < k.length; i++) mix(k.charCodeAt(i)); walk(v[k]); } return; }
+      const s = String(v); for (let i = 0; i < s.length; i++) mix(s.charCodeAt(i));
+    };
+    walk(c);
+    return h.toString(16);
+  };
+  const t0 = Date.now();
+  const D = await generate(opt('river-delta'));
+  const tD = Date.now() - t0;
+  const D2 = await generate(opt('river-delta'));
+  const D3 = await generate(opt('river-delta', { tSeed: 4 }));
+  const Hl = await generate(opt('highlands'));
+  const T = D.terrain;
+  check('terrain off: the city has no terrain and starts with the field', A.terrain === undefined && A.events[0].k === 'field' && A.opts.terrain === false);
+  check('terrain on: the events start with the terrain, then the field', D.events[0].k === 'terrain' && D.events[1].k === 'field', `${tD} ms, ${D.lots.length} lots, relief ${D.stats.relief} m`);
+  check('terrain: the same seeds and options give the same city and ground', hash(D) === hash(D2), hash(D));
+  check('terrain: another world seed gives another world', hash(D) !== hash(D3) && T.site.x !== D3.terrain.site.x || T.site.z !== D3.terrain.site.z || hash(D) !== hash(D3));
+  check('terrain: the city on terrain differs from the flat city of the same seed', hash(D) !== hash(await generate({ seed: 7, size: 'town' })));
+  check('terrain: Math.random is restored', Math.random.name === 'random');
+  // the coast from the terrain sea level
+  {
+    const inV = (p) => p[0] > 0 && p[1] > 0 && p[0] < D.view.w && p[1] < D.view.h;
+    let n = 0, off = 0, worst = 0;
+    let mouth = 0;
+    for (const l of D.roads.coast) for (const p of l) {
+      if (!inV(p)) continue;
+      // where the shore crosses the river mouth the ground is the carved bed
+      const r = riverAt(T, p[0], p[1]);
+      if (r && r.d < T.river.halfW + 12) { mouth++; continue; }
+      n++;
+      const d = Math.abs(groundAt(T, p[0], p[1]) - T.seaLevel);
+      worst = Math.max(worst, d);
+      if (d > 2.5) off++;
+    }
+    check('terrain: the coast roads lie on the terrain sea level (within 2.5 m, off the river mouth)', n > 20 && off === 0, `${n} vertices in the view, ${off} off, worst ${worst.toFixed(2)} m, ${mouth} at the river mouth`);
+    let agree = 0, tot = 0;
+    for (let y = 5; y < D.view.h; y += 23) for (let x = 5; x < D.view.w; x += 23) {
+      const g = groundAt(T, x, y);
+      if (Math.abs(g - T.seaLevel) < 1.5) continue;
+      if (riverAt(T, x, y) && riverAt(T, x, y).d < T.river.halfW + 20) continue;
+      tot++;
+      if ((g < T.seaLevel) === inside([x, y], D.sea)) agree++;
+    }
+    check('terrain: the sea polygon is the ground under the sea level', tot > 100 && agree / tot > 0.995, `${agree} of ${tot} samples agree`);
+    check('terrain: the sea is an even-odd polygon of the shore rings', D.sea.length > 2 && T.waterRings.length >= 1 && D.coastlines.length === D.roads.coast.length, `${T.waterRings.length} rings, ${D.sea.length} points`);
+  }
+  // the river from the largest LIB river
+  {
+    const rv = T.river;
+    check('terrain: a river from the terrain crosses the view', !!rv && D.river.length > 3 && D.roads.river.length >= 1, rv ? `half width ${rv.halfW} m, ${rv.line.length} points, ${D.roads.river.length} bank roads` : 'none');
+    const tex = T.worldSize / 512;
+    const dTo = (p, l) => { let b = Infinity; for (let i = 1; i < l.length; i++) { const a = l[i - 1], c = l[i], dx = c[0] - a[0], dy = c[1] - a[1]; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))); b = Math.min(b, Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)); } return b; };
+    let far = 0, worst = 0;
+    for (const p of rv.line) { const d = dTo(p, rv.lib); worst = Math.max(worst, d); if (d > 1.5 * tex) far++; }
+    check('terrain: the river follows the LIB river (within 1.5 texels)', far === 0, `worst ${worst.toFixed(1)} m, texel ${tex.toFixed(1)} m`);
+    const inPoly = rv.line.slice(1, -1).filter((p) => inside(p, D.river)).length;
+    check('terrain: the river polygon holds its centreline', inPoly >= 0.95 * (rv.line.length - 2), `${inPoly} of ${rv.line.length - 2}`);
+    check('terrain: the river surface never rises downstream', rv.surf.every((v, i) => i === 0 || v <= rv.surf[i - 1] + 1e-6), `${rv.surf[0].toFixed(2)} .. ${rv.surf[rv.surf.length - 1].toFixed(2)} m`);
+  }
+  // no buildings in water, roads under the grade bound
+  for (const C of [D, Hl]) {
+    const TT = C.terrain;
+    let wet = 0, low = 0;
+    C.lots.forEach((l) => {
+      const c = centroid(l);
+      if ((C.sea.length > 2 && inside(c, C.sea)) || (C.river.length > 2 && inside(c, C.river))) wet++;
+      if (TT.hasSea && groundAt(TT, c[0], c[1]) < TT.seaLevel) low++;
+    });
+    check(`terrain ${TT.preset}: no lot in the sea, a lake or the river`, wet === 0 && low === 0 && C.lots.length > 200, `${C.lots.length} lots, ${wet} in water, ${low} under the sea level`);
+    let L = 0, over = 0, over2 = 0;
+    for (const cls of ['main', 'major', 'minor']) for (const l of C.roads[cls]) for (const q of [resample(l, 4)]) for (let i = 1; i < q.length; i++) {
+      const d = Math.hypot(q[i][0] - q[i - 1][0], q[i][1] - q[i - 1][1]);
+      if (!d) continue;
+      const r = riverAt(TT, q[i][0], q[i][1]);
+      if (r && r.d < TT.river.halfW + 20) continue;   // bridges
+      const g = Math.abs(groundAt(TT, q[i][0], q[i][1]) - groundAt(TT, q[i - 1][0], q[i - 1][1])) / d;
+      L += d; if (g > TT.grade) over += d; if (g > 1.5 * TT.grade) over2 += d;
+    }
+    check(`terrain ${TT.preset}: road grades stay under the street grade (${TT.grade})`, over / L < 0.05 && over2 / L < 0.02,
+      `${(L / 1000).toFixed(1)} km of road, ${(over / L * 100).toFixed(2)} % over the grade, ${(over2 / L * 100).toFixed(2)} % over 1.5 times`);
+  }
+  // more presets: each gives a city with lots, none in water
+  for (const p of ['archipelago', 'canyonlands', 'alpine']) {
+    const C = await generate(opt(p));
+    const wet = C.lots.filter((l) => { const c = centroid(l); return (C.sea.length > 2 && inside(c, C.sea)) || (C.river.length > 2 && inside(c, C.river)); }).length;
+    check(`terrain ${p}: a city with lots, none in water`, C.lots.length > 100 && wet === 0, `${C.lots.length} lots, roads ${C.roads.main.length + C.roads.major.length + C.roads.minor.length}, coast ${C.roads.coast.length}, river ${C.river.length > 2 ? 'yes' : 'no'}`);
+  }
+  check('terrain: every preset is a LIB preset', CITY_PRESETS.length >= 8);
+  // playback
+  {
+    const tl = timeline(D);
+    check('terrain playback: the terrain phase comes first', tl.phases[0].k === 'terrain' && tl.terrain && tl.phases[1].k === 'field', tl.phases.map((p) => p.k).join(' '));
+    const f0 = frameAt(D, tl, 0), fm = frameAt(D, tl, tl.terrain[1] * 0.5), fe = frameAt(D, tl, tl.dur);
+    check('terrain playback: at t = 0 the terrain starts and nothing is built', f0.terrain === 0 && f0.snap === 0 && !f0.lots.length && Object.values(f0.roads).every((r) => !r.length));
+    check('terrain playback: half way through the terrain phase, the middle snapshot', Math.abs(fm.snap - T.snaps.length / 2) < 1e-6 && fm.phase === 'terrain');
+    check('terrain playback: the last frame is the whole city on the finished ground', fe.terrain === 1 && fe.phase === 'done' && fe.lots.length === D.lots.length && fe.buildings.length === D.buildings.length);
+    check('terrain playback: the field fades as before (field phase after the terrain)', frameAt(D, tl, tl.field[0] + tl.field[1]).field > 0.9 && fe.field === 0);
+    check('terrain: 7 stage snapshots, each over the world and the domain', T.snaps.length === 7 && T.snaps.every((sn) => sn.world.every(Number.isFinite) && sn.crop.length === T.crop.w * T.crop.h), T.snaps.map((sn) => sn.stage).join(' '));
+  }
+  // 3D
+  {
+    const tl = timeline(D);
+    const m = buildMesh(D, tl);
+    const nv = m.vertices.byteLength / STRIDE, f32 = new Float32Array(m.vertices);
+    let bad = 0;
+    for (let i = 0; i < nv; i++) for (const k of [0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12]) if (!Number.isFinite(f32[i * 13 + k])) bad++;
+    let mx = 0; for (const i of m.indices) if (i > mx) mx = i;
+    check('terrain mesh: city vertices finite, indices in range', bad === 0 && mx < nv, `${nv} vertices`);
+    const t = m.terrain, tv = t.vertices.byteLength / TSTRIDE, tf = new Float32Array(t.vertices);
+    let tbad = 0, tmx = 0;
+    for (let i = 0; i < tv; i++) for (const k of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13]) if (!Number.isFinite(tf[i * 14 + k])) tbad++;
+    for (const i of t.indices) if (i > tmx) tmx = i;
+    check('terrain mesh: ground vertices finite, 8 heights, indices in range', tbad === 0 && tmx < tv && t.K === 8 && t.indices.length % 3 === 0, `${tv} vertices, ${t.indices.length / 3} triangles`);
+    // the patch vertices carry the graded ground as their last height
+    const NO = T.outer.G + 1, base = NO * NO;
+    let off = 0;
+    for (let q = 0; q < T.grid.h.length; q += 97) if (Math.abs(tf[(base + q) * 14 + 9] - T.grid.h[q]) > 1e-3) off++;
+    check('terrain mesh: the patch ends on the graded city ground', off === 0);
+    // building roofs and block tops stand on their ground
+    const cx = D.view.w / 2, cy = D.view.h / 2;
+    let under = 0, n3 = 0;
+    for (let i = 0; i < nv; i++) {
+      const kind = Math.round(f32[i * 13 + 8]);
+      if ((kind !== 3 && kind !== 2) || f32[i * 13 + 2] !== 1) continue;
+      n3++;
+      const g = groundAt(T, f32[i * 13] + cx, cy - f32[i * 13 + 1]);
+      if (f32[i * 13 + 12] < g + 0.4) under++;
+    }
+    check('terrain mesh: block and roof corners sit on or over the ground', n3 > 0 && under === 0, `${n3} corners, ${under} under`);
+    let feet = 0, nf = 0;
+    for (let i = 0; i < nv; i++) {
+      if (Math.round(f32[i * 13 + 8]) !== 3 || f32[i * 13 + 2] !== 0) continue;
+      nf++;
+      const g = groundAt(T, f32[i * 13] + cx, cy - f32[i * 13 + 1]);
+      if (f32[i * 13 + 12] + 0.6 > g + 0.6) feet++;
+    }
+    check('terrain mesh: building feet go into the ground', nf > 0 && feet === 0, `${nf} feet, ${feet} above`);
+    check('terrain mesh: the camera looks at the ground (or the water) under the centre', Number.isFinite(m.groundZ) && Math.abs(m.groundZ - Math.max(groundAt(T, cx, cy), T.hasSea ? T.seaLevel : -Infinity)) < 1e-6, `ground ${m.groundZ.toFixed(1)} m, yaw ${m.homeYaw == null ? '-' : m.homeYaw.toFixed(2)}`);
+    const fl = fieldLines(D, fieldSampler(D));
+    check('terrain: field lines finite, on the ground', fl.length > 0 && fl.every(Number.isFinite));
+    const stl = toSTL(D);
+    check('terrain: STL export parses', stl.byteLength === 84 + new DataView(stl).getUint32(80, true) * 50);
+  }
+  // 2D
+  {
+    const rec = { calls: 0, bad: 0, images: 0 };
+    const ctx = new Proxy({}, {
+      get(t2, k) { if (k in t2) return t2[k]; return (...a) => { rec.calls++; if (k === 'drawImage') rec.images++; for (const v of a) if (typeof v === 'number' && !Number.isFinite(v)) rec.bad++; }; },
+      set(t2, k, v) { t2[k] = v; return true; },
+    });
+    const v = fitView(D, 800, 500, 10), tl = timeline(D);
+    const img = { width: T.under.w, height: T.under.h };
+    let err = null;
+    try {
+      drawMap(ctx, D, fullFrame(D), { w: 800, h: 500, dpr: 2, ...v, fieldAt: fieldSampler(D), layers: {}, terrain: { a: img, b: null, k: 0 } });
+      drawMap(ctx, D, frameAt(D, tl, 2), { w: 800, h: 500, dpr: 2, ...v, fieldAt: null, layers: {}, terrain: { a: img, b: img, k: 0.4 } });
+    } catch (e) { err = e; }
+    check('terrain 2D: the underlay and the contours draw with finite numbers', !err && rec.bad === 0 && rec.images === 3, err ? err.message : `${rec.calls} calls, ${rec.images} images`);
+    const u = T.under;
+    check('terrain 2D: the underlay covers the domain, opaque', u.data.length === u.w * u.h * 4 && u.w * u.m >= D.domain.w - u.m && u.data.every((x, i) => i % 4 !== 3 || x === 255), `${u.w} x ${u.h} at ${u.m} m`);
+    check('terrain 2D: contour lines at a round interval', T.contours.interval > 0 && T.contours.minor.length % 4 === 0 && T.contours.minor.length + T.contours.major.length > 0, `every ${T.contours.interval} m, ${T.contours.minor.length / 4 + T.contours.major.length / 4} segments`);
+    const r = snapshotRaster(T, 0);
+    check('terrain 2D: the snapshot rasters fill their crop', r.data.length === T.crop.w * T.crop.h * 4);
+    const svg = toSVG(D);
+    check('terrain SVG: contours, an even-odd sea, the coastlines', svg.includes('id="contours"') && svg.includes('fill-rule="evenodd"') && (svg.match(/class="coastline"/g) || []).length === D.coastlines.length);
+    const j = JSON.parse(toJSON(D));
+    check('terrain JSON: the terrain summary, no grids', j.terrain && j.terrain.preset === T.preset && j.terrain.options.seed === T.opts.seed && !('grid' in j.terrain));
+  }
 }
 
 // ─── page module with DOM stubs ────────────────────────────────────────────

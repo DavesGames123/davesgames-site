@@ -50,7 +50,7 @@
      grep -n 'window.snSaver'        screensaver
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Grow a procedural city from a seed: tensor-field streamline roads, coast, river, parks, lots and buildings, then watch it being built in 2D and 3D. After MapGenerator by ProbableTrain.">
+<meta name="description" content="Grow a procedural city on a DLA terrain from a seed: the land forms, then tensor-field streamline roads, coast, river, parks, lots and buildings, built in 2D and 3D. After MapGenerator by ProbableTrain.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <script src="../../lib/nav-data.js"></script>
@@ -75,6 +75,7 @@
       <button class="chip" id="chip2d" type="button" aria-pressed="true" title="2D map (V)"><i class="dot"></i>Map</button>
       <button class="chip" id="chip3d" type="button" aria-pressed="false" title="3D city (V)"><i class="dot"></i>3D</button>
       <button class="chip" id="chipField" type="button" aria-pressed="false" title="Show the tensor field (F)"><i class="dot"></i>Field</button>
+      <button class="chip" id="chipTerrain" type="button" aria-pressed="true" title="Hillshade and contours under the map (T)"><i class="dot"></i>Terrain</button>
     </div>
     <nav id="controls" aria-label="City">
       <button id="prev" type="button" aria-label="Previous seed" title="Previous seed (Left)">‹</button>
