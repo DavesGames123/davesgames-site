@@ -15,7 +15,11 @@
 //                    can attach the depth read-only and sample it at once.
 //                    With ctx.depthIsCopy = true (depthView is a copy) the
 //                    surfaces write depth for the volumetric pass after them.
-//    resize, dispose.
+//    resize, dispose, setDebug(n) (0 lit, 1 refraction, 2 reflection,
+//                    3 Fresnel, 4 foam, 5 bed colour, 6 path and depth).
+//  From SKY (NOTES.md): gpu.cloudShadow / frame.cloudShadow (sun light on
+//  the water) and gpu.skyView / frame.skyView (the sky in reflections).
+//  Either can come after createWater; group 1 is made again when it does.
 //
 //  DOM-free builders (node tests in ../tests/water.test.mjs reach them):
 //    waveModes(opts)            lattice wave vectors and Phillips amplitudes
@@ -307,6 +311,17 @@ export function buildRiverRibbons(t, o = {}) {
       bed.push(b);
       depth.push(clamp(0.25 + 0.05 * W[i], 0.3, 3));
     }
+    // the floor of the surface: the highest ground on the centre line at
+    // this row and half way to its neighbours, so that a bump of the bed
+    // between two rows does not cut the ribbon into pieces
+    const floorS = [];
+    for (let i = 0; i < n; i++) {
+      const [x, z] = P[i];
+      let f = heightAt(x, z);
+      if (i > 0) f = Math.max(f, heightAt((x + P[i - 1][0]) / 2, (z + P[i - 1][1]) / 2));
+      if (i < n - 1) f = Math.max(f, heightAt((x + P[i + 1][0]) / 2, (z + P[i + 1][1]) / 2));
+      floorS.push(f + 0.25);
+    }
     for (let i = 0; i < n; i++) {
       let s = bed[i] + depth[i];
       if (i > 0) s = Math.min(s, surf[i - 1]);
@@ -330,6 +345,7 @@ export function buildRiverRibbons(t, o = {}) {
         surf[i] = s2[i];
       }
     }
+    for (let i = 0; i < n; i++) surf[i] = Math.max(surf[i], floorS[i]);
     // offsets: the inner bank of a bend is held inside the radius of curvature
     const hl = [], hr = [];
     for (let i = 0; i < n; i++) {
@@ -421,7 +437,7 @@ export function buildRiverRibbons(t, o = {}) {
       const hyd = depth[i];
       // Manning: v = R^(2/3) S^(1/2) / n, with a rough mountain bed (n = 0.06)
       let speed = clamp((1 / 0.06) * Math.pow(hyd, 2 / 3) * Math.sqrt(slope), 0.2, 5);
-      let foam = smooth(0.05, 0.25, slope);
+      let foam = smooth(0.08, 0.35, slope);
       for (let k = 1; k <= 3; k++) if (i - k >= 0 && fall[i - k + 1]) foam = Math.max(foam, 1 - (k - 1) / 3);
       if (joinFoam && i >= n - 4) foam = Math.max(foam, 0.6);
       const row = { x: P[i][0], z: P[i][1], y: surf[i], bed: bed[i], s, width: W[i], flow: F[i], speed, foam, depth: hyd, kind: 0, dx: T[i][0], dz: T[i][1], hl: hl[i], hr: hr[i], nx: Nn[i][0], nz: Nn[i][1] };
@@ -567,7 +583,7 @@ export function buildOceanGrid(rMin = 0.6, rMax = 60000, nr = 200, na = 160) {
 }
 
 // ------------------------------------------------------------------- GPU ----
-const U_FLOATS = 52; // 13 vec4
+const U_FLOATS = 60; // 15 vec4
 
 export async function createWater(gpu) {
   const { device, queue } = gpu;
@@ -607,8 +623,20 @@ export async function createWater(gpu) {
       { binding: 3, visibility: VF, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 4, visibility: VF, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 5, visibility: VF, sampler: { type: 'filtering' } },
+      { binding: 6, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 7, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 8, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 9, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
     ],
   });
+  // SKY's cloud shadow map and sky-view LUT (NOTES.md SKY -> ALL, SKY ->
+  // WATER). They come after createWater (CORE wires them as gpu.cloudShadow,
+  // gpu.skyView or frame.cloudShadow, frame.skyView); 1 x 1 stand-ins until then.
+  const clampS = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+  const one = device.createTexture({ label: 'water 1x1', size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  queue.writeTexture({ texture: one }, new Uint16Array([0x3c00, 0x3c00, 0x3c00, 0x3c00]), { bytesPerRow: 8 }, [1, 1]);
+  const oneView = one.createView();
+  let cloudSrc = null, skySrc = null;
   // group 2: CORE's shadow sample layout; a host with no shadows gets a
   // dummy group (no cascades: sunShadow returns 1)
   let shadowLayout = gpu.shadowSampleLayout, ownShadow = null;
@@ -672,9 +700,10 @@ export async function createWater(gpu) {
   let builtKey = null;
   let ocean = null, surf = null, mist = null;
   let oceanOn = false;
-  let group1 = null, groupKey = [null, null];
+  let group1 = null, groupKey = [null, null, null, null];
   let wind = [6, 2], windInit = false;
   let modes = null, modesAge = 1e9;
+  let debugView = 0, frameN = 0;
   const stats = { rivers: 0, riverVerts: 0, lakes: 0, lakeTris: 0, falls: 0, ocean: false };
 
   const destroyAll = (o) => { if (o) for (const b of Object.values(o)) if (b && b.destroy) b.destroy(); };
@@ -697,7 +726,9 @@ export async function createWater(gpu) {
     // ocean grid out to the horizon (beyond the world for island maps)
     destroyAll(ocean); ocean = null;
     if (oceanOn) {
-      const og = buildOceanGrid(0.6, Math.max(30000, t.worldSize * 3), Math.round(150 + 70 * quality), Math.round(112 + 64 * quality));
+      // far enough that its rim lies under the true horizon from a few km up
+      // (a nearer rim shows the sky below the horizon as a dark line)
+      const og = buildOceanGrid(0.6, Math.max(160000, t.worldSize * 8), Math.round(165 + 70 * quality), Math.round(112 + 64 * quality));
       ocean = { vb: upload(og.vertices, GPUBufferUsage.VERTEX), ib: upload(og.indices, GPUBufferUsage.INDEX), count: og.indices.length };
     }
     // rivers and lakes: rebuild only when the LIB arrays change
@@ -763,18 +794,26 @@ export async function createWater(gpu) {
     U.set([0.32, 0.075, 0.048, clamp((ws - 5) * 0.08 + storm * 0.6, 0, 1.4)], 16);    // ocean absorption, whitecaps
     U.set([0.03, 0.085, 0.125, 1.0], 20);                                                     // ocean scatter, shore foam
     U.set([0.42, 0.26, 0.21, 0.5], 24);                                                       // river absorption
-    U.set([0.05, 0.065, 0.035, 1.6], 28);                                                      // river scatter, flow period
+    U.set([0.055, 0.08, 0.06, 1.6], 28);                                                       // river scatter, flow period
     U.set([0.36, 0.11, 0.075, 1.0], 32);                                                      // lake absorption, ripple scale
     U.set([0.028, 0.06, 0.06, 0], 36);                                                        // lake scatter
     U.set([ws > 1e-3 ? wind[0] / ws : 1, ws > 1e-3 ? wind[1] / ws : 0, ws, storm], 40);
     const night = 1 - smooth(-0.15, 0.05, g[85]);
     U.set([quality > 0.25 ? 1 : 0, quality > 0.15 ? 1 : 0, clamp(g[109] || 0, 0, 1), night], 44);
-    U.set([COUNT, WAVE_N, Math.round(24 + 40 * quality), 0], 48);
+    U.set([COUNT, WAVE_N, Math.round(24 + 40 * quality), debugView], 48);
+    const cs = frame.cloudShadow || gpu.cloudShadow || null;
+    cloudSrc = cs && cs.view ? cs : null;
+    const sk = frame.skyView || gpu.skyView || null;
+    skySrc = sk && sk.view ? sk : null;
+    const rect = cloudSrc && cloudSrc.rect ? cloudSrc.rect() : [0, 0, 1];
+    U.set([rect[0], rect[1], rect[2], cloudSrc && cloudSrc.base ? cloudSrc.base() : 2000], 52);
+    U.set([skySrc ? (skySrc.scale ?? 1) : 0, skySrc ? 1 : 0, cloudSrc ? 1 : 0, 0], 56);
     queue.writeBuffer(ubuf, 0, U);
   }
 
   function bindFor(ctx) {
-    if (!group1 || groupKey[0] !== ctx.sceneColorView || groupKey[1] !== ctx.depthView) {
+    const cv = cloudSrc ? cloudSrc.view : oneView, sv = skySrc ? skySrc.view : oneView;
+    if (!group1 || groupKey[0] !== ctx.sceneColorView || groupKey[1] !== ctx.depthView || groupKey[2] !== cv || groupKey[3] !== sv) {
       group1 = device.createBindGroup({
         layout: layout1,
         entries: [
@@ -784,9 +823,13 @@ export async function createWater(gpu) {
           { binding: 3, resource: waveAView },
           { binding: 4, resource: waveBView },
           { binding: 5, resource: repeat },
+          { binding: 6, resource: cv },
+          { binding: 7, resource: (cloudSrc && cloudSrc.sampler) || clampS },
+          { binding: 8, resource: sv },
+          { binding: 9, resource: (skySrc && skySrc.sampler) || clampS },
         ],
       });
-      groupKey = [ctx.sceneColorView, ctx.depthView];
+      groupKey = [ctx.sceneColorView, ctx.depthView, cv, sv];
     }
     return group1;
   }
@@ -795,8 +838,13 @@ export async function createWater(gpu) {
     stats,
     last: null,
     setTerrain,
+    // 0 lit, 1 refraction, 2 reflection, 3 Fresnel, 4 foam, 5 bed colour, 6 path / depth
+    setDebug(n) { debugView = n | 0; },
     update(frame) { if (frame.quality != null) quality = frame.quality; writeUniforms(frame); },
     compute(encoder) {
+      // Low quality and phones: the waves update every second frame
+      frameN++;
+      if (!terrain || ((quality <= 0.25 || gpu.coarse) && (frameN & 1))) return;
       const p = encoder.beginComputePass({ label: 'water waves' });
       p.setPipeline(wavePipe);
       p.setBindGroup(3, waveGroup);
@@ -829,10 +877,10 @@ export async function createWater(gpu) {
         pass.draw(6 * U[50], mist.count);
       }
     },
-    resize() { group1 = null; groupKey = [null, null]; },
+    resize() { group1 = null; groupKey = [null, null, null, null]; },
     dispose() {
       destroyAll(ocean); destroyAll(surf); destroyAll(mist);
-      waveA.destroy(); waveB.destroy(); ubuf.destroy(); modeBuf.destroy();
+      waveA.destroy(); waveB.destroy(); one.destroy(); ubuf.destroy(); modeBuf.destroy();
       ocean = surf = mist = null; terrain = null; group1 = null;
     },
   };

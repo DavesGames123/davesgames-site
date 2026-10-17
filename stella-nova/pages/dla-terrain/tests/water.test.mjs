@@ -133,6 +133,26 @@ test('surface follows the terrain: above the bed, within the depth, never uphill
   assert.ok(rows[0].y - rows[rows.length - 1].y > 40, 'falls along the valley');
 });
 
+test('fine bed relief between two rows stays under the ribbon (no cut pieces)', () => {
+  // a gentle valley plus short bumps (like detailHeight) between the rows
+  const base = (x, z) => 200 - x * 0.03 + Math.abs(z) * 0.4;
+  const fine = (x, z) => base(x, z) + 2.0 * Math.max(0, Math.sin(x * 0.55));
+  const t = makeTerrain(base, { n: 256 });
+  const pts = [];
+  for (let i = 0; i <= 60; i++) pts.push(-600 + i * 20, 0);
+  t.rivers = [{ pts: new Float32Array(pts), width: new Float32Array(61).fill(10), flow: new Float32Array(61).map((_, i) => 1 + i) }];
+  const rows = buildRiverRibbons(t, { heightAt: fine }).rivers[0].rows.filter((r) => r.kind === 0);
+  let worst = Infinity;
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1], b = rows[i];
+    for (let k = 0; k <= 8; k++) {
+      const u = k / 8, x = a.x + (b.x - a.x) * u, z = a.z + (b.z - a.z) * u;
+      worst = Math.min(worst, a.y + (b.y - a.y) * u - fine(x, z));
+    }
+  }
+  assert.ok(worst > -0.1, `the bed comes ${(-worst).toFixed(2)} m through the surface`);
+});
+
 test('a sharp drop becomes a waterfall sheet with mist, steep reaches get rapids foam', () => {
   const f = (x) => (x < 0 ? 120 - x * -0.01 : 90 - x * 0.01);
   const t = makeTerrain((x) => f(x), { n: 256 });

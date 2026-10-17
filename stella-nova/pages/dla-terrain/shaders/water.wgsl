@@ -57,7 +57,9 @@ struct WaterU {
   lakeSca: vec4f,  // rgb in-scatter albedo, w unused
   windS: vec4f,    // xy smoothed wind unit, z wind speed m/s, w storminess
   flags: vec4f,    // x ssr on, y caustics on, z rain 0..1, w night 0..1
-  comp: vec4f,     // x modes per cascade, y texture size, z mist sprites per fall, w unused
+  comp: vec4f,     // x modes per cascade, y texture size, z mist sprites per fall, w debug view (setDebug)
+  cloudR: vec4f,   // xy cloud shadow rect origin xz, z rect size m, w cloud base world y
+  skyV: vec4f,     // x sky-view LUT scale, y LUT on, z cloud shadow on, w unused
 };
 
 @group(1) @binding(0) var<uniform> WU: WaterU;
@@ -66,6 +68,10 @@ struct WaterU {
 @group(1) @binding(3) var wWaveA: texture_2d_array<f32>;
 @group(1) @binding(4) var wWaveB: texture_2d_array<f32>;
 @group(1) @binding(5) var wRepeat: sampler;
+@group(1) @binding(6) var wCloudTex: texture_2d<f32>;   // SKY cloud shadow (r = sun transmittance)
+@group(1) @binding(7) var wCloudS: sampler;
+@group(1) @binding(8) var wSkyView: texture_2d<f32>;    // SKY Hillaire sky-view LUT
+@group(1) @binding(9) var wSkyS: sampler;
 
 @group(3) @binding(0) var<uniform> WC: WaterU;
 @group(3) @binding(1) var<storage, read> wModes: array<vec4f>;
@@ -207,6 +213,44 @@ fn wPhaseM(c: f32, g: f32) -> f32 {
 
 fn wMoonColor() -> vec3f { return vec3f(0.62, 0.70, 0.86) * G.moonDir.w; }
 
+// SKY's cloud shadow (NOTES.md SKY -> ALL): the sun transmittance through the
+// moving clouds above p. 1 when SKY has not given the map.
+fn wCloudShadow(p: vec3f) -> f32 {
+  if (WU.skyV.z < 0.5) { return 1.0; }
+  let sd = G.sunDir.xyz;
+  let lit = smoothstep(-0.04, 0.03, sd.y);
+  let t = max(WU.cloudR.w - p.y, 0.0) / max(sd.y, 0.08);
+  let q = p.xz + sd.xz * t;
+  let uv = (q - WU.cloudR.xy) / max(WU.cloudR.z, 1.0);
+  let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
+  let T = select(1.0 - 0.7 * G.weather.x, textureSampleLevel(wCloudTex, wCloudS, uv, 0.0).r, inside);
+  return mix(1.0, T, lit);
+}
+
+// The clear-sky radiance from SKY's sky-view LUT (fn sk_skyViewUV in
+// shaders/sky.wgsl; radiance per unit sun, times skyV.x).
+fn wSkyLUT(dir: vec3f) -> vec3f {
+  let rg = 6360.0;
+  let r = rg + max(G.camPos.y - WU.misc.y, 2.0) / 1000.0;
+  let vh = sqrt(max(r * r - rg * rg, 0.0));
+  let beta = acos(clamp(vh / r, -1.0, 1.0));
+  let zha = W_PI - beta;
+  let vz = acos(clamp(dir.y, -1.0, 1.0));
+  var v: f32;
+  if (vz < zha) {
+    let c = vz / zha;
+    v = 0.5 * (1.0 - sqrt(max(1.0 - c, 0.0)));
+  } else {
+    v = 0.5 + 0.5 * sqrt(clamp((vz - zha) / beta, 0.0, 1.0));
+  }
+  let vxz = dir.xz;
+  let sxz = G.sunDir.xz;
+  let lv = length(vxz) * length(sxz);
+  let cosAz = select(1.0, dot(vxz, sxz) / lv, lv > 1e-6);
+  let u = sqrt(clamp(0.5 - 0.5 * cosAz, 0.0, 1.0));
+  return textureSampleLevel(wSkyView, wSkyS, vec2f(u, v), 0.0).rgb * WU.skyV.x;
+}
+
 // Analytic sky radiance for a direction. Scale comes from G.ambient (the sky
 // irradiance: radiance ~ E / pi), tint from G.fog and G.sunColor, so that the
 // look follows SKY's state even with no sky texture. disc: draw the sun disc.
@@ -224,9 +268,15 @@ fn wSky(dirIn: vec3f, disc: bool) -> vec3f {
   let sunUp = smoothstep(-0.12, 0.05, L.y);
   // forward Mie glow and the warm band toward the low sun
   col += G.sunColor.rgb * ((wPhaseM(cs, 0.78) * 0.05 + (pow(max(cs, 0.0), 6.0) * 0.12 * pow(1.0 - y, 3.0))) * sunUp * (1.0 - (cover * 0.75)));
-  // clouds: grey the sky toward its luminance, lift it a little
+  if (WU.skyV.y > 0.5) {
+    // SKY's real atmosphere (above the horizon only: the LUT holds the
+    // ground below it)
+    col = wSkyLUT(vec3f(dir.x, max(dir.y, 0.015), dir.z));
+  }
+  // clouds: grey the sky toward the overcast radiance (G.ambient / pi)
   let lum = dot(col, vec3f(0.2126, 0.7152, 0.0722));
-  col = mix(col, vec3f(lum) * vec3f(0.96, 0.98, 1.02) * 1.05, cover * 0.85);
+  let grey = mix(lum, dot(base, vec3f(0.2126, 0.7152, 0.0722)) * 1.15, 0.5);
+  col = mix(col, vec3f(grey) * vec3f(0.96, 0.98, 1.02), cover * 0.85);
   // stars and the moon glow after dusk
   let night = 1.0 - smoothstep(-0.18, 0.02, L.y);
   if (night > 0.0 && dir.y > 0.0) {
@@ -243,7 +293,7 @@ fn wSky(dirIn: vec3f, disc: bool) -> vec3f {
     col += wMoonColor() * (smoothstep(0.99995, 0.99998, cm) * 40.0 * (1.0 - cover));
   }
   if (dir.y < 0.0) {
-    col = hor * (0.55 + 0.45 * exp(dir.y * 6.0));
+    col = col * (0.55 + 0.45 * exp(dir.y * 6.0));
   }
   return col;
 }
@@ -282,7 +332,7 @@ fn wSSR(P: vec3f, R: vec3f, dist: f32) -> vec4f {
       }
       let hit = wWorldAt(huv, wDepthAt(huv));
       if (hit.y < P.y - 0.4) { return vec4f(0.0); }
-      let edge = smoothstep(0.0, 0.08, huv.x) * smoothstep(1.0, 0.92, huv.x) * smoothstep(0.0, 0.08, huv.y) * smoothstep(1.0, 0.9, huv.y);
+      let edge = smoothstep(0.0, 0.08, huv.x) * (1.0 - smoothstep(0.92, 1.0, huv.x)) * smoothstep(0.0, 0.08, huv.y) * (1.0 - smoothstep(0.9, 1.0, huv.y));
       let fadeI = 1.0 - smoothstep(0.6, 1.0, f32(i) / f32(steps));
       let c = textureSampleLevel(wScene, sLinear, huv, 0.0).rgb;
       return vec4f(c, edge * fadeI);
@@ -302,14 +352,37 @@ fn wSkyFromScene(R: vec3f) -> vec4f {
   let uv = vec2f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { return vec4f(0.0); }
   if (wDepthAt(uv) > 0.0) { return vec4f(0.0); }
-  let edge = smoothstep(0.0, 0.1, uv.x) * smoothstep(1.0, 0.9, uv.x) * smoothstep(0.0, 0.1, uv.y) * smoothstep(1.0, 0.9, uv.y);
+  let edge = smoothstep(0.0, 0.1, uv.x) * (1.0 - smoothstep(0.9, 1.0, uv.x)) * smoothstep(0.0, 0.1, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
   return vec4f(textureSampleLevel(wScene, sLinear, uv, 0.0).rgb, edge * 0.85);
 }
 
-fn wReflect(P: vec3f, Rin: vec3f, dist: f32, rough: f32) -> vec3f {
+// Does the reflected ray hit the banks? A short march against the coarse
+// terrain (no detail). Returns 1 for open sky, 0 for a bank. Rivers and lakes
+// lie in valleys: their banks, not the bright horizon, fill the low reflection.
+fn wBankOpen(P: vec3f, R: vec3f, reach: f32) -> f32 {
+  var open = 1.0;
+  var t = 4.0;
+  for (var i = 0; i < 7; i++) {
+    let Q = P + R * t;
+    let h = baseHeight(Q.xz);
+    open = min(open, clamp((Q.y - h) / max(t * 0.06, 0.5) + 0.5, 0.0, 1.0));
+    t *= 2.0;
+    if (t > reach) { break; }
+  }
+  return open;
+}
+
+fn wReflect(P: vec3f, Rin: vec3f, dist: f32, rough: f32, banks: f32) -> vec3f {
   var R = Rin;
   if (R.y < 0.02) { R = normalize(vec3f(R.x, abs(R.y) * 0.5 + 0.02, R.z)); }
   var col = wSky(R, false);
+  if (banks > 0.0) {
+    // the bank colour: the ground lit by the sky and a little of the sun
+    let ao = terrainAO(P.xz);
+    let bank = (G.ambient.rgb / W_PI * 0.10 + G.sunColor.rgb * 0.012) * vec3f(0.85, 1.0, 0.7);
+    let open = wBankOpen(P, R, banks);
+    col = mix(bank, col * mix(0.55, 1.0, ao), open);
+  }
   let ss = wSkyFromScene(R);
   col = mix(col, ss.rgb, ss.a * (1.0 - smoothstep(0.15, 0.5, rough)));
   let ssr = wSSR(P, R, dist);
@@ -384,6 +457,7 @@ struct WMat {
   foam: f32,      // 0..1
   refr: f32,      // refraction strength
   caust: f32,     // caustic gain
+  banks: f32,     // reach m of the bank test in the reflection (0 = off)
 };
 
 fn wShade(P: vec3f, N: vec3f, fragPos: vec4f, m: WMat) -> vec4f {
@@ -416,7 +490,8 @@ fn wShade(P: vec3f, N: vec3f, fragPos: vec4f, m: WMat) -> vec4f {
     path = distance(P, bed);
     vdepth = max(P.y - bed.y, 0.0);
   }
-  let lit = sunShadow(P, vec3f(0.0, 1.0, 0.0));
+  let cloudT = wCloudShadow(P);
+  let lit = sunShadow(P, vec3f(0.0, 1.0, 0.0)) * cloudT;
   // light reaching the bed comes down through vdepth of water
   let down = exp(-m.absorb * (vdepth / max(L.y, 0.2)));
   if (m.caust > 0.0 && WU.flags.y > 0.5 && vdepth < 30.0) {
@@ -437,13 +512,21 @@ fn wShade(P: vec3f, N: vec3f, fragPos: vec4f, m: WMat) -> vec4f {
   // reflection
   let rough = sqrt(sqrt(m.a2));
   let R = reflect(-V, N);
-  let refl = wReflect(P, R, dist, rough);
+  let refl = wReflect(P, R, dist, rough, m.banks);
   var F = W_F0 + (1.0 - W_F0) * pow(1.0 - NdV, 5.0);
   F = F / (1.0 + rough * 3.0 * (1.0 - NdV));
 
   var col = mix(refr, refl, F);
+  let dbg = i32(WU.comp.w);
+  if (dbg > 0) {
+    var o = vec3f(0.0);
+    if (dbg == 1) { o = refr; } else if (dbg == 2) { o = refl; } else if (dbg == 3) { o = vec3f(F); }
+    else if (dbg == 4) { o = vec3f(m.foam); } else if (dbg == 5) { o = bedCol; }
+    else if (dbg == 6) { o = vec3f(path / 10.0, vdepth / 5.0, behind0 / 5.0); }
+    return vec4f(o, 1.0);
+  }
   // CORE's cascaded sun shadow (group 2): ridges shade the glitter and foam
-  let shadowSun = sunShadow(P, vec3f(0.0, 1.0, 0.0)) * (1.0 - (G.weather.x * 0.85));
+  let shadowSun = lit * (1.0 - (G.weather.x * 0.85));
   col += sunE * (wSpec(N, V, L, m.a2) * max(dot(N, L), 0.0) * shadowSun);
   if (G.moonDir.y > 0.0) {
     col += wMoonColor() * (wSpec(N, V, normalize(G.moonDir.xyz), m.a2 * 0.6) * max(dot(N, normalize(G.moonDir.xyz)), 0.0) * (1.0 - G.weather.x));
@@ -530,7 +613,7 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   // whitecaps from the folding of the surface (Jacobian below one)
   let J = wJacobian(s);
   let capN = wFbm(v.base * 0.35 + vec2f(WU.misc.x * 0.05, 0.0));
-  var foam = smoothstep(0.85, 0.35, J + (capN - 0.5) * 0.4) * WU.oceanAbs.w;
+  var foam = (1.0 - smoothstep(0.35, 0.85, J + (capN - 0.5) * 0.4)) * WU.oceanAbs.w;
   // shore foam: a band that follows the water line plus breaker crests
   let shoreN = wFbm(P.xz * 0.6 + vec2f(0.0, WU.misc.x * 0.15));
   // distance to the water line ~ depth / bed slope: a band some metres wide
@@ -551,6 +634,7 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   m.foam = foam;
   m.refr = 0.045;
   m.caust = 1.0;
+  m.banks = 0.0;
   if (!ff) { N = -N; }
   return wShade(P, N, v.pos, m);
 }
@@ -618,7 +702,7 @@ fn wRiver(v: SurfOut, P: vec3f, t: f32, fp: f32) -> vec4f {
   let ph0 = fract(t / per);
   let ph1 = fract(t / per + 0.5);
   let w0 = 1.0 - abs(2.0 * ph0 - 1.0);
-  let turb = 0.02 + 0.06 * v.a.z + min(speed, 5.0) * 0.008;
+  let turb = 0.055 + 0.08 * v.a.z + min(speed, 5.0) * 0.012;
   let s0 = wLocalSlope(q - flow * (ph0 * per), 0.4, 1.0, fp);
   let s1 = wLocalSlope(q - flow * (ph1 * per) + vec2f(3.7, 1.9), 0.4, 1.0, fp);
   let sl = mix(s1, s0, w0) * turb;
@@ -626,12 +710,12 @@ fn wRiver(v: SurfOut, P: vec3f, t: f32, fp: f32) -> vec4f {
   let fq = q * vec2f(0.55, 0.22) - vec2f(0.0, t * speed * 0.22);
   let fn0 = wFbm(fq);
   let fn1 = wFbm(fq * 2.3 + 5.0);
-  let bank = smoothstep(0.7, 1.0, abs(v.uv.x)) * smoothstep(0.3, 2.0, speed) * 0.35;
-  var foam = smoothstep(0.75, 0.25, fn0 + (1.0 - v.a.z) * 0.6) * v.a.z;
+  let bank = smoothstep(0.75, 1.0, abs(v.uv.x)) * smoothstep(1.0, 3.0, speed) * 0.25;
+  var foam = (1.0 - smoothstep(0.25, 0.75, fn0 + (1.0 - v.a.z) * 0.6)) * v.a.z;
   foam = max(foam, bank * smoothstep(0.45, 0.65, fn1));
   // streaks: thin lines of bubbles stretched along the current
   let sk = wFbm(vec2f(q.x * 0.9, q.y * 0.07 - t * speed * 0.07) + 11.0);
-  foam = max(foam, smoothstep(0.6, 0.78, sk) * 0.3 * smoothstep(0.5, 3.0, speed));
+  foam = max(foam, smoothstep(0.62, 0.8, sk) * 0.18 * smoothstep(1.0, 3.5, speed));
   let nWorld = normalize(vec3f(0.0, 1.0, 0.0) - (bin * sl.x) - (tang * sl.y));
   return vec4f(nWorld, foam);
 }
@@ -666,6 +750,7 @@ fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f 
     m.foam = 0.0;
     m.refr = 0.02;
     m.caust = 0.6;
+    m.banks = 600.0;
     edge = smoothstep(0.05, 0.6, v.uv.x);
   } else if (v.kind > 0.5) {
     let f = wFall(v, P, t);
@@ -673,7 +758,7 @@ fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f 
     let lit = G.sunColor.rgb * (0.35 + 0.45 * max(L.y, 0.0)) * (1.0 - G.weather.x * 0.7) + G.ambient.rgb * 0.9 + wMoonColor() * 0.3;
     let col = vec3f(0.86, 0.91, 0.94) * lit * (0.6 + 0.4 * f.y);
     // ragged sides: the sheet thins to threads at its edges
-    let side = smoothstep(1.0, 0.55, abs(v.uv.x) + (f.z - 0.5) * 0.35);
+    let side = (1.0 - smoothstep(0.55, 1.0, abs(v.uv.x) + (f.z - 0.5) * 0.35));
     let a = clamp(f.x, 0.0, 1.0) * 0.92 * side;
     return vec4f(col * a, a);
   } else {
@@ -685,6 +770,7 @@ fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f 
     m.foam = r.w;
     m.refr = 0.03;
     m.caust = 0.5;
+    m.banks = 300.0;
     // fade in at the source, fade out where the river meets the sea
     edge = smoothstep(0.0, 30.0, v.uv.y);
     if (WU.misc.z > 0.5) { edge *= smoothstep(WU.misc.y - 0.4, WU.misc.y + 0.8, P.y); }
