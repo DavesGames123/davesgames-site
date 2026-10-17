@@ -119,8 +119,15 @@ function onYear(s) {
   if (plantsInfo.length !== s.plants.length || plantsInfo.token !== token) {
     plantsInfo = s.plants.map(p => ({ x: p.x, z: p.z, germ: p.germ, r: SPECIES[p.species].size.r * 0.3, form: SPECIES[p.species].form, species: p.species }));
     plantsInfo.token = token;
-    if (ok) R.setPlants(plantsInfo);
+    if (ok) { R.setPlants(plantsInfo); placeProps(); }
   }
+}
+
+// the scanned rocks, stump, ferns, flowers and grass round the plants
+function placeProps() {
+  if (!ok || !plantsInfo.length) return;
+  R.setProps({ seed: S.seed, cut: S.roots && rootsInfo ? rootsInfo.R : 0,
+    plants: plantsInfo.map(p => ({ x: p.x, z: p.z, r: SPECIES[p.species].size.r, trunk: p.form === 'tree' ? 0.9 : 0.45 })) });
 }
 
 // ------------------------------------------------------- pack the shown year
@@ -312,7 +319,7 @@ function setToggle(id, key, on, label) {
 function setRootsOn(on) {
   setToggle('rootsBtn', 'roots', on, 'Roots');
   if (ok && rootsInfo) R.setRootsOn(on, rootsInfo.R, rootsInfo.D);
-  rootsN = -1;
+  rootsN = -1; placeProps();
 }
 function setLeavesOn(on) { setToggle('leavesBtn', 'leaves', on, 'Leaves'); if (ok) R.setLeavesOn(on); }
 const fmt = { spy: v => v.toFixed(0) + ' s', wind: v => Math.round(v * 100) + '%', lam: v => '×' + v.toFixed(2), alp: v => '×' + v.toFixed(2), xi: v => '×' + v.toFixed(2) };

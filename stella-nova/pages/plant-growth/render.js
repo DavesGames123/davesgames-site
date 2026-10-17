@@ -42,6 +42,7 @@
 //    grass ................... "function makeGrass"
 //    cut-away ................ "function makeCutaway"
 //    texture loading ......... "function loadArray"
+//    props ................... "function buildProps"
 //    public api .............. "const api = {"
 // ============================================================================
 import * as THREE from 'three';
@@ -51,6 +52,7 @@ import { TEX_W, CELLS, speciesTables, WIND_GLSL } from './pose.js';
 import { SEASON_GLSL } from './season.js';
 import { GROUND_GLSL, grassField } from './ground.js';
 import { BARKS } from './look.js';
+import { scatterProps, decodeMesh } from './props.js';
 import { ATLAS_SIZE } from './atlas.js';
 
 const TAB = speciesTables();
@@ -759,6 +761,71 @@ export function createRender(opts) {
   const seeds = new THREE.InstancedMesh(seedGeo, seedMat, 16); seeds.count = 0; seeds.castShadow = true; scene.add(seeds);
   let seedList = [];
 
+  // ------------------------------------------------- natural objects
+  // Scanned CC0 props (props.js): one InstancedMesh per packed mesh. The
+  // rocks and the stump take snow on top; the foliage sways, browns in
+  // late autumn, and the celandine shows only from spring to summer.
+  const props = { table: null, buf: null, mats: {}, meshes: [], want: null };
+  function propMaterial(set) {
+    if (props.mats[set]) return props.mats[set];
+    const S2 = props.table.sets[set];
+    const m = new THREE.MeshStandardMaterial({ roughness: S2.foliage ? 0.8 : 0.95, metalness: 0, envMapIntensity: 0.6 });
+    m.map = loadTex(loader, A + S2.color, true, true);
+    m.normalMap = loadTex(loader, A + S2.normal, false, true);
+    if (S2.foliage) {
+      m.alphaMap = loadTex(loader, A + S2.alpha, false, true);
+      m.alphaTest = 0.5; m.side = THREE.DoubleSide; m.alphaToCoverage = true;
+    }
+    const foliage = S2.foliage ? 1 : 0, flower = set === 'celandine' ? 1 : 0;
+    m.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, U);
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\n' + COMMON_GLSL + 'varying float vUpN;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          float pph = uClock - floor(uClock);
+          ${flower ? 'transformed *= smoothstep(0.18, 0.28, pph) * (1.0 - smoothstep(0.62, 0.75, pph));' : ''}
+          ${foliage ? 'vec3 ip = instanceMatrix[3].xyz; transformed.xz += uWindDir * uWind * 0.35 * position.y * position.y * sin(uTime * 2.2 + ip.x * 0.7 + ip.z * 0.5);' : ''}
+          vUpN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uSnow, uClock; varying float vUpN;')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          float pp = uClock - floor(uClock);
+          ${foliage ? 'float brown = smoothstep(0.74, 0.9, pp) + 1.0 - smoothstep(0.1, 0.3, pp); diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.35, 1.0, 0.45) * 0.8, clamp(brown, 0.0, 1.0) * 0.8);' : ''}
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.89, 0.94), uSnow * smoothstep(0.35, 0.8, vUpN) * ${foliage ? '0.6' : '0.95'});`);
+    };
+    m.customProgramCacheKey = () => 'pg-prop-' + foliage + flower;
+    props.mats[set] = m;
+    return m;
+  }
+  function buildProps() {
+    if (!props.table || !props.want) return;
+    for (const im of props.meshes) { scene.remove(im); im.dispose(); }
+    props.meshes = [];
+    const list = scatterProps(Object.assign({ meshes: props.table.meshes, coarse }, props.want));
+    const by = new Map();
+    for (const o of list) { if (!by.has(o.mesh)) by.set(o.mesh, []); by.get(o.mesh).push(o); }
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), P = new THREE.Vector3(), SC = new THREE.Vector3();
+    for (const [k, items] of by) {
+      const md = props.table.meshes[k];
+      if (!md.geo) {
+        const d = decodeMesh(props.buf, md), g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3));
+        g.setAttribute('normal', new THREE.BufferAttribute(d.nrm, 3, true));
+        g.setAttribute('uv', new THREE.BufferAttribute(d.uv, 2));
+        g.setIndex(new THREE.BufferAttribute(d.idx, 1));
+        md.geo = g;
+      }
+      const im = new THREE.InstancedMesh(md.geo, propMaterial(md.set), items.length);
+      items.forEach((o, i) => { Q.setFromAxisAngle(Y, o.rot); P.set(o.x, o.y - o.sink, o.z); SC.setScalar(o.scale); M.compose(P, Q, SC); im.setMatrixAt(i, M); });
+      im.castShadow = true; im.receiveShadow = true;
+      scene.add(im); props.meshes.push(im);
+    }
+  }
+  Promise.all([fetch(A + 'props.json').then(r => r.json()), fetch(A + 'props.bin').then(r => r.arrayBuffer())])
+    .then(([t, b]) => { props.table = t; props.buf = b; buildProps(); })
+    .catch(() => { /* the scene works without the props */ });
+  function setProps(want) { props.want = want; buildProps(); }
+
   // ---------------------------------------------------------- state set
   let box = [-0.3, 0, -0.3, 0.3, 0.3, 0.3];
   function setPack(pk) {
@@ -847,7 +914,7 @@ export function createRender(opts) {
 
   const api = {
     renderer, scene, camera, controls, uniforms: U, ready,
-    setPack, setRootPack, setPlants, setCrowns, setMode, setGradient, setRootsOn, setLeavesOn, resize, frame,
+    setPack, setRootPack, setPlants, setCrowns, setProps, setMode, setGradient, setRootsOn, setLeavesOn, resize, frame,
     get box() { return box; },
     render() { renderer.render(scene, camera); },
     stats() { return { nodes: plant.geo.instanceCount, leaves: leafGeo.instanceCount, roots: roots.geo.instanceCount }; },

@@ -18,6 +18,8 @@ import { makeShots, shotPlan, bandFrame, fitDistance, projectedRadius, codeExtra
 import { ATLAS_CELLS } from './atlas.js';
 import { LOOK, BARKS } from './look.js';
 import { rng } from '../../lib/dla-engine.js';
+import { scatterProps, decodeMesh } from './props.js';
+import fs from 'node:fs';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
@@ -273,6 +275,23 @@ for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECI
   const f = grassField({ n: 5000, seed: 2, avoid: [{ x: 0, z: 0, r: 0.5 }], cut: 2 });
   let bad = 0; for (let k = 0; k < f.length; k += 4) if (Math.hypot(f[k], f[k + 1]) < 0.5 || inCutaway(f[k], f[k + 1], 2)) bad++;
   ok(f.length / 4 > 4000 && bad === 0, 'grass keeps off the trunk and the cut-away');
+}
+
+// --- props: scanned rocks, stump, ferns, flowers, grass ----------------------
+{
+  const table = JSON.parse(fs.readFileSync(new URL('./assets/props.json', import.meta.url)));
+  const b = fs.readFileSync(new URL('./assets/props.bin', import.meta.url)), buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.length);
+  ok(table.bytes === buf.byteLength && table.meshes.length === 33, `props: ${table.meshes.length} meshes in ${buf.byteLength} bytes`);
+  let fin = true; for (const m of table.meshes) { const d = decodeMesh(buf, m); if (!finite(d.pos) || !finite(d.uv) || d.idx.some(i => i >= m.n)) fin = false; }
+  ok(fin, 'props: decoded meshes are finite and their indices in range');
+  const plants = [{ x: 0, z: 0, r: 6, trunk: 0.9 }];
+  const a = scatterProps({ seed: 4, meshes: table.meshes, plants, cut: 3 }), c = scatterProps({ seed: 4, meshes: table.meshes, plants, cut: 3 });
+  ok(JSON.stringify(a) === JSON.stringify(c), 'props: the same seed places the same props');
+  const sets = new Set(a.map(o => o.set));
+  ok(['rocks', 'stump', 'fern', 'celandine', 'grass'].every(k => sets.has(k)), 'props: every kind is placed');
+  ok(a.every(o => !inCutaway(o.x, o.z, 3) && Math.hypot(o.x, o.z) > 0.9), 'props: none on the trunk or in the cut-away');
+  const ph = scatterProps({ seed: 4, meshes: table.meshes, plants, coarse: true });
+  ok(ph.length < a.length * 0.7, `props: fewer on a phone (${ph.length} of ${a.length})`);
 }
 
 // --- roots by DLA ---------------------------------------------------------------

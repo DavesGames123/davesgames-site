@@ -66,7 +66,16 @@ textures and one library from the sources below.
    (colour 1024 px, normal 512 px). bark-birch and bark-fern are drawn by
    that script (our own).
 
-5. three.js r160 (the 3D render)
+5. Ground props (assets/props.bin, props.json, prop-*.jpg/png)
+   Poly Haven, https://polyhaven.com, CC0 1.0 (public domain), 1k glTF:
+     rocks ...... Rock Moss Set 01 (Kless Gyzen)
+     stump ...... Tree Stump 01 (Rob Tuytel)
+     fern ....... Fern 02 (Rob Tuytel, Rico Cilliers)
+     celandine .. Celandine 01 (Rob Tuytel, Rico Cilliers)
+     grass ...... Grass Medium 01 (Rob Tuytel, Rico Cilliers)
+   tools/prep-props.py packs the meshes (quantised) and resizes the maps.
+
+6. three.js r160 (the 3D render)
    https://threejs.org, MIT licence, Copyright 2010-2023 three.js authors.
    Loaded from stella-nova/vendor/three@0.160.0.
 
