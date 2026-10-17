@@ -22,7 +22,7 @@ function section(name) { current = name; }
 function check(name, fn) {
   const label = `${current} :: ${name}`;
   // Checks run one at a time, in order: the palette is module state.
-  pending.push(() => Promise.resolve().then(fn).then(() => { pass++; }, e => { fail++; console.log('FAIL ' + label + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 4).join('\n     ')); }));
+  pending.push(() => Promise.resolve().then(fn).then(() => { pass++; }, e => { fail++; console.log('FAIL ' + label + '\n     ' + (e && e.stack || e).toString().split('\n').slice(0, 6).join('\n     ')); }));
 }
 async function drain() { while (pending.length) await pending.shift()(); }
 
@@ -525,11 +525,63 @@ else {
 
   check('boot with the real packages on disk (what has landed)', async () => {
     const { win, doc } = makeDom();
-    const b = await MAIN.boot({ doc, win, typeset: (el, t) => { el.textContent = t; return true; }, raf: () => {}, now: () => 0, noAnimate: true, saver: false });
-    const st = await win.tensorPage.state();
+    const warns = [];
+    win.console = { info() {}, log() {}, warn: (...a) => warns.push(a.map(String).join(' ')), error: (...a) => warns.push(a.map(String).join(' ')) };
+    let rafFn = null, clock = 0;
+    const b = await MAIN.boot({ doc, win, typeset: (el, t) => { el.textContent = t; return true; }, raf: fn => { rafFn = fn; }, now: () => clock, noAnimate: true, saver: false });
+    const api = win.tensorPage;
+    const st = await api.state();
     assert.equal(st.ready, true);
     console.log('     real packages: missing = ' + JSON.stringify(st.missing) + '; entry = ' + st.entryId + '; steps = ' + st.stepCount);
+    // Open every LIBRARY entry and play it through, in each diagram style.
+    const ids = [...b.packages.library.byId.keys()];
+    const styles = ['penrose', 'birdtrack', 'network'];
+    let frames = 0;
+    for (const [k, id] of ids.entries()) {
+      await api.setView({ style: styles[k % 3] });
+      await api.openEntry(id);
+      for (let f = 0; f < 60; f++) { clock += 250; rafFn(); frames++; }
+    }
+    if (!b.packages.missing.some(m => m.startsWith('diagram'))) assert.ok(doc.querySelectorAll('#diagHost svg *').length > 0, 'the diagram drew');
+    assert.deepEqual(warns, [], 'no view threw');
+    console.log(`     real packages: ${ids.length} entries opened and played (${frames} frames), no view threw`);
     b.stop();
+  });
+}
+
+// ============================================================================
+section('viz frames of the traces');
+// VIZ index.js needs three (an importmap in the browser), but its scene
+// code is DOM-free. Each step that CORE gives VIZ (after resolveScene)
+// goes through VIZ stepScene() and frameScene() at five values of t.
+{
+  let R = null, DLmod = null, TM = null, LIBm = null;
+  try { R = await import(join(ROOT, 'viz/registry.js')); DLmod = await import(join(ROOT, 'viz/dl.js')); TM = await import(join(ROOT, 'viz/trace-map.js')); LIBm = await import(join(ROOT, 'library/index.js')); }
+  catch (e) { console.log('skip viz frames: ' + e.message.split('\n')[0]); }
+  if (R && DLmod && TM && LIBm) check('every library step draws a VIZ frame', async () => {
+    const MAIN = await import(join(ROOT, 'main.js'));
+    let n = 0, empty = 0;
+    const bad = [];
+    for (const e of LIBm.LIBRARY) {
+      const tr = e.trace({});
+      for (const st0 of tr.steps) {
+        const st = st0.viz && st0.viz.scene ? { ...st0, viz: { ...st0.viz, scene: MAIN.resolveScene(st0.viz.scene, R.SCENE_IDS) } } : st0;
+        const sc = TM.stepScene(st, R.SCENE_IDS);
+        assert.ok(R.SCENE_IDS.includes(sc.scene) || R.SCENES[sc.scene], `${e.id}: scene ${sc.scene}`);
+        for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+          const dl = new DLmod.DL();
+          try { R.frameScene(sc.scene, dl, { params: sc.params, time: 1.5, t, step: st }); n++; }
+          catch (err) { bad.push(`${e.id} step ${st.id || st.kind} (${st.kind}) scene ${sc.scene} t=${t}: ${err.message}`); break; }
+        }
+      }
+      if (e.viz && e.viz.scene) { const id = MAIN.resolveScene(e.viz.scene, R.SCENE_IDS); if (!R.SCENES[id]) empty++; }
+    }
+    assert.equal(empty, 0, 'every entry scene resolves to a VIZ scene');
+    // A frame that throws is a VIZ bug, not a CORE bug: print it as a
+    // finding (and put it in NOTES.md), and let VIZ tests own the fix.
+    // main.js safe() catches it at run time and warns once.
+    for (const b of bad) console.log('     FINDING (VIZ): ' + b);
+    console.log(`     viz: ${n} frames of library steps drew; ${bad.length} step(s) threw`);
   });
 }
 

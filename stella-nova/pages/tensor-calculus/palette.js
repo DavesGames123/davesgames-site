@@ -95,8 +95,9 @@ export function setActive(syms) {
     used.add(k); out.set(s, k);  // more than 8 letters: colours repeat
   }
   active = out; activeOrder = order;
-  if (typeof window !== 'undefined' && window.dispatchEvent && typeof CustomEvent === 'function') {
-    window.dispatchEvent(new CustomEvent('tensor:palette', { detail: { slots: Object.fromEntries(out) } }));
+  // The event is for views that cache colours. It never stops the call.
+  if (typeof window !== 'undefined' && window.dispatchEvent && typeof window.CustomEvent === 'function') {
+    try { window.dispatchEvent(new window.CustomEvent('tensor:palette', { detail: { slots: Object.fromEntries(out) } })); } catch (e) { /* no event */ }
   }
   return new Map(out);
 }

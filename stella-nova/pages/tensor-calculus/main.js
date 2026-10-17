@@ -152,7 +152,17 @@ export async function boot(opts = {}) {
   }
   if (diagram.note) { const fb = $('diagFallback'); fb.hidden = false; fb.textContent = diagram.note; }
 
-  const safe = (name, fn) => { try { return fn(); } catch (e) { win.console && win.console.warn(`[tensor-calculus] ${name}:`, e); return undefined; } };
+  // A view call that throws must not stop the other views or the clock. A
+  // frame error repeats each frame, so each message is logged once.
+  const warned = new Set();
+  const safe = (name, fn) => {
+    try { return fn(); }
+    catch (e) {
+      const key = name + ':' + (e && e.message);
+      if (!warned.has(key) && warned.size < 50) { warned.add(key); if (win.console) win.console.warn(`[tensor-calculus] ${name}:`, e); }
+      return undefined;
+    }
+  };
   const vizScenes = () => (Array.isArray(viz.scenes) ? viz.scenes : []);
 
   // ---------------------------------------------------------------- player
