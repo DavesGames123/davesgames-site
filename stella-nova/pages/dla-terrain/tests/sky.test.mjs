@@ -143,6 +143,62 @@ check('writeSkyGlobals fills SKY fields, leaves exposure', () => {
   assert.ok(Math.abs(f[GLOBALS.sunColor + 3] - 0.4) < 1e-6);
 });
 
+check('a call 0..2 s after the last one continues the front (no prev passed)', () => {
+  skyState(0.5, 'clear', 0.3, 46, 1000);
+  const a = skyState(0.5, 'overcast', 0.3, 46, 1000.5);
+  assert.ok(a.weather[0] < 0.2, 'cover jumps to ' + a.weather[0]);
+  const b = skyState(0.5, 'overcast', 0.3, 46, 5000, { stateless: true });
+  assert.ok(Math.abs(b.weather[0] - 0.92) < 1e-6, 'stateless gives the preset');
+});
+
+check('the result has the names of gpu/globals.js packGlobals', () => {
+  const s = skyState(0.6, 'thunderstorm', 0.3, 46, 7, { stateless: true });
+  for (const k of ['sunIlluminance', 'moonIlluminance', 'fogDensity', 'gust', 'windPhase', 'cover', 'rain', 'snow', 'lightning', 'wetness', 'snowCover', 'storminess', 'season', 'tod'])
+    assert.ok(typeof s[k] === 'number' && Number.isFinite(s[k]), k);
+});
+
+check('overrides change the preset', () => {
+  const s = skyState(0.5, 'clear', 0.3, 46, 3, { cover: 0.5, stateless: true });
+  assert.ok(Math.abs(s.weather[0] - 0.5) < 1e-6);
+});
+
+check('night exposure stays darker than day exposure would make it', () => {
+  const n = skyState(0.0, 'clear', 0.3, 46, 0, { stateless: true });
+  assert.ok(n.exposureHint <= 45 && n.exposureHint > 1);
+});
+
+// ---- render modules (DOM-free parts) ----
+const W = await import('../render/weather.js');
+check('the DLA bolt reaches down and has one main channel', () => {
+  const g = W.createBoltGrower(42, 120).finish();
+  const b = W.boltSegments(g.model);
+  assert.ok(b.minY <= -120, 'depth ' + b.minY);
+  assert.ok(b.mainCount > 60 && b.count <= 900 && b.count > b.mainCount);
+  for (let i = 0; i < b.mainCount; i++) assert.equal(b.segs[i * 8 + 3], 1);
+  const g2 = W.createBoltGrower(42, 120).finish();
+  assert.equal(W.boltSegments(g2.model).count, b.count, 'seeded');
+});
+const SK = await import('../render/sky.js');
+check('cloud layer sits over the valleys, storms bring it down', () => {
+  const t = { seaLevel: 0, heightScale: 2000 };
+  const fair = SK.cloudLayer(t, { cover: 0.3, cumulus: 1, storm: 0, rain: 0, fog: 2e-5 });
+  const storm = SK.cloudLayer(t, { cover: 0.9, cumulus: 1, storm: 1, rain: 1, fog: 2e-4 });
+  assert.ok(fair.base > 900 && fair.top > fair.base + 500 && fair.anvil > fair.top);
+  assert.ok(storm.base < fair.base);
+});
+check('SkyU offsets match the WGSL struct', () => {
+  const src = readFileSync(join(page, 'shaders/sky.wgsl'), 'utf8');
+  const body = src.slice(src.indexOf('struct SkyU {'), src.indexOf('}', src.indexOf('struct SkyU {')));
+  const names = [...body.matchAll(/^\s+(\w+): vec4f/gm)].map((m) => m[1]);
+  assert.equal(names.length * 4, SK.SKYU_FLOATS);
+  names.forEach((n, i) => assert.equal(SK.SKYU[n], i * 4, n));
+});
+check('splitSkyLibrary cuts at the entry line only', () => {
+  const src = readFileSync(join(page, 'shaders/sky.wgsl'), 'utf8');
+  const lib = SK.splitSkyLibrary(src);
+  assert.ok(lib.includes('fn cloudShadow') && !lib.includes('@compute') && lib.includes('struct SkyU'));
+});
+
 // ---- static checks of the shaders and modules (only when they exist) ----
 const wgslFiles = ['shaders/sky.wgsl', 'shaders/clouds.wgsl', 'shaders/weather.wgsl'];
 for (const f of wgslFiles) {
@@ -155,6 +211,14 @@ for (const f of wgslFiles) {
       if (code.includes('&&') && code.includes('||') && !/\(\s*[^()]*(&&|\|\|)[^()]*\)/.test(code))
         assert.fail('line ' + (i + 1) + ': ' + code.trim());
     }
+  });
+  check(f + ': no built-in smoothstep (Metal: undefined for a >= b)', () => {
+    const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!/[^_\w]smoothstep\(/.test(code));
+  });
+  check(f + ': no reserved WGSL words as names', () => {
+    for (const w of ['patch', 'filter', 'sample', 'texture', 'module', 'output', 'input', 'common'])
+      assert.ok(!new RegExp('\\b(let|var|const) ' + w + '\\b').test(src), w);
   });
   check(f + ': credits our sources in the header', () => {
     assert.ok(/pages\/forge|pages\/weather-map|pages\/volume-noise|Hillaire/.test(src.slice(0, 4000)));
