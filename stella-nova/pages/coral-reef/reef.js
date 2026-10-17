@@ -290,6 +290,7 @@ export function createReef(opts = {}) {
     count: 0, now: 0, joined: 0, walks: 0,
     px: new Float32Array(capTotal), py: new Float32Array(capTotal), pz: new Float32Array(capTotal),
     col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), birth: new Float32Array(capTotal),
+    gy: new Float32Array(capTotal),      // the ground height under each particle (colour by height)
     addColony, loadPreset, step, growAll, reset, setCurrent, setParams, colonyCap, done,
     get bleach() { return bleachLevel(env.temp); },
     allowance: 0,
@@ -342,7 +343,7 @@ export function createReef(opts = {}) {
         const e = Math.hypot(x0, z0); if (e > u.ext) u.ext = e;
         const g = R.count++;
         R.px[g] = x0 + u.bx; R.py[g] = y0 + u.by; R.pz[g] = z0 + u.bz;
-        R.col[g] = k; R.loc[g] = i; R.birth[g] = R.now;
+        R.col[g] = k; R.loc[g] = i; R.birth[g] = R.now; R.gy[g] = groundY(R.px[g], R.pz[g]);
         colony.ids.push(g); colony.count++;
       },
     });

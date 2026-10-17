@@ -33,7 +33,7 @@
 //    grep -n 'window.snSaver'        the screensaver hook
 // ============================================================================
 import { createScene } from './scene.js';
-import { createReef, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, polypRadius, sandY, speciesHook } from './reef.js';
+import { createReef, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, polypRadius, speciesHook } from './reef.js';
 import { MODES, colourT, naturalRGB, radiiOf, fieldsOf } from './colour.js';
 import { createCoralMesher, groove } from './coral-sdf.js';
 import { meshRock } from './terrain.js';
@@ -157,7 +157,7 @@ function syncPolyps() {
     data[o] = c.k; data[o + 1] = i; data[o + 2] = c.model.parent[i];
     data[o + 3] = P[i * 3]; data[o + 4] = P[i * 3 + 1]; data[o + 5] = P[i * 3 + 2]; data[o + 6] = g;
     radBuf[g] = polypRadius(c.sp, 1);
-    const h = reef.py[g] - sandY(reef.px[g], reef.pz[g]); if (h > hMax) hMax = h;
+    const h = reef.py[g] - reef.gy[g]; if (h > hMax) hMax = h;
     tBuf[g] = G.mode === 'flow' ? 0 : G.mode === 'colony' ? (reef.col[g] * 0.618034 + 0.12) % 1 : G.mode === 'height' ? h / Math.max(1, hMax) : 1;
     const q = c.sp.tip; natBuf[g * 3] = q[0]; natBuf[g * 3 + 1] = q[1]; natBuf[g * 3 + 2] = q[2];
   }

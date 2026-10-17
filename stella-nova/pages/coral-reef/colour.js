@@ -95,7 +95,7 @@ export function colourT(reef, mode, out, F) {
     for (let i = 0; i < n; i++) out[i] = Math.log(F.sub[i]) / Math.log(Math.max(2, F.maxSub[reef.col[i]]));
   } else if (mode === 'height' || mode === 'light') {
     let hm = 1e-6;
-    for (let i = 0; i < n; i++) { const h = reef.py[i] - sandY(reef.px[i], reef.pz[i]); out[i] = h; if (h > hm) hm = h; }
+    for (let i = 0; i < n; i++) { const h = reef.py[i] - (reef.gy ? reef.gy[i] : sandY(reef.px[i], reef.pz[i])); out[i] = h; if (h > hm) hm = h; }
     for (let i = 0; i < n; i++) out[i] = Math.max(0, out[i] / hm);
     if (mode === 'light') {
       const cnt = crowding(reef);
