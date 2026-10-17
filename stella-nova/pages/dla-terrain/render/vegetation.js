@@ -4,7 +4,10 @@
 //  createVegetation(gpu) -> module (CONTRACT.md "Module interface"):
 //    setTerrain(t)  new Terrain: makeField + a scatter stream (scatter.js)
 //    update(frame)  stream tiles round the camera (time budget), upload new
-//                   instance pages, the per frame uniforms
+//                   instance pages, the per frame uniforms. frame.veg =
+//                   { density 0.2..2.5, conifer 0..1, flowers 0..1 } (the
+//                   Vegetation sliders): a new mix scatters again
+//                   (scatter.js f.mix)
 //    compute(enc)   grass: cs_blades + cs_final; props: cs_snap (new pages),
 //                   cs_count, cs_scan, cs_emit (GPU cull, LOD, shadow list)
 //    drawShadow     props into the sun cascade of this pass (CORE binds SP)
@@ -18,7 +21,12 @@
 //  made here (tree skeletons with leaf cards, conifer whorls, palms, ribbed
 //  cacti, displaced rocks, ferns, reeds, flowers, mushrooms, logs). The
 //  instance seed picks the variant. Stand-ins first: the asset models load
-//  in the background and replace them (the library is rebuilt once).
+//  in the background and replace them. Phase 1 loads the manifest
+//  default set; each finished terrain adds the assets whose biome tags are
+//  on it (phase 2, the library is rebuilt then).
+//
+//  SHADOWS  Near casters (under 45 m) draw mesh LOD 1, far casters the
+//  impostor quad turned to the sun (vs_imp_shadow), to shadowCap m.
 //  Procedural textures (bark, leaf clusters, needles, fronds, rock) are
 //  drawn on the CPU into one texture array; asset albedo maps go into the
 //  same array (layer per source texture file).
@@ -52,7 +60,7 @@
 //    grep -n 'function syncTiles'       stream -> instance pages
 //    grep -n 'export async function createVegetation'
 // ============================================================================
-import { makeField, createScatterStream, SPECIES, LAYERS, LAYER_INDEX, STRIDE, BIOME_KEYS, normKey } from './scatter.js';
+import { makeField, createScatterStream, SPECIES, LAYERS, LAYER_INDEX, STRIDE, BIOME_KEYS, normKey, MIX0 } from './scatter.js';
 
 export const PAGE = 128;               // instances per page (props.wgsl PAGE)
 const LODS = 4;                         // camera lists per prototype
@@ -905,9 +913,9 @@ const SPEC_GPU = {
 };
 // ASSETS: words in the asset name or id that fit a species (kind first)
 const PROTO_WORDS = {
-  oak: ['oak', 'tree_small'], beech: ['beech', 'maple', 'lime', 'deciduous'], birch: ['birch', 'aspen'],
+  oak: ['oak', 'furrowed', 'tree_small'], beech: ['beech', 'maple', 'lime', 'smooth bark', 'deciduous'], birch: ['birch', 'aspen'],
   spruce: ['spruce', 'fir_tree', 'fir tree'], pine: ['pine_tree', 'scots'], jungle: ['jungle', 'tropical', 'kapok', 'jacaranda', 'island_tree'],
-  palm: ['palm'], acacia: ['acacia', 'searsia'], willow: ['willow'], deadtree: ['dead', 'snag'],
+  palm: ['palm'], acacia: ['acacia', 'acacia-like', 'wide canopy', 'searsia'], willow: ['willow'], deadtree: ['dead', 'snag'],
   bush: ['shrub_0', 'bush'], 'conifer-young': ['sapling'], dryshrub: ['fynbos', 'rooibos', 'didelta', 'sage'], cactus: ['cactus', 'saguaro', 'quiver_tree', 'othonna'],
   fern: ['fern'], flower: ['flower', 'daisy', 'poppy', 'dandelion', 'celandine', 'periwinkle'], mushroom: ['mushroom', 'toadstool'],
   pebble: ['pebble', 'stone', 'rock'], reed: ['reed', 'cattail', 'rush'], rock: ['rock', 'stone', 'boulder'], boulder: ['boulder', 'rock'],
@@ -928,10 +936,11 @@ async function defaultBitmap(url, size) {
 }
 
 // The asset prototypes per species: { key: [ { lods: [[parts]], height, radius, wind, sink, textures: Map name -> url } ] }
-export async function loadAssetProtos(lib, texSize, log) {
+// accept(asset) -> bool picks the assets to load (default: all).
+export async function loadAssetProtos(lib, texSize, log, accept = null) {
   const out = {};
   if (!lib || !lib.manifest) return out;
-  const assets = lib.manifest.assets || [];
+  const assets = (lib.manifest.assets || []).filter((a) => !accept || accept(a));
   for (const sp of SPECIES) {
     const words = PROTO_WORDS[sp.key] || [];
     const kindOk = (a) => a.kind === sp.kind || (KIND_ALSO[sp.key] || []).includes(a.kind) || (sp.key === 'boulder' && a.kind === 'rock') || (sp.key === 'rock' && a.kind === 'boulder');
@@ -950,7 +959,13 @@ export async function loadAssetProtos(lib, texSize, log) {
       try {
         const lods = [], matUrl = new Map();
         for (let l = 0; l < Math.min(3, a.lods.length); l++) {
-          const got = await lib.loadAsset(a.id, l);
+          // one retry after a short wait: a file that another process
+          // writes at that moment (or a dropped request) fails once
+          let got;
+          try { got = await lib.loadAsset(a.id, l); } catch (e1) {
+            await new Promise((r) => setTimeout(r, 400));
+            got = await lib.loadAsset(a.id, l);
+          }
           const parts = [];
           for (const m of got.scene.meshes) {
             const fol = m.material?.alphaMode === 'MASK' || (a.materials || []).some((mm) => mm.foliage && mm.name === m.material?.name);
@@ -1041,11 +1056,15 @@ function buildLibrary(protoSets, texNames) {
     if (p.flags & FLAG.impostor) slots.push({ ...p.impRange, list: pi * LODS + 3, pass: 'camera', proto: pi, imp: true, kind: 'imp', layer: 0 });
     if (!(p.flags & FLAG.noShadow)) {
       const nl = R.length;
-      [Math.min(1, nl - 1), nl - 1].forEach((l, k) => R[l].forEach((r) => slots.push({ ...r, list: S * LODS + pi * 2 + k, pass: 'shadow', proto: pi })));
+      R[Math.min(1, nl - 1)].forEach((r) => slots.push({ ...r, list: S * LODS + pi * 2, pass: 'shadow', proto: pi }));
+      // far casters (over 45 m): a tree with an impostor casts with its
+      // sun facing impostor quad (2 triangles, not about 2k)
+      if (p.flags & FLAG.impostor) slots.push({ ...p.impRange, list: S * LODS + pi * 2 + 1, pass: 'shadow', proto: pi, imp: true, kind: 'impsh', layer: 0 });
+      else R[nl - 1].forEach((r) => slots.push({ ...r, list: S * LODS + pi * 2 + 1, pass: 'shadow', proto: pi }));
     }
   });
   // order: kind groups for fewer pipeline changes
-  const order = { bark: 0, rock: 1, leaf: 2, imp: 3 };
+  const order = { bark: 0, rock: 1, leaf: 2, imp: 3, impsh: 4 };
   slots.sort((a, b) => (a.pass === b.pass ? 0 : a.pass === 'camera' ? -1 : 1) || order[a.kind] - order[b.kind]);
   return { protos, speciesProtos, vb, ib, slots, nLists, ranges };
 }
@@ -1105,7 +1124,7 @@ export async function createVegetation(gpu) {
     fragment: o.fs ? { module: o.mod, entryPoint: o.fs, targets: o.targets ?? [{ format: gpu.hdrFormat }] } : undefined,
     primitive: { topology: o.topology ?? 'triangle-list', cullMode: o.cull ?? 'none' },
     depthStencil: o.depth });
-  const [pSnap, pCount, pScan, pEmit, pBlades, pFinal, pBark, pLeaf, pImp, pShOpaque, pShLeaf, pBake, pGrass] = await Promise.all([
+  const [pSnap, pCount, pScan, pEmit, pBlades, pFinal, pBark, pLeaf, pImp, pShOpaque, pShLeaf, pBake, pGrass, pShImp] = await Promise.all([
     cpipe(propsMod, plProps, 'cs_snap'), cpipe(propsMod, plProps, 'cs_count'), cpipe(propsMod, plProps, 'cs_scan'), cpipe(propsMod, plProps, 'cs_emit'),
     cpipe(grassMod, plGrassC, 'cs_blades'), cpipe(grassMod, plGrassC, 'cs_final'),
     rpipe({ label: 'bark', layout: plMesh, mod: propsMod, vs: 'vs_mesh', fs: 'fs_mesh', cull: 'back', depth: depthS }),
@@ -1116,6 +1135,7 @@ export async function createVegetation(gpu) {
     rpipe({ label: 'bake', layout: plBake, mod: propsMod, vs: 'vs_bake', fs: 'fs_bake', cull: 'none', targets: [{ format: 'rgba8unorm-srgb' }, { format: 'rgba8unorm' }],
       depth: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' } }),
     rpipe({ label: 'grass', layout: plGrassR, mod: grassMod, vs: 'vs_grass', fs: 'fs_grass', buffers: [], topology: 'triangle-strip', cull: 'none', depth: depthS }),
+    rpipe({ label: 'shadow impostor', layout: plShadow, mod: propsMod, vs: 'vs_imp_shadow', fs: 'fs_imp_shadow', targets: [], cull: 'none', depth: shadowS }),
   ]);
 
   mark('pipelines');
@@ -1135,7 +1155,11 @@ export async function createVegetation(gpu) {
       const layer = tex.levels.length + k;
       // an ImageBitmap (browser) or raw { data: RGBA8 sRGB, width, height } (tests)
       if (bm.data) queue.writeTexture({ texture: t, origin: [0, 0, layer] }, bm.data, { bytesPerRow: texSize * 4, rowsPerImage: texSize }, [texSize, texSize, 1]);
-      else queue.copyExternalImageToTexture({ source: bm }, { texture: t, origin: [0, 0, layer] }, [texSize, texSize, 1]);
+      else {
+        // a bitmap that the platform cannot copy leaves its layer empty (the
+        // model stays, with a dark albedo) instead of losing every asset
+        try { queue.copyExternalImageToTexture({ source: bm }, { texture: t, origin: [0, 0, layer] }, [texSize, texSize, 1]); } catch (e) { log('veg: texture layer ' + layer + ': ' + (e.message || e)); }
+      }
       genMips(t, layer, 'rgba8unorm-srgb');
     });
     if (matTex) matTex.destroy();
@@ -1174,7 +1198,10 @@ export async function createVegetation(gpu) {
   }
 
   // ---- buffers that do not depend on the library
-  const maxPages = Math.round(256 + 1792 * q);           // 0.25: 704 pages (90k), 1: 2048 pages (262k)
+  // instance pages: the far canopy fills about 1600 pages at q 0.75, so
+  // the pool is larger than that; a phone (gpu.coarse) takes 60 %
+  const coarse = !!gpu.coarse;
+  const maxPages = Math.round((384 + 3200 * q) * (coarse ? 0.6 : 1));   // q 0.25: 1184 (152k), 0.75: 2784 (356k), 1: 3584 (459k)
   const maxInst = maxPages * PAGE;
   const instBuf = device.createBuffer({ label: 'veg instances', size: maxInst * 32, usage: BU.STORAGE | BU.COPY_DST });
   const visBuf = device.createBuffer({ label: 'veg visible', size: maxInst * 3 * 8, usage: BU.STORAGE });
@@ -1183,8 +1210,16 @@ export async function createVegetation(gpu) {
   const params = new Float32Array(64);
 
   // grass
-  const grassD = (0.075 - 0.035 * q);                   // fine spacing m: q 1 -> 4 cm
-  const grassR0 = 10;
+  // fine spacing m: q 1 -> 4 cm; low quality and phones get fewer blades
+  // and a shorter grass range (R0 x 8 is the outer ring)
+  const grassD = (0.075 - 0.035 * q) * (coarse ? 1.3 : 1);
+  const grassR0 = q < 0.4 || coarse ? 7 : 10;
+  // layer distances: x 0.625 (low) .. 1 (ultra), phones x 0.75 more
+  const farK = (0.5 + 0.5 * q) * (coarse ? 0.75 : 1);
+  // tree shadow casters: near ones draw LOD 1 (about 8k triangles for an
+  // asset tree) into each cascade, far ones their impostor quad. Past this
+  // range the impostor crown shading (props.wgsl fs_imp) stands for it.
+  const shadowCap = (300 + 900 * q) * (coarse ? 0.6 : 1);   // q 0.75: 975 m
   const grassN = Math.ceil((2 * grassR0) / grassD / 8) * 8 + 8;
   const grassCap = Math.min(Math.floor(device.limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6));
   const bladeBuf = device.createBuffer({ label: 'veg blades', size: grassCap * 48, usage: BU.STORAGE });
@@ -1389,13 +1424,23 @@ export async function createVegetation(gpu) {
   function clearAll() { for (const key of [...tiles.keys()]) freeTile(key); highPage = 0; }
 
   // ---- assets in the background (procedural stand-ins until then)
+  // Two phases. First the default-view set (manifest default: true, the
+  // ASSETS download budget). Then, when a finished terrain arrives, the
+  // other assets whose biome tags occur on it (palms and tropical shrubs
+  // for a tropical island, saguaro for a desert, ...), and the library is
+  // built again. Loads run one at a time (a chain); bitmaps are cached.
   let assetsState = 'none';
-  async function loadAssets() {
+  let assetIds = '';                       // the accepted set now installed
+  const bitmapCache = new Map();           // url -> bitmap
+  async function loadAssets(accept) {
     const lib = gpu.assets;
     if (!lib || !lib.manifest) return;
+    const ids = (lib.manifest.assets || []).filter(accept).map((a) => a.id).join(',');
+    if (ids === assetIds) return;
+    assetIds = ids;
     assetsState = 'loading';
     try {
-      const sets = await loadAssetProtos(lib, texSize, log);
+      const sets = await loadAssetProtos(lib, texSize, log, accept);
       if (!Object.keys(sets).length) { assetsState = 'none fit'; return; }
       // textures: one layer per albedo url
       const urls = [];
@@ -1403,17 +1448,41 @@ export async function createVegetation(gpu) {
       const loader = gpu.vegImageLoader || defaultBitmap;
       const bitmaps = [];
       urlLayers.clear();
-      for (const u of urls) { try { bitmaps.push(await loader(u, texSize)); urlLayers.set(u, bitmaps.length - 1); } catch (e) { log('veg: texture ' + u + ': ' + (e.message || e)); } }
-      const base = standIns();
+      for (const u of urls) {
+        let bm = bitmapCache.get(u) || null;
+        if (!bm) {
+          try { bm = await loader(u, texSize); } catch (e1) {
+            try { await new Promise((r) => setTimeout(r, 400)); bm = await loader(u, texSize); } catch (e) { log('veg: texture ' + u + ': ' + (e.message || e)); }
+          }
+          if (bm) bitmapCache.set(u, bm);
+        }
+        if (bm) { bitmaps.push(bm); urlLayers.set(u, bitmaps.length - 1); }
+      }
+      const base = { ...sets0 };
       for (const k in sets) {
         // one stand-in stays: it fills the biomes that no asset is tagged for
-        base[k] = [...sets[k], base[k][0]];
+        base[k] = [...sets[k], sets0[k][0]];
       }
       installLibrary(base, bitmaps);
       assetsState = 'loaded ' + Object.keys(sets).map((k) => k + ' ' + sets[k].length).join(', ');
     } catch (e) { assetsState = 'failed'; log('veg: assets failed: ' + (e.message || e)); }
   }
-  const assetsReady = gpu.assets ? loadAssets() : Promise.resolve();
+  let assetChain = Promise.resolve();
+  const queueAssets = (accept) => { assetChain = assetChain.then(() => loadAssets(accept)); return assetChain; };
+  const isDefault = (a) => a.default !== false;
+  const assetsReady = gpu.assets ? queueAssets(isDefault) : Promise.resolve();
+  // the biome keys that cover at least 0.3 % of a terrain
+  function biomesOn(cpu) {
+    const c = new Uint32Array(256);
+    const B = cpu.biome, step = Math.max(1, B.length >> 16);
+    let n = 0;
+    for (let i = 0; i < B.length; i += step) { c[B[i]]++; n++; }
+    const tbl = gpu.biomes || cpu.biomes || null;
+    const keyOf = (id) => (tbl ? normKey((tbl.find((b) => b.id === id) || {}).key) : BIOME_KEYS[id]);
+    const out = new Set();
+    for (let id = 0; id < 256; id++) if (c[id] > n * 0.003) { const k = keyOf(id); if (k) out.add(k); }
+    return out;
+  }
 
   // ---- per frame state
   let aerialOn = true;
@@ -1421,6 +1490,9 @@ export async function createVegetation(gpu) {
   const lodPx = [380, 150, 52, 2.5];
   const stats = { instances: 0, tiles: 0, pages: 0, grassCap, grassN, libMs: tLib, protos: () => L.lib.protos.length };
 
+  let mix = MIX0, mixAt = -1;
+  const clampN = (v, a, b, d) => (Number.isFinite(+v) ? Math.max(a, Math.min(b, Math.round(+v * 100) / 100)) : d);
+  const newStream = () => createScatterStream(field, { farScale: farK, maxDist: Math.min(7000, field.worldSize * 0.75) });
   const mod = {
     ready: assetsReady,
     setTerrain(t) {
@@ -1434,12 +1506,29 @@ export async function createVegetation(gpu) {
       if (field && field._src === cpu) { snapAll = true; return; }
       field = makeField({ ...cpu, origin: -cpu.worldSize / 2 }, { biomes: gpu.biomes || cpu.biomes || null });
       field._src = cpu;
+      field.mix = mix;
       clearAll();
-      stream = createScatterStream(field, { farScale: 0.5 + 0.5 * q, maxDist: Math.min(7000, cpu.worldSize * 0.75) });
+      stream = newStream();
       snapAll = true;
+      // phase 2 of the assets: the ones whose biomes are on this terrain
+      if (gpu.assets && gpu.assets.manifest) {
+        const on = biomesOn(cpu);
+        queueAssets((a) => isDefault(a) || (a.biomes || []).some((b) => on.has(normKey(b))));
+      }
     },
     update(frame) {
       const g = frame.globals;
+      // frame.veg (Vegetation sliders and dice): a new mix scatters again,
+      // at most 3 times a second while a slider moves
+      const fv = frame.veg;
+      if (fv) {
+        const m = { density: clampN(fv.density, 0.2, 2.5, 1), conifer: clampN(fv.conifer, 0, 1, 0.5), flowers: clampN(fv.flowers, 0, 1, 0.5) };
+        const t = frame.time ?? 0;
+        if ((m.density !== mix.density || m.conifer !== mix.conifer || m.flowers !== mix.flowers) && t - mixAt > 0.33) {
+          mix = m; mixAt = t;
+          if (field) { field.mix = mix; clearAll(); stream = newStream(); snapAll = true; }
+        }
+      }
       const cam = frame.camera?.pos || [g[GO.camPos], g[GO.camPos + 1], g[GO.camPos + 2]];
       const tv = frame.terrain || terrainView;
       if (tv && tv.version !== terrainVersion) { terrainVersion = tv.version; snapUntil = (frame.time ?? 0) + 1.2; }
@@ -1457,7 +1546,7 @@ export async function createVegetation(gpu) {
       const proj = frame.camera?.proj || g.subarray(GO.proj, GO.proj + 16);
       const H = g[GO.screen + 1] || 720;
       shadowsOn = frame.shadows === false || frame.shadowInfo === null ? 0 : 1;
-      const shadowFar = Math.min(frame.shadowDistance ?? 1e9, frame.shadowInfo?.splits?.[frame.shadowInfo.count - 1] ?? 1e9, 350 + 1000 * q);
+      const shadowFar = Math.min(frame.shadowDistance ?? 1e9, frame.shadowInfo?.splits?.[frame.shadowInfo.count - 1] ?? 1e9, shadowCap);
       const lodScale = 0.6 + 0.6 * q;
       params.fill(0);
       params.set([cam[0], cam[1], cam[2], g[GO.camPos + 3]], 0);
@@ -1468,9 +1557,9 @@ export async function createVegetation(gpu) {
       params.set([sd[0], sd[1], sd[2], shadowsOn && sd[1] > -0.05 ? 1 : 0], 16);
       params.set([L.lib.nLists, L.lib.slots.length, L.lib.protos.length, aerialOn ? 1 : 0], 20);
       LAYERS.forEach((lr, i) => {
-        const fs = 0.5 + 0.5 * q;
+        const fs = farK;
         const on = lr.key.startsWith('canopy') ? treesOn : propsOn2;
-        params.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, 0], 28 + i * 4);
+        params.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, (lr.farBand || 0) * fs], 28 + i * 4);
       });
       // cloud shadow: rect (x0, z0, size) and the cloud base y; size 0 = none
       const cs = frame.cloudShadow || gpu.cloudShadow || null;
@@ -1530,7 +1619,7 @@ export async function createVegetation(gpu) {
       pass.setVertexBuffer(0, L.vbuf); pass.setIndexBuffer(L.ibuf, 'uint32');
       let cur = null;
       for (const s of L.shadowSlots) {
-        const pipe = s.kind === 'leaf' ? pShLeaf : pShOpaque;
+        const pipe = s.kind === 'impsh' ? pShImp : s.kind === 'leaf' ? pShLeaf : pShOpaque;
         if (pipe !== cur) { pass.setPipeline(pipe); cur = pipe; }
         pass.setBindGroup(3, L.drawBG, [s.k * 256]);
         pass.drawIndexedIndirect(L.argsBuf, s.k * 20);

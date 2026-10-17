@@ -38,6 +38,7 @@
 //    grep -n 'fn vs_mesh'       the instanced mesh vertex
 //    grep -n 'fn fs_mesh'       the PBR foliage and bark fragment
 //    grep -n 'fn vs_imp'        the impostor quad
+//    grep -n 'fn vs_imp_shadow' the far shadow caster (sun facing quad)
 //    grep -n 'fn vs_bake'       the impostor bake
 //    grep -n 'fn vegAerial'     fog
 // ============================================================================
@@ -50,7 +51,7 @@ struct VegParams {
   sun: vec4f,       // xyz toward the sun, w 1 when shadows are on
   counts: vec4f,    // x lists, y slots, z species, w 1 = own aerial fog (0 when SKY haze does it)
   cloud: vec4f,     // SKY cloud shadow: x0, z0, size m (0 = none), cloud base y
-  layers: array<vec4f, 8>,  // near m, far m, band m, 0
+  layers: array<vec4f, 8>,  // near m, far m, band m, far-end band m (0 = band)
 };
 // Per species: a = height m, radius m, lod count, flags (bit 0 impostor,
 // 1 deciduous, 2 no shadow, 3 rock triplanar, 4 conifer, 5 flower tint)
@@ -135,8 +136,12 @@ fn classify(i: u32) -> Cls {
   // layer band
   let lb = VP.layers[L];
   var lf = 1.0;
-  if (lb.x > 0.0) { lf = smoothstep(lb.x, lb.x + lb.z, d); }
-  lf = lf * (1.0 - smoothstep(lb.y - lb.z, lb.y, d));
+  // edges always rise (Metal: smoothstep with a >= b is undefined); the
+  // far edge fades over lb.w when it is set (a wide band at the horizon)
+  let band = max(lb.z, 1.0);
+  let farBand = max(select(band, lb.w, lb.w > 0.0), 1.0);
+  if (lb.x > 0.0) { lf = smoothstep(lb.x, lb.x + band, d); }
+  lf = lf * (1.0 - smoothstep(max(lb.y - farBand, 0.0), max(lb.y, 1.0), d));
   if (lf <= 0.002) { return c; }
   let flags = u32(sp.a.w + 0.5);
   // shadow list: near the camera, and the sphere or its shadow in view
@@ -171,7 +176,7 @@ fn classify(i: u32) -> Cls {
   let l1 = select(3u, l1i, l1i < lods);
   // small props without an impostor fade out below the cull size
   if (!imp && lvl + 1u >= lods) {
-    let cut = VP.lodPx.w;
+    let cut = max(VP.lodPx.w, 0.01);
     if (px < cut) { return c; }
     let fb = 1.0 - smoothstep(cut, cut * 1.6, px);
     c.n = 1u; c.list0 = base + l0; c.fade0 = select(packFade(-fb, lf), packFade(1.0, lf), fb <= 0.001);
@@ -307,6 +312,15 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32, f0: f32) -> f32 {
 fn autumnF() -> f32 { let s = fract(G.weather2.w); return smoothstep(0.30, 0.50, s) * (1.0 - smoothstep(0.62, 0.75, s)); }
 fn winterF() -> f32 { let s = fract(G.weather2.w); return smoothstep(0.58, 0.75, s) * (1.0 - smoothstep(0.92, 1.0, s)); }
 fn springF() -> f32 { let s = fract(G.weather2.w); return 1.0 - smoothstep(0.0, 0.18, s) + smoothstep(0.94, 1.0, s); }
+
+// conifer needles read darker and bluer than broadleaf crowns; the
+// species seed spreads the forest colour (some stands lighter, some darker)
+fn crownTint(c: vec3f, flags: u32, it: Inst) -> vec3f {
+  var k = c;
+  if ((flags & 16u) != 0u) { k = k * vec3f(0.62, 0.74, 0.70); }
+  let stand = fract(sin(dot(floor(it.p.xz / 37.0), vec2f(12.9898, 78.233))) * 43758.547);
+  return k * mix(0.82, 1.12, stand);
+}
 
 fn hueTint(c: vec3f, t: f32) -> vec3f {
   // t -1..1: cooler and darker .. warmer and lighter
@@ -495,6 +509,7 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   if (leaf || (flags & 32u) != 0u) {
     alb = leafSeason(alb, sp, it);
     alb = hueTint(alb, it.q.z);
+    if (leaf) { alb = crownTint(alb, flags, it); }
   } else {
     alb *= 0.9 + 0.1 * it.q.z;
   }
@@ -561,7 +576,11 @@ fn vs_imp(v: VIn, @builtin(instance_index) k: u32) -> IOut {
   let v0 = u32(floor(fv)) % NVIEW;
   o.views = vec2u(v0, (v0 + 1u) % NVIEW);
   o.blendW = fract(fv);
-  let fw = v.pos.z * h;              // frame width m
+  // far canopy: one far tree stands for about five near ones (spacing 6.5
+  // m against 3.4 m), so its crown widens with distance to keep the cover
+  let dC = distance(G.camPos.xyz, root);
+  let widen = select(1.0, 1.0 + (0.7 * smoothstep(1200.0, 5000.0, dC)), layerOf(it.q) == 1u);
+  let fw = v.pos.z * h * widen;      // frame width m
   // wind: the top sways like the mesh trunk
   let wb = v.pos.y * v.pos.y;
   let wo = windOffset(root, vec3f(0.0, v.pos.y * h, 0.0), h, wb, 0.0, sp, it.q.w, vec3f(0.0, 1.0, 0.0));
@@ -591,10 +610,20 @@ fn fs_imp(o: IOut) -> @location(0) vec4f {
   let view = select(o.views.x, o.views.y, pickB);
   // the view frame turns with its own angle: shift u to match
   let uv = impUV(o.uv, view);
-  let a = textureSample(tImpA, sRep, uv, layer);
-  var alpha = a.a * 1.25;
-  if (alpha < 0.5) { discard; }
-  let nt = textureSample(tImpN, sRep, uv, layer);
+  // A frame is 256 px, a far tree a few px: the right mip (4 to 6) has
+  // averaged the crown with the empty frame, and a 0.5 cut on it draws the
+  // whole frame as a square block. So the sample level stops at 2.5 (the
+  // crown silhouette still holds there) and, past mip 4, the cut turns
+  // into a per pixel dither (coverage, as alpha to coverage; TAA smooths it)
+  let dimsA = vec2f(textureDimensions(tImpA, 0));
+  let ddx = dpdx(uv * dimsA); let ddy = dpdy(uv * dimsA);
+  let mipA = max(0.0, 0.5 * log2(max(max(dot(ddx, ddx), dot(ddy, ddy)), 1e-8)));
+  let lodS = min(mipA, 2.5);
+  let a = textureSampleLevel(tImpA, sRep, uv, layer, lodS);
+  let cutT = mix(0.5, 0.2 + (0.6 * fract(cm_ign(o.pos.xy) + (G.frame.x * 0.6180339))), smoothstep(4.0, 6.0, mipA));
+  let alpha = a.a;
+  if (alpha < cutT) { discard; }
+  let nt = textureSampleLevel(tImpN, sRep, uv, layer, lodS);
   // baked normal is in the frame space of that view: x right, y up, z out
   let nf = nt.xyz * 2.0 - 1.0;
   let vAng = f32(view) / f32(NVIEW) * 6.2831853 + it.q.x;
@@ -604,14 +633,58 @@ fn fs_imp(o: IOut) -> @location(0) vec4f {
   let n = normalize(vec3f(rightW.x * nf.x + outW.x * nf.z, nf.y, rightW.y * nf.x + outW.y * nf.z));
   let leafy = nt.a > 0.5;
   var alb = a.rgb;
-  if (leafy) { alb = hueTint(leafSeason(alb, sp, it), it.q.z); }
+  let flags = u32(sp.a.w + 0.5);
+  if (leafy) { alb = crownTint(hueTint(leafSeason(alb, sp, it), it.q.z), flags, it); }
   let wet = G.weather2.x;
   alb *= 1.0 - wet * 0.3;
   let snow = G.weather2.y * smoothstep(0.2, 0.85, n.y) * 0.7;
   alb = mix(alb, vec3f(0.85, 0.88, 0.92), snow);
-  var col = shadeVeg(alb, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz), select(0.0, 0.8, leafy), 0.12);
+  // crown self shadow: the lower crown and the inner frame get less sky
+  // and sun (the bake has the mesh AO only); dense stands read as a canopy
+  // with dark gaps, not as lit balls
+  let hgt = 1.0 - o.uv.y;
+  let rim = abs(o.uv.x - 0.5) * 2.0;
+  let crown = mix(0.42, 1.0, pow(clamp(hgt, 0.0, 1.0), 0.8)) * mix(1.0, 0.85, 1.0 - rim);
+  var col = shadeVeg(alb * crown, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz), select(0.0, 0.5, leafy), 0.12);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
+}
+
+// The far shadow caster: the impostor quad turned to face the sun (in xz),
+// with the view of the atlas that looks along the sun, alpha tested. Its
+// shadow is the crown silhouette, at 2 triangles a tree.
+@vertex
+fn vs_imp_shadow(v: VIn, @builtin(instance_index) k: u32) -> IOut {
+  var o: IOut;
+  let rec = visibleR[offsetsR[D.list] + k];
+  let it = instR[rec.x];
+  let sp = species[spOf(it.q)];
+  let h = sp.a.x * it.p.w;
+  let root = it.p.xyz - vec3f(0.0, sp.b.z * h, 0.0);
+  var toS = G.sunDir.xz;
+  toS = select(vec2f(0.0, 1.0), toS / max(length(toS), 1e-4), length(toS) > 1e-4);
+  let right = vec2f(toS.y, -toS.x);
+  let ang = atan2(toS.x, toS.y) - it.q.x;
+  let fv = fract(ang / 6.2831853) * f32(NVIEW);
+  let v0 = u32(floor(fv + 0.5)) % NVIEW;
+  o.views = vec2u(v0, v0);
+  o.blendW = 0.0;
+  let fw = v.pos.z * h;
+  let wb = v.pos.y * v.pos.y;
+  let wo = windOffset(root, vec3f(0.0, v.pos.y * h, 0.0), h, wb, 0.0, sp, it.q.w, vec3f(0.0, 1.0, 0.0));
+  let wp = root + vec3f(right.x, 0.0, right.y) * (v.pos.x * fw) + vec3f(0.0, v.pos.y * h, 0.0) + wo;
+  o.wp = wp;
+  o.pos = SP.viewProj * vec4f(wp, 1.0);
+  o.uv = vec2f(v.pos.x + 0.5, 1.0 - v.pos.y);
+  o.ii = rec;
+  o.basis = vec4f(right, toS);
+  return o;
+}
+
+@fragment
+fn fs_imp_shadow(o: IOut) {
+  let a = textureSampleLevel(tImpA, sRep, impUV(o.uv, o.views.x), D.layer, 1.0).a;
+  if (a < 0.5) { discard; }
 }
 
 // ----------------------------------------------------------------- bake --

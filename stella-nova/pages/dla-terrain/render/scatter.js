@@ -16,8 +16,10 @@
 //  LAYERS  Each layer has a spacing r, a tile size and a maximum distance
 //  from the camera (LAYERS). A layer streams its own square tiles. The
 //  canopy has two layers: "canopy" (r 3.4 m, to 1.2 km) and "canopyFar"
-//  (r 8 m, from 1.1 km to the horizon), and the GPU cross-fades them with
+//  (r 6.5 m, from 1.1 km to the horizon), and the GPU cross-fades them with
 //  a dither in the 1.1 to 1.2 km band (instance word fadeIn / fadeOut).
+//  The far layer fades out over farBand (1.8 km) at its far end, and
+//  props.wgsl widens far crowns, so the forest cover stays the same.
 //
 //  POISSON DISC  The candidate grid is global: cell (i, j) of a layer has
 //  one candidate at a hashed jitter, with a hashed priority. A candidate
@@ -28,7 +30,8 @@
 //  dense land it is a blue noise disc pattern.
 //
 //  DENSITY  density = biome table x moisture x slope gate x height gate
-//  x stand noise x water gate. Stands: a low frequency noise cut at a
+//  x stand noise x water gate x the user mix (f.mix = frame.veg: density,
+//  conifer share, flower share; MIX0 when not set). Stands: a low frequency noise cut at a
 //  threshold makes forest stands and glades; near the cut, edge shrubs and
 //  edge trees get a boost (the "edge" term). Clustering follows the
 //  shan-shui idea of a cubed noise gate for plant clumps (ideas only, from
@@ -101,11 +104,12 @@ export const SPECIES_INDEX = Object.fromEntries(SPECIES.map((s, i) => [s.key, i]
 
 // ---------------------------------------------------------------- layers
 // r: Poisson radius m. tile: tile size m. near/far: distance band m in
-// which the layer shows (the GPU fades over `band`). minScale: the layer
+// which the layer shows (the GPU fades over `band`; farBand, when set, is
+// the fade at the far end). minScale: the layer
 // only keeps instances at least this big (far layers drop small ones).
 export const LAYERS = [
   { key: 'canopy', r: 3.4, tile: 128, near: 0, far: 1200, band: 100, salt: 11 },
-  { key: 'canopyFar', r: 8.0, tile: 512, near: 1100, far: 7000, band: 100, salt: 12, of: 'canopy' },
+  { key: 'canopyFar', r: 6.5, tile: 512, near: 1100, far: 7000, band: 100, farBand: 1800, salt: 12, of: 'canopy' },
   { key: 'understory', r: 1.6, tile: 64, near: 0, far: 320, band: 40, salt: 21 },
   { key: 'rocks', r: 2.3, tile: 64, near: 0, far: 420, band: 50, salt: 31 },
   { key: 'ground', r: 0.6, tile: 32, near: 0, far: 70, band: 15, salt: 41 },
@@ -347,8 +351,18 @@ function layerDensity(f, L, x, z) {
     d += cliffAbove(f, x, z) * 0.5;
     if (sl > 1.0) d *= 0.3;
   }
+  // the user mix (frame.veg, the Vegetation sliders and dice): density
+  // scales every layer but the reeds; more flowers also fill the ground layer
+  const mx = f.mix || MIX0;
+  d *= mx.density;
+  if (key === 'ground') d *= 0.75 + 0.5 * mx.flowers;
   return Math.max(0, Math.min(1, d));
 }
+
+// frame.veg defaults: density 0.2..2.5, conifer 0..1, flowers 0..1
+export const MIX0 = Object.freeze({ density: 1, conifer: 0.5, flowers: 0.5 });
+const CONIFER = new Set(['spruce', 'pine', 'conifer-young']);
+const BROADLEAF = new Set(['oak', 'beech', 'birch', 'willow', 'jungle']);
 
 const cliffAbove = (f, x, z) => f.cliffAt(x, z);
 
@@ -388,6 +402,11 @@ function pickSpecies(f, L, x, z, u) {
       case 'mushroom': v *= moist; break;
       case 'pebble': v *= 0.6 + smooth(0.3, 1.0, sl) + (wd < 6 ? 1 : 0); break;
     }
+    // the user mix: conifer share and flower share (0.5 = as the biome has it)
+    const mx = f.mix || MIX0;
+    if (CONIFER.has(s.key)) v *= 2 * mx.conifer;
+    else if (BROADLEAF.has(s.key)) v *= 2 * (1 - mx.conifer);
+    else if (s.key === 'flower') v *= 2 * mx.flowers;
     w[k] = Math.max(0, v); tot += w[k];
   }
   if (!(tot > 0)) return -1;

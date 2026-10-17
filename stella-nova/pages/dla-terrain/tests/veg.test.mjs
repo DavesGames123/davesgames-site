@@ -244,6 +244,31 @@ const perBiome = {};
 let total = 0; for (const L of LAYERS) total += world[L.key].count;
 console.log('       instances in the 2 km test world: ' + LAYERS.map((L) => L.key + ' ' + world[L.key].count).join(', ') + '; total ' + total + ' in ' + tScatter.toFixed(0) + ' ms');
 
+// 7b the user mix (frame.veg -> f.mix): density scales, conifer and
+// flower shares; the far canopy fades over its own wide band
+{
+  const fm = makeField(synthTerrain());
+  const countSp = (mix, layer, keys) => {
+    fm.mix = mix; let c = 0, all = 0;
+    for (const w of tilesFor(fm, 0, 0).filter((x) => x.layer === layer)) {
+      const r = scatterTile(fm, layer, w.tx, w.tz); all += r.count;
+      for (let i = 0; i < r.count; i++) if (keys.includes(SPECIES[r.data[i * STRIDE + 5]].key)) c++;
+    }
+    return { c, all };
+  };
+  const m0 = { density: 1, conifer: 0.5, flowers: 0.5 };
+  const lo = countSp({ ...m0, density: 0.3 }, 'canopy', []).all, mid = countSp(m0, 'canopy', []).all, hi = countSp({ ...m0, density: 2.5 }, 'canopy', []).all;
+  check('mix: tree count rises with density', lo < mid && mid < hi, lo + ' < ' + mid + ' < ' + hi);
+  const noCon = countSp({ ...m0, conifer: 0 }, 'canopy', ['spruce', 'pine']).c;
+  const allCon = countSp({ ...m0, conifer: 1 }, 'canopy', ['oak', 'beech', 'birch', 'willow', 'jungle']).c;
+  check('mix: conifer 0 has no spruce or pine, conifer 1 no broadleaf', noCon === 0 && allCon === 0, noCon + ', ' + allCon);
+  const fl0 = countSp({ ...m0, flowers: 0 }, 'ground', ['flower']).c, fl1 = countSp({ ...m0, flowers: 1 }, 'ground', ['flower']).c;
+  check('mix: flowers 0 has none, flowers 1 has some', fl0 === 0 && fl1 > 0, fl0 + ', ' + fl1);
+  fm.mix = null;
+  const far = LAYERS[LAYER_INDEX.canopyFar];
+  check('far canopy: a far fade band wider than the near band', far.farBand > far.band * 4, far.band + ' / ' + far.farBand);
+}
+
 // 8 the real LIB terrain, when it is there
 try {
   const lib = await import('../../../lib/dla-terrain.js');

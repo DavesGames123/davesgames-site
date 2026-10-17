@@ -144,7 +144,7 @@ fn cs_blades(@builtin(global_invocation_id) gid: vec3u) {
   if (L > 0u) { r0 = ringRadius(L - 1u); }
   if (dist < r0 || dist >= ringRadius(L)) { return; }
   let rl = ringRadius(lvl);
-  let fade = 1.0 - smoothstep(rl * 0.75, rl, dist);
+  let fade = 1.0 - smoothstep(rl * 0.75, max(rl, 1e-3), dist);   // rising edges (Metal)
   if (fade <= 0.0) { return; }
   if (!insideTerrain(xz)) { return; }
   // biome with a jittered lookup (one texel), so edges are not square
@@ -336,8 +336,12 @@ fn fs_grass(o: GOut) -> @location(0) vec4f {
   if (GP.misc.w > 0.5 && L.y > -0.05) { sh = sunShadow(o.wp, tn); }
   sh *= grassCloud(o.wp);
   sh *= smoothstep(-0.06, 0.05, L.y);
-  // self shadow inside the sward: deep blades see less sun
-  let ao = mix(0.25, 1.0, pow(o.t, 0.7)) * terrainAO(o.wp.xz);
+  // self shadow inside the sward: deep blades see less sun and sky. The
+  // contact hint: the lowest fifth of a blade goes near black, so the
+  // sward reads as standing on the ground, not pasted over it
+  let contact = mix(0.35, 1.0, smoothstep(0.0, 0.22, o.t));
+  let ao = mix(0.2, 1.0, pow(o.t, 0.65)) * contact * terrainAO(o.wp.xz);
+  sh *= mix(0.45, 1.0, smoothstep(0.0, 0.3, o.t));
   let ndl = dot(n, L);
   var col = alb / CM_PI * max((ndl + 0.5) / 1.5, 0.0) * sunE * sh * mix(0.5, 1.0, o.t);
   // light through the blade, strongest toward the sun
