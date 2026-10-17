@@ -59,6 +59,7 @@
      ui/layout.js  ui/player.js  ui/tex-view.js  ui/library-browser.js
      ui/playground.js  ui/lens.js  ui/learn-menu.js  ui/phone.js
      ui/credits.js  ui/packages.js  ui/page-api.js  ui/tex-color.js
+     ui/scene-controls.js  ui/ops.js
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="stylesheet" href="style.css">
@@ -161,6 +162,8 @@
       <span class="pane-title">3D</span>
       <span id="vizCaption" class="pane-sub"></span>
       <span class="spacer"></span>
+      <button id="followBtn" class="mini" hidden title="Let the 3D view follow the steps again">Follow the steps</button>
+      <button id="sceneBtn" class="mini" aria-controls="sceneBox" aria-expanded="false" title="Pick a scene and move its sliders">Scene</button>
       <button class="mini pane-focus" data-focus="viz" title="Focus this view" aria-label="Focus the 3D view">⤢</button>
       <button class="mini pane-close" data-close="viz" title="Hide this view" aria-label="Hide the 3D view">✕</button>
     </header>
@@ -168,6 +171,7 @@
       <canvas id="vizCanvas" aria-label="3D picture of the tensor"></canvas>
       <div id="vizFallback" class="fallback" hidden></div>
       <div id="vizHint" class="view-hint">drag to orbit · pinch or scroll to zoom</div>
+      <div id="sceneBox" class="note-pop scene-pop" hidden></div>
     </div>
   </section>
 

@@ -26,7 +26,10 @@
 //                               { style: 'penrose'|'birdtrack'|'network' }
 //                             the diagram style can go with any layout:
 //                               { views: ['tex','diagram'], style: 'network' }
-//    setScene(id, params)     show one VIZ scene with no trace
+//    setScene(id, params)     show one VIZ scene. It stays while a trace
+//                             plays in the TeX and the diagram (a free
+//                             scene) until the next trace or follow()
+//    follow()                 the 3D view follows the steps again
 //    pickIndex(sym | null)    the Indices lens: highlight sym in all views
 //    showExpr(texOrExpr)      typeset an expression in the TeX view and the
 //                             diagram, with no trace
@@ -41,7 +44,7 @@
 //  STATE  (state() returns a copy)
 //    { ready, entryId, views: ['tex','viz','diagram'], mode: 'all'|'pair'|
 //      'focus', diagramStyle, scene: {id, params}, pickedIndex, playing,
-//      speed, stepIndex, t, stepCount, chapter, isPhone }
+//      speed, stepIndex, t, stepCount, chapter, isPhone, vizFree, missing }
 //
 //  SAVER SEAM. impl.internals() gives { store, player, layout, views:
 //  { tex, viz, diagram } } to saver/index.js. main.js imports
@@ -54,7 +57,7 @@
 //      attach(win, impl) . connect the real implementation, run the queue
 // ============================================================================
 
-export const METHODS = Object.freeze(['openEntry', 'playTrace', 'setView', 'setScene', 'pickIndex', 'showExpr', 'seek', 'pause', 'resume', 'state', 'on']);
+export const METHODS = Object.freeze(['openEntry', 'playTrace', 'setView', 'setScene', 'pickIndex', 'showExpr', 'seek', 'pause', 'resume', 'follow', 'state', 'on']);
 
 export function installStub(win) {
   if (win.tensorPage && win.tensorPage.__core) return win.tensorPage;

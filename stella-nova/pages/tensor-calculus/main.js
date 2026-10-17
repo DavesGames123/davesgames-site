@@ -29,7 +29,7 @@
 //  window.tensorPage  (ui/page-api.js has the full list)
 //    openEntry(id, params) · playTrace(trace, opts) · setView(spec) ·
 //    setScene(id, params) · pickIndex(sym) · showExpr(texOrExpr) ·
-//    seek(i, t) · pause() · resume() · state() · on(event, fn)
+//    seek(i, t) · pause() · resume() · follow() · state() · on(event, fn)
 //
 //  GREP MAP
 //    grep -n 'function boot'        the boot order
@@ -53,6 +53,7 @@ import { createLearnMenu } from './ui/learn-menu.js';
 import { renderLens, symsFromSlot, symLabel } from './ui/lens.js';
 import { createPhone } from './ui/phone.js';
 import { renderCredits } from './ui/credits.js';
+import { createSceneControls } from './ui/scene-controls.js';
 import { scriptIndices } from './ui/tex-color.js';
 import * as palette from './palette.js';
 
@@ -116,6 +117,9 @@ export async function boot(opts = {}) {
   const S = {
     ready: false, entryId: null, layout: initialLayout(), scene: { id: null, params: {} },
     pickedIndex: null, trace: null, chapter: null, dim: 3, speed: 1,
+    // vizFree: a scene that the reader or tensorPage.setScene() chose. VIZ
+    // then gets no play(step, t) until the next trace (or "Follow").
+    vizFree: false,
   };
   const listeners = new Map();
   const emit = (ev, data) => { for (const fn of listeners.get(ev) || []) try { fn(data); } catch (e) { win.console && win.console.error(e); } };
@@ -171,7 +175,7 @@ export async function boot(opts = {}) {
     onFrame(i, t, step, raw) {
       if (step !== lastStep) { lastStep = step; if (step.after && diagram.show && !diagram.play) diagram.show(step.after); }
       safe('tex.play', () => tex.play(step, t));
-      safe('viz.play', () => viz.play(step, t));
+      if (!S.vizFree) safe('viz.play', () => viz.play(step, t));
       safe('diagram.play', () => diagram.play(step, t));
       el.scrub.value = String(Math.round(player.position().frac * 1000));
       emit('tick', { index: i, t, raw });
@@ -311,6 +315,7 @@ export async function boot(opts = {}) {
     const ids = vizScenes();
     trace = { ...trace, steps: trace.steps.map(st => (st.viz && st.viz.scene ? { ...st, viz: { ...st.viz, scene: resolveScene(st.viz.scene, ids) } } : st)) };
     S.trace = trace; S.dim = trace.dim || S.dim;
+    setFree(false);
     palette.setActive(traceSyms(trace, M));
     lastStep = null;
     player.load(trace);
@@ -333,12 +338,32 @@ export async function boot(opts = {}) {
     S.scene = { id: rid, params: { ...params } };
     safe('viz.setScene', () => viz.setScene(rid, params));
     const cap = $('vizCaption');
+    if (!$('sceneBox').hidden) sceneCtl.render();
     if (cap) {
-      const info = pk.viz && pk.viz.sceneInfo ? safe('sceneInfo', () => pk.viz.sceneInfo(rid)) : null;
+      const info = sceneInfoOf(rid);
       cap.textContent = (info && info.label) || (rid ? rid.replace(/-/g, ' ') : '');
     }
     return { ...S.scene };
   }
+
+  const followBtn = $('followBtn');
+  function setFree(free) {
+    S.vizFree = !!free;
+    followBtn.hidden = !(S.vizFree && S.trace && S.trace.steps.length);
+    if (!S.vizFree && S.trace && S.trace.steps.length) {
+      const pos = player.position();
+      if (pos.index >= 0) safe('viz.play', () => viz.play(player.steps()[pos.index], pos.t));
+    }
+  }
+  followBtn.addEventListener('click', () => setFree(false));
+  const sceneInfoOf = id => (viz.sceneInfo ? safe('viz.sceneInfo', () => viz.sceneInfo(id)) : pk.viz && pk.viz.sceneInfo ? safe('sceneInfo', () => pk.viz.sceneInfo(id)) : null);
+  const sceneCtl = createSceneControls({ box: $('sceneBox'), btn: $('sceneBtn') }, {
+    scenes: vizScenes,
+    info: sceneInfoOf,
+    current: () => (viz.state ? (safe('viz.state', () => viz.state()) || S.scene) : S.scene),
+    onScene: id => { setScene(id, {}); setFree(true); },
+    onParams: p => { S.scene.params = { ...S.scene.params, ...p }; if (viz.setParams) safe('viz.setParams', () => viz.setParams(p)); else safe('viz.setScene', () => viz.setScene(S.scene.id, S.scene.params)); setFree(true); },
+  });
 
   let browser = null;
   function openEntry(id, params, o = {}) {
@@ -414,7 +439,7 @@ export async function boot(opts = {}) {
     openEntry: (id, params, o) => openEntry(id, params, o),
     playTrace: (trace, o) => playTrace(trace, o),
     setView: spec => setView(spec),
-    setScene: (id, params) => setScene(id, params),
+    setScene: (id, params) => { const r = setScene(id, params); setFree(true); return r; },
     pickIndex: sym => pickIndex(sym),
     showExpr: x => { showExpr(x); return true; },
     seek: (i, t) => { player.seek(i, t); syncPlay(); return player.position(); },
@@ -427,11 +452,12 @@ export async function boot(opts = {}) {
         scene: { id: S.scene.id, params: { ...S.scene.params } }, pickedIndex: S.pickedIndex, playing: pos.playing,
         speed: pos.speed, stepIndex: pos.index, t: pos.t, stepCount: player.steps().length,
         chapter: learnMenu && learnMenu.current ? learnMenu.current() : S.chapter, isPhone: !!(phone && phone.isPhone()),
-        missing: pk.missing.slice(),
+        missing: pk.missing.slice(), vizFree: S.vizFree,
       };
     },
     on,
-    internals: () => ({ store: S, player, layout: { get: () => ({ ...S.layout }), set: setView }, views: { tex, viz, diagram }, packages: pk, palette, emit }),
+    follow: () => { setFree(false); return true; },
+    internals: () => ({ store: S, player, setFree, layout: { get: () => ({ ...S.layout }), set: setView }, views: { tex, viz, diagram }, packages: pk, palette, emit }),
   };
 
   learnMenu = createLearnMenu({ menu: $('learnMenu'), host: $('learnHost') }, {
@@ -481,7 +507,7 @@ export async function boot(opts = {}) {
       else if (e.key === 'ArrowRight') { player.pause(); player.next(); syncPlay(); }
       else if (e.key === 'ArrowLeft') { player.pause(); player.prev(); syncPlay(); }
       else if (e.key >= '1' && e.key <= '4') setView(['all', 'tex', 'viz', 'diagram'][+e.key - 1]);
-      else if (e.key === 'Escape') { setCredits(false); feyn.hidden = true; legendBox.hidden = true; el.stepList.hidden = true; if (S.pickedIndex) pickIndex(null); }
+      else if (e.key === 'Escape') { setCredits(false); feyn.hidden = true; legendBox.hidden = true; sceneCtl.close(); el.stepList.hidden = true; if (S.pickedIndex) pickIndex(null); }
     });
   }
   bindKeys();

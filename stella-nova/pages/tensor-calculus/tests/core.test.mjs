@@ -432,6 +432,15 @@ else {
     chips.find(c => c.dataset.sym === 'mu').click();
     assert.equal((await api.state()).pickedIndex, null, 'second tap clears');
 
+    // A free scene: setScene stops play() to VIZ; follow() gives it back.
+    await api.setScene('dual-basis', { s: 1 });
+    assert.equal((await api.state()).vizFree, true);
+    log.length = 0; clock += 100; rafFn();
+    assert.ok(!log.some(l => l[0] === 'viz' && l[1] === 'play'), 'no VIZ play on a free scene');
+    assert.ok(log.some(l => l[0] === 'diagram' && l[1] === 'play'), 'the diagram still plays');
+    await api.follow();
+    assert.equal((await api.state()).vizFree, false);
+
     // Events, seek, pause, a played trace from LEARN.
     const seen = [];
     const off = api.on('step', e => seen.push(e.index));
