@@ -36,6 +36,8 @@
                 on a phone in portrait, a right drawer in landscape
      #status    fps, render size, terrain readout
      #dock      the phone dock: panel, generate, randomise, time, camera, saver
+     #histBack #histFwd #copyLink  the rolled worlds (world-state.js); the
+                URL hash holds the full world, so a link reloads it
      #notice    a module that did not load
      #credits   the credits drawer
      #nogpu     the message when WebGPU is missing
@@ -88,7 +90,7 @@
   <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
   <div class="tabs" id="sheetTabs" role="tablist">
     <button type="button" data-tab="terrain" class="on" role="tab">Terrain</button>
-    <button type="button" data-tab="sky" role="tab">Sky</button>
+    <button type="button" data-tab="sky" role="tab">Sky &amp; life</button>
     <button type="button" data-tab="view" role="tab">View</button>
   </div>
   <button id="panelClose" type="button" aria-label="Close the controls">✕</button>
@@ -103,26 +105,40 @@
     </div>
     <div class="btns">
       <button type="button" id="genBtn" class="primary">Generate</button>
-      <button type="button" id="randBtn" title="Randomise every option">Randomise</button>
+      <button type="button" id="randBtn" title="Roll a new world: terrain, weather, time, season, plants, water and camera (locked groups stay)">⚄ Randomise everything</button>
+    </div>
+    <div class="histrow">
+      <button type="button" id="histBack" aria-label="The world before" title="The world before" disabled>‹ Back</button>
+      <span id="histPos"></span>
+      <button type="button" id="histFwd" aria-label="The next world" title="The next world" disabled>Next ›</button>
+      <button type="button" id="copyLink" title="Copy a link to this world (the address bar holds it too)">Copy link</button>
     </div>
     <div id="optGroups"></div>
   </section>
 
   <section class="tab" data-tab="sky" hidden>
-    <div class="sec-label">Time of day</div>
+    <div class="sec-label" data-group="Time">Time of day</div>
     <div class="row"><label for="tod">Time</label><input type="range" id="tod" min="0" max="1" step="0.001" value="0.35"><span class="val" id="todV"></span></div>
     <div class="row"><label for="todSpeed">Day length</label><input type="range" id="todSpeed" min="0" max="1" step="0.01" value="0.25"><span class="val" id="todSpeedV"></span></div>
     <div class="btns"><button type="button" id="todPlay">Play</button><button type="button" id="todGolden">Golden hour</button></div>
+    <div class="sec-label" data-group="Season">Season</div>
     <div class="row"><label for="season">Season</label><input type="range" id="season" min="0" max="1" step="0.01" value="0.35"><span class="val" id="seasonV"></span></div>
     <div class="row"><label for="latitude">Latitude</label><input type="range" id="latitude" min="-70" max="70" step="1" value="46"><span class="val" id="latitudeV"></span></div>
-    <div class="sec-label">Weather</div>
+    <div class="sec-label" data-group="Sky">Weather</div>
     <div class="chips" id="wxChips"></div>
     <div id="wxSliders"></div>
     <div class="btns"><button type="button" id="wxReset">Weather from preset</button></div>
+    <div class="sec-label" data-group="Vegetation">Vegetation</div>
+    <div class="row"><label for="vegDensity">Forest density</label><input type="range" id="vegDensity" min="0.2" max="2.5" step="0.01" value="1"><span class="val" id="vegDensityV"></span></div>
+    <div class="row"><label for="vegConifer">Conifers</label><input type="range" id="vegConifer" min="0" max="1" step="0.01" value="0.5"><span class="val" id="vegConiferV"></span></div>
+    <div class="row"><label for="vegFlowers">Flowers</label><input type="range" id="vegFlowers" min="0" max="1" step="0.01" value="0.5"><span class="val" id="vegFlowersV"></span></div>
+    <div class="sec-label" data-group="Water">Water</div>
+    <div class="row"><label for="waterTint">Water colour</label><input type="range" id="waterTint" min="0" max="1" step="0.01" value="0.35"><span class="val" id="waterTintV"></span></div>
+    <div class="row"><label for="waterWaves">Waves</label><input type="range" id="waterWaves" min="0" max="1" step="0.01" value="0.4"><span class="val" id="waterWavesV"></span></div>
   </section>
 
   <section class="tab" data-tab="view" hidden>
-    <div class="sec-label">Camera</div>
+    <div class="sec-label" data-group="Camera">Camera</div>
     <div class="seg" id="camSeg">
       <button type="button" data-cam="orbit">Orbit</button>
       <button type="button" data-cam="fly">Fly</button>

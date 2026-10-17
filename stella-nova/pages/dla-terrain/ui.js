@@ -15,14 +15,20 @@
 //  DOM part:
 //    createUI(app, doc) -> ui = { buildOptions(lib), syncOptions(), setProgress(p),
 //        progressDone(), setTerrainMap(view, BIOMES), drawMap(cam), syncSky(),
-//        syncView(), status(a, b), notice(text), toast(text), isPhone(),
-//        setPanel(open), mapRect() }
+//        syncView(), syncMix(), syncLocks(), syncHistory(), status(a, b),
+//        notice(text), toast(text), isPhone(), setPanel(open), mapRect() }
+//    DICE AND LOCKS  every LIB group (summary row) and every extra group of
+//        world-state.js (Sky, Time, Season, Vegetation, Water, Camera: the
+//        .sec-label rows with data-group) has a dice (app.randomise(group))
+//        and a lock (app.toggleLock(group)). A locked group keeps its values
+//        in "Randomise everything" and its dice is off.
 //    app is the page state of main.js; ui calls its methods (app.setOpt,
 //    app.generate, app.randomise, app.applyPreset, app.setTod, ...).
 //
 //  grep -n targets: "export function groupOptions", "export function mapPixels",
 //  "export function createUI", "function buildOptions", "function drawMap",
-//  "── SHEET", "── SKY", "── VIEW", "── MAP", "── PROGRESS"
+//  "── SHEET", "── SKY", "── VIEW", "── MAP", "── PROGRESS", "── DICE",
+//  "── MIX", "── HISTORY"
 // ============================================================================
 
 export const PHONE_Q = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
@@ -176,6 +182,36 @@ export function createUI(app, doc = globalThis.document) {
     return row;
   }
 
+  // ── DICE: a dice and a lock for one group ──
+  const LOCK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5" rx="1.6"/><path class="shackle" d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7"/></svg>';
+  const UNLOCK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5" rx="1.6"/><path class="shackle" d="M5.2 7V5.2a2.8 2.8 0 0 1 5.5-0.8"/></svg>';
+  ui.tools = new Map();
+  function groupTools(group) {
+    const wrap = el('span', 'gtools');
+    const lock = el('button', 'lock'); lock.type = 'button';
+    lock.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); app.toggleLock(group); });
+    const dice = el('button', 'dice', '⚄'); dice.type = 'button';
+    dice.title = 'Randomise ' + group.toLowerCase(); dice.setAttribute('aria-label', dice.title);
+    dice.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); app.randomise(group); });
+    wrap.append(lock, dice);
+    ui.tools.set(group, { lock, dice });
+    syncLock(group);
+    return wrap;
+  }
+  function syncLock(group) {
+    const t = ui.tools.get(group);
+    if (!t) return;
+    const on = !!(app.locks && app.locks.has(group));
+    t.lock.innerHTML = on ? LOCK_SVG : UNLOCK_SVG;
+    t.lock.setAttribute('aria-pressed', String(on));
+    t.lock.title = on ? group + ' is locked: Randomise everything keeps it' : 'Lock ' + group.toLowerCase() + ' (keep it when you randomise everything)';
+    t.lock.setAttribute('aria-label', t.lock.title);
+    t.dice.disabled = on;
+  }
+  ui.syncLocks = () => { for (const g of ui.tools.keys()) syncLock(g); };
+  // the extra groups: a .sec-label with data-group gets the tools
+  for (const lab of doc.querySelectorAll('.sec-label[data-group]')) lab.append(groupTools(lab.dataset.group));
+
   // ── TERRAIN options (from LIB OPTIONS) ──
   function buildOptions(lib) {
     ui.lib = lib;
@@ -187,10 +223,7 @@ export function createUI(app, doc = globalThis.document) {
       if (group === 'World' || group === 'DLA ridges') det.open = true;
       const sum = el('summary');
       sum.append(el('span', '', group));
-      const dice = el('button', 'dice', '⚄');
-      dice.type = 'button'; dice.title = 'Randomise ' + group.toLowerCase(); dice.setAttribute('aria-label', dice.title);
-      dice.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); app.randomise(group); });
-      sum.append(dice);
+      sum.append(groupTools(group));
       det.append(sum);
       for (const d of items) {
         const id = 'opt_' + d.key;
@@ -246,9 +279,39 @@ export function createUI(app, doc = globalThis.document) {
   $('seedIn').addEventListener('change', () => { const v = Math.max(1, Math.min(999999, Math.round(+$('seedIn').value || 1))); app.setOpt('seed', v); });
   $('seedDice').addEventListener('click', () => { app.setOpt('seed', 1 + Math.floor(Math.random() * 999998)); syncOptions(); app.generate(); });
   $('genBtn').addEventListener('click', () => app.generate());
-  $('randBtn').addEventListener('click', () => app.randomise(null));
+  $('randBtn').addEventListener('click', () => app.randomiseAll());
   $('dockGen').addEventListener('click', () => app.nextPreset());
-  $('dockDice').addEventListener('click', () => app.randomise(null));
+  $('dockDice').addEventListener('click', () => app.randomiseAll());
+
+  // ── HISTORY: the rolled worlds, back and forward; the link ──
+  $('histBack').addEventListener('click', () => app.historyStep(-1));
+  $('histFwd').addEventListener('click', () => app.historyStep(1));
+  $('copyLink').addEventListener('click', () => app.copyLink());
+  ui.syncHistory = () => {
+    const h = app.hist;
+    $('histBack').disabled = !(h && h.canBack);
+    $('histFwd').disabled = !(h && h.canForward);
+    $('histPos').textContent = h && h.size > 1 ? (h.index + 1) + ' / ' + h.size : '';
+  };
+
+  // ── MIX: vegetation and water look ──
+  const MIX = [
+    ['vegDensity', 'veg', 'density', v => v.toFixed(2) + '×'], ['vegConifer', 'veg', 'conifer', v => Math.round(v * 100) + '%'],
+    ['vegFlowers', 'veg', 'flowers', v => Math.round(v * 100) + '%'], ['waterTint', 'water', 'tint', v => (v < 0.25 ? 'glacial' : v < 0.5 ? 'clear' : v < 0.75 ? 'green' : 'peaty')],
+    ['waterWaves', 'water', 'waves', v => (v < 0.25 ? 'calm' : v < 0.6 ? 'breeze' : 'rough')],
+  ];
+  for (const [id, part, key, fmt] of MIX) {
+    const inp = $(id);
+    if (!inp) continue;
+    inp.addEventListener('input', () => { $(id + 'V').textContent = fmt(+inp.value); app.setMix(part, key, +inp.value); });
+  }
+  ui.syncMix = () => {
+    for (const [id, part, key, fmt] of MIX) {
+      const inp = $(id), v = app[part] && app[part][key];
+      if (!inp || v === undefined) continue;
+      inp.value = v; $(id + 'V').textContent = fmt(+v);
+    }
+  };
 
   // ── SKY ──
   const todText = v => { const m = Math.round(v * 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
@@ -260,7 +323,7 @@ export function createUI(app, doc = globalThis.document) {
   $('todPlay').addEventListener('click', () => app.setPlaying(!app.playing));
   $('todGolden').addEventListener('click', () => app.setTod(app.tod < 0.5 ? 0.275 : 0.715));
   const seasonNames = ['spring', 'summer', 'autumn', 'winter'];
-  $('season').addEventListener('input', e => { app.season = +e.target.value; $('seasonV').textContent = seasonNames[Math.floor(((+e.target.value + 0.125) % 1) * 4)]; });
+  $('season').addEventListener('input', e => { app.setSeason ? app.setSeason(+e.target.value) : (app.season = +e.target.value); $('seasonV').textContent = seasonNames[Math.floor(((+e.target.value + 0.125) % 1) * 4)]; });
   $('latitude').addEventListener('input', e => { app.latitude = +e.target.value; $('latitudeV').textContent = (+e.target.value).toFixed(0) + '°'; });
   ui.wxRows = new Map();
   function buildWeather(WEATHER) {

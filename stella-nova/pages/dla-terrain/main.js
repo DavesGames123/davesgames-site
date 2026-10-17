@@ -32,9 +32,17 @@
 //  shot plan is saver.js. P toggles the in-page saver.
 //
 //  URL: ?seed=<int> ?preset=<id> ?q=0..3 ?tod=0..1 ?wx=<weather id> ?cam=orbit|fly|drone
+//  HASH (world-state.js): #s=..&p=..&o=..&t=..&w=..&se=..&v=..&wa=..&c=.. holds
+//  the full world (options diff, time, weather, season, plants, water,
+//  camera), so a link reloads the same world; it wins over the query.
+//  "Randomise everything" and each group dice push a new hash (history
+//  back and forward work); edits replace it (debounced).
+//
+//  DEFAULT OPENING  a strong preset at golden hour: the camera turns round
+//  the terrain while it forms from DLA, then a drone flies a ridge.
 //
 //  grep -n targets: "── APP", "── BOOT", "── MODULES", "── GENERATE",
-//  "── LOOP", "── INPUT", "── SAVER", "── LOSS", "function frameGlobals"
+//  "── LOOP", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
 import { createTerrainGPU } from './gpu/terrain-gpu.js';
@@ -49,6 +57,7 @@ import { createCamera, dronePath } from './camera.js';
 import { createUI, todRate } from './ui.js';
 import { buildShotPlan, framing, shotLabel, shotTod, extractFn, SHOT_CODE, mulberry } from './saver.js';
 import { plateBand } from '../../lib/saver-clear.js';
+import { rollGroup, rollWorld, encodeHash, decodeHash, createHistory, newSeed, VEG0, WATER0, todForElevation } from './world-state.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('view');
@@ -70,18 +79,24 @@ export const MODULES = [
 const app = {
   lib: TerrainStub, libKind: 'stub', skyLib: null, sky: null,
   opts: {}, preset: null,
-  tod: clamp(+(Q.get('tod') ?? 0.3), 0, 1), todSpeed: 0.12, playing: true,
+  tod: clamp(+(Q.get('tod') ?? 0.27), 0, 1), todSpeed: 0.07, playing: true,
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
   qualityIndex: clamp(+(Q.get('q') ?? (coarse ? 1 : 2)), 0, 3),
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
   camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50 },
   terrain: null, gen: null, skyT: 0, skySpeed: 1, lastInput: -1e9,
   saverRun: null, drones: { ridge: 0, river: 0 },
+  veg: { ...VEG0 }, water: { ...WATER0 }, locks: loadLocks(), hist: createHistory(30),
+  camShot: null, pendingCam: null, lastHash: '', genOpts: null, opening: true,
 };
+function loadLocks() {
+  try { const a = JSON.parse(localStorage.getItem('dla-terrain-locks') || '[]'); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
+}
 window.__dlaTerrain = app;   // for the console
 
 let gpu = null, tg = null, sh = null, post = null, fg = null, ui = null;
 const cam = createCamera({ fovY: 50 * Math.PI / 180 });
+app.cam = cam;   // for the console and the Deno harness
 const G = new Float32Array(GLOBALS_FLOATS), GV = globalsView(G);
 let prevVP = null, frameNo = 0, lastT = 0, fpsAcc = 0, fpsN = 0, fps = 0, pendingSnap = null, lastSnapAt = 0;
 let skyState = null, worker = null, workerKind = null, genId = 0, booted = false;
@@ -94,7 +109,7 @@ const world = {
 };
 
 // ── methods the UI calls ──
-app.setOpt = (k, v) => { app.opts[k] = v; app.preset = app.preset && k !== 'seed' ? null : app.preset; ui && ui.syncOptions(); };
+app.setOpt = (k, v) => { app.opts[k] = v; app.preset = app.preset && k !== 'seed' ? null : app.preset; ui && ui.syncOptions(); hashSoon(); };
 app.applyPreset = id => {
   const p = app.lib.PRESETS[id];
   if (!p) return;
@@ -103,33 +118,51 @@ app.applyPreset = id => {
   app.opts = { ...app.lib.defaults(), ...p.opts, seed, ...(coarse ? { n: Math.min(p.opts.n || 1024, 1024) } : {}) };
   ui.syncOptions();
   app.generate();
+  writeHash(true);
 };
 app.nextPreset = () => {
   const ids = Object.keys(app.lib.PRESETS);
   app.applyPreset(ids[(ids.indexOf(app.preset) + 1) % ids.length]);
 };
+// the dice: one group (world-state.js rollGroup), or every unlocked group
 app.randomise = group => {
-  const seed = 1 + Math.floor(Math.random() * 999998);
-  const base = { ...app.opts };
-  let o;
-  try { o = app.lib.randomOptions(seed, base, group || null); } catch { o = app.lib.randomOptions(seed, base); }
-  if (group) {
-    // only the options of this group change
-    for (const d of app.lib.OPTIONS) if (d.group === group) base[d.key] = o[d.key];
-    o = base;
-  }
-  if (!group) o.seed = seed;
-  if (o.n && app.opts.n) o.n = app.opts.n;
-  app.opts = o; app.preset = null;
-  ui.syncOptions();
-  app.generate();
+  if (!group) { app.randomiseAll(); return; }
+  applyWorld(rollGroup(worldNow(), group, newSeed(), app.lib, rollCtx()), { push: true });
 };
-app.setTod = v => { app.tod = ((v % 1) + 1) % 1; ui.syncSky(); };
-app.setPlaying = p => { app.playing = p; ui.syncSky(); };
+app.randomiseAll = seed => {
+  const w = rollWorld(worldNow(), app.locks, seed || newSeed(), app.lib, rollCtx());
+  applyWorld(w, { push: true });
+  const wx = weatherList().find(x => x.id === w.weather);
+  ui.toast(`New world · ${ui.todText(w.tod)} · ${wx ? wx.label : w.weather}`);
+};
+app.toggleLock = group => {
+  if (app.locks.has(group)) app.locks.delete(group); else app.locks.add(group);
+  try { localStorage.setItem('dla-terrain-locks', JSON.stringify([...app.locks])); } catch { /* private mode */ }
+  ui.syncLocks();
+};
+app.setMix = (part, key, v) => { app[part] = { ...app[part], [key]: v }; hashSoon(); };
+app.setSeason = v => { app.season = v; hashSoon(); };
+app.historyStep = d => {
+  const h = d < 0 ? app.hist.back() : app.hist.forward();
+  if (!h) return;
+  const w = decodeHash(h, app.lib);
+  if (w) applyWorld({ ...worldNow(), ...w }, { push: false, hash: h });
+};
+app.copyLink = () => {
+  app.camShot = camNow();
+  writeHash(false);
+  const url = location.href;
+  const done = () => ui.toast('The link to this world is copied');
+  try { navigator.clipboard.writeText(url).then(done, () => ui.toast('Copy the address bar: it holds this world')); }
+  catch { ui.toast('Copy the address bar: it holds this world'); }
+};
+app.setTod = v => { app.tod = ((v % 1) + 1) % 1; ui.syncSky(); hashSoon(); };
+app.setPlaying = p => { app.playing = p; ui.syncSky(); hashSoon(); };
 app.setWeather = (id, reset) => {
   app.weatherId = id;
   if (reset && app.sky && app.sky.reset) app.sky.reset();
   ui && ui.syncSky();
+  if (!app.saverRun) hashSoon();
 };
 app.setWxOver = (k, v) => { app.wxOver[k] = v; };
 app.clearWxOver = () => { app.wxOver = {}; };
@@ -145,13 +178,15 @@ app.setCam = mode => {
   if (mode === 'drone') { app.drone('ridge'); return; }
   cam.setMode(mode, world); app.camMode = mode; ui.syncView();
 };
-app.drone = kind => {
+app.drone = (kind, pickIndex) => {
   const t = app.terrain || (tg && tg.view && tg.view.cpu);
   const list = t && (kind === 'river' ? t.rivers : t.ridges);
   if (!list || !list.length) { ui.toast(app.gen && app.gen.running ? 'The flight paths come when the terrain is done' : 'This terrain has no ' + kind + 's to follow'); return; }
   // the longest paths first, then the next one each time
   const sorted = list.slice().sort((a, b) => b.pts.length - a.pts.length);
-  const pick = sorted[app.drones[kind]++ % Math.min(sorted.length, 8)];
+  const k = pickIndex ?? app.drones[kind]++;
+  const pick = sorted[k % Math.min(sorted.length, 8)];
+  app.dronePick = { path: kind, pick: k % Math.min(sorted.length, 8) };
   cam.drone = dronePath(pick.pts, world, kind === 'river'
     ? { clearance: 45, lookAhead: 520, lookDown: 80, spacing: 70, window: 400, side: 420, sideK: 0.8 }
     : { clearance: 110, lookAhead: 520, lookDown: 90, spacing: 90, window: 320 });
@@ -194,6 +229,13 @@ async function loadLib() {
 function initialOptions() {
   const lib = app.lib;
   app.opts = lib.defaults();
+  const fromHash = decodeHash(location.hash, lib);
+  if (fromHash) {
+    applyWorld({ ...worldNow(), ...fromHash }, { push: false, generate: false, hash: location.hash });
+    if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+    app.opening = !fromHash.cam;
+    return;
+  }
   const pid = Q.get('preset');
   if (pid && lib.PRESETS[pid]) { app.preset = pid; Object.assign(app.opts, lib.PRESETS[pid].opts); }
   else if (!pid) {
@@ -313,6 +355,9 @@ app.generate = () => {
   const firstOrNewSize = !app.gen || Math.abs((app.gen.ws || 0) - ws) > 1;
   app.gen = { id, running: true, t0: performance.now(), ws, n, stage: null, label: 'Starting' };
   app.terrain = null;
+  app.genOpts = JSON.stringify(app.opts);
+  // the sun follows the climate latitude of the terrain
+  if (Number.isFinite(+o.latitude)) { app.latitude = clamp(Math.round(+o.latitude), -70, 70); ui.syncSky(); }
   if (tg) { const v = tg.begin({ n, worldSize: ws, heightScale: o.heightScale, seaLevel: 0 }); setTerrainAll(v); }
   ui.setProgress({ stage: 'dla', label: 'Growing DLA ridges', frac: 0 });
   if (firstOrNewSize && !app.saverRun) {
@@ -351,7 +396,13 @@ function onWorker(m) {
     ui.progressDone(`Done in ${(ms / 1000).toFixed(1)} s`);
     ui.setTerrainMap({ ...t, worldSize: t.worldSize, stage: 'done' }, app.lib.BIOMES, t);
     app.drones = { ridge: 0, river: 0 };
-    if (app.camMode === 'drone' && cam.droneKind) app.drone(cam.droneKind);
+    if (app.saverRun) { /* the saver owns the camera */ }
+    else if (app.pendingCam) { applyCam(app.pendingCam); app.pendingCam = null; }
+    else if (app.opening && performance.now() - app.lastInput > 4000) {
+      // the first terrain of a visit: a golden-hour drone flight on a ridge
+      app.drone('ridge', 0);
+    } else if (app.camMode === 'drone' && cam.droneKind) app.drone(cam.droneKind);
+    app.opening = false;
   } else if (m.type === 'error') {
     app.gen.running = false;
     ui.progressDone('Generation failed');
@@ -452,6 +503,7 @@ function loop(now) {
     globals: G, g: GV, camera: m, time: now / 1000, dt, tod: app.tod, weather: st, sky: st,
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null,
+    veg: app.veg, waterLook: app.water, season: app.season,
   };
   for (const md of fg.active()) if (md.update) {
     try { md.update(frame); } catch (e) { console.warn(`dla-terrain: ${md.role} update failed`, e); md.failed = true; ui.notice(`${md.label || md.role}: update failed`); }
@@ -697,6 +749,83 @@ window.snSaver = { enter: opts => saverEnter(opts || {}), exit: () => saverExit(
 $('saverBtn').addEventListener('click', () => saverEnter({}));
 $('dockSaver').addEventListener('click', () => saverEnter({}));
 
+// ── WORLD: the state of world-state.js, the hash, the camera shots ───────
+function weatherList() { return app.skyLib ? app.skyLib.WEATHER : SkyStub.WEATHER; }
+function rollCtx() {
+  return {
+    solarPosition: app.skyLib && app.skyLib.solarPosition, latitude: app.latitude,
+    weatherIds: weatherList().map(w => w.id), coarse,
+  };
+}
+function worldNow() {
+  return {
+    opts: { ...app.opts }, preset: app.preset, tod: app.tod, playing: app.playing, weather: app.weatherId,
+    season: app.season, veg: { ...app.veg }, water: { ...app.water }, cam: app.camShot,
+  };
+}
+// the camera as a shot of world-state.js
+function camNow() {
+  const ws = world.size;
+  if (app.camMode === 'drone' && app.dronePick) return { kind: 'drone', ...app.dronePick };
+  if (app.camMode === 'fly') {
+    const f = cam.fly;
+    return { kind: 'fly', x: Math.round(f.pos[0]), y: Math.round(f.pos[1]), z: Math.round(f.pos[2]), yaw: +f.yaw.toFixed(3), pitch: +f.pitch.toFixed(3) };
+  }
+  const o = cam.orbit;
+  return { kind: 'orbit', yaw: +(((o.yaw % 6.2832) + 6.2832) % 6.2832).toFixed(3), pitch: +o.pitch.toFixed(3), distK: +(o.dist / ws).toFixed(3), tx: +(o.target[0] / ws).toFixed(3), tz: +(o.target[2] / ws).toFixed(3) };
+}
+function applyCam(c) {
+  if (!c || !tg) return;
+  const ws = world.size;
+  if (c.kind === 'drone') { app.drone(c.path, c.pick); return; }
+  if (c.kind === 'fly') {
+    cam.setMode('fly', world); app.camMode = 'fly';
+    cam.fly.pos = [c.x, c.y, c.z]; cam.fly.yaw = c.yaw; cam.fly.pitch = c.pitch;
+  } else {
+    cam.setMode('orbit', world); app.camMode = 'orbit'; cam.orbitGoal = null;
+    const x = c.tx * ws, z = c.tz * ws;
+    cam.orbit = { target: [x, Math.max(world.heightAt(x, z), world.seaLevel), z], yaw: c.yaw, pitch: c.pitch, dist: c.distK * ws };
+  }
+  if (post) post.resetHistory();
+  ui.syncView();
+}
+// apply a world: regenerate only when the terrain options changed
+function applyWorld(w, o = {}) {
+  const regen = o.generate !== false && JSON.stringify(w.opts) !== app.genOpts;
+  app.opts = { ...w.opts }; app.preset = w.preset ?? null;
+  if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+  app.tod = w.tod; app.playing = w.playing !== false; app.season = w.season;
+  app.veg = { ...VEG0, ...(w.veg || {}) }; app.water = { ...WATER0, ...(w.water || {}) };
+  app.wxOver = {};
+  if (weatherList().some(x => x.id === w.weather)) app.weatherId = w.weather;
+  app.camShot = w.cam || null;
+  if (ui) { ui.syncOptions(); ui.syncSky(); ui.syncMix(); }
+  if (w.cam) app.pendingCam = w.cam;
+  if (regen && booted) app.generate();
+  else if (w.cam && app.terrain) { applyCam(w.cam); app.pendingCam = null; }
+  if (o.hash !== undefined) { app.lastHash = o.hash; try { history.replaceState(null, '', o.hash); } catch { /* file: url */ } ui && ui.syncHistory(); }
+  else writeHash(!!o.push);
+}
+let hashT = 0;
+function writeHash(push) {
+  if (app.saverRun) return;
+  clearTimeout(hashT);
+  const h = encodeHash(worldNow(), app.lib);
+  if (h === app.lastHash && !push) return;
+  app.lastHash = h;
+  try { history[push ? 'pushState' : 'replaceState'](null, '', h); } catch { /* file: url or sandbox */ }
+  if (push) app.hist.push(h); else if (booted) app.hist.replace(h);
+  ui && ui.syncHistory();
+}
+function hashSoon() { clearTimeout(hashT); hashT = setTimeout(() => writeHash(false), 450); }
+function onHash() {
+  if (location.hash === app.lastHash) return;
+  const w = decodeHash(location.hash, app.lib);
+  if (!w) return;
+  app.hist.push(location.hash);
+  applyWorld({ ...worldNow(), ...w }, { push: false, hash: location.hash });
+}
+
 // ── LOSS ────────────────────────────────────────────────────────────────
 let losses = 0;
 async function onLost(info) {
@@ -716,12 +845,20 @@ async function main() {
   ui = createUI(app);
   await loadLib();
   initialOptions();
+  if (!location.hash && !Q.has('tod') && app.skyLib && app.skyLib.solarPosition) {
+    // golden hour: the sun 3 degrees over the horizon in the morning, so the
+    // valley fog is still there and the light warms the ridges
+    const lat = Number.isFinite(+app.opts.latitude) ? clamp(Math.round(+app.opts.latitude), -70, 70) : app.latitude;
+    const t = todForElevation(3, true, app.season, lat, app.skyLib.solarPosition);
+    if (t !== null) app.tod = t;
+  }
   ui.buildOptions(app.lib);
   ui.buildWeather(app.skyLib ? app.skyLib.WEATHER : SkyStub.WEATHER);
   if (!(app.skyLib ? app.skyLib.WEATHER : SkyStub.WEATHER).some(w => w.id === app.weatherId)) app.weatherId = 'fair';
   ui.buildQuality(QUALITY);
   if (Q.get('cam') === 'fly') { cam.setMode('fly', world); app.camMode = 'fly'; }
-  ui.syncSky(); ui.syncView();
+  ui.syncSky(); ui.syncView(); ui.syncMix(); ui.syncLocks();
+  addEventListener('hashchange', onHash);
   if (app.libKind === 'stub') ui.notice('lib/dla-terrain.js is not there yet: a plain noise terrain stands in');
   try {
     await bootGPU();
@@ -732,6 +869,9 @@ async function main() {
   await makeWorker();
   booted = true;
   app.generate();
+  writeHash(false);
+  app.hist.push(app.lastHash);
+  ui.syncHistory();
   if (Q.get('cam') === 'drone') setTimeout(() => app.drone('ridge'), 4000);
   requestAnimationFrame(loop);
 }
