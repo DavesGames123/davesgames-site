@@ -84,13 +84,15 @@ w.SN_NAV = [
 ] },
 { id: "science", label: "Science", constellations: [
   { id: "space", label: "Space & Gravity", short: "Space", icon: "☾", color: "#60b0f0", color2: "#ffc864", groups: [
-    { h: "Planets & Orbits", p: [
+    { h: "Orbits", p: [
       ["hohmann", "Hohmann Transfer", "SIM"],
       ["leo", "LEO Catalog", "NEW", "leo-catalog"],
       ["gravity", "Gravity Sim", "SIM"],
+      ["gravity-lab", "Gravity Lab", "NEW"]
+    ] },
+    { h: "Planets", p: [
       ["forge", "Planet Forge", "GPU"],
       ["roche-limit", "Roche Limit", "SIM"],
-      ["gravity-lab", "Gravity Lab", "NEW"],
       ["planet-collision", "Planet Collision", "NEW"]
     ] },
     { h: "Deep Space", p: [
@@ -127,18 +129,14 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [
-    { h: "Proteins", p: [
+    { h: "Molecules of Life", p: [
       ["protein-viewer", "Protein Structure", "3D"],
-      ["protein-folding", "Protein Folding", "SIM"]
-    ] },
-    { h: "Viruses & Prions", p: [
+      ["protein-folding", "Protein Folding", "SIM"],
       ["virus-atlas", "Virus Atlas", "3D"]
     ] },
-    { h: "Anatomy", p: [
+    { h: "Anatomy & Imaging", p: [
       ["human-skull", "Human Skull", "3D"],
-      ["human-skeleton", "Human Skeleton", "3D"]
-    ] },
-    { h: "Medical Imaging", p: [
+      ["human-skeleton", "Human Skeleton", "3D"],
       ["ct-explained", "How CT Works", "NEW"],
       ["ct-lab", "CT Lab", "LAB"],
       ["ct-lab-3d", "CT Lab 3D", "NEW"]
@@ -147,35 +145,23 @@ w.SN_NAV = [
       ["neuron-lab", "Neuron Lab", "SIM"],
       ["neuron-network", "Neural Network", "SIM"]
     ] },
-    { h: "Deep Time", p: [
-      ["ancient-earth", "Ancient Earth", "3D"]
-    ] },
-    { h: "Epidemiology", p: [
-      ["outbreak", "Outbreak", "SIM"]
-    ] },
-    { h: "Growth", p: [
+    { h: "Growth & Spread", p: [
       ["plant-growth", "Plant Growth", "3D"],
       ["coral-reef", "Coral Reef Growth", "3D"],
-      ["dla-terrain", "DLA Terrain", "3D"]
+      ["outbreak", "Outbreak", "SIM"]
     ] }
   ] },
   { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
-    { h: "Flow", p: [
+    { h: "Fluid Solvers", p: [
       ["fluidlab", "Stable Fluids", "GPU"],
-      ["wind-tunnel", "Wind Tunnel", "CFD"],
       ["euler-fluid", "Euler Fluid", "SIM"],
       ["flip-fluid", "FLIP Water", "SIM"],
-      ["pbf-boundary", "PBF Boundaries", "SIM"],
+      ["pbf-boundary", "PBF Boundaries", "SIM"]
+    ] },
+    { h: "Air, Heat & Fire", p: [
+      ["wind-tunnel", "Wind Tunnel", "CFD"],
       ["fire-simulation", "Fire Simulation", "SIM"],
       ["thermal-convection", "Thermal Convection", "SIM"]
-    ] },
-    { h: "Earth & Ocean", p: [
-      ["tidal-currents", "Tidal Currents", "DATA"],
-      ["city-atlas", "City Atlas", "3D"],
-      ["map-generator", "City Generator", "3D"],
-      ["storm-globe", "Storm Globe", "DATA"],
-      ["weather-map", "Weather Map", "DATA"],
-      ["map-projections", "Map Projections", "MATH"]
     ] },
     { h: "Navier–Stokes", p: [
       ["ns-equations", "Navier–Stokes 1D", "MATH"],
@@ -189,18 +175,34 @@ w.SN_NAV = [
       ["ns-vortex", "Blowup: Vortex", "3D"]
     ] }
   ] },
+  { id: "earth", label: "Earth & Weather", short: "Earth", icon: "♁", color: "#a8d65c", color2: "#5cc0e8", groups: [
+    { h: "Ocean & Weather", p: [
+      ["tidal-currents", "Tidal Currents", "DATA"],
+      ["storm-globe", "Storm Globe", "DATA"],
+      ["weather-map", "Weather Map", "DATA"]
+    ] },
+    { h: "Maps & Cities", p: [
+      ["city-atlas", "City Atlas", "3D"],
+      ["map-generator", "City Generator", "3D"],
+      ["map-projections", "Map Projections", "MATH"]
+    ] },
+    { h: "Land & Deep Time", p: [
+      ["dla-terrain", "DLA Terrain", "3D"],
+      ["ancient-earth", "Ancient Earth", "3D"]
+    ] }
+  ] },
   { id: "fields", label: "Light & Fields", short: "Fields", icon: "∇", color: "#60e0ee", color2: "#ffb478", groups: [
     { h: "Electromagnetism", p: [
       ["magnetlab", "MagnetLab", "NEW"],
       ["biot-savart", "Biot–Savart Law", "NEW"],
       ["maxwell", "Maxwell's Equations", "NEW", "maxwells-equations"],
-      ["twenty-to-four", "Twenty to Four", "NEW"],
+      ["twenty-to-four", "Twenty to Four", "NEW"]
+    ] },
+    { h: "Circuits & Radio", p: [
+      ["breadboard-lab", "Breadboard Lab", "NEW"],
       ["smith-chart", "Smith Chart", "NEW"],
       ["antenna-fields", "Antenna Fields", "NEW"],
       ["sstv", "Slow-Scan Television", "NEW"]
-    ] },
-    { h: "Electronics", p: [
-      ["breadboard-lab", "Breadboard Lab", "NEW"]
     ] },
     { h: "Optics", p: [
       ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
@@ -213,26 +215,27 @@ w.SN_NAV = [
   { id: "patterns", label: "Patterns & Chaos", short: "Patterns", icon: "∞", color: "#9db4ff", color2: "#c490ff", groups: [
     { h: "Chaos", p: [
       ["attractorlab", "Strange Attractors", "3D"],
-      ["flowlab", "Vector Fields", "SIM"],
-      ["julia-fractals", "Julia Fractals", "SIM"]
+      ["flowlab", "Vector Fields", "SIM"]
     ] },
     { h: "Emergence", p: [
       ["reaction-diffusion", "Reaction–Diffusion", "GPU"],
       ["lenia", "Lenia", "GPU"],
       ["game-of-life", "Game of Life", "SIM"]
     ] },
-    { h: "Number Theory", p: [
-      ["ulam-spiral", "Ulam Spiral", "GPU"],
-      ["ramanujan-pi", "Ramanujan–Sato Series", "MATH"]
-    ]},
-    { h: "Geometry & Topology", p: [
-      ["hopf-fibration", "Hopf Fibration", "GPU"]
-    ] },
-    { h: "Fractal Growth", p: [
+    { h: "Fractals", p: [
+      ["julia-fractals", "Julia Fractals", "SIM"],
       ["dlaf", "Diffusion-Limited Aggregation", "SIM"]
-    ] },
-    { h: "Probability", p: [
+    ] }
+  ] },
+  { id: "maths", label: "Mathematics", short: "Maths", icon: "∑", color: "#f2d16b", color2: "#9db4ff", groups: [
+    { h: "Numbers & Chance", p: [
+      ["ulam-spiral", "Ulam Spiral", "GPU"],
+      ["ramanujan-pi", "Ramanujan–Sato Series", "MATH"],
       ["dice", "Dice Lab", "3D"]
+    ] },
+    { h: "Geometry & Tensors", p: [
+      ["hopf-fibration", "Hopf Fibration", "GPU"],
+      ["tensor-calculus", "Tensor Calculus", "3D"]
     ] }
   ] },
   { id: "sound", label: "Sound & Vibration", short: "Sound", icon: "♪", color: "#ff8ac2", color2: "#ffb478", groups: [
@@ -251,23 +254,49 @@ w.SN_NAV = [
       ["chladni-plate", "Chladni Plate", "NEW"]
     ] }
   ] },
-  { id: "machines", label: "Machines", short: "Machines", icon: "◷", color: "#e6c27a", color2: "#f0b27a", groups: [
+  { id: "papers", label: "Research", short: "Research", icon: "¶", color: "#ffa06e", color2: "#c9a7ff", groups: [
+    { h: "Physics", p: [
+      ["gravitational-imaging", "Gravitational Imaging", "NEW"],
+      ["circular-rydberg", "Circular Rydberg Atoms", "NEW"]
+    ] },
+    { h: "Biology & Medicine", p: [
+      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],
+      ["enzyme-design", "De Novo Enzyme Design", "NEW"],
+      ["mrna-vaccine", "The mRNA Vaccine", "NEW"],
+      ["fly-duel", "Fly Brain Card Duel", "NEW"]
+    ] },
+    { h: "Machine Learning", p: [
+      ["4d-codebench", "4DCodeBench", "NEW"],
+      ["legged-rl", "Legged Robot Gym", "NEW"]
+    ] }
+  ] }
+] },
+{ id: "engineering", label: "Machines", constellations: [
+  { id: "machines", label: "Engines & Drivetrains", short: "Engines", icon: "⚙", color: "#e6c27a", color2: "#f0b27a", groups: [
     { h: "Engines", p: [
       ["stirling-engine", "Stirling Engine", "3D"],
       ["four-stroke-engine", "Four-Stroke Engine", "3D"],
       ["wankel-engine", "Wankel Rotary Engine", "3D"],
       ["radial-engine", "Radial Engine", "3D"]
     ] },
-    { h: "Gears & Transmissions", p: [
-      ["differential", "Differential", "3D"],
-      ["planetary-gearbox", "Planetary Gearbox", "3D"],
-      ["manual-gearbox", "Manual Gearbox", "3D"],
-      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
+    { h: "Gears", p: [
       ["gear-types", "Gear Types", "3D"],
+      ["planetary-gearbox", "Planetary Gearbox", "3D"],
+      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
+      ["differential", "Differential", "3D"]
+    ] },
+    { h: "Transmissions & Joints", p: [
+      ["manual-gearbox", "Manual Gearbox", "3D"],
       ["cvt", "CVT", "3D"],
       ["universal-joints", "Universal & CV Joints", "3D"],
       ["ball-screw", "Ball Screw & Lead Screw", "3D"]
     ] },
+    { h: "Pumps", p: [
+      ["pumps", "Positive-Displacement Pumps", "3D"],
+      ["swashplate-pump", "Swashplate Piston Pump", "3D"]
+    ] }
+  ] },
+  { id: "clockwork", label: "Linkages & Clockwork", short: "Clockwork", icon: "◷", color: "#f0a868", color2: "#ffd98a", groups: [
     { h: "Linkages & Cams", p: [
       ["geneva-cams", "Geneva Drive & Cams", "3D"],
       ["linkages", "Linkages", "3D"],
@@ -281,16 +310,14 @@ w.SN_NAV = [
       ["pendulum-clock", "Pendulum Clock", "3D"],
       ["antikythera", "Antikythera Mechanism", "3D"]
     ] },
-    { h: "Pumps", p: [
-      ["pumps", "Positive-Displacement Pumps", "3D"],
-      ["swashplate-pump", "Swashplate Piston Pump", "3D"]
-    ] },
     { h: "Calculating & Cipher", p: [
       ["calculators", "Pascaline & Curta", "3D"],
       ["curta", "Curta Calculator", "3D"],
       ["enigma-rotors", "Enigma Rotors", "3D"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"]
-    ] },
+    ] }
+  ] },
+  { id: "dynamics", label: "Dynamics", short: "Dynamics", icon: "↻", color: "#ff8a6e", color2: "#ffc46e", groups: [
     { h: "Motion & Collisions", p: [
       ["cannonball-2d", "Cannonball 2D", "SIM"],
       ["cannonball-3d", "Cannonball 3D", "3D"],
@@ -299,78 +326,55 @@ w.SN_NAV = [
       ["pinball", "Pinball", "SIM"],
       ["spatial-hashing", "Spatial Hashing", "3D"]
     ] },
-    { h: "Pendulums & Constraints", p: [
+    { h: "Pendulums & Beads", p: [
       ["pendulum-short", "Pendulum in 100 Lines", "SIM"],
       ["triple-pendulum", "Triple Pendulum", "SIM"],
       ["bead-on-wire", "Bead on a Wire", "SIM"],
-      ["many-beads", "Many Beads", "SIM"],
+      ["many-beads", "Many Beads", "SIM"]
+    ] },
+    { h: "Rigid Bodies & Joints", p: [
       ["joints", "Joint Simulation", "3D"],
-      ["rigid-bodies", "Rigid Bodies", "3D"]
-    ] },
-    { h: "Soft Bodies & Cloth", p: [
-      ["soft-bodies", "Soft Bodies", "3D"],
-      ["soft-body-interaction", "Grab Interaction", "3D"],
-      ["soft-body-skinning", "Soft Body Skinning", "3D"],
-      ["cloth", "Cloth", "3D"],
-      ["cloth-self-collision", "Cloth Self-Collision", "3D"]
-    ] },
-    { h: "Folding", p: [
-      ["origami", "Origami Simulator", "SIM"]
-    ] },
-    { h: "Physics Engines", p: [
+      ["rigid-bodies", "Rigid Bodies", "3D"],
       ["mujoco-lab", "MuJoCo Lab", "NEW"]
     ] }
   ] },
-  { id: "language", label: "Language", short: "Language", icon: "❝", color: "#f2d16b", color2: "#7ee0c3", groups: [
-    { h: "Writing", p: [
-      ["lose-the-modifier", "Lose the Modifier", "WORDS"]
-    ] }
-  ] },
-  { id: "papers", label: "Research", short: "Research", icon: "¶", color: "#ffa06e", color2: "#c9a7ff", groups: [
-    { h: "Astrophysics", p: [
-      ["gravitational-imaging", "Gravitational Imaging", "NEW"]
+  { id: "softbody", label: "Soft Bodies & Cloth", short: "Soft Bodies", icon: "◐", color: "#e7a0f0", color2: "#9ad0ff", groups: [
+    { h: "Soft Bodies", p: [
+      ["soft-bodies", "Soft Bodies", "3D"],
+      ["soft-body-interaction", "Grab Interaction", "3D"],
+      ["soft-body-skinning", "Soft Body Skinning", "3D"]
     ] },
-    { h: "Atomic Physics", p: [
-      ["circular-rydberg", "Circular Rydberg Atoms", "NEW"]
-    ] },
-    { h: "Machine Learning", p: [
-      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],
-      ["4d-codebench", "4DCodeBench", "NEW"],
-      ["enzyme-design", "De Novo Enzyme Design", "NEW"],
-      ["legged-rl", "Legged Robot Gym", "NEW"]
-    ] },
-    { h: "Medicine", p: [
-      ["mrna-vaccine", "The mRNA Vaccine", "NEW"]
-    ] },
-    { h: "Neuroscience", p: [
-      ["fly-duel", "Fly Brain Card Duel", "NEW"]
+    { h: "Cloth & Folding", p: [
+      ["cloth", "Cloth", "3D"],
+      ["cloth-self-collision", "Cloth Self-Collision", "3D"],
+      ["origami", "Origami Simulator", "SIM"]
     ] }
   ] }
 ] },
 { id: "graphics", label: "Graphics", constellations: [
   { id: "shaders", label: "Shader Tables", short: "Shaders", icon: "✦", color: "#e58bd0", color2: "#b896ff", groups: [
-    { h: "Patterns", p: [
+    { h: "Noise & Fields", p: [
       ["noise", "Noise Table", "WGSL", "noise-table"],
       ["volume-noise", "Volume Noise", "WGSL"],
       ["fields", "Field Table", "COMPUTE", "field-table"],
-      ["sims", "Simulation Table", "COMPUTE", "simulation-table"],
+      ["sims", "Simulation Table", "COMPUTE", "simulation-table"]
+    ] },
+    { h: "Patterns & Fractals", p: [
       ["dot-field", "Dot Field Table", "WGSL", "dot-field-table"],
       ["polar", "Polar & Lattice Table", "WGSL", "polar-table"],
-      ["sdf2d", "SDF 2D Table", "WGSL", "sdf2d-table"]
+      ["sdf2d", "SDF 2D Table", "WGSL", "sdf2d-table"],
+      ["fractal-flames", "Fractal Flames", "WGSL"]
     ] },
     { h: "Image", p: [
       ["color", "Color Table", "WGSL", "color-table"],
       ["postfx", "Post-Process", "WGSL", "postfx-table"],
-      ["sampling", "Sampling Table", "WGSL", "sampling-table"],
+      ["sampling", "Sampling Table", "WGSL", "sampling-table"]
     ] },
     { h: "Surfaces", p: [
       ["lighting", "Lighting Table", "WGSL", "lighting-table"],
       ["sdf-solids", "SDF Solids Table", "WGSL", "sdf-solids-table"],
       ["liquid-metal", "Liquid Metal Table", "WGSL", "liquid-metal-table"],
       ["refraction-table", "Refraction Table", "WGSL"]
-    ] },
-    { h: "Fractals", p: [
-      ["fractal-flames", "Fractal Flames", "WGSL"]
     ] }
   ] },
   { id: "effects", label: "Game Effects", short: "Effects", icon: "✺", color: "#ff9a5c", color2: "#ff5a4a", groups: [
@@ -409,16 +413,20 @@ w.SN_NAV = [
       ["orbs", "Presence Orbs", "WGSL", "presence-orbs"],
       ["thinking-orbs", "Thinking Orbs", "WGSL"],
       ["voxel", "Voxel Flythrough", "GPU", "voxel-flythrough"]
-    ] },
-    { h: "Generative", p: [
-      ["markov-junior", "MarkovJunior", "RULES"],
+    ] }
+  ] },
+  { id: "generative", label: "Generative Art", short: "Generative", icon: "❈", color: "#ff8fa8", color2: "#ffd27a", groups: [
+    { h: "Pen & Ink", p: [
       ["shan-shui", "Shan Shui", "SVG"],
       ["fishdraw", "Fishdraw", "SVG"],
       ["mushrooms", "Mushroom Draw", "SVG"],
       ["nonflowers", "Nonflowers", "CANVAS"],
-      ["context-free", "Context Free", "WASM"],
-      ["holocloth", "Holocloth", "CLOTH"],
       ["line-art", "Line Art", "RUST"]
+    ] },
+    { h: "Rules & Grammars", p: [
+      ["markov-junior", "MarkovJunior", "RULES"],
+      ["context-free", "Context Free", "WASM"],
+      ["holocloth", "Holocloth", "CLOTH"]
     ] }
   ] }
 ] },
@@ -461,8 +469,11 @@ w.SN_NAV = [
       ["sdf-lab", "SDF Modeller", "TOOL"],
       ["bench", "Composition Bench", "NODES", "composition-bench"]
     ] },
-    { h: "Code & Science", p: [
-      ["pascal-editor", "Pascal Editor", "TOOL"],
+    { h: "Writing & Code", p: [
+      ["lose-the-modifier", "Lose the Modifier", "WORDS"],
+      ["pascal-editor", "Pascal Editor", "TOOL"]
+    ] },
+    { h: "Science", p: [
       ["sci-tools", "Science Toolkit", "TOOL"],
       ["solar", "Solar Transit Study", "TOOL"]
     ] }

@@ -39,26 +39,31 @@
   --c: var(--blue);
 }
 /* SECTOR-COLOURS:BEGIN  written by tools/nav-sync.js from lib/nav-data.js */
-[data-sector="game"]       { --c: #ffc832; --c2: #ff8a3d; }
-[data-sector="wiki"]       { --c: #6db8e0; --c2: #50c8b8; }
-[data-sector="community"]  { --c: #64dcc8; --c2: #64c8f0; }
-[data-sector="space"]      { --c: #60b0f0; --c2: #ffc864; }
-[data-sector="quantum"]    { --c: #9088e0; --c2: #64b4ff; }
-[data-sector="chemistry"]  { --c: #7ee0b0; --c2: #ffc46b; }
-[data-sector="life"]       { --c: #6cd6a8; --c2: #e8d2a8; }
-[data-sector="fluids"]     { --c: #50c0ff; --c2: #64dcc8; }
-[data-sector="fields"]     { --c: #60e0ee; --c2: #ffb478; }
-[data-sector="patterns"]   { --c: #9db4ff; --c2: #c490ff; }
-[data-sector="sound"]      { --c: #ff8ac2; --c2: #ffb478; }
-[data-sector="machines"]   { --c: #e6c27a; --c2: #f0b27a; }
-[data-sector="language"]   { --c: #f2d16b; --c2: #7ee0c3; }
-[data-sector="papers"]     { --c: #ffa06e; --c2: #c9a7ff; }
-[data-sector="shaders"]    { --c: #e58bd0; --c2: #b896ff; }
-[data-sector="effects"]    { --c: #ff9a5c; --c2: #ff5a4a; }
-[data-sector="rendering"]  { --c: #96c8ff; --c2: #ffb478; }
-[data-sector="finance"]    { --c: #2bd685; --c2: #79acff; }
-[data-sector="craft"]      { --c: #7cc4ff; --c2: #ffb86c; }
-[data-sector="tools"]      { --c: #9fd8a0; --c2: #ffd27a; }
+[data-sector="game"]        { --c: #ffc832; --c2: #ff8a3d; }
+[data-sector="wiki"]        { --c: #6db8e0; --c2: #50c8b8; }
+[data-sector="community"]   { --c: #64dcc8; --c2: #64c8f0; }
+[data-sector="space"]       { --c: #60b0f0; --c2: #ffc864; }
+[data-sector="quantum"]     { --c: #9088e0; --c2: #64b4ff; }
+[data-sector="chemistry"]   { --c: #7ee0b0; --c2: #ffc46b; }
+[data-sector="life"]        { --c: #6cd6a8; --c2: #e8d2a8; }
+[data-sector="fluids"]      { --c: #50c0ff; --c2: #64dcc8; }
+[data-sector="earth"]       { --c: #a8d65c; --c2: #5cc0e8; }
+[data-sector="fields"]      { --c: #60e0ee; --c2: #ffb478; }
+[data-sector="patterns"]    { --c: #9db4ff; --c2: #c490ff; }
+[data-sector="maths"]       { --c: #f2d16b; --c2: #9db4ff; }
+[data-sector="sound"]       { --c: #ff8ac2; --c2: #ffb478; }
+[data-sector="papers"]      { --c: #ffa06e; --c2: #c9a7ff; }
+[data-sector="machines"]    { --c: #e6c27a; --c2: #f0b27a; }
+[data-sector="clockwork"]   { --c: #f0a868; --c2: #ffd98a; }
+[data-sector="dynamics"]    { --c: #ff8a6e; --c2: #ffc46e; }
+[data-sector="softbody"]    { --c: #e7a0f0; --c2: #9ad0ff; }
+[data-sector="shaders"]     { --c: #e58bd0; --c2: #b896ff; }
+[data-sector="effects"]     { --c: #ff9a5c; --c2: #ff5a4a; }
+[data-sector="rendering"]   { --c: #96c8ff; --c2: #ffb478; }
+[data-sector="generative"]  { --c: #ff8fa8; --c2: #ffd27a; }
+[data-sector="finance"]     { --c: #2bd685; --c2: #79acff; }
+[data-sector="craft"]       { --c: #7cc4ff; --c2: #ffb86c; }
+[data-sector="tools"]       { --c: #9fd8a0; --c2: #ffd27a; }
 /* SECTOR-COLOURS:END */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

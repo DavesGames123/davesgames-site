@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-228 registered pages in 5 regions and 20 constellations.
+229 registered pages in 6 regions and 25 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -159,13 +159,13 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 
 | Key | Title | Constellation > group | Badge | Blurb | Credit | Home | Saver | Thumb |
 |---|---|---|---|---|---|---|---|---|
-| `hohmann` | Hohmann Transfer | Space & Gravity > Planets & Orbits | SIM | Plan the cheapest burn between two orbits. |  | shown | hook, tier 3, default | yes |
-| `leo` (pages/leo-catalog) | LEO Catalog | Space & Gravity > Planets & Orbits | NEW | Thousands of real satellites in low orbit. |  | shown | hook, tier 3, default | yes |
-| `gravity` | Gravity Sim | Space & Gravity > Planets & Orbits | SIM | A Barnes-Hut n-body sandbox. Fling planets. |  | shown | hook, tier 2, default | yes |
-| `forge` | Planet Forge | Space & Gravity > Planets & Orbits | GPU | Sculpt and paint a planet from noise. |  | shown | hook, tier 3, default | yes |
-| `roche-limit` | Roche Limit | Space & Gravity > Planets & Orbits | SIM | An icy moon crosses the Roche limit and becomes a ring. |  | shown | hook, tier 4, default | yes |
-| `gravity-lab` | Gravity Lab | Space & Gravity > Planets & Orbits | NEW | Throw planets, stars and black holes into a GPU gravity sandbox. |  | shown | hook, tier 4, default | yes |
-| `planet-collision` | Planet Collision | Space & Gravity > Planets & Orbits | NEW | Two planets collide as molten particles: the Moon hits Earth. |  | shown | hook, tier 4, default | yes |
+| `hohmann` | Hohmann Transfer | Space & Gravity > Orbits | SIM | Plan the cheapest burn between two orbits. |  | shown | hook, tier 3, default | yes |
+| `leo` (pages/leo-catalog) | LEO Catalog | Space & Gravity > Orbits | NEW | Thousands of real satellites in low orbit. |  | shown | hook, tier 3, default | yes |
+| `gravity` | Gravity Sim | Space & Gravity > Orbits | SIM | A Barnes-Hut n-body sandbox. Fling planets. |  | shown | hook, tier 2, default | yes |
+| `gravity-lab` | Gravity Lab | Space & Gravity > Orbits | NEW | Throw planets, stars and black holes into a GPU gravity sandbox. |  | shown | hook, tier 4, default | yes |
+| `forge` | Planet Forge | Space & Gravity > Planets | GPU | Sculpt and paint a planet from noise. |  | shown | hook, tier 3, default | yes |
+| `roche-limit` | Roche Limit | Space & Gravity > Planets | SIM | An icy moon crosses the Roche limit and becomes a ring. |  | shown | hook, tier 4, default | yes |
+| `planet-collision` | Planet Collision | Space & Gravity > Planets | NEW | Two planets collide as molten particles: the Moon hits Earth. |  | shown | hook, tier 4, default | yes |
 | `galaxy` | Galaxy | Space & Gravity > Deep Space | SIM | A spiral galaxy that holds its own arms. |  | shown | hook, tier 1, default | yes |
 | `blackhole` | Black Hole | Space & Gravity > Deep Space | GPU | Gravitational lensing around a Schwarzschild hole. |  | shown | hook, tier 1, default | yes |
 | `wormhole` (pages/ellis-wormhole) | Wormhole | Space & Gravity > Deep Space | GPU | Fly through an Ellis wormhole. |  | shown | hook, tier 2, default | yes |
@@ -182,34 +182,26 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `molecular-bond` | Molecular Bond | Chemistry > Molecules & Reactions | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
 | `molecules` | Molecule Explorer | Chemistry > Molecules & Reactions | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
 | `reactions` | Reaction Explorer | Chemistry > Molecules & Reactions | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |
-| `protein-viewer` | Protein Structure | Life Sciences > Proteins | 3D | Real protein structures in 3D, 37 presets. |  | shown | hook, tier 3, default | yes |
-| `protein-folding` | Protein Folding | Life Sciences > Proteins | SIM | Watch a chain fold into its native shape. |  | shown | hook, tier 2, default | yes |
-| `virus-atlas` | Virus Atlas | Life Sciences > Viruses & Prions | 3D | Real virus capsids from the PDB: assemble, peel, explode. |  | shown | hook, tier 4, default | yes |
-| `human-skull` | Human Skull | Life Sciences > Anatomy | 3D | A human skull in 51 parts, pulled apart. |  | shown | hook, tier 3, default | yes |
-| `human-skeleton` | Human Skeleton | Life Sciences > Anatomy | 3D | Explode a skeleton and inspect all 200 bones. |  | shown | hook, tier 3, default | yes |
-| `ct-explained` | How CT Works | Life Sciences > Medical Imaging | NEW | How CT works, from X-ray shadows to slices. |  | shown | hook, tier 3, default | yes |
-| `ct-lab` | CT Lab | Life Sciences > Medical Imaging | LAB | Scan phantoms, fill the sinogram, break the image. |  | shown | hook, tier 4, default | yes |
-| `ct-lab-3d` | CT Lab 3D | Life Sciences > Medical Imaging | NEW | CT scan a real walnut, a rabbit, a skull or a mosquito in amber, then slice it. |  | shown | hook, tier 4, default | yes |
+| `protein-viewer` | Protein Structure | Life Sciences > Molecules of Life | 3D | Real protein structures in 3D, 37 presets. |  | shown | hook, tier 3, default | yes |
+| `protein-folding` | Protein Folding | Life Sciences > Molecules of Life | SIM | Watch a chain fold into its native shape. |  | shown | hook, tier 2, default | yes |
+| `virus-atlas` | Virus Atlas | Life Sciences > Molecules of Life | 3D | Real virus capsids from the PDB: assemble, peel, explode. |  | shown | hook, tier 4, default | yes |
+| `human-skull` | Human Skull | Life Sciences > Anatomy & Imaging | 3D | A human skull in 51 parts, pulled apart. |  | shown | hook, tier 3, default | yes |
+| `human-skeleton` | Human Skeleton | Life Sciences > Anatomy & Imaging | 3D | Explode a skeleton and inspect all 200 bones. |  | shown | hook, tier 3, default | yes |
+| `ct-explained` | How CT Works | Life Sciences > Anatomy & Imaging | NEW | How CT works, from X-ray shadows to slices. |  | shown | hook, tier 3, default | yes |
+| `ct-lab` | CT Lab | Life Sciences > Anatomy & Imaging | LAB | Scan phantoms, fill the sinogram, break the image. |  | shown | hook, tier 4, default | yes |
+| `ct-lab-3d` | CT Lab 3D | Life Sciences > Anatomy & Imaging | NEW | CT scan a real walnut, a rabbit, a skull or a mosquito in amber, then slice it. |  | shown | hook, tier 4, default | yes |
 | `neuron-lab` | Neuron Lab | Life Sciences > Neuroscience | SIM | A 3D neuron: watch a spike run along its branches. |  | shown | hook, tier 3, default | yes |
 | `neuron-network` | Neural Network | Life Sciences > Neuroscience | SIM | A cortical column of spiking cells in a gamma rhythm. |  | shown | hook, tier 3, default | yes |
-| `ancient-earth` | Ancient Earth | Life Sciences > Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
-| `outbreak` | Outbreak | Life Sciences > Epidemiology | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
-| `plant-growth` | Plant Growth | Life Sciences > Growth | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
-| `coral-reef` | Coral Reef Growth | Life Sciences > Growth | 3D | Coral colonies grow live as marine snow sticks to their tips. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
-| `dla-terrain` | DLA Terrain | Life Sciences > Growth | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | no |
-| `fluidlab` | Stable Fluids | Fluids > Flow | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
-| `wind-tunnel` | Wind Tunnel | Fluids > Flow | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
-| `euler-fluid` | Euler Fluid | Fluids > Flow | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `flip-fluid` | FLIP Water | Fluids > Flow | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `pbf-boundary` | PBF Boundaries | Fluids > Flow | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `fire-simulation` | Fire Simulation | Fluids > Flow | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `thermal-convection` | Thermal Convection | Fluids > Flow | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
-| `tidal-currents` | Tidal Currents | Fluids > Earth & Ocean | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
-| `city-atlas` | City Atlas | Fluids > Earth & Ocean | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
-| `map-generator` | City Generator | Fluids > Earth & Ocean | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
-| `storm-globe` | Storm Globe | Fluids > Earth & Ocean | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
-| `weather-map` | Weather Map | Fluids > Earth & Ocean | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
-| `map-projections` | Map Projections | Fluids > Earth & Ocean | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
+| `plant-growth` | Plant Growth | Life Sciences > Growth & Spread | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `coral-reef` | Coral Reef Growth | Life Sciences > Growth & Spread | 3D | Coral colonies grow live as marine snow sticks to their tips. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `outbreak` | Outbreak | Life Sciences > Growth & Spread | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
+| `fluidlab` | Stable Fluids | Fluids > Fluid Solvers | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
+| `euler-fluid` | Euler Fluid | Fluids > Fluid Solvers | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `flip-fluid` | FLIP Water | Fluids > Fluid Solvers | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `pbf-boundary` | PBF Boundaries | Fluids > Fluid Solvers | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `wind-tunnel` | Wind Tunnel | Fluids > Air, Heat & Fire | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
+| `fire-simulation` | Fire Simulation | Fluids > Air, Heat & Fire | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `thermal-convection` | Thermal Convection | Fluids > Air, Heat & Fire | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
 | `ns-equations` | Navier–Stokes 1D | Fluids > Navier–Stokes | MATH | The Navier-Stokes terms one at a time in 1D. |  | shown | generic, tier 5 | yes |
 | `ns-burgers` | Burgers Equation | Fluids > Navier–Stokes | SIM | Shocks form in the Burgers equation. |  | shown | hook, tier 3, default | yes |
 | `ns-flow2d` | Navier–Stokes 2D | Fluids > Navier–Stokes | SIM | Navier-Stokes on a 2D grid. |  | shown | hook, tier 3, default | yes |
@@ -217,14 +209,22 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ns-wave` | Blowup: Wave | Fluids > Blowup | MATH | The blowup question through a wave model. |  | shown | hook, tier 3, default | yes |
 | `ns-geometry` | Blowup: Geometry | Fluids > Blowup | SIM | The blowup question through the geometry of the flow. |  | shown | hook, tier 3, default | yes |
 | `ns-vortex` | Blowup: Vortex | Fluids > Blowup | 3D | A vortex that may blow up. |  | shown | hook, tier 2, default | yes |
+| `tidal-currents` | Tidal Currents | Earth & Weather > Ocean & Weather | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
+| `storm-globe` | Storm Globe | Earth & Weather > Ocean & Weather | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
+| `weather-map` | Weather Map | Earth & Weather > Ocean & Weather | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
+| `city-atlas` | City Atlas | Earth & Weather > Maps & Cities | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
+| `map-generator` | City Generator | Earth & Weather > Maps & Cities | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
+| `map-projections` | Map Projections | Earth & Weather > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
+| `dla-terrain` | DLA Terrain | Earth & Weather > Land & Deep Time | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | no |
+| `ancient-earth` | Ancient Earth | Earth & Weather > Land & Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
 | `maxwell` (pages/maxwells-equations) | Maxwell's Equations | Light & Fields > Electromagnetism | NEW | The four equations, animated. |  | shown | hook, tier 4, default | yes |
 | `twenty-to-four` | Twenty to Four | Light & Fields > Electromagnetism | NEW | A field study in four panels. |  | shown | hook, tier 4, default | yes |
-| `smith-chart` | Smith Chart | Light & Fields > Electromagnetism | NEW | Impedance on the Smith chart. |  | shown | hook, tier 3, default | yes |
-| `antenna-fields` | Antenna Fields | Light & Fields > Electromagnetism | NEW | Radio waves leave a dipole, a loop and an array. |  | shown | hook, tier 4, default | yes |
-| `sstv` | Slow-Scan Television | Light & Fields > Electromagnetism | NEW | Slow-scan television: a picture sent as sound, decoded live. |  | shown | hook, tier 3, default | yes |
-| `breadboard-lab` | Breadboard Lab | Light & Fields > Electronics | NEW | Build circuits on 3D breadboards and test them live. |  | shown | hook, tier 3, default | yes |
+| `breadboard-lab` | Breadboard Lab | Light & Fields > Circuits & Radio | NEW | Build circuits on 3D breadboards and test them live. |  | shown | hook, tier 3, default | yes |
+| `smith-chart` | Smith Chart | Light & Fields > Circuits & Radio | NEW | Impedance on the Smith chart. |  | shown | hook, tier 3, default | yes |
+| `antenna-fields` | Antenna Fields | Light & Fields > Circuits & Radio | NEW | Radio waves leave a dipole, a loop and an array. |  | shown | hook, tier 4, default | yes |
+| `sstv` | Slow-Scan Television | Light & Fields > Circuits & Radio | NEW | Slow-scan television: a picture sent as sound, decoded live. |  | shown | hook, tier 3, default | yes |
 | `diffraction` (pages/diffraction-lab) | Aperture Diffraction | Light & Fields > Optics | NEW | Light through an aperture. |  | shown | hook, tier 3, default | yes |
 | `double-slit` | Double-Slit Diffraction | Light & Fields > Optics | NEW | Interference, one photon at a time. |  | shown | hook, tier 2, default | yes |
 | `polarization` (pages/circular-polarization) | Circular Polarization | Light & Fields > Optics | NEW | Watch a wave twist as it travels. |  | shown | hook, tier 2, default | yes |
@@ -232,15 +232,16 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `photon-caustics-3d` | Photon Caustics 3D | Light & Fields > Optics | GPU | Sunlight through waves draws caustics on a pool floor. |  | shown | hook, tier 3, default | yes |
 | `attractorlab` | Strange Attractors | Patterns & Chaos > Chaos | 3D | Lorenz, Rossler, Thomas and friends. |  | shown | hook, tier 2, default | yes |
 | `flowlab` | Vector Fields | Patterns & Chaos > Chaos | SIM | Flow lines through vector fields. |  | shown | hook, tier 2, default | yes |
-| `julia-fractals` | Julia Fractals | Patterns & Chaos > Chaos | SIM | Julia and Mandelbrot sets, zoom and explore. | Ten Minute Physics #19 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `reaction-diffusion` | Reaction–Diffusion | Patterns & Chaos > Emergence | GPU | Gray-Scott patterns that grow and split. |  | shown | hook, tier 3, default | yes |
 | `lenia` | Lenia | Patterns & Chaos > Emergence | GPU | Continuous cellular life. |  | shown | hook, tier 3, default | yes |
 | `game-of-life` | Game of Life | Patterns & Chaos > Emergence | SIM | Conway’s Life on the GPU, with a pattern library. |  | shown | hook, tier 2, default | yes |
-| `ulam-spiral` | Ulam Spiral | Patterns & Chaos > Number Theory | GPU | Primes form lines in the Ulam spiral and 21 more layouts. |  | shown | hook, tier 3, default | yes |
-| `ramanujan-pi` | Ramanujan–Sato Series | Patterns & Chaos > Number Theory | MATH | Race Ramanujan-Sato series for pi, digit by digit. |  | shown | hook, tier 3, default | yes |
-| `hopf-fibration` | Hopf Fibration | Patterns & Chaos > Geometry & Topology | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
-| `dlaf` | Diffusion-Limited Aggregation | Patterns & Chaos > Fractal Growth | SIM | Grow diffusion-limited aggregation live after fogleman/dlaf, and colour the growth front with heatmaps. | dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
-| `dice` | Dice Lab | Patterns & Chaos > Probability | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
+| `julia-fractals` | Julia Fractals | Patterns & Chaos > Fractals | SIM | Julia and Mandelbrot sets, zoom and explore. | Ten Minute Physics #19 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `dlaf` | Diffusion-Limited Aggregation | Patterns & Chaos > Fractals | SIM | Grow diffusion-limited aggregation live after fogleman/dlaf, and colour the growth front with heatmaps. | dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `ulam-spiral` | Ulam Spiral | Mathematics > Numbers & Chance | GPU | Primes form lines in the Ulam spiral and 21 more layouts. |  | shown | hook, tier 3, default | yes |
+| `ramanujan-pi` | Ramanujan–Sato Series | Mathematics > Numbers & Chance | MATH | Race Ramanujan-Sato series for pi, digit by digit. |  | shown | hook, tier 3, default | yes |
+| `dice` | Dice Lab | Mathematics > Numbers & Chance | 3D | Physics dice from d4 to d20, tested for fairness. |  | shown | hook, tier 3, default | yes |
+| `hopf-fibration` | Hopf Fibration | Mathematics > Geometry & Tensors | GPU | The 3-sphere as linked circles, in 3D. |  | shown | hook, tier 4, default | yes |
+| `tensor-calculus` | Tensor Calculus | Mathematics > Geometry & Tensors | 3D | Tensor calculus in three linked views: the index equation, a 3D picture and its Penrose diagram, played step by step. |  | shown | hook, tier 4, default | no |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
@@ -251,73 +252,78 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `resonance-3d` | Resonance 3D | Sound & Vibration > Resonance | 3D | Resonance figures in 3D. |  | shown | hook, tier 2, default | yes |
 | `wave-membrane` | Standing Wave Membrane | Sound & Vibration > Resonance | SIM | Chladni modes of a vibrating drum. |  | shown | hook, tier 2, default | yes |
 | `chladni-plate` | Chladni Plate | Sound & Vibration > Resonance | NEW | Sand finds the nodal lines of guitar and violin tops. |  | shown | hook, tier 3, default | yes |
-| `stirling-engine` | Stirling Engine | Machines > Engines | 3D | A Stirling engine cut open, with a live P-V loop. |  | shown | hook, tier 3, default | yes |
-| `four-stroke-engine` | Four-Stroke Engine | Machines > Engines | 3D | An inline four, exploded: crank, valves, Otto cycle. |  | shown | hook, tier 3, default | yes |
-| `wankel-engine` | Wankel Rotary Engine | Machines > Engines | 3D | A Wankel rotor in its epitrochoid, three chambers live. |  | shown | hook, tier 3, default | yes |
-| `radial-engine` | Radial Engine | Machines > Engines | 3D | A radial aero engine cut away: master and link rods. |  | shown | hook, tier 3, default | yes |
-| `differential` | Differential | Machines > Gears & Transmissions | 3D | A rear axle opened up: open, clutch and Torsen units. |  | shown | hook, tier 3, default | yes |
-| `planetary-gearbox` | Planetary Gearbox | Machines > Gears & Transmissions | 3D | Hold the sun, carrier or ring; then a Simpson set. |  | shown | hook, tier 3, default | yes |
-| `manual-gearbox` | Manual Gearbox | Machines > Gears & Transmissions | 3D | A five-speed gearbox cut open: shift and watch the synchros lock each gear. |  | shown | hook, tier 3, default | yes |
-| `harmonic-drive` | Harmonic & Cycloidal Drives | Machines > Gears & Transmissions | 3D | The reducers inside robot joints: a flexing strain wave gear and a cycloidal drive. |  | shown | hook, tier 3, default | yes |
-| `gear-types` | Gear Types | Machines > Gears & Transmissions | 3D | Spur, helical, bevel, worm and rack gears in 3D. |  | shown | hook, tier 3, default | yes |
-| `cvt` | CVT | Machines > Gears & Transmissions | 3D | A push-belt CVT and a toroidal drive change ratio. |  | shown | hook, tier 3, default | yes |
-| `universal-joints` | Universal & CV Joints | Machines > Gears & Transmissions | 3D | Cardan joints, their ripple, and a Rzeppa CV joint. |  | shown | hook, tier 3, default | yes |
-| `ball-screw` | Ball Screw & Lead Screw | Machines > Gears & Transmissions | 3D | Lead screw against ball screw: travel, balls, efficiency. |  | shown | hook, tier 3, default | yes |
-| `geneva-cams` | Geneva Drive & Cams | Machines > Linkages & Cams | 3D | Turn steady rotation into steps: a Geneva drive and a disc cam in 3D. |  | shown | hook, tier 3, default | yes |
-| `linkages` | Linkages | Machines > Linkages & Cams | 3D | Bars and pins that draw curves, a true straight line, and a walking step. |  | shown | hook, tier 3, default | yes |
-| `spirograph` | Spirograph | Machines > Linkages & Cams | NEW | Toothed gears draw hypotrochoids and epitrochoids. |  | shown | hook, tier 2, default | yes |
-| `ratchets` | Ratchets & Freewheels | Machines > Linkages & Cams | 3D | Ratchet, sprag clutch and freehub: drive one way, slip the other. |  | shown | hook, tier 3, default | yes |
-| `sewing-machine` | Lockstitch Sewing Machine | Machines > Linkages & Cams | 3D | A lockstitch machine: needle, hook, bobbin and feed dog. |  | shown | hook, tier 3, default | yes |
-| `watch-movement` | Watch Movement | Machines > Timekeeping | 3D | A pocket watch that runs, then comes apart. |  | shown | hook, tier 3, default | yes |
-| `watch-randomizer` | Timepiece Randomizer | Machines > Timekeeping | 3D | Roll a pocket watch, wristwatch, wall clock or alarm clock. |  | shown | hook, tier 3, default | yes |
-| `pendulum-clock` | Pendulum Clock | Machines > Timekeeping | 3D | Three escapements on a pendulum clock, simulated. |  | shown | hook, tier 3, default | yes |
-| `antikythera` | Antikythera Mechanism | Machines > Timekeeping | 3D | The Antikythera gear train, cranked day by day. |  | shown | hook, tier 3, default | yes |
-| `pumps` | Positive-Displacement Pumps | Machines > Pumps | 3D | Gear, vane and Roots pumps move fluid pockets. |  | shown | hook, tier 3, default | yes |
-| `swashplate-pump` | Swashplate Piston Pump | Machines > Pumps | 3D | An axial piston pump on a tilted swashplate. |  | shown | hook, tier 3, default | yes |
-| `calculators` | Pascaline & Curta | Machines > Calculating & Cipher | 3D | The Pascaline and the Curta carry digit by digit. |  | shown | hook, tier 3, default | yes |
-| `curta` | Curta Calculator | Machines > Calculating & Cipher | 3D | The Curta calculator in 3D, part by part. |  | shown | hook, tier 3, default | yes |
-| `enigma-rotors` | Enigma Rotors | Machines > Calculating & Cipher | 3D | The Enigma rotor stack, from key to lamp. |  | shown | hook, tier 3, default | yes |
-| `pin-tumbler-lock` | Pin Tumbler Lock | Machines > Calculating & Cipher | 3D | Key in: each pin stack splits on the shear line. |  | shown | hook, tier 3, default | yes |
-| `cannonball-2d` | Cannonball 2D | Machines > Motion & Collisions | SIM | A ball under gravity in a box: physics in a few lines. | Ten Minute Physics #1 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `cannonball-3d` | Cannonball 3D | Machines > Motion & Collisions | 3D | The cannonball in 3D: balls bouncing in a box. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `cannonball-vr` | Cannonball VR | Machines > Motion & Collisions | VR | The 3D cannonball box in a VR headset. Needs WebXR. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3 | yes |
-| `billiard` | Billiard | Machines > Motion & Collisions | SIM | Many balls collide; set the restitution from elastic to dead. | Ten Minute Physics #3 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `pinball` | Pinball | Machines > Motion & Collisions | SIM | A playable pinball table: flippers, bumpers and borders. | Ten Minute Physics #4 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `spatial-hashing` | Spatial Hashing | Machines > Motion & Collisions | 3D | Thousands of balls collide, found fast by a spatial hash. | Ten Minute Physics #11 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `pendulum-short` | Pendulum in 100 Lines | Machines > Pendulums & Constraints | SIM | A chaotic pendulum, complete in about a hundred lines. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `triple-pendulum` | Triple Pendulum | Machines > Pendulums & Constraints | SIM | A chaotic multi-link pendulum with position based dynamics. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `bead-on-wire` | Bead on a Wire | Machines > Pendulums & Constraints | SIM | A bead held on a circular wire, against the exact solution. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `many-beads` | Many Beads | Machines > Pendulums & Constraints | SIM | Many beads collide on one circular wire. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `joints` | Joint Simulation | Machines > Pendulums & Constraints | 3D | Hinges, ball joints and a steering linkage with XPBD. | Ten Minute Physics #25 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `rigid-bodies` | Rigid Bodies | Machines > Pendulums & Constraints | 3D | Stacks, chains and collisions of rigid bodies in 3D. | Ten Minute Physics #22 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `soft-bodies` | Soft Bodies | Machines > Soft Bodies & Cloth | 3D | Squash and throw tetrahedral soft bunnies (XPBD). | Ten Minute Physics #10 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `soft-body-interaction` | Grab Interaction | Machines > Soft Bodies & Cloth | 3D | Pick up and throw a simulated body with the mouse. | Ten Minute Physics #8 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `soft-body-skinning` | Soft Body Skinning | Machines > Soft Bodies & Cloth | 3D | A detailed dragon skinned to a coarse soft body. | Ten Minute Physics #12 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `cloth` | Cloth | Machines > Soft Bodies & Cloth | 3D | Fast, stable XPBD cloth with bending. | Ten Minute Physics #14 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `cloth-self-collision` | Cloth Self-Collision | Machines > Soft Bodies & Cloth | 3D | Cloth that folds onto itself and does not pass through. | Ten Minute Physics #15 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `origami` | Origami Simulator | Machines > Folding | SIM | Draw a crease pattern and watch it fold. |  | directory only | hook, tier 3, default | no |
-| `mujoco-lab` | MuJoCo Lab | Machines > Physics Engines | NEW | The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth. |  | shown | hook, tier 4, default | yes |
-| `lose-the-modifier` | Lose the Modifier | Language > Writing | WORDS | Turn “very tired” into one strong word. |  | shown | hook, tier 4, default | yes |
-| `gravitational-imaging` | Gravitational Imaging | Research > Astrophysics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
-| `circular-rydberg` | Circular Rydberg Atoms | Research > Atomic Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
-| `alphafold` (pages/alphafold-explained) | How AlphaFold Works | Research > Machine Learning | ML | How AlphaFold turns a sequence into a structure. |  | shown | hook, tier 3, default | yes |
+| `gravitational-imaging` | Gravitational Imaging | Research > Physics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
+| `circular-rydberg` | Circular Rydberg Atoms | Research > Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
+| `alphafold` (pages/alphafold-explained) | How AlphaFold Works | Research > Biology & Medicine | ML | How AlphaFold turns a sequence into a structure. |  | shown | hook, tier 3, default | yes |
+| `enzyme-design` | De Novo Enzyme Design | Research > Biology & Medicine | NEW | Design an enzyme from scratch: hold the chemistry still and grow a protein around it. |  | shown | no | yes |
+| `mrna-vaccine` | The mRNA Vaccine | Research > Biology & Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |
+| `fly-duel` | Fly Brain Card Duel | Research > Biology & Medicine | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | hook, tier 4, default | yes |
 | `4d-codebench` | 4DCodeBench | Research > Machine Learning | NEW | Can coding agents rebuild a moving scene from video? Play the benchmark in your browser. |  | shown | no | yes |
-| `enzyme-design` | De Novo Enzyme Design | Research > Machine Learning | NEW | Design an enzyme from scratch: hold the chemistry still and grow a protein around it. |  | shown | no | yes |
 | `legged-rl` | Legged Robot Gym | Research > Machine Learning | NEW | Walking robot policies in MuJoCo, in your browser. |  | shown | hook, tier 4, default | yes |
-| `mrna-vaccine` | The mRNA Vaccine | Research > Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |
-| `fly-duel` | Fly Brain Card Duel | Research > Neuroscience | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | hook, tier 4, default | yes |
+
+### Machines
+
+| Key | Title | Constellation > group | Badge | Blurb | Credit | Home | Saver | Thumb |
+|---|---|---|---|---|---|---|---|---|
+| `stirling-engine` | Stirling Engine | Engines & Drivetrains > Engines | 3D | A Stirling engine cut open, with a live P-V loop. |  | shown | hook, tier 3, default | yes |
+| `four-stroke-engine` | Four-Stroke Engine | Engines & Drivetrains > Engines | 3D | An inline four, exploded: crank, valves, Otto cycle. |  | shown | hook, tier 3, default | yes |
+| `wankel-engine` | Wankel Rotary Engine | Engines & Drivetrains > Engines | 3D | A Wankel rotor in its epitrochoid, three chambers live. |  | shown | hook, tier 3, default | yes |
+| `radial-engine` | Radial Engine | Engines & Drivetrains > Engines | 3D | A radial aero engine cut away: master and link rods. |  | shown | hook, tier 3, default | yes |
+| `gear-types` | Gear Types | Engines & Drivetrains > Gears | 3D | Spur, helical, bevel, worm and rack gears in 3D. |  | shown | hook, tier 3, default | yes |
+| `planetary-gearbox` | Planetary Gearbox | Engines & Drivetrains > Gears | 3D | Hold the sun, carrier or ring; then a Simpson set. |  | shown | hook, tier 3, default | yes |
+| `harmonic-drive` | Harmonic & Cycloidal Drives | Engines & Drivetrains > Gears | 3D | The reducers inside robot joints: a flexing strain wave gear and a cycloidal drive. |  | shown | hook, tier 3, default | yes |
+| `differential` | Differential | Engines & Drivetrains > Gears | 3D | A rear axle opened up: open, clutch and Torsen units. |  | shown | hook, tier 3, default | yes |
+| `manual-gearbox` | Manual Gearbox | Engines & Drivetrains > Transmissions & Joints | 3D | A five-speed gearbox cut open: shift and watch the synchros lock each gear. |  | shown | hook, tier 3, default | yes |
+| `cvt` | CVT | Engines & Drivetrains > Transmissions & Joints | 3D | A push-belt CVT and a toroidal drive change ratio. |  | shown | hook, tier 3, default | yes |
+| `universal-joints` | Universal & CV Joints | Engines & Drivetrains > Transmissions & Joints | 3D | Cardan joints, their ripple, and a Rzeppa CV joint. |  | shown | hook, tier 3, default | yes |
+| `ball-screw` | Ball Screw & Lead Screw | Engines & Drivetrains > Transmissions & Joints | 3D | Lead screw against ball screw: travel, balls, efficiency. |  | shown | hook, tier 3, default | yes |
+| `pumps` | Positive-Displacement Pumps | Engines & Drivetrains > Pumps | 3D | Gear, vane and Roots pumps move fluid pockets. |  | shown | hook, tier 3, default | yes |
+| `swashplate-pump` | Swashplate Piston Pump | Engines & Drivetrains > Pumps | 3D | An axial piston pump on a tilted swashplate. |  | shown | hook, tier 3, default | yes |
+| `geneva-cams` | Geneva Drive & Cams | Linkages & Clockwork > Linkages & Cams | 3D | Turn steady rotation into steps: a Geneva drive and a disc cam in 3D. |  | shown | hook, tier 3, default | yes |
+| `linkages` | Linkages | Linkages & Clockwork > Linkages & Cams | 3D | Bars and pins that draw curves, a true straight line, and a walking step. |  | shown | hook, tier 3, default | yes |
+| `spirograph` | Spirograph | Linkages & Clockwork > Linkages & Cams | NEW | Toothed gears draw hypotrochoids and epitrochoids. |  | shown | hook, tier 2, default | yes |
+| `ratchets` | Ratchets & Freewheels | Linkages & Clockwork > Linkages & Cams | 3D | Ratchet, sprag clutch and freehub: drive one way, slip the other. |  | shown | hook, tier 3, default | yes |
+| `sewing-machine` | Lockstitch Sewing Machine | Linkages & Clockwork > Linkages & Cams | 3D | A lockstitch machine: needle, hook, bobbin and feed dog. |  | shown | hook, tier 3, default | yes |
+| `watch-movement` | Watch Movement | Linkages & Clockwork > Timekeeping | 3D | A pocket watch that runs, then comes apart. |  | shown | hook, tier 3, default | yes |
+| `watch-randomizer` | Timepiece Randomizer | Linkages & Clockwork > Timekeeping | 3D | Roll a pocket watch, wristwatch, wall clock or alarm clock. |  | shown | hook, tier 3, default | yes |
+| `pendulum-clock` | Pendulum Clock | Linkages & Clockwork > Timekeeping | 3D | Three escapements on a pendulum clock, simulated. |  | shown | hook, tier 3, default | yes |
+| `antikythera` | Antikythera Mechanism | Linkages & Clockwork > Timekeeping | 3D | The Antikythera gear train, cranked day by day. |  | shown | hook, tier 3, default | yes |
+| `calculators` | Pascaline & Curta | Linkages & Clockwork > Calculating & Cipher | 3D | The Pascaline and the Curta carry digit by digit. |  | shown | hook, tier 3, default | yes |
+| `curta` | Curta Calculator | Linkages & Clockwork > Calculating & Cipher | 3D | The Curta calculator in 3D, part by part. |  | shown | hook, tier 3, default | yes |
+| `enigma-rotors` | Enigma Rotors | Linkages & Clockwork > Calculating & Cipher | 3D | The Enigma rotor stack, from key to lamp. |  | shown | hook, tier 3, default | yes |
+| `pin-tumbler-lock` | Pin Tumbler Lock | Linkages & Clockwork > Calculating & Cipher | 3D | Key in: each pin stack splits on the shear line. |  | shown | hook, tier 3, default | yes |
+| `cannonball-2d` | Cannonball 2D | Dynamics > Motion & Collisions | SIM | A ball under gravity in a box: physics in a few lines. | Ten Minute Physics #1 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `cannonball-3d` | Cannonball 3D | Dynamics > Motion & Collisions | 3D | The cannonball in 3D: balls bouncing in a box. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `cannonball-vr` | Cannonball VR | Dynamics > Motion & Collisions | VR | The 3D cannonball box in a VR headset. Needs WebXR. | Ten Minute Physics #2 by Matthias Müller (MIT) | shown | hook, tier 3 | yes |
+| `billiard` | Billiard | Dynamics > Motion & Collisions | SIM | Many balls collide; set the restitution from elastic to dead. | Ten Minute Physics #3 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `pinball` | Pinball | Dynamics > Motion & Collisions | SIM | A playable pinball table: flippers, bumpers and borders. | Ten Minute Physics #4 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `spatial-hashing` | Spatial Hashing | Dynamics > Motion & Collisions | 3D | Thousands of balls collide, found fast by a spatial hash. | Ten Minute Physics #11 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `pendulum-short` | Pendulum in 100 Lines | Dynamics > Pendulums & Beads | SIM | A chaotic pendulum, complete in about a hundred lines. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `triple-pendulum` | Triple Pendulum | Dynamics > Pendulums & Beads | SIM | A chaotic multi-link pendulum with position based dynamics. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `bead-on-wire` | Bead on a Wire | Dynamics > Pendulums & Beads | SIM | A bead held on a circular wire, against the exact solution. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `many-beads` | Many Beads | Dynamics > Pendulums & Beads | SIM | Many beads collide on one circular wire. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `joints` | Joint Simulation | Dynamics > Rigid Bodies & Joints | 3D | Hinges, ball joints and a steering linkage with XPBD. | Ten Minute Physics #25 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `rigid-bodies` | Rigid Bodies | Dynamics > Rigid Bodies & Joints | 3D | Stacks, chains and collisions of rigid bodies in 3D. | Ten Minute Physics #22 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `mujoco-lab` | MuJoCo Lab | Dynamics > Rigid Bodies & Joints | NEW | The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth. |  | shown | hook, tier 4, default | yes |
+| `soft-bodies` | Soft Bodies | Soft Bodies & Cloth > Soft Bodies | 3D | Squash and throw tetrahedral soft bunnies (XPBD). | Ten Minute Physics #10 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `soft-body-interaction` | Grab Interaction | Soft Bodies & Cloth > Soft Bodies | 3D | Pick up and throw a simulated body with the mouse. | Ten Minute Physics #8 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `soft-body-skinning` | Soft Body Skinning | Soft Bodies & Cloth > Soft Bodies | 3D | A detailed dragon skinned to a coarse soft body. | Ten Minute Physics #12 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `cloth` | Cloth | Soft Bodies & Cloth > Cloth & Folding | 3D | Fast, stable XPBD cloth with bending. | Ten Minute Physics #14 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `cloth-self-collision` | Cloth Self-Collision | Soft Bodies & Cloth > Cloth & Folding | 3D | Cloth that folds onto itself and does not pass through. | Ten Minute Physics #15 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `origami` | Origami Simulator | Soft Bodies & Cloth > Cloth & Folding | SIM | Draw a crease pattern and watch it fold. |  | directory only | hook, tier 3, default | no |
 
 ### Graphics
 
 | Key | Title | Constellation > group | Badge | Blurb | Credit | Home | Saver | Thumb |
 |---|---|---|---|---|---|---|---|---|
-| `noise` (pages/noise-table) | Noise Table | Shader Tables > Patterns | WGSL | Perlin, simplex, Worley and more, live. |  | shown | hook, tier 2 | yes |
-| `volume-noise` | Volume Noise | Shader Tables > Patterns | WGSL | Tileable 3D Perlin-Worley noise for clouds, in WGSL. | TileableVolumeNoise by Sébastien Hillaire (MIT) | search only | hook, tier 3, default | yes |
-| `fields` (pages/field-table) | Field Table | Shader Tables > Patterns | COMPUTE | Compute-shader fields and flows. |  | shown | hook, tier 2, default | yes |
-| `sims` (pages/simulation-table) | Simulation Table | Shader Tables > Patterns | COMPUTE | GPU simulations side by side. |  | shown | hook, tier 3, default | yes |
-| `dot-field` (pages/dot-field-table) | Dot Field Table | Shader Tables > Patterns | WGSL | Halftone and dot-matrix fields. |  | shown | hook, tier 2 | yes |
-| `polar` (pages/polar-table) | Polar & Lattice Table | Shader Tables > Patterns | WGSL | Spirals, rosettes and lattices in WGSL. |  | shown | hook, tier 2 | yes |
-| `sdf2d` (pages/sdf2d-table) | SDF 2D Table | Shader Tables > Patterns | WGSL | Every 2D signed-distance shape. |  | shown | hook, tier 4, default | yes |
+| `noise` (pages/noise-table) | Noise Table | Shader Tables > Noise & Fields | WGSL | Perlin, simplex, Worley and more, live. |  | shown | hook, tier 2 | yes |
+| `volume-noise` | Volume Noise | Shader Tables > Noise & Fields | WGSL | Tileable 3D Perlin-Worley noise for clouds, in WGSL. | TileableVolumeNoise by Sébastien Hillaire (MIT) | search only | hook, tier 3, default | yes |
+| `fields` (pages/field-table) | Field Table | Shader Tables > Noise & Fields | COMPUTE | Compute-shader fields and flows. |  | shown | hook, tier 2, default | yes |
+| `sims` (pages/simulation-table) | Simulation Table | Shader Tables > Noise & Fields | COMPUTE | GPU simulations side by side. |  | shown | hook, tier 3, default | yes |
+| `dot-field` (pages/dot-field-table) | Dot Field Table | Shader Tables > Patterns & Fractals | WGSL | Halftone and dot-matrix fields. |  | shown | hook, tier 2 | yes |
+| `polar` (pages/polar-table) | Polar & Lattice Table | Shader Tables > Patterns & Fractals | WGSL | Spirals, rosettes and lattices in WGSL. |  | shown | hook, tier 2 | yes |
+| `sdf2d` (pages/sdf2d-table) | SDF 2D Table | Shader Tables > Patterns & Fractals | WGSL | Every 2D signed-distance shape. |  | shown | hook, tier 4, default | yes |
+| `fractal-flames` | Fractal Flames | Shader Tables > Patterns & Fractals | WGSL | flam3 fractal flames on the GPU: mutate and morph. | flam3 by Scott Draves (GPL-3.0) | search only | hook, tier 3, default | yes |
 | `color` (pages/color-table) | Color Table | Shader Tables > Image | WGSL | Tone curves and palettes in WGSL. |  | shown | no | yes |
 | `postfx` (pages/postfx-table) | Post-Process | Shader Tables > Image | WGSL | Bloom, grain and grading passes. |  | shown | no | yes |
 | `sampling` (pages/sampling-table) | Sampling Table | Shader Tables > Image | WGSL | Sampling patterns, side by side. |  | shown | hook, tier 2 | yes |
@@ -325,7 +331,6 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `sdf-solids` (pages/sdf-solids-table) | SDF Solids Table | Shader Tables > Surfaces | WGSL | 78 signed-distance solids, glass to gold. |  | shown | hook, tier 4, default | yes |
 | `liquid-metal` (pages/liquid-metal-table) | Liquid Metal Table | Shader Tables > Surfaces | WGSL | Chrome blobs that melt and merge. |  | shown | hook, tier 2, default | yes |
 | `refraction-table` | Refraction Table | Shader Tables > Surfaces | WGSL | Glass panels that bend, split and frost the light. | optics after quick-liquid (MIT) | search only | no | yes |
-| `fractal-flames` | Fractal Flames | Shader Tables > Fractals | WGSL | flam3 fractal flames on the GPU: mutate and morph. | flam3 by Scott Draves (GPL-3.0) | search only | hook, tier 3, default | yes |
 | `explosion` | Explosion | Game Effects > Weapons & Engines |  | The game’s explosion effects. |  | shown | hook, tier 2, default | yes |
 | `flare` | Engine Propulsion Effects | Game Effects > Weapons & Engines |  | Engine plumes and thruster flares. |  | shown | hook, tier 2, default | yes |
 | `beam` (pages/beam-table) | Beam & Decal Table | Game Effects > Weapons & Engines | WGSL | Lasers, beams and decals. |  | shown | hook, tier 3, default | yes |
@@ -348,14 +353,14 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `orbs` (pages/presence-orbs) | Presence Orbs | Rendering > Volumes | WGSL | Soft volumetric presence orbs. |  | shown | hook, tier 3, default | yes |
 | `thinking-orbs` | Thinking Orbs | Rendering > Volumes | WGSL | Dot orbs that spin, wave and morph. | thinking-orbs by RareFormLabs (MIT) | search only | no | yes |
 | `voxel` (pages/voxel-flythrough) | Voxel Flythrough | Rendering > Volumes | GPU | Fly through an endless voxel world. |  | shown | hook, tier 2, default | yes |
-| `markov-junior` | MarkovJunior | Rendering > Generative | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
-| `shan-shui` | Shan Shui | Rendering > Generative | SVG | An endless ink landscape scroll, drawn from a seed. | shan-shui-inf by Lingdong Huang (MIT) | search only | no | yes |
-| `fishdraw` | Fishdraw | Rendering > Generative | SVG | Pen-line fish, one specimen or a full plate. | fishdraw by Lingdong Huang (MIT) | search only | hook, tier 3, default | yes |
-| `mushrooms` | Mushroom Draw | Rendering > Generative | SVG | Procedural mushrooms as pen-plotter lines. |  | shown | hook, tier 3, default | yes |
-| `nonflowers` | Nonflowers | Rendering > Generative | CANVAS | Gongbi paintings of flowers that do not exist. |  | shown | hook, tier 3, default | yes |
-| `context-free` | Context Free | Rendering > Generative | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | yes |
-| `holocloth` | Holocloth | Rendering > Generative | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | yes |
-| `line-art` | Line Art | Rendering > Generative | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | yes |
+| `shan-shui` | Shan Shui | Generative Art > Pen & Ink | SVG | An endless ink landscape scroll, drawn from a seed. | shan-shui-inf by Lingdong Huang (MIT) | search only | no | yes |
+| `fishdraw` | Fishdraw | Generative Art > Pen & Ink | SVG | Pen-line fish, one specimen or a full plate. | fishdraw by Lingdong Huang (MIT) | search only | hook, tier 3, default | yes |
+| `mushrooms` | Mushroom Draw | Generative Art > Pen & Ink | SVG | Procedural mushrooms as pen-plotter lines. |  | shown | hook, tier 3, default | yes |
+| `nonflowers` | Nonflowers | Generative Art > Pen & Ink | CANVAS | Gongbi paintings of flowers that do not exist. |  | shown | hook, tier 3, default | yes |
+| `line-art` | Line Art | Generative Art > Pen & Ink | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | yes |
+| `markov-junior` | MarkovJunior | Generative Art > Rules & Grammars | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
+| `context-free` | Context Free | Generative Art > Rules & Grammars | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | yes |
+| `holocloth` | Holocloth | Generative Art > Rules & Grammars | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | yes |
 
 ### Finance
 
@@ -381,9 +386,10 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `matlab` (pages/material-studio) | PBR Material Studio | Studio Tools > 3D & Materials | TOOL | Author PBR materials with a live sphere. |  | shown | hook, tier 3, default | yes |
 | `sdf-lab` | SDF Modeller | Studio Tools > 3D & Materials | TOOL | Model with distance fields, Forge style. |  | shown | generic, tier 4 | yes |
 | `bench` (pages/composition-bench) | Composition Bench | Studio Tools > 3D & Materials | NODES | Wire nodes from every table together. |  | shown | generic, tier 4 | yes |
-| `pascal-editor` | Pascal Editor | Studio Tools > Code & Science | TOOL | Pascal, the open-source 3D building editor. |  | shown | no | no |
-| `sci-tools` | Science Toolkit | Studio Tools > Code & Science | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | yes |
-| `solar` | Solar Transit Study | Studio Tools > Code & Science | TOOL | Sun paths for any place and date. |  | shown | generic, tier 5 | yes |
+| `lose-the-modifier` | Lose the Modifier | Studio Tools > Writing & Code | WORDS | Turn “very tired” into one strong word. |  | shown | hook, tier 4, default | yes |
+| `pascal-editor` | Pascal Editor | Studio Tools > Writing & Code | TOOL | Pascal, the open-source 3D building editor. |  | shown | no | no |
+| `sci-tools` | Science Toolkit | Studio Tools > Science | TOOL | Units, constants, statistics, fits and chemistry in one offline page. |  | shown | no | yes |
+| `solar` | Solar Transit Study | Studio Tools > Science | TOOL | Sun paths for any place and date. |  | shown | generic, tier 5 | yes |
 
 ### Hidden pages
 

@@ -182,15 +182,20 @@
     <a class="chip" data-sector="chemistry" href="#chart" data-goto="chemistry">Chemistry</a>
     <a class="chip" data-sector="life" href="#chart" data-goto="life">Life</a>
     <a class="chip" data-sector="fluids" href="#chart" data-goto="fluids">Fluids</a>
+    <a class="chip" data-sector="earth" href="#chart" data-goto="earth">Earth</a>
     <a class="chip" data-sector="fields" href="#chart" data-goto="fields">Fields</a>
     <a class="chip" data-sector="patterns" href="#chart" data-goto="patterns">Patterns</a>
+    <a class="chip" data-sector="maths" href="#chart" data-goto="maths">Maths</a>
     <a class="chip" data-sector="sound" href="#chart" data-goto="sound">Sound</a>
-    <a class="chip" data-sector="machines" href="#chart" data-goto="machines">Machines</a>
-    <a class="chip" data-sector="language" href="#chart" data-goto="language">Language</a>
     <a class="chip" data-sector="papers" href="#chart" data-goto="papers">Research</a>
+    <a class="chip" data-sector="machines" href="#chart" data-goto="machines">Engines</a>
+    <a class="chip" data-sector="clockwork" href="#chart" data-goto="clockwork">Clockwork</a>
+    <a class="chip" data-sector="dynamics" href="#chart" data-goto="dynamics">Dynamics</a>
+    <a class="chip" data-sector="softbody" href="#chart" data-goto="softbody">Soft Bodies</a>
     <a class="chip" data-sector="shaders" href="#chart" data-goto="shaders">Shaders</a>
     <a class="chip" data-sector="effects" href="#chart" data-goto="effects">Effects</a>
     <a class="chip" data-sector="rendering" href="#chart" data-goto="rendering">Render</a>
+    <a class="chip" data-sector="generative" href="#chart" data-goto="generative">Generative</a>
     <a class="chip" data-sector="finance" href="#chart" data-goto="finance">Finance</a>
     <a class="chip" data-sector="craft" href="#chart" data-goto="craft">Craft</a>
     <a class="chip" data-sector="tools" href="#chart" data-goto="tools">Tools</a>
@@ -478,14 +483,17 @@
         <details class="dir-group" data-sector="space" open>
           <summary><span class="dir-dot"></span><span class="dir-name">Space &amp; Gravity</span><span class="dir-count">11</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Planets &amp; Orbits</h4>
+            <h4 class="dir-h">Orbits</h4>
             <ul>
               <li><a href="/stella-nova/#hohmann" target="_top" data-key="hohmann">Hohmann Transfer<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#leo" target="_top" data-key="leo">LEO Catalog<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#gravity" target="_top" data-key="gravity">Gravity Sim<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#gravity-lab" target="_top" data-key="gravity-lab">Gravity Lab<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Planets</h4>
+            <ul>
               <li><a href="/stella-nova/#forge" target="_top" data-key="forge">Planet Forge<span class="badge">GPU</span></a></li>
               <li><a href="/stella-nova/#roche-limit" target="_top" data-key="roche-limit">Roche Limit<span class="badge">SIM</span></a></li>
-              <li><a href="/stella-nova/#gravity-lab" target="_top" data-key="gravity-lab">Gravity Lab<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#planet-collision" target="_top" data-key="planet-collision">Planet Collision<span class="badge">NEW</span></a></li>
             </ul>
             <h4 class="dir-h">Deep Space</h4>
@@ -535,24 +543,18 @@
           </div>
         </details>
         <details class="dir-group" data-sector="life" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Life Sciences</span><span class="dir-count">15</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Life Sciences</span><span class="dir-count">13</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Proteins</h4>
+            <h4 class="dir-h">Molecules of Life</h4>
             <ul>
               <li><a href="/stella-nova/#protein-viewer" target="_top" data-key="protein-viewer">Protein Structure<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#protein-folding" target="_top" data-key="protein-folding">Protein Folding<span class="badge">SIM</span></a></li>
-            </ul>
-            <h4 class="dir-h">Viruses &amp; Prions</h4>
-            <ul>
               <li><a href="/stella-nova/#virus-atlas" target="_top" data-key="virus-atlas">Virus Atlas<span class="badge">3D</span></a></li>
             </ul>
-            <h4 class="dir-h">Anatomy</h4>
+            <h4 class="dir-h">Anatomy &amp; Imaging</h4>
             <ul>
               <li><a href="/stella-nova/#human-skull" target="_top" data-key="human-skull">Human Skull<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#human-skeleton" target="_top" data-key="human-skeleton">Human Skeleton<span class="badge">3D</span></a></li>
-            </ul>
-            <h4 class="dir-h">Medical Imaging</h4>
-            <ul>
               <li><a href="/stella-nova/#ct-explained" target="_top" data-key="ct-explained">How CT Works<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#ct-lab" target="_top" data-key="ct-lab">CT Lab<span class="badge">LAB</span></a></li>
               <li><a href="/stella-nova/#ct-lab-3d" target="_top" data-key="ct-lab-3d">CT Lab 3D<span class="badge">NEW</span></a></li>
@@ -562,43 +564,29 @@
               <li><a href="/stella-nova/#neuron-lab" target="_top" data-key="neuron-lab">Neuron Lab<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#neuron-network" target="_top" data-key="neuron-network">Neural Network<span class="badge">SIM</span></a></li>
             </ul>
-            <h4 class="dir-h">Deep Time</h4>
-            <ul>
-              <li><a href="/stella-nova/#ancient-earth" target="_top" data-key="ancient-earth">Ancient Earth<span class="badge">3D</span></a></li>
-            </ul>
-            <h4 class="dir-h">Epidemiology</h4>
-            <ul>
-              <li><a href="/stella-nova/#outbreak" target="_top" data-key="outbreak">Outbreak<span class="badge">SIM</span></a></li>
-            </ul>
-            <h4 class="dir-h">Growth</h4>
+            <h4 class="dir-h">Growth &amp; Spread</h4>
             <ul>
               <li><a href="/stella-nova/#plant-growth" target="_top" data-key="plant-growth">Plant Growth<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#coral-reef" target="_top" data-key="coral-reef">Coral Reef Growth<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#dla-terrain" target="_top" data-key="dla-terrain">DLA Terrain<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#outbreak" target="_top" data-key="outbreak">Outbreak<span class="badge">SIM</span></a></li>
             </ul>
           </div>
         </details>
         <details class="dir-group" data-sector="fluids" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Fluids</span><span class="dir-count">20</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Fluids</span><span class="dir-count">14</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Flow</h4>
+            <h4 class="dir-h">Fluid Solvers</h4>
             <ul>
               <li><a href="/stella-nova/#fluidlab" target="_top" data-key="fluidlab">Stable Fluids<span class="badge">GPU</span></a></li>
-              <li><a href="/stella-nova/#wind-tunnel" target="_top" data-key="wind-tunnel">Wind Tunnel<span class="badge">CFD</span></a></li>
               <li><a href="/stella-nova/#euler-fluid" target="_top" data-key="euler-fluid">Euler Fluid<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#flip-fluid" target="_top" data-key="flip-fluid">FLIP Water<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#pbf-boundary" target="_top" data-key="pbf-boundary">PBF Boundaries<span class="badge">SIM</span></a></li>
+            </ul>
+            <h4 class="dir-h">Air, Heat &amp; Fire</h4>
+            <ul>
+              <li><a href="/stella-nova/#wind-tunnel" target="_top" data-key="wind-tunnel">Wind Tunnel<span class="badge">CFD</span></a></li>
               <li><a href="/stella-nova/#fire-simulation" target="_top" data-key="fire-simulation">Fire Simulation<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#thermal-convection" target="_top" data-key="thermal-convection">Thermal Convection<span class="badge">SIM</span></a></li>
-            </ul>
-            <h4 class="dir-h">Earth &amp; Ocean</h4>
-            <ul>
-              <li><a href="/stella-nova/#tidal-currents" target="_top" data-key="tidal-currents">Tidal Currents<span class="badge">DATA</span></a></li>
-              <li><a href="/stella-nova/#city-atlas" target="_top" data-key="city-atlas">City Atlas<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#map-generator" target="_top" data-key="map-generator">City Generator<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#storm-globe" target="_top" data-key="storm-globe">Storm Globe<span class="badge">DATA</span></a></li>
-              <li><a href="/stella-nova/#weather-map" target="_top" data-key="weather-map">Weather Map<span class="badge">DATA</span></a></li>
-              <li><a href="/stella-nova/#map-projections" target="_top" data-key="map-projections">Map Projections<span class="badge">MATH</span></a></li>
             </ul>
             <h4 class="dir-h">Navier–Stokes</h4>
             <ul>
@@ -615,6 +603,28 @@
             </ul>
           </div>
         </details>
+        <details class="dir-group" data-sector="earth" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Earth &amp; Weather</span><span class="dir-count">8</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Ocean &amp; Weather</h4>
+            <ul>
+              <li><a href="/stella-nova/#tidal-currents" target="_top" data-key="tidal-currents">Tidal Currents<span class="badge">DATA</span></a></li>
+              <li><a href="/stella-nova/#storm-globe" target="_top" data-key="storm-globe">Storm Globe<span class="badge">DATA</span></a></li>
+              <li><a href="/stella-nova/#weather-map" target="_top" data-key="weather-map">Weather Map<span class="badge">DATA</span></a></li>
+            </ul>
+            <h4 class="dir-h">Maps &amp; Cities</h4>
+            <ul>
+              <li><a href="/stella-nova/#city-atlas" target="_top" data-key="city-atlas">City Atlas<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#map-generator" target="_top" data-key="map-generator">City Generator<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#map-projections" target="_top" data-key="map-projections">Map Projections<span class="badge">MATH</span></a></li>
+            </ul>
+            <h4 class="dir-h">Land &amp; Deep Time</h4>
+            <ul>
+              <li><a href="/stella-nova/#dla-terrain" target="_top" data-key="dla-terrain">DLA Terrain<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#ancient-earth" target="_top" data-key="ancient-earth">Ancient Earth<span class="badge">3D</span></a></li>
+            </ul>
+          </div>
+        </details>
         <details class="dir-group" data-sector="fields" open>
           <summary><span class="dir-dot"></span><span class="dir-name">Light &amp; Fields</span><span class="dir-count">13</span></summary>
           <div class="dir-body">
@@ -624,13 +634,13 @@
               <li><a href="/stella-nova/#biot-savart" target="_top" data-key="biot-savart">Biot–Savart Law<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#maxwell" target="_top" data-key="maxwell">Maxwell's Equations<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#twenty-to-four" target="_top" data-key="twenty-to-four">Twenty to Four<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Circuits &amp; Radio</h4>
+            <ul>
+              <li><a href="/stella-nova/#breadboard-lab" target="_top" data-key="breadboard-lab">Breadboard Lab<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#smith-chart" target="_top" data-key="smith-chart">Smith Chart<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#antenna-fields" target="_top" data-key="antenna-fields">Antenna Fields<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#sstv" target="_top" data-key="sstv">Slow-Scan Television<span class="badge">NEW</span></a></li>
-            </ul>
-            <h4 class="dir-h">Electronics</h4>
-            <ul>
-              <li><a href="/stella-nova/#breadboard-lab" target="_top" data-key="breadboard-lab">Breadboard Lab<span class="badge">NEW</span></a></li>
             </ul>
             <h4 class="dir-h">Optics</h4>
             <ul>
@@ -643,13 +653,12 @@
           </div>
         </details>
         <details class="dir-group" data-sector="patterns" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Patterns &amp; Chaos</span><span class="dir-count">11</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Patterns &amp; Chaos</span><span class="dir-count">7</span></summary>
           <div class="dir-body">
             <h4 class="dir-h">Chaos</h4>
             <ul>
               <li><a href="/stella-nova/#attractorlab" target="_top" data-key="attractorlab">Strange Attractors<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#flowlab" target="_top" data-key="flowlab">Vector Fields<span class="badge">SIM</span></a></li>
-              <li><a href="/stella-nova/#julia-fractals" target="_top" data-key="julia-fractals">Julia Fractals<span class="badge">SIM</span></a></li>
             </ul>
             <h4 class="dir-h">Emergence</h4>
             <ul>
@@ -657,22 +666,26 @@
               <li><a href="/stella-nova/#lenia" target="_top" data-key="lenia">Lenia<span class="badge">GPU</span></a></li>
               <li><a href="/stella-nova/#game-of-life" target="_top" data-key="game-of-life">Game of Life<span class="badge">SIM</span></a></li>
             </ul>
-            <h4 class="dir-h">Number Theory</h4>
+            <h4 class="dir-h">Fractals</h4>
+            <ul>
+              <li><a href="/stella-nova/#julia-fractals" target="_top" data-key="julia-fractals">Julia Fractals<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#dlaf" target="_top" data-key="dlaf">Diffusion-Limited Aggregation<span class="badge">SIM</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="maths" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Mathematics</span><span class="dir-count">5</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Numbers &amp; Chance</h4>
             <ul>
               <li><a href="/stella-nova/#ulam-spiral" target="_top" data-key="ulam-spiral">Ulam Spiral<span class="badge">GPU</span></a></li>
               <li><a href="/stella-nova/#ramanujan-pi" target="_top" data-key="ramanujan-pi">Ramanujan–Sato Series<span class="badge">MATH</span></a></li>
+              <li><a href="/stella-nova/#dice" target="_top" data-key="dice">Dice Lab<span class="badge">3D</span></a></li>
             </ul>
-            <h4 class="dir-h">Geometry &amp; Topology</h4>
+            <h4 class="dir-h">Geometry &amp; Tensors</h4>
             <ul>
               <li><a href="/stella-nova/#hopf-fibration" target="_top" data-key="hopf-fibration">Hopf Fibration<span class="badge">GPU</span></a></li>
-            </ul>
-            <h4 class="dir-h">Fractal Growth</h4>
-            <ul>
-              <li><a href="/stella-nova/#dlaf" target="_top" data-key="dlaf">Diffusion-Limited Aggregation<span class="badge">SIM</span></a></li>
-            </ul>
-            <h4 class="dir-h">Probability</h4>
-            <ul>
-              <li><a href="/stella-nova/#dice" target="_top" data-key="dice">Dice Lab<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#tensor-calculus" target="_top" data-key="tensor-calculus">Tensor Calculus<span class="badge">3D</span></a></li>
             </ul>
           </div>
         </details>
@@ -697,8 +710,33 @@
             </ul>
           </div>
         </details>
+        <details class="dir-group" data-sector="papers" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Research</span><span class="dir-count">8</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Physics</h4>
+            <ul>
+              <li><a href="/stella-nova/#gravitational-imaging" target="_top" data-key="gravitational-imaging">Gravitational Imaging<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#circular-rydberg" target="_top" data-key="circular-rydberg">Circular Rydberg Atoms<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Biology &amp; Medicine</h4>
+            <ul>
+              <li><a href="/stella-nova/#alphafold" target="_top" data-key="alphafold">How AlphaFold Works<span class="badge">ML</span></a></li>
+              <li><a href="/stella-nova/#enzyme-design" target="_top" data-key="enzyme-design">De Novo Enzyme Design<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#mrna-vaccine" target="_top" data-key="mrna-vaccine">The mRNA Vaccine<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#fly-duel" target="_top" data-key="fly-duel">Fly Brain Card Duel<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Machine Learning</h4>
+            <ul>
+              <li><a href="/stella-nova/#4d-codebench" target="_top" data-key="4d-codebench">4DCodeBench<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#legged-rl" target="_top" data-key="legged-rl">Legged Robot Gym<span class="badge">NEW</span></a></li>
+            </ul>
+          </div>
+        </details>
+      </div>
+      <div class="dir-col" data-region="engineering">
+        <p class="dir-region">Machines</p>
         <details class="dir-group" data-sector="machines" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Machines</span><span class="dir-count">46</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Engines &amp; Drivetrains</span><span class="dir-count">14</span></summary>
           <div class="dir-body">
             <h4 class="dir-h">Engines</h4>
             <ul>
@@ -707,17 +745,30 @@
               <li><a href="/stella-nova/#wankel-engine" target="_top" data-key="wankel-engine">Wankel Rotary Engine<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#radial-engine" target="_top" data-key="radial-engine">Radial Engine<span class="badge">3D</span></a></li>
             </ul>
-            <h4 class="dir-h">Gears &amp; Transmissions</h4>
+            <h4 class="dir-h">Gears</h4>
             <ul>
-              <li><a href="/stella-nova/#differential" target="_top" data-key="differential">Differential<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#planetary-gearbox" target="_top" data-key="planetary-gearbox">Planetary Gearbox<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#manual-gearbox" target="_top" data-key="manual-gearbox">Manual Gearbox<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#harmonic-drive" target="_top" data-key="harmonic-drive">Harmonic &amp; Cycloidal Drives<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#gear-types" target="_top" data-key="gear-types">Gear Types<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#planetary-gearbox" target="_top" data-key="planetary-gearbox">Planetary Gearbox<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#harmonic-drive" target="_top" data-key="harmonic-drive">Harmonic &amp; Cycloidal Drives<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#differential" target="_top" data-key="differential">Differential<span class="badge">3D</span></a></li>
+            </ul>
+            <h4 class="dir-h">Transmissions &amp; Joints</h4>
+            <ul>
+              <li><a href="/stella-nova/#manual-gearbox" target="_top" data-key="manual-gearbox">Manual Gearbox<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#cvt" target="_top" data-key="cvt">CVT<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#universal-joints" target="_top" data-key="universal-joints">Universal &amp; CV Joints<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#ball-screw" target="_top" data-key="ball-screw">Ball Screw &amp; Lead Screw<span class="badge">3D</span></a></li>
             </ul>
+            <h4 class="dir-h">Pumps</h4>
+            <ul>
+              <li><a href="/stella-nova/#pumps" target="_top" data-key="pumps">Positive-Displacement Pumps<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#swashplate-pump" target="_top" data-key="swashplate-pump">Swashplate Piston Pump<span class="badge">3D</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="clockwork" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Linkages &amp; Clockwork</span><span class="dir-count">13</span></summary>
+          <div class="dir-body">
             <h4 class="dir-h">Linkages &amp; Cams</h4>
             <ul>
               <li><a href="/stella-nova/#geneva-cams" target="_top" data-key="geneva-cams">Geneva Drive &amp; Cams<span class="badge">3D</span></a></li>
@@ -733,11 +784,6 @@
               <li><a href="/stella-nova/#pendulum-clock" target="_top" data-key="pendulum-clock">Pendulum Clock<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#antikythera" target="_top" data-key="antikythera">Antikythera Mechanism<span class="badge">3D</span></a></li>
             </ul>
-            <h4 class="dir-h">Pumps</h4>
-            <ul>
-              <li><a href="/stella-nova/#pumps" target="_top" data-key="pumps">Positive-Displacement Pumps<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#swashplate-pump" target="_top" data-key="swashplate-pump">Swashplate Piston Pump<span class="badge">3D</span></a></li>
-            </ul>
             <h4 class="dir-h">Calculating &amp; Cipher</h4>
             <ul>
               <li><a href="/stella-nova/#calculators" target="_top" data-key="calculators">Pascaline &amp; Curta<span class="badge">3D</span></a></li>
@@ -745,6 +791,11 @@
               <li><a href="/stella-nova/#enigma-rotors" target="_top" data-key="enigma-rotors">Enigma Rotors<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#pin-tumbler-lock" target="_top" data-key="pin-tumbler-lock">Pin Tumbler Lock<span class="badge">3D</span></a></li>
             </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="dynamics" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Dynamics</span><span class="dir-count">13</span></summary>
+          <div class="dir-body">
             <h4 class="dir-h">Motion &amp; Collisions</h4>
             <ul>
               <li><a href="/stella-nova/#cannonball-2d" target="_top" data-key="cannonball-2d">Cannonball 2D<span class="badge">SIM</span></a></li>
@@ -754,67 +805,35 @@
               <li><a href="/stella-nova/#pinball" target="_top" data-key="pinball">Pinball<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#spatial-hashing" target="_top" data-key="spatial-hashing">Spatial Hashing<span class="badge">3D</span></a></li>
             </ul>
-            <h4 class="dir-h">Pendulums &amp; Constraints</h4>
+            <h4 class="dir-h">Pendulums &amp; Beads</h4>
             <ul>
               <li><a href="/stella-nova/#pendulum-short" target="_top" data-key="pendulum-short">Pendulum in 100 Lines<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#triple-pendulum" target="_top" data-key="triple-pendulum">Triple Pendulum<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#bead-on-wire" target="_top" data-key="bead-on-wire">Bead on a Wire<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#many-beads" target="_top" data-key="many-beads">Many Beads<span class="badge">SIM</span></a></li>
+            </ul>
+            <h4 class="dir-h">Rigid Bodies &amp; Joints</h4>
+            <ul>
               <li><a href="/stella-nova/#joints" target="_top" data-key="joints">Joint Simulation<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#rigid-bodies" target="_top" data-key="rigid-bodies">Rigid Bodies<span class="badge">3D</span></a></li>
-            </ul>
-            <h4 class="dir-h">Soft Bodies &amp; Cloth</h4>
-            <ul>
-              <li><a href="/stella-nova/#soft-bodies" target="_top" data-key="soft-bodies">Soft Bodies<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#soft-body-interaction" target="_top" data-key="soft-body-interaction">Grab Interaction<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#soft-body-skinning" target="_top" data-key="soft-body-skinning">Soft Body Skinning<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#cloth" target="_top" data-key="cloth">Cloth<span class="badge">3D</span></a></li>
-              <li><a href="/stella-nova/#cloth-self-collision" target="_top" data-key="cloth-self-collision">Cloth Self-Collision<span class="badge">3D</span></a></li>
-            </ul>
-            <h4 class="dir-h">Folding</h4>
-            <ul>
-              <li><a href="/stella-nova/#origami" target="_top" data-key="origami">Origami Simulator<span class="badge">SIM</span></a></li>
-            </ul>
-            <h4 class="dir-h">Physics Engines</h4>
-            <ul>
               <li><a href="/stella-nova/#mujoco-lab" target="_top" data-key="mujoco-lab">MuJoCo Lab<span class="badge">NEW</span></a></li>
             </ul>
           </div>
         </details>
-        <details class="dir-group" data-sector="language" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Language</span><span class="dir-count">1</span></summary>
+        <details class="dir-group" data-sector="softbody" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Soft Bodies &amp; Cloth</span><span class="dir-count">6</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Writing</h4>
+            <h4 class="dir-h">Soft Bodies</h4>
             <ul>
-              <li><a href="/stella-nova/#lose-the-modifier" target="_top" data-key="lose-the-modifier">Lose the Modifier<span class="badge">WORDS</span></a></li>
+              <li><a href="/stella-nova/#soft-bodies" target="_top" data-key="soft-bodies">Soft Bodies<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#soft-body-interaction" target="_top" data-key="soft-body-interaction">Grab Interaction<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#soft-body-skinning" target="_top" data-key="soft-body-skinning">Soft Body Skinning<span class="badge">3D</span></a></li>
             </ul>
-          </div>
-        </details>
-        <details class="dir-group" data-sector="papers" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Research</span><span class="dir-count">8</span></summary>
-          <div class="dir-body">
-            <h4 class="dir-h">Astrophysics</h4>
+            <h4 class="dir-h">Cloth &amp; Folding</h4>
             <ul>
-              <li><a href="/stella-nova/#gravitational-imaging" target="_top" data-key="gravitational-imaging">Gravitational Imaging<span class="badge">NEW</span></a></li>
-            </ul>
-            <h4 class="dir-h">Atomic Physics</h4>
-            <ul>
-              <li><a href="/stella-nova/#circular-rydberg" target="_top" data-key="circular-rydberg">Circular Rydberg Atoms<span class="badge">NEW</span></a></li>
-            </ul>
-            <h4 class="dir-h">Machine Learning</h4>
-            <ul>
-              <li><a href="/stella-nova/#alphafold" target="_top" data-key="alphafold">How AlphaFold Works<span class="badge">ML</span></a></li>
-              <li><a href="/stella-nova/#4d-codebench" target="_top" data-key="4d-codebench">4DCodeBench<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#enzyme-design" target="_top" data-key="enzyme-design">De Novo Enzyme Design<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#legged-rl" target="_top" data-key="legged-rl">Legged Robot Gym<span class="badge">NEW</span></a></li>
-            </ul>
-            <h4 class="dir-h">Medicine</h4>
-            <ul>
-              <li><a href="/stella-nova/#mrna-vaccine" target="_top" data-key="mrna-vaccine">The mRNA Vaccine<span class="badge">NEW</span></a></li>
-            </ul>
-            <h4 class="dir-h">Neuroscience</h4>
-            <ul>
-              <li><a href="/stella-nova/#fly-duel" target="_top" data-key="fly-duel">Fly Brain Card Duel<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#cloth" target="_top" data-key="cloth">Cloth<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#cloth-self-collision" target="_top" data-key="cloth-self-collision">Cloth Self-Collision<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#origami" target="_top" data-key="origami">Origami Simulator<span class="badge">SIM</span></a></li>
             </ul>
           </div>
         </details>
@@ -824,11 +843,14 @@
         <details class="dir-group" data-sector="shaders" open>
           <summary><span class="dir-dot"></span><span class="dir-name">Shader Tables</span><span class="dir-count">12</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Patterns</h4>
+            <h4 class="dir-h">Noise &amp; Fields</h4>
             <ul>
               <li><a href="/stella-nova/#noise" target="_top" data-key="noise">Noise Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#fields" target="_top" data-key="fields">Field Table<span class="badge">COMPUTE</span></a></li>
               <li><a href="/stella-nova/#sims" target="_top" data-key="sims">Simulation Table<span class="badge">COMPUTE</span></a></li>
+            </ul>
+            <h4 class="dir-h">Patterns &amp; Fractals</h4>
+            <ul>
               <li><a href="/stella-nova/#dot-field" target="_top" data-key="dot-field">Dot Field Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#polar" target="_top" data-key="polar">Polar &amp; Lattice Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#sdf2d" target="_top" data-key="sdf2d">SDF 2D Table<span class="badge">WGSL</span></a></li>
@@ -871,7 +893,7 @@
           </div>
         </details>
         <details class="dir-group" data-sector="rendering" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Rendering</span><span class="dir-count">12</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Rendering</span><span class="dir-count">10</span></summary>
           <div class="dir-body">
             <h4 class="dir-h">Ray Marching</h4>
             <ul>
@@ -892,7 +914,12 @@
               <li><a href="/stella-nova/#orbs" target="_top" data-key="orbs">Presence Orbs<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#voxel" target="_top" data-key="voxel">Voxel Flythrough<span class="badge">GPU</span></a></li>
             </ul>
-            <h4 class="dir-h">Generative</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="generative" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Generative Art</span><span class="dir-count">2</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Pen &amp; Ink</h4>
             <ul>
               <li><a href="/stella-nova/#mushrooms" target="_top" data-key="mushrooms">Mushroom Draw<span class="badge">SVG</span></a></li>
               <li><a href="/stella-nova/#nonflowers" target="_top" data-key="nonflowers">Nonflowers<span class="badge">CANVAS</span></a></li>
@@ -939,7 +966,7 @@
           </div>
         </details>
         <details class="dir-group" data-sector="tools" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Studio Tools</span><span class="dir-count">9</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Studio Tools</span><span class="dir-count">10</span></summary>
           <div class="dir-body">
             <h4 class="dir-h">Animation &amp; Video</h4>
             <ul>
@@ -956,9 +983,13 @@
               <li><a href="/stella-nova/#sdf-lab" target="_top" data-key="sdf-lab">SDF Modeller<span class="badge">TOOL</span></a></li>
               <li><a href="/stella-nova/#bench" target="_top" data-key="bench">Composition Bench<span class="badge">NODES</span></a></li>
             </ul>
-            <h4 class="dir-h">Code &amp; Science</h4>
+            <h4 class="dir-h">Writing &amp; Code</h4>
             <ul>
+              <li><a href="/stella-nova/#lose-the-modifier" target="_top" data-key="lose-the-modifier">Lose the Modifier<span class="badge">WORDS</span></a></li>
               <li><a href="/stella-nova/#pascal-editor" target="_top" data-key="pascal-editor">Pascal Editor<span class="badge">TOOL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Science</h4>
+            <ul>
               <li><a href="/stella-nova/#sci-tools" target="_top" data-key="sci-tools">Science Toolkit<span class="badge">TOOL</span></a></li>
               <li><a href="/stella-nova/#solar" target="_top" data-key="solar">Solar Transit Study<span class="badge">TOOL</span></a></li>
             </ul>
