@@ -292,7 +292,7 @@ const ROUND = [
   'I_{ij} = m (r^2 \\delta_{ij} - r_i r_j)', '\\nabla_\\mu \\xi_\\nu + \\nabla_\\nu \\xi_\\mu = 0', "T'^{a}{}_{b} = J^{a}{}_{c} (J^{-1})^{d}{}_{b} T^{c}{}_{d}",
   'g^{\\mu\\alpha} g_{\\alpha\\nu} = \\delta^\\mu_\\nu', 'x^{\\mu\'} = \\Lambda^{\\mu\'}{}_{\\nu} x^\\nu', 'h_{ij} = Q_{ij} - \\frac{1}{3} \\delta_{ij} Q',
   '\\operatorname{tr} A = A^i{}_i', 'A^{0}', 'g_{01} + g_{10}', '2 A^a - 3 B^a', '-R', '\\frac{1}{2}(T_{ab} + T_{ba})',
-  'S = Q^{i}{}_{j} K^{j}{}_{i}', 'R = g^{\\mu\\nu} R_{\\mu\\nu}', '\\nabla_\\mu \\nabla_\\nu \\phi', 'E^{\\mu}{}_{\\nu} = \\frac{1}{4} F^{\\mu\\alpha} F_{\\nu\\alpha}',
+  'S = Q^{i}{}_{j} K^{j}{}_{i}', 'g_{a[c} R_{d]b}', 'A_{[a} B_{b} C_{c]}', 'X_{ab} = \\frac{1}{2} A_{(a} \\nabla_{b)} \\phi', 'R = g^{\\mu\\nu} R_{\\mu\\nu}', '\\nabla_\\mu \\nabla_\\nu \\phi', 'E^{\\mu}{}_{\\nu} = \\frac{1}{4} F^{\\mu\\alpha} F_{\\nu\\alpha}',
 ];
 check(`${ROUND.length} strings parse and print back to the same structure`, () => {
   ok(ROUND.length >= 40, 'at least 40 strings');
@@ -361,6 +361,42 @@ check('validate: Einstein rule, free indices, friendly messages', () => {
   ok(!M.validate(M.parseIndexTex('\\epsilon_{ij}'), { dim: 3 }).ok);
   ok(M.validate(M.parseIndexTex('\\delta_{ab}')).warnings.length === 1);
   ok(!M.validate(M.parseIndexTex('T_{(a}{}^{b)}')).ok, 'mixed bracket');
+});
+
+check('brackets over several factors go on the term (DIAGRAM request)', () => {
+  const t = M.parseIndexTex('g_{a[c} R_{d]b}').terms[0];
+  ok(!t.factors[0].sym && !t.factors[1].sym, 'not on a factor');
+  ok(t.sym.length === 1 && t.sym[0].type === 'antisym');
+  ok(JSON.stringify(t.sym[0].slots) === '[{"factor":0,"index":1},{"factor":1,"index":0}]', JSON.stringify(t.sym[0].slots));
+  ok(JSON.stringify(t.sym[0].refs) === '[[0,1],[1,0]]');
+  ok(M.toTex(M.parseIndexTex('g_{a[c} R_{d]b}'), { colors: false }) === 'g_{a[c} R_{d]b}');
+  const three = M.parseIndexTex('2 A_{(a} B_{b} C_{c)}').terms[0];
+  ok(three.coeff === 2 && three.sym[0].slots.map(r => r.factor).join() === '0,1,2');
+  const one = M.parseIndexTex('\\partial_{[\\lambda} F_{\\mu\\nu]}').terms[0].factors[0];
+  ok(one.sym[0].slots.join() === '2,0,1', 'a derivative bracket on one factor stays on factor.sym');
+  ok(!M.validate(M.parseIndexTex('g^{a[c} R_{d]b}')).ok, 'mixed heights');
+  let msg = ''; try { M.parseIndexTex('(A_{a} + B_{a}) C_{[b} D_{c]}'); } catch (e) { msg = e.message; }
+  ok(/after a \( \) group/.test(msg), msg);
+  msg = ''; try { M.parseIndexTex('A_{[a} B_{b}'); } catch (e) { msg = e.message; }
+  ok(/no match/.test(msg), msg);
+  const rl = M.relabel(M.parseIndexTex('g_{a[c} R_{d]b}'), { c: 'e' });
+  ok(rl.terms[0].sym && rl.tex === 'g_{a[e} R_{d]b}', rl.tex);
+});
+check('expandBrackets writes the permutations out', () => {
+  ok(M.toTex(M.expandBrackets(M.parseIndexTex('g_{a[c} R_{d]b}')), { colors: false }) === '\\frac{1}{2} g_{ac} R_{db} - \\frac{1}{2} g_{ad} R_{cb}');
+  ok(M.expandBrackets(M.parseIndexTex('\\partial_{[\\lambda} F_{\\mu\\nu]}')).terms.length === 6);
+  const x = M.expandToComponents(M.parseIndexTex('A_{[a} B_{b]}'), { bindings: { A: M.Tensor.fromNested([1, 2], 'd'), B: M.Tensor.fromNested([3, 5], 'd') }, values: { a: 0, b: 1 } });
+  near(x.lines[0].value, 0.5 * (5 - 6), 1e-15);
+});
+check('Weyl tensor from its bracket formula equals weyl()', () => {
+  const m = { id: 'test', dim: 4, coords: ['t', 'x', 'y', 'z'], coordTex: ['t', 'x', 'y', 'z'], params: {},
+    g: (x, F) => { const d = [F.neg(F.add(1, F.sq(x[1]))), F.add(1, F.sq(x[2])), F.exp(x[1]), F.add(2, F.mul(x[1], x[2]))]; return d.map((v, i) => d.map((_, j) => (i === j ? v : 0))); } };
+  const c = M.curvatureAt(m, [0.1, 0.3, 0.5, 0.2]);
+  ok(c.Ricci.maxAbs() > 1e-2 && c.Weyl.maxAbs() > 1e-3, 'non-trivial test metric');
+  const e = M.parseIndexTex('C_{abcd} = R_{abcd} - 2 \\frac{1}{2} g_{a[c} R_{d]b} + 2 \\frac{1}{2} g_{b[c} R_{d]a} + \\frac{1}{3} R g_{a[c} g_{d]b}');
+  ok(M.validate(e).ok, M.validate(e).errors.map(x => x.msg).join());
+  const r = M.evaluateExpr(e, { C: c.Weyl, 'R@4': c.RiemannDown, 'R@2': c.Ricci, 'scalar:R': c.R, g: c.g });
+  ok(r.residual < 1e-10, `residual ${r.residual}`);
 });
 
 // ---------------------------------------------------------------------------

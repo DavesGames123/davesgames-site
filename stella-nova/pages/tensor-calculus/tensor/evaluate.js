@@ -11,14 +11,17 @@
 //      coefficient takes opts.coeffs[coeff]. A derivative factor takes
 //      bindings['nabla:T'] or bindings['partial:T'] with the derivative
 //      slots last (the order of f.deriv). A digit index picks one
-//      component. (..) and [..] marks symmetrize the slots first.
+//      component. (..) and [..] marks symmetrize the slots first, also
+//      a mark over several factors (term.sym, for example g_{a[c} R_{d]b}).
 //      One name for a tensor and a scalar (R_{mn} and R): bind the tensor
-//      as bindings.R and the scalar as bindings['scalar:R'].
+//      as bindings.R and the scalar as bindings['scalar:R']. One name for
+//      tensors of two ranks (Riemann R_{abcd}, Ricci R_{ab}): bind 'R@4' and 'R@2'.
 //      The result slots follow expr.free; an equation gives
 //      { lhs, rhs, residual } with residual = max |lhs - rhs|.
 //
 //  expandToComponents(expr, opts) -> { lines, tex, truncated }
-//      Writes the Einstein sums out for the TeX view. opts: dim, values
+//      Writes the Einstein sums out for the TeX view. It writes the
+//      ( ) and [ ] brackets out first (expandBrackets). opts: dim, values
 //      ({ sym: k } for the free indices; default all 0), all (every free
 //      value), coords (labels such as ['t','r','\\theta','\\phi']),
 //      bindings (then each product and the sum have numbers), maxTerms,
@@ -31,8 +34,8 @@
 //      expandToComponents ... "export function expandToComponents"
 // ============================================================================
 
-import { Tensor, einsum, raise, lower, symmetrize, antisymmetrize, kroneckerDelta, leviCivita, matInverse, indexTuples } from './tensor.js';
-import { factorTex, indexColorMap, fmtNum, factorIndices } from './expr.js';
+import { Tensor, einsum, product, raise, lower, symmetrize, antisymmetrize, kroneckerDelta, leviCivita, matInverse, indexTuples } from './tensor.js';
+import { factorTex, indexColorMap, fmtNum, factorIndices, expandBrackets } from './expr.js';
 
 const isComp = x => x && (x instanceof Tensor || (x.shape && x.data) || Array.isArray(x));
 
@@ -68,7 +71,7 @@ export function factorTensor(f, bindings = {}, opts = {}) {
     return t;
   } else {
     const key = f.deriv ? `${f.derivKind || 'nabla'}:${f.name}` : f.name;
-    const b = bindings[key];
+    const b = bindings[`${key}@${want.length}`] ?? bindings[key];
     if (b == null) throw new Error(f.deriv ? `bind the derivative: give bindings['${key}'] with the derivative slots last` : `bind the tensor ${f.tex}: give bindings['${f.name}'] as components`);
     if (typeof b === 'number') throw new Error(`${f.tex} has indices, but bindings['${key}'] is a number`);
     t = Tensor.from(b);
@@ -86,6 +89,15 @@ export function factorTensor(f, bindings = {}, opts = {}) {
 
 const LETTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+// Digit indices pick one component: slice those slots away.
+function sliceFixed(ft, ixs) {
+  const keep = ixs.map((i, k) => (i.fixed ? -1 : k)).filter(k => k >= 0);
+  const out = new Tensor(keep.map(k => ft.shape[k]), keep.map(k => ft.variance[k]));
+  const full = ixs.map(i => (i.fixed ? +i.sym : 0));
+  for (const id of indexTuples(out.shape)) { keep.forEach((k, q) => { full[k] = id[q]; }); out.data[out.offset(id)] = ft.data[ft.offset(full)]; }
+  return out;
+}
+
 function termValue(t, freeOrder, bindings, opts, dim) {
   let coeff = t.coeff;
   if (typeof coeff === 'string') {
@@ -97,17 +109,31 @@ function termValue(t, freeOrder, bindings, opts, dim) {
   const L = sym => { if (!letter.has(sym)) letter.set(sym, LETTERS[letter.size]); return letter.get(sym); };
   for (const ix of freeOrder) L(ix.sym);
   const specs = [], ts = [];
+  // A bracket over several factors (term.sym): form the outer product of
+  // the factors, (anti)symmetrize the marked slots, then contract it as
+  // one tensor. The bracket acts before the sums, as the notation says.
+  if (t.sym && t.sym.length && t.factors.length) {
+    const offs = [];
+    let big = null, off = 0;
+    for (const f of t.factors) {
+      const ft = factorTensor(f, bindings, opts);
+      offs.push(off); off += ft.rank;
+      big = big ? product(big, ft) : ft;
+    }
+    for (const m of t.sym) {
+      const slots = m.slots.map(r => offs[r.factor] + r.index);
+      big = m.type === 'sym' ? symmetrize(big, slots) : antisymmetrize(big, slots);
+    }
+    const ixs = t.factors.flatMap(factorIndices);
+    if (ixs.some(i => i.fixed)) big = sliceFixed(big, ixs);
+    const outSpec = freeOrder.map(i => L(i.sym)).join('');
+    return einsum(`${ixs.filter(i => !i.fixed).map(i => L(i.sym)).join('')}->${outSpec}`, big).scale(coeff);
+  }
   for (const f of t.factors) {
     let ft = factorTensor(f, bindings, opts);
     const ixs = factorIndices(f);
     // Digit indices pick one component: slice those slots away.
-    if (ixs.some(i => i.fixed)) {
-      const keep = ixs.map((i, k) => (i.fixed ? -1 : k)).filter(k => k >= 0);
-      const out = new Tensor(keep.map(k => ft.shape[k]), keep.map(k => ft.variance[k]));
-      const full = ixs.map(i => (i.fixed ? +i.sym : 0));
-      for (const id of indexTuples(out.shape)) { keep.forEach((k, q) => { full[k] = id[q]; }); out.data[out.offset(id)] = ft.data[ft.offset(full)]; }
-      ft = out;
-    }
+    if (ixs.some(i => i.fixed)) ft = sliceFixed(ft, ixs);
     specs.push(ixs.filter(i => !i.fixed).map(i => L(i.sym)).join(''));
     ts.push(ft);
   }
@@ -143,6 +169,8 @@ export function evaluateExpr(expr, bindings = {}, opts = {}) {
 
 // ---- explicit sums for the TeX view ------------------------------------------
 export function expandToComponents(expr, opts = {}) {
+  // Brackets first: the written-out sum has one product per permutation.
+  if (expr.terms.some(t => (t.sym && t.sym.length) || t.factors.some(f => f.sym && f.sym.length))) expr = expandBrackets(expr);
   const bindings = opts.bindings;
   const dim = opts.dim ?? (bindings ? dimOf(bindings, opts) : 3);
   const label = k => (opts.coords ? opts.coords[k] : String(k));

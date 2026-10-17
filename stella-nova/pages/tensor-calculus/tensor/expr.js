@@ -11,7 +11,11 @@
 //                  sym?: [{ type: 'sym'|'antisym', slots: [k, ...] }],
 //                  (slots index factorIndices(f): the indices, then deriv)
 //                  power?: number, stagger?: boolean }
-//      Term    = { coeff: number | string, factors: [Factor], side?: 0|1 }
+//      Term    = { coeff: number | string, factors: [Factor], side?: 0|1,
+//                  sym?: [{ type: 'sym'|'antisym', slots: [{ factor, index }], refs: [[factor, index]] }] }
+//                A bracket inside one factor is on factor.sym. A bracket that
+//                spans factors (g_{a[c} R_{d]b}) is on term.sym: factor is the
+//                place in term.factors, index a position in factorIndices.
 //      TensorExpr = { terms, free, dummies, tex, rel?: '=', lhs?, rhs? }
 //  An equation has rel '=', lhs and rhs (each a TensorExpr), and terms =
 //  lhs terms (side 0) then rhs terms (side 1). free is the lhs free list,
@@ -116,26 +120,34 @@ export function parseIndexTex(src) {
     return { sym, up: false, fixed };
   }
 
-  // One script after ^ or _. Gives { idx: [Index], marks: [{type, from, to}], deriv: [{Index}], dkind }.
-  // Bracket marks may span index groups and a prefix derivative
-  // (\partial_{[\lambda} F_{\mu\nu]}), so they live in one context per
-  // factor: positions count the indices in written order.
-  let mctx = null;
-  const newCtx = () => ({ stack: [], marks: [], count: 0 });
+  // One script after ^ or _. Gives { idx: [Index], deriv: [Index], dkind }.
+  // Bracket marks may span index groups, a prefix derivative and several
+  // factors (g_{a[c} R_{d]b}). An open mark lives in the context of the
+  // product (pctx) and collects members { ord, w }: ord is the factor's
+  // place in the term, w the written place of the index in that factor
+  // (mctx.count). finishFactor turns w into a factorIndices position.
+  let mctx = null, pctx = null;
+  const newCtx = () => ({ count: 0 });
+  const newPctx = () => ({ stack: [], closed: [], ord: 0 });
   function script(up) {
     if (!mctx) mctx = newCtx();
     const out = { idx: [], deriv: [], dkind: null };
-    const push = ix => { ix.up = up; if (!ix.fixed) delete ix.fixed; (out.dkind ? out.deriv : out.idx).push(ix); mctx.count++; };
+    const push = ix => {
+      ix.up = up; if (!ix.fixed) delete ix.fixed;
+      (out.dkind ? out.deriv : out.idx).push(ix);
+      for (const e of pctx.stack) e.members.push({ ord: pctx.ord, w: mctx.count });
+      mctx.count++;
+    };
     if (peek() && peek().t === '{') {
       p++;
-      const stack = mctx.stack;
+      const stack = pctx.stack;
       while (peek() && peek().t !== '}') {
         const k = peek();
-        if (k.t === '(' || k.t === '[') { stack.push({ type: k.t === '(' ? 'sym' : 'antisym', from: mctx.count, close: k.t === '(' ? ')' : ']' }); p++; continue; }
+        if (k.t === '(' || k.t === '[') { stack.push({ type: k.t === '(' ? 'sym' : 'antisym', close: k.t === '(' ? ')' : ']', members: [] }); p++; continue; }
         if (k.t === ')' || k.t === ']') {
-          const s = stack.pop();
-          if (!s || s.close !== k.t) err(`'${k.t}' does not close a group`);
-          mctx.marks.push({ type: s.type, from: s.from, to: mctx.count });
+          const e = stack.pop();
+          if (!e || e.close !== k.t) err(`'${k.t}' does not close a group`);
+          pctx.closed.push(e);
           p++; continue;
         }
         if (k.t === ',' || k.t === ';') { out.dkind = k.t === ',' ? 'partial' : 'nabla'; out.dstyle = k.t === ',' ? 'comma' : 'semicolon'; p++; continue; }
@@ -217,16 +229,42 @@ export function parseIndexTex(src) {
 
   const range = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
 
+  // Term-level marks: sym: [{ type, slots: [{ factor, index }], refs: [[factor, index]] }].
+  const shiftSym = (sym, d) => sym.map(m => ({ type: m.type, slots: m.slots.map(r => ({ factor: r.factor + d, index: r.index })) }));
   const mulTerms = (A, B) => {
     const out = [];
-    for (const a of A) for (const b of B) out.push({ coeff: mulCoeff(a.coeff, b.coeff), factors: a.factors.concat(b.factors.map(cloneFactor)) });
+    for (const a of A) for (const b of B) {
+      const t = { coeff: mulCoeff(a.coeff, b.coeff), factors: a.factors.concat(b.factors.map(cloneFactor)) };
+      const sym = (a.sym || []).concat(b.sym ? shiftSym(b.sym, a.factors.length) : []);
+      if (sym.length) t.sym = sym;
+      out.push(t);
+    }
     return out;
   };
 
   function product() {
+    const savedP = pctx;
+    pctx = newPctx();
     let acc = [{ coeff: 1, factors: [] }];
     let pendingDeriv = [];
     let any = false;
+    // The next factor's place in the term; -1 when a ( ) group made several terms.
+    const nextOrd = () => (acc.length === 1 ? acc[0].factors.length : -1);
+    // After a factor: resolve the members of this factor, keep one-factor
+    // marks on the factor (f.sym), and keep the others for the term.
+    const finishFactor = (f, nPre) => {
+      const nI = f.indices.length, ord = pctx.ord;
+      const map = w => (w < nPre ? nI + w : (w - nPre < nI ? w - nPre : nI + nPre + (w - nPre - nI)));
+      for (const e of pctx.stack.concat(pctx.closed)) for (const m of e.members) {
+        if (m.ord !== ord || m.index != null) continue;
+        if (ord < 0) err('a bracket over indices of several factors cannot come after a ( ) group in the same term');
+        m.index = map(m.w);
+      }
+      const own = pctx.closed.filter(e => e.members.every(m => m.ord === ord));
+      if (own.length) f.sym = (f.sym || []).concat(own.map(e => ({ type: e.type, slots: e.members.map(m => m.index) })));
+      pctx.closed = pctx.closed.filter(e => !own.includes(e));
+      mctx = null;
+    };
     for (;;) {
       const k = peek();
       if (!k || k.t === '+' || k.t === '-' || k.t === '=' || k.t === ')' || k.t === '}') {
@@ -244,10 +282,9 @@ export function parseIndexTex(src) {
         // (J^{-1})^{a}{}_{b}: a bracketed name that takes indices.
         if (peek() && (peek().t === '^' || peek().t === '_') && inner.length === 1 && inner[0].coeff === 1 && inner[0].factors.length === 1 && !inner[0].factors[0].indices.length) {
           const tex = src.slice(open.pos, close.end);
-          mctx = newCtx();
+          mctx = newCtx(); pctx.ord = nextOrd();
           const f = factor({ name: tex, tex });
-          if (mctx.stack.length) err('a ( or [ in the indices has no match');
-          mctx = null;
+          finishFactor(f, 0);
           acc = mulTerms(acc, [{ coeff: 1, factors: [f] }]);
           continue;
         }
@@ -275,7 +312,7 @@ export function parseIndexTex(src) {
       if (k.t === 'cmd' && (k.v === 'partial' || k.v === 'nabla')) {
         p++;
         const kind = k.v;
-        if (!pendingDeriv.length) mctx = newCtx();
+        if (!pendingDeriv.length) { mctx = newCtx(); pctx.ord = nextOrd(); }
         if (peek() && (peek().t === '_' || peek().t === '^')) {
           const up = toks[p++].t === '^';
           const s = script(up);
@@ -286,7 +323,7 @@ export function parseIndexTex(src) {
         const isDerivNext = nx && nx.t === 'cmd' && (nx.v === 'partial' || nx.v === 'nabla');
         if (!isFactorNext && !isDerivNext) {
           // Free-standing operator, for example the end of "\partial_\mu".
-          if (mctx.stack.length || mctx.marks.length) err('a ( or [ bracket over a derivative must close on the next factor');
+          if (pctx.stack.concat(pctx.closed).some(e => e.members.some(m => m.ord === pctx.ord && m.index == null))) err('a ( or [ bracket over a free-standing derivative is not supported; put the derivative next to a tensor');
           mctx = null;
           for (const d of pendingDeriv) acc = mulTerms(acc, [{ coeff: 1, factors: [{ name: d.kind, tex: '\\' + d.kind, indices: [d.ix], kind: d.kind }] }]);
           pendingDeriv = [];
@@ -299,17 +336,9 @@ export function parseIndexTex(src) {
         acc = mulTerms(acc, [{ coeff: 1, factors: [{ name: k.v, tex: '\\' + k.v, indices: [], kind: 'scalar' }] }]);
         continue;
       }
-      if (!pendingDeriv.length) mctx = newCtx();
+      if (!pendingDeriv.length) { mctx = newCtx(); pctx.ord = nextOrd(); }
       const nPre = pendingDeriv.length;
       const f = factor();
-      if (mctx.stack.length) err('a ( or [ in the indices has no match');
-      if (mctx.marks.length) {
-        // written position -> position in factorIndices(f) (indices, then deriv)
-        const nI = f.indices.length;
-        const map = w => (w < nPre ? nI + w : (w - nPre < nI ? w - nPre : nI + nPre + (w - nPre - nI)));
-        f.sym = mctx.marks.map(m => ({ type: m.type, slots: range(m.from, m.to).map(map) }));
-      }
-      mctx = null;
       if (pendingDeriv.length) {
         const kinds = new Set(pendingDeriv.map(d => d.kind));
         if (kinds.size > 1) err('mixing \\partial and \\nabla on one factor is not supported');
@@ -317,9 +346,17 @@ export function parseIndexTex(src) {
         f.derivKind = pendingDeriv[0].kind; f.derivStyle = 'prefix';
         pendingDeriv = [];
       }
+      finishFactor(f, nPre);
       acc = mulTerms(acc, [{ coeff: 1, factors: [f] }]);
     }
     if (!any) err('a term is empty');
+    if (pctx.stack.length) err('a ( or [ in the indices has no match');
+    if (pctx.closed.length) {
+      if (acc.length !== 1) err('a bracket over indices of several factors cannot come after a ( ) group in the same term');
+      const sym = pctx.closed.map(e => ({ type: e.type, slots: e.members.map(m => ({ factor: m.ord, index: m.index })) }));
+      acc[0].sym = normTermSym((acc[0].sym || []).concat(sym));
+    }
+    pctx = savedP;
     return acc;
   }
   function subSum() {
@@ -334,7 +371,7 @@ export function parseIndexTex(src) {
     if (peek() && (peek().t === '+' || peek().t === '-')) { sign = peek().t === '-' ? -1 : 1; p++; }
     for (;;) {
       const pr = product();
-      for (const t of pr) terms.push({ coeff: mulCoeff(sign, t.coeff), factors: t.factors });
+      for (const t of pr) terms.push(t.sym ? { coeff: mulCoeff(sign, t.coeff), factors: t.factors, sym: t.sym } : { coeff: mulCoeff(sign, t.coeff), factors: t.factors });
       if (peek() && (peek().t === '+' || peek().t === '-')) { sign = peek().t === '-' ? -1 : 1; p++; continue; }
       break;
     }
@@ -377,7 +414,20 @@ export function fac(name, indices = [], opts = {}) {
   if (f.deriv && !f.derivKind) f.derivKind = 'nabla';
   return f;
 }
-export function term(coeff, factors) { return { coeff, factors }; }
+// term(coeff, factors, sym?) where sym is the term-level bracket list.
+export function term(coeff, factors, sym) { return sym && sym.length ? { coeff, factors, sym: normTermSym(sym) } : { coeff, factors }; }
+
+// Term-level brackets: [{ type, slots: [{ factor, index }], refs: [[factor, index]] }].
+// factor is the place of the factor in term.factors; index is a position
+// in factorIndices(factor) (its indices, then its derivative indices).
+// refs is the same list as pairs (the form DIAGRAM reads).
+export function normTermSym(sym) {
+  return sym.map(m => {
+    const slots = (m.slots || m.refs.map(([factor, index]) => ({ factor, index }))).map(r => (Array.isArray(r) ? { factor: r[0], index: r[1] } : { factor: r.factor, index: r.index }));
+    return { type: m.type, slots, refs: slots.map(r => [r.factor, r.index]) };
+  });
+}
+const copyTerm = t => (t.sym && t.sym.length ? { coeff: t.coeff, factors: t.factors.map(cloneFactor), sym: normTermSym(t.sym) } : { coeff: t.coeff, factors: t.factors.map(cloneFactor) });
 
 export function cloneFactor(f) {
   const g = { ...f, indices: f.indices.map(i => ({ ...i })) };
@@ -425,7 +475,7 @@ export function makeExpr(x) {
     e.tex = toTex(e, { colors: false });
     return e;
   }
-  const terms = x.map(t => ({ coeff: t.coeff, factors: t.factors.map(cloneFactor) }));
+  const terms = x.map(copyTerm);
   const free = terms.length ? termIndexInfo(terms[0]).free : [];
   const dummies = [...new Set(terms.flatMap(t => termIndexInfo(t).dummies))];
   const e = { terms, free, dummies, tex: '' };
@@ -469,7 +519,13 @@ export function factorTex(f, opts = {}) {
   return printFactor(f, cmap, opts.colors !== false, opts.subst);
 }
 
-function printFactor(f, cmap, colors, subst) {
+// Factor positions (factorIndices order) in written order.
+export function writtenOrder(f) {
+  const n = f.indices.length, nd = (f.deriv || []).length;
+  return (f.derivStyle || 'prefix') === 'prefix' && nd ? [...Array(nd).keys()].map(j => n + j).concat([...Array(n).keys()]) : [...Array(n + nd).keys()];
+}
+
+function printFactor(f, cmap, colors, subst, extra) {
   const c = ix => {
     const s = subst && subst[ix.sym] != null ? String(subst[ix.sym]) : symTex(ix.sym);
     if (!colors || ix.fixed || !cmap.has(ix.sym)) return s;
@@ -489,6 +545,10 @@ function printFactor(f, cmap, colors, subst) {
     const a = written[Math.min(...ws)], b = written[Math.max(...ws)];
     open.set(a, (open.get(a) || '') + (s.type === 'sym' ? '(' : '['));
     close.set(b, (s.type === 'sym' ? ')' : ']') + (close.get(b) || ''));
+  }
+  if (extra) {
+    for (const [q, str] of extra.open) open.set(q, str + (open.get(q) || ''));
+    for (const [q, str] of extra.close) close.set(q, (close.get(q) || '') + str);
   }
   const cw = (ix, q) => (open.get(q) || '') + c(ix) + (close.get(q) || '');
   if (f.deriv && style === 'prefix') {
@@ -530,7 +590,18 @@ function printTerms(terms, cmap, colors) {
     let co = t.coeff, neg = false;
     if (typeof co === 'number') { neg = co < 0; co = Math.abs(co); }
     else if (co.startsWith('-')) { neg = true; co = co.slice(1).trim(); }
-    let body = t.factors.map(f => printFactor(f, cmap, colors)).join(' ');
+    // Term-level brackets: open at the member written first, close at the last.
+    const extras = t.factors.map(() => ({ open: new Map(), close: new Map() }));
+    for (const m of t.sym || []) {
+      const ranked = m.slots.filter(r => t.factors[r.factor]).map(r => ({ ...r, w: writtenOrder(t.factors[r.factor]).indexOf(r.index) })).filter(r => r.w >= 0);
+      if (!ranked.length) continue;
+      ranked.sort((a, b) => a.factor - b.factor || a.w - b.w);
+      const a = ranked[0], b = ranked[ranked.length - 1];
+      const E = extras[a.factor].open, C = extras[b.factor].close;
+      E.set(a.index, (E.get(a.index) || '') + (m.type === 'sym' ? '(' : '['));
+      C.set(b.index, (m.type === 'sym' ? ')' : ']') + (C.get(b.index) || ''));
+    }
+    let body = t.factors.map((f, q) => printFactor(f, cmap, colors, undefined, extras[q])).join(' ');
     let cs = typeof co === 'number' ? (co === 1 && body ? '' : fmtNum(co)) : co;
     if (cs && body) cs += ' ';
     const piece = cs + body;
@@ -585,6 +656,11 @@ export function validate(expr, opts = {}) {
         if (f.kind === 'epsilon' && opts.dim && f.indices.length !== opts.dim)
           errors.push({ msg: `In ${where}, the Levi-Civita symbol has ${f.indices.length} indices, but in ${opts.dim} dimensions it needs ${opts.dim}.`, term: k });
       }
+      for (const m of t.sym || []) {
+        const ixs = m.slots.map(r => t.factors[r.factor] && factorIndices(t.factors[r.factor])[r.index]);
+        if (ixs.some(ix => !ix)) errors.push({ msg: `In ${where}, a bracket over several factors points at an index that is not there.`, term: k });
+        else if (new Set(ixs.map(ix => ix.up)).size > 1) errors.push({ msg: `In ${where}, a bracket over several factors mixes upper and lower indices. Symmetrize indices of one kind only.`, term: k });
+      }
       // A bare 0 is the zero tensor of any rank: it matches every free list.
       if (!(t.factors.length === 0 && t.coeff === 0)) termSets.push({ where, free, k, sideNo });
     });
@@ -610,7 +686,7 @@ export function validate(expr, opts = {}) {
 // Rename index syms: relabel(expr, { mu: 'alpha' }).
 export function relabel(expr, map) {
   const r = ix => (map[ix.sym] != null ? { ...ix, sym: map[ix.sym] } : { ...ix });
-  const fix = terms => terms.map(t => ({ coeff: t.coeff, factors: t.factors.map(f => { const g = cloneFactor(f); g.indices = g.indices.map(r); if (g.deriv) g.deriv = g.deriv.map(r); return g; }) }));
+  const fix = terms => terms.map(t => term(t.coeff, t.factors.map(f => { const g = cloneFactor(f); g.indices = g.indices.map(r); if (g.deriv) g.deriv = g.deriv.map(r); return g; }), t.sym));
   if (expr.rel) return makeExpr({ lhs: fix(expr.lhs.terms), rhs: fix(expr.rhs.terms) });
   return makeExpr(fix(expr.terms));
 }
@@ -620,6 +696,46 @@ export function exprKey(expr) {
   const fk = f => [f.name, f.kind, f.power ?? '', f.indices.map(i => (i.up ? '^' : '_') + i.sym).join(''),
     (f.deriv || []).map(i => (i.up ? '^' : '_') + i.sym).join(''), f.derivKind || '',
     (f.sym || []).map(s => s.type + s.slots.join('.')).join('|')].join('/');
-  const tk = t => `${typeof t.coeff === 'number' ? +t.coeff.toPrecision(12) : t.coeff}*${t.factors.map(fk).join(' ')}@${t.side ?? 0}`;
+  const sk = t => (t.sym || []).map(m => m.type + m.slots.map(r => `${r.factor}.${r.index}`).join(',')).join('|');
+  const tk = t => `${typeof t.coeff === 'number' ? +t.coeff.toPrecision(12) : t.coeff}*${t.factors.map(fk).join(' ')}@${t.side ?? 0}${t.sym ? '#' + sk(t) : ''}`;
   return (expr.rel ? '=' : '') + expr.terms.map(tk).join(' + ');
+}
+
+// Write every bracket out: T_{[ab]} becomes 1/2 T_{ab} - 1/2 T_{ba}, and
+// g_{a[c} R_{d]b} becomes 1/2 g_{ac} R_{db} - 1/2 g_{ad} R_{cb}. Factor
+// marks (factor.sym) and term marks (term.sym) both go.
+export function expandBrackets(expr) {
+  const perms = arr => {
+    if (arr.length <= 1) return [{ p: arr.slice(), sign: 1 }];
+    const out = [];
+    arr.forEach((x, i) => {
+      const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+      for (const q of perms(rest)) out.push({ p: [x].concat(q.p), sign: (i % 2 ? -1 : 1) * q.sign });
+    });
+    return out;
+  };
+  const get = (f, i) => (i < f.indices.length ? f.indices[i] : f.deriv[i - f.indices.length]);
+  const put = (f, i, ix) => { if (i < f.indices.length) f.indices[i] = ix; else f.deriv[i - f.indices.length] = ix; };
+  const one = t => {
+    const marks = (t.sym || []).map(m => ({ type: m.type, slots: m.slots.map(r => [r.factor, r.index]) }));
+    t.factors.forEach((f, q) => { for (const m of f.sym || []) marks.push({ type: m.type, slots: m.slots.map(i => [q, i]) }); });
+    let terms = [{ coeff: t.coeff, factors: t.factors.map(f => { const g = cloneFactor(f); delete g.sym; return g; }) }];
+    for (const m of marks) {
+      const ps = perms(m.slots.map((_, k) => k)), k = ps.length;
+      const next = [];
+      for (const tt of terms) {
+        const orig = m.slots.map(([q, i]) => ({ ...get(tt.factors[q], i) }));
+        for (const { p, sign } of ps) {
+          const fs = tt.factors.map(cloneFactor);
+          m.slots.forEach(([q, i], r) => put(fs[q], i, { ...orig[p[r]], up: orig[r].up }));
+          next.push({ coeff: mulCoeff((m.type === 'antisym' ? sign : 1) / k, tt.coeff), factors: fs });
+        }
+      }
+      terms = next;
+    }
+    return terms;
+  };
+  const side = terms => terms.flatMap(one);
+  if (expr.rel) return makeExpr({ lhs: side(expr.lhs.terms), rhs: side(expr.rhs.terms) });
+  return makeExpr(side(expr.terms));
 }

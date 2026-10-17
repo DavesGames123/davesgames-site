@@ -15,6 +15,10 @@
 //      relabel(expr, map), cloneExpr, exprKey (structural key), symTex(sym), fmtNum(x)
 //      factorTex(f, { colors, colorMap, subst }), factorIndices(f) (indices, then deriv),
 //      writtenIndices(f) (prefix derivative first); expr.free is in written order
+//      Brackets: inside one factor on factor.sym; over several factors on
+//          term.sym = [{ type, slots: [{ factor, index }], refs: [[factor, index]] }]
+//          (index is a position in factorIndices). term(coeff, factors, sym),
+//          normTermSym, writtenOrder(f), expandBrackets(expr) (writes them out)
 //      Labels of trace steps keep their math in $...$.
 //
 //  COMPONENTS (tensor.js)   Components = { shape, variance: ['u'|'d'], data }
@@ -57,7 +61,8 @@
 //  NUMERIC EVALUATION (evaluate.js)
 //      evaluateExpr(expr, bindings, { dim, metric, coeffs }) -> Tensor (free slots in expr.free order)
 //          an equation gives { lhs, rhs, residual }; bindings['nabla:V'] binds a
-//          derivative (derivative slots last); bindings['scalar:R'] a scalar R
+//          derivative (derivative slots last); bindings['scalar:R'] a scalar R;
+//          bindings['R@4'] and ['R@2'] two tensors of one name by rank
 //      expandToComponents(expr, { dim, values, all, bindings, coords, maxTerms, skipZero })
 //          -> { lines: [{ values, tex, texNumeric, value, terms }], tex, truncated }
 //      factorTensor(f, bindings, opts), fmtVal(x)
