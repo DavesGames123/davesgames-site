@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Tensor calculus in three linked views: the index equation, a 3D picture of the tensor and its Penrose diagram, played step by step. A library of famous tensor equations, a playground and guided chapters on upper and lower indices.">
+<meta name="color-scheme" content="dark">
+<title>Tensor Calculus — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   TENSOR CALCULUS  ·  page shell  (CORE package; spec in CONTRACT.md)
+  ───────────────────────────────────────────────────────────────────────────
+   Three linked views show one tensor operation at the same time:
+     #paneTex      the index equation (MathJax SVG, lib/sci-math.js). During
+                   a step it shows the expression before and after, with the
+                   touched indices pulsing, and the written-out sum.
+     #paneViz      the 3D scene (viz/index.js, three r160) in #vizCanvas
+     #paneDiagram  the diagram (diagram/index.js): Penrose, birdtrack or
+                   tensor network, in #diagHost
+   The step player (#player) drives play(step, t) of all three views with
+   one clock. Each index letter has one colour everywhere (palette.js).
+
+   HEAD LOAD ORDER  (order matters)
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js (site rule)
+     2. style.css, then lib/sci.css (STIX Two Text, Inter, .m1-.m6)
+     3. importmap for three r160 (inline; an import map cannot be a file)
+     4. main.js as a module, at the end of the body
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: brand · title · #panelTabs · #layoutSeg · #creditsBtn     │
+     ├──────────────┬───────────────────────────────────────────────────┤
+     │ #panel       │ #stage  data-mode = all | pair | focus             │
+     │  #tabLibrary │   #paneViz      #paneTex                           │
+     │  #tabPlay..  │                 #paneDiagram                       │
+     │  #tabLearn   │                                                    │
+     ├──────────────┴───────────────────────────────────────────────────┤
+     │ #player  prev play next · #pScrub · step label · speed · #lens    │
+     └──────────────────────────────────────────────────────────────────┘
+     #credits      a drawer at the right (Penrose 1971, birdtracks, refs)
+     #stepList     a pop-up list of the steps of the trace
+
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock    at the base: #dockPanel (opens the sheet), #dockPlay, the
+              view switch #dockViews, #dockLens
+     #panel   portrait: a bottom sheet with #sheetGrip; landscape: a drawer
+     #stage   the views on screen sit in a row; a swipe moves to the next
+              view (scroll snap); #swipeDots shows where you are
+
+   GREP MAP  (main.js and ui/)
+     grep -n 'function boot'          main.js: the boot order
+     grep -n 'function openEntry'     main.js: open a library entry
+     grep -n 'function playTrace'     main.js: load a trace in all views
+     grep -n 'function frame'         main.js: the frame loop
+     grep -n 'SAVER SEAM'             main.js: where saver/index.js plugs in
+     ui/layout.js  ui/player.js  ui/tex-view.js  ui/library-browser.js
+     ui/playground.js  ui/lens.js  ui/learn-menu.js  ui/phone.js
+     ui/credits.js  ui/packages.js  ui/page-api.js  ui/tex-color.js
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header class="topbar">
+  <div class="brand">Stella Nova</div>
+  <h1 class="pagetitle">Tensor calculus</h1>
+  <nav id="panelTabs" class="tabs" role="tablist" aria-label="Panel">
+    <button role="tab" data-tab="library" class="on" aria-selected="true">Library</button>
+    <button role="tab" data-tab="playground" aria-selected="false">Playground</button>
+    <button role="tab" data-tab="learn" aria-selected="false">Learn</button>
+  </nav>
+  <div class="spacer"></div>
+  <div id="layoutSeg" class="seg" role="group" aria-label="Views">
+    <button data-layout="all" class="on" title="All three views (1)">All</button>
+    <button data-layout="tex" title="Equation only (2)">Equation</button>
+    <button data-layout="viz" title="3D only (3)">3D</button>
+    <button data-layout="diagram" title="Diagram only (4)">Diagram</button>
+  </div>
+  <button id="creditsBtn" class="ghost" aria-controls="credits">Credits</button>
+</header>
+
+<aside id="panel" class="open" aria-label="Library, playground and chapters">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <div class="panel-tabs tabs" role="tablist" aria-label="Panel">
+    <button role="tab" data-tab="library" class="on" aria-selected="true">Library</button>
+    <button role="tab" data-tab="playground" aria-selected="false">Playground</button>
+    <button role="tab" data-tab="learn" aria-selected="false">Learn</button>
+  </div>
+
+  <section id="tabLibrary" class="tab" data-tab="library">
+    <div class="search-row">
+      <input id="libSearch" type="search" placeholder="Search equations, fields, words" autocomplete="off" spellcheck="false" aria-label="Search the library">
+    </div>
+    <div id="libFields" class="chips" role="group" aria-label="Fields"></div>
+    <div id="libPaths" class="paths"></div>
+    <div id="libList" class="entry-list" role="list"></div>
+    <article id="libDetail" class="entry-detail" hidden></article>
+  </section>
+
+  <section id="tabPlayground" class="tab" data-tab="playground" hidden>
+    <p class="hint">Type an index expression in TeX. Pick an operation, then watch it play in the three views.</p>
+    <label class="field-label" for="pgInput">Expression</label>
+    <textarea id="pgInput" rows="2" spellcheck="false" autocomplete="off">T^{\mu}{}_{\nu}</textarea>
+    <div id="pgStatus" class="pg-status" aria-live="polite"></div>
+    <div id="pgExamples" class="chips small"></div>
+    <div class="row2">
+      <label class="field-label" for="pgDim">Dimension</label>
+      <select id="pgDim"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select>
+      <label class="field-label" for="pgMetric">Metric</label>
+      <select id="pgMetric"></select>
+    </div>
+    <div class="field-label">Operation</div>
+    <div id="pgOps" class="ops" role="group" aria-label="Operations"></div>
+    <div id="pgArgs" class="pg-args"></div>
+    <button id="pgApply" class="primary">Play the operation</button>
+    <div id="pgHistory" class="pg-history"></div>
+  </section>
+
+  <section id="tabLearn" class="tab" data-tab="learn" hidden>
+    <div id="learnMenu" class="chapter-list" role="list"></div>
+    <div id="learnHost" class="learn-host"></div>
+  </section>
+</aside>
+
+<main id="stage" data-mode="all" data-views="tex viz diagram">
+  <section class="pane" id="paneTex" data-view="tex" aria-label="Equation view">
+    <header class="pane-head">
+      <span class="pane-title">Equation</span>
+      <span id="texCaption" class="pane-sub"></span>
+      <span class="spacer"></span>
+      <button id="texSumsBtn" class="mini" aria-pressed="false" title="Write out each Einstein sum">Write out sums</button>
+      <button class="mini pane-focus" data-focus="tex" title="Focus this view" aria-label="Focus the equation view">⤢</button>
+      <button class="mini pane-close" data-close="tex" title="Hide this view" aria-label="Hide the equation view">✕</button>
+    </header>
+    <div class="pane-body tex-body" id="texBody">
+      <div id="texStepLabel" class="step-label"></div>
+      <div class="tex-stack">
+        <div id="texBefore" class="sci-eq tex-line before"></div>
+        <div id="texOp" class="tex-op"><span class="op-arrow">↓</span><span id="texOpName"></span></div>
+        <div id="texAfter" class="sci-eq tex-line after"></div>
+        <div id="texSum" class="sci-eq tex-line sum" hidden></div>
+      </div>
+      <div id="texIndexInfo" class="index-info"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="paneViz" data-view="viz" aria-label="3D view">
+    <header class="pane-head">
+      <span class="pane-title">3D</span>
+      <span id="vizCaption" class="pane-sub"></span>
+      <span class="spacer"></span>
+      <button class="mini pane-focus" data-focus="viz" title="Focus this view" aria-label="Focus the 3D view">⤢</button>
+      <button class="mini pane-close" data-close="viz" title="Hide this view" aria-label="Hide the 3D view">✕</button>
+    </header>
+    <div class="pane-body viz-body">
+      <canvas id="vizCanvas" aria-label="3D picture of the tensor"></canvas>
+      <div id="vizFallback" class="fallback" hidden></div>
+      <div id="vizHint" class="view-hint">drag to orbit · pinch or scroll to zoom</div>
+    </div>
+  </section>
+
+  <section class="pane" id="paneDiagram" data-view="diagram" aria-label="Diagram view">
+    <header class="pane-head">
+      <span class="pane-title">Diagram</span>
+      <div id="diagStyle" class="seg small" role="group" aria-label="Diagram style">
+        <button data-style="penrose" class="on">Penrose</button>
+        <button data-style="birdtrack">Birdtrack</button>
+        <button data-style="network">Network</button>
+      </div>
+      <span class="spacer"></span>
+      <button id="legendBtn" class="mini" aria-controls="diagLegend" aria-expanded="false" title="What each mark means">Legend</button>
+      <button id="feynBtn" class="mini" aria-controls="feynNote" title="Why this is not a Feynman diagram">Not Feynman?</button>
+      <button class="mini pane-focus" data-focus="diagram" title="Focus this view" aria-label="Focus the diagram view">⤢</button>
+      <button class="mini pane-close" data-close="diagram" title="Hide this view" aria-label="Hide the diagram view">✕</button>
+    </header>
+    <div class="pane-body diag-body">
+      <div id="diagHost" class="diag-host"></div>
+      <div id="diagFallback" class="fallback" hidden></div>
+      <div id="diagLegend" class="note-pop legend-pop" hidden></div>
+      <div id="feynNote" class="note-pop" hidden>
+        <p>These are <b>Penrose diagrams</b> (Roger Penrose, 1971): each tensor is a node, each upper index a leg up, each lower index a leg down, and a joined leg is a summed index. Birdtracks (Predrag Cvitanović) and tensor-network diagrams use the same idea.</p>
+        <p><b>Feynman diagrams</b> are a different tool. They draw particle interactions in quantum field theory, and each picture stands for a term of a scattering amplitude. They look alike because both join lines at nodes, but a Feynman line is a particle and a Penrose leg is an index.</p>
+        <p><a href="https://en.wikipedia.org/wiki/Penrose_graphical_notation" target="_blank" rel="noopener">Penrose graphical notation</a> · <a href="https://en.wikipedia.org/wiki/Feynman_diagram" target="_blank" rel="noopener">Feynman diagram</a></p>
+      </div>
+    </div>
+  </section>
+  <div id="swipeDots" class="swipe-dots" aria-hidden="true"></div>
+</main>
+
+<footer id="player" aria-label="Step player">
+  <div class="pl-buttons">
+    <button id="pPrev" class="pl-btn" aria-label="Last step" title="Last step (←)">⏮</button>
+    <button id="pPlay" class="pl-btn play" aria-label="Play" title="Play or pause (space)">▶</button>
+    <button id="pNext" class="pl-btn" aria-label="Next step" title="Next step (→)">⏭</button>
+  </div>
+  <div class="pl-track">
+    <div class="pl-top">
+      <button id="pStepsBtn" class="pl-label" aria-controls="stepList" aria-expanded="false"><span id="pCount">0 / 0</span><span id="pLabel">Open an equation from the library</span></button>
+    </div>
+    <div class="pl-scrub">
+      <div id="pTicks" class="pl-ticks"></div>
+      <input id="pScrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Scrub the steps">
+    </div>
+  </div>
+  <label class="pl-speed"><span>Speed</span>
+    <select id="pSpeed" aria-label="Speed"></select>
+  </label>
+  <div id="lens" class="lens" role="group" aria-label="Indices lens">
+    <span class="lens-title">Indices</span>
+    <div id="lensChips" class="lens-chips"></div>
+  </div>
+  <ol id="stepList" class="step-list" hidden></ol>
+</footer>
+
+<aside id="credits" class="drawer" hidden aria-label="Credits">
+  <button id="creditsClose" class="mini drawer-close" aria-label="Close the credits">✕</button>
+  <h2>Credits and sources</h2>
+  <div id="creditsBody"></div>
+</aside>
+
+<nav id="dock" aria-label="Phone controls">
+  <button id="dockPanel" aria-label="Library and playground" aria-expanded="false">☰</button>
+  <button id="dockPlay" aria-label="Play">▶</button>
+  <div id="dockViews" class="seg" role="group" aria-label="Views">
+    <button data-layout="tex">Eq</button>
+    <button data-layout="viz">3D</button>
+    <button data-layout="diagram">Diagram</button>
+    <button data-layout="all" class="on">All</button>
+  </div>
+  <button id="dockLens" aria-label="Indices lens" aria-expanded="false">μ</button>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Tensor calculus: notes between packages
+
+One dated line per request: from, to, what. Append; do not rewrite.
+
+- 2026-10-17 CORE -> MATH: toTex() colours by first appearance (indexColorMap). CORE passes `colorMap` built from palette.js `indexSlot()`, so the page is consistent. Please make the default colorMap come from `../palette.js` indexSlot too, so a package that calls toTex() with no colorMap gets the same colours as the views.
+- 2026-10-17 CORE -> LIBRARY, VIZ: the scene ids differ (LIBRARY `vector-covector`, `basis-dual`, `rank2-transform`, `contraction-block`, `component-cube`, `metric-ellipses`, `curvilinear-grid`, `christoffel-basis`, ...; VIZ `upper-lower`, `dual-basis`, `contraction`, `rank3-cube`, `metric-field`, `curvilinear`, `christoffel`, ...). CORE maps them in main.js `resolveScene` (SCENE_ALIAS plus a word match) before VIZ sees a step. One shared list would be better: LIBRARY could change the `viz` column of library/scenes.js to the VIZ ids.
+- 2026-10-17 CORE -> LEARN: CORE accepts `createLearn(host, { page, menu, typeset })`, or `CHAPTERS` plus `openChapter(id, host, page)` / `mountChapter(host, id, page)`. `page` is window.tensorPage (ui/page-api.js header). Every method returns a promise; `on()` returns its off() at once. `showExpr()` takes a TeX string.
+- 2026-10-17 CORE -> VIZ, DIAGRAM: createViz gets `{ palette, indexColor, indexRGB, onPick, math, externalClock: true }`; CORE calls setTime(seconds) each frame. createDiagram gets the same plus `onPickIndex` and `style`. CORE calls diagram.resize() and viz.resize() when a layout change ends.
+- 2026-10-17 DIAGRAM -> MATH: parseIndexTex rejects a bracket that spans two factors (`g_{a[c} R_{d]b}`, `\partial_{[\lambda} F_{\mu\nu]}`; Weyl and the Maxwell Bianchi identity need it). DIAGRAM draws it when the term carries `sym: [{ type: 'sym'|'antisym', refs: [[factorIndex, slotIndex], ...] }]` (or `syms: [sym, ...]`). DIAGRAM reads `factor.deriv` with `derivKind` already.
