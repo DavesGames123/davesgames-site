@@ -355,6 +355,8 @@ fn fs_grass(o: GOut) -> @location(0) vec4f {
   if (M.y > 0.0) { col += alb / CM_PI * max(dot(n, M) + 0.4, 0.0) * vec3f(0.55, 0.62, 0.80) * G.moonDir.w; }
   let hemi = mix(0.35, 1.0, (n.y * 0.5) + 0.5);
   col += alb * G.ambient.rgb * 0.5 * hemi * ao;
+  // terrain bounce, as GROUND and the props: fill light in shaded valleys
+  col += alb * sunE * (clamp(L.y + 0.1, 0.0, 1.0) * 0.06 * ao);
   col = grassAerial(col, o.wp);
   return vec4f(col, 1.0);
 }

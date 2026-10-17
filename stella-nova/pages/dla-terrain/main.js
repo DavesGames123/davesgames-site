@@ -489,7 +489,13 @@ function loop(now) {
   if (!gpu) return;
   const st = skyNow(dt);
   // SKY's exposure hint caps the auto exposure, so a night stays dark
-  if (post && st && Number.isFinite(st.exposureHint)) post.settings.maxExp = clamp(st.exposureHint * 1.5, 0.05, 40);
+  // (at night only: by day the auto exposure may lift a shaded valley
+  // up to 6 x the hint, so a deep fjord at 14:00 is not black)
+  if (post && st && Number.isFinite(st.exposureHint)) {
+    const sy = st.sunDir ? st.sunDir[1] : (G[GLOBALS.sunDir.offset + 1] || 0);
+    const day = clamp((sy + 0.05) / 0.15, 0, 1);
+    post.settings.maxExp = clamp(st.exposureHint * (1.5 + 4.5 * day), 0.05, 40);
+  }
   // the lens and the saver band
   let shift = 0;
   if (app.saverRun) {

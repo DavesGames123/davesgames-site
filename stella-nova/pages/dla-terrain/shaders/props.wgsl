@@ -365,7 +365,11 @@ fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, t
   if (M.y > 0.0) { col += alb / CM_PI * max(dot(n, M) + 0.3, 0.0) * vec3f(0.55, 0.62, 0.80) * G.moonDir.w; }
   // sky ambient (hemisphere), as GROUND does it
   let hemi = mix(0.35, 1.0, (n.y * 0.5) + 0.5);
-  col += alb * G.ambient.rgb * 0.5 * hemi * ao;
+  let aoA = mix(0.4, 1.0, ao);
+  col += alb * G.ambient.rgb * (1.25 / CM_PI) * hemi * aoA;
+  // terrain bounce, as GROUND: lit slopes across a valley fill the shade
+  // (without it rocks and trunks in a shaded valley read as black cut-outs)
+  col += alb * sunE * (clamp(L.y + 0.1, 0.0, 1.0) * 0.045 * (1.0 - (0.5 * n.y)) * aoA);
   return col;
 }
 

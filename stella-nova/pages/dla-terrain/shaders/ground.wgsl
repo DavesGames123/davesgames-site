@@ -1273,7 +1273,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   }
   // sky ambient (hemisphere), occlusion from tNormal.w and the crevices
   let microAO = mix(0.55, 1.0, clamp(hg.x * 1.2, 0.0, 1.0));
-  let ao = aoT * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8);
+  // the baked terrain AO is soft-limited at 0.45: a deep valley still sees
+  // a band of sky and the lit far wall (at full strength it went black)
+  let ao = mix(0.45, 1.0, aoT) * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8);
   // the sky is brighter toward the sun: a mild sun-side bias keeps the
   // form of slopes in shadow at a low sun
   let sunSide = normalize(vec3f(L.x, 0.35, L.z));
@@ -1282,7 +1284,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   col += alb * (G.ambient.rgb / GPI) * (hemi + bounce) * ao;
   // terrain bounce: sunlit slopes across a valley light the shaded side
   // (a fixed fraction: the mean ground albedo times the view of lit land)
-  col += alb * sunE * (clamp(L.y + 0.1, 0.0, 1.0) * 0.045 * (1.0 - (0.5 * n.y)) * ao);
+  col += alb * sunE * (clamp(L.y + 0.1, 0.0, 1.0) * 0.07 * (1.0 - (0.5 * n.y)) * ao);
   // sky reflection on wet ground, puddles and snow
   let R = reflect(-V, n);
   let ndv = max(dot(n, V), 0.0);
