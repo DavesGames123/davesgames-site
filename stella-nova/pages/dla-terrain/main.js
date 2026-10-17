@@ -533,6 +533,8 @@ function loop(now) {
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
+    // the vegetation scatter time per frame (ms): less on Low and phones
+    budgetMs: coarse || app.qualityIndex === 0 ? 1.5 : app.qualityIndex === 1 ? 2.2 : 3,
   };
   for (const md of fg.active()) if (md.update) {
     try { md.update(frame); } catch (e) { console.warn(`dla-terrain: ${md.role} update failed`, e); md.failed = true; ui.notice(`${md.label || md.role}: update failed`); }
