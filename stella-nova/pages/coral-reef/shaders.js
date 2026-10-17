@@ -108,6 +108,7 @@ vec3 causticAt(vec3 w, vec3 n) {
   vec2 q = (w.xz - uSun.xz / max(0.2, -uSun.y) * (${SURFACE_Y.toFixed(1)} - w.y) * 0.04) / uCaustTile;
   vec2 dq = vec2(0.0035, 0.0021);
   vec3 e = vec3(texture(uCaustTex, q - dq).r, texture(uCaustTex, q).r, texture(uCaustTex, q + dq).r) * uCaustScale;
+  e = min(log2(1.0 + e), vec3(3.2));       // E = 1 stays 1; a fold (E up to 24) is a bright line, not a white blot
   float up = clamp(n.y * 0.7 + 0.3, 0.0, 1.0);
   float depth = clamp(1.0 - (${SURFACE_Y.toFixed(1)} - w.y) / 300.0, 0.3, 1.0);
   return mix(vec3(1.0), e, up * depth);
@@ -193,7 +194,7 @@ void main() {
   w.xz += dir * wave * amp * uSwayK * pow(max(h, 0.0) * 0.045, 1.5);
   vW = w.xyz; vL = position;
   vN = normalize(mat3(modelMatrix) * normal);
-  vNat = A.rgb;
+  vNat = pow(A.rgb, vec3(2.2));        // the natural colours are sRGB-like values: to linear
   vT = (uMode > 0.5 && uMode < 1.5) ? max(aGid, 0.0) / max(1.0, uCount - 1.0) : A.a;
   vGlow = exp(-max(age, 0.0) / 1.6);
   vTip = tip;
@@ -313,7 +314,7 @@ void main() {
   w.xz += (normalize(uCur + vec2(0.0001)) * (0.6 + 0.4 * sin(uTime * 1.3 + ph))) * sw * size * 0.9 * uSwayK;
   vW = w.xyz;
   vN = normalize(mat3(modelMatrix) * (aT.w > 1.5 ? normalize(t * d.x + b * d.y + nn * 0.6) : (aT.w > 0.5 ? nn : t * d.x + b * d.y)));
-  vNat = A.rgb;
+  vNat = pow(A.rgb, vec3(2.2));        // the natural colours are sRGB-like values: to linear
   vT = (uMode > 0.5 && uMode < 1.5) ? iData.x / max(1.0, uCount - 1.0) : A.a;
   vGlow = exp(-max(age, 0.0) / 2.0);
   gl_Position = projectionMatrix * viewMatrix * w;
