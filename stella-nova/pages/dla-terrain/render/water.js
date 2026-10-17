@@ -20,6 +20,10 @@
 //  From SKY (NOTES.md): gpu.cloudShadow / frame.cloudShadow (sun light on
 //  the water) and gpu.skyView / frame.skyView (the sky in reflections).
 //  Either can come after createWater; group 1 is made again when it does.
+//  From CORE (POLISH): frame.waterLook = { tint 0..1, waves 0..1 }, the Sky
+//  & life tab sliders. tint scales the absorption and scatter (waterTint:
+//  glacial, clear, green, peaty); waves scales the wind of the wave
+//  spectrum (0.4 = as the weather).
 //
 //  DOM-free builders (node tests in ../tests/water.test.mjs reach them):
 //    waveModes(opts)            lattice wave vectors and Phillips amplitudes
@@ -68,6 +72,24 @@ function mulberry32(seed) {
   };
 }
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+
+// The Water colour slider (frame.waterLook.tint 0..1): multipliers of the
+// absorption a and the scatter s per channel. 0 glacial (milky turquoise),
+// 0.35 clear (the base values), 0.65 green (algae), 1 peaty (tea brown).
+const TINT_KEYS = [
+  { t: 0, a: [1.6, 0.55, 0.7], s: [2.2, 2.4, 1.7] },
+  { t: 0.35, a: [1, 1, 1], s: [1, 1, 1] },
+  { t: 0.65, a: [1.1, 0.9, 2.6], s: [0.9, 1.35, 0.55] },
+  { t: 1, a: [0.9, 2.4, 6.5], s: [1.5, 0.75, 0.25] },
+];
+export function waterTint(t) {
+  t = clamp(t, 0, 1);
+  let i = 0;
+  while (i < TINT_KEYS.length - 2 && t > TINT_KEYS[i + 1].t) i++;
+  const A = TINT_KEYS[i], B = TINT_KEYS[i + 1], u = (t - A.t) / (B.t - A.t);
+  const l = (x, y) => x.map((v, k) => v + (y[k] - v) * u);
+  return { a: l(A.a, B.a), s: l(A.s, B.s) };
+}
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // ----------------------------------------------------------- wave spectrum ----
@@ -765,6 +787,7 @@ export async function createWater(gpu) {
     api.last = { rivers: rb, lakes: lb };
   }
 
+  let lastWaves;
   function writeUniforms(frame) {
     const g = frame.globals;
     const time = frame.time ?? g[83];
@@ -774,9 +797,15 @@ export async function createWater(gpu) {
     const k = 1 - Math.exp(-dt / 6);
     wind[0] += (wx - wind[0]) * k; wind[1] += (wz - wind[1]) * k;
     const storm = clamp(g[114] || 0, 0, 1);
+    const look = frame.waterLook || {};
+    if (look.waves !== lastWaves) { lastWaves = look.waves; modes = null; }
+    const tk = waterTint(look.tint ?? 0.35);
+    const mulv = (a, m) => [a[0] * m[0], a[1] * m[1], a[2] * m[2]];
     modesAge += dt;
     if (!modes || modesAge > 0.25) {
-      modes = waveModes({ wind, storm, count: COUNT, lattice });
+      // the Waves slider (frame.waterLook.waves, 0.4 = as the weather)
+      const wk = 0.4 + 1.5 * clamp(look.waves ?? 0.4, 0, 1);
+      modes = waveModes({ wind: [wind[0] * wk, wind[1] * wk], storm, count: COUNT, lattice });
       modesAge = 0;
     }
     wavePhases(modes, time, phases);
@@ -791,12 +820,13 @@ export async function createWater(gpu) {
     U.set([CASCADES[0].L, CASCADES[1].L, CASCADES[2].L, 1.0 + storm * 0.35], 4);
     U.set([Math.floor(cam[0] / snapS) * snapS, Math.floor(cam[2] / snapS) * snapS, 30000, 2 / (p11 * screenH)], 8);
     U.set([modes.slopeVar[0], modes.slopeVar[1], modes.slopeVar[2], modes.hs], 12);
-    U.set([0.32, 0.075, 0.048, clamp((ws - 5) * 0.08 + storm * 0.6, 0, 1.4)], 16);    // ocean absorption, whitecaps
-    U.set([0.03, 0.085, 0.125, 1.0], 20);                                                     // ocean scatter, shore foam
-    U.set([0.42, 0.26, 0.21, 0.5], 24);                                                       // river absorption
-    U.set([0.055, 0.08, 0.06, 1.6], 28);                                                       // river scatter, flow period
-    U.set([0.36, 0.11, 0.075, 1.0], 32);                                                      // lake absorption, ripple scale
-    U.set([0.028, 0.06, 0.06, 0], 36);                                                        // lake scatter
+    // the Water colour slider scales absorption (a) and scatter (s)
+    U.set([...mulv([0.32, 0.075, 0.048], tk.a), clamp((ws - 5) * 0.08 + storm * 0.6, 0, 1.4)], 16);    // ocean absorption, whitecaps
+    U.set([...mulv([0.03, 0.085, 0.125], tk.s), 1.0], 20);                                                     // ocean scatter, shore foam
+    U.set([...mulv([0.42, 0.26, 0.21], tk.a), 0.5], 24);                                                       // river absorption
+    U.set([...mulv([0.055, 0.08, 0.06], tk.s), 1.6], 28);                                                       // river scatter, flow period
+    U.set([...mulv([0.36, 0.11, 0.075], tk.a), 1.0], 32);                                                      // lake absorption, ripple scale
+    U.set([...mulv([0.028, 0.06, 0.06], tk.s), 0], 36);                                                        // lake scatter
     U.set([ws > 1e-3 ? wind[0] / ws : 1, ws > 1e-3 ? wind[1] / ws : 0, ws, storm], 40);
     const night = 1 - smooth(-0.15, 0.05, g[85]);
     U.set([quality > 0.25 ? 1 : 0, quality > 0.15 ? 1 : 0, clamp(g[109] || 0, 0, 1), night], 44);

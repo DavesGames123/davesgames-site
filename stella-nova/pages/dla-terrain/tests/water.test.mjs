@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {
   buildRiverRibbons, buildLakeMeshes, buildOceanGrid, waveModes, wavePhases, waveLattice,
-  sampleHeight, seaHs, CASCADES, SURF_STRIDE,
+  sampleHeight, seaHs, CASCADES, SURF_STRIDE, waterTint,
 } from '../render/water.js';
 
 let pass = 0, fail = 0;
@@ -290,6 +290,16 @@ test('ocean grid: closed rings, indices in range, reaches the horizon radius', (
   for (let i = 0; i < nv; i++) maxR = Math.max(maxR, g.vertices[i * 2]);
   assert.ok(Math.abs(maxR - 30000) < 1e-3 * 30000);
   assert.equal(g.indices.length, 32 * 3 + 39 * 32 * 6);
+});
+
+test('water colour slider: 0.35 is the base, peaty takes the blue, glacial scatters', () => {
+  const c = waterTint(0.35);
+  assert.deepEqual(c.a.map(x => +x.toFixed(6)), [1, 1, 1]);
+  assert.deepEqual(c.s.map(x => +x.toFixed(6)), [1, 1, 1]);
+  const peat = waterTint(1), glacial = waterTint(0);
+  assert.ok(peat.a[2] > 4 && peat.s[2] < 0.5, 'peaty absorbs blue');
+  assert.ok(glacial.s[1] > 2 && glacial.a[1] < 1, 'glacial scatters green-blue');
+  for (let t = 0; t <= 1.0001; t += 0.05) { const v = waterTint(t); assert.ok([...v.a, ...v.s].every(x => x > 0 && Number.isFinite(x))); }
 });
 
 console.log(`# water: ${pass} passed, ${fail} failed`);
