@@ -22,9 +22,13 @@
 //  0.55 of the view ranges, within the shadow distance): coarser, and
 //  crack-free by the same rule.
 //
-//  MATERIAL  shaders/ground.wgsl. ASSETS ground textures, when the
-//  manifest lists them, load into three texture arrays (albedo, normal,
-//  ORM) with mips; until then the procedural layers draw alone.
+//  MATERIAL  shaders/ground.wgsl. The ASSETS ground sets (manifest kind
+//  "ground texture", gpu.assets.loadGround) load into three texture arrays
+//  (albedo, normal, ORM with height in b) with mips, at 256, 512 or 1024 by
+//  quality. groundLayerMap gives each of the eight logical layers of the
+//  shader a primary and an alternate set (grass / dry grass / meadow,
+//  forest floor / pine floor, sand / desert, rock / scree, ...). Until the
+//  sets load, the procedural layers draw alone.
 //
 //  Shadows: CORE owns the cascaded map (gpu/shadows.js) and sets group 2
 //  on the pass: gpu.shadowSampleLayout for drawOpaque (common.wgsl fn
@@ -35,14 +39,15 @@
 //  grep -n targets: "export function lodConfig", "export function buildMinMax",
 //  "export function nodeBounds", "export function frustumPlanes",
 //  "export function selectNodes", "export function morphVertex",
-//  "export function gridIndices", "export function matchGroundTextures",
+//  "export function gridIndices", "export function groundLayerMap",
 //  "export async function createGround", "drawOpaque", "drawShadow"
 // ============================================================================
 
 const INST_FLOATS = 8;          // a: x0, z0, size, N; b: morph start, morph end, level, 0
 const MAX_INST = 6144;
 export const LAYERS = ['rock', 'cliff', 'grass', 'forest floor', 'sand', 'snow', 'mud', 'gravel'];
-const LAYER_RES = 1024;
+// texture array size per quality (three arrays of 13 sets: about 180 MB at 1024)
+export const layerRes = (q) => (q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256);
 
 // ------------------------------------------------------------ LOD config --
 
@@ -261,54 +266,57 @@ export function gridIndices(N) {
 
 // ------------------------------------------------------- ground textures --
 
-const LAYER_KEYS = [
-  [/cliff/i, 1], [/forest|litter|leaf|needle|moss/i, 3], [/snow|ice/i, 5], [/mud|soil|dirt|clay/i, 6],
-  [/gravel|pebble|scree/i, 7], [/sand|beach|dune/i, 4], [/grass|meadow|lawn/i, 2], [/rock|stone|granite/i, 0],
+// The ASSETS ground sets (manifest kind "ground texture") by role. The
+// test order puts the specific names first ("dry grass" before "grass").
+const SET_ROLES = [
+  ['cliff', /cliff/i], ['scree', /scree/i], ['dry', /dry/i], ['meadow', /meadow|damp/i],
+  ['pine', /pine|needle/i], ['desert', /desert|cracked/i], ['forest', /forest|leaf|litter/i],
+  ['gravel', /gravel|pebble/i], ['mud', /mud/i], ['snow', /snow/i], ['sand', /sand|beach/i],
+  ['rock', /rock/i], ['grass', /grass/i],
 ];
+// logical layer -> [primary role, fallback], and its alternate role
+const PRIMARY = [['rock', 'cliff'], ['cliff', 'rock'], ['grass', 'meadow'], ['forest', 'pine'],
+  ['sand', 'desert'], ['snow', null], ['mud', null], ['gravel', 'scree']];
+const ALTERNATE = ['scree', 'rock', 'dry', 'pine', 'desert', null, null, 'scree'];
+export const MAX_SETS = 16;
+// Sets with a known defect are not used (the layer then draws procedural):
+// ground_mud has a 4 x 4 grid of seams in its albedo (NOTES.md, 2026-10-17,
+// GROUND to ASSETS). Remove the id when the set is fixed.
+export const SKIP_SETS = new Set(['ground_mud']);
 
-function pickFile(files, re) {
-  if (!files) return null;
-  if (Array.isArray(files)) {
-    for (const f of files) {
-      const s = typeof f === 'string' ? f : (f.file || f.url || f.path || '');
-      if (re.test(s) || (f && re.test(f.map || f.role || ''))) return s;
+// records: the ground sets in texture array order. Returns { roles, tiles
+// (Float32Array 16, m), map (Float32Array 16: [0..7] primary array layer of
+// each logical layer, [8..15] alternate, 255 = none), meadow (layer) }.
+export function groundLayerMap(records) {
+  const roles = {};
+  const tiles = new Float32Array(MAX_SETS).fill(2);
+  records.slice(0, MAX_SETS).forEach((r, k) => {
+    tiles[k] = r.tile || 2;
+    if (SKIP_SETS.has(r.id)) return;
+    const name = `${r.id || ''} ${r.name || ''}`;
+    for (const [role, re] of SET_ROLES) {
+      if (re.test(name) && roles[role] === undefined) { roles[role] = k; break; }
     }
-    return null;
-  }
-  for (const [k, v] of Object.entries(files)) {
-    const s = typeof v === 'string' ? v : (v && (v.file || v.url || v.path || (Array.isArray(v) ? v[0] : '')));
-    if (s && (re.test(k) || re.test(s))) return s;
-  }
-  return null;
+  });
+  const idx = (role) => (role && roles[role] !== undefined ? roles[role] : 255);
+  const map = new Float32Array(16);
+  PRIMARY.forEach(([a, b], l) => { map[l] = idx(a) !== 255 ? idx(a) : idx(b); });
+  ALTERNATE.forEach((a, l) => { map[8 + l] = idx(a); });
+  return { roles, tiles, map, meadow: idx('meadow') };
 }
 
-// Match the ground textures of an ASSETS manifest to the eight layers.
-// Returns [{ layer, id, albedo, normal, orm }] (file paths as listed).
-export function matchGroundTextures(manifest) {
+// ground set records of a manifest (kind "ground texture"), in the order of
+// manifest.groundLayers when it is there
+export function groundRecords(manifest) {
   if (!manifest) return [];
-  const list = Array.isArray(manifest) ? manifest : (manifest.assets || manifest.items || manifest.entries || []);
-  const out = [];
-  const taken = new Set();
-  for (const a of list) {
-    if (!a || !/ground|terrain|texture|surface/i.test(String(a.kind || a.type || ''))) continue;
-    const name = `${a.id || ''} ${a.name || ''} ${(a.tags || a.biomes || []).join?.(' ') || ''}`;
-    let layer = -1;
-    for (const [re, l] of LAYER_KEYS) { if (re.test(name)) { layer = l; break; } }
-    if (layer < 0 || taken.has(layer)) continue;
-    const files = a.files || a.maps || a.textures || a.lods || a;
-    const albedo = pickFile(files, /albedo|diff|basecolor|base_color|colou?r|_col/i);
-    if (!albedo) continue;
-    out.push({
-      layer, id: a.id || a.name,
-      albedo,
-      normal: pickFile(files, /normal|_nor|nrm/i),
-      orm: pickFile(files, /orm|arm|rough/i),
-    });
-    taken.add(layer);
+  const list = Array.isArray(manifest) ? manifest : (manifest.assets || []);
+  const g = list.filter((a) => a && /ground/i.test(String(a.kind || '')) && a.textures && a.textures.albedo);
+  if (manifest.groundLayers) {
+    const by = new Map(g.map((a) => [a.id, a]));
+    const ordered = manifest.groundLayers.map((id) => by.get(id)).filter(Boolean);
+    if (ordered.length) return ordered;
   }
-  // cliff falls back to rock
-  if (!taken.has(1)) { const r = out.find((e) => e.layer === 0); if (r) out.push({ ...r, layer: 1 }); }
-  return out;
+  return g;
 }
 
 // ----------------------------------------------------------------- module --
@@ -345,16 +353,25 @@ export async function createGround(gpu) {
       { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
     ],
   });
   // the shadow pass reads U (group 1) too: the morph needs the terrain top
-  const uBuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
-  const uData = new Float32Array(16);
+  const uBuf = device.createBuffer({ size: 52 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
+  const uData = new Float32Array(52);
+  // SKY's cloud shadow map (module.cloudShadow), when CORE hands it over as
+  // gpu.cloudShadow or frame.cloudShadow; a lit 1 x 1 stand-in until then
+  const litTex = device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, label: 'ground lit' });
+  queue.writeTexture({ texture: litTex }, new Uint8Array([255, 255, 255, 255]), { bytesPerRow: 4 }, [1, 1]);
+  const litSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+  let cloud = null;
+  let layerMap = groundLayerMap([]);
   const sRepeat = gpu.sRepeat || device.createSampler({ addressModeU: 'repeat', addressModeV: 'repeat', magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', maxAnisotropy: 8 });
 
   // layer arrays: a 4x4 dummy until ASSETS textures arrive
-  const mkArray = (size, format, mips, label) => device.createTexture({
-    size: [size, size, 8], format, mipLevelCount: mips, label,
+  const mkArray = (size, format, mips, label, layers = 1) => device.createTexture({
+    size: [size, size, layers], format, mipLevelCount: mips, label,
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
   });
   let texAlb = mkArray(4, 'rgba8unorm-srgb', 1, 'ground alb dummy');
@@ -369,6 +386,8 @@ export async function createGround(gpu) {
       { binding: 2, resource: texNrm.createView({ dimension: '2d-array' }) },
       { binding: 3, resource: texOrm.createView({ dimension: '2d-array' }) },
       { binding: 4, resource: sRepeat },
+      { binding: 5, resource: cloud ? cloud.view : litTex.createView() },
+      { binding: 6, resource: cloud ? cloud.sampler : litSampler },
     ],
   });
   let groundBG = makeBG();
@@ -477,10 +496,18 @@ export async function createGround(gpu) {
     shArr = shSel.out;
     queue.writeBuffer(shInstBuf, 0, shArr, 0, shSel.count * INST_FLOATS);
 
+    const cs = frame.cloudShadow || gpu.cloudShadow || null;
+    if (cs && cs.view && cs.sampler) {
+      if (!cloud || cloud.view !== cs.view) { cloud = { view: cs.view, sampler: cs.sampler }; groundBG = makeBG(); }
+      const r = cs.rect ? cs.rect() : [0, 0, 1];
+      uData[48] = r[0]; uData[49] = r[1]; uData[50] = r[2]; uData[51] = cs.base ? cs.base() : 2000;
+    } else if (cloud) { cloud = null; groundBG = makeBG(); }
     uData.set([cfg.N, cfg.ranges[0], cfg.levels, pad,
-      texOn, 4.0, debug, quality,
-      aerialOn, 1, Math.min(terrain.worldSize * 0.3, 8000), 0,
+      texOn, layerMap.meadow, debug, quality,
+      aerialOn, 1, Math.min(terrain.worldSize * 0.3, 8000), cloud ? 1 : 0,
       frame.time || 0, hMin, hTop, 1]);
+    uData.set(layerMap.tiles, 16);
+    uData.set(layerMap.map, 32);
     queue.writeBuffer(uBuf, 0, uData);
   }
 
@@ -538,43 +565,77 @@ export async function createGround(gpu) {
     queue.submit([enc.finish()]);
   }
 
-  async function loadImage(src) {
-    const r = await fetch(src);
-    if (!r.ok) throw new Error(`${src}: ${r.status}`);
-    const blob = await r.blob();
-    return createImageBitmap(blob, { resizeWidth: LAYER_RES, resizeHeight: LAYER_RES, resizeQuality: 'high', colorSpaceConversion: 'none' });
+  // a bitmap (browser) or { width, height, data } RGBA bytes (tests) into
+  // layer k of tex, at res x res
+  async function upload(img, tex, k, res) {
+    if (!img) return false;
+    if (img.data) {
+      if (img.width !== res || img.height !== res) return false;
+      queue.writeTexture({ texture: tex, origin: [0, 0, k] }, img.data, { bytesPerRow: res * 4 }, [res, res, 1]);
+      return true;
+    }
+    let src = img;
+    if ((img.width !== res || img.height !== res) && typeof createImageBitmap !== 'undefined') {
+      src = await createImageBitmap(img, { resizeWidth: res, resizeHeight: res, resizeQuality: 'high' });
+    }
+    queue.copyExternalImageToTexture({ source: src }, { texture: tex, origin: [0, 0, k] }, [res, res, 1]);
+    return true;
   }
 
-  // Load the ground textures listed in the ASSETS manifest. Resolves to the
-  // number of layers loaded (0: the procedural layers stay alone).
+  async function fetchBitmap(u) {
+    const r = await fetch(u);
+    if (!r.ok) throw new Error(`${u}: ${r.status}`);
+    return createImageBitmap(await r.blob(), { colorSpaceConversion: 'none' });
+  }
+
+  // Load the ASSETS ground sets into the three arrays. gpu.assets is the
+  // glb-lite library (loadGround) or a bare manifest. Resolves to the
+  // number of sets loaded (0: the procedural layers stay alone).
   async function loadAssetTextures() {
     const a = gpu.assets;
-    const manifest = a && (a.manifest || a);
-    const found = matchGroundTextures(manifest);
-    if (!found.length || typeof createImageBitmap === 'undefined') return 0;
-    const base = (a && (a.baseURL || a.base)) || new URL('../../../assets/nature/', import.meta.url).href;
-    const mips = Math.floor(Math.log2(LAYER_RES)) + 1;
-    const alb = mkArray(LAYER_RES, 'rgba8unorm-srgb', mips, 'ground alb');
-    const nrm = mkArray(LAYER_RES, 'rgba8unorm', mips, 'ground nrm');
-    const orm = mkArray(LAYER_RES, 'rgba8unorm', mips, 'ground orm');
+    if (!a) return 0;
+    let sets = null;
+    if (a.loadGround) sets = await a.loadGround();
+    else {
+      const recs = groundRecords(a.manifest || a);
+      if (!recs.length || typeof createImageBitmap === 'undefined') return 0;
+      const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
+      sets = await Promise.all(recs.map(async (rec) => {
+        const t = rec.textures;
+        const get = (f) => (f ? fetchBitmap(new URL(f, base).href).catch(() => null) : null);
+        const [albedo, normal, orm] = await Promise.all([get(t.albedo), get(t.normal), get(t.orm)]);
+        return { record: rec, albedo, normal, orm };
+      }));
+    }
+    sets = (sets || []).filter((x) => x && x.albedo).slice(0, MAX_SETS);
+    if (!sets.length) return 0;
+    const res = layerRes(quality);
+    const mips = Math.floor(Math.log2(res)) + 1;
+    const L = sets.length;
+    const alb = mkArray(res, 'rgba8unorm-srgb', mips, 'ground alb', L);
+    const nrm = mkArray(res, 'rgba8unorm', mips, 'ground nrm', L);
+    const orm = mkArray(res, 'rgba8unorm', mips, 'ground orm', L);
+    const flat = { width: res, height: res, data: new Uint8Array(res * res * 4) };
     let ok = 0;
-    for (const f of found) {
+    for (let k = 0; k < L; k++) {
+      const st = sets[k];
       try {
-        const jobs = [[f.albedo, alb, 'rgba8unorm-srgb'], [f.normal, nrm, 'rgba8unorm'], [f.orm, orm, 'rgba8unorm']];
-        for (const [file, tex, fmt] of jobs) {
-          if (!file) continue;
-          const img = await loadImage(new URL(file, base).href);
-          queue.copyExternalImageToTexture({ source: img }, { texture: tex, origin: [0, 0, f.layer] }, [LAYER_RES, LAYER_RES, 1]);
-          genMips(tex, fmt, f.layer, mips);
-        }
+        await upload(st.albedo, alb, k, res);
+        // a missing normal map is flat, a missing ORM is AO 1, rough 0.8, height 0.5
+        if (!(await upload(st.normal, nrm, k, res))) { flat.data.fill(0); for (let i = 0; i < res * res; i++) { flat.data[i * 4] = 128; flat.data[i * 4 + 1] = 128; flat.data[i * 4 + 2] = 255; } await upload(flat, nrm, k, res); }
+        if (!(await upload(st.orm, orm, k, res))) { for (let i = 0; i < res * res; i++) { flat.data[i * 4] = 255; flat.data[i * 4 + 1] = 204; flat.data[i * 4 + 2] = 128; } await upload(flat, orm, k, res); }
+        genMips(alb, 'rgba8unorm-srgb', k, mips);
+        genMips(nrm, 'rgba8unorm', k, mips);
+        genMips(orm, 'rgba8unorm', k, mips);
         ok++;
       } catch (e) {
-        console.warn('ground: texture', f.id, e.message);
+        console.warn('ground: texture set', st.record && st.record.id, e.message);
       }
     }
     if (!ok) { alb.destroy(); nrm.destroy(); orm.destroy(); return 0; }
     texAlb.destroy(); texNrm.destroy(); texOrm.destroy();
     texAlb = alb; texNrm = nrm; texOrm = orm;
+    layerMap = groundLayerMap(sets.map((x) => x.record));
     groundBG = makeBG();
     texOn = 1;
     return ok;
@@ -596,7 +657,7 @@ export async function createGround(gpu) {
     dispose() {
       for (const b of [uBuf, instBuf, shInstBuf]) b.destroy();
       for (const k of Object.keys(idxBufs)) idxBufs[k].buf.destroy();
-      texAlb.destroy(); texNrm.destroy(); texOrm.destroy();
+      texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy();
     },
   };
 }

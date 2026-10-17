@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   lodConfig, buildMinMax, nodeBounds, selectNodes, morphVertex, gridIndices,
-  frustumPlanes, matchGroundTextures, LAYERS,
+  frustumPlanes, groundLayerMap, groundRecords, LAYERS, SKIP_SETS,
 } from '../render/ground.js';
 
 let pass = 0, fail = 0;
@@ -182,21 +182,28 @@ for (const q of [1.0, 0.3]) {
   ok(neg === 0 && pos === N * N * 2, `grid ${N}: ${pos} triangles, all with +y normals`);
 }
 
-// ---- ASSETS manifest match
+// ---- ASSETS ground sets -> logical layers
 {
-  const man = {
-    assets: [
-      { id: 'rock_face_03', kind: 'ground texture', files: { albedo: 'tex/rock_diff.webp', normal: 'tex/rock_nor.webp', orm: 'tex/rock_arm.webp' } },
-      { id: 'forest_leaves_02', kind: 'ground texture', files: { albedo: 'tex/fl_diff.webp', normal: 'tex/fl_nor.webp' } },
-      { id: 'aerial_grass_rock', kind: 'ground texture', files: { diffuse: 'tex/g_diff.webp' } },
-      { id: 'pine_01', kind: 'tree', files: { lod0: 'pine.glb' } },
-    ],
-  };
-  const m = matchGroundTextures(man);
-  const by = Object.fromEntries(m.map((e) => [LAYERS[e.layer], e.id]));
-  ok(by.rock === 'rock_face_03' && by['forest floor'] === 'forest_leaves_02' && by.grass === 'aerial_grass_rock' && by.cliff === 'rock_face_03' && m.length === 4,
-    'matchGroundTextures maps rock, forest floor, grass, and cliff to rock', JSON.stringify(by));
-  ok(matchGroundTextures(null).length === 0 && matchGroundTextures({ assets: [] }).length === 0, 'matchGroundTextures with no manifest gives no layers');
+  const manPath = fileURLToPath(new URL('../../../assets/nature/manifest.json', import.meta.url));
+  let man = null;
+  try { man = JSON.parse(readFileSync(manPath, 'utf8')); } catch { man = null; }
+  if (man) {
+    const recs = groundRecords(man);
+    const m = groundLayerMap(recs);
+    const name = (k) => (k === 255 ? 'none' : recs[k].id);
+    const prim = LAYERS.map((l, i) => `${l}=${name(m.map[i])}`).join(' ');
+    // every layer has a set, except a layer whose only set is in SKIP_SETS
+    const allSet = [...m.map.slice(0, 8)].every((k, l) => k !== 255 || (l === 6 && recs.some((r) => SKIP_SETS.has(r.id))));
+    ok(recs.length >= 8 && allSet && name(m.map[2]) === 'ground_grass' && name(m.map[10]) === 'ground_dry_grass' && name(m.map[1]) === 'ground_cliff' && m.meadow !== 255,
+      `groundLayerMap on the ASSETS manifest (${recs.length} sets): every layer has a set (skipped: ${[...SKIP_SETS].join(', ')})`, prim);
+    ok([...m.tiles.slice(0, recs.length)].every((t, k) => t === Math.fround(recs[k].tile)), 'groundLayerMap keeps the tile size of each set');
+  } else {
+    ok(true, 'groundLayerMap: no ASSETS manifest yet (skipped)');
+  }
+  const none = groundLayerMap([]);
+  ok([...none.map].every((k) => k === 255) && groundRecords(null).length === 0, 'groundLayerMap with no sets maps every layer to none (procedural only)');
+  const part = groundLayerMap([{ id: 'x_rock', tile: 3 }]);
+  ok(part.map[0] === 0 && part.map[1] === 0 && part.map[2] === 255, 'a missing cliff set falls back to rock');
 }
 
 // ---- static WGSL rules

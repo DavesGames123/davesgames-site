@@ -53,15 +53,20 @@
 
 struct GroundU {
   lod: vec4f,     // x grid N (full patch), y LOD 0 range m, z level count, w detail pad m
-  mat: vec4f,     // x textures on (0/1), y texture tile m, z debug view, w quality 0..1
-  shadow: vec4f,  // x aerial perspective on (0/1), y height march on (0/1), z march length m, w 0
+  mat: vec4f,     // x textures on (0/1), y meadow set layer (255: none), z debug view, w quality 0..1
+  shadow: vec4f,  // x aerial perspective on (0/1), y height march on (0/1), z march length m, w cloud shadow on (0/1)
   misc: vec4f,    // x time s, y min height m, z terrain top m (max + pad, LOD metric), w ripple strength
+  tiles: array<vec4f, 4>,  // tile size m of texture array layer k: tiles[k / 4][k % 4]
+  map: array<vec4f, 4>,    // [0..7] primary layer of logical layer l, [8..15] alternate (255: none)
+  cloud: vec4f,   // SKY cloud shadow: xy rect origin (world xz), z rect size m, w cloud base y m
 };
 @group(1) @binding(0) var<uniform> U: GroundU;
-@group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // 8 layers, rgba8unorm-srgb
-@group(1) @binding(2) var tLayerNrm: texture_2d_array<f32>;  // 8 layers, rgba8unorm (xy normal)
-@group(1) @binding(3) var tLayerOrm: texture_2d_array<f32>;  // 8 layers, r AO, g rough, b height
+@group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // ASSETS ground sets, rgba8unorm-srgb
+@group(1) @binding(2) var tLayerNrm: texture_2d_array<f32>;  // rgba8unorm, OpenGL normal (+y)
+@group(1) @binding(3) var tLayerOrm: texture_2d_array<f32>;  // r AO, g roughness, b height
 @group(1) @binding(4) var sRepeat: sampler;                  // linear, repeat, anisotropic
+@group(1) @binding(5) var tCloudSh: texture_2d<f32>;         // SKY module.cloudShadow.view (r: sun transmittance)
+@group(1) @binding(6) var sCloudSh: sampler;
 
 const GPI: f32 = 3.14159265;
 
@@ -251,17 +256,19 @@ fn baseH(xz: vec2f) -> f32 {
 // 5 temperate forest, 6 rainforest, 7 boreal forest, 8 tundra, 9 bare rock,
 // 10 snow, 11 wetland, 12 river, 13 lake, 14 scree, 15 alpine meadow.
 
-struct BW { w0: vec4f, w1: vec4f, grass: vec3f, litter: vec3f };
+struct BW { w0: vec4f, w1: vec4f, grass: vec3f, litter: vec3f, kind: vec2f };
+// kind: x boreal (pine floor), y desert (cracked dry ground)
 // w0 = rock, cliff, grass, forest floor; w1 = sand, snow, mud, gravel
 
 fn biomeBase(id: u32) -> BW {
   var b: BW;
   b.w0 = vec4f(0.0, 0.0, 1.0, 0.0); b.w1 = vec4f(0.0);
   b.grass = vec3f(0.092, 0.118, 0.044); b.litter = vec3f(0.090, 0.068, 0.042);
+  b.kind = vec2f(0.0);
   switch (id) {
     case 0u: { b.w0 = vec4f(0.1, 0.0, 0.0, 0.0); b.w1 = vec4f(0.7, 0.0, 0.35, 0.2); }
     case 1u: { b.w0 = vec4f(0.0); b.w1 = vec4f(1.0, 0.0, 0.0, 0.08); }
-    case 2u: { b.w0 = vec4f(0.18, 0.0, 0.0, 0.0); b.w1 = vec4f(1.0, 0.0, 0.0, 0.25);
+    case 2u: { b.w0 = vec4f(0.18, 0.0, 0.0, 0.0); b.w1 = vec4f(1.0, 0.0, 0.0, 0.25); b.kind = vec2f(0.0, 1.0);
                b.grass = vec3f(0.30, 0.22, 0.11); }
     case 3u: { b.w0 = vec4f(0.04, 0.0, 0.85, 0.0); b.w1 = vec4f(0.30, 0.0, 0.0, 0.05);
                b.grass = vec3f(0.26, 0.205, 0.085); }
@@ -272,7 +279,7 @@ fn biomeBase(id: u32) -> BW {
     case 6u: { b.w0 = vec4f(0.0, 0.0, 0.30, 1.0); b.w1 = vec4f(0.0, 0.0, 0.22, 0.0);
                b.grass = vec3f(0.048, 0.098, 0.028); b.litter = vec3f(0.070, 0.062, 0.032); }
     case 7u: { b.w0 = vec4f(0.05, 0.0, 0.25, 1.0); b.w1 = vec4f(0.0, 0.0, 0.05, 0.05);
-               b.grass = vec3f(0.080, 0.105, 0.045); b.litter = vec3f(0.085, 0.072, 0.050); }
+               b.grass = vec3f(0.080, 0.105, 0.045); b.litter = vec3f(0.085, 0.072, 0.050); b.kind = vec2f(1.0, 0.0); }
     case 8u: { b.w0 = vec4f(0.25, 0.0, 0.7, 0.0); b.w1 = vec4f(0.0, 0.0, 0.10, 0.25);
                b.grass = vec3f(0.150, 0.130, 0.072); }
     case 9u: { b.w0 = vec4f(1.0, 0.0, 0.0, 0.0); b.w1 = vec4f(0.0, 0.0, 0.0, 0.3); }
@@ -300,7 +307,7 @@ fn biomeMix(xz: vec2f) -> BW {
   let i = vec2i(fl);
   let f = g - fl;
   var r: BW;
-  r.w0 = vec4f(0.0); r.w1 = vec4f(0.0); r.grass = vec3f(0.0); r.litter = vec3f(0.0);
+  r.w0 = vec4f(0.0); r.w1 = vec4f(0.0); r.grass = vec3f(0.0); r.litter = vec3f(0.0); r.kind = vec2f(0.0);
   for (var k = 0; k < 4; k++) {
     let o = vec2i(k & 1, k >> 1u);
     let id = textureLoad(tBiome, clamp(i + o, vec2i(0), n - 1), 0).r;
@@ -308,7 +315,7 @@ fn biomeMix(xz: vec2f) -> BW {
     let wy = select(1.0 - f.y, f.y, o.y == 1);
     let w = wx * wy;
     let b = biomeBase(id);
-    r.w0 += b.w0 * w; r.w1 += b.w1 * w; r.grass += b.grass * w; r.litter += b.litter * w;
+    r.w0 += b.w0 * w; r.w1 += b.w1 * w; r.grass += b.grass * w; r.litter += b.litter * w; r.kind += b.kind * w;
   }
   return r;
 }
@@ -373,7 +380,9 @@ fn macroErosion(p: vec3f, down: vec2f, steep: f32, fp: f32) -> vec2f {
 
 // --------------------------------------------------------------- layers --
 
-struct Mat { alb: vec3f, h: vec4f, rough: f32 };   // h: x height 0..1, yzw gradient (1/m)
+struct Mat { alb: vec3f, h: vec4f, rough: f32, tn: vec3f, ao: f32 };
+// h: x height 0..1, yzw gradient (1/m); tn: texture normal offset (world, in
+// the tangent plane); ao: texture occlusion
 
 // 3D Worley: x F1, y F2 (distances in cells), and the gradient of F2 - F1
 // (in cells), for crack lines between blocks.
@@ -470,6 +479,9 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   let lich = smoothstep(0.1, 0.55, lichN + (moist - 0.45)) * (1.0 - crack);
   c = mix(c, mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, lichN)), lich * 0.4 * (1.0 - (region.y * 0.8)));
   // cracks dark, block tops a little lighter
+  // weathering: tone patches at 1..6 m, so a face is not one flat grey
+  let wz = fbmd(p, 0.35, 3, 0.55, fp).x;
+  c *= mix(0.68, 1.18, smoothstep(-0.55, 0.55, wz));
   c *= mix(1.0, 0.5, crack) * mix(0.86, 1.06, clamp(h, 0.0, 1.0));
   // ledge undercuts shade dark, ledge tops catch light
   c *= mix(1.0, mix(0.7, 1.1, step), fadeL);
@@ -492,7 +504,11 @@ fn layerGrass(p: vec3f, fp: f32, tint: vec3f, moist: f32) -> Mat {
   let hue = fbm2((p.xz * 0.06) + 3.3, 3);
   c = mix(c, c * vec3f(0.80, 0.95, 1.05), smoothstep(0.0, 0.5, hue) * 0.6);
   c = mix(c, c * vec3f(1.25, 1.12, 0.80), smoothstep(0.0, 0.5, -hue) * 0.5);
-  c *= 0.82 + (0.30 * n.x) + (0.12 * clump.x);
+  c *= 0.80 + (0.30 * n.x) + (0.22 * clump.x);
+  // tussocks: darker, bluer hollows between them (seen to ~60 m)
+  let tus = voronoi2(p.xz * 0.9);
+  let tf = 1.0 - smoothstep(0.15, 0.6, fp);
+  c *= mix(1.0, mix(0.72, 1.08, smoothstep(0.1, 0.6, 1.0 - tus.x)), tf);
   // little bare soil between clumps
   c = mix(c, vec3f(0.11, 0.085, 0.06), smoothstep(0.25, 0.65, -clump.x) * 0.45);
   // small flowers in spring meadows (only close)
@@ -561,7 +577,7 @@ fn layerMud(p: vec3f, fp: f32, moist: f32) -> Mat {
   var m: Mat;
   let n = fbmd(p, 0.9, 4, 0.5, fp);
   let cr = voronoi2(p.xz * 0.9);
-  let crack = (1.0 - smoothstep(0.0, 0.06, abs(cr.x - 0.5) * 0.5)) * (1.0 - smoothstep(0.1, 0.3, fp)) * smoothstep(0.7, 0.3, moist);
+  let crack = (1.0 - smoothstep(0.0, 0.06, abs(cr.x - 0.5) * 0.5)) * (1.0 - smoothstep(0.1, 0.3, fp)) * (1.0 - smoothstep(0.3, 0.7, moist));
   m.h = vec4f(0.25 + (0.15 * n.x) - (0.15 * crack), n.yzw * 0.15);
   m.alb = mix(vec3f(0.085, 0.065, 0.045), vec3f(0.12, 0.095, 0.065), n.x * 0.5 + 0.5) * (1.0 - crack * 0.4);
   m.rough = 0.62;
@@ -593,47 +609,118 @@ fn layerGravel(p: vec3f, fp: f32, region: vec3f) -> Mat {
 
 // ------------------------------------------------------ texture layers --
 
-// Planar or triplanar sample of the asset texture of one layer. The uv
-// gradients come from the caller (uniform control flow).
+// One ASSETS ground set (texture array layer k) at p: planar on xz, or
+// triplanar on steep ground. Two scales (the tile and 3.7 tiles, turned)
+// mix past 10 m, so the repeat does not show. gx, gy: dp/dx, dp/dy.
+// nrm is an offset in the tangent plane of n (OpenGL maps: +y is up in the
+// image).
 struct TexS { alb: vec3f, nrm: vec3f, orm: vec3f };
 
-fn texLayer(layer: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f) -> TexS {
-  let s = 1.0 / max(U.mat.y, 0.5);
+fn texTile(k: u32) -> f32 { return max(U.tiles[k >> 2u][k & 3u], 0.25); }
+
+fn tex3(k: u32, uv: vec2f, gu: vec2f, gv: vec2f) -> array<vec4f, 3> {
+  return array<vec4f, 3>(
+    textureSampleGrad(tLayerAlb, sRepeat, uv, k, gu, gv),
+    textureSampleGrad(tLayerNrm, sRepeat, uv, k, gu, gv),
+    textureSampleGrad(tLayerOrm, sRepeat, uv, k, gu, gv));
+}
+
+// No visible repeat (after Quilez, "texture repetition", technique 3): a
+// slow noise picks one of eight uv offsets; two samples blend across the
+// step, so the tile grid does not line up. High quality only.
+fn tex3NoTile(k: u32, uv: vec2f, gu: vec2f, gv: vec2f) -> array<vec4f, 3> {
+  if (U.mat.w < 0.5) { return tex3(k, uv, gu, gv); }
+  let v = (vnoise2(uv * 0.31) * 0.5) + 0.5;
+  let l = v * 8.0;
+  let i = floor(l);
+  let f = l - i;
+  let oa = sin(vec2f(3.0, 7.0) * i);
+  let ob = sin(vec2f(3.0, 7.0) * (i + 1.0));
+  let a = tex3(k, uv + oa, gu, gv);
+  let b = tex3(k, uv + ob, gu, gv);
+  let d = a[0].rgb - b[0].rgb;
+  let w = smoothstep(0.2, 0.8, f - (0.1 * (d.x + d.y + d.z)));
+  return array<vec4f, 3>(mix(a[0], b[0], w), mix(a[1], b[1], w), mix(a[2], b[2], w));
+}
+
+// one projection: uv from the plane coordinates, two scales mixed by far
+fn texProj(k: u32, q: vec2f, gq: vec2f, hq: vec2f, s: f32, far: f32) -> array<vec4f, 3> {
+  var a = tex3NoTile(k, q * s, gq * s, hq * s);
+  if (far > 0.01) {
+    let r = mat2x2f(0.8, 0.6, -0.6, 0.8);
+    let s2 = s * 0.27;
+    let b = tex3(k, (r * q) * s2 + vec2f(0.37, 0.71), (r * gq) * s2, (r * hq) * s2);
+    // keep the colour of the near scale: mix the detail only
+    a[0] = vec4f(mix(a[0].rgb, b[0].rgb, far), 1.0);
+    a[1] = mix(a[1], b[1], far);
+    a[2] = mix(a[2], b[2], far);
+  }
+  return a;
+}
+
+fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32) -> TexS {
+  let s = 1.0 / texTile(k);
   var o: TexS;
   if (!tri) {
-    let uv = p.xz * s;
-    o.alb = textureSampleGrad(tLayerAlb, sRepeat, uv, layer, gx.xz * s, gy.xz * s).rgb;
-    let nn = textureSampleGrad(tLayerNrm, sRepeat, uv, layer, gx.xz * s, gy.xz * s).xy * 2.0 - 1.0;
-    o.orm = textureSampleGrad(tLayerOrm, sRepeat, uv, layer, gx.xz * s, gy.xz * s).rgb;
-    // tangent space on xz: t = +x, b = +z
-    let nz = sqrt(max(1.0 - dot(nn, nn), 0.0));
-    o.nrm = normalize(vec3f(nn.x, nz, nn.y));
+    let t = texProj(k, p.xz, gx.xz, gy.xz, s, far);
+    o.alb = t[0].rgb; o.orm = t[2].rgb;
+    let m = t[1].xy * 2.0 - 1.0;
+    let off = vec3f(m.x, 0.0, -m.y);
+    o.nrm = off - (dot(off, n) * n);
     return o;
   }
   var w = pow(abs(n), vec3f(4.0));
   w /= (w.x + w.y + w.z);
-  o.alb = vec3f(0.0); o.orm = vec3f(0.0);
-  var nsum = vec3f(0.0);
-  // x projection (zy), y projection (xz), z projection (xy)
-  let uvx = p.zy * s; let uvy = p.xz * s; let uvz = p.xy * s;
-  let ax = textureSampleGrad(tLayerAlb, sRepeat, uvx, layer, gx.zy * s, gy.zy * s).rgb;
-  let ay = textureSampleGrad(tLayerAlb, sRepeat, uvy, layer, gx.xz * s, gy.xz * s).rgb;
-  let az = textureSampleGrad(tLayerAlb, sRepeat, uvz, layer, gx.xy * s, gy.xy * s).rgb;
-  o.alb = (ax * w.x) + (ay * w.y) + (az * w.z);
-  let ox = textureSampleGrad(tLayerOrm, sRepeat, uvx, layer, gx.zy * s, gy.zy * s).rgb;
-  let oy = textureSampleGrad(tLayerOrm, sRepeat, uvy, layer, gx.xz * s, gy.xz * s).rgb;
-  let oz = textureSampleGrad(tLayerOrm, sRepeat, uvz, layer, gx.xy * s, gy.xy * s).rgb;
-  o.orm = (ox * w.x) + (oy * w.y) + (oz * w.z);
-  // whiteout-style blend of the tangent normals (Golus 2017)
-  let nx = textureSampleGrad(tLayerNrm, sRepeat, uvx, layer, gx.zy * s, gy.zy * s).xy * 2.0 - 1.0;
-  let ny = textureSampleGrad(tLayerNrm, sRepeat, uvy, layer, gx.xz * s, gy.xz * s).xy * 2.0 - 1.0;
-  let nz2 = textureSampleGrad(tLayerNrm, sRepeat, uvz, layer, gx.xy * s, gy.xy * s).xy * 2.0 - 1.0;
-  let tx = vec3f(0.0, nx.y, nx.x) * w.x;
-  let ty = vec3f(ny.x, 0.0, ny.y) * w.y;
-  let tz = vec3f(nz2.x, nz2.y, 0.0) * w.z;
-  nsum = n + tx + ty + tz;
-  o.nrm = normalize(nsum);
+  // vertical planes: v = -y, so the image is upright on a cliff
+  let tx = texProj(k, vec2f(p.z, -p.y), vec2f(gx.z, -gx.y), vec2f(gy.z, -gy.y), s, far);
+  let ty = texProj(k, p.xz, gx.xz, gy.xz, s, far);
+  let tz = texProj(k, vec2f(p.x, -p.y), vec2f(gx.x, -gx.y), vec2f(gy.x, -gy.y), s, far);
+  o.alb = (tx[0].rgb * w.x) + (ty[0].rgb * w.y) + (tz[0].rgb * w.z);
+  o.orm = (tx[2].rgb * w.x) + (ty[2].rgb * w.y) + (tz[2].rgb * w.z);
+  let mx = tx[1].xy * 2.0 - 1.0;
+  let my = ty[1].xy * 2.0 - 1.0;
+  let mz = tz[1].xy * 2.0 - 1.0;
+  let off = (vec3f(0.0, mx.y, mx.x * sign(n.x)) * w.x) + (vec3f(my.x, 0.0, -my.y) * w.y) + (vec3f(mz.x * sign(n.z), mz.y, 0.0) * w.z);
+  o.nrm = off - (dot(off, n) * n);
   return o;
+}
+
+// Set k at p, calibrated: the scanned sets differ a lot in mean colour
+// (a red cliff, a dark sand, a grey snow), so a set gives only its detail
+// relative to its own mean (the 1 x 1 mip), times the target colour of
+// its role. Far away (texF 0) that is the target alone, so the colour does
+// not change where the texture fades out.
+fn texSetCal(k: u32, tgt: vec3f, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32, texF: f32) -> TexS {
+  var t: TexS;
+  let mean = max(textureSampleLevel(tLayerAlb, sRepeat, vec2f(0.5), k, 16.0).rgb, vec3f(0.01));
+  t.alb = tgt;
+  t.orm = textureSampleLevel(tLayerOrm, sRepeat, vec2f(0.5), k, 16.0).rgb;
+  t.nrm = vec3f(0.0);
+  if (texF > 0.01) {
+    let tn = texSet(k, p, n, tri, gx, gy, far);
+    // detail: mostly luminance, a little of the hue
+    let rel = tn.alb / mean;
+    let lr = dot(rel, vec3f(0.3, 0.59, 0.11));
+    let det = clamp(mix(vec3f(lr), rel, 0.35), vec3f(0.0), vec3f(3.0));
+    t.alb = tgt * mix(vec3f(1.0), det, texF);
+    t.orm = mix(t.orm, tn.orm, texF);
+    t.nrm = tn.nrm * texF;
+  }
+  return t;
+}
+
+fn mixTex(a: TexS, b: TexS, f: f32) -> TexS {
+  var o: TexS;
+  o.alb = mix(a.alb, b.alb, f); o.nrm = mix(a.nrm, b.nrm, f); o.orm = mix(a.orm, b.orm, f);
+  return o;
+}
+
+fn mapIdx(i: u32) -> u32 { return u32(U.map[i >> 2u][i & 3u] + 0.5); }
+
+// mean albedo of the procedural rock palette (the ratio carries the cracks,
+// lichen, strata and weathering of the procedural rock onto the texture)
+fn rockMean(region: vec3f) -> vec3f {
+  return (vec3f(0.195, 0.188, 0.177) * region.x) + (vec3f(0.345, 0.2, 0.115) * region.y) + (vec3f(0.078, 0.073, 0.068) * region.z);
 }
 
 // ---------------------------------------------------------------- light --
@@ -685,6 +772,19 @@ fn marchShadow(world: vec3f, l: vec3f, fp: f32) -> f32 {
     t *= grow;
   }
   return smoothstep(0.0, 1.0, vis);
+}
+
+// SKY's moving cloud shadows (NOTES.md 2026-10-17 SKY -> ALL): project p
+// along the sun to the cloud base and read the transmittance map. 1 = lit.
+fn cloudShadowAt(p: vec3f) -> f32 {
+  if (U.shadow.w < 0.5) { return 1.0; }
+  let t = max(U.cloud.w - p.y, 0.0) / max(G.sunDir.y, 0.08);
+  let q = p.xz + (G.sunDir.xz * t);
+  let uv = (q - U.cloud.xy) / max(U.cloud.z, 1.0);
+  let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
+  let T = select(1.0 - (0.7 * G.weather.x), textureSampleLevel(tCloudSh, sCloudSh, uv, 0.0).r, inside);
+  let lit = smoothstep(-0.04, 0.03, G.sunDir.y);
+  return mix(1.0, T, lit);
 }
 
 // Aerial perspective: height-falloff fog from G.fog, plus a sun lobe.
@@ -740,7 +840,12 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // derivatives first (uniform control flow)
   let dpx = dpdx(p);
   let dpy = dpdy(p);
-  let fp = max(max(length(dpx), length(dpy)), 1e-3);
+  // footprint: between the geometric mean and the max of the two pixel
+  // axes. The max alone blurs the ground at a grazing view (it is set by
+  // the long axis); TAA hides the small rest of the aliasing.
+  let lx = length(dpx);
+  let ly = length(dpy);
+  let fp = max(mix(sqrt(lx * ly), max(lx, ly), 0.3), 1e-3);
 
   // per-pixel normal: the base slope from tNormal (bilinear of the texel
   // normals: smooth, where differences of the bilinear height show facets)
@@ -845,19 +950,92 @@ fn fs(v: VOut) -> @location(0) vec4f {
   wsum = max(wsum, 1e-3);
   var mats = array<Mat, 8>();
   var hmax = -10.0;
+  // asset textures: full near, gone past ~260 m (the procedural layers and
+  // the macro terms carry the far ground)
+  let texF = U.mat.x * (1.0 - smoothstep(110.0, 260.0, dist));
+  let farMix = smoothstep(10.0, 45.0, dist) * 0.5;
+  let triOn = slope > 0.28;
+  let sg = seasonGrass(bw.grass, G.weather2.w, 0.0);
+  // texture position with a slow warp (in m): the tile rows do not line up
+  let pw = p + vec3f(fbm2(xz * 0.045, 2), 0.0, fbm2((xz * 0.045) + 19.1, 2)) * 1.6;
+  // mid-scale tone and hue (10..60 m) for the textured layers
+  let vm = fbm2(xz * 0.035, 3);
+  let vh = fbm2((xz * 0.06) + 3.3, 2);
   for (var i = 0u; i < 8u; i++) {
     let wi = wa[i] / wsum;
     wa[i] = wi;
     if (wi < 0.02) { continue; }
     var m: Mat;
-    switch (i) {
-      case 0u: { m = layerRock(p, fp, 0.0, moist, region, down, slope); }
-      case 1u: { m = layerRock(p, fp, 1.0, moist, region, down, slope); }
-      case 2u: { m = layerGrass(p, fp, bw.grass, moist); }
-      case 3u: { m = layerForest(p, fp, bw.litter, moist); }
-      case 4u: { m = layerSand(p, fp, region, slope); }
-      case 6u: { m = layerMud(p, fp, moist); }
-      default: { m = layerGravel(p, fp, region); }
+    // the procedural layer: always for rock and cliff (their cracks, ledges
+    // and lichen tint the texture), else only where the texture fades out
+    let kP = mapIdx(i);
+    let hasSet = (U.mat.x > 0.5) && (kP < 64u);
+    let hasTex = hasSet && (texF > 0.01);
+    if ((i <= 1u) || !hasSet) {
+      switch (i) {
+        case 0u: { m = layerRock(p, fp, 0.0, moist, region, down, slope); }
+        case 1u: { m = layerRock(p, fp, 1.0, moist, region, down, slope); }
+        case 2u: { m = layerGrass(p, fp, bw.grass, moist); }
+        case 3u: { m = layerForest(p, fp, bw.litter, moist); }
+        case 4u: { m = layerSand(p, fp, region, slope); }
+        case 6u: { m = layerMud(p, fp, moist); }
+        default: { m = layerGravel(p, fp, region); }
+      }
+    } else {
+      m.alb = vec3f(0.2); m.h = vec4f(0.5, 0.0, 0.0, 0.0); m.rough = 0.8;
+    }
+    m.tn = vec3f(0.0);
+    m.ao = 1.0;
+    if (hasSet) {
+      let tri = triOn && (i <= 1u);
+      // far: the mean of the set (its 1 x 1 mip), so the colour does not
+      // change where the texture fades out
+      // target colours of the roles (tuned with the procedural palettes)
+      var tgtP = rockMean(region);
+      var tgtA = vec3f(0.23, 0.22, 0.20);
+      var rmin = 0.6;
+      switch (i) {
+        case 1u: { tgtP = rockMean(region) * 0.9; tgtA = rockMean(region); }
+        case 2u: { tgtP = sg; tgtA = seasonGrass(vec3f(0.20, 0.155, 0.075), G.weather2.w, 0.0); rmin = 0.8; }
+        case 3u: { tgtP = bw.litter; tgtA = vec3f(0.10, 0.075, 0.05); rmin = 0.8; }
+        case 4u: { tgtP = mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y); tgtA = vec3f(0.40, 0.30, 0.19); rmin = 0.75; }
+        case 5u: { tgtP = vec3f(0.82, 0.85, 0.90); rmin = 0.35; }
+        case 6u: { tgtP = vec3f(0.085, 0.066, 0.045); rmin = 0.45; }
+        case 7u: { tgtP = vec3f(0.24, 0.215, 0.19); tgtA = vec3f(0.23, 0.22, 0.20); }
+        default: {}
+      }
+      var t = texSetCal(kP, tgtP, pw, nGeo, tri, dpx, dpy, farMix, texF);
+      // the alternate set of this layer and how much of it
+      var af = 0.0;
+      switch (i) {
+        case 0u: { af = (1.0 - smoothstep(0.22, 0.42, slope)) * 0.85; }
+        case 1u: { af = smoothstep(-0.1, 0.5, fbm2(xz * 0.02, 2)) * 0.5; }
+        case 2u: { af = clamp((1.0 - smoothstep(0.18, 0.42, moist)) + (smoothstep(0.1, 0.5, fbm2(xz * 0.013, 3)) * 0.5), 0.0, 1.0); }
+        case 3u: { af = bw.kind.x; }
+        case 4u: { af = bw.kind.y; }
+        case 7u: { af = 1.0 - tree; }
+        default: {}
+      }
+      let kA = mapIdx(i + 8u);
+      if ((af > 0.02) && (kA < 64u) && (kA != kP)) {
+        t = mixTex(t, texSetCal(kA, tgtA, pw, nGeo, tri, dpx, dpy, farMix, texF), af);
+      }
+      // damp grass: the meadow set in wet ground (U.mat.y)
+      if (i == 2u) {
+        let kM = u32(U.mat.y + 0.5);
+        let wf = smoothstep(0.6, 0.85, moist) * (1.0 - af);
+        if ((wf > 0.02) && (kM < 64u)) { t = mixTex(t, texSetCal(kM, vec3f(0.075, 0.115, 0.035), pw, nGeo, false, dpx, dpy, farMix, texF), wf); }
+      }
+      // the procedural modulation: rock keeps its cracks, lichen, strata
+      // and weathering; the other layers get a mid-scale tone and hue
+      var ratio = vec3f(0.84 + (0.32 * vm));
+      if (i <= 1u) { ratio = clamp(m.alb / rockMean(region), vec3f(0.3), vec3f(1.8)); }
+      else if (i == 2u) { ratio *= mix(vec3f(1.0), vec3f(1.12, 1.04, 0.82), smoothstep(0.0, 0.6, vh)); }
+      m.alb = t.alb * ratio;
+      m.h = vec4f(mix(m.h.x, t.orm.b, max(texF, 0.5)), m.h.yzw * (1.0 - (texF * 0.6)));
+      m.rough = max(mix(m.rough, t.orm.g, max(texF, 0.5)), rmin);
+      m.tn = t.nrm;
+      m.ao = mix(1.0, t.orm.r, texF);
     }
     mats[i] = m;
     hmax = max(hmax, m.h.x + wi);
@@ -865,39 +1043,22 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // height blend: depth 0.2 of the layer height (the classic splat trick)
   let depthB = mix(0.26, 0.9, smoothstep(0.3, 8.0, fp));
   var alb = vec3f(0.0); var hg = vec4f(0.0); var rough = 0.0; var tw = 0.0;
+  var tnS = vec3f(0.0); var aoS = 0.0;
   for (var i = 0u; i < 8u; i++) {
     let wi = wa[i];
     if (wi < 0.02) { continue; }
     let b = max((mats[i].h.x + wi) - (hmax - depthB), 0.0);
     alb += mats[i].alb * b; hg += mats[i].h * b; rough += mats[i].rough * b; tw += b;
+    tnS += mats[i].tn * b; aoS += mats[i].ao * b;
   }
-  alb /= max(tw, 1e-4); hg /= max(tw, 1e-4); rough /= max(tw, 1e-4);
+  let itw = 1.0 / max(tw, 1e-4);
+  alb *= itw; hg *= itw; rough *= itw; tnS *= itw; aoS *= itw;
 
   // ---- normal: geometry + material bump (surface gradient)
   let bumpFade = 1.0 - smoothstep(30.0, 250.0, dist);
   let bumpK = mix(0.035, 0.07, q) * bumpFade;
   let gt = hg.yzw - (dot(hg.yzw, nGeo) * nGeo);
-  var n = normalize(nGeo - (gt * bumpK));
-
-  // ---- asset textures (ASSETS manifest), tinted by the procedural albedo
-  if (U.mat.x > 0.5) {
-    var ta = vec3f(0.0); var tn = vec3f(0.0); var tr = 0.0; var tt = 0.0;
-    for (var i = 0u; i < 8u; i++) {
-      let wi = wa[i];
-      if (wi < 0.05) { continue; }
-      let s = texLayer(i, p, nGeo, (i == L_ROCK) || (i == L_CLIFF), dpx, dpy);
-      ta += s.alb * wi; tn += s.nrm * wi; tr += s.orm.g * wi; tt += wi;
-    }
-    if (tt > 0.0) {
-      ta /= tt; tr /= tt;
-      // keep the procedural macro colour: the texture brings the detail
-      let lumT = max(dot(ta, vec3f(0.3, 0.59, 0.11)), 1e-3);
-      let lumP = max(dot(alb, vec3f(0.3, 0.59, 0.11)), 1e-3);
-      alb = mix(alb, ta * (lumP / lumT) * mix(vec3f(1.0), alb / lumP, 0.5), 0.75 * bumpFade);
-      rough = mix(rough, tr, 0.7 * bumpFade);
-      n = normalize(mix(n, normalize(tn), 0.8 * bumpFade));
-    }
-  }
+  var n = normalize(nGeo - (gt * bumpK) + tnS);
 
   // ---- snow on top (height blended: crevices fill first)
   let snowM = layerSnow(p, fp);
@@ -948,10 +1109,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
   var shM = 1.0;
   if (L.y > -0.05) {
     sh = sunShadow(p, nGeo);
-    let ms = marchShadow(p + (nGeo * 0.5), L, fp);
+    // the march starts on the base surface: detail relief under the base
+    // would shadow itself in the bilinear field
+    let ms = marchShadow(vec3f(p.x, max(p.y, baseH(xz)) + 0.5, p.z), L, fp);
     sh = min(sh, ms);
     // the ground's own normal turns away from the sun
     sh *= smoothstep(-0.02, 0.08, dot(nGeo, L) + 0.03);
+    sh *= cloudShadowAt(p);
   }
   var col = brdf(n, V, L, alb, rough, f0) * sunE * sh;
   // snow subsurface: a soft wrap and blue tint in shadow
@@ -963,7 +1127,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   }
   // sky ambient (hemisphere), occlusion from tNormal.w and the crevices
   let microAO = mix(0.55, 1.0, clamp(hg.x * 1.2, 0.0, 1.0));
-  let ao = aoT * mix(1.0, microAO, bumpFade);
+  let ao = aoT * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8);
   // the sky is brighter toward the sun: a mild sun-side bias keeps the
   // form of slopes in shadow at a low sun
   let sunSide = normalize(vec3f(L.x, 0.35, L.z));
