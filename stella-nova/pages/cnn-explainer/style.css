@@ -12,7 +12,8 @@
      grep -n 'SHELL'     tokens, topbar, buttons
      grep -n 'LEARN'     the explainer column and its widgets
      grep -n 'STAGE'     the photo strip and the network canvas
-     grep -n 'DETAIL'    the detail card
+     grep -n 'DETAIL'    the zoom panel (inline, in the column of its map)
+     grep -n 'RUN'       the run bar, the lit explainer step, the answer
      grep -n 'POPS'      colours pop-up, credits drawer, camera, toast
      grep -n 'TOUCH'     44 px targets on a coarse pointer
      grep -n 'PHONE'     dock, sheets, the vertical network
@@ -116,26 +117,53 @@ body.panel-closed #stage{left:0}
 .net-hint{position:absolute;left:14px;bottom:10px;color:var(--faint);font-size:0.76rem;pointer-events:none}
 body.detail-open .net-hint{display:none}
 
-/* DETAIL */
-.detail{position:fixed;z-index:26;left:calc(var(--learn-w) + 18px);right:18px;bottom:18px;height:min(560px,62vh);display:grid;
-  grid-template-rows:auto auto 1fr auto auto;background:rgba(15,18,26,0.97);border:1px solid var(--line-b);border-radius:16px;
-  box-shadow:0 18px 60px rgba(0,0,0,0.55);padding:12px 16px 10px;animation:dIn .32s var(--ease)}
-body.panel-closed .detail{left:18px}
-@keyframes dIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.detail{animation:none}#learn,#stage{transition:none}}
+/* DETAIL (the zoom panel: inside #netWrap, placed by main.js; the grow
+   transform maps its final box to the map it comes out of) */
+.detail{position:absolute;z-index:6;left:0;top:0;width:10px;height:10px;display:grid;grid-template-rows:auto auto 1fr auto auto;
+  background:rgba(15,18,26,0.97);border:1px solid rgba(255,160,110,0.32);border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,0.5);
+  padding:10px 14px 8px;transform-origin:0 0;will-change:transform;overflow:hidden;--zc:1;--zt:0}
+.detail>*:not(.d-tile){opacity:var(--zc)}
+.d-tile{position:absolute;inset:0;width:100%;height:100%;opacity:var(--zt);image-rendering:pixelated;pointer-events:none;border-radius:inherit}
+.detail[data-mode="tour"] .d-foot{display:none}
+@media (prefers-reduced-motion:reduce){.detail{animation:dFade .25s ease both;will-change:auto}#learn,#stage{transition:none}}
+@keyframes dFade{from{opacity:0}to{opacity:1}}
 .d-head{display:flex;align-items:flex-start;gap:10px}
-.d-titles{flex:1;min-width:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.d-titles h2{font-family:var(--sci-serif);font-size:1.15rem;color:var(--ink)}
-.d-sub{color:var(--dim);font-size:0.82rem}
-.d-math{margin:6px 0 2px;min-height:1.6em;color:var(--ink)}
+.d-titles{flex:1;min-width:0;display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.d-titles h2{font-family:var(--sci-serif);font-size:1.12rem;color:var(--ink)}
+.d-sub{color:var(--dim);font-size:0.8rem}
+.d-math{margin:4px 0 2px;min-height:1.6em;color:var(--ink);overflow-x:auto;overflow-y:hidden}
 .d-cv{width:100%;height:100%;min-height:0;display:block;outline:none}
-.d-foot{display:flex;align-items:center;gap:8px;padding-top:6px}
+.d-foot{display:flex;align-items:center;gap:8px;padding-top:6px;flex-wrap:wrap}
 .d-play{min-width:40px}
 .d-speed{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:0.8rem;margin-left:8px}
-.d-speed input{width:120px;accent-color:var(--accent)}
+.d-speed input{width:110px;accent-color:var(--accent)}
 .d-speed b{font-family:var(--sci-mono);font-weight:400;color:var(--ink);min-width:48px}
 .d-pos{margin-left:auto;color:var(--faint);font-family:var(--sci-mono);font-size:0.78rem}
-.d-text{color:#c4cad6;font-size:0.84rem;line-height:1.55;margin:6px 0 0;max-width:110ch}
+.d-text{color:#c4cad6;font-size:0.82rem;line-height:1.5;margin:6px 0 0;max-width:110ch;max-height:4.6em;overflow-y:auto}
+
+/* RUN (the guided run bar and the lit step of the explainer) */
+.stage-head{flex:0 0 auto;background:var(--bg)}
+.tour{padding:6px 14px 8px;border-bottom:1px solid var(--line)}
+.t-row{display:flex;align-items:center;gap:6px;min-width:0}
+.t-play{min-width:40px}
+.t-play.replay{color:var(--accent)}
+.t-cap{flex:1;min-width:0;margin:0 0 0 8px;color:#c4cad6;font-size:0.84rem;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-cap b{color:var(--accent);font-weight:500}
+.t-speed select{border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:8px;padding:3px 6px;font-size:0.8rem;min-height:28px}
+.t-track{display:flex;gap:2px;margin-top:6px;height:16px;align-items:stretch;cursor:pointer;touch-action:none;outline:none;border-radius:4px}
+.t-track:focus-visible{box-shadow:0 0 0 2px rgba(255,160,110,0.55)}
+.t-seg{position:relative;flex:1 1 0;min-width:0;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.t-seg .t-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,160,110,0.42)}
+.t-seg.on .t-fill{background:var(--accent)}
+.t-seg span{position:relative;display:block;font-size:0.62rem;line-height:16px;text-align:center;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:clip;pointer-events:none}
+.t-seg.on span{color:#1a1310}
+.ex-sec{position:relative;transition:opacity .3s}
+.ex-sec.on::before{content:"";position:absolute;left:-12px;top:18px;bottom:6px;width:2px;border-radius:1px;background:var(--accent)}
+.ex-sec.on .ex-h{color:#ffd2bb}
+body.run-on .ex-sec:not(.on):not(.ex-foot){opacity:0.62}
+.pred.in{animation:predIn .6s var(--ease) both}
+@keyframes predIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.pred.in{animation:dFade .25s ease both}.ex-sec{transition:none}}
 
 /* POPS */
 .pop{position:fixed;z-index:40;top:calc(var(--top-h) + 8px);right:16px;width:min(340px,calc(100vw - 32px));padding:14px;border:1px solid var(--line-b);
@@ -163,7 +191,8 @@ body.panel-closed .detail{left:18px}
 /* TOUCH */
 @media (pointer:coarse){
   .mini{min-width:44px;min-height:44px}
-  .ghost,.ph-btn,.seg button,.ex-show{min-height:44px}
+  .ghost,.ph-btn,.seg button,.ex-show,.t-speed select{min-height:44px}
+  .t-track{height:22px}
   .ex-btn{width:48px;height:48px}
   .sl input{min-height:32px}
 }
@@ -178,7 +207,12 @@ body.panel-closed .detail{left:18px}
   .pred{flex:1}
   .pred-2{display:none}
   #stage{left:0;bottom:var(--dock-h);overflow-y:auto;overscroll-behavior:contain;display:block;-webkit-overflow-scrolling:touch}
-  .strip{position:sticky;top:0;z-index:4;background:rgba(11,13,19,0.96);padding:8px 12px}
+  .stage-head{position:sticky;top:0;z-index:8;background:rgba(11,13,19,0.96)}
+  .strip{padding:8px 12px}
+  .tour{padding:4px 12px 6px}
+  .t-cap{white-space:normal;font-size:0.8rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .t-seg span{display:none}
+  .t-track{height:18px}
   .net-wrap{flex:none}
   #netCv{position:relative;inset:auto}
   .net-hint{display:none}
@@ -194,10 +228,9 @@ body.panel-closed .detail{left:18px}
   #sheetGrip span{width:42px;height:5px;border-radius:3px;background:rgba(255,255,255,0.22)}
   .sheet-close{display:block;position:absolute;top:4px;right:10px;z-index:3}
   .learn-body{padding:4px 18px 30px}
-  .detail{left:0;right:0;bottom:var(--dock-h);height:84vh;height:84dvh;border-radius:16px 16px 0 0;padding:10px 12px 8px;z-index:34}
-  body.panel-closed .detail{left:0}
+  .detail{padding:8px 10px 6px;border-radius:12px}
   .d-speed input{width:90px}
-  .d-text{font-size:0.8rem;max-height:5.2em;overflow-y:auto}
+  .d-text{font-size:0.8rem;max-height:4.2em}
   .pop{top:auto;bottom:calc(var(--dock-h) + 10px);right:12px;left:12px;width:auto}
   .drawer{top:0;width:100vw;z-index:50}
 }

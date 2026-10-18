@@ -2,8 +2,9 @@
 //  CNN EXPLAINER  ·  explain.js  the explainer column and its widgets
 // ----------------------------------------------------------------------------
 //  Fills #learn with the walk through the network, step by step, in plain
-//  words. Each step has a "Show me" button that opens the detail view of a
-//  real map. Two small widgets:
+//  words. The guided run (tour.js) lights the step it plays (mark) and
+//  scrolls the column to it. Each step has a "Show me" button that moves
+//  the run to that layer (page.jumpTo). Two small widgets:
 //    kernel playground   input size, kernel size, stride and padding on a
 //                        small grid; the kernel slides and the output fills
 //                        in; o = floor((n + 2p - k) / s) + 1 with numbers
@@ -12,6 +13,7 @@
 //  The maths of both widgets is in playground.js (node tests).
 //
 //  grep -n 'export function createExplain'
+//  grep -n 'function mark'           light a step and scroll to it
 //  grep -n 'const SECTIONS'          the text of each step
 //  grep -n 'function mountPlayground'
 //  grep -n 'function mountActivation'
@@ -25,7 +27,7 @@ import { typeset } from '../../lib/sci-math.js';
 const SECTIONS = [
   { id: 'intro', h: 'What you are looking at', body: [
     'This is a small convolutional neural network (CNN) that runs in your browser. It looks at a 64 × 64 picture and says which of ten things it shows: a lifeboat, a ladybug, a pizza, a bell pepper, a school bus, a koala, an espresso, a red panda, an orange or a sport car.',
-    'Each square on the right is a feature map: a grid of numbers that one part of the network computed, drawn as colour. The picture goes in at the left and the answer comes out at the right. Point at a map to see what feeds it. Click a map to watch the maths.',
+    'Each square on the right is a feature map: a grid of numbers that one part of the network computed, drawn as colour. The picture goes in at the left and the answer comes out at the right. The run plays the network one layer at a time and opens a few maps to show the maths. Pause it, step it, or click any map to zoom in.',
   ], show: null },
   { id: 'input', h: '1 · The picture is numbers', body: [
     'A colour picture is three grids: red, green and blue. Each cell holds a value from 0 to 255, which the network divides by 255. So the input is 64 × 64 × 3 = 12,288 numbers between 0 and 1.',
@@ -73,7 +75,8 @@ export function createExplain({ doc = document, win = window, host, page }) {
     if (s.widget === 'activation') widgets.activation = mountActivation(sec, { doc, win, page });
     if (s.show) {
       const b = make('button', 'ex-show', s.show.label); b.type = 'button';
-      b.addEventListener('click', () => page.openDetail({ li: s.show.li, c: s.show.c }));
+      b.dataset.li = s.show.li;
+      b.addEventListener('click', () => (page.jumpTo ? page.jumpTo(s.show.li) : page.openDetail({ li: s.show.li, c: s.show.c })));
       sec.appendChild(b);
     }
     host.appendChild(sec);
@@ -83,7 +86,28 @@ export function createExplain({ doc = document, win = window, host, page }) {
   cb.addEventListener('click', () => page.openCredits());
   foot.appendChild(cb);
   host.appendChild(foot);
-  return { widgets, refresh() { widgets.activation && widgets.activation.draw(); } };
+  // light the step with id and scroll the column to it (unless the reader
+  // scrolled the column in the last 5 s)
+  const scroller = host.closest ? host.closest('#learn') || host : host;
+  const st = { current: '', lastScroll: null, userAt: -1e9 };
+  const now = () => (win.performance ? win.performance.now() : Date.now());
+  for (const ev of ['wheel', 'touchmove']) scroller.addEventListener(ev, () => { st.userAt = now(); }, { passive: true });
+  function mark(id, { smooth = true, scroll = true } = {}) {
+    for (const sec of host.querySelectorAll('.ex-sec')) {
+      const on = sec.id === 'ex-' + id;
+      sec.classList.toggle('on', on);
+      if (on) sec.setAttribute('aria-current', 'step'); else sec.removeAttribute('aria-current');
+    }
+    if (id === st.current) return;
+    st.current = id;
+    const sec = host.querySelector('#ex-' + id);
+    if (!sec || !scroll || now() - st.userAt < 5000) return;
+    const top = Math.max(0, (sec.offsetTop || 0) - 14);
+    st.lastScroll = { id, top, behavior: smooth ? 'smooth' : 'auto' };
+    if (scroller.scrollTo) { try { scroller.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' }); } catch (e) { scroller.scrollTop = top; } }
+    else scroller.scrollTop = top;
+  }
+  return { widgets, mark, st, refresh() { widgets.activation && widgets.activation.draw(); } };
 }
 
 // ── kernel playground ──────────────────────────────────────────────────────
