@@ -469,6 +469,7 @@ function buildUI() {
   lk.label('Light and water');
   lk.toggle({ id: 'tBeam', label: 'Lamp beams', value: G.beam, onChange: v => { G.beam = v; if (S) S.opts.volume = v; } });
   lk.toggle({ id: 'tSnow', label: 'Marine snow', value: G.snow, onChange: v => { G.snow = v; if (S) S.opts.snow = v; } });
+  lk.toggle({ id: 'tFauna', label: 'Creatures', value: !fauna || fauna.enabled, onChange: v => { if (fauna) fauna.setEnabled(v); }, hint: 'Animals of each depth: scans of museum specimens and generated species. Off is faster on a small device.' });
   lk.toggle({ id: 'tPolyps', label: 'Polyps', value: G.polyps, onChange: v => { G.polyps = v; if (S) { S.setPolypsVisible(v); S.setWorldPolyps(v); } } });
   lk.toggle({ id: 'tDetail', label: 'Surface detail', value: G.surface, onChange: v => { G.surface = v; if (S) S.U.uDetail.value = v ? 1 : 0; }, hint: 'Fine bumps on the rock and the coral skin. Off is faster on a small device.' });
   lk.slider({ id: 'sCaust', valueId: 'vCaust', label: 'Caustics', min: 0, max: 1.5, step: 0.05, value: G.caust, format: v => (v ? fmt(v) : 'Off'), onInput: v => { G.caust = v; if (S) S.U.uCaust.value = v; } });
