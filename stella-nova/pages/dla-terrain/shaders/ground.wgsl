@@ -1089,10 +1089,15 @@ fn hexXf(v: vec2i, rot: f32) -> vec4f {
 }
 fn hexUV(uv: vec2f, x: vec4f) -> vec2f { return vec2f((x.x * uv.x) - (x.y * uv.y), (x.y * uv.x) + (x.x * uv.y)) + x.zw; }
 fn hexRot(g: vec2f, x: vec4f) -> vec2f { return vec2f((x.x * g.x) - (x.y * g.y), (x.y * g.x) + (x.x * g.y)); }
-// a normal map xy turned back by the vertex turn (the map was sampled turned)
+// a normal map xy turned back by the vertex turn (the map was sampled
+// turned). The map is OpenGL: r = -dh/du, g = +dh/dv (v runs down the
+// image), so the gradient in the turned frame is (-r, g) and turns back by
+// the transpose: r' = c r - s g, g' = s r + c g. (The old form c r + s g,
+// -s r + c g turned the bumps by twice the tile angle: lit from a random
+// side on every hex tile.)
 fn hexNrm(t: vec4f, x: vec4f) -> vec4f {
   let m = (t.xy * 2.0) - 1.0;
-  let r = vec2f((x.x * m.x) + (x.y * m.y), (-x.y * m.x) + (x.x * m.y));
+  let r = vec2f((x.x * m.x) - (x.y * m.y), (x.y * m.x) + (x.x * m.y));
   return vec4f((r * 0.5) + 0.5, t.zw);
 }
 // weights sharpened (Mikkelsen: an even blend of three samples loses the
@@ -1590,7 +1595,12 @@ fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32,
   let mx = tx[1].xy * 2.0 - 1.0;
   let my = ty[1].xy * 2.0 - 1.0;
   let mz = tz[1].xy * 2.0 - 1.0;
-  let off = (vec3f(0.0, mx.y, mx.x * sign(n.x)) * w.x) + (vec3f(my.x, 0.0, -my.y) * w.y) + (vec3f(mz.x * sign(n.z), mz.y, 0.0) * w.z);
+  // tangent frames of the three planes: x plane u = +z, image up = +y;
+  // z plane u = +x, image up = +y; y plane u = +x, image up = -z. The uv
+  // is not mirrored on the -x and -z faces, so the tangent is the same on
+  // both faces and the red channel takes no sign(n) (a sign flip turned
+  // the bumps of every cliff that faces -x or -z inside out)
+  let off = (vec3f(0.0, mx.y, mx.x) * w.x) + (vec3f(my.x, 0.0, -my.y) * w.y) + (vec3f(mz.x, mz.y, 0.0) * w.z);
   o.nrm = off - (dot(off, n) * n);
   return o;
 }
@@ -1662,7 +1672,7 @@ fn macroRock(kC: u32, p: vec3f, n: vec3f, gx: vec3f, gy: vec3f, dist: f32) -> ve
       let nz = tZ[1].xy * 2.0 - 1.0;
       let a = (ax * w.x) + (ay * w.y) + (az * w.z);
       lum += (dot(a, vec3f(0.3, 0.59, 0.11)) / ml) * fo;
-      off += ((vec3f(0.0, nx.y, nx.x * sign(n.x)) * w.x) + (vec3f(ny.x, 0.0, -ny.y) * w.y) + (vec3f(nz.x * sign(n.z), nz.y, 0.0) * w.z)) * fo;
+      off += ((vec3f(0.0, nx.y, nx.x) * w.x) + (vec3f(ny.x, 0.0, -ny.y) * w.y) + (vec3f(nz.x, nz.y, 0.0) * w.z)) * fo;   // no sign(n): see fn texSet
       ws += fo;
     }
   }

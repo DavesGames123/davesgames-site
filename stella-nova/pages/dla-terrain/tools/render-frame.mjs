@@ -208,8 +208,55 @@ function closeCam(kind, d, pick = 0) {
   console.log('close', kind, d, 'at', P.map(v => v.toFixed(1)).join(','), 'slope', g.toFixed(2), 'eye agl', (C[1] - H(C[0], C[2])).toFixed(1), 'dist', Math.hypot(dx, dy, dz).toFixed(1));
   return true;
 }
+// prop:<species>:<d>[:<pick>] — a shot of a scattered plant or stone of
+// that species (render/scatter.js SPECIES key) from about d m, with the
+// sun at the side of the view (to check the shading of the props)
+const SCAT = await import('../render/scatter.js');
+const SPECIES_KEYS = SCAT.SPECIES.map(x => x.key);
+function closeProp(key, d, pick = 0) {
+  const v = app.fg.modules.find(m => m.role === 'vegetation');
+  const tiles = v && v._internal && v._internal.tiles;
+  const t = app.terrain, cam = app.cam, ws = t.worldSize;
+  const H = (x, z) => (app.lib && app.lib.terrainHeightAt ? app.lib.terrainHeightAt(t, x, z) : 0);
+  const want = SPECIES_KEYS.indexOf(key);
+  const hits = [];
+  const f = v._internal.field, LK = SCAT.SPECIES[want] ? SCAT.SPECIES[want].layer : 'rocks';
+  const Ly = SCAT.LAYERS.find(l => l.key === LK), nt = Math.ceil(ws / Ly.tile);
+  let sd0 = 4242;
+  const rnd = () => ((sd0 = (sd0 * 1103515245 + 12345) >>> 0) / 4294967296);
+  const extra = [];
+  for (let k = 0; k < 400 && f && extra.length < 40; k++) {
+    const tl = SCAT.scatterTile(f, LK, Math.floor(rnd() * nt), Math.floor(rnd() * nt));
+    if (tl.count) extra.push({ tile: tl });
+  }
+  for (const e of [...(tiles ? tiles.values() : []), ...extra]) {
+    const d8 = e.tile.data;
+    for (let i = 0; i < e.tile.count; i++) {
+      const sp = d8[i * 8 + 5];
+      if (Math.round(sp) === want) hits.push([d8[i * 8], d8[i * 8 + 2]]);
+    }
+  }
+  if (!hits.length) { console.log('prop: no', key); return false; }
+  const [x, z] = hits[Math.min(hits.length - 1, pick)];
+  const sd = app.G ? [app.G[84], app.G[86]] : [1, 0];
+  const sl = Math.hypot(sd[0], sd[1]) || 1;
+  // the eye looks across the sun direction: the lit side on the right
+  const ox = -sd[1] / sl, oz = sd[0] / sl;
+  const C = [x + ox * d, 0, z + oz * d];
+  C[1] = Math.max(H(x, z) + d * 0.35, H(C[0], C[2]) + 1.7);
+  const P = [x, H(x, z) + 0.5, z];
+  const dx = P[0] - C[0], dy = P[1] - C[1], dz = P[2] - C[2];
+  cam.setMode('fly', { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  app.camMode = 'fly';
+  cam.fly.pos = C;
+  cam.fly.yaw = Math.atan2(dx, -dz); cam.fly.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  cam.update(1, {}, { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  console.log('prop', key, d, 'of', hits.length, 'at', x.toFixed(1), z.toFixed(1), 'sun xz', sd.map(q => q.toFixed(2)).join(','));
+  return true;
+}
 let perf = [];
 for (const s of steps) {
+  if (s.startsWith('prop:')) { const [, key, d, pk] = s.split(':'); closeProp(key, +d || 6, +pk || 0); await pump(40, s); continue; }
   if (s === 'orbit') { await pump(30, 'orbit'); }
   else if (s === 'drone') { app.drone('ridge'); await pump(60, 'drone'); }
   else if (s === 'river') { app.drone('river'); await pump(60, 'river'); }

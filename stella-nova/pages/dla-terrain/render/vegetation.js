@@ -727,7 +727,9 @@ function genRock(seed, P) {
     const P2 = pos.map((q) => [q.p[0] * ys, (q.p[1] - minY) * ys, q.p[2] * ys]);
     for (const [a, b, c] of faces) { const fn = V.cross(V.sub(P2[b], P2[a]), V.sub(P2[c], P2[a])); for (const k of [a, b, c]) nrm[k] = V.add(nrm[k], fn); }
     P2.forEach((p, k) => part.vert(p, V.norm(nrm[k]), [p[0], p[2]], 0, 0, 0.45 + 0.55 * Math.min(1, pos[k].d * 1.2)));
-    for (const [a, b, c] of faces) part.tri(a, c, b);
+    // counter-clockwise seen from outside, as the face normals above (and
+    // glTF): the winding agrees with the stored normals
+    for (const [a, b, c] of faces) part.tri(a, b, c);
     lods.push([part]);
   }
   return lods;
@@ -887,6 +889,33 @@ const GEN = {
   log: (s, h) => genLog(s, { H: h, L: 4.5, bark: 'barkDead' }),
   stump: (s, h) => genStump(s, { H: h, bark: 'barkOak' }),
 };
+
+// WINDING (2026-10-18, the user: "i also notice that rock normals are
+// inverted"). The bark pipeline culls back faces (counter-clockwise is the
+// front, as glTF). The tube, lathe and rock generators made clockwise
+// triangles, so the GPU dropped the outside of every procedural trunk,
+// branch, log, mushroom and stand-in rock and drew the inside walls: lit
+// from inside. fixWinding turns each triangle whose face normal points
+// against its summed vertex normals. Every stand-in goes through it.
+export function fixWinding(parts) {
+  let flipped = 0;
+  for (const p of parts) {
+    const v = p.v, I = p.i;
+    for (let t = 0; t + 2 < I.length; t += 3) {
+      const A = I[t] * VSTRIDE, B = I[t + 1] * VSTRIDE, C = I[t + 2] * VSTRIDE;
+      const e1x = v[B] - v[A], e1y = v[B + 1] - v[A + 1], e1z = v[B + 2] - v[A + 2];
+      const e2x = v[C] - v[A], e2y = v[C + 1] - v[A + 1], e2z = v[C + 2] - v[A + 2];
+      const fx = e1y * e2z - e1z * e2y, fy = e1z * e2x - e1x * e2z, fz = e1x * e2y - e1y * e2x;
+      const d = fx * (v[A + 3] + v[B + 3] + v[C + 3]) + fy * (v[A + 4] + v[B + 4] + v[C + 4]) + fz * (v[A + 5] + v[B + 5] + v[C + 5]);
+      if (d < 0) { const k = I[t + 1]; I[t + 1] = I[t + 2]; I[t + 2] = k; flipped++; }
+    }
+  }
+  return flipped;
+}
+for (const k of Object.keys(GEN)) {
+  const g = GEN[k];
+  GEN[k] = (seed, P) => { const lods = g(seed, P); for (const parts of lods) fixWinding(parts); return lods; };
+}
 // GPU per species: flags, bend (m tip offset per m/s and m height), flutter, sink, lean rad
 const SPEC_GPU = {
   oak: { f: FLAG.impostor | FLAG.deciduous, bend: 0.5, flutter: 0.5, lean: 0.03 },
@@ -994,6 +1023,11 @@ export async function loadAssetProtos(lib, texSize, log, accept = null, o = {}) 
               p.vert([x, y, z], [nx, ny, nz], [u, v], hy * hy, fol ? Math.sqrt(rr) : 0, ao);
             }
             for (let i = 0; i < m.indices.length; i++) p.i.push(m.indices[i]);
+            // the bark pipeline culls back faces: the double-sided bark and
+            // succulent meshes of the scans (and their simplified LODs)
+            // have up to 45 % of triangles wound against their normals,
+            // which showed as holes and inside walls; the normals decide
+            if (!fol) fixWinding([p]);
             parts.push(p);
           }
           lods.push(parts);
@@ -1245,6 +1279,36 @@ export function classifyCPU(it, sp, P, G) {
   if (bb > 0 && l1i < last) { out.n = 2; out.lists.push([base + l0, -bb, lf], [base + l1, bb, lf]); }
   else { out.n = 1; out.lists.push([base + l0, 1, lf]); }
   return out;
+}
+// The stand-in LOD parts of a species (tests: the normals audit)
+export function standInLods(key, seed = 1000) {
+  const sp = SPECIES.find((x) => x.key === key);
+  return GEN[key](seed, sp.h);
+}
+// Winding against stored normals for a list of parts: the share (by area)
+// of triangles whose face normal (counter-clockwise) and summed vertex
+// normals point the same way, and the outward share (face normal against
+// the centroid of the part). -> { agree, out, bad (NaN or zero normals) }
+export function windingStats(parts) {
+  let agree = 0, tot = 0, out = 0, bad = 0;
+  const c = [0, 0, 0]; let nv = 0;
+  for (const p of parts) for (let i = 0; i < p.n; i++) { for (let k = 0; k < 3; k++) c[k] += p.v[i * VSTRIDE + k]; nv++; }
+  for (let k = 0; k < 3; k++) c[k] /= Math.max(nv, 1);
+  for (const p of parts) {
+    const v = p.v, I = p.i;
+    for (let i = 0; i < p.n; i++) { const L = Math.hypot(v[i * VSTRIDE + 3], v[i * VSTRIDE + 4], v[i * VSTRIDE + 5]); if (!(L > 0.1)) bad++; }
+    for (let t = 0; t < I.length; t += 3) {
+      const A = I[t] * VSTRIDE, B = I[t + 1] * VSTRIDE, C = I[t + 2] * VSTRIDE;
+      const e1 = [v[B] - v[A], v[B + 1] - v[A + 1], v[B + 2] - v[A + 2]], e2 = [v[C] - v[A], v[C + 1] - v[A + 1], v[C + 2] - v[A + 2]];
+      const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const ar = Math.hypot(...fn); if (ar < 1e-12) continue;
+      const d = fn[0] * (v[A + 3] + v[B + 3] + v[C + 3]) + fn[1] * (v[A + 4] + v[B + 4] + v[C + 4]) + fn[2] * (v[A + 5] + v[B + 5] + v[C + 5]);
+      tot += ar; if (d > 0) agree += ar;
+      const ce = [0, 1, 2].map((k) => (v[A + k] + v[B + k] + v[C + k]) / 3 - c[k]);
+      out += fn[0] * ce[0] + fn[1] * ce[1] + fn[2] * ce[2] > 0 ? ar : 0;
+    }
+  }
+  return { agree: tot ? agree / tot : 1, out: tot ? out / tot : 1, bad };
 }
 // A stand-in prototype as buildLibrary makes it, for the tests: the species
 // row (8 floats, as the GPU species buffer) and the LOD0 vertex positions.
