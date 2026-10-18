@@ -58,11 +58,13 @@
 //  screen opens at Low quality on a 512 grid (no ?q= given), and a phone
 //  shows "tap to explore" one time (ui.hintOnce).
 //
-//  INPUT  one finger or the left button turns the orbit (looks in fly
-//  mode); two fingers pan and pinch zoom (fly: a two-finger joystick); a
-//  double tap or a double click flies the orbit to that ground point
-//  (camera.js pickGround). The canvas has touch-action: none, and the page
-//  does not scroll, so no gesture goes to the page.
+//  INPUT  input.js (CAMERA): the left button or one finger turns round the
+//  ground under it, the right button drags the ground, the wheel and a
+//  pinch zoom to the ground under the cursor, two fingers pan and twist;
+//  fly: WASD, the wheel sets the speed, L mouse look, a touch stick; a
+//  double tap or a double click flies to that ground point; R resumes a
+//  drone flight. The canvas has touch-action: none, and the page does
+//  not scroll, so no gesture goes to the page.
 //
 //  FRAMING  viewShift() moves the image centre to the centre of the clear
 //  rect (layout.js clearRect of ui.overlays()), so the subject stays clear
@@ -210,7 +212,8 @@ app.setLook = (k, v) => {
   if (k === 'fov') cam.fovY = v * Math.PI / 180;
 };
 app.setCam = mode => {
-  if (mode === 'drone') { app.drone('ridge'); return; }
+  // the Drone button flies a held (taken over) drone on, else a new ridge
+  if (mode === 'drone') { if (cam.resumeDrone(world)) { app.camMode = 'drone'; ui.syncView(); } else app.drone('ridge'); return; }
   cam.setMode(mode, world); app.camMode = mode; ui.syncView();
 };
 app.drone = (kind, pickIndex, high) => {
@@ -681,98 +684,13 @@ function statusLine(st) {
 }
 
 // ── INPUT ───────────────────────────────────────────────────────────────
-const keys = new Set();
-const ptrs = new Map();
-let look = [0, 0], pan = [0, 0], zoom = 0, pinch = null, touchMove = [0, 0, 0];
-function takeInput() {
-  const k = c => (keys.has(c) ? 1 : 0);
-  const move = [
-    k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft') + touchMove[0],
-    k('KeyE') + k('Space') - k('KeyQ') - k('KeyC') + touchMove[1],
-    k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown') + touchMove[2],
-  ].map(v => clamp(v, -1, 1));
-  const out = { look, pan, zoom, move, boost: keys.has('ShiftLeft') || keys.has('ShiftRight') };
-  look = [0, 0]; pan = [0, 0]; zoom = 0;
-  if (move.some(v => v)) app.lastInput = performance.now();
-  return out;
-}
-function leaveDrone() {
-  if (app.camMode === 'drone') { cam.setMode('fly', world); app.camMode = 'fly'; ui.syncView(); }
-}
-canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('pointerdown', e => {
-  if (app.saverRun) return;
-  canvas.focus({ preventScroll: true });
-  lastPtrType = e.pointerType || 'mouse';
-  try { canvas.setPointerCapture(e.pointerId); } catch { /* old browser */ }
-  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey, x0: e.clientX, y0: e.clientY, t0: performance.now() });
-  if (ptrs.size === 2) {
-    const [a, b] = [...ptrs.values()];
-    pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d0: Math.hypot(a.x - b.x, a.y - b.y), cx0: (a.x + b.x) / 2, cy0: (a.y + b.y) / 2 };
-  }
-  app.lastInput = performance.now();
-  $('hint').classList.add('gone');
-});
-canvas.addEventListener('pointermove', e => {
-  const p = ptrs.get(e.pointerId);
-  if (!p) return;
-  const dx = e.clientX - p.x, dy = e.clientY - p.y;
-  p.x = e.clientX; p.y = e.clientY;
-  app.lastInput = performance.now();
-  if (ptrs.size === 1) {
-    if (Math.abs(e.clientX - p.x0) + Math.abs(e.clientY - p.y0) > 6) leaveDrone();
-    if (app.camMode === 'orbit' && (p.b === 2 || p.shift)) { pan[0] += dx; pan[1] += dy; }
-    else { look[0] += dx; look[1] += dy; }
-  } else if (ptrs.size === 2 && pinch) {
-    const [a, b] = [...ptrs.values()];
-    const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-    leaveDrone();
-    if (app.camMode === 'orbit') {
-      zoom += Math.log(d / Math.max(1, pinch.d)) / Math.log(1 / 0.88);
-      pan[0] += cx - pinch.cx; pan[1] += cy - pinch.cy;
-    } else {
-      // fly: a two-finger joystick (drag = strafe and climb, pinch = forward)
-      touchMove = [clamp((cx - pinch.cx0) / 90, -1, 1), clamp(-(cy - pinch.cy0) / 90, -1, 1), clamp((d - pinch.d0) / 90, -1, 1)];
-    }
-    pinch.d = d; pinch.cx = cx; pinch.cy = cy;
-  }
-});
-// a double tap (touch or pen) or a double click flies the orbit to the
-// ground under that point
-let lastTap = null;
-function flyToScreen(x, y) {
-  const m = app.lastMatrices;
-  if (!m || !tg || app.saverRun) return false;
-  const p = pickGround(m.invViewProj, 2 * x / innerWidth - 1, 1 - 2 * y / innerHeight, world, world.size * 3);
-  if (!p) return false;
-  app.flyTo(p[0], p[2]);
-  return true;
-}
-const endPtr = e => {
-  const p = ptrs.get(e.pointerId);
-  const was = ptrs.size;
-  ptrs.delete(e.pointerId);
-  if (ptrs.size < 2) { pinch = null; touchMove = [0, 0, 0]; }
-  if (e.type !== 'pointerup' || !p || was !== 1 || e.pointerType === 'mouse') return;
-  const now = performance.now();
-  if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 10 || now - p.t0 > 300) { lastTap = null; return; }
-  if (lastTap && now - lastTap.t < 340 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
-    lastTap = null;
-    flyToScreen(e.clientX, e.clientY);
-  } else lastTap = { t: now, x: e.clientX, y: e.clientY };
-};
-let lastPtrType = 'mouse';
-canvas.addEventListener('dblclick', e => { e.preventDefault(); if (lastPtrType === 'mouse') flyToScreen(e.clientX, e.clientY); });
-canvas.addEventListener('pointerup', endPtr);
-canvas.addEventListener('pointercancel', endPtr);
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  if (app.saverRun) return;
-  const s = -e.deltaY / (e.deltaMode === 1 ? 3 : 100);
-  if (app.camMode === 'orbit') zoom += s;
-  else if (app.camMode === 'fly') { const f = cam.forward, k = s * 40 * Math.max(1, (cam.pos[1] - world.heightAt(cam.pos[0], cam.pos[2])) / 50); cam.fly.pos = cam.fly.pos.map((v, i) => v + f[i] * k); }
-  app.lastInput = performance.now();
-}, { passive: false });
+// input.js holds the pointer, touch, wheel and camera keys; the app
+// keys stay below (they fill input.keys for the movement)
+import { createInput } from './input.js';
+const input = createInput({ canvas, app, cam, world, ui: () => ui, hint: $('hint'), ready: () => !!tg, pickGround });
+const keys = input.keys;
+const takeInput = dt => input.take(dt);
+const leaveDrone = () => input.leaveDrone();
 addEventListener('keydown', e => {
   const tag = (e.target && e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'select' || tag === 'textarea' || e.metaKey || e.ctrlKey || e.altKey) return;
