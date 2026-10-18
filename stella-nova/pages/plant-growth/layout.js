@@ -28,7 +28,8 @@
 //
 //  ECO LIMITS. ecoLimits(coarse) gives the caps of the ground ecosystem
 //  (eco.js buildEco): grass tussocks (8 blades each), forbs, stones, leaf
-//  litter, woodland trees, seedlings, and the mesh LOD of the nature pack.
+//  litter, woodland trees, seedlings, the mesh LOD of the nature pack, and
+//  procN, the cells per side of the far-meadow grids round the camera.
 //  A coarse pointer (a phone or a tablet) gets the phone caps.
 //
 //  PIXEL RATIO. pixelRatioStep(state, dt) lowers the pixel ratio of a
@@ -148,7 +149,7 @@ export function pixelRatioStep(st, dt) {
 }
 
 export const ECO_LIMITS = {
-  desktop: { tussocks: 26000, forbs: 700, stones: 1400, litter: 7000, woodland: 520, seedlings: 160, lod: 1, R: 24 },
-  phone: { tussocks: 9000, forbs: 260, stones: 500, litter: 2200, woodland: 220, seedlings: 60, lod: 2, R: 20 },
+  desktop: { tussocks: 26000, forbs: 700, stones: 1400, litter: 7000, woodland: 520, seedlings: 160, lod: 1, R: 24, procN: 80 },
+  phone: { tussocks: 9000, forbs: 260, stones: 500, litter: 2200, woodland: 220, seedlings: 60, lod: 2, R: 20, procN: 44 },
 };
 export function ecoLimits(coarse) { return coarse ? ECO_LIMITS.phone : ECO_LIMITS.desktop; }

@@ -499,9 +499,36 @@ const eco7 = E.buildEco({ seed: 7, plants: OAK_PLANT });
   ok(SPECIES.oak.size.r * 2 >= 15 && SPECIES.oak.size.r * 2 <= 25, `a mature oak crown is ${SPECIES.oak.size.r * 2} m across`);
 }
 {
+  // the far meadow round the camera: no bare disc edge past the tussocks
+  const F = eco7.fields, cam = [30, 26];
+  const a = E.procGrass(cam[0], cam[1], F, E.ECO_R), b = E.procGrass(cam[0], cam[1], F, E.ECO_R);
+  ok(a.length > 2000 && JSON.stringify(a.slice(0, 50)) === JSON.stringify(b.slice(0, 50)), `far meadow: ${a.length} tussocks round the camera, the same each frame`);
+  ok(a.every(o => Math.hypot(o.rec[0], o.rec[1]) >= 0.82 * E.ECO_R), 'far meadow: none inside the tussocks of buildEco (it fades in at 0.82 R)');
+  const moved = E.procGrass(cam[0] + 0.25 * 3, cam[1], F, E.ECO_R);
+  const key = o => o.rec[0].toFixed(4) + ',' + o.rec[1].toFixed(4);
+  const setA = new Set(a.map(key)), shared = moved.filter(o => setA.has(key(o))).length;
+  ok(shared > 0.8 * Math.min(a.length, moved.length), `far meadow: the cells are anchored in the world (${shared} of ${moved.length} stay when the camera moves)`);
+  let wrongPath = 0, wrongWood = 0, inner = 0;
+  for (const o of a) {
+    const [x, z, kind] = o.rec, pth = F.path(x, z);
+    if (pth > 0.08 && pth < 0.75 && F.wood(x, z) <= 0.5 && kind !== 3) wrongPath++;
+    if (F.wood(x, z) > 0.5 && kind !== 2) wrongWood++;
+    if (Math.max(Math.abs(x - cam[0]), Math.abs(z - cam[1])) < 5 && o.keep > 0.99) inner++;
+  }
+  const dIn = inner / 100;
+  ok(wrongPath === 0 && wrongWood === 0, 'far meadow: path turf on the path, shade grass in the wood');
+  ok(dIn > 4, `far meadow: ${dIn.toFixed(1)} tussocks per m2 near the camera`);
+  const env = { p: 0.5, snow: 0, time: 0, wind: 0.35, crowns: [], F, R: E.ECO_R };
+  const T = new Float32Array(a.length * 8); a.forEach((o, i) => T.set(o.rec, i * 8));
+  const hs = [];
+  for (let q = 0; q < T.length; q += 8 * 5) if (T[q + 2] !== 3) for (let bI = 1; bI < E.BLADES; bI++) { const B = E.bladeAt(T, q, bI, env, a[q / 8].keep); if (B.vis > 0.99) hs.push(B.h); }
+  hs.sort((x, y) => x - y);
+  ok(hs.length > 500 && hs[Math.floor(hs.length * 0.5)] >= 0.2 && hs[Math.floor(hs.length * 0.95)] <= 0.7, `far meadow blades: median ${(hs[Math.floor(hs.length * 0.5)] * 100).toFixed(0)} cm`);
+}
+{
   // phones: the caps of layout.js
   const ph = ecoLimits(true), dk = ecoLimits(false);
-  ok(ph === ECO_LIMITS.phone && dk === ECO_LIMITS.desktop && ph.tussocks < dk.tussocks / 2 && ph.forbs < dk.forbs && ph.stones < dk.stones && ph.litter < dk.litter && ph.lod >= dk.lod, 'phones get smaller ecosystem caps');
+  ok(ph === ECO_LIMITS.phone && dk === ECO_LIMITS.desktop && ph.tussocks < dk.tussocks / 2 && ph.forbs < dk.forbs && ph.stones < dk.stones && ph.litter < dk.litter && ph.lod >= dk.lod && ph.procN * ph.procN < dk.procN * dk.procN / 3, `phones get smaller ecosystem caps (far meadow ${2 * ph.procN * ph.procN} against ${2 * dk.procN * dk.procN} tussocks)`);
   const e = E.buildEco({ seed: 7, plants: OAK_PLANT, limits: ph, R: ph.R });
   ok(e.tussocks.length / 8 <= ph.tussocks && e.forbs.length <= ph.forbs + 60 && e.stones.length <= ph.stones && e.litter.length / 8 <= ph.litter && e.woodland.length <= ph.woodland, `phone community: ${e.tussocks.length / 8} tussocks, ${e.forbs.length} forbs, ${e.stones.length} stones`);
   // nothing in the soil cut-away or on a trunk

@@ -41,7 +41,7 @@
 //    asset loading ......... "function loadAsset"
 //    the meadow object ..... "export function createMeadow"
 // ============================================================================
-import { FORBS, BLADES, BLADE_W, LEAN, GRASS_COL, GROUND_COL } from './eco.js';
+import { FORBS, BLADES, BLADE_W, LEAN, GRASS_COL, GROUND_COL, GRASS, PROC } from './eco.js';
 import { groundY } from './ground.js';
 import { parseGLB } from '../../lib/glb-lite.js';
 
@@ -82,39 +82,65 @@ export function grassGeometry(THREE, T) {
   geo.instanceCount = T.length / 8;
   return geo;
 }
-export function grassMaterial(THREE, U, COMMON) {
+// proc: the far meadow round the camera (eco.js procGrass): no instance
+// attributes, the tussock comes from gl_InstanceID and the fields.
+export function grassMaterial(THREE, U, COMMON, proc = false) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.55 });
-  const own = { uGrassR: { value: 24 } };
+  const own = { uGrassR: { value: 24 }, uProcN: { value: PROC.n } };
   m.userData.own = own;
+  const G = GRASS;
+  const PROC_GLSL = /* glsl */`
+        int pid = gl_InstanceID, pn = int(uProcN + 0.5), phalf = pn / 2;
+        int lvl = pid / (pn * pn), pj = pid - lvl * pn * pn;
+        float cs = lvl == 0 ? ${PROC.cell[0].toFixed(3)} : ${PROC.cell[1].toFixed(3)};
+        uint salt = lvl == 0 ? 41u : 42u;
+        ivec2 ic = ivec2(floor(cameraPosition.xz / cs)) - ivec2(phalf) + ivec2(pj % pn, pj / pn);
+        vec2 pp2 = (vec2(ic) + vec2(ehash(ic, salt), ehash(ic, salt + 7u))) * cs;
+        float procKeep = 1.0;
+        float dcam = max(abs(pp2.x - cameraPosition.x), abs(pp2.y - cameraPosition.z));
+        if (lvl == 1 && dcam < ${PROC.cell[0].toFixed(3)} * float(phalf) - ${PROC.cell[0].toFixed(3)}) procKeep = 0.0;
+        procKeep *= (1.0 - smoothstep(cs * float(phalf) * 0.8, cs * float(phalf), dcam)) * smoothstep(0.82 * uGrassR, uGrassR, length(pp2));
+        float psw = fSward(pp2), pmead = fMeadow(pp2), ppth = fPath(pp2), pwd = fWood(pp2);
+        int pkind = ppth > 0.08 && ppth < 0.75 ? 3 : (ehash(ic, salt + 23u) < pmead ? 0 : 1);
+        if (pwd > 0.5) pkind = 2;
+        float pdens = pkind == 0 ? pow(psw, 1.4) * (1.0 - 0.92 * ppth) : pkind == 1 ? (0.3 + 0.7 * psw) * (1.0 - 0.75 * ppth) : pkind == 2 ? 0.45 : 1.0;
+        pdens *= 1.0 - 0.9 * smoothstep(0.85, 1.0, ppth);
+        if (ehash(ic, salt + 29u) >= pdens) procKeep = 0.0;
+        vec2 GH = pkind == 0 ? vec2(${G[0].h[0]}, ${G[0].h[1]}) : pkind == 1 ? vec2(${G[1].h[0]}, ${G[1].h[1]}) : pkind == 2 ? vec2(${G[2].h[0]}, ${G[2].h[1]}) : vec2(${G[3].h[0]}, ${G[3].h[1]});
+        vec2 GS = pkind == 0 ? vec2(${G[0].spread[0]}, ${G[0].spread[1]}) : pkind == 1 ? vec2(${G[1].spread[0]}, ${G[1].spread[1]}) : pkind == 2 ? vec2(${G[2].spread[0]}, ${G[2].spread[1]}) : vec2(${G[3].spread[0]}, ${G[3].spread[1]});
+        float pwk = sqrt(cs / ${PROC.cell[0].toFixed(3)});
+        float pH = GH.x + (GH.y - GH.x) * (0.35 * ehash(ic, salt + 31u) + 0.65 * pmead * (pkind == 0 ? 1.0 : 0.5)) * (0.8 + 0.4 * fMoist(pp2));
+        vec4 T0 = vec4(pp2, float(pkind), pH);
+        vec4 T1 = vec4((GS.x + (GS.y - GS.x) * ehash(ic, salt + 37u)) * min(1.8, pwk), ehash(ic, salt + 19u), ehash(ic, salt + 13u) * 0.92, pwk);`;
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, U, own);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + COMMON + /* glsl */`
-        uniform float uGrassR;
-        attribute vec4 aT0, aT1;
+        uniform float uGrassR, uProcN;
+        ${proc ? '' : 'attribute vec4 aT0, aT1;'}
         varying vec3 vGc; varying float vGt, vGsnow;
         const float BLADE_W[4] = float[4](${BLADE_W.map(v => v.toFixed(4)).join(', ')});
         const vec2 LEAN[4] = vec2[4](${LEAN.map(l => `vec2(${l[0].toFixed(3)}, ${l[1].toFixed(3)})`).join(', ')});`)
-      .replace('#include <beginnormal_vertex>', /* glsl */`
+      .replace('#include <beginnormal_vertex>', (proc ? PROC_GLSL : 'vec4 T0 = aT0, T1 = aT1; float procKeep = 1.0;') + /* glsl */`
         float bI = position.z, tt = position.y, side = position.x;
-        int kind = int(aT0.z + 0.5);
-        float rb = fract(aT1.y * 31.7 + bI * 0.618), rb2 = fract(aT1.y * 17.3 + bI * 0.377);
-        float ang = bI * 2.39996 + aT1.y * 6.2832;
-        float rr = aT1.x * sqrt((bI + 0.5) / ${BLADES.toFixed(1)});
-        vec2 bp = aT0.xy + vec2(cos(ang), sin(ang)) * rr;
+        int kind = int(T0.z + 0.5);
+        float rb = fract(T1.y * 31.7 + bI * 0.618), rb2 = fract(T1.y * 17.3 + bI * 0.377);
+        float ang = bI * 2.39996 + T1.y * 6.2832;
+        float rr = T1.x * sqrt((bI + 0.5) / ${BLADES.toFixed(1)});
+        vec2 bp = T0.xy + vec2(cos(ang), sin(ang)) * rr;
         float Lt = fLight(bp);
-        float vis = smoothstep(aT1.z, aT1.z + 0.12, grassKeep(kind, Lt)) * (1.0 - smoothstep(0.85 * uGrassR, uGrassR, length(bp)));
+        float vis = smoothstep(T1.z, T1.z + 0.12, grassKeep(kind, Lt)) * ${proc ? 'procKeep' : '(1.0 - smoothstep(0.85 * uGrassR, uGrassR, length(bp)))'};
         if (uCut > 0.0 && bp.x > -0.05 && bp.y > -0.05 && dot(bp, bp) < (uCut + 0.1) * (uCut + 0.1)) vis = 0.0;
         float pp = uClock - floor(uClock), lodge;
         vec4 st = grassState(pp, kind, uSnow, lodge);
         bool culm = bI < 0.5 && kind <= 1 && rb < 0.85;
-        float h = culm ? aT0.w * 1.45 * (0.85 + 0.3 * rb) * st.z * vis * (1.0 - 0.65 * uSnow) : aT0.w * (0.6 + 0.55 * rb) * st.x * vis;
+        float h = culm ? T0.w * 1.45 * (0.85 + 0.3 * rb) * st.z * vis * (1.0 - 0.65 * uSnow) : T0.w * (0.6 + 0.55 * rb) * st.x * vis;
         float tw = (rb2 - 0.5) * 1.2;
         vec2 dir = vec2(cos(ang + tw), sin(ang + tw));
         float lean = culm ? 0.05 + 0.3 * lodge : LEAN[kind].x + LEAN[kind].y * rb2 + 0.6 * lodge;
         float gs = gust(bp, uTime, uWindDir);
         float wv = uWind * (0.25 + 1.2 * gs) * (1.0 - 0.5 * lodge);
-        float wdt = culm ? (tt > 0.8 ? 0.0022 + 0.0045 * st.z * sin(3.14159 * (tt - 0.8) / 0.2) : 0.0016) : BLADE_W[kind] * (0.75 + 0.5 * rb) * aT1.w * (1.0 - 0.8 * tt);
+        float wdt = culm ? (tt > 0.8 ? 0.0022 + 0.0045 * st.z * sin(3.14159 * (tt - 0.8) / 0.2) : 0.0016) : BLADE_W[kind] * (0.75 + 0.5 * rb) * T1.w * (1.0 - 0.8 * tt);
         float hz = lean * h * pow(tt, 1.6) + (culm ? 0.12 * h * tt * tt * tt * tt : 0.0);
         float vy = h * tt * (1.0 - 0.55 * min(lean, 1.2) * tt) - 0.3 * wv * h * tt * tt;
         float fl = 0.03 * uWind * h * tt * tt * sin(uTime * 6.0 + rb * 30.0 + bp.x * 2.0);
@@ -126,7 +152,7 @@ export function grassMaterial(THREE, U, COMMON) {
         vec3 tng = normalize(vec3(dir.x * lean * 1.6 + uWindDir.x * wv * 1.6 * tt, 1.0 - lean * tt, dir.y * lean * 1.6 + uWindDir.y * wv * 1.6 * tt));
         vec3 acr = vec3(-dir.y, 0.0, dir.x);
         vec3 objectNormal = normalize(mix(cross(acr, tng), vec3(0.0, 1.0, 0.0), 0.45));
-        float tint = fract(aT1.y * 7.31), tint2 = fract(aT1.y * 3.17);
+        float tint = fract(T1.y * 7.31), tint2 = fract(T1.y * 3.17);
         vec3 fresh = mix(${v3(GRASS_COL.base)}, ${v3(GRASS_COL.tip)}, 0.5) * (0.82 + 0.36 * tint);
         fresh = mix(fresh, fresh * vec3(1.2, 1.0, 0.7), tint2 * 0.6);
         if (kind == 2) fresh *= vec3(0.7, 0.85, 1.1);
@@ -143,7 +169,7 @@ export function grassMaterial(THREE, U, COMMON) {
       .replace('#include <map_fragment>', 'diffuseColor.rgb = mix(vGc, vec3(0.8, 0.83, 0.88), vGsnow * 0.6);')
       .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= 0.4 + 0.6 * vGt;');
   };
-  m.customProgramCacheKey = () => 'pg-grass2';
+  m.customProgramCacheKey = () => 'pg-grass2' + (proc ? 'p' : '');
   return m;
 }
 
@@ -527,9 +553,18 @@ export function createMeadow(ctx) {
   let man = null, eco = null, token = 0;
   const manP = fetch(NAT + 'manifest.json').then(r => r.json()).then(j => { man = j; }).catch(() => { man = null; });
 
-  // grass
+  // grass: the tussocks round the plants, and the far meadow round the camera
   const grassMat = grassMaterial(THREE, U, COMMON);
   let grass = null;
+  const procMat = grassMaterial(THREE, U, COMMON, true);
+  const procN = ctx.limits.procN || PROC.n;
+  procMat.userData.own.uProcN.value = procN;
+  const procGeo = grassGeometry(THREE, new Float32Array(8));
+  procGeo.deleteAttribute('aT0'); procGeo.deleteAttribute('aT1');
+  procGeo.instanceCount = 2 * procN * procN;
+  const procMesh = new THREE.Mesh(procGeo, procMat);
+  procMesh.frustumCulled = false; procMesh.receiveShadow = true;
+  group.add(procMesh);
   // litter, petals, seedlings
   const litMat = litterMaterial(THREE, U, COMMON, ctx.atlas);
   const quad = new THREE.PlaneGeometry(1, 1, 2, 2); quad.translate(0, 0.5, 0);
@@ -559,6 +594,7 @@ export function createMeadow(ctx) {
     grass = new THREE.Mesh(grassGeometry(THREE, e.tussocks), grassMat);
     grass.frustumCulled = false; grass.receiveShadow = true;
     grassMat.userData.own.uGrassR.value = ctx.limits.R;
+    procMat.userData.own.uGrassR.value = ctx.limits.R;
     group.add(grass);
     // litter
     if (litter) { group.remove(litter); litter.geometry.dispose(); }
@@ -680,7 +716,7 @@ export function createMeadow(ctx) {
     for (const m of impMats) { m.uniforms.uSunK.value = o.sunK; }
   }
   function stats() {
-    return { tussocks: grass ? grass.geometry.instanceCount : 0, props: props.reduce((s, m) => s + m.count, 0), woodland: eco ? eco.woodland.length : 0, seedlings: seedGeo.instanceCount };
+    return { tussocks: grass ? grass.geometry.instanceCount : 0, farMeadow: procGeo.instanceCount, props: props.reduce((s, m) => s + m.count, 0), woodland: eco ? eco.woodland.length : 0, seedlings: seedGeo.instanceCount };
   }
   return { group, setEco, setSeedlings, frame, stats };
 }

@@ -51,6 +51,7 @@
 //    point processes ...... "export function thomas"
 //    build the community .. "export function buildEco"
 //    leaf litter piles .... "function litterPiles"
+//    the far meadow ....... "export function procGrass"
 //    seedlings ............ "export function seedlings"
 //    L function ........... "export function ripleyL"
 //    GLSL twin ............ "export const ECO_GLSL"
@@ -610,14 +611,14 @@ export function groundMix(x, z, env) {
 export const BLADES = 8, BLADE_W = [0.0062, 0.0038, 0.0058, 0.0045];
 export const LEAN = [[0.3, 0.65], [0.3, 0.6], [0.6, 0.6], [0.35, 0.5]];   // [base, + rand] per kind
 export const GRASS_COL = { base: [0.07, 0.14, 0.03], tip: [0.2, 0.33, 0.08], straw: [0.55, 0.47, 0.26], dead: [0.3, 0.23, 0.13], flower: [0.17, 0.14, 0.11], flower2: [0.15, 0.16, 0.08], ripe: [0.42, 0.34, 0.17] };
-export function bladeAt(T, q, b, env) {
+export function bladeAt(T, q, b, env, keep = -1) {
   const x = T[q], z = T[q + 1], kind = T[q + 2] | 0, H = T[q + 3], spread = T[q + 4], rand = T[q + 5], rank = T[q + 6], wk = T[q + 7];
   const rb = frac(rand * 31.7 + b * 0.618), rb2 = frac(rand * 17.3 + b * 0.377);
   const ang = b * 2.39996 + rand * 6.2832, rr = spread * Math.sqrt((b + 0.5) / BLADES);
   const bx = x + Math.cos(ang) * rr, bz = z + Math.sin(ang) * rr;
   const L = lightAt(bx, bz, env.crowns || [], env.F);
   let vis = ss(rank, rank + 0.12, grassKeep(kind, L));
-  vis *= 1 - ss(0.85 * env.R, env.R, Math.hypot(bx, bz));
+  vis *= keep >= 0 ? keep : 1 - ss(0.85 * env.R, env.R, Math.hypot(bx, bz));   // keep: the far-meadow weight (procGrass)
   const st = grassState(env.p, kind, env.snow || 0);
   const culm = b < 1 && kind <= 1 && rb < 0.85;
   const h = culm ? H * 1.45 * (0.85 + 0.3 * rb) * st[2] * vis * (1 - 0.65 * (env.snow || 0)) : H * (0.6 + 0.55 * rb) * st[0] * vis;
@@ -647,6 +648,50 @@ export function bladePoint(B, t, side, env, out = [0, 0, 0]) {
   out[2] = B.bz + B.dir[1] * hz + d[1] * wv * B.h * t2 * 0.8 + B.dir[0] * w * side;
   out[1] = groundY(B.bx, B.bz) + Math.max(0.002, vy);
   return out;
+}
+
+// ------------------------------------------------------ the far meadow
+// Past the tussocks of buildEco (radius R round the plants), a grass layer
+// follows the camera: two square grids of world-anchored cells (PROC.n x
+// PROC.n each, sizes PROC.cell), one tussock candidate per cell at a
+// hashed jitter. The kind and the density come from the same fields, so
+// the swards, the path and the wood go on; a candidate lives if a hash is
+// under the density. It fades in over 0.82 R .. R, where the tussocks of
+// buildEco fade out, and at the outer edge of its grid. procGrass() is
+// the CPU twin of the PROC branch of the grass shader (meadow.js). It
+// returns tussock records (8 floats, as buildEco) and a keep weight.
+export const PROC = { cell: [0.25, 0.9], n: 80 };   // n: the desktop grid (layout.js procN)
+export function procGrass(cx, cz, F, R, n = PROC.n) {
+  const out = [];
+  for (let lvl = 0; lvl < 2; lvl++) {
+    const cs = PROC.cell[lvl], salt = 41 + lvl, half = Math.floor(n / 2);
+    const bx = Math.floor(cx / cs) - half, bz = Math.floor(cz / cs) - half;
+    for (let j = 0; j < n * n; j++) {
+      const ix = bx + (j % n), iz = bz + Math.floor(j / n);
+      const x = (ix + hash3(ix, iz, salt)) * cs, z = (iz + hash3(ix, iz, salt + 7)) * cs;
+      const rec = procTussock(ix, iz, x, z, lvl, cx, cz, F, R, n);
+      if (rec) out.push(rec);
+    }
+  }
+  return out;
+}
+export function procTussock(ix, iz, x, z, lvl, cx, cz, F, R, n) {
+  const cs = PROC.cell[lvl], salt = 41 + lvl, half = Math.floor(n / 2);
+  if (lvl === 1 && Math.max(Math.abs(x - cx), Math.abs(z - cz)) < PROC.cell[0] * half - PROC.cell[0]) return null;
+  const dc = Math.max(Math.abs(x - cx), Math.abs(z - cz));
+  const edge = 1 - ss(cs * half * 0.8, cs * half, dc);
+  const disc = ss(0.82 * R, R, Math.hypot(x, z));
+  const sw = F.sward(x, z), mead = F.meadow(x, z), pth = F.path(x, z), wd = F.wood(x, z);
+  let kind = pth > 0.08 && pth < 0.75 ? 3 : hash3(ix, iz, salt + 23) < mead ? 0 : 1;
+  if (wd > 0.5) kind = 2;
+  let dens = kind === 0 ? Math.pow(sw, 1.4) * (1 - 0.92 * pth) : kind === 1 ? (0.3 + 0.7 * sw) * (1 - 0.75 * pth) : kind === 2 ? 0.45 : 1;
+  dens *= 1 - 0.9 * ss(0.85, 1, pth);
+  const keep = (hash3(ix, iz, salt + 29) < dens ? 1 : 0) * disc * edge;
+  if (keep <= 0) return null;
+  const G = GRASS[kind], r1 = hash3(ix, iz, salt + 31), r2 = hash3(ix, iz, salt + 37);
+  const wk = Math.sqrt(cs / PROC.cell[0]);
+  const H = G.h[0] + (G.h[1] - G.h[0]) * (0.35 * r1 + 0.65 * mead * (kind === 0 ? 1 : 0.5)) * (0.8 + 0.4 * F.moist(x, z));
+  return { rec: [x, z, kind, H, (G.spread[0] + (G.spread[1] - G.spread[0]) * r2) * Math.min(1.8, wk), hash3(ix, iz, salt + 19), hash3(ix, iz, salt + 13) * 0.92, wk], keep };
 }
 
 // ------------------------------------------------------------ statistics

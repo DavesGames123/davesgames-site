@@ -124,6 +124,7 @@ async function programs() {
   add('ground', R.makeGround(U, { turf: t2, meadow: t2, soil: t2, forest: t2, litter: t2, normal: t2 }).material, {}, [['groundY(gx', 'padMask'], ['fCover(p)', 'fSward(p)', 'uGroundN', 'litC']]);
   const C = R.COMMON_GLSL;
   add('grass', M.grassMaterial(THREE, U, C), {}, [['bladeP', 'grassState(pp', 'gust(bp'], ['vGsnow']]);
+  add('grass far meadow', M.grassMaterial(THREE, U, C, true), {}, [['bladeP', 'gl_InstanceID', 'procKeep'], ['vGsnow']]);
   add('stone', M.natureMaterial(THREE, U, C, 'stone', { map: t2, normal: t2 }), { instancing: true }, [['vNw ='], ['north * (1.35']]);
   add('forb', M.natureMaterial(THREE, U, C, 'forb', { map: t2, normal: t2, alpha: true }), { instancing: true }, [['forbVigour(sp', 'forbBloom(sp'], ['> vBloom']]);
   add('forb (no normal map)', M.natureMaterial(THREE, U, C, 'forb', { map: t2, alpha: true }), { instancing: true });
