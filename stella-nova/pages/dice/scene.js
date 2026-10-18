@@ -30,7 +30,8 @@
 //  GREP MAP
 //    function studioRoom ........ the reflection room
 //    function feltTexture ....... the felt
-//    function woodTexture ....... the rim grain
+//    function woodTexture ....... the rim grain until the scan loads
+//    function scanWood .......... the real sapele scan (artwork/, CREDITS.md)
 //    function grainUV ........... box-mapped UVs in cm along a rail
 //    function feltShade ......... the dark border of the felt
 //    export function createScene  the factory
@@ -117,6 +118,18 @@ function woodTexture() {
     g.fillStyle = 'rgba(40,22,10,0.35)';
     for (let i = 0; i < 2600; i++) g.fillRect(rnd() * w, rnd() * h, 3 + rnd() * 9, 1);
   });
+}
+// The rim's real wood: a CC0 photo scan of sapele veneer (Poly Haven,
+// CREDITS.md), turned so the grain runs along u. The tile is 50 x 50 cm and
+// grainUV gives one unit per 30 x 7.5 cm, so the repeat is 0.6 x 0.15.
+// The material keeps the procedural woodTexture until the scan loads, and
+// keeps it if the load fails.
+function scanWood(mat) {
+  new THREE.TextureLoader().load(new URL('artwork/sapele-veneer-rim.jpg', import.meta.url).href, (t) => {
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+    t.repeat.set(30 / 50, 7.5 / 50);
+    const old = mat.map; mat.map = t; mat.needsUpdate = true; if (old) old.dispose();
+  }, undefined, () => {});
 }
 // Box-mapped UVs in cm for a rail long along x (alongX) or z. The faces
 // along the rail take u along its length, so the grain follows the rail.
@@ -226,6 +239,7 @@ export function createScene({ canvas, coarse = false, onNoGL } = {}) {
   // along the top of each rail.
   const woodMap = woodTexture();
   const woodMat = new THREE.MeshPhysicalMaterial({ map: woodMap, roughness: 0.55, clearcoat: 0.18, clearcoatRoughness: 0.5, envMapIntensity: 0.6 });
+  scanWood(woodMat);
   const shadeMat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const tray = new THREE.Group(); scene.add(tray);
   let dims = TRAYS.medium;
