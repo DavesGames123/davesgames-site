@@ -22,12 +22,22 @@
 //
 //  4. A new worker version takes control at once (skipWaiting in sw.js).
 //     The shell code in an open tab (lib/*.js, among them the screensaver
-//     recorder) is then the old version. If the tab had a worker before
-//     and the shell loaded less than RELOAD_WINDOW_MS ago, the shell
-//     reloads at once: that is the first load after a deploy, before the
-//     user has done anything. Later it does not reload by itself. It sets
-//     snOffline.stale, and the screensaver reloads before it records
-//     (lib/screensaver.js startFromMenu). Page swaps get the new files.
+//     recorder) is then the old version. The shell reloads by itself only
+//     when all of these are true (function mayReload):
+//       - the tab had a worker before (one worker replaces another)
+//       - the shell loaded less than RELOAD_WINDOW_MS (15 s) ago
+//       - the user has done nothing yet: no key, tap, click or wheel in
+//         the shell, and the page frame is not scrolled
+//       - no screensaver runs
+//       - this tab did not reload by itself in the last RELOAD_GAP_MS
+//         (10 min). sessionStorage 'sn-sw-reload' keeps the time. When
+//         sessionStorage does not work, the shell does not reload.
+//     The gap stops a reload loop: CDN edges can give two versions of
+//     sw.js for some minutes after a deploy, and each reload asks again.
+//     The user reported: "the homepage frequently crashes and reloads".
+//     In all other cases it sets snOffline.stale, and the screensaver
+//     reloads before it records (lib/screensaver.js startFromMenu). Page
+//     swaps get the new files.
 //
 //  window.snOffline.status() gives a promise of the worker cache counts:
 //  { version, core, coreTotal, lazy, lazyTotal, warming }. Test scripts use it.
@@ -37,13 +47,16 @@
 //    background pass ...... "function warmLater"
 //    live-data notice ..... "function showLiveNotice"
 //    new version .......... "function onNewWorker"
+//    reload rules ......... "function mayReload"
 // ============================================================================
 (function () {
   'use strict';
   if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
   var SW = navigator.serviceWorker;
   var WARM_DELAY_MS = 8000;
-  var RELOAD_WINDOW_MS = 30000;
+  var RELOAD_WINDOW_MS = 15000;
+  var RELOAD_GAP_MS = 10 * 60 * 1000;
+  var RELOAD_KEY = 'sn-sw-reload';
   var T0 = Date.now();
   var stale = false;
   var base = document.baseURI;
@@ -117,11 +130,32 @@
   // A tab with no worker at load gets its first one now: its code is
   // current, so only a change from one worker to another counts.
   var hadWorker = !!SW.controller;
+  var acted = false;
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (t) {
+    window.addEventListener(t, function () { acted = true; }, { capture: true, passive: true });
+  });
+  function frameScrolled() {
+    try {
+      var f = document.querySelector('#frame-wrap iframe'), w = f && f.contentWindow;
+      return !!(w && (w.scrollY || (w.document.scrollingElement && w.document.scrollingElement.scrollTop)) > 0);
+    } catch (e) { return false; }
+  }
+  // True when the shell may reload by itself now. It writes the reload
+  // time first, so a second reload in this tab waits RELOAD_GAP_MS.
+  function mayReload() {
+    var saver = window.snScreensaver && window.snScreensaver.running;
+    if (saver || acted || Date.now() - T0 >= RELOAD_WINDOW_MS || frameScrolled()) return false;
+    try {
+      var last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
+      if (Date.now() - last < RELOAD_GAP_MS) return false;
+      sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+      return sessionStorage.getItem(RELOAD_KEY) !== null;
+    } catch (e) { return false; }
+  }
   function onNewWorker() {
     if (!hadWorker) { hadWorker = true; return; }
     stale = true;
-    var saver = window.snScreensaver && window.snScreensaver.running;
-    if (!saver && Date.now() - T0 < RELOAD_WINDOW_MS) location.reload();
+    if (mayReload()) location.reload();
   }
   SW.addEventListener('controllerchange', onNewWorker);
 
