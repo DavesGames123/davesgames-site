@@ -16,6 +16,7 @@
 // ============================================================================
 import { C, BODY, unitsOf } from '../data.js';
 import { body, orbiting, Parts, disk, halo, COLORS, DEG, rng, gauss, v3, elementsToState, toCOM, period, runCpu, fmt } from './common.js';
+import { closeFocus } from './focus.js';
 import { System } from '../nbody.js';
 
 const MS = C.MSUN, AU = C.AU;
@@ -98,6 +99,7 @@ export const pythagorean = {
       sources: ['sp67'],
     };
   },
+  focus: closeFocus,
   test: { n: 60 },
   check(spec) {
     const sys = new System(spec.bodies, spec.opts);

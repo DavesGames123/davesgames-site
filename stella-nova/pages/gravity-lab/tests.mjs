@@ -32,8 +32,11 @@
 //     the run that follows), frame.js, saver-plan.js (reel, shots, cuts,
 //     subjects, laws), budget.js pixelRatio, size.js (drawn radii under
 //     the cap, never under the collision radius), director.js (D1: the
-//     camera aims at the bound centre of mass or at an active pair, and
-//     the pair stays in the frame and in the saver band, 16:9 and 9:16)
+//     camera aims at the action or at an active pair, and
+//     the pair stays in the frame and in the saver band, 16:9 and 9:16),
+//     the action framing (A1-A4, focus.js and framing-check.mjs: 80% of
+//     the action weight in view in every experiment, no chase of an
+//     escaper, the saver shots in the plate band, aim and zoom caps)
 //  GPU (Deno WebGPU): cs_restricted against CpuParticles, cs_gravity and
 //  cs_kick against the f64 direct sum, the impact stamp and hit counts
 //  PAGE (Deno WebGPU, test-page.mjs): the whole page on a fake DOM: boot,
@@ -302,6 +305,7 @@ async function pageModuleTests() {
   }
   // D1 the camera director (director.js) on the CPU bodies
   await directorTest(X, R, F);
+  await framingTests(X);
   // B1 pixels
   {
     const pr = [BG.pixelRatio('auto', false, 1920, 1080, 2), BG.pixelRatio('auto', true, 390, 844, 3), BG.pixelRatio('high', false, 2560, 1440, 2)];
@@ -311,11 +315,107 @@ async function pageModuleTests() {
   }
 }
 
+// A1-A4: the action framing (focus.js, framing-check.mjs). Every library
+// variant runs A_SEC s on the CPU with A_N particles, a particle readback
+// every READ_S s, the director and the cameras (16:9, 9:16, full and in a
+// saver band).
+//  A1  calm frames 1.5 s after a focus change show at least 80% of the
+//      action weight; a pair in focus stays on screen; the eased aim and
+//      the zoom stay under their caps, and the aim has no shake (jerk)
+//  A2  a body thrown out of a binary at 3x the escape speed: the framing
+//      stays on the binary (never chases the escaper)
+//  A3  the saver shots (shotPlan, shotFrame) in the plate band: establish
+//      and top shots show 80% of the action weight, close shots keep the
+//      subject in the band
+//  A4  focus.js parts: sampleRows / partsInFrame, a leaving body and a
+//      leaving particle weigh little, the radius floor, the density gain
+//      falls with crowding, the bloom fades on a large star, labels thin
+//      out, the trail cap
+async function framingTests(X) {
+  const FC = await import('./framing-check.mjs'), FO = await import('./focus.js'), D = await import('./director.js');
+  const A_SEC = 10, A_N = 200, JERK = 0.08;
+  const bad = { w: [], pair: [], aim: [], zoom: [], jerk: [], gone: [], sw: [], subj: [] };
+  let runs = 0, frames = 0, minW = 1, meanW = 0, nW = 0, aim = 0, zoom = 0, jerk = 0, sMin = 1, sMean = 0, sN = 0, subj = 0, subjN = 0, hooks = 0;
+  const t0 = Date.now();
+  for (const [key, ex] of Object.entries(X.EXPERIMENTS)) for (const v of ex.variants) {
+    const sp = X.build(key, 1, { n: A_N, variant: v }), name = key + '/' + v;
+    const r = FC.runFraming(sp, ex, { sec: A_SEC, saver: true });
+    runs++; frames += r.frames; if (ex.focus) hooks++;
+    if (r.dead) { bad.w.push(name + ' not finite'); continue; }
+    minW = Math.min(minW, r.minW); meanW += r.sumW; nW += r.nW;
+    aim = Math.max(aim, r.aimRate); zoom = Math.max(zoom, r.zoomRate); jerk = Math.max(jerk, r.jerk);
+    if (r.minW < 0.8) bad.w.push(`${name} ${r.minW.toFixed(2)} (${r.worst})`);
+    if (r.pairOut) bad.pair.push(`${name} ${r.pairOut}/${r.pairChecked}`);
+    // the cap is against the distance before the zoom step of the frame
+    if (r.aimRate > D.DIR.AIM_MAX * (1 + D.DIR.ZOOM_OUT / 30)) bad.aim.push(`${name} ${r.aimRate.toFixed(2)}`);
+    if (r.zoomRate > D.DIR.ZOOM_OUT * 1.001) bad.zoom.push(`${name} ${r.zoomRate.toFixed(2)}`);
+    if (r.jerk > JERK) bad.jerk.push(`${name} ${r.jerk.toFixed(3)}`);
+    if (r.gone) bad.gone.push(name);
+    const S = r.saver;
+    sMin = Math.min(sMin, S.minW); sMean += S.meanW * S.nW; sN += S.nW; subj += S.subjOut; subjN += S.subjChecked;
+    if (S.minW < 0.8) bad.sw.push(`${name} ${S.minW.toFixed(2)}`);
+    if (S.subjOut > 0.05 * Math.max(1, S.subjChecked)) bad.subj.push(`${name} ${S.subjOut}/${S.subjChecked}`);
+  }
+  const u = a => a.slice(0, 4).join(' | ') || 'none';
+  ok('A1 action framing: every experiment keeps 80% of the action weight in view (16:9, 9:16), pairs on screen, aim and zoom under their caps, no shake',
+    !bad.w.length && !bad.pair.length && !bad.aim.length && !bad.zoom.length && !bad.jerk.length && !bad.gone.length && hooks >= 6,
+    `${runs} runs x ${A_SEC} s (${hooks} with a focus hook), ${frames} frames; weight in view min ${minW.toFixed(2)} mean ${(meanW / Math.max(1, nW)).toFixed(3)}; eased aim max ${aim.toFixed(2)}/s (cap ${D.DIR.AIM_MAX}), zoom max ${zoom.toFixed(2)}/s (cap ${D.DIR.ZOOM_OUT}), jerk max ${jerk.toFixed(3)} (bound ${JERK}); ` +
+    `under 80%: ${u(bad.w)}; pair out: ${u(bad.pair)}; aim: ${u(bad.aim)}; zoom: ${u(bad.zoom)}; jerk: ${u(bad.jerk)}; aimed at a body that left: ${u(bad.gone)} [${((Date.now() - t0) / 1000).toFixed(1)} s]`);
+  {
+    const e = FC.escapeRun();
+    ok('A2 an escaper is not chased: the framing stays on the binary while the third body flies off', e.rMax < 0.6 && e.aimOff < 0.3 && e.dEnd > 10,
+      `escaper at ${e.dEnd.toFixed(1)} (view extent 3); framing radius at start ${e.r0.toFixed(3)}, largest once the escaper is past 2 extents ${e.rMax.toFixed(3)}, aim off the binary ${e.aimOff.toFixed(3)}`);
+  }
+  ok('A3 saver framing: establish and top shots keep 80% of the action weight in the plate band (16:9, 9:16), close shots keep the subject in the band',
+    !bad.sw.length && !bad.subj.length,
+    `weight in band min ${sMin.toFixed(2)} mean ${(sMean / Math.max(1, sN)).toFixed(3)} (${sN} frames); subject out of band ${subj}/${subjN} frames; under 80%: ${u(bad.sw)}; subject out: ${u(bad.subj)}`);
+  {
+    const fails = [];
+    // sampleRows: every k-th live row, in the frame of the readback
+    const body = new Float32Array(12 * 10);
+    for (let i = 0; i < 10; i++) { body[12 * i] = i; body[12 * i + 4] = 1; body[12 * i + 7] = i % 2 ? 1 : 0; }
+    const fr = { c: [1, 0, 0], v: [1, 0, 0], th: 0, om: 0 };
+    const ps = FO.sampleRows(body, 10, 0, fr, 3);
+    if (ps.live !== 5 || ps.n !== 3 || ps.pos[0] !== 0 || ps.vel[0] !== 0) fails.push(`sampleRows ${ps.live} ${ps.n} ${ps.pos[0]} ${ps.vel[0]}`);
+    const fast = FO.sampleRows(body, 10, 0, null, 8), ip = FO.partsInFrame(fast, { c: [0, 0, 0], v: [0, 0, 0], th: 0, om: 0 }, 100, null, 1);
+    if (Math.abs(ip.pos[0] - (1 + FO.FOCUS.EXTRA)) > 1e-9) fails.push('partsInFrame cap ' + ip.pos[0]);
+    // a leaving body and a leaving particle
+    const sys = { n: 2, alive: [1, 1], m: [1, 0.001], x: [0, 0, 0, 1, 0, 0], v: [0, 0, 0, 5, 0, 0], pos(i) { return [this.x[3 * i], this.x[3 * i + 1], this.x[3 * i + 2]]; }, vel(i) { return [this.v[3 * i], this.v[3 * i + 1], this.v[3 * i + 2]]; } };
+    const gone = new Uint8Array(2), lv = FO.leavingMask(sys, gone);
+    const parts = { n: 2, pos: Float64Array.from([0.5, 0, 0, 0, 0.5, 0]), vel: Float64Array.from([5, 0, 0, -1.4, 0, 0]), row: [0, 1], group: [0, 0] };
+    const smp = FO.focusSample({ sys, frame: { c: [0, 0, 0], v: [0, 0, 0], th: 0, om: 0 }, gone, leaving: lv, parts, ext: 1, rNow: null });
+    if (!lv[1] || lv[0] || Math.abs(smp.mass[1] - FO.FOCUS.LEAVE_W) > 1e-12 || !(smp.mass[2] < smp.mass[3] * 0.2)) fails.push(`leaving ${Array.from(lv)} ${Array.from(smp.mass.subarray(0, smp.count)).map(x => x.toFixed(3))}`);
+    // the radius floor: two bodies in a close pass
+    const fa = FO.frameAction(FO.makeFramer(), { sys: { n: 2, alive: [1, 1], m: [1, 1], x: [0, 0, 0, 0.001, 0, 0], v: [0, 0, 0, 0, 0, 0], pos(i) { return [this.x[3 * i], 0, 0]; }, vel() { return [0, 0, 0]; } }, frame: { c: [0, 0, 0], v: [0, 0, 0], th: 0, om: 0 }, gone, leaving: new Uint8Array(2), parts: null, ext: 2, rNow: [0.02, 0.02] }, 1 / 60);
+    if (!(fa.radius >= Math.max(FO.FOCUS.MIN_EXT * 2, FO.FOCUS.MIN_BODY * 0.02) * FO.FOCUS.MARGIN - 1e-12)) fails.push('floor ' + fa.radius);
+    // density gain: falls when the same rows crowd one cell
+    const proj = p => ({ x: 500 + 100 * p[0], y: 400 + 100 * p[1] });
+    const spread = new Float64Array(3 * 400), knot = new Float64Array(3 * 400);
+    for (let k = 0; k < 400; k++) { spread[3 * k] = (k % 20) / 2 - 5; spread[3 * k + 1] = Math.floor(k / 20) / 2.5 - 4; knot[3 * k] = (k % 20) * 0.001; }
+    const g1 = FO.densityGain({ peak: FO.peakDensity(spread, 400, 16384, proj, 1000, 800), ptPx: 1.05, gain: 0.62 });
+    const g2 = FO.densityGain({ peak: FO.peakDensity(knot, 400, 16384, proj, 1000, 800), ptPx: 1.05, gain: 0.62 });
+    if (!(g1 === 1 && g2 < 0.6 && g2 >= FO.FOCUS.GAIN_MIN)) fails.push(`gain ${g1} ${g2}`);
+    if (!(FO.bloomFactor(10) === 1 && FO.bloomFactor(200) < 0.4 && FO.bloomFactor(1e5) === FO.FOCUS.BLOOM_MIN)) fails.push('bloom');
+    // labels: twenty names on one spot give one; spread out, up to the cap
+    const near = Array.from({ length: 20 }, (_, i) => ({ i, x: 100 + i, y: 100, pri: i }));
+    const far = Array.from({ length: 20 }, (_, i) => ({ i, x: 100 * i, y: 50 * (i % 3), pri: i }));
+    const kn = FO.thinLabels(near, 10), kf = FO.thinLabels(far, 10);
+    if (kn.size !== 1 || !kn.has(19) || kf.size !== 10) fails.push(`labels ${kn.size} ${kf.size}`);
+    const tc1 = FO.trailCap(3), tc2 = FO.trailCap(30);
+    if (!(tc1.points === 420 && tc1.alpha === 1 && tc2.points * 30 <= FO.FOCUS.TRAIL_ALL && tc2.alpha < 0.6)) fails.push('trails');
+    ok('A4 focus.js: samples in the readback frame, leaving bodies and particles weigh little, radius floor, density gain, bloom fade, label thinning, trail cap',
+      fails.length === 0, fails.join(' | ') || `gain spread ${g1.toFixed(2)}, knot ${g2.toFixed(2)}; floor ${fa.radius.toFixed(3)}; labels ${kn.size} on one spot, ${kf.size} spread; trails 30 x ${tc2.points}, alpha ${tc2.alpha.toFixed(2)}`);
+  }
+}
+
 // D1: every library variant with bodies and 60 rolls run for D_SEC s of
 // real time at 30 frames a second (bodies only, no particles). Each frame
 // the director aims and four cameras follow it: 16:9 and 9:16, full
-// screen and inside a saver plate band. Checks: the aim is the bound
-// centre of mass (or the spec's centre body) or on the segment between
+// screen and inside a saver plate band. Checks: the calm aim is at the
+// action (a body that has not left is within 1.25 framing radii, or the
+// aim is between the two nearest bodies: never empty space; 1.5 s after
+// a body leaves the aim may travel to the new system; the spec's
+// centre body for its own view) or on the segment between
 // the two bodies of the pair, never a body that has left; 1 s after a
 // focus change both bodies of the pair project inside the frame (the
 // clear band for the saver); drawn radii stay under the size cap.
@@ -338,7 +438,7 @@ async function directorTest(X, R, F) {
     const trails = sp.bodies.map(() => ({ pts: new Float32Array(3 * TR), n: 0, head: 0, last: null }));
     const rnd = N.rng(sp.seed * 7 + 3), az = 2 * Math.PI * rnd(), el = 0.1 + 1.2 * rnd();
     const cams = SCREENS.map(() => ({ cut: true }));
-    let fk = '', fAt = 0, t = 0, dead = false;
+    let fk = '', fAt = 0, t = 0, dead = false, goneKey = '', goneAt = 0;
     for (let k = 0; k < D_SEC / DT && !dead; k++) {
       sys.advance(sp.rate * DT, 1); t += DT;
       for (const e of sys.drain()) D.noteEvent(dir, e, ext);
@@ -356,17 +456,25 @@ async function directorTest(X, R, F) {
       }
       const d = D.direct(dir, sys, fr, DT, { view: sp.view, ext, rNow, trail: i => D.ringTail(trails[i], D.DIR.TRAIL_K), parts: false });
       frames++;
-      const key = d.mode + ':' + d.i + ':' + d.j;
+      const key = d.mode + ':' + d.i + ':' + d.j, gk = Array.from(d.gone).join('');
       if (key !== fk) { fk = key; fAt = t; if (d.mode !== 'calm') focuses++; }
+      if (gk !== goneKey) { goneKey = gk; goneAt = t; }
       // the aim
       if (d.mode === 'calm') {
         if (Number.isInteger(sp.view.center) && sys.alive[sp.view.center] && !d.gone[sp.view.center]) {
           if (Math.hypot(...d.target) > 1e-9 * ext) bad.aim.push(`${sp.title}: calm target off the centre body`);
         } else {
-          let M = 0, nb = 0; const c = [0, 0, 0], mn = [0, 0, 0];
-          for (let i = 0; i < sys.n; i++) if (sys.alive[i] && !d.gone[i]) { const p = F.toFrame(fr, sys.pos(i)); nb++; M += sys.m[i]; for (let q = 0; q < 3; q++) { c[q] += sys.m[i] * p[q]; mn[q] += p[q]; } }
-          const com = M > 0 ? c.map(x => x / M) : mn.map(x => x / Math.max(1, nb));
-          if (Math.hypot(d.target[0] - com[0], d.target[1] - com[1], d.target[2] - com[2]) > 0.02 * ext) bad.aim.push(`${sp.title}: calm target off the bound centre of mass`);
+          // the action camera (focus.js) aims at the action, never at empty
+          // space: a live body that has not left is within its framing
+          // radius, or the aim is between the two nearest bodies (two
+          // galaxy cores that fly apart)
+          const ds = [];
+          for (let i = 0; i < sys.n; i++) if (sys.alive[i] && !d.gone[i]) { const p = F.toFrame(fr, sys.pos(i)); ds.push([Math.hypot(d.target[0] - p[0], d.target[1] - p[1], d.target[2] - p[2]), p]); }
+          ds.sort((a, b) => a[0] - b[0]);
+          const gap = ds.length > 1 ? Math.hypot(ds[0][1][0] - ds[1][1][0], ds[0][1][1] - ds[1][1][1], ds[0][1][2] - ds[1][1][2]) : 0;
+          // (1.5 s after the set of bodies that left changes, the aim is on
+          // its way to the new system: not checked; 25% slack for the lag)
+          if (t - goneAt > 1.5 && ds.length && ds[0][0] > Math.max(1.25 * d.radius, 0.6 * gap)) bad.aim.push(`${sp.title}: calm target in empty space`);
         }
       } else {
         pairFrames++;
@@ -396,7 +504,7 @@ async function directorTest(X, R, F) {
     }
   }
   const u = a => [...new Set(a)];
-  ok('D1 camera director: aims at the bound centre of mass or at an active pair, never at a body that left; the pair stays in the frame and in the saver band (16:9 and 9:16); drawn radii under the cap',
+  ok('D1 camera director: aims at the action (a body within the framing radius) or at an active pair, never at a body that left; the pair stays in the frame and in the saver band (16:9 and 9:16); drawn radii under the cap',
     bad.aim.length === 0 && bad.gone.length === 0 && bad.frame.length === 0 && bad.size.length === 0 && focuses >= 20,
     `${specs.length} runs x ${D_SEC} s, ${frames} frames, ${focuses} focus changes to a pair, ${(100 * pairFrames / frames).toFixed(1)}% of frames on a pair; ${checked} body projections, nearest edge ${worstEdge.toFixed(1)} px; ` +
     `aim ${bad.aim.length} [${u(bad.aim).slice(0, 3).join(' | ')}], gone ${bad.gone.length} [${u(bad.gone).slice(0, 3).join(' | ')}], frame ${bad.frame.length} [${u(bad.frame).slice(0, 4).join(' | ')}], size ${bad.size.length} [${u(bad.size).slice(0, 3).join(' | ')}]`);

@@ -5,7 +5,8 @@
 //  starts a run (app/run.js startRun), writes the link (?seed=, ?exp=) and
 //  refreshes the story strip, the tray and the details. refreshHUD() runs
 //  four times a second (clock, selection card, live numbers); placeLabels()
-//  each frame (body names on screen).
+//  each frame (body names on screen; they thin out when crowded:
+//  focus.js thinLabels).
 //
 //  LINKS   ?seed=<int> a random run (roll.js), &scene=<sandbox key> a
 //          generated scene of that kind; ?exp=<key>&v=<variant>&s=<seed>
@@ -32,6 +33,7 @@ import { toFrame } from '../frame.js';
 import { stateToElements, v3 } from '../nbody.js';
 import { pixelRatio } from '../budget.js';
 import { drawRadius, heaviest } from '../size.js';
+import { thinLabels } from '../focus.js';
 import { typeset } from '../../../lib/sci-math.js';
 
 export const SCENES = { cluster: 'A knot of suns', rumble: 'Packed planets', ringDive: 'Rubble moon dive', binaryDisk: 'Two suns and a disk', bhSwarm: 'Stars and a black hole',
@@ -176,12 +178,21 @@ export function placeLabels() {
   const R = S.ren, k = R.W / $('gpu').clientWidth, phone = PHONE_Q.matches;
   const dom = dominant(sys);
   while (labelEls.length < sys.n) { const d = document.createElement('div'); d.className = 'lbl'; host.appendChild(d); labelEls.push(d); }
+  // the names thin out when crowded (focus.js thinLabels)
+  const cands = [], at = [];
+  for (let i = 0; i < sys.n; i++) {
+    if (!sys.alive[i] || !S.meta[i]) continue;
+    const q = R.project(toFrame(S.frame, sys.pos(i)));
+    if (!q || q.x < 0 || q.y < 0 || q.x > R.W || q.y > R.H) continue;
+    at[i] = q;
+    const pri = i === S.sel ? 4e300 : dom && i === dom.i ? 3e300 : S.meta[i].item ? 2e300 : sys.m[i];
+    cands.push({ i, x: q.x / k, y: q.y / k, pri });
+  }
+  const keep = thinLabels(cands, phone ? 3 : 10);
   for (let i = 0; i < labelEls.length; i++) {
     const el = labelEls[i];
-    const show = i < sys.n && sys.alive[i] && S.meta[i] && (!phone || i === S.sel || (dom && i === dom.i)) && (sys.n <= 14 || i === S.sel || S.meta[i].item || (dom && i === dom.i));
-    if (!show) { el.hidden = true; continue; }
-    const q = R.project(toFrame(S.frame, sys.pos(i)));
-    if (!q || q.x < 0 || q.y < 0 || q.x > R.W || q.y > R.H) { el.hidden = true; continue; }
+    if (!keep.has(i)) { el.hidden = true; continue; }
+    const q = at[i];
     el.hidden = false;
     if (el.textContent !== S.meta[i].name) el.textContent = S.meta[i].name;
     el.classList.toggle('sel', i === S.sel);
@@ -365,7 +376,7 @@ export function buildUI() {
   for (const b of document.querySelectorAll('#colors button')) b.addEventListener('click', () => { UI.colorMode = +b.dataset.c; for (const x of document.querySelectorAll('#colors button')) x.classList.toggle('on', x === b); });
   document.querySelector(`#colors button[data-c="${UI.colorMode}"]`).classList.add('on');
   const tog = (id, key) => { $(id).checked = UI[key]; $(id).addEventListener('change', () => { UI[key] = $(id).checked; }); };
-  tog('tTrails', 'trails'); tog('tLabels', 'labels'); tog('tPredict', 'predict'); tog('tCalm', 'calm');
+  tog('tTrails', 'trails'); tog('tLabels', 'labels'); tog('tPredict', 'predict'); tog('tCalm', 'calm'); tog('tAction', 'action');
   for (const b of document.querySelectorAll('#quals button')) b.addEventListener('click', () => {
     UI.quality = b.dataset.q; for (const x of document.querySelectorAll('#quals button')) x.classList.toggle('on', x === b);
     resizeNow(); applyChoice(S.choice, { url: false });

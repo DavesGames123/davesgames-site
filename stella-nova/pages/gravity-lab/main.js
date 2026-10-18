@@ -13,6 +13,8 @@
 //    directFrame  where the action is (director.js through app/camera.js)
 //    saverFrame   the screensaver's camera goal and slow motion
 //    camFrame     the camera (app/camera.js) in frame coordinates
+//    lookFrame    the particle gain, point size and bloom against the
+//                 crowding (focus.js densityGain, bloomFactor)
 //    render       bodies, segments, camera uniform, draw
 //    placeLabels  the body names (app/ui.js)
 //  refreshHUD runs at 4 Hz.
@@ -26,7 +28,7 @@
 //    saver.js    window.snSaver: the shots and the plate
 //  Root (no DOM): nbody.js lab.js engine.js budget.js data.js
 //  experiments/ items.js roll.js frame.js saver-plan.js render.js size.js
-//  director.js
+//  director.js focus.js
 //
 //  RELEASE. lib/gpu-guard.js destroys the device on pagehide; this file
 //  also destroys it there (and the Lab and renderer buffers first).
@@ -37,7 +39,7 @@ import { loadNbodyCode } from './engine.js';
 import { Renderer, loadRenderCode } from './render.js';
 import { S, UI, $, bootDone, bootFailed, PHONE_Q, COARSE } from './app/state.js';
 import { stepRun, bodyInstances, segments, lights } from './app/run.js';
-import { camFrame, cam, directFrame } from './app/camera.js';
+import { camFrame, cam, directFrame, lookFrame } from './app/camera.js';
 import { buildUI, applyChoice, firstChoice, refreshHUD, placeLabels, resizeNow } from './app/ui.js';
 import { saverFrame } from './app/saver.js';
 import { typesetAll } from '../../lib/sci-math.js';
@@ -63,10 +65,14 @@ function loop(now) {
   const sg = segments(S.dpr || 1);
   R.setSegments(sg.f, sg.n);
   const sp = S.spec, U = sp.scale || { V: 1 };
+  // the look against the crowding: a dense core dims the points and
+  // thins them; a star that fills the view fades the bloom (focus.js)
+  const gain = PHONE_Q.matches || COARSE ? 0.8 : 0.62, lk = lookFrame(c, R.W / (S.dpr || 1), R.H / (S.dpr || 1), gain, dt);
+  R.bloomStrength = 0.1 * lk.bloomK;
   R.writeCam(Object.assign(c, {
     t: S.lab.t, dpr: S.dpr || 1, frame: [S.frame.c[0], S.frame.c[1], S.frame.c[2], S.frame.th], lights: lights(),
-    minBodyPx: 3 * (S.dpr || 1), minPtPx: 1.05 * (S.dpr || 1), flashT: sp.rate * 0.8, colorMode: UI.colorMode,
-    gain: PHONE_Q.matches || COARSE ? 0.8 : 0.62, speedScale: 1 / Math.max(1e-30, typicalSpeed()), vref: S.frame.v,
+    minBodyPx: 3 * (S.dpr || 1), minPtPx: 1.05 * lk.ptK * (S.dpr || 1), flashT: sp.rate * 0.8, colorMode: UI.colorMode,
+    gain: gain * lk.gainK, speedScale: 1 / Math.max(1e-30, typicalSpeed()), vref: S.frame.v,
   }));
   R.render();
   placeLabels();

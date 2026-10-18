@@ -23,12 +23,16 @@
 //  event of the same pair (eventKey) cuts once in EVENT_REPEAT s, so a
 //  pair that flips between bound and free does not fill the reel. Data-driven subjects: pickSubject scores the bodies by
 //  their acceleration (where gravity is doing the most work right now).
+//  FRAMING (shotFrame): each shot kind takes the page's framing (the
+//  director and the action camera of focus.js), so the saver and the page
+//  show the same action.
 //
 //  grep -n targets: "export const SHOTS", "export function makeReel",
 //  "export function shotPlan", "export function shotDone",
 //  "export function eventWorth", "export function pickSubject",
 //  "export function shotGoal", "export function lawFor",
-//  "export function eventWait", "export function eventKey"
+//  "export function eventWait", "export function eventKey",
+//  "export function shotFrame", "export function tooFast"
 // ============================================================================
 import { reel } from './roll.js';
 
@@ -97,11 +101,17 @@ export function eventWorth(e, ext) {
 export function eventWait(worth) { return worth >= 4 ? EVENT_MIN : CUT_MIN; }
 // The same event of the same pair has the same key.
 export function eventKey(e) { return e.type + ':' + (e.i ?? '') + ':' + (e.j ?? ''); }
-// The subject: bodies [{ i, a (|acceleration|), m, dom (bool), alive }];
-// the largest acceleration, not the dominant body; the runner-up one time
-// in three. Returns a body index or -1.
+// The subject: bodies [{ i, a (|acceleration|), m, dom (bool), alive,
+// fast (tooFast) }]; the largest acceleration, not the dominant body and
+// not a fast body; the runner-up one time in three. Returns a body index
+// or -1.
+// A body that turns about the dominant body faster than once in FAST_S s
+// of real time (fast: omega x sim rate, rad/s) is a blur on screen and is
+// not a subject.
+export const FAST_S = 2;
+export function tooFast(omegaSim, rate) { return omegaSim * rate > 2 * Math.PI / FAST_S; }
 export function pickSubject(bodies, rnd) {
-  const c = bodies.filter(b => b.alive && !b.dom && isFinite(b.a)).sort((p, q) => q.a - p.a);
+  const c = bodies.filter(b => b.alive && !b.dom && !b.fast && isFinite(b.a)).sort((p, q) => q.a - p.a);
   if (!c.length) { const d = bodies.find(b => b.alive); return d ? d.i : -1; }
   if (c.length > 1 && rnd() < 0.33) return c[1].i;
   return c[0].i;
@@ -120,4 +130,34 @@ export function lawFor(spec) {
   const orbit = ['kepler', 'transfers', 'slingshot', 'solar', 'blackhole', 'resonance', 'triton', 'kozai', 'sl9', 'tde'];
   if (orbit.includes(spec.key) || (spec.rollInfo && /cometStorm|probes|bhSwarm/.test(spec.rollInfo.base || ''))) return { name: 'vis-viva', tex: 'v^2 = G M\\left(\\frac{2}{r} - \\frac{1}{a}\\right)' };
   return { name: 'Newton', tex: '\\vec F = -\\frac{G\\,m_1 m_2}{r^2}\\,\\hat r' };
+}
+
+// The framing of a shot at progress u: { az, el, frame, zoomK }. d: the
+// director's result (director.js direct: the calm view of the action
+// camera, focus.js, or a pair); close: the close framing (the pair, or
+// the subject and its recent trail: app/saver.js closeFrame); calmK: the
+// saver's calm setting (0..1), which widens the close shots.
+//   establish, top  the director's framing (the calm view at the shot's
+//                   zoom; a pair as it is)
+//   push            from the calm view about the close framing to it
+//   follow, low, close   the close framing (low a little wider)
+export const PUSH_K = 2.6;
+export function shotFrame(sh, u, d, close, calmK = 0) {
+  const g0 = shotGoal(sh, u), calm = d.calm || d;
+  let frame, zoomK = 1;
+  if (sh.kind === 'push') {
+    // the target is the close framing all the way (never empty space),
+    // the radius shrinks from the whole view about it, at least PUSH_K
+    // times (the calm view of the action camera can be close already)
+    const r0 = Math.max(PUSH_K * close.radius, calm.radius + Math.hypot(close.target[0] - calm.target[0], close.target[1] - calm.target[1], close.target[2] - calm.target[2]));
+    const e = u * u * (3 - 2 * u);
+    frame = { mode: 'push', i: close.i, j: close.j, target: close.target, radius: Math.exp(Math.log(r0) + (Math.log(close.radius) - Math.log(r0)) * e) };
+  } else if (sh.kind === 'establish' || sh.kind === 'top') {
+    frame = d; if (d.mode === 'calm') zoomK = g0.distK;
+  } else {
+    frame = close;
+    if (sh.kind === 'low' && frame.mode !== 'pair') zoomK = 1.25;
+  }
+  if (sh.kind !== 'establish' && sh.kind !== 'top') zoomK *= 1 + 0.15 * calmK;
+  return { az: g0.az, el: g0.el, frame, zoomK };
 }

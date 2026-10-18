@@ -14,8 +14,17 @@
 //  eases the target and the distance to that focus.
 //    page    the director moves the target and the distance; the user
 //            turns the camera (az, el). A zoom (wheel, pinch) gives the
-//            distance to the user for USER_HOLD ms; a followed body or a
-//            throw in progress stops the director.
+//            distance to the user for USER_HOLD ms, then the camera eases
+//            back (stepCam rate caps); a followed body, a throw in
+//            progress or the Follow action toggle off (UI.action) stops
+//            the director.
+//  PARTICLES. readParts() reads the particle rows back every READ_S s
+//  (focus.js sampleRows, in the frame of the readback): the director's
+//  action camera weighs them (galaxy tails, debris, dust at the points).
+//  LOOK. lookFrame() gives the particle gain and point size against the
+//  crowding (focus.js densityGain: the brightness hint and the densest
+//  screen cell) and the bloom fade for a star that fills the view
+//  (bloomFactor); main.js writes them in the camera uniform.
 //    saver   app/saver.js sets S.saver.goal { az, el, frame, zoomK }: the
 //            shot angle on critically damped springs, the framing through
 //            stepCam inside the plate band (lib/saver-clear.js plateBand).
@@ -24,13 +33,17 @@
 //
 //  grep -n targets: "export const cam", "export function resetCam",
 //  "export function fitDist", "export function directFrame",
-//  "export function camFrame", "export function eyeOf", "USER_HOLD"
+//  "export function camFrame", "export function eyeOf", "USER_HOLD",
+//  "function readParts", "export function lookFrame"
 // ============================================================================
 import { S, UI, bus } from './state.js';
-import { makeDirector, noteEvent, direct, stepCam, ringTail, DIR } from '../director.js';
+import { toFrame } from '../frame.js';
+import { makeDirector, noteEvent, direct, stepCam, ringTail, project, DIR } from '../director.js';
+import { sampleRows, partsInFrame, peakDensity, densityGain, bloomFactor, FOCUS } from '../focus.js';
+import { EXPERIMENTS } from '../experiments/index.js';
 
 export const FOV = DIR.FOV;
-const USER_HOLD = 10000;
+const USER_HOLD = 8000;
 export const cam = {
   az: -0.6, el: 0.5, dist: 10, target: [0, 0, 0], tgtOff: [0, 0, 0],
   // spring state (the saver)
@@ -52,19 +65,68 @@ export function resetCam(spec, W, H) {
   cam.zoomAt = -Infinity;
   cam.dir = makeDirector(); cam.fc = { cut: false }; cam.auto = false;
 }
+// The particle sample of the run (focus.js sampleRows): a readback of the
+// particle rows every FOCUS.READ_S s (one at a time; a readback of the run
+// before is dropped). S.partSample { pos, vel, row, n, live, t, frame }:
+// in the frame of the readback (a new frame, a followed body, starts a
+// new sample).
+let readAt = -Infinity, runId = 0;
+function readParts() {
+  const lab = S.lab, now = performance.now(), id = runId;
+  if (!lab || !lab.be || !lab.be.readback || now - readAt < FOCUS.READ_S * 1000) return;
+  readAt = now;
+  const t = lab.t, cap = lab.cap, f0 = S.frame;
+  let r;
+  try { r = lab.be.readback(); } catch (e) { return; }
+  Promise.resolve(r).then(rb => { if (rb && rb.body && id === runId && S.lab === lab) S.partSample = sampleRows(rb.body, cap, t, f0); }).catch(() => {});
+}
 // The director's focus of this frame (after the sim step): S.dirNow.
 export function directFrame(dt) {
   const sys = S.lab && S.lab.sys, sp = S.spec;
   if (!sp) return null;
+  const P = sp.self || sp.particles, parts = !!(P && P.n) || !!(S.lab && S.lab.pool);
+  if (parts) readParts();
   const rNow = S.meta ? S.meta.map(m => m.rNow ?? m.rDraw) : null;
+  S.sampleNow = S.partSample && S.frame && sys ? partsInFrame(S.partSample, S.frame, S.lab.t, P && P.group, sp.view.extent) : null;
+  const X = EXPERIMENTS[sp.key];
   S.dirNow = direct(cam.dir, sys, S.frame, dt, {
-    view: sp.view, ext: sp.view.extent, rNow, parts: !!(sp.particles || sp.self),
+    view: sp.view, ext: sp.view.extent, rNow, parts,
     trail: i => ringTail(S.trails[i], DIR.TRAIL_K),
+    spec: sp, focus: X && X.focus, sample: S.sampleNow, pending: !!(P && P.n) && !S.partSample, t: S.lab ? S.lab.t : 0,
   });
   return S.dirNow;
 }
-// a new run: a new director, and no focus of the run before
-bus('run', () => { cam.dir = makeDirector(); S.dirNow = null; });
+// a new run: a new director, no focus and no particle sample of the run
+// before
+bus('frame', () => { S.partSample = null; readAt = -Infinity; });
+bus('run', () => { cam.dir = makeDirector(); S.dirNow = null; S.partSample = null; S.sampleNow = null; runId++; readAt = -Infinity; });
+
+// The look of this frame against the crowding: { gainK, ptK, bloomK },
+// eased (no flicker). c: the camFrame result; W, H: CSS px; gain: the base
+// particle gain.
+const look = { gainK: 1, bloomK: 1 };
+export function lookFrame(c, W, H, gain, dt) {
+  const sys = S.lab && S.lab.sys, d = S.dirNow, ps = S.sampleNow;
+  let gk = 1, bk = 1;
+  if (ps && ps.n) {
+    const proj = p => project(c, p, W, H);
+    gk = densityGain({ fr: d && d.calm && d.calm.fa, nLive: ps.live, viewPx: W * H, peak: peakDensity(ps.pos, ps.n, ps.live, proj, W, H), ptPx: 1.05, gain });
+  }
+  if (sys && S.meta) {
+    // the largest star on screen: its drawn radius in px
+    const t = Math.tan(FOV / 2), f = [c.target[0] - c.eye[0], c.target[1] - c.eye[1], c.target[2] - c.eye[2]], fl = Math.hypot(...f) || 1;
+    let px = 0;
+    for (let i = 0; i < sys.n; i++) {
+      const m = S.meta[i]; if (!m || !sys.alive[i] || !(m.id === 0 || m.id === 7)) continue;
+      const p = toFrame(S.frame, sys.pos(i)), z = ((p[0] - c.eye[0]) * f[0] + (p[1] - c.eye[1]) * f[1] + (p[2] - c.eye[2]) * f[2]) / fl;
+      if (z > 0) px = Math.max(px, (m.rNow ?? m.rDraw) * 0.5 * H / (t * z));
+    }
+    bk = bloomFactor(px);
+  }
+  const e = c.cut ? 1 : 1 - Math.exp(-dt * 2);
+  look.gainK += (gk - look.gainK) * e; look.bloomK += (bk - look.bloomK) * e;
+  return { gainK: look.gainK, ptK: 0.8 + 0.2 * look.gainK, bloomK: look.bloomK };
+}
 bus('event', d => { if (S.spec) noteEvent(cam.dir, d.e, S.spec.view.extent); });
 
 export function eyeOf(az, el, dist, tgt) {
@@ -104,7 +166,7 @@ export function camFrame(W, H, dt) {
   } else {
     cam.cut = false;
     const now = performance.now();
-    const auto = !!S.dirNow && S.follow < 0 && !S.aim && !(now - cam.zoomAt < USER_HOLD);
+    const auto = UI.action && !!S.dirNow && S.follow < 0 && !S.aim && !(now - cam.zoomAt < USER_HOLD);
     if (auto) frameTo(S.dirNow, W, H, null, dt, 1, false, !cam.auto);
     else if (S.follow >= 0) {
       // following: the frame centre is the body; ease the target there

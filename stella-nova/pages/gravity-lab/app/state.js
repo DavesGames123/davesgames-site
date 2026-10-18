@@ -34,6 +34,7 @@ export const S = {
 export const UI = {
   speedI: 3, paused: false,
   trails: true, labels: true, predict: true, colorMode: 0, quality: 'auto',
+  action: true,                             // Follow action: the director moves the camera
   item: null,                               // the armed tray item key
   calm: RM_Q.matches,
 };

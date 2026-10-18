@@ -19,6 +19,8 @@
 //    threebody.js choreography, pythagorean, sitnikov, kozai, triton
 //    systems.js   circumbinary, resonance, flyby, rings, sl9
 //    extreme.js   galaxies, blackhole, tde, disk
+//    focus.js     the focus hooks (where the action is) of galaxies,
+//                 pythagorean, slingshot, lagrange, blackhole, tde
 // ============================================================================
 import { kepler, transfers, slingshot, solar, hill } from './orbits.js';
 import { lagrange, horseshoe, trojans } from './points.js';

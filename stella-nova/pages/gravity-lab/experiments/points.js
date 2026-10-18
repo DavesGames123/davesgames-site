@@ -11,6 +11,7 @@
 // ============================================================================
 import { C, BODY, unitsOf, ROUTH_MU } from '../data.js';
 import { body, orbiting, Parts, disk, COLORS, DEG, rng, gauss, v3, elementsToState, toCOM, period, runCpu, fmt } from './common.js';
+import { lagrangeFocus } from './focus.js';
 import { lagrangePoints } from '../nbody.js';
 
 const AU = C.AU, MS = C.MSUN;
@@ -67,6 +68,7 @@ export const lagrange = {
       sources: ['nssdc', 'jplsat', 'routh'],
     };
   },
+  focus: lagrangeFocus,
   test: { n: 300 },
   check(spec) {
     const { lab } = runCpu(spec, 2 * Math.PI * 8, 200);

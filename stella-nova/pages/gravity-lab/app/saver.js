@@ -18,7 +18,9 @@
 //              merge or a breakup after 3 s of the shot, the rest after
 //              5 s: saver-plan.js eventWait). A stale event is dropped and
 //              the same event of the same pair cuts once in 45 s.
-//    framing   stepCam (director.js) fits the framing in the clear band of
+//    framing   saver-plan.js shotFrame picks the framing of each shot kind
+//              from the director (the calm view of the action camera,
+//              focus.js, as on the page); stepCam (director.js) fits it in the clear band of
 //              the plate (plateBand, lib/saver-clear.js) at the real
 //              aspect (16:9, or the 9:16 column), with a lens shift to
 //              the band centre.
@@ -30,7 +32,7 @@
 //  grep -n targets: "function nextRun", "function cutTo", "function closeFrame", "export function saverFrame",
 //  "function tick", "function plate", "function onEvent", "window.snSaver"
 // ============================================================================
-import { makeReel, shotPlan, shotDone, eventWorth, eventWait, eventKey, pickSubject, shotGoal, lawFor, mk, rng, CUT_MAX, EVENT_STALE, EVENT_REPEAT } from '../saver-plan.js';
+import { makeReel, shotPlan, shotDone, eventWorth, eventWait, eventKey, pickSubject, shotGoal, shotFrame, tooFast, lawFor, mk, rng, CUT_MAX, EVENT_STALE, EVENT_REPEAT } from '../saver-plan.js';
 import { plateBand } from '../../../lib/saver-clear.js';
 import { S, UI, $, RM_Q, bus, bootReady } from './state.js';
 import { cam } from './camera.js';
@@ -81,9 +83,14 @@ function cutTo(i, shot) {
   cam.cut = true;
 }
 function bodyStats(sys, d) {
-  const dom = dominant(sys), out = [];
-  for (let i = 0; i < sys.n; i++) out.push({ i, alive: !!sys.alive[i] && !(d && d.gone && d.gone[i]), m: sys.m[i], a: Math.hypot(sys.a[3 * i], sys.a[3 * i + 1], sys.a[3 * i + 2]), dom: dom && dom.i === i });
+  const dom = dominant(sys), out = [], rate = S.spec.rate * (S.saverSpeed || 1);
+  for (let i = 0; i < sys.n; i++) out.push({ i, alive: !!sys.alive[i] && !(d && d.gone && d.gone[i]), m: sys.m[i], a: Math.hypot(sys.a[3 * i], sys.a[3 * i + 1], sys.a[3 * i + 2]), dom: dom && dom.i === i, fast: !!dom && dom.i !== i && tooFast(omegaAbout(sys, i, dom.i), rate) });
   return out;
+}
+// the angular rate of body i about body j (rad per sim time)
+function omegaAbout(sys, i, j) {
+  const r = v3.sub(sys.pos(i), sys.pos(j)), v = v3.sub(sys.vel(i), sys.vel(j));
+  return v3.len(v3.cross(r, v)) / Math.max(1e-300, v3.dot(r, r));
 }
 // The close framing of a shot: the director's pair when there is action,
 // else the subject and its recent trail, else the calm view.
@@ -111,28 +118,20 @@ export function saverFrame(dt) {
   const d = S.dirNow || { mode: 'calm', i: -1, j: -1, target: [0, 0, 0], radius: ext, calm: { target: [0, 0, 0], radius: ext } };
   // the action takes every shot: the subject is the pair's first body
   if (d.mode !== 'calm' && sv.subject !== d.i && sv.subject !== d.j) sv.subject = d.i;
-  let frame, zoomK = 1;
+  let frame, zoomK = 1, az = g0.az, el0 = g0.el;
   if (sv.eventPos) { frame = { mode: 'point', i: -1, j: -1, target: sv.eventPos, radius: 0.6 * ext }; zoomK = g0.distK; }
-  else if (sh.kind === 'push') {
-    // from the whole system about the focus to the focus: the target is
-    // the focus all the way (never empty space), the radius shrinks
-    const f = closeFrame(d), c = d.calm || d;
-    const r0 = Math.max(f.radius, c.radius + Math.hypot(f.target[0] - c.target[0], f.target[1] - c.target[1], f.target[2] - c.target[2]));
-    const e = u * u * (3 - 2 * u);
-    frame = { mode: 'push', i: f.i, j: f.j, target: f.target, radius: Math.exp(Math.log(r0) + (Math.log(f.radius) - Math.log(r0)) * e) };
-  } else if (sh.kind === 'establish' || sh.kind === 'top') {
-    frame = d; if (d.mode === 'calm') zoomK = g0.distK;
-  } else {
-    // follow, low, close: the action, or the subject
-    frame = closeFrame(d);
-    if (sh.kind === 'low' && frame.mode !== 'pair') zoomK = 1.25;
+  else {
+    // the same framing as the page (director.js and focus.js), by shot
+    // kind: saver-plan.js shotFrame
+    const f = shotFrame(sh, u, d, sh.kind === 'establish' || sh.kind === 'top' ? d : closeFrame(d), sv.calm);
+    frame = f.frame; zoomK = f.zoomK; az = f.az; el0 = f.el;
   }
   // the clear band of the plate: plateBand measures the plate text in the
   // parent document (a layout read): 4 times a second is enough, as in
   // roche-limit/app/occlusion.js. stepCam sizes from it and the real W / H.
   const now = performance.now();
   if (!(now - (sv.bandAt || 0) < 250) || sv.bandH !== H) { sv.bandAt = now; sv.bandH = H; sv.band = plateBand(H); }
-  sv.goal = { az: g0.az, el: g0.el, frame, band: sv.band, zoomK: zoomK * (sh.kind === 'establish' || sh.kind === 'top' ? 1 : 1 + 0.15 * sv.calm) };
+  sv.goal = { az, el: el0, frame, band: sv.band, zoomK: sv.eventPos && sh.kind !== 'establish' && sh.kind !== 'top' ? zoomK * (1 + 0.15 * sv.calm) : zoomK };
   // slow motion in an event shot: in over 0.6 s, out over the last 1.5 s
   const slowGoal = sh.slow < 1 ? (el < sh.len - 1.5 ? sh.slow : 1) : 1;
   sv.speed += (slowGoal - sv.speed) * Math.min(1, dt * 2.5);

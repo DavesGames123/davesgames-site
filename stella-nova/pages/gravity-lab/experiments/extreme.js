@@ -13,6 +13,7 @@
 // ============================================================================
 import { C, BODY, SGRA, unitsOf } from '../data.js';
 import { body, Parts, disk, COLORS, DEG, rng, gauss, v3, elementsToState, toCOM, period, runCpu, liveRows, normalOf, tiltFn, fmt } from './common.js';
+import { galaxiesFocus, blackholeFocus, tdeFocus } from './focus.js';
 import { System, selfEnergy, selfStep } from '../nbody.js';
 
 const MS = C.MSUN, AU = C.AU;
@@ -72,6 +73,7 @@ export const galaxies = {
       return Math.sqrt(2 * q ** 3 / M) * (D + D ** 3 / 3);
     }
   },
+  focus: galaxiesFocus,
   test: { n: 600 },
   check(spec) {
     const T = spec.tPeri + 4;
@@ -140,6 +142,7 @@ export const blackhole = {
       sources: ['grav22', 'gillessen'],
     };
   },
+  focus: blackholeFocus,
   test: { n: 300 },
   check(spec) {
     const sys = new System(spec.bodies, spec.opts);
@@ -180,6 +183,7 @@ export const tde = {
       sources: ['rees88', 'grav22'],
     };
   },
+  focus: tdeFocus,
   test: { n: 400 },
   check(spec) {
     const { lab, events } = runCpu(spec, spec.tq * 1.6, 300);

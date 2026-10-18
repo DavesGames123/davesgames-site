@@ -16,6 +16,7 @@
 // ============================================================================
 import { C, BODY, unitsOf, UNITS } from '../data.js';
 import { body, orbiting, Parts, disk, halo, COLORS, DEG, rng, gauss, v3, elementsToState, toCOM, period, runCpu, liveRows, fmt } from './common.js';
+import { slingshotFocus } from './focus.js';
 import { stateToElements, hill as hillR } from '../nbody.js';
 
 const AU = C.AU, MS = C.MSUN;
@@ -219,6 +220,7 @@ export const slingshot = {
       sources: ['nssdc'],
     };
   },
+  focus: slingshotFocus,
   test: { n: 200 },
   check(spec) {
     const { lab, events } = runCpu(spec, spec.tArrive + 12, 300);

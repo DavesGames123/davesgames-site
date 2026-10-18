@@ -39,6 +39,7 @@ import { BODY_FLOATS, SEG_FLOATS } from '../render.js';
 import { drawRadius, heaviest } from '../size.js';
 import { S, UI, SPEEDS, PHONE_Q, COARSE, emit } from './state.js';
 import { cam } from './camera.js';
+import { trailCap } from '../focus.js';
 
 export const KIND_ID = { sun: 0, star: 0, redDwarf: 0, blue: 0, hot: 0, rock: 1, moon: 1, mars: 1, amber: 1, mercury: 1, venus: 1, jupiter: 2, saturn: 2, gas: 2, ice: 3, neptune: 3, uranus: 3, earth: 4, comet: 5, probe: 6, core: 7, bh: 8 };
 const TRAIL = 420;
@@ -128,6 +129,7 @@ export function stepRun(dtReal) {
       // the old centre to the new one
       if (S.frameKey && old) cam.target = toFrame(S.frame, toWorld(old, cam.target));
       S.frameKey = key; S.trails = S.meta.map(() => newTrail());
+      emit('frame', key);
     }
     if (UI.trails && h > 0) pushTrails();
   }
@@ -267,14 +269,19 @@ export function segments(dpr) {
   const seg = (a, b, w, c, aa, ab) => { const o = n * SEG_FLOATS; segF[o] = a[0]; segF[o + 1] = a[1]; segF[o + 2] = a[2]; segF[o + 3] = w; segF[o + 4] = b[0]; segF[o + 5] = b[1]; segF[o + 6] = b[2]; segF[o + 7] = ab; segF[o + 8] = c[0]; segF[o + 9] = c[1]; segF[o + 10] = c[2]; segF[o + 11] = aa; n++; };
   const sys = S.lab && S.lab.sys;
   if (sys && UI.trails) {
+    // the trail cap (focus.js trailCap): fewer points and fainter trails
+    // when there are many
+    let nt = 0; for (let i = 0; i < S.trails.length; i++) if (S.trails[i] && S.trails[i].n >= 2) nt++;
+    const tc = trailCap(nt, TRAIL);
     for (let i = 0; i < S.trails.length; i++) {
       const T = S.trails[i], m = S.meta[i]; if (!T || T.n < 2 || !m) continue;
-      need(T.n);
+      const nk = Math.min(T.n, tc.points);
+      need(nk);
       const c = m.id === 8 ? [0.75, 0.7, 0.65] : [0.35 + 0.65 * m.color[0], 0.35 + 0.65 * m.color[1], 0.35 + 0.65 * m.color[2]];
-      const w = (m.id === 6 ? 1.2 : 1.6) * dpr, a0 = sys.alive[i] ? 0.75 : 0.35;
-      for (let k = 1; k < T.n; k++) {
-        const ia = (T.head - T.n + k - 1 + TRAIL) % TRAIL, ib = (ia + 1) % TRAIL;
-        const fa = (k - 1) / T.n, fb = k / T.n;
+      const w = (m.id === 6 ? 1.2 : 1.6) * dpr, a0 = (sys.alive[i] ? 0.75 : 0.35) * tc.alpha;
+      for (let k = 1; k < nk; k++) {
+        const ia = (T.head - nk + k - 1 + TRAIL) % TRAIL, ib = (ia + 1) % TRAIL;
+        const fa = (k - 1) / nk, fb = k / nk;
         seg([T.pts[3 * ia], T.pts[3 * ia + 1], T.pts[3 * ia + 2]], [T.pts[3 * ib], T.pts[3 * ib + 1], T.pts[3 * ib + 2]], w, c, a0 * fa * fa, a0 * fb * fb);
       }
     }
