@@ -34,7 +34,24 @@
 //    at its storm cell (stroke x, z; or a bearing and a distance), from the
 //    cloud base to the terrain.
 //
+//  SHAFTS  god rays and volumetric shadows (shaders/weather.wgsl SHAFTS).
+//    shaftPlan(user, q, profile, level) picks the mode: 1 volumetric (a
+//    march of the haze against CORE's sun shadow map and the cloud shadow,
+//    half size on High and Ultra, quarter size below), 2 screen (a radial
+//    blur of the clear sky round the sun, quarter size: phones, Low), 0
+//    off. The user setting (frame.shafts.mode: auto, off, screen, volume)
+//    and the profile cap (gpu.profile.shafts) both apply; the governor
+//    level 3 and up takes volumetric to screen, 5 takes it off.
+//    shaftUniforms(plan, frame) gives the range (the cascade far, at most
+//    SHAFT_RANGE_MAX), the steps, and the mist: thick at golden hour,
+//    thin at noon, x frame.shafts.k. prep(enc, frame, ctx) runs after
+//    CORE's water pass: csShaftMarch or csShaftRadial into the raw
+//    target, then csShaftResolve into the history pair. The froxel inject
+//    writes the unshadowed sun in-scatter (the sun volume) for the march
+//    and drops the near part of its own sun term (fn shaftNear).
+//
 //  grep -n targets: "export function createBoltGrower", "export function boltSegments",
+//  "export function shaftPlan", "export function shaftUniforms", "prep(enc",
 //  "export async function createWeather", "function gridFor", "counts(",
 //  "function placeBolt", "draw(pass", "export function precipPhases",
 //  "export function rainDropPos"
@@ -172,6 +189,46 @@ export function rainDropPos(k, ph, cam, rainR, h) {
 }
 
 // ── GPU part ────────────────────────────────────────────────────────────────
+// ── SHAFTS plan (DOM-free, tests/sky.test.mjs and tests/caps.test.mjs) ──────
+export const SHAFT_MODES = ['auto', 'off', 'screen', 'volume'];
+export const SHAFT_STEPS_MAX = 32;     // = SHAFT_MAX of weather.wgsl
+export const SHAFT_RANGE_MAX = 6000;   // m
+// -> { mode: 0 off | 1 volumetric | 2 screen, steps, k (target size / render size) }
+export function shaftPlan(user = 'auto', q = 1, profile = null, level = 0) {
+  const cap = (profile && profile.shafts) || 'volume';
+  let want = user;
+  if (!SHAFT_MODES.includes(want)) want = 'auto';
+  if (want === 'auto') want = q >= 0.4 ? 'volume' : 'screen';
+  const rank = { off: 0, screen: 1, volume: 2 };
+  if (rank[want] > rank[cap]) want = cap;
+  if (level >= 5) want = 'off';
+  else if (level >= 3 && want === 'volume') want = 'screen';
+  if (want === 'off') return { mode: 0, steps: 0, k: 0.25 };
+  if (want === 'screen') return { mode: 2, steps: 0, k: 0.25 };
+  const steps = Math.min(SHAFT_STEPS_MAX, q >= 0.95 ? 24 : q >= 0.7 ? 18 : q >= 0.45 ? 14 : 10);
+  return { mode: 1, steps, k: q >= 0.7 ? 0.5 : 0.25 };
+}
+// the shaft uniform (struct ShaftU, 16 floats). frame: { shadowDistance,
+// frameIndex, shafts: { k }, globals }; sunY the sun height (unit dir y);
+// fog: the haze per m of the weather
+export function shaftUniforms(plan, o = {}) {
+  const sunY = o.sunY ?? 0.3, k = clamp(o.k ?? 1, 0, 3);
+  const R = clamp(o.shadowDistance || 3000, 500, SHAFT_RANGE_MAX);
+  // golden hour: a low sun gives long warm shafts through thick morning
+  // and evening air; at noon the mist is thin and the shafts subtle
+  const gold = 1 - smoothstep(0.04, 0.45, sunY);
+  const day = smoothstep(-0.06, 0.04, sunY);
+  const mist = ((0.06e-4 + 0.3e-4 * gold) * k * (0.2 + 0.8 * day)) + (clamp(o.fog ?? 0, 0, 1e-3) * 0.1 * k);
+  const hgt = 120 + 380 * gold;
+  return new Float32Array([
+    R, plan.steps, mist, hgt,
+    plan.mode, o.frameIndex || 0, o.fullW || 1, o.fullH || 1,
+    1, 1, 1, 0.9 * k * (0.35 + 0.65 * gold),
+    o.reset ? 0 : 0.88, 0, 0, 0,
+  ]);
+}
+const smoothstep = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+
 function gridFor(q) {
   if (q >= 0.75) return [160, 90, 64];
   if (q >= 0.4) return [128, 72, 48];
@@ -208,6 +265,23 @@ export async function createWeather(gpu, shared) {
       { binding: 1, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
       { binding: 4, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } },
       { binding: 5, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 8, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } },
+    ] }),
+    // SHAFTS: the march / radial pass and the resolve pass
+    shaft: device.createBindGroupLayout({ label: 'shaft march', entries: [
+      { binding: 20, visibility: ALLC, texture: { sampleType: 'depth' } },
+      { binding: 21, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 22, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 23, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float' } },
+      { binding: 24, visibility: ALLC, buffer: { type: 'uniform' } },
+      { binding: 27, visibility: ALLC, texture: { sampleType: 'float' } },
+    ] }),
+    shaftRes: device.createBindGroupLayout({ label: 'shaft resolve', entries: [
+      { binding: 20, visibility: ALLC, texture: { sampleType: 'depth' } },
+      { binding: 23, visibility: ALLC, storageTexture: { access: 'write-only', format: 'rgba16float' } },
+      { binding: 24, visibility: ALLC, buffer: { type: 'uniform' } },
+      { binding: 25, visibility: ALLC, texture: { sampleType: 'float' } },
+      { binding: 26, visibility: ALLC, texture: { sampleType: 'float' } },
     ] }),
     integ: device.createBindGroupLayout({ label: 'frox integrate', entries: [
       { binding: 2, visibility: ALLC, texture: { sampleType: 'float', viewDimension: '3d' } },
@@ -225,7 +299,8 @@ export async function createWeather(gpu, shared) {
     fragment: { module, entryPoint: fs, targets: [{ format: gpu.hdrFormat, blend }] },
     primitive: { topology: 'triangle-list' },
   });
-  const [pInject, pInteg, pHaze, pPrecip, pBolt] = await Promise.all([
+  const shaftLayout = device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, shadowLayout, G3.shaft] });
+  const [pInject, pInteg, pHaze, pPrecip, pBolt, pShaft, pRadial, pShaftRes] = await Promise.all([
     device.createComputePipelineAsync({ label: 'csFroxInject', compute: { module, entryPoint: 'csFroxInject' },
       layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, shadowLayout, G3.inject] }) }),
     device.createComputePipelineAsync({ label: 'csFroxIntegrate', compute: { module, entryPoint: 'csFroxIntegrate' },
@@ -233,6 +308,10 @@ export async function createWeather(gpu, shared) {
     draw('haze', 'vsHaze', 'fsHaze', premul),
     draw('precip', 'vsPrecip', 'fsPrecip', premul),
     draw('bolt', 'vsBolt', 'fsBolt', add),
+    device.createComputePipelineAsync({ label: 'csShaftMarch', compute: { module, entryPoint: 'csShaftMarch' }, layout: shaftLayout }),
+    device.createComputePipelineAsync({ label: 'csShaftRadial', compute: { module, entryPoint: 'csShaftRadial' }, layout: shaftLayout }),
+    device.createComputePipelineAsync({ label: 'csShaftResolve', compute: { module, entryPoint: 'csShaftResolve' },
+      layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, L.empty, G3.shaftRes] }) }),
   ]);
   const emptyBG = device.createBindGroup({ layout: L.empty, entries: [] });
   const boltBuffer = device.createBuffer({ label: 'bolt segs', size: MAX_BOLT_SEGS * 32, usage: BU.STORAGE | BU.COPY_DST });
@@ -246,12 +325,13 @@ export async function createWeather(gpu, shared) {
     if (vt) for (const t of vt.all) t.destroy();
     const mk = (label) => device.createTexture({ label, size: grid, dimension: '3d', format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING });
     const lossSky = device.createTexture({ label: 'frox sky loss', size: [grid[0], grid[1]], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING });
-    vt = { inj: [mk('frox inject 0'), mk('frox inject 1')], loss: [mk('frox loss 0'), mk('frox loss 1')], vol: mk('frox volume'), lossSky };
-    vt.all = [...vt.inj, ...vt.loss, vt.vol, lossSky];
-    vt.v = { inj: vt.inj.map((t) => t.createView()), loss: vt.loss.map((t) => t.createView()), vol: vt.vol.createView(), lossSky: lossSky.createView() };
+    vt = { inj: [mk('frox inject 0'), mk('frox inject 1')], loss: [mk('frox loss 0'), mk('frox loss 1')], vol: mk('frox volume'), sun: mk('frox sun'), lossSky };
+    vt.all = [...vt.inj, ...vt.loss, vt.vol, vt.sun, lossSky];
+    vt.v = { inj: vt.inj.map((t) => t.createView()), loss: vt.loss.map((t) => t.createView()), vol: vt.vol.createView(), sun: vt.sun.createView(), lossSky: lossSky.createView() };
     vt.injectBG = [0, 1].map((i) => device.createBindGroup({ layout: G3.inject, entries: [
       { binding: 0, resource: vt.v.inj[i] }, { binding: 1, resource: vt.v.inj[1 - i] },
-      { binding: 4, resource: vt.v.loss[i] }, { binding: 5, resource: vt.v.loss[1 - i] }] }));
+      { binding: 4, resource: vt.v.loss[i] }, { binding: 5, resource: vt.v.loss[1 - i] },
+      { binding: 8, resource: vt.v.sun }] }));
     vt.integBG = [0, 1].map((i) => device.createBindGroup({ layout: G3.integ, entries: [
       { binding: 2, resource: vt.v.inj[i] }, { binding: 3, resource: vt.v.vol },
       { binding: 6, resource: vt.v.loss[i] }, { binding: 7, resource: vt.v.lossSky }] }));
@@ -259,6 +339,46 @@ export async function createWeather(gpu, shared) {
     stamp++;
   }
   makeVolumes();
+
+  // ── SHAFTS targets: raw + a history pair at k x the render size ─────────
+  const shaftBuf = device.createBuffer({ label: 'ShaftU', size: 64, usage: BU.UNIFORM | BU.COPY_DST });
+  const blackTex = device.createTexture({ label: 'shaft none', size: [1, 1], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.COPY_DST });
+  // rgb 0, a 1 (no mist): f16 1.0 = 0x3c00
+  queue.writeTexture({ texture: blackTex }, new Uint16Array([0, 0, 0, 0x3c00]), { bytesPerRow: 8 }, [1, 1]);
+  const blackView = blackTex.createView();
+  let sht = null, shaftStamp = 0, shaftOn = false, shaftReset = true, plan = { mode: 0, steps: 0, k: 0.25 };
+  function shaftTargets(w, h, k) {
+    const sw = Math.max(8, Math.round(w * k)), shh = Math.max(8, Math.round(h * k));
+    if (sht && sht.w === sw && sht.h === shh) return;
+    if (sht) for (const t of sht.all) t.destroy();
+    const mk = (label) => device.createTexture({ label, size: [sw, shh], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING });
+    sht = { w: sw, h: shh, raw: mk('shaft raw'), acc: [mk('shaft acc 0'), mk('shaft acc 1')], ping: 0, bg: new Map() };
+    sht.all = [sht.raw, ...sht.acc];
+    sht.v = { raw: sht.raw.createView(), acc: sht.acc.map((t) => t.createView()) };
+    shaftReset = true;
+    shaftStamp++;
+  }
+  // cached per depth view and cloud view (the cloud target ping-pongs, so
+  // two groups per depth view; no bind group is made in a steady frame)
+  function shaftGroups(depthView, cloudAccView) {
+    let byCloud = sht.bg.get(depthView);
+    if (!byCloud) { byCloud = new Map(); sht.bg.set(depthView, byCloud); }
+    let g = byCloud.get(cloudAccView || blackView);
+    if (g && g.stamp === stamp) return g;
+    g = {
+      stamp,
+      march: device.createBindGroup({ label: 'shaft march', layout: G3.shaft, entries: [
+        { binding: 20, resource: depthView }, { binding: 21, resource: vt.v.vol }, { binding: 22, resource: vt.v.sun },
+        { binding: 23, resource: sht.v.raw }, { binding: 24, resource: { buffer: shaftBuf } }, { binding: 27, resource: cloudAccView || blackView }] }),
+      res: [0, 1].map((i) => device.createBindGroup({ label: 'shaft resolve ' + i, layout: G3.shaftRes, entries: [
+        { binding: 20, resource: depthView }, { binding: 23, resource: sht.v.acc[i] }, { binding: 24, resource: { buffer: shaftBuf } },
+        { binding: 25, resource: sht.v.raw }, { binding: 26, resource: sht.v.acc[1 - i] }] })),
+    };
+    byCloud.set(cloudAccView || blackView, g);
+    if (byCloud.size > 4) byCloud.delete(byCloud.keys().next().value);
+    if (sht.bg.size > 6) sht.bg.delete(sht.bg.keys().next().value);
+    return g;
+  }
 
   // ── lightning state ───────────────────────────────────────────────────────
   const bolts = { pool: [], growing: null, seed: 1, strokeId: null, segCount: 0, terrain: null };
@@ -353,7 +473,54 @@ export async function createWeather(gpu, shared) {
       pass.end();
     },
 
-    drawResources() { return { volumeView: vt.v.vol, lossView: vt.v.lossSky, boltBuffer, stamp }; },
+    drawResources() {
+      const sv = shaftOn && sht ? sht.v.acc[sht.ping] : blackView;
+      return { volumeView: vt.v.vol, lossView: vt.v.lossSky, boltBuffer, stamp: stamp * 1000 + shaftStamp, shaftView: sv, shaftKey: sv };
+    },
+
+    // SHAFTS: the plan of this frame (sky.js fillUniform puts mode and
+    // range into S.shadow.w and S.anim1.w before the froxel inject)
+    shaftFrame(frame, profile) {
+      const f = frame.shafts || {};
+      const p2 = shaftPlan(f.mode || 'auto', q, profile || gpu.profile, frame.govLevel | 0);
+      if (p2.mode !== plan.mode || p2.k !== plan.k) shaftReset = true;
+      plan = p2;
+      shaftOn = plan.mode > 0;
+      const R = clamp(frame.shadowDistance || 3000, 500, SHAFT_RANGE_MAX);
+      return { mode: plan.mode, range: R };
+    },
+    get shaftPlan() { return plan; },
+
+    // SHAFTS: after CORE's water pass (sky.js volumetricPrep); ctx.depthView
+    // is the depth of this frame, frame.shadowBindGroup the map of this frame
+    prep(enc, frame, ctx, cloudAccView) {
+      if (!shaftOn || !ctx || !ctx.depthView) return;
+      const w = ctx.width || 16, h = ctx.height || 16;
+      shaftTargets(w, h, plan.k);
+      const g = frame.globals;
+      const sunY = g ? g[GLOBALS.sunDir + 1] : 0.3;
+      const fog = frame.weather && frame.weather.fog;
+      queue.writeBuffer(shaftBuf, 0, shaftUniforms(plan, {
+        sunY, k: frame.shafts && frame.shafts.k, shadowDistance: frame.shadowDistance, frameIndex: frame.frameIndex,
+        fullW: w, fullH: h, fog: Number.isFinite(fog) ? fog : 0, reset: shaftReset,
+      }));
+      shaftReset = false;
+      const sbg = frame.shadowBindGroup || gpu.shadowSampleBindGroup || (gpu.shadows && gpu.shadows.sampleBindGroup) || dummyShadowBG;
+      const G2 = shaftGroups(ctx.depthView, cloudAccView);
+      const pass = enc.beginComputePass({ label: 'shafts' });
+      pass.setBindGroup(0, gpu.globalsBindGroup);
+      pass.setBindGroup(1, shared.readBindGroup);
+      pass.setPipeline(plan.mode === 1 ? pShaft : pRadial);
+      pass.setBindGroup(2, sbg);
+      pass.setBindGroup(3, G2.march);
+      pass.dispatchWorkgroups(Math.ceil(sht.w / 8), Math.ceil(sht.h / 8));
+      sht.ping = 1 - sht.ping;
+      pass.setPipeline(pShaftRes);
+      pass.setBindGroup(2, emptyBG);
+      pass.setBindGroup(3, G2.res[sht.ping]);
+      pass.dispatchWorkgroups(Math.ceil(sht.w / 8), Math.ceil(sht.h / 8));
+      pass.end();
+    },
 
     draw(pass, frame, g1) {
       pass.setPipeline(pHaze);
@@ -373,6 +540,8 @@ export async function createWeather(gpu, shared) {
 
     dispose() {
       for (const t of vt.all) t.destroy();
+      if (sht) for (const t of sht.all) t.destroy();
+      shaftBuf.destroy(); blackTex.destroy();
       boltBuffer.destroy(); dummyDepth.destroy(); dummyCasc.destroy();
     },
   };

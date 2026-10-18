@@ -141,6 +141,8 @@ function makeLayouts(device, gpu) {
     tex(11), tex(12), tex(13, { viewDimension: '3d' }),
     { binding: 14, visibility: SS.VERTEX | SS.FRAGMENT, buffer: { type: 'read-only-storage' } },
     tex(15),
+    // SHAFTS: the resolved shaft target of render/weather.js
+    tex(17),
   ]);
   const sub = (ids) => device.createBindGroupLayout({ label: 'sky g1 ' + ids.join(','), entries: read.filter((e) => ids.includes(e.binding)) });
   return {
@@ -281,14 +283,19 @@ export async function createSky(gpu) {
     weather.resize(w, h, q);
   }
 
+  // cached per depth view, shaft view and cloud ping (the cloud and the
+  // shaft targets ping-pong, so a steady frame makes no bind group)
   function drawGroup(depthView) {
-    const key = depthView;
-    let g = tg.drawBG.get(key);
     const vb = weather.drawResources();
-    if (g && g.stamp === vb.stamp && g.ping === tg.ping) return g.bg;
-    const e = readEntries.filter(([b]) => !DRAW_SKIP.includes(b)).concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }], [15, vb.lossView]]);
-    g = { bg: bg(L.draw, e, 'sky draw'), stamp: vb.stamp, ping: tg.ping };
-    tg.drawBG.set(key, g);
+    let byShaft = tg.drawBG.get(depthView);
+    if (!byShaft) { byShaft = new Map(); tg.drawBG.set(depthView, byShaft); }
+    let pair = byShaft.get(vb.shaftKey);
+    if (!pair) { pair = [null, null]; byShaft.set(vb.shaftKey, pair); if (byShaft.size > 4) byShaft.delete(byShaft.keys().next().value); }
+    let g = pair[tg.ping];
+    if (g && g.stamp === vb.stamp) return g.bg;
+    const e = readEntries.filter(([b]) => !DRAW_SKIP.includes(b)).concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }], [15, vb.lossView], [17, vb.shaftView]]);
+    g = { bg: bg(L.draw, e, 'sky draw'), stamp: vb.stamp };
+    pair[tg.ping] = g;
     if (tg.drawBG.size > 8) tg.drawBG.delete(tg.drawBG.keys().next().value);
     return g.bg;
   }
@@ -433,14 +440,16 @@ export async function createSky(gpu) {
     // cloud shadow square round the camera, snapped to its texels
     const size = clamp(ws * 1.4, 30000, 90000), texel = size / SH;
     const x0 = Math.floor((cam[0] - size / 2) / texel) * texel, z0 = Math.floor((cam[2] - size / 2) / texel) * texel;
-    put(SKYU.shadow, x0, z0, size, 0);
+    // SHAFTS: the mode (0 off, 1 volumetric, 2 screen) and the range m
+    const shf = weather.shaftFrame(frame);
+    put(SKYU.shadow, x0, z0, size, shf.mode);
     // rainbow: rain in the air and a sun lower than 42 deg that the deck lets through
     const sunEl = Math.asin(clamp(sunY, -1, 1)) * 180 / Math.PI;
     const rainbow = (s.rainbow ?? 1) * smooth(0.02, 0.25, wx.rain) * smooth(-1, 4, sunEl) * smooth(42, 30, sunEl) * (1 - smooth(0.88, 1.0, wx.cover) * 0.8);
     put(SKYU.misc, lat, s.moonPhase ?? 0.5, st.clock % 3600, rainbow);
     const cnt = st.rain === false ? { rain: 0, splash: 0, snow: 0, bolt: 0, rainMax: 1, splashMax: 1, snowMax: 1 } : weather.counts(wx, q, frame, s.bolt);
     put(SKYU.counts, cnt.rain, cnt.splash, cnt.snow, cnt.bolt);
-    put(SKYU.anim1, st.hazeOff[0], st.hazeOff[1], cnt.splashMax, 0);
+    put(SKYU.anim1, st.hazeOff[0], st.hazeOff[1], cnt.splashMax, shf.range);
     put(SKYU.anim4, ph.splashT, ph.flutterT, cnt.rainMax, cnt.snowMax);
     put(SKYU.precip, 32, 26, 1.8 / 60, 0.0026);
     put(SKYU.prevCam, st.prevCam[0], st.prevCam[1], st.prevCam[2], tg ? tg.k : 0.5);
@@ -539,6 +548,13 @@ export async function createSky(gpu) {
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(1, BG.read);
       pass.draw(3);
+    },
+
+    // SHAFTS: CORE calls this after its water pass, before the volumetric
+    // pass (gpu/frame.js), with the depth and the shadow map of this frame
+    volumetricPrep(enc, frame, ctx) {
+      if (!tg) return;
+      weather.prep(enc, frame, ctx, st.clouds ? tg.v.acc[tg.ping] : null);
     },
 
     drawVolumetric(pass, frame, ctx) {

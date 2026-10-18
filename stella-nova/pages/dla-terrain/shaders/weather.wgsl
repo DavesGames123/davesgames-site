@@ -119,9 +119,19 @@ fn vol_medium(p: vec3f) -> VolMedium {
 // across the sky: the sky LUT has no shadows, so fsHaze takes this off it
 @group(3) @binding(4) var outLoss: texture_storage_3d<rgba16float, write>;
 @group(3) @binding(5) var histLoss: texture_3d<f32>;
+// SHAFTS: the sun in-scatter with no shadow (rgb per km), a = the share of
+// the clear air (Rayleigh and Mie) in it; csShaftMarch reads it
+@group(3) @binding(8) var outSun: texture_storage_3d<rgba16float, write>;
 
 // in-scatter and extinction are stored per km (x 1000) so fp16 keeps them
 const VOL_K: f32 = 1000.0;
+// SHAFTS: the weight of the per-pixel march at distance d (1 near, 0 past
+// the shaft range S.anim1.w); 0 everywhere when the mode is not volumetric
+fn shaftNear(d: f32) -> f32 {
+  if ((S.shadow.w < 0.5) || (S.shadow.w > 1.5)) { return 0.0; }
+  let R = max(S.anim1.w, 1.0);
+  return 1.0 - sk_ss(R * 0.75, R, d);
+}
 // the most depth slices of the froxel grid (render/weather.js: 64 at full quality)
 const VOL_ZMAX: u32 = 128u;
 
@@ -147,10 +157,17 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   if (vis > 0.001 && G.sunDir.y > -0.05) { vis *= sunShadow(p, vec3f(0.0)); }
   // the loss counts the air only (the Rayleigh and Mie of the sky LUT);
   // under a full deck there is no clear-sky shaft to take away
-  var loss = sun * (1.0 - vis) * (m.sR * pR + vec3f(m.sM * pM)) * (1.0 - S.cloud0.z * 0.8);
+  // SHAFTS (volumetric mode, S.shadow.w = 1): inside the shaft range the
+  // per-pixel march of csShaftMarch gives the shadowed sun in-scatter, so
+  // the froxel keeps only the part past it (no light counted two times)
+  let far = 1.0 - shaftNear(d);
+  let sunAir = sun * (m.sR * pR + vec3f(m.sM * pM));
+  let sunAll = sun * (m.sR * pR + vec3f(m.sM * pM + m.sF * pF));
+  textureStore(outSun, id, vec4f(sunAll * VOL_K, cm_luminance(sunAir) / max(cm_luminance(sunAll), 1e-12)));
+  var loss = sunAir * (1.0 - vis) * (1.0 - S.cloud0.z * 0.8) * far;
   let rKm = sk_rKm(p.y);
   let ms = sk_multi(rKm, G.sunDir.y) * S.sun.y;
-  var Ls = sun * vis * (m.sR * pR + vec3f(m.sM * pM + m.sF * pF)) + ms * (m.sR + vec3f(m.sM + m.sF * 0.5));
+  var Ls = sunAll * (vis * far) + ms * (m.sR + vec3f(m.sM + m.sF * 0.5));
   // sky ambient (G.ambient is irradiance: radiance = E / pi)
   Ls += G.ambient.rgb * (1.0 / SK_PI) * (m.sF + m.sM * 0.5) * 0.85;
   // moon
@@ -218,6 +235,37 @@ fn csFroxIntegrate(@builtin(global_invocation_id) id: vec3u) {
 @group(1) @binding(15) var tLossSky: texture_2d<f32>;
 // the cloud accumulation of clouds.wgsl (a = transmittance through the clouds)
 @group(1) @binding(11) var tCloudAcc: texture_2d<f32>;
+// SHAFTS: the resolved shaft target (rgb add, a mist transmittance)
+@group(1) @binding(17) var tShaft: texture_2d<f32>;
+
+// the shaft target at full pixel ij: the 4 nearest texels, bilinear
+// weights times a depth weight (a texel of another surface counts little)
+fn shaftAt(ij: vec2i, dz: f32) -> vec4f {
+  if (S.shadow.w < 0.5) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+  let sz = vec2i(textureDimensions(tShaft));
+  let full = vec2i(textureDimensions(tDepth));
+  let k = max(i32(round(f32(full.x) / f32(sz.x))), 1);
+  let c = (vec2f(ij) / f32(k));
+  let q0 = vec2i(floor(c));
+  let f = c - floor(c);
+  let me = linearDepth(max(dz, 1e-9));
+  var sum = vec4f(0.0);
+  var ws = 0.0;
+  for (var y = 0; y <= 1; y++) {
+    for (var x = 0; x <= 1; x++) {
+      let q = clamp(q0 + vec2i(x, y), vec2i(0), sz - vec2i(1));
+      let dq = textureLoad(tDepth, clamp(q * k, vec2i(0), full - vec2i(1)), 0);
+      let bw = select(1.0 - f.x, f.x, x == 1) * select(1.0 - f.y, f.y, y == 1);
+      var dw = 1.0;
+      if ((dz > 0.0) != (dq > 0.0)) { dw = 0.02; }
+      else if (dz > 0.0) { dw = 1.0 / (1.0 + (40.0 * abs(linearDepth(dq) - me) / me)); }
+      let wgt = (bw * dw) + 1e-5;
+      sum += textureLoad(tShaft, q, 0) * wgt;
+      ws += wgt;
+    }
+  }
+  return sum / ws;
+}
 
 struct VOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f }
 
@@ -276,10 +324,12 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
     let dist = length(wp - G.camPos.xyz);
     let w = clamp((vol_distSlice(dist) - 0.5) / n, 0.5 / n, 1.0 - 0.5 / n);
     let v = hazeTap(i.uv, w);
-    var L = v.rgb;
+    // SHAFTS: the near sun in-scatter with sharp shadows and the mist
+    let sh = shaftAt(ij, dz);
+    var L = v.rgb + max(sh.rgb, vec3f(0.0));
     if (dist > 150.0) { L += vol_rainbow(rd) * (1.0 - v.a * 0.5) * sk_ss(150.0, 600.0, dist); }
     // past the far slice: keep the far transmittance
-    return vec4f(L, 1.0 - v.a);
+    return vec4f(L, 1.0 - (v.a * sh.a));
   }
   // sky: the fog part only, closed form exponential height fog to infinity
   let far = textureSampleLevel(tVolume, sClamp, vec3f(i.uv, 1.0 - 0.5 / n), 0.0);
@@ -300,9 +350,13 @@ fn fsHaze(i: VOut) -> @location(0) vec4f {
   let clearSky = textureSampleLevel(tCloudAcc, sClamp, i.uv, 0.0).a;
   let lossSky = min(textureSampleLevel(tLossSky, sClamp, i.uv, 0.0).rgb, skyL * 0.8) * Tf * clearSky;
   L -= lossSky;
+  // SHAFTS: the mist, less the near in-scatter that shadows take off the
+  // sky (at most most of the sky radiance there)
+  let sh = shaftAt(ij, 0.0);
+  L += max(sh.rgb, -(skyL * 0.8 * Tf * clearSky) + lossSky);
   L += vol_rainbow(rd);
   L += S.bolt.w * vec3f(0.5, 0.55, 0.7) * 0.2 * sk_ss(-0.1, 0.4, rd.y);
-  return vec4f(L, 1.0 - Tf);
+  return vec4f(L, 1.0 - (Tf * sh.a));
 }
 
 // ── rain, splashes and snow ──────────────────────────────────────────────────
@@ -514,4 +568,209 @@ fn fsBolt(i: BOut) -> @location(0) vec4f {
   if (i.k.y > 0.5) { e = exp(-x * x * 6.0) * 0.05 * i.k.x; } else { e = sk_ss(1.0, 0.2, x); }
   let col = vec3f(0.78, 0.84, 1.0) * e * i.k.x * S.bolt.w * 900.0;
   return vec4f(col, 0.0);
+}
+
+// ── SHAFTS: god rays and volumetric shadows ──────────────────────────────────
+// render/weather.js runs these after CORE's water pass (module
+// volumetricPrep), so the depth and the sun shadow map are of this frame.
+//   csShaftMarch   (volumetric mode 1) per pixel of a half or quarter size
+//                  target: march the view ray to min(depth, the shaft range
+//                  R) in at most SHAFT_MAX steps (IGN jitter, steps dense
+//                  near the eye). Each step takes one hardware 2 x 2 tap of
+//                  CORE's cascaded sun shadow (fn shaftShadow) and the cloud
+//                  shadow, and the unshadowed sun in-scatter and the haze
+//                  transmittance from the froxels (outSun, tVolume). The
+//                  froxels drop the same near term (fn shaftNear), so the
+//                  mean light stays the same: only the shadows get sharp.
+//                  A thin forward-scattering mist (Henyey-Greenstein, a
+//                  strong forward lobe) near the ground makes the shafts
+//                  read; it also takes light away (rgb in, a transmittance).
+//                  Sky pixels: rgb is the mist minus the near in-scatter
+//                  that the shadows take off the sky LUT.
+//   csShaftRadial  (screen mode 2, phones and Low) a radial blur of the
+//                  clear sky round the sun on screen, at most SHAFT_RADIAL
+//                  taps; the cheap fallback.
+//   csShaftResolve reprojects the last result with G.prevViewProj, clamps
+//                  it to the 3 x 3 range of this frame, blends 0.88.
+//   fsHaze         upsamples it with depth weights (fn shaftAt).
+// Shaft uniform SH (render/weather.js shaftUniforms):
+struct ShaftU {
+  p0: vec4f,   // x range R m, y steps, z mist per m, w mist height m
+  p1: vec4f,   // x mode, y frame index, z full width px, w full height px
+  p2: vec4f,   // xyz sun radiance scale for the radial mode, w radial strength
+  p3: vec4f,   // x history weight (0 = reset), yzw spare
+};
+const SHAFT_MAX: i32 = 32;      // the most march steps (a constant cap)
+const SHAFT_RADIAL: i32 = 24;   // the most radial taps (a constant cap)
+@group(3) @binding(20) var tDepthS: texture_depth_2d;
+@group(3) @binding(21) var tVolS: texture_3d<f32>;
+@group(3) @binding(22) var tSunS: texture_3d<f32>;
+@group(3) @binding(23) var outShaft: texture_storage_2d<rgba16float, write>;
+@group(3) @binding(24) var<uniform> SH: ShaftU;
+@group(3) @binding(25) var tShaftRaw: texture_2d<f32>;
+@group(3) @binding(26) var tShaftHist: texture_2d<f32>;
+@group(3) @binding(27) var tCloudAccS: texture_2d<f32>;
+
+// the full-size depth texel that a shaft texel stands for
+fn shaftSrc(q: vec2i, full: vec2i, k: i32) -> vec2i { return clamp(q * k, vec2i(0), full - vec2i(1)); }
+
+// one hardware compare tap of the sun shadow (no PCF: the march averages)
+fn shaftShadow(p: vec3f, viewZ: f32) -> f32 {
+  let n = clamp(i32(cascades.params.x), 0, 4);
+  if (n <= 0) { return 1.0; }
+  let c = cascadeOf(viewZ);
+  let s = shadowTap(c, p);
+  if (any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0)) || (s.z > 1.0)) { return 1.0; }
+  let v = textureSampleCompareLevel(tShadow, sShadow, s.xy, c, s.z + cascades.params.z);
+  return mix(v, 1.0, sk_ss(cascades.splits[n - 1] * 0.9, cascades.splits[n - 1], viewZ));
+}
+
+// the mist phase: a strong forward lobe and a broad part
+fn shaftPhase(c: f32) -> f32 { return (0.55 * sk_hg(c, 0.8)) + (0.45 * sk_hg(c, 0.2)); }
+
+@compute @workgroup_size(8, 8)
+fn csShaftMarch(@builtin(global_invocation_id) id: vec3u) {
+  let sz = textureDimensions(outShaft);
+  if ((id.x >= sz.x) || (id.y >= sz.y)) { return; }
+  let full = vec2i(textureDimensions(tDepthS));
+  let k = max(i32(round(f32(full.x) / f32(sz.x))), 1);
+  let src = shaftSrc(vec2i(id.xy), full, k);
+  let uv = (vec2f(src) + 0.5) / vec2f(full);
+  let dz = textureLoad(tDepthS, src, 0);
+  let sky = dz <= 0.0;
+  let ro = G.camPos.xyz;
+  let rd = viewRay(uv);
+  var dist = 1.0e9;
+  if (!sky) { dist = length(worldFromDepth(uv, dz) - ro); }
+  let R = max(SH.p0.x, 1.0);
+  let tEnd = min(dist, R);
+  let n = clamp(i32(SH.p0.y), 4, SHAFT_MAX);
+  let jit = fract(cm_ign(vec2f(id.xy) + vec2f(f32(u32(SH.p1.y) % 64u) * 5.588238, 0.0)) + (f32(u32(SH.p1.y) % 16u) * 0.618034));
+  let cosT = dot(rd, G.sunDir.xyz);
+  let fwd = -(G.view * vec4f(rd, 0.0)).z;   // view z per m along the ray
+  let gN = vec2f(S.vol2.z);
+  // the mist: a layer over the ground, the ground taken as a line from
+  // under the eye to under the ray end (two height reads per pixel)
+  let hCam = terrainHeight(ro.xz);
+  let pEnd = ro + (rd * tEnd);
+  let hEnd = terrainHeight(pEnd.xz);
+  let sunR = sk_sunRadiance(ro + (rd * (tEnd * 0.3)));
+  let lit = sk_ss(-0.04, 0.03, G.sunDir.y);
+  let ph = shaftPhase(cosT);
+  let amb = G.ambient.rgb * (0.5 / SK_PI);
+  var air = vec3f(0.0);    // the shadowed near in-scatter of the haze
+  var unsh = vec3f(0.0);   // the same with no shadow (for the sky loss)
+  var mist = vec3f(0.0);
+  var Tm = 1.0;
+  var ratio = 0.0;
+  var tPrev = 0.0;
+  for (var i = 0; i < SHAFT_MAX; i++) {
+    if (i >= n) { break; }
+    let u = (f32(i) + jit) / f32(n);
+    let t = tEnd * (u * u);
+    let dt = max(t - tPrev, 0.0) + ((tEnd / f32(n)) * 0.02);
+    tPrev = t;
+    let p = ro + (rd * t);
+    let w = shaftNear(t);
+    var vis = cloudShadow(p);
+    if ((vis > 0.001) && (lit > 0.0)) { vis *= shaftShadow(p, t * fwd); }
+    vis *= lit;
+    // the froxel at this point: unshadowed sun in-scatter and the haze
+    // transmittance from the eye
+    let fz = clamp(vol_distSlice(t) / gN.x, 0.5 / gN.x, 1.0 - (0.5 / gN.x));
+    let sIn = textureSampleLevel(tSunS, sClamp, vec3f(uv, fz), 0.0);
+    let Tf = textureSampleLevel(tVolS, sClamp, vec3f(uv, fz), 0.0).a;
+    let e = sIn.rgb * ((1.0 / VOL_K) * Tf * dt * w);
+    air += e * (vis * Tm);
+    unsh += e * Tm;
+    ratio += sIn.a * w;
+    // the mist layer
+    let hRef = mix(hCam, hEnd, t / max(tEnd, 1.0));
+    let sig = SH.p0.z * exp(-max(p.y - hRef, 0.0) / max(SH.p0.w, 1.0)) * w;
+    let Ts = exp(-sig * dt);
+    mist += ((sunR * (vis * ph)) + amb) * (Tm * Tf * (1.0 - Ts));
+    Tm *= Ts;
+  }
+  ratio = ratio / f32(n);
+  var o = mist + air;
+  if (sky) { o = mist - ((unsh - air) * ratio); }
+  textureStore(outShaft, vec2i(id.xy), vec4f(o, Tm));
+}
+
+@compute @workgroup_size(8, 8)
+fn csShaftRadial(@builtin(global_invocation_id) id: vec3u) {
+  let sz = textureDimensions(outShaft);
+  if ((id.x >= sz.x) || (id.y >= sz.y)) { return; }
+  let full = vec2i(textureDimensions(tDepthS));
+  let uv = (vec2f(id.xy) + 0.5) / vec2f(sz);
+  // the sun on screen
+  let sc = G.viewProj * vec4f(G.camPos.xyz + (G.sunDir.xyz * 1.0e5), 1.0);
+  var o = vec3f(0.0);
+  if ((sc.w > 0.0) && (G.sunDir.y > -0.05)) {
+    let su = vec2f((sc.x / sc.w) * 0.5 + 0.5, 0.5 - ((sc.y / sc.w) * 0.5));
+    let jit = cm_ign(vec2f(id.xy) + vec2f(f32(u32(SH.p1.y) % 64u) * 5.588238, 0.0));
+    let stp = (su - uv) * (0.85 / f32(SHAFT_RADIAL));
+    var q = uv + (stp * jit);
+    var acc = 0.0;
+    var wsum = 0.0;
+    var decay = 1.0;
+    for (var i = 0; i < SHAFT_RADIAL; i++) {
+      let inside = all(q >= vec2f(0.0)) && all(q <= vec2f(1.0));
+      var m = 0.0;
+      if (inside) {
+        let src = clamp(vec2i(q * vec2f(full)), vec2i(0), full - vec2i(1));
+        let open = select(0.0, 1.0, textureLoad(tDepthS, src, 0) <= 0.0);
+        // the bright sky round the sun only (about 6 deg): an open sky far
+        // from the sun gives no streak, an occluder near it gives one
+        let cq = dot(viewRay(q), G.sunDir.xyz);
+        let near = pow(max(cq, 0.0), 900.0);
+        m = open * near * textureSampleLevel(tCloudAccS, sClamp, q, 0.0).a;
+      }
+      acc += m * decay;
+      wsum += decay;
+      decay *= 0.93;
+      q += stp;
+    }
+    let rd = viewRay(uv);
+    let c = dot(rd, G.sunDir.xyz);
+    // a forward lobe: the streaks fade away from the sun
+    let glow = sk_hg(c, 0.75) * 0.02;
+    o = G.sunColor.rgb * ((acc / max(wsum, 1e-4)) * glow * SH.p2.w * sk_ss(-0.05, 0.05, G.sunDir.y));
+  }
+  textureStore(outShaft, vec2i(id.xy), vec4f(o, 1.0));
+}
+
+@compute @workgroup_size(8, 8)
+fn csShaftResolve(@builtin(global_invocation_id) id: vec3u) {
+  let sz = vec2i(textureDimensions(outShaft));
+  let q = vec2i(id.xy);
+  if ((q.x >= sz.x) || (q.y >= sz.y)) { return; }
+  let cur = textureLoad(tShaftRaw, q, 0);
+  var lo = cur;
+  var hi = cur;
+  for (var y = -1; y <= 1; y++) {
+    for (var x = -1; x <= 1; x++) {
+      let v = textureLoad(tShaftRaw, clamp(q + vec2i(x, y), vec2i(0), sz - vec2i(1)), 0);
+      lo = min(lo, v);
+      hi = max(hi, v);
+    }
+  }
+  // where this texel was last frame
+  let full = vec2i(textureDimensions(tDepthS));
+  let k = max(i32(round(f32(full.x) / f32(sz.x))), 1);
+  let src = shaftSrc(q, full, k);
+  let uv = (vec2f(src) + 0.5) / vec2f(full);
+  let dz = textureLoad(tDepthS, src, 0);
+  var wp = G.camPos.xyz + (viewRay(uv) * 1.0e5);
+  if (dz > 0.0) { wp = worldFromDepth(uv, dz); }
+  let pc = G.prevViewProj * vec4f(wp, 1.0);
+  var o = cur;
+  if ((pc.w > 0.0) && (SH.p3.x > 0.0)) {
+    let puv = vec2f((pc.x / pc.w) * 0.5 + 0.5, 0.5 - ((pc.y / pc.w) * 0.5));
+    if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0))) {
+      let h = clamp(textureSampleLevel(tShaftHist, sClamp, puv, 0.0), lo, hi);
+      o = mix(cur, h, SH.p3.x);
+    }
+  }
+  textureStore(outShaft, q, o);
 }
