@@ -30,8 +30,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { installThree, fakeCanvas } from '../coral-reef/tests/fake-gl.mjs';
 import { createBase, PLOT_R } from './base.js';
-import { SPECIES_LIST, GROW_S, sizeFor, rateFor, colonyStats, frameSample, saverClear, saverPlan, shotPose, ageYears } from './species.js';
-import { createReef, SPECIES_IDS } from '../coral-reef/reef.js';
+import { SPECIES_LIST, GROUPS, GROW_S, sizeFor, rateFor, colonyStats, frameSample, saverClear, saverPlan, shotPose, ageYears, EXT_RATE, speciesCard, matchSpecies } from './species.js';
+import { createReef, SPECIES, SPECIES_IDS, SPECIES_GROUPS, silhouetteOf, colonyInfo } from '../coral-reef/reef.js';
+import { createCoralMesher, SHAPES, SKIN_CODE, POLYP_LOOK } from '../coral-reef/coral-sdf.js';
 import { createReefRunner } from '../coral-reef/mesh-worker.js';
 import { frameFit, projectedBox } from '../coral-reef/saver.js';
 import * as SH from '../coral-reef/shaders.js';
@@ -64,24 +65,120 @@ for (let i = 0; i < 4000; i++) {
 ok(maxG <= B.lipschitz, `|grad sdf| ${maxG.toFixed(2)} <= lipschitz ${B.lipschitz}`);
 
 // ── 2. growth ──
+// Every species of the table (reef.js SPECIES): ONE colony on the base at
+// the page rate (cap / GROW_S, 16 ms steps of simulated time), on the
+// desktop and the phone profile: full in 50 to 125 s, one root, every
+// particle within 1.05 spacings of its parent, the count within the cap,
+// never in the rock or the sand, and it stays full. Then the fine mesh
+// (lod false, as the page): not empty, in the triangle budget of the
+// page, polyps per m^2 in the stated range of the species.
 sect('2. growth: one colony per species at the page rate');
+const BUDGET_TRIS = { desktop: 1200000, phone: 450000 };
+const grown = {};
 for (const q of ['desktop', 'phone']) {
   for (const id of SPECIES_IDS) {
     const R = createReef({ rock: B2, seed: 5, quality: q, radius: PLOT_R, rate: 0, budget: { particles: 20000 } });
     const c = R.growColony(B2.site, id, { size: sizeFor(id), seed: 5, rate: 0 });
     R.setRate(rateFor(c.cap));
-    let t = 0, tFull = -1, inRock = 0;
+    let t = 0, tFull = -1, inRock = 0, roots = 0, gap = 0;
     const dt = 16;
     while (t < 200000) { R.step(dt, 50, t); t += dt; if (R.done()) { tFull = t / 1000; break; } }
-    for (let g = 0; g < R.count; g++) if (B2.sdf(R.px[g], R.py[g], R.pz[g]) <= 0 || R.py[g] < B2.sand.heightAt(R.px[g], R.pz[g])) inRock++;
+    const sp = R.params[id].particleSpacing;
+    for (let g = 0; g < R.count; g++) {
+      if (B2.sdf(R.px[g], R.py[g], R.pz[g]) <= 0 || R.py[g] < B2.sand.heightAt(R.px[g], R.pz[g])) inRock++;
+      const p = R.parent[g];
+      if (p < 0) roots++; else gap = Math.max(gap, Math.hypot(R.px[g] - R.px[p], R.py[g] - R.py[p], R.pz[g] - R.pz[p]) / sp);
+    }
     const n0 = R.count; for (let k = 0; k < 200; k++) R.step(dt, 50, t + k * dt);
     const st = colonyStats(R, 0);
-    ok(tFull >= 50 && tFull <= 125 && inRock === 0 && R.count === n0,
-      `${q} ${id}: cap ${c.cap}, ${R.count} particles, full at ${tFull.toFixed(1)} s, h ${(st.height * 100).toFixed(0)} cm, w ${(st.width * 100).toFixed(0)} cm, in rock ${inRock}, after full +${R.count - n0}`);
+    ok(tFull >= 50 && tFull <= 125 && inRock === 0 && R.count === n0 && roots === 1 && gap <= 1.05 && R.count <= c.cap,
+      `${q} ${id}: cap ${c.cap}, ${R.count} particles, full at ${tFull.toFixed(1)} s, h ${(st.height * 100).toFixed(0)} cm, w ${(st.width * 100).toFixed(0)} cm, ${roots} root, largest link ${gap.toFixed(2)} spacings, in rock ${inRock}, after full +${R.count - n0}`);
+    // the fine mesh of the page (lod false), with polyps
+    const M = createCoralMesher({ fine: R.fine, radius: PLOT_R, polyps: 1, lod: false });
+    M.addColony(colonyInfo(c));
+    for (let g = 0; g < R.count; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+    for (const [g, j] of R.bridges) M.bridge(g, j);
+    let tris = 0, pol = 0, area = 0;
+    for (const m of M.meshAll()) {
+      tris += m.indices.length / 3; pol += m.polyps.length / 8;
+      const P = m.positions, I = m.indices;
+      for (let k = 0; k < I.length; k += 3) {
+        const a = I[k] * 3, b = I[k + 1] * 3, d = I[k + 2] * 3;
+        const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[d] - P[a], vy = P[d + 1] - P[a + 1], vz = P[d + 2] - P[a + 2];
+        area += 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+      }
+    }
+    const dens = pol / Math.max(1e-9, area);
+    ok(tris > 1000 && tris <= BUDGET_TRIS[q], `${q} ${id}: mesh ${tris} tris (budget ${BUDGET_TRIS[q]}), ${area.toFixed(2)} m^2`);
+    if (q === 'desktop') {
+      const rg = SHAPES[id].polyp.range;
+      ok(dens >= rg[0] && dens <= rg[1], `${q} ${id}: ${pol} polyps, ${dens.toFixed(0)} per m^2 in [${rg}]`);
+      grown[id] = { R, c, sil: silhouetteOf(R, c), dens };
+    }
   }
 }
-ok(SPECIES_LIST.length === SPECIES_IDS.length && SPECIES_LIST.length >= 5, `the picker lists every species (${SPECIES_LIST.map(s => s.id).join(', ')})`);
+ok(SPECIES_LIST.length === SPECIES_IDS.length && SPECIES_IDS.length >= 30, `the picker lists every species (${SPECIES_IDS.length})`);
 ok(Math.abs(ageYears('staghorn', 0.12) - 1) < 1e-9, 'age: 12 cm of staghorn is one year');
+
+// metadata: names, depth, form, group, colours, morphs, skin, polyp look, rate
+{
+  const bad = [];
+  const isRGB = c => Array.isArray(c) && c.length === 3 && c.every(v => v >= 0 && v <= 1);
+  for (const id of SPECIES_IDS) {
+    const sp = SPECIES[id], sh = SHAPES[id], card = speciesCard(id);
+    const why = [];
+    if (!sp.label || !/^[A-Z][a-z]+ [a-z]+/.test(sp.latin || '')) why.push('names');
+    if (!Array.isArray(sp.depth) || !(sp.depth[0] >= 0 && sp.depth[1] > sp.depth[0])) why.push('depth');
+    if (!sp.form || !SPECIES_GROUPS.some(g => g.id === sp.group)) why.push('form or group');
+    if (!sp.habitat || !sp.fact || sp.fact.length < 30) why.push('habitat or fact');
+    if (!isRGB(sp.base) || !isRGB(sp.tip) || !sp.morphs.length || !sp.morphs.every(m => isRGB(m[0]) && isRGB(m[1]))) why.push('colours');
+    if (!sh || !(SKIN_CODE[id] >= 0 && SKIN_CODE[id] <= 14) || !POLYP_LOOK[id] || !Array.isArray(sh.polyp.range)) why.push('shape');
+    if (!(EXT_RATE[id] > 0) || !card || !card.rule || !card.depth) why.push('card or rate');
+    if (why.length) bad.push(`${id} (${why.join(', ')})`);
+  }
+  ok(!bad.length, `metadata: every species has its names, depth, form, group, habitat, fact, colours, skin and card${bad.length ? ': ' + bad.join('; ') : ''}`);
+  ok(GROUPS.every(g => g.ids.length >= 4) && GROUPS.reduce((a, g) => a + g.ids.length, 0) === SPECIES_IDS.length, `groups: ${GROUPS.map(g => `${g.id} ${g.ids.length}`).join(', ')}`);
+  const deep = SPECIES_IDS.filter(id => SPECIES[id].depth[1] >= 1000);
+  ok(deep.length >= 10, `deep species to 1000 m or more for the Deep Ocean Explorer: ${deep.join(', ')}`);
+  ok(SPECIES_IDS.every(id => (SPECIES[id].group === 'soft' || SPECIES[id].group === 'fans') === (SPECIES[id].sway > 0) || SPECIES[id].group === 'deep'),
+    'sway: soft corals and fans sway, stony corals do not');
+  ok(matchSpecies('lophelia', 'desmophyllum') && matchSpecies('venus', 'glass sponge') && !matchSpecies('staghorn', 'sponge'), 'search: by Latin name, by form, no false match');
+}
+
+// distinct silhouettes: a descriptor per species (height / width, lift,
+// tips, forks, planarity, hollowness, spread, size, branch thinness); the
+// nearest two species must stay apart
+{
+  const f = id => {
+    const s = grown[id].sil, size = Math.max(s.height, s.width);
+    return [Math.log2(Math.max(s.aspect, 0.05)) * 0.5, s.lift, s.tips * 2, s.forks * 2, Math.min(s.planarity, 1.2), s.hollow, s.spread, Math.log2(size) * 0.25, Math.log2(SPECIES[id].r0 / size) * 0.25];
+  };
+  let best = [Infinity, '', ''];
+  for (let i = 0; i < SPECIES_IDS.length; i++) for (let j = i + 1; j < SPECIES_IDS.length; j++) {
+    const a = f(SPECIES_IDS[i]), b = f(SPECIES_IDS[j]), d = Math.hypot(...a.map((v, k) => v - b[k]));
+    if (d < best[0]) best = [d, SPECIES_IDS[i], SPECIES_IDS[j]];
+  }
+  ok(best[0] > 0.15, `silhouettes: no two species near-identical (nearest ${best[1]} and ${best[2]}: ${best[0].toFixed(3)} > 0.15)`);
+  for (const id of SPECIES_IDS) {
+    const s = grown[id].sil;
+    console.log(`       ${id.padEnd(12)} h/w ${s.aspect.toFixed(2).padStart(5)} lift ${s.lift.toFixed(2)} tips ${s.tips.toFixed(2)} forks ${s.forks.toFixed(2)} planarity ${s.planarity.toFixed(2)} hollow ${s.hollow.toFixed(2)} polyps ${grown[id].dens.toFixed(0)}/m^2`);
+  }
+  // sea fans and gorgonians: planar (a fan in one plane, mostly planar trees)
+  const flat = SPECIES_IDS.filter(id => SPECIES[id].apex && SPECIES[id].apex.planar === true);
+  const most = SPECIES_IDS.filter(id => SPECIES[id].apex && typeof SPECIES[id].apex.planar === 'number' && SPECIES[id].apex.planar >= 0.75);
+  ok(flat.length >= 3 && flat.every(id => grown[id].sil.planarity < 0.03), `planar: ${flat.map(id => `${id} ${grown[id].sil.planarity.toFixed(3)}`).join(', ')} (< 0.03)`);
+  ok(most.every(id => grown[id].sil.planarity < 0.15), `mostly planar: ${most.map(id => `${id} ${grown[id].sil.planarity.toFixed(3)}`).join(', ')} (< 0.15)`);
+  // the sway moves whole branches (shaders.js coralSwayJS, the CPU copy)
+  for (const id of SPECIES_IDS.filter(q => SPECIES[q].sway > 0)) {
+    const { R, c } = grown[id], sp = R.params[id].particleSpacing, lvl = Math.round(SPECIES[id].sway * 4), o = [0, 0, 0], O = new Float64Array(R.count * 3);
+    let jump = 0;
+    for (const t of [0.7, 2.3, 5.1, 9.4]) {
+      for (const g of c.ids) { SH.coralSwayJS(R.px[g], R.py[g], R.pz[g], R.gy[g], lvl, t, [1, 0], 1, o); O[g * 3] = o[0]; O[g * 3 + 1] = o[1]; O[g * 3 + 2] = o[2]; }
+      for (const g of c.ids) { const p = R.parent[g]; if (p >= 0) jump = Math.max(jump, Math.hypot(O[g * 3] - O[p * 3], O[g * 3 + 1] - O[p * 3 + 1], O[g * 3 + 2] - O[p * 3 + 2]) / sp); }
+    }
+    ok(jump < 0.2, `sway: ${id} moves whole branches (largest difference of a particle and its parent ${jump.toFixed(3)} spacings)`);
+  }
+}
 
 // ── 3. worker ──
 sect('3. worker runner with the base rock');
@@ -116,7 +213,7 @@ sect('3. worker runner with the base rock');
 // ── 4. saver ──
 sect('4. saver plan and framing');
 {
-  const plan = saverPlan(7, { n: 12 });
+  const plan = saverPlan(7, { n: 2 * SPECIES_IDS.length });
   const ids = SPECIES_IDS;
   ok(new Set(plan.slice(0, ids.length).map(s => s.species)).size === ids.length, `the first ${ids.length} stages hold every species: ${plan.slice(0, ids.length).map(s => s.species).join(' ')}`);
   ok(plan.every((s, i) => i === 0 || s.species !== plan[i - 1].species), 'no species twice in a row');
@@ -224,7 +321,14 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     const d = P.doc;
     ok(!P.errors.length, `boot with no errors${P.errors.length ? ': ' + P.errors[0].slice(0, 300) : ''}`);
     ok(d.getElementById('nogl').hidden, 'WebGL2 (fake) is up: no "WebGL not available" note');
-    ok(d.querySelectorAll('#species button').length === SPECIES_IDS.length, `species chips: ${d.querySelectorAll('#species button').length}`);
+    ok(d.querySelectorAll('#panel .sp-group button').length === SPECIES_IDS.length && d.querySelectorAll('#panel .sp-group').length === GROUPS.length, `species chips: ${d.querySelectorAll('#panel .sp-group button').length} in ${d.querySelectorAll('#panel .sp-group').length} groups`);
+    const srch = d.getElementById('spSearch');
+    srch.value = 'glass'; srch.dispatchEvent(new P.win.Event('input'));
+    const vis = [...d.querySelectorAll('#panel .sp-group button')].filter(b => !b.hidden).map(b => b.dataset.id);
+    ok(vis.length >= 3 && vis.every(id => matchSpecies(id, 'glass')) && vis.includes('venus'), `search "glass": ${vis.join(', ')}`);
+    srch.value = ''; srch.dispatchEvent(new P.win.Event('input'));
+    const card = d.getElementById('spNote').textContent;
+    ok(/Acropora cervicornis/.test(card) && /1 to 30 m/.test(card) && /Growth rule/.test(card), `info card: ${card.slice(0, 120)}`);
     ok(d.querySelectorAll('#modes button').length >= 5 && d.querySelectorAll('#gradPick .gg-sw').length >= 10, 'colour-by chips and the gradient picker');
     await P.run(6000);
     // the user (2026-10-18, Safari on Mac): "the lighting on the coral
@@ -240,9 +344,9 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     ok(n1 > 5, `the colony grows on the main thread runner: ${n1} particles after 6 s, state "${d.getElementById('rState').textContent}"`);
     ok(n1 < 600, `a watchable pace: ${n1} particles in 6 s (a full colony is about 90 s)`);
     d.getElementById('sSpeed').value = '4'; d.getElementById('sSpeed').dispatchEvent(new P.win.Event('input'));
-    d.querySelector('#species button[data-id="table"]').click();
+    d.querySelector('#panel .sp-group button[data-id="table"]').click();
     await P.run(2500);
-    ok(d.getElementById('rSp').textContent === 'Table coral' && d.querySelector('#species button.on').dataset.id === 'table', 'a species chip starts a new table coral');
+    ok(d.getElementById('rSp').textContent === 'Table coral' && [...d.querySelectorAll('#panel .sp-group button.on')].map(b => b.dataset.id).join() === 'table' && /Acropora hyacinthus/.test(d.getElementById('spNote').textContent), 'a species chip starts a new table coral, one chip on, the card follows');
     d.getElementById('bPlay').click();
     await P.run(300);
     const nP = d.getElementById('rN').textContent; await P.run(1500);

@@ -16,7 +16,8 @@
 //    layout.js ....... the phone breakpoints, the clear area, the sheet snap
 //    budget.js ....... the device profile (shadow, volume, pixel cap)
 //    saver.js ........ frameFit (the subject fit in a clear area)
-//  Our own: base.js (the rock), species.js (pace, framing, saver plan),
+//  Our own: base.js (the rock), species.js (pace, framing, saver plan,
+//  the info card data), picker.js (the grouped, searchable species picker),
 //  worker.js (the worker wrapper).
 //
 //  TEXTURES. scene.js loads the sand and rock textures by paths relative
@@ -60,8 +61,9 @@ import { createActionCamera } from '../../lib/action-camera.js';
 import { createBase, PLOT_R } from './base.js';
 import {
   SPECIES_LIST, GROW_S, SAVER_GROW_S, shortName, sizeFor, rateFor, ageYears, ageText,
-  frameSample, saverClear, saverPlan, shotPose,
+  frameSample, saverClear, saverPlan, shotPose, depthText,
 } from './species.js';
+import { mountSpeciesPicker } from './picker.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia(PHONE_QUERY);
@@ -394,20 +396,12 @@ function setPlaying(on) {
 }
 function setSpecies(id, regrow = true) {
   G.species = id;
-  if (panel && panel.find('species')) panel.find('species').set(id);
-  const sp = SPECIES[id];
-  const card = $('spNote');
-  if (card) card.innerHTML = `<p class="ic-name">${esc(sp.label)}</p><p class="ic-latin"><i>${esc(sp.latin)}</i> · ${esc(sp.form)}</p>${NOTE[id] ? `<p>${esc(NOTE[id])}</p>` : ''}`;
+  // picker.js: the grouped, searchable picker and the info card (#spNote)
+  if (spPicker) spPicker.set(id);
   $('dockSpName').textContent = shortName(id);
   if (regrow) { setPlaying(true); startColony(); }
 }
-const NOTE = {
-  staghorn: 'Tips are favoured: a busy particle, or a flake from below, rarely sticks, so thin branches race up.',
-  fan: 'Every new particle is put into one vertical plane across the current: a flat, webbed fan.',
-  table: 'A short stalk grows up, then only side joins stick: a flat plate.',
-  boulder: 'High stubbornness, and each new particle is laid on a compact dome: a brain coral with grooves.',
-  finger: 'Low stickiness: flakes creep into the gaps before they stick, so the lobes stay thick and soft.',
-};
+let spPicker = null;
 function setPanel(open) { if (sheet) sheet.setOpen(open); }
 function buildUI() {
   fillIcons(document);
@@ -415,11 +409,7 @@ function buildUI() {
   const regrow = () => { setPlaying(true); startColony(); };
 
   const sp = panel.section({ id: 'species', title: 'Species', open: true });
-  sp.chips({
-    id: 'species', label: 'Species', columns: 2, value: G.species, onChange: id => setSpecies(id),
-    items: SPECIES_LIST.map(s => ({ id: s.id, label: s.label, swatch: css(SPECIES[s.id].tip) })),
-  });
-  sp.slot({ id: 'spNote' }).input.classList.add('sp-card');
+  spPicker = mountSpeciesPicker(sp, { value: G.species, onChange: id => setSpecies(id), phone: PHONE_Q.matches });
 
   const gr = panel.section({ id: 'growth', title: 'Growth', open: true });
   gr.actions([
@@ -449,10 +439,7 @@ function buildUI() {
 
   $('dockPlay').addEventListener('click', () => setPlaying(!G.playing));
   $('dockRegrow').addEventListener('click', regrow);
-  $('dockSp').addEventListener('click', () => {
-    const i = SPECIES_LIST.findIndex(s => s.id === G.species);
-    setSpecies(SPECIES_LIST[(i + 1) % SPECIES_LIST.length].id);
-  });
+  $('dockSp').addEventListener('click', () => spPicker.step(1));
   sheet = mountSheet({ panel: $('panel'), grip: $('sheetGrip'), menu: $('dockMenu'), close: $('panelClose'), gear: $('gear'), phoneQ: PHONE_Q });
   addEventListener('keydown', e => { if (e.key === 'Escape' && PHONE_Q.matches && sheet.open) sheet.setOpen(false); });
   const mark = () => { lastInput = nowMs(); if (!hintGone) { hintGone = true; setTimeout(() => $('hint').classList.add('gone'), 2500); } };
@@ -519,7 +506,8 @@ window.snSaver = {
     const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
     const label = typeof o.label === 'function' ? o.label : () => {};
     const seed = (o.seed >>> 0) || 1;
-    const plan = saverPlan(seed, { n: 12, calm });
+    // every species once before any species comes again
+    const plan = saverPlan(seed, { n: SPECIES_LIST.length, calm });
     const saved = { species: G.species, seed: G.seed, mode: G.mode, gradient: G.gradient, rev: G.rev, dir: G.dir, speed: G.speed, playing: G.playing };
     sv = { plan, i: -1, stage: null, t: 0, band: null, bandFn: null, bandT: 0, labT: 0, fading: false, cut: true, saved, label };
     import('../../lib/saver-clear.js').then(m => { if (sv) sv.bandFn = m.plateBand; }).catch(() => { /* no plate */ });
@@ -530,7 +518,7 @@ window.snSaver = {
       const modeLbl = (MODES.find(m => m.id === d.mode) || MODES[0]).label;
       return {
         title: s.sp.label,
-        sub: `${s.sp.latin} · ${s.sp.form.toLowerCase()} · one colony grows from a seed on a rock`,
+        sub: `${s.sp.latin} · ${s.sp.form.toLowerCase()} · ${depthText(d.species)} deep · one colony grows from a seed on a rock`,
         params: [
           { sym: 'N', name: 'particles', value: s.n.toLocaleString(), cls: 'm1' },
           { sym: 'h', name: 'height', value: `${(s.h * 100).toFixed(1)} cm`, cls: 'm2' },
