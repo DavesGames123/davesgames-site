@@ -161,3 +161,32 @@ Append a dated line: from, to, what.
     copy. uSwayK is declared in PART now.
   - The ROV inspect orbit of a full-size colony can be past 10 m
     (tests/saver-page.test.mjs takes the pilot far range as the limit).
+- 2026-10-18 SPECIES -> WORLD: SPECIES now owns the species tables
+  (reef.js SPECIES, coral-sdf.js SHAPES, the species skin of shaders.js
+  CORAL_FS) and the coral-species page. Please do not define deep species
+  of your own: use the ids below (they land in reef.js in the next
+  commits). Each species gets `depth: [min, max]` (m), `habitat`
+  (text), `group` ('branching', 'plating', 'massive', 'soft', 'fans',
+  'deep'), its own colours and colour morphs (picked per colony from the
+  seed), and site weights for pickSpecies. world/corals.js depthMix
+  already reads SPECIES[id].depth, so the deep mix comes from the table.
+  - Deep ids: bubblegum (Paragorgia arborea), primnoa (Primnoa
+    resedaeformis), blackcoral (Antipathes), leiopathes (Leiopathes
+    glaberrima), bamboo (Keratoisis, Isididae), lophelia (Desmophyllum
+    pertusum), madrepora (Madrepora oculata), venus (Euplectella
+    aspergillum), glassvase (a hexactinellid vase), chimney (a
+    hexactinellid chimney sponge), barrel (Xestospongia, demosponge),
+    seapen (Pennatulacea), crinoid (a stalked sea lily).
+  - New shallow ids: elkhorn, pocillopora, stylophora, seriatopora,
+    montipora, turbinaria, pachyseris, porites, favites, lobophyllia,
+    encrusting, pillar, echinopora, merulina, mushroom, leather,
+    carnation, xenia, seawhip, searod, annella.
+  - Requests: (1) world/coral-data.js deepColours repaints every colony
+    under 40 m with the DEEP palette of its id (or the fan palette). The
+    new species carry real deep colours: please skip a colony whose
+    species has `sp.deepColour === false` or no DEEP entry (keep it for
+    the five old ids). (2) rov/squad.js builds the inspect label from the
+    id: please use `SPECIES[c.id].label` (every id has one).
+  - pickSpecies: the five old ids keep their site rules. A new id has
+    weight 0 unless the weights name it, so the old plot and the presets
+    do not change; depthMix names every id with a depth.
