@@ -144,6 +144,10 @@ h3{font:600 0.8rem var(--sci-sans);color:var(--dim);margin:18px 0 8px}
 /* The desktop card shows "Keeps" and the formula; "Distorts" and "Used for"
    open with the button. The phone About tab shows all. */
 #card:not(.open) .more{display:none}
+/* A real historical map in the projection (cards.js art, artwork/, CREDITS.txt). */
+.cardBody .hist{margin:10px 0 0}
+.cardBody .hist img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--line-b)}
+.cardBody .hist figcaption{font-size:0.74rem;line-height:1.4;color:var(--dim);margin-top:4px}
 .moreBtn{margin-top:8px;font:0.76rem var(--sci-sans);color:var(--acc);background:transparent;border:1px solid var(--line-b);border-radius:7px;padding:4px 9px}
 #cardPhone .moreBtn{display:none}
 #cardPhone .more{display:block}

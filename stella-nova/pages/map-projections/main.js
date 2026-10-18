@@ -179,6 +179,7 @@ function renderCard() {
     <dl><dt>Keeps</dt><dd>${c.keeps}</dd><dt class="more">Distorts</dt><dd class="more">${c.bends}</dd><dt class="more">Used for</dt><dd class="more">${c.use}</dd></dl>
     <div class="sci-eq" data-tex="${c.tex.replace(/"/g, '&quot;')}"></div>
     <div class="sci-eq scale" data-tex="${c.scale.replace(/"/g, '&quot;')}"></div>
+    ${c.art ? `<figure class="more hist"><img src="${c.art.src}" width="${c.art.w}" height="${c.art.h}" alt="${c.art.alt}" loading="lazy" decoding="async"><figcaption>${c.art.cap}</figcaption></figure>` : ''}
     <button type="button" class="moreBtn">${cardOpen ? 'Less' : 'Distorts, used for…'}</button>`;
   for (const id of ['cardDesk', 'cardPhone']) {
     const el = $(id); el.innerHTML = html; typesetAll(el);

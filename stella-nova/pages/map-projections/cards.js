@@ -5,7 +5,9 @@
 //  distorts), use (where it is used), tex (the forward formula, TeX for
 //  MathJax), scale (TeX: the scale factors h along the meridian and k along
 //  the parallel, the area scale s, the angle error omega, or the missing
-//  part of the forward formula). The card and the saver plate typeset both;
+//  part of the forward formula), and art (optional: a real historical map
+//  in that projection, artwork/ and CREDITS.txt; main.js shows it with the
+//  "Distorts, used for" part). The card and the saver plate typeset both;
 //  no projection is shown as code. tests.mjs checks every h, k and s here
 //  against the numerical Jacobian (proj.js distortion). Dates and names follow
 //  Snyder, "Map Projections: A Working Manual" (USGS PP 1395, 1987) and
@@ -41,6 +43,7 @@ export const CARDS = {
     keeps: 'Angles and the shape of small areas. A line of constant compass bearing (a rhumb line) is a straight line.',
     bends: 'Area. The scale grows as 1/cos(latitude), so areas grow as its square: at 60° by 4, at 72° (Greenland) by about 10. The poles are infinitely far away, so the map stops near 85°.',
     use: 'Nautical charts since the 1600s, because a navigator can draw a course with a ruler and read the bearing.',
+    art: { src: 'artwork/wright-molyneux-1599-mercator.jpg', w: 720, h: 511, alt: 'Engraved world chart of about 1599 by Edward Wright, on Mercator\'s projection, with rhumb lines from compass roses', cap: 'Edward Wright\'s chart of the world, about 1599: one of the first maps drawn on Mercator\'s projection from Wright\'s own tables. Public domain.' },
     tex: 'y = \\ln\\tan\\!\\left(\\frac{\\pi}{4}+\\frac{\\varphi}{2}\\right),\\quad x = \\lambda',
     scale: 'h = k = \\sec\\varphi,\\quad s = hk = \\sec^2\\varphi,\\quad \\omega = 0',
   },
@@ -249,6 +252,7 @@ export const CARDS = {
     keeps: 'Areas, and true distances along every parallel and along the central meridian. Every parallel is an arc round the North Pole, so the world becomes a heart.',
     bends: 'Shapes far from the central meridian: the southern continents at the edges are sheared and stretched along the outline.',
     use: 'Sixteenth-century world maps, among them Oronce Finé (1531) and the young Mercator\'s double heart map (1538).',
+    art: { src: 'artwork/fine-1531-double-cordiform.jpg', w: 720, h: 488, alt: 'Woodcut world map by Oronce Finé, 1531: the northern and southern hemispheres as two hearts side by side', cap: 'Oronce Finé, Nova et integra universi orbis descriptio, 1531: each hemisphere is a Werner heart, centred on a pole. Public domain.' },
     tex: '\\rho = \\frac{\\pi}{2} - \\varphi,\\quad E = \\frac{\\lambda\\cos\\varphi}{\\rho},\\quad x = \\rho\\sin E,\\quad y = -\\rho\\cos E',
     scale: '\\text{Bonne with } \\varphi_1 = 90^\\circ:\\quad k = 1,\\quad s = 1',
   },

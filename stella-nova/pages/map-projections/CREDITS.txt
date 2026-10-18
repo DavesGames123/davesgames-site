@@ -17,6 +17,15 @@ Globe image
 NASA Blue Marble: Next Generation (Reto Stockli, NASA Earth Observatory),
 public domain, read from ../ancient-earth/data/present/color-2k.jpg.
 
+Historical maps (artwork/)
+--------------------------
+Real maps in two of the projections. The card shows each one under
+"Distorts, used for" (cards.js field art). One line per file: the file,
+the work, the source page and the licence.
+
+artwork/wright-molyneux-1599-mercator.jpg | Edward Wright, after the globe of Emery Molyneux, chart of the world ("Thou hast here gentle reader a true hydrographical description..."), about 1599, from Hakluyt, The Principal Navigations, 2nd ed., London 1598-1600; scan hosted by the Newberry Library | https://commons.wikimedia.org/wiki/File:Wright%E2%80%93Molyneux_Map.png | Public domain (marked so on the file page, read 2026-10-18) | changes: border cropped, resized to 720 x 511, JPEG quality 78
+artwork/fine-1531-double-cordiform.jpg | Oronce Finé, Nova et integra universi orbis descriptio, Paris 1531, woodcut world map in a double cordiform (Werner) projection | https://commons.wikimedia.org/wiki/File:Oronce_Fine_1531.jpg | Public domain (marked so on the file page, read 2026-10-18) | changes: the caption strip under the map cropped, resized to 720 x 488, JPEG quality 78
+
 Formulas and facts
 ------------------
 All projection code is written for this page. The formulas follow:
