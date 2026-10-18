@@ -8,9 +8,18 @@
 //                   near 1, patches of contrast that differ, and it moves.
 //                   The old 6-wave tile pattern fails the same test, so
 //                   the test can see a regular net.
+//    glsl ......... every program of shaders.js passes naga (as GLSL 450)
+//                   and glslangValidator as GLSL ES 3.00 with the prefix
+//                   that three.js r160 adds (the browser form)
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
 // ============================================================================
+import * as SH from '../shaders.js';
+import { checkPrograms } from '../glsl-check.mjs';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { waveSpectrum, causticField, causticPattern, autocorrPeak, fadeAt, FADE_K, surfaceAt, N_WAVES } from '../water.js';
 
 let pass = 0, fail = 0;
@@ -90,6 +99,57 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
     ok(mono && jump < 0.02, `fade R ${R}: falls smoothly, no step (largest step ${f3(jump)} per 0.2% of R)`);
     ok(fadeAt(R * 1.005, R) > 0.998 && fadeAt(R * 1.295, R) < 0.002, `fade R ${R}: no edge at R or at ${FADE_K} R (the slope is 0 at both ends)`);
   }
+}
+
+// ── glsl ────────────────────────────────────────────────────────────────────
+// The prefix of three.js r160 for a GLSL3 ShaderMaterial (WebGLProgram),
+// cut to what these programs use. Raw programs get the version line only.
+const PREC = 'precision highp float;\nprecision highp int;\nprecision highp sampler2D;\n';
+const VS_PRE = '#version 300 es\n#define attribute in\n#define varying out\n#define texture2D texture\n' + PREC +
+  'uniform mat4 modelMatrix;\nuniform mat4 modelViewMatrix;\nuniform mat4 projectionMatrix;\nuniform mat4 viewMatrix;\nuniform mat3 normalMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n' +
+  'in vec3 position;\nin vec3 normal;\nin vec2 uv;\n';
+const FS_PRE = '#version 300 es\n#define varying in\n#define texture2D texture\n' + PREC +
+  'uniform mat4 viewMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n' +
+  'vec4 sRGBTransferOETF( in vec4 value ) { return vec4( mix( pow( value.rgb, vec3( 0.41666 ) ) * 1.055 - vec3( 0.055 ), value.rgb * 12.92, vec3( lessThanEqual( value.rgb, vec3( 0.0031308 ) ) ) ), value.a ); }\n' +
+  'vec4 linearToOutputTexel( vec4 value ) { return sRGBTransferOETF( value ); }\n';
+const GLSLANG = ['/opt/homebrew/bin/glslangValidator', '/usr/local/bin/glslangValidator'].find(p => fs.existsSync(p));
+function checkES(progs) {
+  if (!GLSLANG) return null;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coral-es-'));
+  const out = [];
+  try {
+    for (const p of progs) {
+      const logs = [];
+      for (const [st, src] of [['vert', p.vs], ['frag', p.fs]]) {
+        const f = path.join(dir, `${p.name}.${st}`);
+        fs.writeFileSync(f, p.raw ? '#version 300 es\n' + src : (st === 'vert' ? VS_PRE : FS_PRE) + src);
+        try { execFileSync(GLSLANG, [f], { stdio: 'pipe' }); } catch (e) { logs.push(`${st}: ${String(e.stdout || e.stderr || e.message).trim().split('\n').slice(0, 8).join('\n')}`); }
+      }
+      out.push({ name: p.name, ok: !logs.length, log: logs.join('\n') });
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  return out;
+}
+{
+  const progs = [
+    { name: 'coral', vs: SH.CORAL_VS, fs: SH.CORAL_FS },
+    { name: 'polyp', vs: SH.POLYP_VS, fs: SH.POLYP_FS },
+    { name: 'rock', vs: SH.ROCK_VS, fs: SH.ROCK_FS },
+    { name: 'sand', vs: SH.SURF_VS, fs: SH.SAND_FS },
+    { name: 'snow', vs: SH.SNOW_VS, fs: SH.SNOW_FS },
+    { name: 'caustic', vs: SH.CAUSTIC_VS, fs: SH.CAUSTIC_FS, raw: true },
+    { name: 'volume', vs: SH.FULL_VS, fs: SH.VOL_FS, raw: true },
+    { name: 'composite', vs: SH.FULL_VS, fs: SH.COMP_FS, raw: true },
+  ];
+  const nr = checkPrograms(progs);
+  if (nr[0].ok === null) console.log('glsl: naga not found, the naga check did not run');
+  else { console.log('glsl naga: ' + nr.map(r => `${r.name} ${r.ok ? 'ok' : 'FAIL'}`).join(', ')); for (const r of nr) ok(r.ok, `glsl: ${r.name} passes naga`, r.log); }
+  const er = checkES(progs);
+  if (!er) console.log('glsl: glslangValidator not found, the GLSL ES check did not run');
+  else { console.log('glsl ES 3.00: ' + er.map(r => `${r.name} ${r.ok ? 'ok' : 'FAIL'}`).join(', ')); for (const r of er) ok(r.ok, `glsl: ${r.name} compiles as GLSL ES 3.00 with the three.js prefix`, r.log); }
+  // the GLSL noise is the water.js noise (the CPU tests measure the screen)
+  ok(SH.NOISE2.includes('374761393u') && SH.NOISE2.includes('668265263u') && SH.NOISE2.includes('1274126177u') && SH.NOISE2.includes('2.03') && SH.WATER.includes('4.4') && SH.WATER.includes('0.026'), 'glsl: NOISE2 and causticAt use the water.js hash, warp and patch numbers');
+  ok(SH.WATER.includes('0.30 * uR') && SH.WATER.includes('length(w.xz) - uR'), 'glsl: fadeAt is the water.js plot fade');
 }
 
 export function done(tag = 'scene') {
