@@ -27,6 +27,9 @@
 //      jsdom is not in the repo. Set JSDOM_DIR to a folder whose
 //      node_modules holds jsdom (npm i jsdom@24 there), else this part is
 //      skipped with a note.
+//    - bounded work in the jsdom boot: the listener count stays the same
+//      over 20 resize events, and a hidden tab asks for no animation
+//      frame and frees the sky canvas
 //    - phone and tablet layouts (async function phoneLayouts), a jsdom boot
 //      per home viewport with a matchMedia for it. The CSS checks use
 //      tools/css-viewport.mjs (declared sizes, no layout engine):
@@ -229,10 +232,15 @@ async function jsdomBoot() {
   vc.on('jsdomError', e => { if (!/Could not parse CSS/.test(e.message)) errors.push(e.message); });
   vc.on('error', (...a) => errors.push('console.error ' + a.join(' ')));
   const ios = [];
+  let adds = 0, rafs = 0;
   const dom = await JSDOM.fromFile(path.join(HOME, 'index.html'), {
     runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true, virtualConsole: vc,
     beforeParse(w) {
       w.devicePixelRatio = 2;
+      const ET = w.EventTarget.prototype, add = ET.addEventListener;
+      ET.addEventListener = function (...a) { adds++; return add.apply(this, a); };
+      const raf = w.requestAnimationFrame;
+      w.requestAnimationFrame = cb => { rafs++; return raf.call(w, cb); };
       w.matchMedia = q => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {} });
       w.IntersectionObserver = class { constructor(cb, o) { this.cb = cb; this.o = o || {}; this.t = []; ios.push(this); } observe(t) { this.t.push(t); } unobserve() {} disconnect() {} takeRecords() { return []; } };
       w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
@@ -274,6 +282,16 @@ async function jsdomBoot() {
     shift = 6000; w.Observatory.lazy.fill(rail);
     check('loader: a rail drops cards more than 2.5 widths back', cards.every((c, i) => i * 336 + 320 - shift >= -3600 || !c.querySelector('img[src]')));
   }
+  // Bounded work: 20 resizes add no listener; a hidden tab stops frames.
+  const a0 = adds;
+  for (let i = 0; i < 20; i++) { w.dispatchEvent(new w.Event('resize')); await new Promise(r => setTimeout(r, 160)); }
+  check(`bounded: 20 resizes add no listener (${a0} -> ${adds})`, adds === a0);
+  Object.defineProperty(d, 'hidden', { value: true, configurable: true });
+  d.dispatchEvent(new w.Event('visibilitychange'));
+  const r0 = rafs;
+  await new Promise(r => setTimeout(r, 300));
+  const sky = d.getElementById('sky');
+  check(`bounded: a hidden tab asks for no frame (${rafs - r0}) and frees the sky canvas (${sky.width}x${sky.height})`, rafs === r0 && sky.width === 0);
   w.close();
 }
 await jsdomBoot();
