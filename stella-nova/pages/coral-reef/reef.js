@@ -17,10 +17,17 @@
 //  engine grid cell is at least 0.5 units. R.px/py/pz are metres.
 //
 //  ROCK. The colonies grow on rock/index.js createRock (ROCK package):
-//  rock.sdf (negative inside), rock.normal, rock.sampleSurface. Walkers
-//  that touch the rock are lost, except near the base of a colony whose
-//  species encrusts: there a walker can stick as a new root. No particle
-//  centre is ever inside the rock (the tests check rock.sdf > 0).
+//  rock.sdf (negative inside; a bound: steps use sdf / rock.lipschitz,
+//  thresholds sdf / rock.sdfScale), rock.normal, rock.sampleSurface, and
+//  rock.sand.heightAt (the sand is not in rock.sdf). Walkers that touch
+//  the rock or the sand are lost, except next to the coral of a colony
+//  whose species encrusts: there a walker can stick as a new root, so the
+//  base creeps over the rock. No particle centre is ever inside the rock
+//  or under the sand (the tests check it).
+//
+//  STOP. A colony stops at its cap, at its soft size outline, when it
+//  gets no join in 6000 walkers (shaded out), or when its join rate past
+//  half its cap falls under 6 % (its outline is full).
 //
 //  API (SCENE and the worker build against this header)
 //    const R = createReef({ rock, seed, quality: 'desktop'|'mid'|'phone',
@@ -44,6 +51,10 @@
 //    R.contacts: Map 'a,b' -> { a, b, kind: 'fuse'|'overgrow', n, at }
 //    createReefMirror()  the same particle arrays on the main thread, fed by
 //                        the worker messages (colour.js reads either one)
+//    chooseFocus(colonies, points, budgetTris)  the colonies for the fine
+//                        mesh (coral-sdf.js setFocus), nearest first
+//    R.progress() -> { count, target, limit, colonies, live, fraction, done,
+//                      walkers, walks, lost, fusions, overgrowths }
 //
 //  SPECIES (grep -n 'export const SPECIES')
 //    staghorn ... tips favoured: joins on busy or lower particles refused
