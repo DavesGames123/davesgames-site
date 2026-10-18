@@ -12,7 +12,10 @@
 //  device at every governor level, and records the passes: each frame
 //  that dispatches csCloudShadow must also dispatch csClouds and draw the
 //  cloud composite. It also checks that the march steps follow
-//  frame.gov.cloudK and never go under 16.
+//  frame.gov.cloudK and never go under 16, and that the march and the
+//  resolve cover every texel of the cloud target and the composite the
+//  whole screen ("if i look abouve the horizon on DLA it looks like the
+//  screen stops rendering").
 // ============================================================================
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -33,10 +36,11 @@ globalThis.GPUTextureUsage = { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STO
 // a recording mock device: pipelines carry their label, passes record
 // what they dispatch and draw
 const rec = [];
+const dims = {};
 const obj = (extra = {}) => ({ createView: () => obj(), destroy() {}, ...extra });
 const passRec = () => {
   let cur = null;
-  return { setPipeline(p) { cur = p.label; }, setBindGroup() {}, dispatchWorkgroups() { rec.push('dispatch:' + cur); }, draw() { rec.push('draw:' + cur); }, end() {} };
+  return { setPipeline(p) { cur = p.label; }, setBindGroup() {}, dispatchWorkgroups(x, y = 1) { rec.push('dispatch:' + cur); dims[cur] = [x, y]; }, draw(n) { rec.push('draw:' + cur); dims['draw:' + cur] = n; }, end() {} };
 };
 const device = {
   features: new Set(),
@@ -118,6 +122,17 @@ for (let l = 0; l <= MAX_LEVEL; l++) {
 }
 await check('the march steps follow frame.gov.cloudK and stay at 16 or more', () => {
   assert.ok(steps[0] >= steps[1] && steps[1] >= steps[MAX_LEVEL] && steps[MAX_LEVEL] >= 16 && steps[0] > steps[MAX_LEVEL], JSON.stringify(steps));
+});
+await check('every texel of the cloud target is marched and resolved, and the composite covers the screen (no stale sky)', () => {
+  const tg = sky._debug.targets();
+  for (const k of ['csClouds', 'csCloudResolve']) {
+    const d = dims[k];
+    assert.ok(d && d[0] * 8 >= tg.cw && d[1] * 8 >= tg.ch, `${k} ${JSON.stringify(d)} for ${tg.cw} x ${tg.ch}`);
+  }
+  assert.equal(dims['draw:cloud composite'], 3, 'a full-screen triangle');
+  const clouds = readFileSync(join(page, 'shaders/clouds.wgsl'), 'utf8');
+  const res = /fn csCloudResolve\([\s\S]*?\n\}/.exec(clouds)[0];
+  assert.ok(/var outv = cur;/.test(res) && /textureStore\(outAccum, ij, outv\);/.test(res), 'the resolve writes this frame when the history is not valid');
 });
 console.log('# cloud march steps by governor level: ' + JSON.stringify(steps));
 console.log(`clouds-visible: ${pass} passed, ${fail} failed`);

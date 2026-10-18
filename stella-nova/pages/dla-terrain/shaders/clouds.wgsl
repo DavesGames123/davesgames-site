@@ -41,6 +41,11 @@
 //                   light under a closed deck, lightning glow, aerial
 //                   perspective. Out: rgba (in-scatter, transmittance; 0 when
 //                   the march ends at T < 0.01), depth (front, mean).
+//                   TERRAIN: cl_ground cuts the density under the ground
+//                   (coarse height, soft contact CL_CONTACT_M); csCloudMap
+//                   adds orographic lift on windward slopes and caps on
+//                   peaks that reach the base. FAR: cl_far, a 2D layer from
+//                   CL_FAR0 of the map side to CL_FAR_M, after the march.
 //    csCloudResolve temporal reprojection with G.prevViewProj and the
 //                   cloud motion of the frame (S.anim0.xy), variance
 //                   clipping in the 3x3 neighbourhood, into the history.
@@ -52,7 +57,7 @@
 //  grep -n targets: "fn cl_worleyCells", "fn cl_perlin", "fn csNoiseBase",
 //  "fn csNoiseDetail", "fn csNoise2D", "fn cl_wx", "fn cl_coverage",
 //  "fn csCloudMap", "fn cl_map", "fn cl_profile", "fn cl_density",
-//  "fn cl_sceneLimit", "CL_STEPS_MAX",
+//  "fn cl_sceneLimit", "CL_STEPS_MAX", "fn cl_ground", "fn cl_far",
 //  "fn cl_lightMarch", "fn cl_scatter", "fn cl_cirrus", "fn csCloudShadow",
 //  "fn csClouds", "fn csCloudResolve", "fn fsCloudComp"
 //
@@ -314,6 +319,23 @@ fn csCloudMap(@builtin(global_invocation_id) id: vec3u) {
   let w = cl_wx(xz);
   var cv = vec4f(0.0, w.kind, 0.0, 0.0);
   if (w.cover >= 0.005) { cv = cl_coverage(xz, w); }
+  // TERRAIN: orographic lift and cap clouds. Wind toward rising ground
+  // near the cloud base lifts the air: more cover on the windward
+  // slopes; peaks that reach the base wear a cap. Only where the weather
+  // has some cloud (w.cover), so a clear sky stays clear.
+  if (insideTerrain(xz) && (w.cover > 0.02)) {
+    let gnd = baseHeight(xz);
+    let base = w.base + cv.z;
+    let n = terrainNormal(xz);
+    let wl = length(G.wind.xy);
+    let wd = select(vec2f(1.0, 0.0), G.wind.xy / max(wl, 1e-3), wl > 0.2);
+    let upslope = clamp(-dot(n.xz, wd) * 3.0, 0.0, 1.0) * sk_ss(0.5, 6.0, wl);
+    let near = sk_ss(base - 900.0, base - 100.0, gnd);
+    let lift = upslope * near * 0.35;
+    let cap = sk_ss(base - 250.0, base + 150.0, gnd) * 0.6;
+    let k = sk_ss(0.02, 0.2, w.cover);
+    cv.x = clamp(cv.x + (max(lift, cap) * k * (1.0 - cv.x)), 0.0, 1.0);
+  }
   let patchy = sk_ss(-0.3, 0.35, cl_baseOffset((xz * 0.6) + vec2f(913.0, 211.0)));
   textureStore(outCMap0, vec2i(id.xy), vec4f(cv.x, cv.y, w.base + cv.z, w.top));
   textureStore(outCMap1, vec2i(id.xy), vec4f(w.storm, max(cl_baseOffset(xz), 0.0), patchy, w.cover));
@@ -335,6 +357,17 @@ fn cl_map(xz: vec2f) -> ClMap {
 }
 
 // Density 0..about 1.5 at world p. full: add the detail erosion.
+// TERRAIN: the clouds and the ground. Under the top of the terrain
+// (G.terrainOrigin.w) a cloud sample reads the coarse height (baseHeight,
+// 4 loads): no cloud under the ground, a soft contact over CL_CONTACT_M,
+// so a low deck wraps round a peak and sits in a valley and does not
+// pass through the hill. 1 = free air.
+const CL_CONTACT_M: f32 = 60.0;
+fn cl_ground(p: vec3f) -> f32 {
+  if ((p.y > (G.terrainOrigin.w + 20.0)) || !insideTerrain(p.xz)) { return 1.0; }
+  return sk_ss(0.0, CL_CONTACT_M, p.y - baseHeight(p.xz));
+}
+
 fn cl_density(p: vec3f, full: bool) -> f32 {
   let L = cl_layer();
   let h = sk_layerH(p);
@@ -342,6 +375,8 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
   let mp = cl_map(p.xz);
   var cov = mp.m0.x;
   if (cov < 0.005) { return 0.0; }
+  let gk = cl_ground(p);
+  if (gk <= 0.0) { return 0.0; }
   let tq = mp.m0.y;
   let storm = mp.m1.x;
   let b0 = mp.m0.z;
@@ -394,7 +429,7 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
   let d = clamp((sh - lo) / max(0.3 * cov, 0.03), 0.0, 1.0) * mix(0.55, 1.0, cov);
   if (d <= 0.0) { return 0.0; }
   // denser cores in cumulus, lighter decks
-  return d * mix(1.4, 2.4, tq) * (1.0 + storm);
+  return d * mix(1.4, 2.4, tq) * (1.0 + storm) * gk;
 }
 
 // The light source of the clouds: the sun by day, the moon by night.
@@ -501,6 +536,37 @@ fn cl_cirrus(ro: vec3f, rd: vec3f, cosT: f32) -> vec4f {
   let col = li.rad * ph * 2.4 + G.ambient.rgb * (0.6 / SK_PI);
   let fade = sk_ss(160000.0, 60000.0, t);
   return vec4f(col, a * fade);
+}
+
+// ── far clouds ───────────────────────────────────────────────────────────────
+const CL_FAR0: f32 = 0.45;        // the far layer starts at this share of the map side
+const CL_FAR_M: f32 = 260000.0;   // and ends here (m)
+fn cl_far(ro: vec3f, rd: vec3f, cosT: f32) -> vec4f {
+  let L = cl_layer();
+  let mid = mix(L.h0, L.h1, 0.3);
+  let hit = sk_layerHit(ro, rd, mid);
+  var t = hit.y;
+  if (sk_layerH(ro) > mid) { t = hit.x; }
+  let t0 = CL_FAR0 * S.cmap.z;
+  if ((t < (t0 * 0.95)) || (t > CL_FAR_M)) { return vec4f(0.0); }
+  let q = ro + (rd * t);
+  let w = cl_wx(q.xz);
+  if (w.cover < 0.01) { return vec4f(0.0); }
+  let cv = cl_coverage(q.xz, w);
+  // a thin sheet at a grazing view is still thick along the ray
+  let a = cv.x * mix(0.6, 0.95, w.cover) * sk_ss(t0, t0 * 1.12, t) * (1.0 - sk_ss(CL_FAR_M * 0.6, CL_FAR_M, t));
+  if (a <= 0.001) { return vec4f(0.0); }
+  let li = cl_light(q);
+  let ph = mix(sk_hg(cosT, 0.6), sk_hg(cosT, -0.2), 0.4);
+  var c = (li.rad * (0.35 * ph + 0.04)) + (G.ambient.rgb * (0.6 / SK_PI));
+  // aerial perspective: the air to the far cloud (the same law as the
+  // near clouds, at the far distance)
+  let clearAir = textureSampleLevel(tSkyView, sClamp, sk_skyViewUV(S.radii.w, rd, G.sunDir.xyz), 0.0).rgb * S.sun.y;
+  let hMid = max((0.5 * (G.camPos.y + q.y)) - G.terrain.z, 0.0);
+  let ext = (1.2e-5 * exp(-hMid / 8000.0)) + ((S.mieS.x * 1e-3) * exp(-hMid / 1200.0)) + (min(S.vol1.z, 1.4e-4) * exp(-hMid / 1500.0));
+  let Ta = exp(-ext * t);
+  c = (c * Ta) + (clearAir * (1.0 - Ta) * 0.9);
+  return vec4f(c, a);
 }
 
 // ── cloud shadow map ─────────────────────────────────────────────────────────
@@ -636,6 +702,19 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
     let ext = (1.2e-5 * exp(-hMid / 8000.0)) + ((S.mieS.x * 1e-3) * exp(-hMid / 1200.0)) + (S.vol1.z * exp(-hMid / 1500.0));
     let Ta = exp(-ext * mean);
     col = (col * Ta) + (skyBehind * (1.0 - Ta) * (1.0 - T) * 0.9);
+  }
+  // FAR CLOUDS (the user: "the clouds don't render from far away enough"):
+  // past the march (the cloud map square, CL_FAR0 x S.cmap.z) a 2D layer
+  // at the middle of the slab out to CL_FAR_M, its cover from the weather
+  // model and the coverage noise, lit by the sun or the moon, faded into
+  // the air. One evaluation per texel, no loop.
+  {
+    let fl = cl_far(ro, rd, cosT);
+    if (fl.a > 0.0) {
+      col += T * fl.rgb * fl.a;
+      T *= 1.0 - fl.a;
+      if (mean > 9.0e5) { mean = CL_FAR0 * S.cmap.z; front = mean; }
+    }
   }
   // cirrus, behind the low deck when the camera is below it
   let ci = cl_cirrus(ro, rd, cosT);
