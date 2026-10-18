@@ -27,6 +27,22 @@
 //     every used ink at contrast 3 or more, reaches most families and
 //     many palettes, and builds valid modifiers; the saver pool is dark
 //     and large enough.
+// 12. density (density.js): at the default Density and Detail every
+//     pattern is fixed by the seed, has finite numbers, stays inside the
+//     board (clipped families), is under the desktop cap and not capped,
+//     and has at least as many elements and points as at D 1. Prints the
+//     per-pattern and per-family counts at D 1 and at the default. Time:
+//     DENSE_LIGHT_MS for a light pattern, DENSE_HEAVY_MS for a heavy one.
+//     At the maximum density with the maximum params: under the caps and
+//     WORST_MS. densify keeps every value inside its limit.
+// 13. phone: a lower density cap and element cap; at the phone cap every
+//     pattern (max params) stays under the phone element cap.
+// 14. export of dense output: every SVG at the default density is
+//     well-formed and under SVG_DEF_MB, the worst case under SVG_MAX_MB;
+//     merged paths use fewer tags than elements; the relative path data
+//     reads back to the same points (no drift); the canvas batch draws
+//     each element once.
+// 15. echo pass, worker cache and dense picks (taste.js, saver pool).
 //  Prints one line per failure and a summary; exits 1 on any failure.
 // ============================================================================
 import { run, defaults, CAP, boardSize, UNIT } from './engine.js';
@@ -40,6 +56,10 @@ import { runJob } from './worker.js';
 import { surprise, usedInks, LINE_FAMS } from './taste.js';
 import { SAVER_PALETTES } from './saver.js';
 import { paletteScore, luminance } from './color.js';
+import { DENSITY, DETAIL, DENSE, densify, densityCap, runCap } from './density.js';
+import { pathRel, drawItems } from './export.js';
+import { cacheSize } from './worker.js';
+import { tasteDensity } from './taste.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } };
@@ -306,6 +326,155 @@ const NEW_NODES = 20000, LIGHT_MS = 150, MAX_MS = 1500;
   ok(SAVER_PALETTES.length >= 20 && SAVER_PALETTES.every(p => luminance(p.bg) < 0.05), `saver pool: ${SAVER_PALETTES.length} dark palettes`);
   for (const n of [1, 2, 3, 4, 5]) ok(SAVER_PALETTES.some(p => paletteScore(p, n) >= 3), `saver pool has a palette for ${n} inks at contrast 3`);
   console.log(`surprise: worst contrast ${worst.toFixed(2)}, mean ${(sum / 400).toFixed(2)} (palette walk ${(rnd / 400).toFixed(2)}), ${fams.size} families, ${pals.size} palettes`);
+}
+
+// 12. density
+const DENSE_LIGHT_MS = 250, DENSE_HEAVY_MS = 1500, WORST_MS = 3000, SVG_DEF_MB = 8, SVG_MAX_MB = 25;
+const DOPT = { D: DENSITY.def, detail: DETAIL.def };
+const KIT_FAMS = NEW_FAMS;
+{
+  const { W, H } = boardSize(0.8), rows = [], fam = {};
+  let n0 = 0, n1 = 0, p0 = 0, p1 = 0;
+  for (const p of PATTERNS) {
+    const a = run(p, defaults(p), 7, W, H, CAP, DOPT), b = run(p, defaults(p), 7, W, H, CAP, DOPT), base = run(p, defaults(p), 7, W, H);
+    ok(sig(a.items) === sig(b.items), `${p.id} at density ${DENSITY.def}: fixed by the seed`);
+    ok(finite(a.items), `${p.id} at density ${DENSITY.def}: finite numbers`);
+    ok(!a.capped && a.items.length <= CAP.nodes && count(a.items) <= CAP.points, `${p.id} at density ${DENSITY.def}: not capped (${a.items.length} elements)`);
+    if (KIT_FAMS.includes(p.family) || NEW_IDS.includes(p.id)) ok(outside(a.items, W, H) <= 0.01, `${p.id} at density ${DENSITY.def}: inside the board`);
+    ok(a.items.length >= base.items.length && a.points >= base.points, `${p.id}: density ${DENSITY.def} gives no fewer elements (${base.items.length} -> ${a.items.length}) or points (${base.points} -> ${a.points})`);
+    const lim = p.heavy ? DENSE_HEAVY_MS : DENSE_LIGHT_MS;
+    ok(a.ms <= lim, `${p.id} at density ${DENSITY.def}: ${a.ms.toFixed(0)} ms (budget ${lim})`);
+    n0 += base.items.length; n1 += a.items.length; p0 += base.points; p1 += a.points;
+    const f = fam[p.family] || (fam[p.family] = [0, 0, 0, 0, 0]); f[0] += base.items.length; f[1] += a.items.length; f[2] += base.points; f[3] += a.points; f[4] = Math.max(f[4], a.ms);
+    rows.push(`${p.id.padEnd(20)} ${String(base.items.length).padStart(6)} ${String(a.items.length).padStart(7)} ${String(base.points).padStart(7)} ${String(a.points).padStart(8)} ${a.ms.toFixed(0).padStart(6)}`);
+  }
+  ok(n1 >= 3 * n0, `density ${DENSITY.def}: at least 3 times the elements over the book (${n0} -> ${n1})`);
+  console.log(`density ${DENSITY.def}, detail ${DETAIL.def} (4:5 board, seed 7, default params)\n${'id'.padEnd(20)}  els@1  els@D  pts@1    pts@D     ms\n${rows.join('\n')}`);
+  console.log('per family: elements at D 1 -> D, points at D 1 -> D, slowest ms');
+  for (const k in fam) { const f = fam[k]; console.log(`  ${k.padEnd(10)} ${f[0]} -> ${f[1]} (x${(f[1] / f[0]).toFixed(1)})  ${f[2]} -> ${f[3]} (x${(f[3] / f[2]).toFixed(1)})  ${f[4].toFixed(0)} ms`); }
+  console.log(`book: elements ${n0} -> ${n1} (x${(n1 / n0).toFixed(2)}), points ${p0} -> ${p1} (x${(p1 / p0).toFixed(2)})`);
+  // densify keeps each value in its limit, at the max density and the max params.
+  for (const p of PATTERNS) {
+    const spec = DENSE[p.id];
+    ok(!!spec, `${p.id} has a density rule`);
+    if (!spec) continue;
+    const P = at(p, 'max'), Q = densify(p, P, DENSITY.max);
+    for (const k in spec) {
+      if (k[0] === '$') continue;
+      ok(!!p.params[k], `${p.id}: density rule names a real param ${k}`);
+      if (!p.params[k]) continue;
+      const r = spec[k], [a0, b0] = p.params[k];
+      if (typeof r === 'string') { ok(Q[k] <= b0 + 1 && Q[k] >= P[k], `${p.id}.${k}: depth rule stays within one level over the slider (${Q[k]})`); continue; }
+      const [e, lim] = Array.isArray(r) ? r : [r, null];
+      if (e > 0) ok(Q[k] <= Math.max(P[k], lim ?? 2 * b0) + 1e-9, `${p.id}.${k}: at most its ceiling (${Q[k]})`);
+      else ok(Q[k] >= Math.min(P[k], lim ?? a0 / 2) - 1e-9, `${p.id}.${k}: at least its floor (${Q[k]})`);
+    }
+  }
+  // The worst case: max density, max params, detail 1, two aspects.
+  let worst = [0, ''];
+  for (const asp of [0.8, 16 / 9]) {
+    const s = boardSize(asp);
+    for (const p of PATTERNS) {
+      const r = run(p, at(p, 'max'), 3, s.W, s.H, CAP, { D: DENSITY.max, detail: 1 });
+      ok(finite(r.items) && r.items.length <= CAP.nodes && count(r.items) <= CAP.points, `${p.id} max density aspect ${asp.toFixed(2)}: finite and under the caps`);
+      ok(r.ms <= WORST_MS, `${p.id} max density aspect ${asp.toFixed(2)}: ${r.ms.toFixed(0)} ms (budget ${WORST_MS})`);
+      if (r.ms > worst[0]) worst = [r.ms, p.id + ' ' + asp.toFixed(2)];
+    }
+  }
+  console.log(`max density ${DENSITY.max}, max params, detail 1: slowest ${worst[1]} at ${worst[0].toFixed(0)} ms`);
+}
+
+// 13. phone
+{
+  const PC = runCap(true), DC = runCap(false);
+  ok(densityCap(true) < densityCap(false) && DENSITY.phoneDef <= densityCap(true), `phone density cap ${densityCap(true)} under the desktop cap ${densityCap(false)}`);
+  ok(PC.nodes < DC.nodes && PC.points < DC.points && DC.nodes <= CAP.nodes && DC.points <= CAP.points, 'phone element cap under the desktop cap');
+  const { W, H } = boardSize(9 / 16); let big = [0, ''];
+  for (const p of PATTERNS) {
+    const r = run(p, at(p, 'max'), 5, W, H, PC, { D: densityCap(true), detail: 1 });
+    const m = applyModifiers(r.items, [Object.assign(modDefaults('repeat'), { nx: 4, ny: 4 })], W, H, 5, PC);
+    ok(r.items.length <= PC.nodes && count(r.items) <= PC.points && m.items.length <= PC.nodes && count(m.items) <= PC.points, `${p.id} at the phone cap: under the phone element cap (${r.items.length} elements, ${count(r.items)} points)`);
+    if (count(r.items) > big[0]) big = [count(r.items), p.id];
+  }
+  console.log(`phone: density cap ${densityCap(true)}, element cap ${PC.nodes} / ${PC.points} points; largest run ${big[1]} at ${big[0]} points`);
+}
+
+// 14. export of dense output
+{
+  const { W, H } = boardSize(210 / 297); let maxDef = [0, ''], maxWorst = [0, ''], bytes = 0, pts = 0, tags = 0, els = 0;
+  for (const p of PATTERNS) {
+    const r = run(p, defaults(p), 5, W, H, CAP, DOPT);
+    const svg = toSVG(applyMode(r.items, 'auto'), { W, H, palette: PALETTES[0], lw: 2, size: { w: 210, h: 297, unit: 'mm' } });
+    const e = xmlCheck(svg), mb = svg.length / 1048576;
+    ok(!e && !/NaN|undefined|Infinity/.test(svg), `${p.id} dense SVG is well-formed ${e}`);
+    ok(mb <= SVG_DEF_MB, `${p.id} dense SVG ${mb.toFixed(2)} MB (limit ${SVG_DEF_MB})`);
+    if (mb > maxDef[0]) maxDef = [mb, p.id];
+    bytes += svg.length; pts += r.points; els += r.items.length; tags += (svg.match(/<(path|circle) /g) || []).length;
+    const w = run(p, at(p, 'max'), 5, W, H, CAP, { D: DENSITY.max, detail: 1 });
+    const mw = toSVG(w.items, { W, H, palette: PALETTES[0], lw: 2 }).length / 1048576;
+    ok(mw <= SVG_MAX_MB, `${p.id} worst-case SVG ${mw.toFixed(1)} MB (limit ${SVG_MAX_MB})`);
+    if (mw > maxWorst[0]) maxWorst = [mw, p.id];
+  }
+  ok(tags * 2 < els, `merged paths: ${tags} path and circle tags for ${els} elements`);
+  console.log(`SVG at density ${DENSITY.def}: largest ${maxDef[1]} ${maxDef[0].toFixed(2)} MB, ${(bytes / pts).toFixed(1)} bytes per point, ${tags} tags for ${els} elements; worst case ${maxWorst[1]} ${maxWorst[0].toFixed(1)} MB`);
+  // Relative path data reads back to the same points.
+  const back = d => {
+    const out = []; let x = 0, y = 0;
+    for (const m of d.matchAll(/([MlLz])([^MlLz]*)/g)) {
+      const v = (m[2].match(/-?(?:\d+\.?\d*|\.\d+)/g) || []).map(Number);
+      if (m[1] === 'M') { x = v[0]; y = v[1]; out.push(x, y); }
+      else if (m[1] === 'l') for (let i = 0; i < v.length; i += 2) { x += v[i]; y += v[i + 1]; out.push(x, y); }
+    }
+    return out;
+  };
+  let drift = 0, nPolys = 0;
+  for (const id of ['curl-streams', 'tone-hatch', 'lead-glass', 'triangle-wang']) {
+    const p = PATTERNS.find(q => q.id === id), r = run(p, defaults(p), 2, W, H, CAP, DOPT);
+    for (const e of r.items) if (e.t === 'poly' && !e.sm) {
+      const q = back(pathRel(e.p, !!e.c, 0)); nPolys++;
+      if (q.length !== e.p.length) { drift = Infinity; break; }
+      for (let i = 0; i < q.length; i++) drift = Math.max(drift, Math.abs(q[i] - e.p[i]));
+    }
+  }
+  ok(nPolys > 1000 && drift <= 0.051, `relative path data reads back within 0.05 units (${nPolys} lines, worst ${drift.toFixed(3)})`);
+  // The canvas batch: each element traced once, far fewer paint calls.
+  const calls = { move: 0, arc: 0, fill: 0, stroke: 0 }, g = new Proxy({}, { get: (t, k) => k in t ? t[k] : (k === 'moveTo' ? () => calls.move++ : k === 'arc' ? () => calls.arc++ : k === 'fill' ? () => calls.fill++ : k === 'stroke' ? () => calls.stroke++ : () => {}), set: (t, k, v) => { t[k] = v; return true; } });
+  const p = PATTERNS.find(q => q.id === 'screen-dots'), r = run(p, defaults(p), 2, W, H, CAP, DOPT);
+  const subs = r.items.reduce((a, e) => a + (e.t === 'multi' ? e.rr.length : 1), 0);
+  drawItems(g, r.items, { palette: PALETTES[0], lw: 2 });
+  ok(calls.move === subs && calls.fill + calls.stroke < r.items.length / 20, `canvas batch: ${subs} subpaths traced once, ${calls.fill + calls.stroke} paint calls for ${r.items.length} elements`);
+}
+
+// 15. echo pass, worker cache, dense picks
+{
+  const { W, H } = boardSize(0.8), p = PATTERNS.find(q => q.id === 'lead-glass');
+  const off = run(p, defaults(p), 4, W, H, CAP, { D: DENSITY.def, detail: 0 }), on = run(p, defaults(p), 4, W, H, CAP, DOPT);
+  const echoes = on.items.filter(e => e.e != null);
+  ok(!off.items.some(e => e.e != null) && echoes.length > 100, `echo: detail 0 adds none, detail ${DETAIL.def} adds ${echoes.length}`);
+  ok(echoes.every(e => e.f === -1 && (e.s === -2 || e.s === e.e)), 'echo lines are strokes in the paper or in their own ink');
+  ok(applyMode(echoes, 'stroke').every(e => e.s === e.e) && applyMode(echoes, 'fill').every((e, i) => e === echoes[i]), 'echo: Lines mode takes the ink, Solids mode keeps the paper line');
+  const c = PATTERNS.find(q => q.id === 'apollonian'), cr = run(c, defaults(c), 4, W, H, CAP, { D: 1, detail: 1 }).items;
+  const discs = cr.filter(e => e.t === 'circle' && e.e == null), rings = cr.filter(e => e.t === 'circle' && e.e != null);
+  ok(rings.length > 0 && rings.every(e => discs.some(d => Math.hypot(d.x - e.x, d.y - e.y) < 0.02 && e.r < d.r)), `echo rings sit inside their discs (${rings.length})`);
+  // Worker cache: a repeat is a hit with the same items; the size is bounded.
+  const job = { pat: 'arc-lattice', P: defaults(PATTERNS[0]), seed: 3, W, H, mods: [], D: 2, detail: 0.5 };
+  const j1 = runJob(job, true), j2 = runJob(job, true);
+  ok(!j1.cached && j2.cached && sig(j1.items) === sig(j2.items), 'worker cache: a repeated job is a hit with the same elements');
+  for (let s = 10; s < 30; s++) runJob(Object.assign({}, job, { seed: s }), true);
+  ok(cacheSize() <= 8, `worker cache holds at most 8 results (${cacheSize()})`);
+  const jd = runJob(job), rd = run(PATTERNS[0], job.P, 3, W, H, CAP, { D: 2, detail: 0.5 });
+  ok(sig(jd.items) === sig(rd.items), 'runJob passes the density and the detail to run');
+  // Dense picks.
+  let lo = 9, hi = 0;
+  for (let s = 1; s <= 200; s++) {
+    const a = tasteDensity(makeRng(s, 'td'), DENSITY.max), b = tasteDensity(makeRng(s, 'td'), DENSITY.max), ph = tasteDensity(makeRng(s, 'td'), densityCap(true));
+    if (s <= 20) ok(a.D === b.D && a.detail === b.detail, `tasteDensity ${s}: fixed by the seed`);
+    ok(ph.D <= densityCap(true), `tasteDensity ${s}: phone pick ${ph.D} under the phone cap`);
+    lo = Math.min(lo, a.D); hi = Math.max(hi, a.D);
+    const sp = surprise(makeRng(s, 'surprise'), PATTERNS, PALETTES, densityCap(true));
+    if (s <= 20) ok(sp.D >= 1.5 && sp.D <= densityCap(true) && sp.detail >= 0 && sp.detail <= 1, `surprise ${s}: density ${sp.D} in range`);
+  }
+  ok(lo >= 1.6 && hi <= 3.2 && hi - lo > 1, `random picks start dense: D ${lo} to ${hi}`);
 }
 
 timing.sort((a, b) => b[1] - a[1]);
