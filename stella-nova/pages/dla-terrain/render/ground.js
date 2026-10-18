@@ -704,11 +704,17 @@ export async function createGround(gpu) {
     return true;
   }
 
-  async function fetchBitmap(u) {
+  async function fetchBitmap(u, size = 0) {
     const r = await fetch(u);
     if (!r.ok) throw new Error(`${u}: ${r.status}`);
-    return createImageBitmap(await r.blob(), { colorSpaceConversion: 'none' });
+    const o = { colorSpaceConversion: 'none' };
+    if (size) { o.resizeWidth = size; o.resizeHeight = size; o.resizeQuality = 'high'; }
+    return createImageBitmap(await r.blob(), o);
   }
+  // a phone profile (gpu/budget.js): fewer sets, decoded at the array size
+  // (not 1024) and not kept in the glb-lite image cache
+  const PHONE_SETS = ['ground_grass', 'ground_forest_floor', 'ground_rock', 'ground_cliff', 'ground_gravel', 'ground_sand', 'ground_snow', 'ground_meadow', 'ground_desert', 'ground_scree'];
+  const pf = gpu.profile && gpu.profile.groundRes ? gpu.profile : null;
 
   // Load the ASSETS ground sets into the three arrays. gpu.assets is the
   // glb-lite library (loadGround) or a bare manifest. Resolves to the
@@ -717,21 +723,22 @@ export async function createGround(gpu) {
     const a = gpu.assets;
     if (!a) return 0;
     let sets = null;
-    if (a.loadGround) sets = await a.loadGround();
+    if (a.loadGround && !pf) sets = await a.loadGround();
     else {
-      const recs = groundRecords(a.manifest || a);
+      let recs = groundRecords(a.manifest || a);
+      if (pf) recs = recs.filter((r) => PHONE_SETS.includes(r.id)).sort((x, y) => PHONE_SETS.indexOf(x.id) - PHONE_SETS.indexOf(y.id)).slice(0, pf.groundLayers || 8);
       if (!recs.length || typeof createImageBitmap === 'undefined') return 0;
       const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
       sets = await Promise.all(recs.map(async (rec) => {
         const t = rec.textures;
-        const get = (f) => (f ? fetchBitmap(new URL(f, base).href).catch(() => null) : null);
+        const get = (f) => (f ? fetchBitmap(new URL(f, base).href, pf ? Math.min(layerRes(quality), pf.groundRes) : 0).catch(() => null) : null);
         const [albedo, normal, orm] = await Promise.all([get(t.albedo), get(t.normal), get(t.orm)]);
         return { record: rec, albedo, normal, orm };
       }));
     }
     sets = (sets || []).filter((x) => x && x.albedo).slice(0, MAX_SETS);
     if (!sets.length) return 0;
-    const res = layerRes(quality);
+    const res = pf ? Math.min(layerRes(quality), pf.groundRes) : layerRes(quality);
     const mips = Math.floor(Math.log2(res)) + 1;
     const L = sets.length;
     const alb = mkArray(res, 'rgba8unorm-srgb', mips, 'ground alb', L);
