@@ -20,12 +20,15 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
-     2. style.css, lib/sci.css, lib/growth-gradients.css
+     2. style.css, lib/sci.css, lib/growth-gradients.css, lib/sn-panel.css
      3. importmap for three r160, then main.js as a module
 
    LAYOUT  (# marks an element id that main.js binds)
      desktop ... #panel at the left, #view fills the frame, #read at the
                  upper right, #legend under it
+     panel ..... #panelBody is empty here: main.js buildUI declares the
+                 sections and controls through lib/sn-panel.js (Species,
+                 Growth, Look, View, About). #aboutBlurb goes into About.
      phone ..... #dock at the base: species, grow or pause, regrow, menu.
                  Menu opens #panel as a bottom sheet (portrait) or a
                  drawer at the right (landscape).
@@ -41,6 +44,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../lib/growth-gradients.css">
+<link rel="stylesheet" href="../../lib/sn-panel.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -53,65 +57,38 @@
 <canvas id="view" aria-label="One coral colony grows on a rock under water"></canvas>
 <div id="nogl" hidden>WebGL 2 is not available in this browser, so the coral cannot render.</div>
 
-<div id="read" aria-live="off">
-  <div class="rd-sp" id="rSp">Staghorn coral</div>
-  <div><span>Particles</span><b id="rN">0</b></div>
-  <div><span>Height</span><b id="rH">0 cm</b></div>
-  <div><span>Polyps</span><b id="rP">0</b></div>
-  <div><span>Age</span><b id="rAge">0 months</b></div>
-  <div class="bar"><i id="rBar"></i></div>
-  <div id="rState" class="state"></div>
+<div id="read" class="snp-card snp-read" aria-live="off">
+  <div class="rd-head" id="rSp">Staghorn coral</div>
+  <div class="rd"><span>Height</span><b id="rH">0 cm</b></div>
+  <div class="rd"><span>Age</span><b id="rAge">0 months</b></div>
+  <div class="rd rd-more"><span>Particles</span><b id="rN">0</b></div>
+  <div class="rd rd-more"><span>Polyps</span><b id="rP">0</b></div>
+  <div class="bar" aria-hidden="true"><i id="rBar"></i></div>
+  <div id="rState" class="rd-state"></div>
 </div>
-<div id="legend"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
+<div id="legend" class="snp-card"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
 <div id="hint">Drag to turn all the way round · pinch or scroll to zoom</div>
 
-<aside id="panel" aria-label="Controls">
-  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
-  <h1 class="ptitle">Coral species</h1>
-  <p class="lede">Choose a coral. One colony grows from a seed on a small rock, from the ground up: marine snow drifts down, and a flake that touches the coral sticks. Each species is a different rule for how the flakes stick. The colony grows once; when it is full it stays.</p>
-
-  <section class="grp">
-    <div class="sec-label">Species</div>
-    <div class="chips sp" id="species"></div>
-    <p class="note" id="spNote"></p>
-    <div class="grid3 runrow">
-      <button id="bPlay" type="button" class="on">❚❚ Pause</button>
-      <button id="bRegrow" type="button">↻ Regrow</button>
-      <button id="bSeed" type="button">⚄ New seed</button>
-    </div>
-    <div class="row"><label for="sSpeed">Growth speed</label><input type="range" id="sSpeed" min="0.25" max="4" step="0.05" value="1"><span class="val" id="vSpeed"></span></div>
-  </section>
-
-  <section class="grp">
-    <div class="sec-label">Colour by</div>
-    <div class="chips" id="modes"></div>
-    <div id="gradPick"></div>
-    <p class="note" id="modeNote"></p>
-  </section>
-
-  <section class="grp">
-    <div class="sec-label">View</div>
-    <div class="row"><label for="sCaust">Caustics</label><input type="range" id="sCaust" min="0" max="1.5" step="0.05" value="1"><span class="val" id="vCaust"></span></div>
-    <div class="row"><label for="sDown">Light from above</label><input type="range" id="sDown" min="0.2" max="4" step="0.05" value="0.7"><span class="val" id="vDown"></span></div>
-    <div class="grid2">
-      <button class="tog on" id="tOrbit" type="button">Auto orbit</button>
-      <button class="tog on" id="tPolyps" type="button">Polyps</button>
-      <button class="tog on" id="tBeam" type="button">Lamp beams</button>
-      <button class="tog on" id="tSnow" type="button">Marine snow</button>
-    </div>
-  </section>
-
-  <div class="credit">Growth engine: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). The species, the SDF coral and the water come from our <a href="../../#coral-reef" target="_top" id="reefLink">coral reef growth</a> page. Stone and sand: CC0 scans from Poly Haven. See CREDITS.txt.</div>
+<aside id="panel" class="snp" aria-label="Controls">
+  <button id="sheetGrip" class="snp-grip" type="button" aria-label="Resize controls" aria-controls="panel"><span></span></button>
+  <header class="snp-top">
+    <h1 class="snp-ptitle">Coral Species</h1>
+    <button id="panelClose" class="snp-iconbtn" type="button" aria-label="Close controls"><i data-icon="close"></i></button>
+  </header>
+  <div id="panelBody"></div>
+  <div id="aboutBlurb" class="snp-row">
+    <p class="snp-text">One colony grows from a seed on a small rock. Marine snow drifts down, and a flake that touches the coral sticks. Each species has its own rule for how the flakes stick.</p>
+    <p class="snp-fine">Growth engine: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). The species, the SDF coral and the water come from our <a href="../../#coral-reef" target="_top" id="reefLink">Deep Ocean Explorer</a> page. Stone and sand: CC0 scans from Poly Haven. See CREDITS.txt.</p>
+  </div>
 </aside>
 
-<nav id="dock" aria-label="Controls">
-  <button id="dockSp" type="button" aria-label="Next species"><i>✿</i><span id="dockSpName">Staghorn</span></button>
-  <button id="dockPlay" type="button" aria-label="Pause the growth"><i>❚❚</i><span>Pause</span></button>
-  <button id="dockRegrow" type="button" aria-label="Regrow"><i>↻</i><span>Regrow</span></button>
-  <button id="dockMenu" type="button" aria-label="Menu" aria-expanded="false"><i>☰</i><span>Menu</span></button>
+<nav id="dock" class="snp-dock" aria-label="Quick controls">
+  <button id="dockSp" type="button" aria-label="Next species"><i data-icon="species"></i><span id="dockSpName">Staghorn</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause the growth"><i data-icon="pause"></i><span>Pause</span></button>
+  <button id="dockRegrow" type="button" aria-label="Regrow"><i data-icon="regrow"></i><span>Regrow</span></button>
+  <button id="dockMenu" type="button" aria-label="Menu" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i><span>Menu</span></button>
 </nav>
-<button id="gear" type="button" aria-label="Open controls">☰</button>
+<button id="gear" class="snp-gear" type="button" aria-label="Open controls" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i></button>
 
 <script type="importmap">
 { "imports": {

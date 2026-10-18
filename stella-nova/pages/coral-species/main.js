@@ -50,7 +50,8 @@ import { MODES, colourT, naturalRGB, radiiOf, fieldsOf } from '../coral-reef/col
 import { SHAPES } from '../coral-reef/coral-sdf.js';
 import { createReefRunner } from '../coral-reef/mesh-worker.js';
 import { createCoralLink } from '../coral-reef/coral-link.js';
-import { PHONE_QUERY, clearFromRects, sheetSnap } from '../coral-reef/layout.js';
+import { PHONE_QUERY, clearFromRects } from '../coral-reef/layout.js';
+import { createPanel, mountSheet, fillIcons, icon } from '../../lib/sn-panel.js';
 import { PROFILES, detectProfile, pageEnv, profileFor, pixelRatioFor } from '../coral-reef/budget.js';
 import { frameFit } from '../coral-reef/saver.js';
 import { mountErrorBox, installErrorHandlers } from '../coral-reef/crash.js';
@@ -268,7 +269,7 @@ function setGradient(id, rev) {
 function setMode(m) {
   G.mode = m;
   if (S) { S.U.uMode.value = m === 'natural' ? 0 : m === 'age' ? 1 : 2; refresh(); }
-  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.id === m));
+  if (panel && panel.find('modes')) panel.find('modes').set(m);
   $('modeNote').textContent = MODE_NOTE[m] || '';
   drawLegend();
 }
@@ -369,21 +370,34 @@ function readout(force) {
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
-let picker = null;
+// lib/sn-panel.js makes every control (one look, labels tied to inputs,
+// collapsible sections that remember their state). Other packages add
+// their controls here through the panel API, not by hand (NOTES.md of
+// pages/coral-reef).
+//   Species ... the species picker and its info card (#spNote)
+//   Growth .... grow or pause, regrow, new seed, growth speed
+//   Look ...... colour by, gradient, polyps
+//   View ...... auto orbit, lamps, marine snow, caustics, light from above
+//   About ..... a short text and the credit
+let picker = null, panel = null, sheet = null;
 const css = c => `rgb(${c.map(v => Math.round(Math.min(1, v) * 255)).join(',')})`;
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function setPlaying(on) {
   G.playing = !!on;
   if (coral) coral.post({ type: 'play', on: G.playing });
-  const t = G.playing ? '❚❚ Pause' : '▶ Grow';
-  $('bPlay').textContent = t; $('bPlay').classList.toggle('on', G.playing);
-  $('dockPlay').innerHTML = G.playing ? '<i>❚❚</i><span>Pause</span>' : '<i>▶</i><span>Grow</span>';
+  const b = panel && panel.find('bPlay');
+  if (b) b.setLabel(G.playing ? 'Pause' : 'Grow', G.playing ? 'pause' : 'play');
+  const d = $('dockPlay');
+  d.innerHTML = `${icon(G.playing ? 'pause' : 'play')}<span>${G.playing ? 'Pause' : 'Grow'}</span>`;
+  d.setAttribute('aria-label', G.playing ? 'Pause the growth' : 'Grow');
   readout(true);
 }
 function setSpecies(id, regrow = true) {
   G.species = id;
-  document.querySelectorAll('#species button').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  if (panel && panel.find('species')) panel.find('species').set(id);
   const sp = SPECIES[id];
-  $('spNote').innerHTML = `<i>${sp.latin}</i> · ${sp.form}. ${NOTE[id] || ''}`;
+  const card = $('spNote');
+  if (card) card.innerHTML = `<p class="ic-name">${esc(sp.label)}</p><p class="ic-latin"><i>${esc(sp.latin)}</i> · ${esc(sp.form)}</p>${NOTE[id] ? `<p>${esc(NOTE[id])}</p>` : ''}`;
   $('dockSpName').textContent = shortName(id);
   if (regrow) { setPlaying(true); startColony(); }
 }
@@ -394,79 +408,58 @@ const NOTE = {
   boulder: 'High stubbornness, and each new particle is laid on a compact dome: a brain coral with grooves.',
   finger: 'Low stickiness: flakes creep into the gaps before they stick, so the lobes stay thick and soft.',
 };
-function setPanel(open) {
-  const p = $('panel');
-  p.classList.toggle('open', open);
-  if (!open) p.classList.remove('full');
-  document.body.classList.toggle('panel-closed', !open);
-  $('dockMenu').setAttribute('aria-expanded', String(open));
-  $('dockMenu').classList.toggle('on', open);
-}
-function bindRange(id, fmt, on) {
-  const el = $(id), v = $(id.replace(/^s/, 'v'));
-  const show = () => { v.textContent = fmt(+el.value); };
-  el.addEventListener('input', () => { show(); on(+el.value); });
-  show();
-}
-function toggle(id, key, on) {
-  const b = $(id);
-  b.classList.toggle('on', !!G[key]);
-  b.addEventListener('click', () => { G[key] = !G[key]; b.classList.toggle('on', G[key]); on(G[key]); });
-}
+function setPanel(open) { if (sheet) sheet.setOpen(open); }
 function buildUI() {
-  const spBox = $('species');
-  for (const s of SPECIES_LIST) {
-    const b = document.createElement('button');
-    b.type = 'button'; b.dataset.id = s.id;
-    b.innerHTML = `<span class="sw" style="background:${css(SPECIES[s.id].tip)}"></span>${s.label}`;
-    b.addEventListener('click', () => setSpecies(s.id));
-    spBox.appendChild(b);
-  }
-  const mBox = $('modes');
-  for (const m of PAGE_MODES) {
-    const b = document.createElement('button');
-    b.type = 'button'; b.dataset.id = m.id; b.textContent = m.label;
-    b.addEventListener('click', () => setMode(m.id));
-    mBox.appendChild(b);
-  }
-  picker = mountGradientPicker($('gradPick'), { value: G.gradient, reversed: G.rev, label: 'Choose a gradient', onChange: (id, rev) => { setGradient(id, rev); if (G.mode === 'natural') setMode('age'); } });
-  $('bPlay').addEventListener('click', () => setPlaying(!G.playing));
-  $('dockPlay').addEventListener('click', () => setPlaying(!G.playing));
+  fillIcons(document);
+  panel = createPanel($('panelBody'), { store: 'coral-species' });
   const regrow = () => { setPlaying(true); startColony(); };
-  $('bRegrow').addEventListener('click', regrow);
+
+  const sp = panel.section({ id: 'species', title: 'Species', open: true });
+  sp.chips({
+    id: 'species', label: 'Species', columns: 2, value: G.species, onChange: id => setSpecies(id),
+    items: SPECIES_LIST.map(s => ({ id: s.id, label: s.label, swatch: css(SPECIES[s.id].tip) })),
+  });
+  sp.slot({ id: 'spNote' }).input.classList.add('sp-card');
+
+  const gr = panel.section({ id: 'growth', title: 'Growth', open: true });
+  gr.actions([
+    { id: 'bPlay', label: 'Pause', icon: 'pause', kind: 'primary', onClick: () => setPlaying(!G.playing) },
+    { id: 'bRegrow', label: 'Regrow', icon: 'regrow', onClick: regrow },
+    { id: 'bSeed', label: 'New seed', icon: 'dice', onClick: () => { G.seed = (G.seed % 9973) + 1; regrow(); } },
+  ]);
+  gr.slider({ id: 'sSpeed', valueId: 'vSpeed', label: 'Growth speed', min: 0.25, max: 4, step: 0.05, value: G.speed, format: v => `${v.toFixed(2)}×`, onInput: v => { G.speed = v; if (coral) coral.post({ type: 'env', env: { speed: v } }); } });
+
+  const lk = panel.section({ id: 'look', title: 'Look', open: true });
+  lk.chips({ id: 'modes', label: 'Colour by', columns: 3, items: PAGE_MODES, value: G.mode, onChange: id => setMode(id) });
+  lk.note({ id: 'modeNote' });
+  const gp = lk.slot({ id: 'gradPick' });
+  picker = mountGradientPicker(gp.input, { value: G.gradient, reversed: G.rev, label: 'Gradient', onChange: (id, rev) => { setGradient(id, rev); if (G.mode === 'natural') setMode('age'); } });
+  lk.toggle({ id: 'tPolyps', label: 'Polyps', value: G.polyps, onChange: v => { G.polyps = v; if (S) S.setPolypsVisible(v); } });
+
+  const vw = panel.section({ id: 'view', title: 'View', open: false });
+  vw.toggle({ id: 'tOrbit', label: 'Auto orbit', value: G.orbit, onChange: v => { G.orbit = v; }, hint: 'After 3 s with no input the camera turns slowly round the colony.' });
+  vw.toggle({ id: 'tBeam', label: 'Lamp beams', value: G.beam, onChange: v => { G.beam = v; if (S) S.opts.volume = v; } });
+  vw.toggle({ id: 'tSnow', label: 'Marine snow', value: G.snow, onChange: v => { G.snow = v; if (S) S.opts.snow = v; panel.find('sSnowAmt').el.hidden = !v; } });
+  // the marine snow amount (SNOW, lib/marine-snow.js: x the depth mix, at most all flakes)
+  vw.slider({ id: 'sSnowAmt', valueId: 'vSnowAmt', label: 'Snow amount', min: 0, max: 1.5, step: 0.05, value: 1, format: v => v.toFixed(2), onInput: v => { if (S && S.setSnowDensity) S.setSnowDensity(v); } });
+  vw.slider({ id: 'sCaust', valueId: 'vCaust', label: 'Caustics', min: 0, max: 1.5, step: 0.05, value: G.caust, format: v => (v ? v.toFixed(2) : 'Off'), onInput: v => { G.caust = v; if (S) { S.U.uCaust.value = v; S.opts.caustics = v > 0; } } });
+  vw.slider({ id: 'sDown', valueId: 'vDown', label: 'Light from above', min: 0.2, max: 4, step: 0.05, value: G.down, format: v => v.toFixed(2), onInput: v => { G.down = v; if (S) S.U.uDown.value = v; } });
+
+  panel.section({ id: 'about', title: 'About', open: false }).slot({ el: $('aboutBlurb') });
+
+  $('dockPlay').addEventListener('click', () => setPlaying(!G.playing));
   $('dockRegrow').addEventListener('click', regrow);
-  $('bSeed').addEventListener('click', () => { G.seed = (G.seed % 9973) + 1; regrow(); });
   $('dockSp').addEventListener('click', () => {
     const i = SPECIES_LIST.findIndex(s => s.id === G.species);
     setSpecies(SPECIES_LIST[(i + 1) % SPECIES_LIST.length].id);
   });
-  bindRange('sSpeed', v => `${v.toFixed(2)}×`, v => { G.speed = v; if (coral) coral.post({ type: 'env', env: { speed: v } }); });
-  bindRange('sCaust', v => v.toFixed(2), v => { G.caust = v; if (S) { S.U.uCaust.value = v; S.opts.caustics = v > 0; } });
-  bindRange('sDown', v => v.toFixed(2), v => { G.down = v; if (S) S.U.uDown.value = v; });
-  toggle('tOrbit', 'orbit', () => {});
-  toggle('tPolyps', 'polyps', on => S && S.setPolypsVisible(on));
-  toggle('tBeam', 'beam', on => { if (S) S.opts.volume = on; });
-  toggle('tSnow', 'snow', on => { if (S) S.opts.snow = on; });
-  $('panelClose').addEventListener('click', () => setPanel(false));
-  $('gear').addEventListener('click', () => setPanel(true));
-  $('dockMenu').addEventListener('click', () => setPanel(!$('panel').classList.contains('open')));
-  // the sheet grip: a drag or a tap (layout.js sheetSnap)
-  const grip = $('sheetGrip');
-  let gy = null;
-  grip.addEventListener('pointerdown', e => { gy = e.clientY; grip.setPointerCapture(e.pointerId); });
-  grip.addEventListener('pointerup', e => {
-    if (gy === null) return;
-    const p = $('panel'), st = p.classList.contains('full') ? 'full' : 'half';
-    const nx = sheetSnap(st, e.clientY - gy); gy = null;
-    if (nx === 'closed') setPanel(false); else p.classList.toggle('full', nx === 'full');
-  });
-  grip.addEventListener('pointercancel', () => { gy = null; });
+  sheet = mountSheet({ panel: $('panel'), grip: $('sheetGrip'), menu: $('dockMenu'), close: $('panelClose'), gear: $('gear'), phoneQ: PHONE_Q });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && PHONE_Q.matches && sheet.open) sheet.setOpen(false); });
   const mark = () => { lastInput = nowMs(); if (!hintGone) { hintGone = true; setTimeout(() => $('hint').classList.add('gone'), 2500); } };
   if (S) { S.controls.addEventListener('start', mark); S.controls.addEventListener('end', mark); }
   setSpecies(G.species, false);
   setMode(G.mode);
-  setPanel(!PHONE_Q.matches);
-  PHONE_Q.addEventListener('change', e => setPanel(!e.matches));
+  setPlaying(G.playing);
 }
 
 function resize() {

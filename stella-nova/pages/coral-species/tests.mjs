@@ -18,6 +18,8 @@
 //                it skips with a note if jsdom is not there): the boot,
 //                the colony grows on the main thread runner, the UI, the
 //                saver hook, a phone boot
+//  8. panel ... panel-check.mjs (a child process): the sn-panel sections and
+//                controls, labels, keyboard order, the stored collapse state
 //  Exit code 1 if a check fails.
 // ============================================================================
 import fs from 'node:fs';
@@ -284,6 +286,17 @@ sect('7. static');
   const head = html.slice(0, html.indexOf('<meta charset'));
   ok(head.indexOf('gpu-guard.js') >= 0 && head.indexOf('gpu-guard.js') < head.indexOf('wishlist.js'), 'wishlist.js loads after gpu-guard.js');
   ok(/github\.com\/fogleman\/dlaf/.test(html) && fs.readFileSync(path.join(HERE, 'CREDITS.txt'), 'utf8').includes('Copyright (C) 2019 Michael Fogleman'), 'dlaf credit in the page and CREDITS.txt');
+}
+
+// panel (lib/sn-panel.js): panel-check.mjs in its own process
+sect('8. panel');
+{
+  let out = '', code = 0;
+  try { out = execFileSync(process.execPath, [path.join(HERE, 'panel-check.mjs')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 300000 }); }
+  catch (e) { out = String(e.stdout || '') + String(e.stderr || ''); code = e.status ?? 1; }
+  for (const l of out.trim().split('\n').filter(l => /^FAIL/.test(l))) console.log('  ' + l);
+  const sum = out.trim().split('\n').filter(l => /^panel-check:/.test(l)).pop() || `exit ${code}`;
+  ok(code === 0, `panel-check.mjs: ${sum}`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
