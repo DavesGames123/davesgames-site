@@ -2,28 +2,39 @@
 //  CNN EXPLAINER  ·  saver.js  the screensaver hook (window.snSaver)
 // ----------------------------------------------------------------------------
 //  Protocol: lib/screensaver.js. enter() hides the page, puts one canvas
-//  over the whole window and plays a seeded plan: the example photos in a
-//  shuffled order (each once before any repeat). Each photo gets a
-//  "pipeline" shot (the network lights up from the picture to the answer,
-//  then a probe walks over the maps and shows what feeds each cell) and
-//  one or two detail shots (convolution, ReLU, max pooling or softmax),
-//  drawn by the same scenes.js code as the page. Shots last 6 to 11 s with
-//  a fade between them. Everything sits in the clear band between the
-//  plate texts (lib/saver-clear.js plateBand), for 16:9 and the 9:16 column.
+//  over the whole window and plays the guided run of the page (tour.js)
+//  on one example photo after the other: a seeded shuffle, each photo
+//  once before any repeat. The run is the same as on the page: the
+//  picture splits into red, green and blue, each layer fills in with the
+//  data flowing from the layer before it, a few columns open in place to
+//  play their detail scene (the zoom layers change from photo to photo),
+//  the 1690 values flow into the class bars and the winner lights up.
+//  The answer holds for a few seconds, then the next photo fades in.
 //
-//  The saver keeps its own maps and results, so the page state stays.
+//  16:9: the columns layout, and a zoom opens its column in place (the
+//  other columns make room). 9:16: one row per layer (the ReLU rows are
+//  left out), and a zoom grows out of its map into a box in the middle of
+//  the band while the network dims. Everything sits in the clear band
+//  between the plate texts (lib/saver-clear.js plateBand).
 //
-//  grep -n 'export function shotPlan'   the seeded plan (no DOM)
+//  The plate changes twice per photo: at the start and at the answer.
+//  The saver keeps its own maps and results, so the page state stays; the
+//  page run waits while the saver plays (page.saverPause).
+//
+//  grep -n 'export function photoPlan'  the seeded photos and zoom layers
 //  grep -n 'export function fitNet'     the network layout in a band
 //  grep -n 'export function installSaver'
-//  grep -n 'function plateFor'          the plate of each shot
+//  grep -n 'function drawRun'           one frame of the run
+//  grep -n 'function drawPanel'         a zoom panel on the canvas
+//  grep -n 'function plateFor'          the plate at the start and the end
 // ============================================================================
-import { forward, ARCH, CLASSES } from './net.js';
+import { forward, CLASSES } from './net.js';
 import { EXAMPLES, exampleRGB } from './data.js';
-import { layoutNet, GRID } from './layout.js';
-import { drawNetwork, THEME } from './draw.js';
+import { layoutNet, zoomFrom, lerpRect } from './layout.js';
+import { drawNetwork, THEME, roundRect } from './draw.js';
 import { makeScene } from './scenes.js';
 import { createMaps } from './maps.js';
+import { tourPlan, segAt, flowState, zoomF, scanAt, busyMap, zoomStart } from './tour.js';
 import { plateBand } from '../../lib/saver-clear.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -34,77 +45,86 @@ export function rng(seed) {
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 
-const DETAIL_KINDS = [
-  { kind: 'conv', layers: [1, 3, 6, 8] },
-  { kind: 'relu', layers: [2, 4, 7] },
-  { kind: 'pool', layers: [5, 10] },
-  { kind: 'dense', layers: [11] },
-];
+// the layers a zoom of each kind can open on
+export const ZOOM_CHOICES = { conv: [1, 3, 6, 8], relu: [2, 4, 7, 9], pool: [5, 10] };
+export const HOLD_SEC = 3.5;   // the answer stays this long before the next photo
 
-// A list of shots: { id: 'pipeline' | 'conv' | 'relu' | 'pool' | 'dense',
-// ex (example index), li, c, sec, start (0..1 of the scan), gw (glide
-// speed factor) }. Seeded; the examples go in a shuffled order, each once
-// before a repeat; no detail kind twice in a row.
-export function shotPlan(seed, n = 40, calm = 0.7) {
+// A list of photos: { ex (example index), zooms: { conv, relu, pool,
+// dense: 11 } }. Seeded; the examples go in a shuffled order, each once
+// before a repeat; no zoom layer the same as on the photo before.
+export function photoPlan(seed, n = 40) {
   const R = rng(seed), out = [];
-  let bag = [], lastKind = '';
+  let bag = [], last = null;
   const nextEx = () => {
     if (!bag.length) { bag = EXAMPLES.map((_, i) => i); for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } }
     return bag.pop();
   };
   while (out.length < n) {
-    const ex = nextEx();
-    out.push({ id: 'pipeline', ex, li: 0, c: 0, sec: 8 + R() * 3 + calm * 1.5 });
-    const k = 1 + (R() < 0.45 ? 1 : 0);
-    for (let j = 0; j < k && out.length < n; j++) {
-      let d; do { d = DETAIL_KINDS[Math.floor(R() * DETAIL_KINDS.length)]; } while (d.kind === lastKind);
-      lastKind = d.kind;
-      const li = d.layers[Math.floor(R() * d.layers.length)];
-      out.push({ id: d.kind, ex, li, c: Math.floor(R() * 10), sec: 6 + R() * 4 + calm * 1.5, start: 0.15 + R() * 0.6 });
+    const zooms = { dense: 11 };
+    for (const [kind, ls] of Object.entries(ZOOM_CHOICES)) {
+      let li; do { li = ls[Math.floor(R() * ls.length)]; } while (last && li === last[kind]);
+      zooms[kind] = li;
     }
+    out.push({ ex: nextEx(), zooms });
+    last = zooms;
   }
   return out;
 }
 
 // The overview inside a band { x, y, w, h }: the columns layout when the
-// band is wide, the blocks layout scaled to fit when it is tall.
-const TALL_SKIP = new Set([2, 4, 7, 9]);
-export function fitNet(band) {
+// band is wide (expand: a zoom column opens in place), the blocks layout
+// scaled to fit when it is tall.
+export const TALL_SKIP = new Set([2, 4, 7, 9]);
+export function fitNet(band, expand = null) {
   const wide = band.w >= band.h * 1.05;
   if (wide) {
-    const L = layoutNet(band.w, band.h, 'h');
-    return { L, k: 1, ox: band.x, oy: band.y };
+    const L = layoutNet(band.w, band.h, 'h', expand ? { expand } : {});
+    return { L, k: 1, ox: band.x, oy: band.y, wide };
   }
   // tall (the 9:16 column): one row of ten maps per layer, the ReLU layers
   // left out (they look like the conv before them), bars in two columns,
   // scaled to fit the band
   const L = layoutNet(band.w, 0, 'v', { per: 10, skip: TALL_SKIP, barCols: 2, inline: true });
   const k = Math.min(1, band.w / L.w, band.h / L.h);
-  return { L, k, ox: band.x + (band.w - L.w * k) / 2, oy: band.y + (band.h - L.h * k) / 2 };
+  return { L, k, ox: band.x + (band.w - L.w * k) / 2, oy: band.y + (band.h - L.h * k) / 2, wide };
 }
 
-// the k-th (mod 5) busiest map of layer li: the largest spread of values
-export function busyMap(res, li, k) {
-  const L = res.layers[li], sp = [];
-  for (let c = 0; c < L.C; c++) {
-    let lo = Infinity, hi = -Infinity, on = 0;
-    for (let i = 0; i < L.H * L.W; i++) { const v = L.data[i * L.C + c]; if (v < lo) lo = v; if (v > hi) hi = v; if (v > 0) on++; }
-    sp.push({ c, s: (hi - lo) * Math.sqrt(on / (L.H * L.W) + 0.05) });
-  }
-  sp.sort((a, b) => b.s - a.s);
-  return sp[k % Math.min(5, sp.length)].c;
-}
+export { busyMap };
 
-function plateFor(shot, res) {
-  const ex = EXAMPLES[shot.ex], top = CLASSES[res.top], pc = (res.probs[res.top] * 100).toFixed(1) + '%';
+// the segment id that debug() and cut() use
+const segId = seg => (seg.kind === 'zoom' ? seg.zoom : seg.kind);
+
+function plateFor(when, photo, res) {
+  const ex = EXAMPLES[photo.ex], top = CLASSES[res.top], pc = (res.probs[res.top] * 100).toFixed(1) + '%';
   const credit = `Photo: ${ex.author}, ${ex.licence}, Wikimedia Commons`;
   const net = 'Tiny VGG from CNN Explainer, Wang et al., IEEE VIS 2020 (MIT)';
-  const label = ARCH[shot.li] ? ARCH[shot.li].label : '';
-  if (shot.id === 'pipeline') return { title: `It sees ${/^[aeiou]/.test(top) ? 'an' : 'a'} ${top}`, sub: `${pc} · a photo of ${ex.cls} through 12 layers and 19,920 weights`, tex: ['p_k = \\frac{e^{z_k}}{\\sum_{j} e^{z_j}}'], lines: [credit, net] };
-  if (shot.id === 'conv') return { title: 'Convolution', sub: `${label}, map ${shot.c + 1}: a 3 × 3 kernel slides over the maps before it`, tex: ['z_{y,x} = \\sum_{c}\\sum_{i,j} a_{c,\\,y+i,\\,x+j}\\, w_{c,i,j} + b'], lines: [credit, net] };
-  if (shot.id === 'relu') return { title: 'ReLU', sub: `${label}, map ${shot.c + 1}: negative values become zero`, tex: ['\\mathrm{ReLU}(x) = \\max(0,\\, x)'], lines: [credit, net] };
-  if (shot.id === 'pool') return { title: 'Max pooling', sub: `${label}, map ${shot.c + 1}: each 2 × 2 tile keeps its largest value`, tex: ['y = \\max(x_1, x_2, x_3, x_4)'], lines: [credit, net] };
-  return { title: 'Softmax', sub: `1690 numbers, ten scores, one answer: ${top} ${pc}`, tex: ['p_k = \\frac{e^{z_k}}{\\sum_{j=1}^{10} e^{z_j}}'], lines: [credit, net] };
+  if (when === 'answer') return { title: `It sees ${/^[aeiou]/.test(top) ? 'an' : 'a'} ${top}`, sub: `${pc} · 12 layers and 19,920 weights, from the pixels to the answer`, tex: ['p_k = \\frac{e^{z_k}}{\\sum_{j=1}^{10} e^{z_j}}'], lines: [credit, net] };
+  return { title: 'Layer by layer', sub: 'A small convolutional network looks at a 64 × 64 photo, one layer at a time', tex: ['z_{y,x} = \\sum_{c}\\sum_{i,j} a_{c,\\,y+i,\\,x+j}\\, w_{c,i,j} + b'], lines: [credit, net] };
+}
+
+// A zoom panel on the canvas. now: where the panel is in this frame;
+// final: its open box. The map tile shows while it is small, then the
+// scene fades in, drawn at the final size and scaled to now.
+function drawPanel(g, now, final, scene, t, f, im) {
+  const T = THEME;
+  g.save();
+  g.globalAlpha = Math.min(1, f * 4);
+  g.fillStyle = 'rgba(15,18,26,0.97)'; roundRect(g, now.x, now.y, now.w, now.h, 12 * Math.min(1, now.w / final.w + 0.1)); g.fill();
+  g.strokeStyle = 'rgba(255,160,110,0.32)'; g.lineWidth = 1; g.stroke();
+  const zt = 1 - smooth((f - 0.25) / 0.5), zc = smooth((f - 0.45) / 0.5);
+  if (zt > 0 && im && im.width) { g.globalAlpha = zt; g.imageSmoothingEnabled = false; g.drawImage(im, now.x, now.y, now.w, now.h); }
+  if (zc > 0 && scene) {
+    g.save();
+    g.translate(now.x, now.y); g.scale(now.w / final.w, now.h / final.h);
+    g.beginPath(); g.rect(0, 0, final.w, final.h); g.clip();
+    g.globalAlpha = zc;
+    g.font = `500 15px ${T.serif}`; g.fillStyle = T.ink; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillText(scene.title, 14, 24);
+    g.translate(6, 34);
+    scene.draw(g, final.w - 12, final.h - 40, t);
+    g.restore();
+  }
+  g.restore();
 }
 
 export function installSaver(page, { doc = document, win = window } = {}) {
@@ -116,7 +136,7 @@ export function installSaver(page, { doc = document, win = window } = {}) {
     if (run) exit();
     const calm = clamp(o.calm == null ? 0.7 : +o.calm, 0, 1);
     const seed = (o.seed >>> 0) || ((Math.random() * 2 ** 31) >>> 0) || 1;
-    const plan = shotPlan(seed, 60, calm);
+    const photos = photoPlan(seed, 60);
     const css = doc.createElement('style');
     css.textContent = 'html,body{overflow:hidden!important}body>*:not(#snSaverCv){visibility:hidden!important}' +
       '#snSaverCv{position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;display:block;cursor:none;touch-action:none;background:#0b0d13}';
@@ -125,101 +145,104 @@ export function installSaver(page, { doc = document, win = window } = {}) {
     doc.body.appendChild(cv);
     const maps = createMaps(doc);
     const st = page.state;
-    run = { plan, css, cv, maps, i: -1, tau: 0, last: 0, raf: 0, scene: null, shot: null, probe: null, subj: null, calm, labels: o.labels !== false, o, errs: 0, frames: 0, startShot: null };
+    // a calm saver plays the run a little slower than the page
+    const pace = 1 + calm * 0.25;
+    page.saverPause && page.saverPause(true);
+    run = { photos, css, cv, maps, pi: -1, tau: 0, last: 0, raf: 0, plan: null, photo: null, res: null, scene: null, segI: -1,
+      zoom: null, f: 0, calm, pace, labels: o.labels !== false, o, errs: 0, frames: 0, answered: false, tall: false, seg: null };
     const g = cv.getContext('2d');
-    function startShot(i) {
-      run.i = i; run.tau = 0;
-      const shot = plan[i % plan.length], res = resultOf(shot.ex);
+    const label = info => { if (typeof o.label === 'function') { try { o.label(Object.assign(info, { anchor: () => (run && run.subj ? run.subj : null) })); } catch (e) { /* the plate is optional */ } } };
+    function startPhoto(i, tall) {
+      run.pi = i; run.tau = 0; run.segI = -1; run.scene = null; run.zoom = null; run.answered = false;
+      const photo = photos[i % photos.length], res = resultOf(photo.ex);
       maps.set(res, { grad: st.grad || 'magma', rev: !!st.rev, scale: st.scale || 'layer' });
-      run.shot = shot; run.res = res;
-      // detail shots: each map uses the whole gradient, and the map is one
-      // of the five busiest of its layer (a sparse map reads as black)
-      if (shot.id !== 'pipeline') maps.set(null, { scale: 'map' });
-      run.scene = shot.id === 'pipeline' ? null : makeScene({ result: res, W: st.W, maps, li: shot.li, c: shot.id === 'dense' ? res.top : busyMap(res, shot.li, shot.c) });
-      if (run.scene && run.scene.count) run.t0 = Math.floor(shot.start * run.scene.count);
-      run.probe = null; run.cam = null;
-      if (typeof o.label === 'function') {
-        if (run.scene && shot.id !== 'dense') shot.c = run.scene.c;
-        try { o.label(Object.assign(plateFor(shot, res), { anchor: () => (run && run.subj ? run.subj : null) })); } catch (e) { /* the plate is optional */ }
-      }
+      run.photo = photo; run.res = res; run.tall = !!tall;
+      run.plan = tourPlan({ zooms: photo.zooms, skip: tall ? TALL_SKIP : null, pace: run.pace });
+      label(plateFor('start', photo, res));
     }
     function frame(now) {
       if (!run) return;
       const dt = Math.min(0.05, run.last ? (now - run.last) / 1000 : 0.016); run.last = now; run.dt = dt;
       const dpr = Math.min(2, win.devicePixelRatio || 1), w = win.innerWidth || 1280, h = win.innerHeight || 720;
       if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-      if (run.i < 0) startShot(0);
-      run.tau += dt;
-      if (run.tau >= run.shot.sec) startShot(run.i + 1);
-      const shot = run.shot, k = run.tau / shot.sec;
       const band = typeof o.label === 'function' ? plateBand(h) : null;
       const pw = band && band.w ? Math.min(w, band.w) : w;
       const top = band ? band.t : h * 0.06, bot = band ? band.b : h * 0.06;
       const m = Math.max(12, pw * 0.04);
       const B = { x: (w - pw) / 2 + m, y: top, w: pw - 2 * m, h: Math.max(120, h - top - bot) };
+      const tall = B.w < B.h * 1.05;
+      if (run.pi < 0) startPhoto(0, tall);
+      run.tau += dt;
+      if (run.tau >= run.plan.total + HOLD_SEC) startPhoto(run.pi + 1, tall);
       if (!g) { run.raf = win.requestAnimationFrame(frame); return; }
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.fillStyle = THEME.bg; g.fillRect(0, 0, w, h);
-      try { if (shot.id === 'pipeline') drawPipeline(g, B, k); else drawDetail(g, B, k); run.frames++; } catch (e) {
+      try { drawRun(g, B); run.frames++; } catch (e) {
         // skip a bad frame; count it for snSaver.debug()
         if (!run.errs++) console.warn('cnn-explainer saver: frame', e);
       }
-      const f = smooth(Math.min(run.tau, shot.sec - run.tau) / (0.5 + 0.6 * run.calm));
-      if (f < 1) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = `rgba(11,13,19,${1 - f})`; g.fillRect(0, 0, w, h); }
+      // a fade at the start and the end of each photo
+      const life = run.plan.total + HOLD_SEC;
+      const fa = smooth(Math.min(run.tau, life - run.tau) / (0.6 + 0.5 * run.calm));
+      if (fa < 1) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = `rgba(11,13,19,${1 - fa})`; g.fillRect(0, 0, w, h); }
       run.raf = win.requestAnimationFrame(frame);
     }
-    function drawPipeline(g2, B, k) {
-      const fit = fitNet(B), L = fit.L, res = run.res;
-      // the network lights up left to right in the first 45 % of the shot
-      const sweep = k / 0.45;
-      const reveal = li => clamp((sweep * 12 - li) / 1.6, 0, 1);
-      // then a probe walks over the maps: hover links and receptive fields
-      let hover = null;
-      if (k > 0.5) {
-        const slot = Math.floor((k - 0.5) / 0.5 * 4);
-        if (!run.probe || run.probe.slot !== slot) {
-          const R = rng((run.i + 1) * 977 + slot * 31);
-          const li = [3, 5, 6, 8, 10, 11][Math.floor(R() * 6)];
-          run.probe = li === 11 ? { slot, h: { kind: 'bar', i: res.top } } : { slot, h: { kind: 'map', li, c: Math.floor(R() * 10), gy: Math.floor(GRID[li] * (0.25 + R() * 0.5)), gx: Math.floor(GRID[li] * (0.25 + R() * 0.5)) } };
+    // one frame of the run at run.tau
+    function drawRun(g2, B) {
+      const plan = run.plan, t = Math.min(run.tau, plan.total), res = run.res;
+      const at = segAt(plan, t), seg = at.seg, fs = flowState(plan, t);
+      run.seg = seg;
+      if (at.i !== run.segI) {
+        run.segI = at.i;
+        if (seg.kind === 'zoom') {
+          const c = seg.li === 11 ? res.top : busyMap(res, seg.li, run.pi);
+          run.scene = makeScene({ result: res, W: page.state.W, maps, li: seg.li, c });
+          run.zoom = { li: seg.li, c, start: zoomStart(res, seg.li, c) };
+        } else { run.scene = null; run.zoom = null; }
+        if (seg.kind === 'answer' && !run.answered) { run.answered = true; label(plateFor('answer', run.photo, res)); }
+      }
+      const f = run.zoom ? zoomF(seg, at.local) : 0;
+      run.f = f;
+      const sceneT = run.scene ? scanAt(seg, at.local, run.zoom.start, run.scene.count) : 0;
+      if (run.scene && run.scene.st) run.scene.st.hold = false;
+      const flow = fs.ended ? null : { li: fs.li, k: fs.k, time: run.tau, reduced: false };
+      const wide = !run.tall && B.w >= B.h * 1.05;
+      if (wide) {
+        const fit = fitNet(B, run.zoom && f > 0 ? { li: run.zoom.li, f } : null), L = fit.L;
+        g2.save(); g2.translate(fit.ox, fit.oy);
+        drawNetwork(g2, L, { maps, result: res, flow, zoom: run.zoom && f > 0 ? { li: run.zoom.li, f } : null, labels: run.labels, barT: fs.barT, win: fs.win });
+        g2.restore();
+        if (run.zoom && f > 0) {
+          const base = fitNet(B).L, full = fitNet(B, { li: run.zoom.li, f: 1 }).L.zoom;
+          const from = zoomFrom(base, run.zoom.li, run.zoom.c, res.top);
+          const now = lerpRect(from, full, f);
+          const sh = r => ({ x: r.x + fit.ox, y: r.y + fit.oy, w: r.w, h: r.h });
+          drawPanel(g2, sh(now), sh(full), run.scene, sceneT, f, run.zoom.li === 11 ? null : maps.img(run.zoom.li, run.zoom.c));
+          run.subj = { x: fit.ox + full.x + full.w / 2, y: fit.oy + full.y + full.h / 2, w: full.w, h: full.h };
+        } else {
+          const col = L.cols.find(c => c.li === fs.li) || L.cols[0];
+          run.subj = { x: fit.ox + col.cx, y: B.y + B.h / 2, r: 60 };
         }
-        hover = run.probe.h;
+        return;
       }
-      // a slow push-in on the probed map in the second half, clipped to the band
-      const z = 1 + 0.5 * smooth((k - 0.52) / 0.3);
-      let tx = L.w / 2, ty = L.h / 2;
-      if (hover) {
-        const r = hover.kind === 'bar' ? L.bars[hover.i] : L.maps.find(m => m.li === hover.li && m.c === hover.c);
-        if (r) { tx = r.x + (r.s || r.w) / 2; ty = r.y + (r.s || r.h) / 2; }
+      // tall: the rows, scaled into the band; a zoom grows into a box in the middle
+      const fit = fitNet(B), L = fit.L;
+      g2.save(); g2.translate(fit.ox, fit.oy); g2.scale(fit.k, fit.k);
+      drawNetwork(g2, L, { maps, result: res, flow, labels: run.labels, barT: fs.barT, win: fs.win });
+      g2.restore();
+      if (run.zoom && f > 0) {
+        g2.fillStyle = `rgba(11,13,19,${0.62 * f})`; g2.fillRect(B.x, B.y, B.w, B.h);
+        const fw = B.w, fh = Math.min(B.h, B.w * 1.5), final = { x: B.x, y: B.y + (B.h - fh) / 2, w: fw, h: fh };
+        const r = zoomFrom(L, run.zoom.li, run.zoom.c, res.top);
+        const from = { x: fit.ox + r.x * fit.k, y: fit.oy + r.y * fit.k, w: r.w * fit.k, h: r.h * fit.k };
+        drawPanel(g2, lerpRect(from, final, f), final, run.scene, sceneT, f, run.zoom.li === 11 ? null : maps.img(run.zoom.li, run.zoom.c));
+        run.subj = { x: final.x + final.w / 2, y: final.y + final.h / 2, w: final.w, h: final.h };
+      } else {
+        const col = L.cols.find(c => c.li === fs.li) || L.cols[0];
+        run.subj = { x: B.x + B.w / 2, y: fit.oy + col.y * fit.k, r: 50 };
       }
-      if (!run.cam || k < 0.5) run.cam = { x: tx, y: ty };
-      const a = 1 - Math.exp(-run.dt * 1.6);
-      run.cam.x += (tx - run.cam.x) * a; run.cam.y += (ty - run.cam.y) * a;
-      const Tx = fit.ox + run.cam.x * fit.k, Ty = fit.oy + run.cam.y * fit.k;
-      const f = (z - 1) / 0.5, Cx = B.x + B.w / 2, Cy = B.y + B.h / 2;
-      const Px = Tx + (Cx - Tx) * f * 0.6, Py = Ty + (Cy - Ty) * f * 0.6;
-      g2.save();
-      g2.beginPath(); g2.rect(B.x, B.y, B.w, B.h); g2.clip();
-      g2.translate(Px, Py); g2.scale(z, z); g2.translate(-Tx, -Ty);
-      g2.translate(fit.ox, fit.oy); g2.scale(fit.k, fit.k);
-      drawNetwork(g2, L, { maps: run.maps, result: res, hover, reveal, labels: run.labels, barT: clamp((sweep - 0.85) / 0.25, 0, 1) });
-      g2.restore();
-      run.subj = { x: Px, y: Py, r: 40 * z };
     }
-    function drawDetail(g2, B, k) {
-      const sc = run.scene;
-      // calm scan speed; the dense scene plays its phases once
-      const t = sc.count ? Math.min(sc.count - 1, run.t0 + run.tau * (2.2 + (1 - run.calm) * 5)) : clamp(k * 1.15, 0, 0.999);
-      if (sc.st) sc.st.hold = false;
-      // scenes are made for a card: give them a box of a good shape inside the band
-      const wide = B.w >= B.h;
-      const bw = wide ? Math.min(B.w, B.h * 2.1) : B.w, bh = wide ? B.h : Math.min(B.h, B.w * 1.6);
-      const x = B.x + (B.w - bw) / 2, y = B.y + (B.h - bh) / 2;
-      g2.save(); g2.translate(x, y);
-      sc.draw(g2, bw, bh, t);
-      g2.restore();
-      run.subj = { x: x + bw / 2, y: y + bh / 2, w: bw, h: bh };
-    }
-    run.startShot = startShot;
+    run.startPhoto = startPhoto;
     run.raf = win.requestAnimationFrame(frame);
     win.__cnnSaver = true;
     return { canvas: cv, warmupMs: 400 };
@@ -229,16 +252,24 @@ export function installSaver(page, { doc = document, win = window } = {}) {
     win.cancelAnimationFrame(run.raf);
     run.cv.remove(); run.css.remove();
     run = null; win.__cnnSaver = false;
+    page.saverPause && page.saverPause(false);
     if (page.requestDraw) page.requestDraw();
   }
-  // cut(id): jump to the next shot of that kind and k (0..1) into it, for probes
+  // cut(id, k): jump to the next segment of that id ('flow', 'conv',
+  // 'relu', 'pool', 'dense', 'answer'; 'pipeline' is 'flow') and k (0..1)
+  // into it, for probes. It looks in this photo, then in the next one.
   function cut(id, k = 0.5) {
     if (!run) return false;
-    for (let j = Math.max(0, run.i + 1); j < run.i + 1 + run.plan.length; j++) {
-      if (run.plan[j % run.plan.length].id === id) { run.startShot(j); run.tau = run.shot.sec * k; return true; }
+    if (id === 'pipeline') id = 'flow';
+    if (!run.plan) run.startPhoto(0, run.tall);
+    for (let pass = 0; pass < 2; pass++) {
+      const from = pass === 0 ? run.segI + 1 : 0;
+      const seg = run.plan.segs.slice(Math.max(0, from)).find(q => segId(q) === id);
+      if (seg) { run.tau = seg.t0 + seg.sec * clamp(k, 0, 0.999); return true; }
+      run.startPhoto(run.pi + 1, run.tall);
     }
     return false;
   }
-  win.snSaver = { enter, exit, cut, debug: () => (run ? { i: run.i, id: run.shot && run.shot.id, ex: run.shot && run.shot.ex, tau: run.tau, frames: run.frames, errs: run.errs } : null) };
+  win.snSaver = { enter, exit, cut, debug: () => (run ? { i: run.pi, id: run.seg ? segId(run.seg) : null, li: run.seg ? run.seg.li : null, ex: run.photo && run.photo.ex, tau: run.tau, f: run.f, frames: run.frames, errs: run.errs } : null) };
   return win.snSaver;
 }

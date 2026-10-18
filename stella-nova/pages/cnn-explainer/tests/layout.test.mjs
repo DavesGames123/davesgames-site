@@ -6,7 +6,8 @@ import { layoutNet, hitTest, feeders, fieldMaps, GRID, zoomWidth, zoomFrom, lerp
 import { barWidths, fillOf, drawNetwork } from '../draw.js';
 import { denseBars, densePhases, isLand } from '../scenes.js';
 import { receptiveField, ARCH } from '../net.js';
-import { shotPlan, fitNet } from '../saver.js';
+import { photoPlan, fitNet, ZOOM_CHOICES } from '../saver.js';
+import { tourPlan } from '../tour.js';
 import { SCALES } from '../colour.js';
 
 let pass = 0, fail = 0;
@@ -40,18 +41,19 @@ ok(fieldMaps(2, 4, 1).join() === '4' && fieldMaps(3, 4, 1).length === 10 && fiel
 ok(GRID.length === ARCH.length, 'one grid size per layer');
 ok(SCALES.map(s => s.id).join() === 'map,layer,network', 'three colour scales');
 
-// saver plan: seeded, varied, every example before a repeat, cut lengths
+// saver plan: seeded, every example before a repeat, the zoom layers vary
 {
-  const a = shotPlan(7, 60, 0.7), b = shotPlan(7, 60, 0.7), c = shotPlan(8, 60, 0.7);
-  ok(JSON.stringify(a) === JSON.stringify(b), 'shotPlan is seeded');
-  ok(JSON.stringify(a) !== JSON.stringify(c), 'shotPlan differs by seed');
-  const firstEx = []; for (const s of a) if (s.id === 'pipeline' && firstEx.length < 20) firstEx.push(s.ex);
-  ok(new Set(firstEx).size === 20, 'the first 20 photos are all different', firstEx.join(','));
-  ok(a.every(s => s.sec >= 6 && s.sec <= 13), 'every shot lasts 6 to 13 s');
-  let rep = 0; let last = ''; for (const s of a) { if (s.id !== 'pipeline') { if (s.id === last) rep++; last = s.id; } }
-  ok(rep === 0, 'no detail kind twice in a row');
-  ok(['conv', 'relu', 'pool', 'dense'].every(k => a.some(s => s.id === k)), 'every detail kind plays');
-  ok(a.every(s => s.id === 'pipeline' || ARCH[s.li].type === s.id), 'detail shots name a layer of their kind');
+  const a = photoPlan(7, 60), b = photoPlan(7, 60), c = photoPlan(8, 60);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'photoPlan is seeded');
+  ok(JSON.stringify(a) !== JSON.stringify(c), 'photoPlan differs by seed');
+  ok(new Set(a.slice(0, 20).map(p => p.ex)).size === 20, 'the first 20 photos are all different', a.slice(0, 20).map(p => p.ex).join(','));
+  ok(a.every(p => Object.entries(ZOOM_CHOICES).every(([k, ls]) => ls.includes(p.zooms[k]) && ARCH[p.zooms[k]].type === k) && p.zooms.dense === 11), 'each zoom names a layer of its kind');
+  let rep = 0; for (let i = 1; i < a.length; i++) for (const k of ['conv', 'relu', 'pool']) if (a[i].zooms[k] === a[i - 1].zooms[k]) rep++;
+  ok(rep === 0, 'no zoom layer twice in a row');
+  ok(Object.entries(ZOOM_CHOICES).every(([k, ls]) => ls.every(li => a.some(p => p.zooms[k] === li))), 'every zoom layer plays in 60 photos');
+  const runs = a.slice(0, 20).map(p => tourPlan({ zooms: p.zooms }));
+  ok(runs.every(r => r.segs.filter(q => q.kind === 'flow').map(q => q.li).join() === '0,1,2,3,4,5,6,7,8,9,10,11'), 'the saver run of each photo visits every layer in order');
+  ok(runs.every(r => r.segs.filter(q => q.kind === 'zoom').length === 4 && r.total >= 30 && r.total <= 60), 'each saver run has four zooms and lasts 30 to 60 s');
 }
 // saver framing: the network fits the clear band at 16:9 and 9:16
 for (const [name, band] of [['16:9', { x: 51, y: 190, w: 1178, h: 400 }], ['16:9 small', { x: 20, y: 120, w: 600, h: 230 }], ['9:16', { x: 18, y: 260, w: 414, h: 700 }], ['9:16 short', { x: 16, y: 200, w: 340, h: 380 }]]) {
@@ -60,6 +62,10 @@ for (const [name, band] of [['16:9', { x: 51, y: 190, w: 1178, h: 400 }], ['16:9
   const s = L.s * f.k;
   ok(s >= 12, `saver ${name}: maps are ${s.toFixed(1)} px, large enough to read`);
   ok(W >= band.w * 0.6 || H >= band.h * 0.6, `saver ${name}: network fills the band (${(W / band.w * 100).toFixed(0)}% x ${(H / band.h * 100).toFixed(0)}%)`);
+  if (f.wide) {
+    const z = fitNet(band, { li: 6, f: 1 }), Z = z.L.zoom;
+    ok(Z && Z.x >= 0 && Z.x + Z.w <= band.w + 0.5 && Z.y + Z.h <= band.h, `saver ${name}: an open zoom column is inside the band`, JSON.stringify(Z));
+  }
 }
 
 // the inline zoom: one column opens, the others make room

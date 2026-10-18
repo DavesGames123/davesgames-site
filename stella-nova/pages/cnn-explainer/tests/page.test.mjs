@@ -5,7 +5,7 @@
 // the answer; pause, step, scrub, speed), a zoom the reader opens (it grows
 // in place, the run waits and goes on), "Show me", the class bars, every
 // example, the zoom of each layer type, the keyboard, hover tips, colours,
-// the explainer widgets, and the screensaver enter and exit. A third boot
+// the explainer widgets, and the screensaver (it plays the same run). A third boot
 // with prefers-reduced-motion checks the fade path.
 // page.advance(dt) is one frame of the page; the tests call it to play the
 // run fast (the jsdom frame loop runs too, between the awaits).
@@ -330,31 +330,44 @@ for (const size of [{ name: 'desktop 1280x800', width: 1280, height: 800, phone:
     doc.getElementById('creditsBtn').click();
     ok(!doc.getElementById('credits').hidden && doc.querySelectorAll('#creditsBody .cr-photos a').length === 20 && /MIT/.test(doc.getElementById('creditsBody').textContent), `${N}: credits list the photos and the MIT licence`);
     doc.getElementById('creditsClose').click();
-    // the screensaver
+    // the screensaver plays the same run
     ok(win.snSaver && typeof win.snSaver.enter === 'function' && typeof win.snSaver.exit === 'function', `${N}: window.snSaver has enter and exit`);
+    page.tour.seek(3); page.tour.playing = true;
     const plates = [];
     const res = win.snSaver.enter({ calm: 0.7, seed: 11, label: p => plates.push(p) });
     ok(res && res.canvas && doc.body.contains(res.canvas), `${N}: the saver canvas is in the document`);
+    ok(!page.tour.playing, `${N}: the page run waits while the saver plays`);
     await wait(250);
     const dbg = win.snSaver.debug();
-    ok(dbg && dbg.id === 'pipeline' && dbg.tau > 0, `${N}: the saver plays the first shot`, JSON.stringify(dbg));
-    ok(plates.length >= 1 && /^It sees/.test(plates[0].title) && plates[0].tex.length === 1, `${N}: the saver names the shot on the plate`, plates[0] && plates[0].title);
-    for (const id of ['conv', 'relu', 'pool', 'dense', 'pipeline']) {
+    ok(dbg && dbg.id === 'flow' && dbg.li === 0 && dbg.tau > 0, `${N}: the saver starts the run at the input`, JSON.stringify(dbg));
+    ok(plates.length >= 1 && plates[0].title === 'Layer by layer' && plates[0].tex.length === 1, `${N}: the saver names the run on the plate`, plates[0] && plates[0].title);
+    for (const id of ['conv', 'relu', 'pool', 'dense', 'answer', 'flow']) {
       for (const k of [0.1, 0.6, 0.95]) {
         ok(win.snSaver.cut(id, k), `${N}: saver cut to ${id}`);
         await wait(40);
       }
       const d = win.snSaver.debug();
-      ok(d.id === id && d.errs === 0 && d.frames > 0, `${N}: saver ${id} shot draws with no error`, JSON.stringify(d));
+      ok(d.id === id && d.errs === 0 && d.frames > 0, `${N}: saver ${id} segment draws with no error`, JSON.stringify(d));
+      if (['conv', 'relu', 'pool', 'dense'].includes(id)) {
+        win.snSaver.cut(id, 0.5); await wait(40);
+        ok(win.snSaver.debug().f > 0.95, `${N}: the saver ${id} zoom is open in its middle`, JSON.stringify(win.snSaver.debug()));
+      }
     }
+    ok(plates.some(p => /^It sees an? /.test(p.title)), `${N}: the saver names the answer at the end of a run`, plates.map(p => p.title).join(' | '));
     win.snSaver.exit();
     ok(!doc.getElementById('snSaverCv') && !win.__cnnSaver, `${N}: the saver exits and removes its canvas`);
-    // a detail shot of the saver draws with no error (jump the clock)
+    ok(page.tour.playing, `${N}: the page run goes on after the saver`);
+    // a second saver run, at 9:16, has no error
     const before = T.errors.length;
+    const iw = win.innerWidth, ih = win.innerHeight;
+    win.innerWidth = 405; win.innerHeight = 720;
     win.snSaver.enter({ calm: 0.2, seed: 3, label: () => {} });
     await wait(60);
+    for (const id of ['flow', 'conv', 'relu', 'dense', 'answer']) { win.snSaver.cut(id, 0.5); await wait(40); }
+    const d9 = win.snSaver.debug();
     win.snSaver.exit();
-    ok(T.errors.length === before, `${N}: a second saver run has no error`);
+    win.innerWidth = iw; win.innerHeight = ih;
+    ok(T.errors.length === before && d9.errs === 0 && d9.frames > 3, `${N}: a 9:16 saver run has no error`, JSON.stringify(d9));
     ok(T.errors.length === 0, `${N}: no errors`, T.errors.slice(0, 5).join(' | '));
   } catch (e) {
     ok(false, `${N}: test threw`, e.stack);
