@@ -193,6 +193,27 @@ function tilted(e, ctl) {
   ok(!threw && c4.enabled === false, 'storage that throws: set works in memory');
 }
 
+// ------------------------------------------------------- subscribe ----
+{
+  const q = [];
+  const e = env({ raf: (f) => { q.push(f); return q.length; } });
+  const ctl = createTilt(e);
+  let calls = 0, lastO = null;
+  const un = ctl.subscribe((o) => { calls++; lastO = o; });
+  const pump = (n) => { for (let i = 0; i < n && q.length; i++) { e.t += 16; q.shift()(); } };
+  pump(5);
+  const idle = calls;
+  for (let i = 0; i < 10; i++) { e.t += 16; ctl.onOrientation({ alpha: 0, beta: 40, gamma: 0 }, 0); }
+  for (let i = 0; i < 10; i++) { e.t += 16; ctl.onOrientation({ alpha: 0, beta: 40, gamma: 10 }, 0); }
+  pump(1); pump(1);
+  ok(calls > idle && lastO.yaw > 0, 'subscribe: frames while the offset moves');
+  let n = 0; while (q.length && n < 5000) { pump(1); n++; }
+  ok(q.length === 0 && n < 5000, 'subscribe: the frames stop when it settles', n);
+  ok(Math.abs(lastO.yaw) < 1e-3, 'subscribe: last frame is near 0 (stale, then settled)', lastO.yaw);
+  un(); e.t += 16; ctl.onOrientation({ alpha: 0, beta: 40, gamma: 0 }, 0);
+  ok(q.length === 0, 'unsubscribe: no more frames');
+}
+
 // ------------------------------------------------------ permission ----
 function fakeWin() {
   const L = {};

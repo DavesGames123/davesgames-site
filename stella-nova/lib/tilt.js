@@ -21,6 +21,8 @@
 //    const { yaw, pitch } = snTilt.get();    // radians, 0 when off
 //  or turn the eye of their own lookAt (import { tiltEye } from this file):
 //    view = lookAt(tiltEye(eye, target, up), target, up);
+//  A page that draws only on demand also asks for a frame on each change:
+//    tilt && tilt.subscribe(() => { dirty = true; kick(); });
 //
 //  HOW THE THREE.JS WRAP WORKS
 //    WebGLRenderer.render calls scene.onBeforeRender after it updates the
@@ -228,7 +230,7 @@ export function writeSetting(storage, on, key = TUNING.key) {
 }
 
 // ----------------------------------------------------------- controller ----
-// env = { now(), visible(), saver(), reducedMotion(), storage, search }
+// env = { now(), visible(), saver(), reducedMotion(), storage, search, raf }
 export function createTilt(env = {}, tuning) {
   const core = createCore(tuning);
   const now = env.now || (() => Date.now());
@@ -252,9 +254,27 @@ export function createTilt(env = {}, tuning) {
     }
     return { yaw: ctl.last.yaw, pitch: ctl.last.pitch };
   };
+  // Pages that draw only on demand subscribe: fn(offset) runs once per
+  // animation frame while the offset moves, and once more when it stops.
+  const subs = new Set();
+  let raf = 0;
+  ctl.moving = () => {
+    const S = core.state;
+    return Math.abs(S.x[0]) + Math.abs(S.x[1]) + Math.abs(S.v[0]) + Math.abs(S.v[1]) > 1e-6
+      || (now() - S.lastEv <= core.tuning.staleMs && Math.abs(S.target[0]) + Math.abs(S.target[1]) > 1e-7);
+  };
+  const tick = () => {
+    raf = 0;
+    const o = ctl.get();
+    subs.forEach((f) => { try { f(o); } catch (e) {} });
+    if (subs.size && ctl.active() && ctl.moving()) kick();
+  };
+  const kick = () => { if (!raf && subs.size && env.raf) raf = env.raf(tick) || 1; };
+  ctl.subscribe = (fn) => { subs.add(fn); kick(); return () => subs.delete(fn); };
   ctl.onOrientation = (ev, angle) => {
     if (ctl.permission === 'unknown' && ev && ev.beta != null) ctl.permission = 'granted';
     core.push(ev, angle, now());
+    if (ctl.active()) kick();
   };
   ctl.recentre = () => core.recentre();
   ctl.set = (on) => {
@@ -468,6 +488,7 @@ export function bootTilt(win) {
     visible: () => win.document.visibilityState !== 'hidden',
     saver: () => inSaver(win),
     reducedMotion: () => !!(rm && rm.matches),
+    raf: (f) => win.requestAnimationFrame(f),
   });
   win.snTilt = ctl;
   if (!ctl.supported) return ctl;
