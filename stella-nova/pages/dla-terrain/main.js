@@ -35,6 +35,14 @@
 //  vegetation when the sky has drawVolumetric (one haze, not two); a
 //  quality change calls module.setQuality(q) on each module.
 //
+//  BOOT ORDER  loadLib -> the worker (beside) -> bootGPU (device, terrain
+//  textures, post, fallback ground and sky) -> the frame loop and
+//  generate() at once -> loadModules in the background: each module is
+//  hot-plugged when its create resolves (plugModule) and takes the place of
+//  its fallback. A slim line (#loadLine, "── LOADING") shows the modules and
+//  the asset megabytes until they are in. So the first second shows the
+//  terrain forming, never a blank canvas.
+//
 //  SAVER  window.snSaver = { enter(opts), exit() } (see "── SAVER"). The
 //  shot plan is saver.js. P toggles the in-page saver.
 //
@@ -62,7 +70,7 @@
 //  band (saver.js framing).
 //
 //  grep -n targets: "── APP", "── BOOT", "── MODULES", "── GENERATE",
-//  "── LOOP", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
+//  "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
 import { createTerrainGPU } from './gpu/terrain-gpu.js';
@@ -304,17 +312,26 @@ async function makeWorker() {
   };
 }
 
+// the device, the terrain textures, shadows, post, the frame graph and the
+// fallback ground and sky: enough to draw. The package modules load later
+// (loadModules, not awaited), so the canvas is never blank while they and
+// their assets download.
+let manifestP = null;
 async function bootGPU() {
-  let assets = null;
-  try {
-    const gl = await import('../../lib/glb-lite.js');
-    if (gl.loadNatureManifest) assets = await gl.loadNatureManifest(new URL('../../assets/nature/', import.meta.url).href);
-  } catch (e) { console.warn('dla-terrain: no nature assets', e); }
-  gpu = await createGPU(canvas, { qualityIndex: app.qualityIndex, assets, coarse });
+  // the nature manifest (a small JSON) loads beside the device, not before it
+  manifestP = manifestP || (async () => {
+    try {
+      const gl = await import('../../lib/glb-lite.js');
+      if (gl.loadNatureManifest) return await gl.loadNatureManifest(new URL('../../assets/nature/', import.meta.url).href);
+    } catch (e) { console.warn('dla-terrain: no nature assets', e); }
+    return null;
+  })();
+  gpu = await createGPU(canvas, { qualityIndex: app.qualityIndex, assets: null, coarse });
   app.gpu = gpu;
   gpu.device.lost.then(info => onLost(info));
   gpu.device.addEventListener && gpu.device.addEventListener('uncapturederror', e => console.warn('dla-terrain GPU:', e.error && e.error.message));
   tg = await createTerrainGPU(gpu);
+  app.tg = tg;   // for the console and the tests
   sh = createShadowMaps(gpu);
   gpu.shadows = sh;
   post = await createPost(gpu);
@@ -326,36 +343,102 @@ async function bootGPU() {
   fg.fallbacks.ground = await createFallbackGround(gpu);
   fg.fallbacks.sky = await createFallbackSky(gpu);
   resize();
-  await loadModules();
 }
 
 // ── MODULES ─────────────────────────────────────────────────────────────
+// Each module is created in the background and hot-plugged when its create
+// resolves: it goes into fg.modules in MODULES order (so it takes the place
+// of its fallback), then wireModules, resize and setTerrain with the view on
+// screen now. A test can hold the creates with window.__dlaTerrainGate
+// (role -> Promise); the page never sets it.
 async function loadModules() {
-  const results = await Promise.all(MODULES.map(async d => {
+  const g = gpu, f0 = fg;
+  const assets = await manifestP;
+  if (gpu !== g) return;                     // the device was lost meanwhile
+  gpu.assets = assets;
+  loading.start(MODULES.map(d => d.role), assets);
+  await Promise.all(MODULES.map(async d => {
+    let mod = null;
     try {
+      const gate = window.__dlaTerrainGate;
+      if (typeof gate === 'function') await gate(d.role);
       const m = await import(d.url);
       const f = m[d.fn] || Object.values(m).find(v => typeof v === 'function' && /^create/.test(v.name));
       if (!f) throw new Error('no ' + d.fn);
-      const mod = await f(gpu);
+      mod = await f(g);
       if (!mod) throw new Error(d.fn + ' returned nothing');
       mod.role = d.role; mod.label = d.label; mod.name = mod.name || d.role;
-      return mod;
     } catch (e) {
       // a module that is not there yet (404) is quiet; a broken one is named
       const missing = /Failed to fetch|Importing a module script failed|error loading dynamically imported module|Cannot find module|404/i.test(String(e && e.message));
       console.warn(`dla-terrain: ${d.url} ${missing ? 'is missing' : 'failed'}`, e);
       if (!missing) ui.notice(`${d.label} did not load: ${String(e && e.message || e).slice(0, 80)}`);
-      return null;
     }
+    if (mod && fg === f0 && gpu === g) plugModule(mod); else if (mod && mod.dispose) try { mod.dispose(); } catch { /* old device */ }
+    loading.settled(d.role, mod);
   }));
-  fg.modules = results.filter(Boolean);
-  wireModules();
-  const ctx = fg.ctx();
-  for (const m of fg.modules) {
-    try { if (m.resize) m.resize(fg.w, fg.h, ctx); } catch (e) { console.warn(e); }
-    try { if (tg.view && m.setTerrain) m.setTerrain(tg.view); } catch (e) { console.warn(e); }
-  }
 }
+function plugModule(mod) {
+  const order = r => MODULES.findIndex(d => d.role === r);
+  fg.modules = fg.modules.concat(mod).sort((a, b) => order(a.role) - order(b.role));
+  wireModules();
+  try { if (mod.resize) mod.resize(fg.w, fg.h, fg.ctx()); } catch (e) { console.warn(e); }
+  try { if (tg.view && mod.setTerrain) mod.setTerrain(tg.view); } catch (e) { console.warn(e); }
+}
+
+// ── LOADING  the slim line "Loading textures and models 12 / 44 MB": the bytes are the
+// resource timings of files under assets/nature/, the total is the default
+// set of the manifest (totals.defaultBytes). It goes when every module is in
+// and the ground textures and the plant models have settled.
+const loading = {
+  pending: new Set(), waits: [], bytes: 0, total: 0, timer: 0, obs: null, done: false,
+  start(roles, assets) {
+    this.pending = new Set(roles); this.waits = []; this.done = false;
+    this.total = (assets && assets.manifest && assets.manifest.totals && assets.manifest.totals.defaultBytes) || 0;
+    try {
+      if (!this.obs && typeof PerformanceObserver !== 'undefined') {
+        this.obs = new PerformanceObserver(list => {
+          for (const e of list.getEntries()) if (/\/assets\/nature\//.test(e.name)) this.bytes += e.transferSize || e.encodedBodySize || 0;
+        });
+        this.obs.observe({ type: 'resource', buffered: true });
+      }
+    } catch { this.obs = null; }
+    clearInterval(this.timer);
+    this.timer = setInterval(() => this.show(), 250);
+    this.show();
+  },
+  settled(role, mod) {
+    this.pending.delete(role);
+    const w = mod && (mod.texturesReady || mod.ready);
+    if (w && typeof w.then === 'function') {
+      const p = Promise.resolve(w).catch(() => {});
+      this.waits.push(p);
+      p.then(() => { this.waits = this.waits.filter(x => x !== p); this.show(); });
+    }
+    this.show();
+  },
+  text() {
+    const mb = v => (v / 1048576).toFixed(v < 10485760 ? 1 : 0);
+    const names = MODULES.filter(d => this.pending.has(d.role)).map(d => d.label.toLowerCase());
+    const size = this.total ? ` ${mb(Math.min(this.bytes, this.total))} / ${mb(this.total)} MB` : this.bytes ? ` ${mb(this.bytes)} MB` : '';
+    if (names.length) return `Loading ${names.join(', ')}${this.waits.length || this.bytes ? ' · textures and models' + size : ''}`;
+    return `Loading textures and models${size}`;
+  },
+  show() {
+    const el = $('loadLine');
+    if (!this.pending.size && !this.waits.length) {
+      clearInterval(this.timer); this.done = true;
+      if (el) el.hidden = true;
+      return;
+    }
+    if (!el) return;
+    el.hidden = false;
+    const t = $('loadText'); if (t) t.textContent = this.text();
+    const f = $('loadFill');
+    if (f) f.style.width = (this.total ? Math.min(100, 100 * this.bytes / this.total) : (100 * (MODULES.length - this.pending.size) / MODULES.length)).toFixed(1) + '%';
+  },
+};
+app.loading = loading;
 
 // cross-package wiring (NOTES.md): the sky haze replaces the ground's own
 // aerial perspective, and the cloud shadow of the sky reaches the ground
@@ -562,6 +645,7 @@ function loop(now) {
   try { fg.render(frame); } catch (e) { console.warn('dla-terrain: frame failed', e); }
   prevVP = m.viewProjNoJitter;
   frameNo++;
+  app.frames = frameNo;
   if (!saving) fg.tick(ms);
   if (frameNo % 3 === 0) ui.drawMap(cam);
   if (frameNo % 15 === 0) statusLine(st);
@@ -949,6 +1033,7 @@ async function onLost(info) {
   try {
     await bootGPU();
     if (app.terrain) setTerrainAll(tg.finish(app.terrain));
+    loadModules();
     ui.toast('The GPU restarted');
   } catch (e) { console.warn(e); }
 }
@@ -974,19 +1059,25 @@ async function main() {
   ui.syncSky(); ui.syncView(); ui.syncMix(); ui.syncLocks();
   addEventListener('hashchange', onHash);
   if (app.libKind === 'stub') ui.notice('lib/dla-terrain.js is not there yet: a plain noise terrain stands in');
+  // the worker starts beside the device; the first frame draws as soon as
+  // the fallbacks exist, and the terrain forms from DLA in that first view
+  const workerP = makeWorker();
+  let gpuOk = false;
   try {
     await bootGPU();
+    gpuOk = true;
   } catch (e) {
     console.warn('dla-terrain: no WebGPU', e);
     $('nogpu').hidden = false;
   }
-  await makeWorker();
+  requestAnimationFrame(loop);
+  await workerP;
   booted = true;
   app.generate();
   writeHash(false);
   app.hist.push(app.lastHash);
   ui.syncHistory();
   if (Q.get('cam') === 'drone') setTimeout(() => app.drone('ridge'), 4000);
-  requestAnimationFrame(loop);
+  if (gpuOk) loadModules();
 }
 main();

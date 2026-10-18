@@ -40,6 +40,7 @@
                 time of day, weather (layout.js has the sizes)
      #histBack #histFwd #copyLink  the rolled worlds (world-state.js); the
                 URL hash holds the full world, so a link reloads it
+     #loadLine  the slim line while the modules and assets load (main.js)
      #notice    a module that did not load
      #credits   the credits drawer
      #nogpu     the message when WebGPU is missing
@@ -78,6 +79,7 @@
     <button id="mapToggle" type="button" aria-label="Hide the map">–</button>
   </figure>
   <div id="hint" data-saver-hide>Drag to turn · scroll to zoom · F fly · O orbit · G drone</div>
+  <div id="loadLine" data-saver-hide role="status" aria-live="polite" hidden><span id="loadText">Loading</span><i><b id="loadFill"></b></i></div>
   <div id="notice" data-saver-hide role="status" aria-live="polite" hidden></div>
   <div id="toast" data-saver-hide role="status" aria-live="polite" hidden></div>
   <div id="nogpu" hidden>
