@@ -8,6 +8,7 @@
      grep -n 'DETAIL'    the selected-object drawer
      grep -n 'PANEL'     the controls (desktop: left column)
      grep -n 'PHONE'     dock, bottom sheets, one view at a time
+     grep -n 'FEYNMAN'   the Feynman diagram card (#feyn, feynman-card.js)
    ========================================================================== */
 :root{
   --ink:#04060b; --ink2:#0a0d16; --ink3:#121726; --text:#e2e6f0; --dim:#8a90a6; --faint:#272d42;
@@ -45,7 +46,7 @@ body.detail-open #stage{right:var(--detail-w)}
 #views.rphi,#views.rz,#views.lego,#views.d3{grid-template-columns:1fr}
 #views .view{position:relative;min-width:0;min-height:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#04060b}
 #views.split .view[data-v="lego"],#views.split .view[data-v="3d"]{display:none}
-#views.rphi .view:not([data-v="rphi"]),#views.rz .view:not([data-v="rz"]),#views.lego .view:not([data-v="lego"]),#views.d3 .view:not([data-v="3d"]){display:none}
+#views.rphi .view:not([data-v="rphi"]):not(.fy),#views.rz .view:not([data-v="rz"]):not(.fy),#views.lego .view:not([data-v="lego"]):not(.fy),#views.d3 .view:not([data-v="3d"]):not(.fy){display:none}
 .view header{position:absolute;left:10px;top:8px;z-index:3;display:flex;gap:8px;align-items:baseline;pointer-events:none}
 .view header b{font-weight:600;font-size:0.72rem;letter-spacing:0.16em;text-transform:uppercase;color:#cfe8ff}
 .view header span{font-size:0.66rem;color:var(--dim)}
@@ -72,6 +73,30 @@ body.detail-open #stage{right:var(--detail-w)}
 .pbusy i{width:9px;height:9px;border-radius:50%;background:var(--beam);box-shadow:0 0 10px var(--beam);animation:pulse 0.9s ease-in-out infinite alternate}
 @keyframes pulse{from{opacity:0.25;transform:scale(0.7)}to{opacity:1;transform:scale(1.1)}}
 #nogl{position:fixed;top:calc(var(--top) + 14px);right:16px;z-index:50;padding:10px 14px;border:1px solid rgba(255,120,100,0.4);color:#ffb0a0;background:var(--ink2);border-radius:8px;max-width:50ch}
+
+/* FEYNMAN: the card of the event diagram. Desktop: over the top right of
+   the views (out of the grid), with a fold button. Phone: a lower view. */
+#views .view.fy{position:absolute;top:8px;right:8px;z-index:4;width:clamp(260px,30%,380px);max-height:calc(100% - 16px);display:flex;flex-direction:column;background:rgba(6,8,14,0.92);border-color:var(--line-b);font-family:var(--sci-sans)}
+#views .view.fy.folded{width:auto}
+.fy-head{display:flex;align-items:center;gap:8px;padding:6px 6px 4px 12px;flex:0 0 auto}
+.fy-head b{font-family:var(--sci-serif);font-weight:500;font-size:0.95rem;color:#eef2fb;white-space:nowrap}
+.fy-sub{font-size:0.64rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fy-fold{margin-left:auto;flex:0 0 auto;height:26px;padding:0 10px;border:1px solid var(--line-b);border-radius:13px;background:var(--ink3);color:var(--beam);font-size:0.66rem}
+.fy.folded .fy-body,.fy.folded .fy-sub{display:none}
+.fy-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 12px 10px;scrollbar-width:thin}
+.fy-title{font-family:var(--sci-serif);font-size:1.02rem;color:#f5f7fd;margin:0 0 2px}
+.fy-svg{width:100%;max-width:100%;overflow:hidden}
+.fy-svg svg{display:block;width:100%;height:auto;max-height:240px;overflow:visible}
+.fy-svg .fy-l{transition:opacity 0.15s,stroke-width 0.15s}
+.fy-svg .has-focus .fy-l:not(.on){opacity:0.32}
+.fy-svg .fy-l.on{stroke-width:3.2px}
+.fy-text,.fy-cpl,.fy-note{font-size:0.72rem;line-height:1.5;color:#b9c0d2;margin-top:4px}
+.fy-note{color:var(--dim);font-size:0.66rem}
+.fy-k{color:var(--beam);font-weight:600;margin-right:2px}
+.fy-c{overflow-wrap:anywhere}
+.fy-sym{display:inline-block;margin-right:4px;color:#eef2fb;line-height:0;vertical-align:middle}
+.fy-sym svg{overflow:visible}
+.fy-sep{color:var(--dim)}
 
 /* STRIP */
 #strip{position:absolute;left:10px;right:10px;bottom:10px;height:var(--strip-h);display:grid;grid-template-columns:1.25fr 1fr;gap:8px;z-index:6;transition:height 0.24s cubic-bezier(0.4,0,0.2,1)}
@@ -166,6 +191,7 @@ body.detail-open #stage{right:var(--detail-w)}
   .grid3 button,.tog,.card,#panelClose{min-height:44px;font-size:0.78rem;border-radius:10px}
   .row{min-height:44px} .row select{min-height:40px;font-size:0.84rem}
   .pclock button{width:38px;height:38px}
+  .fy-fold{height:44px;min-width:64px;border-radius:12px;font-size:0.78rem}
 }
 /* PHONE: one view at a time, the strip in a sheet */
 @media (max-width:768px), (max-height:500px) and (pointer:coarse){
@@ -180,6 +206,12 @@ body.detail-open #stage{right:var(--detail-w)}
   #views.t .view[data-v="3d"]{display:block!important;grid-area:d3}
   #views.t .view.ph:not([data-v="3d"]){grid-area:low}
   #views.t ~ #vtabs button[data-v="3d"]{display:none}
+  #views .view.fy{position:relative;top:auto;right:auto;width:auto;max-height:none;z-index:auto}
+  #views .view.fy.ph{display:flex!important}
+  .fy-fold{display:none}
+  .fy.folded .fy-body,.fy.folded .fy-sub{display:block}
+  .fy-svg svg{max-height:none}
+  #vtabs button{min-width:0;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #vtabs{display:flex;position:absolute;top:6px;left:6px;right:6px;gap:4px}
   #vtabs button{flex:1;height:34px;border:1px solid var(--line);border-radius:9px;background:var(--ink2);color:var(--dim);font-size:0.74rem}
   #vtabs button.on{border-color:var(--beam);color:var(--beam)}

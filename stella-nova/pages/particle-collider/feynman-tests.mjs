@@ -15,12 +15,21 @@
 //    time ......... nothing drawn before the beams come in, the incoming
 //                   lines done at t = 0, everything done at t = 4 ns
 //    colours ...... each final-state line has its detector track colour
+//    time order ... a line leaves a vertex only after the lines into it are
+//                   complete; drawState and toSVG agree
+//    text ......... one sentence per process, every coupling named
+//    objects ...... in 20 transported events each final-state line finds
+//                   its detector object (track, jet, MET) of the same colour
+//    page ......... the card markup, the phone tab, the saver rule, 44 px
+//                   targets, [hidden], no horizontal scroll (text checks)
 //    MathJax ...... with FEYN_MATHJAX=<dir that holds node_modules/
 //                   mathjax-full>, every label and coupling typesets with
-//                   no error and the typeset labels do not overlap
+//                   no error and the typeset labels do not overlap;
+//                   with jsdom in the same folder, the card itself: MathJax
+//                   labels, lines that grow with time, click and focus
 //  The exit code is the number of failures.
 // ============================================================================
-import { diagramFor, toSVG, FP, COUPLINGS, frontAt, lineFrac, colorOf, extent } from './feynman.js';
+import { diagramFor, toSVG, FP, COUPLINGS, frontAt, lineFrac, colorOf, extent, drawState, couplingText, lineObjects } from './feynman.js';
 import { generate, SCENARIOS, BEAMS, available } from './generators.js';
 import { makeRng } from './transport.js';
 import { CLASS_COLOR } from './particles.js';
@@ -196,6 +205,98 @@ for (const d of D) for (const L of d.lines) if (L.ext === 'out' && !L.p.startsWi
 }
 ok(colBad === 0, `final-state colours: muons ${CLASS_COLOR.mu}, electrons ${CLASS_COLOR.e}, photons ${CLASS_COLOR.gamma}, neutrinos (missing ET) ${CLASS_COLOR.nu}, quarks and gluons the jet colour (${colBad} bad)`);
 
+// ── time order (the card draws with drawState) ─────────────────────────────
+// A line leaves a vertex only after every line that comes into the vertex
+// from the left is complete, and drawState gives the same picture as toSVG.
+let oBad = 0, oMsg = '', sdBad = 0;
+for (const d of D) {
+  const N = Object.fromEntries(d.nodes.map(x => [x.id, x]));
+  const left = L => N[L.a].x <= N[L.b].x ? L.a : L.b, right = L => left(L) === L.a ? L.b : L.a;
+  for (let t = -4.2; t <= 4.4; t += 0.1) {
+    const st = drawState(d, frontAt(d, t));
+    for (const v of d.nodes.filter(v => v.cpl)) {
+      const into = d.lines.filter(L => !L.loop && !L.spacelike && right(L) === v.id && N[left(L)].x < v.x - 1e-6);
+      const outOf = d.lines.filter(L => !L.loop && !L.spacelike && left(L) === v.id && N[right(L)].x > v.x + 1e-6);
+      if (outOf.some(L => st.lines[L.i].f > 0) && into.some(L => st.lines[L.i].f < 1)) { oBad++; oMsg = `${d.key} at ${v.id}, t = ${t.toFixed(1)}`; }
+      if (!st.nodes.find(n => n.id === v.id).on && outOf.some(L => st.lines[L.i].f > 0)) { oBad++; oMsg = `${d.key}: ${v.id} hidden while its lines draw`; }
+    }
+  }
+  for (const t of [-3, -1, 0.5, 2, 5]) {
+    const X = frontAt(d, t), st = drawState(d, X), svg = toSVG(d, { front: X }).svg;
+    for (const L of st.lines) {
+      if (!svg.includes(`class="fy-l" data-i="${L.i}" d="${L.d}"`)) sdBad++;
+      if (d.lines[L.i].arrow && !svg.includes(`class="fy-a" data-i="${L.i}" d="`) ) sdBad++;
+    }
+    const nA = (svg.match(/class="fy-a"[^>]*opacity="1"/g) || []).length;
+    if (nA !== st.lines.filter(L => L.arrow).length) sdBad++;
+  }
+}
+ok(oBad === 0, `time order: a line leaves a vertex only after the lines into it are complete, and the vertex shows first (${oBad} bad${oMsg ? ': ' + oMsg : ''})`);
+ok(sdBad === 0, `drawState gives the same paths and arrows as toSVG at five event times (${sdBad} bad)`);
+
+// ── the one-line description and the couplings named ───────────────────────
+let tBad2 = 0, tMsg = '';
+for (const d of D) {
+  if (/\n/.test(d.text) || d.text.length > 260 || !/\.$/.test(d.text)) { tBad2++; tMsg = `${d.key}: text`; }
+  const ct = couplingText(d);
+  if (ct.length !== d.couplings.length) { tBad2++; tMsg = `${d.key}: couplings`; }
+  for (const c of ct) if (!c.text.startsWith(COUPLINGS[c.key].name) || !/at (one vertex|\d+ vertices)$/.test(c.text)) { tBad2++; tMsg = `${d.key}: ${c.text}`; }
+  if (d.key !== 'gun' && !ct.length) { tBad2++; tMsg = `${d.key}: no coupling`; }
+}
+ok(tBad2 === 0, `each diagram has a one-line description and names every coupling with its vertex count (${tBad2} bad${tMsg ? ': ' + tMsg : ''}; ${[...new Set(D.flatMap(d => d.couplings.map(c => c.name)))].join(', ')})`);
+
+// ── detector objects: full events through the transport engine ──────────────
+{
+  const { createEngine } = await import('./transport.js');
+  const { reconstruct } = await import('./reco.js');
+  const { buildObjects } = await import('./picking.js');
+  const ENG = createEngine({ maxSeg: 60000, segShowerMinE: 12 });
+  const RUNS = [['pp', 13.6e6, 'zmm'], ['pp', 13.6e6, 'zee'], ['pp', 13.6e6, 'hgg'], ['pp', 13.6e6, 'h4l'], ['pp', 13.6e6, 'tt'], ['pp', 13.6e6, 'jj'], ['ee', 250000, 'hgg'], ['ee', 91190, 'zmm'], ['ee', 3e6, 'jj'], ['pp', 13.6e6, 'gun']];
+  let nLines = 0, nHit = 0, cBad2 = 0, cMsg = '', kindBad = 0, kMsg = '';
+  for (let r = 0; r < RUNS.length; r++) for (let s = 0; s < 2; s++) {
+    const [beam, sqrtS, kind] = RUNS[r];
+    const g = generate(kind, { beam, sqrtS, pileup: 0, particle: 'mu-', energy: 50000, eta: 0.3, phi: 0.6, count: 1 }, makeRng(4100 + 13 * r + s));
+    const R = ENG.run(g.prims, 900 + r * 7 + s), O = reconstruct(R, g.info), objs = buildObjects(R, O, g.info);
+    const d = diagramFor(g.info), keys = lineObjects(d, g.info, objs.objs);
+    d.lines.forEach((L, i) => {
+      if (L.ext !== 'out' || (L.hard == null && !L.isr)) { if (keys[i]) { kindBad++; kMsg = `${d.key}: inner line ${L.tex} has an object`; } return; }
+      nLines++;
+      const o = keys[i] && objs.byKey.get(keys[i]);
+      if (!o) return;
+      nHit++;
+      const want = L.cls === 'jet' ? 'jet' : L.cls === 'nu' ? 'met' : 'track';
+      if (o.kind !== want) { kindBad++; kMsg = `${d.key}: ${L.tex} -> ${o.kind}`; }
+      const oc = o.kind === 'jet' ? colorOf('jet') : CLASS_COLOR[o.cls];
+      if (oc !== L.color) { cBad2++; cMsg = `${d.key}: ${L.tex} ${L.color} vs ${o.key} ${oc}`; }
+    });
+    const used = keys.filter(k => k && objs.byKey.get(k).kind !== 'met');
+    if (new Set(used).size !== used.length) { kindBad++; kMsg = `${d.key}: one object on two lines`; }
+  }
+  ok(kindBad === 0 && nHit >= 0.8 * nLines, `final-state lines find their detector objects in 20 transported events: ${nHit} of ${nLines} (leptons and photons a hard track, partons a jet, neutrinos the MET; ${kindBad} bad${kMsg ? ': ' + kMsg : ''})`);
+  ok(cBad2 === 0, `each linked line has the colour of its detector object (${cBad2} bad${cMsg ? ': ' + cMsg : ''})`);
+}
+
+// ── the page: markup and phone rules (static text checks) ──────────────────
+{
+  const { readFileSync } = await import('fs');
+  const rd = f => readFileSync(new URL(f, import.meta.url), 'utf8');
+  const html = rd('./index.html'), css = rd('./style.css'), main = rd('./main.js');
+  const checks = [
+    ['the card is in the views', /<section class="view fy" data-v="feyn" id="feyn"/.test(html)],
+    ['a phone tab for it', /<button data-v="feyn" type="button">Feynman<\/button>/.test(html)],
+    ['lib/sci.css loads (STIX Two Text, Inter)', /href="\.\.\/\.\.\/lib\/sci\.css"/.test(html)],
+    ['[hidden]{display:none!important}', css.includes('[hidden]{display:none!important}')],
+    ['the phone list holds it', /phoneList = \(\) => [^\n]*'feyn'[^\n]*'feyn'/.test(main)],
+    ['the saver hides it', /#gear,#feyn\{display:none!important\}/.test(main)],
+    ['44 px fold button on touch', /\.fy-fold\{height:44px/.test(css)],
+    ['the phone card has no fixed width', /#views \.view\.fy\{position:relative;top:auto;right:auto;width:auto/.test(css)],
+    ['no horizontal scroll in the card', /\.fy-body\{[^}]*overflow-x:hidden/.test(css) && /\.fy-svg svg\{display:block;width:100%/.test(css)],
+    ['labels through MathJax (sci-math loadMath), never KaTeX', /loadMath/.test(rd('./feynman-card.js')) && !/import[^\n]*katex|katex[^"'\s]*\.(js|css)/i.test(rd('./feynman-card.js') + html + main)],
+  ];
+  const miss = checks.filter(c => !c[1]).map(c => c[0]);
+  ok(!miss.length, `page wiring: ${checks.length - miss.length} of ${checks.length} markup, phone and saver rules hold${miss.length ? ' (missing: ' + miss.join('; ') + ')' : ''}`);
+}
+
 // ── MathJax ─────────────────────────────────────────────────────────────────
 if (process.env.FEYN_MATHJAX) {
   const { createRequire } = await import('module');
@@ -224,6 +325,60 @@ if (process.env.FEYN_MATHJAX) {
     for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (ov(boxes[i], boxes[j])) { mBad2++; mMsg = `${d.key}: ${boxes[i].L.tex} / ${boxes[j].L.tex}`; }
   }
   ok(mBad2 === 0, `typeset label boxes do not overlap in any diagram (${mBad2} bad${mMsg ? ': ' + mMsg : ''})`);
+
+  // the card itself in jsdom (when the same folder holds jsdom): MathJax
+  // labels in the SVG, the lines grow with the event time, focus and pointer
+  let JSDOM = null;
+  try { ({ JSDOM } = require('jsdom')); } catch (e) { JSDOM = null; }
+  if (JSDOM) {
+    const { readFileSync } = await import('fs');
+    const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+    const sec = /<section class="view fy"[\s\S]*?<\/section>/.exec(html)[0];
+    const dom = new JSDOM(`<!DOCTYPE html><body>${sec}</body>`);
+    globalThis.window = dom.window; globalThis.document = dom.window.document;
+    // MathJax as the page has it (window.MathJax.tex2svgPromise), here from mathjax-full in node
+    dom.window.MathJax = { tex2svgPromise: async t => { const c = dom.window.document.createElement('mjx-container'); c.innerHTML = adaptor.innerHTML(doc.convert(t, { display: false })); return c; } };
+    const { createFeynCard } = await import('./feynman-card.js');
+    const { createEngine } = await import('./transport.js');
+    const { reconstruct } = await import('./reco.js');
+    const { buildObjects } = await import('./picking.js');
+    const root = dom.window.document.getElementById('feyn');
+    root.querySelector('.fy-body').getClientRects = () => [{ width: 1 }];
+    const hov = [], sel = [];
+    const card = createFeynCard(root, { onHover: k => hov.push(k), onSelect: k => sel.push(k) });
+    const msgs = [];
+    for (const [beam, sqrtS, kind, seed] of [['pp', 13.6e6, 'zmm', 11], ['pp', 13.6e6, 'tt', 12], ['ee', 250000, 'h4l', 13]]) {
+      const g = generate(kind, { beam, sqrtS, pileup: 0 }, makeRng(seed)), R = createEngine({ maxSeg: 60000, segShowerMinE: 12 }).run(g.prims, seed), O = reconstruct(R, g.info);
+      const ev = { info: g.info, objs: buildObjects(R, O, g.info) };
+      card.show(ev, -4);
+      await new Promise(r => setTimeout(r, 30));
+      const d = card.diagram, svg = root.querySelector('.fy-svg > svg');
+      const nLab = d.lines.filter(L => L.label).length, nMJ = svg.querySelectorAll('g.fy-t > svg').length, nTxt = svg.querySelectorAll('text.fy-t').length;
+      if (nMJ !== nLab || nTxt) msgs.push(`${d.key}: ${nMJ} MathJax labels of ${nLab}, ${nTxt} text`);
+      const paths = () => [...svg.querySelectorAll('.fy-l')].map(p => p.getAttribute('d'));
+      if (paths().some(x => x)) msgs.push(`${d.key}: lines drawn at t = -4`);
+      card.setTime(0);
+      const mid = paths().filter(x => x).length;
+      card.setTime(10);
+      if (paths().some(x => !x) || !(mid > 0 && mid < d.lines.length)) msgs.push(`${d.key}: drawn ${mid} at t = 0, ${paths().filter(x => x).length} at t = 10`);
+      if ([...svg.querySelectorAll('.fy-a')].some(a => a.getAttribute('opacity') !== '1')) msgs.push(`${d.key}: arrows hidden at the end`);
+      const cs = root.querySelectorAll('.fy-cpl .fy-sym svg').length;
+      if (cs !== d.couplings.length) msgs.push(`${d.key}: ${cs} coupling symbols of ${d.couplings.length}`);
+      if (!root.querySelector('.fy-text').textContent.endsWith('.')) msgs.push(`${d.key}: no description`);
+      // pointer and focus on the first linked line
+      const hit = svg.querySelector('.fy-hit');
+      if (!hit) { msgs.push(`${d.key}: no linked line`); continue; }
+      const k = card.keys[+hit.dataset.i];
+      hit.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      if (sel[sel.length - 1] !== k) msgs.push(`${d.key}: click gave ${sel[sel.length - 1]}`);
+      card.focus(k);
+      const on = svg.querySelectorAll('.fy-l.on').length;
+      if (!svg.classList.contains('has-focus') || on < 1) msgs.push(`${d.key}: focus shows ${on} lines`);
+      card.focus(null);
+      if (svg.classList.contains('has-focus')) msgs.push(`${d.key}: focus not cleared`);
+    }
+    ok(!msgs.length, `the card in jsdom: MathJax SVG labels and coupling symbols, lines grow from none at -4 ns to all at 10 ns, a click selects the linked object, focus brightens its line (3 events${msgs.length ? '; ' + msgs.join('; ') : ''})`);
+  } else console.log('skip the jsdom card check (no jsdom in FEYN_MATHJAX)');
 } else console.log('skip MathJax checks (set FEYN_MATHJAX to a folder with node_modules/mathjax-full)');
 
 console.log(`\n${n - fail} of ${n} checks passed`);

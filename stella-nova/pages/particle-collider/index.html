@@ -23,7 +23,8 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases GPU contexts when the shell swaps pages
-     2. fonts (Space Grotesk, IBM Plex Mono, Instrument Serif), style.css
+     2. fonts (Space Grotesk, IBM Plex Mono, Instrument Serif), style.css,
+        lib/sci.css (STIX Two Text and Inter for the Feynman card)
      3. importmap for three r160 (the 3D view), main.js
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -34,6 +35,9 @@
                 view moves to the next one).
      #over3d .. the 2D canvas over the 3D view: labels, the focus halo
                 (overlay3d.js)
+     #feyn .... the Feynman diagram of the event (feynman-card.js): a card
+                over the top right of the views on a desktop, a lower
+                view (#vtabs "Feynman") on a phone. The saver hides it.
    SELECTION  the chrome is user-select: none; only .about p and
                 .dt-text take a text selection (main.js 'selectstart')
      #strip ... a slim bar under the views: the event title and masses,
@@ -55,6 +59,7 @@
 <meta name="description" content="Collide two particles at a chosen energy and watch the products fly out through a detector, drawn as transverse and longitudinal event diagrams with labels. Every particle is a Monte Carlo track; hover and click any product for a closer look.">
 <link href="../../vendor/fonts/space-grotesk+ibm-plex-mono+instrument-serif.e9f187bf.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -71,9 +76,19 @@
     <section class="view" data-v="rz"><header><b>Longitudinal</b><span>r-z · the beams come in from the left and the right</span></header><div class="host" id="hRz"></div></section>
     <section class="view" data-v="lego"><header><b>Tower map</b><span>E<sub>T</sub> over η-φ</span></header><div class="host"><canvas id="lego"></canvas></div></section>
     <section class="view" data-v="3d"><header><b>3D</b><span>the collision · drag to orbit, wheel to zoom</span></header><div class="host"><canvas id="view3d"></canvas><canvas id="over3d" class="over3d"></canvas></div></section>
+    <section class="view fy" data-v="feyn" id="feyn" aria-label="Feynman diagram of this event">
+      <div class="fy-head"><b>Feynman diagram</b><span class="fy-sub">leading order · time runs left to right</span><button class="fy-fold" type="button" aria-expanded="true" aria-controls="feynBody">Hide</button></div>
+      <div class="fy-body" id="feynBody">
+        <div class="fy-title"></div>
+        <div class="fy-svg"></div>
+        <p class="fy-text"></p>
+        <p class="fy-cpl"></p>
+        <p class="fy-note" hidden></p>
+      </div>
+    </section>
   </div>
   <nav id="vtabs" aria-label="View">
-    <button data-v="rphi" type="button">r-φ</button><button data-v="rz" type="button">r-z</button><button data-v="lego" type="button">Towers</button><button data-v="3d" type="button">3D</button>
+    <button data-v="rphi" type="button">r-φ</button><button data-v="rz" type="button">r-z</button><button data-v="lego" type="button">Towers</button><button data-v="3d" type="button">3D</button><button data-v="feyn" type="button">Feynman</button>
   </nav>
   <div id="strip">
     <button id="stripMore" type="button" aria-expanded="false" aria-controls="strip">Event ▴</button>

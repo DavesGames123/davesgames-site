@@ -26,7 +26,10 @@
 //    from the deposited energy (grep -n 'function toneFor').
 //  STRIP  a slim bar; #stripMore opens the drawer (grep -n 'function setStrip').
 //  PHONE  the 3D view on top; a swipe on the lower view moves through
-//    r-phi, r-z and Towers (grep -n 'phoneList').
+//    r-phi, r-z, Towers and Feynman (grep -n 'phoneList').
+//  FEYNMAN (feynman-card.js)  the leading-order diagram of the event; its
+//    lines draw as S.t moves (feyn.setTime) and its final-state lines link
+//    to the detector objects (feyn.focus, onHover, onSelect).
 //  PREFERENCES  localStorage 'pc-prefs': layout, labels, outline,
 //    hardware (off by default), per viewer. Prefs before v 2 lose their
 //    layout, so the T (layout 't') is the default for every viewer.
@@ -46,6 +49,7 @@ import { buildObjects, cascade, segFlags } from './picking.js';
 import { detail } from './physinfo.js';
 import { createDiagram, createLego, LABEL_OF } from './diagram.js';
 import { PART, CLASS_COLOR, CLASS_LABEL } from './particles.js';
+import { createFeynCard } from './feynman-card.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -54,7 +58,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const GeV = v => (v / 1000).toFixed(Math.abs(v) < 10000 ? 2 : 1);
 
 // ── preferences (per viewer) ────────────────────────────────────────────────
-const PREF = Object.assign({ v: 2, layout: 't', labels: 'hard', outline: true, hardware: false, phoneView: 'rphi' }, (() => { try { const p = JSON.parse(localStorage.getItem('pc-prefs') || '{}'); if (p.v !== 2) { delete p.layout; delete p.phoneView; p.v = 2; } return p; } catch (e) { return {}; } })());
+const PREF = Object.assign({ v: 2, layout: 't', labels: 'hard', outline: true, hardware: false, phoneView: 'rphi', feynFold: false }, (() => { try { const p = JSON.parse(localStorage.getItem('pc-prefs') || '{}'); if (p.v !== 2) { delete p.layout; delete p.phoneView; p.v = 2; } return p; } catch (e) { return {}; } })());
 const savePref = () => { try { localStorage.setItem('pc-prefs', JSON.stringify(PREF)); } catch (e) { /* private mode */ } };
 
 const S = { beam: 'pp', sqrtS: 13.6e6, scen: 'zmm', t: -4, playing: true, speed: 3, auto: false, busy: false, ev: null, seed: 1, pileup: 0,
@@ -66,6 +70,14 @@ const vR = createDiagram($('hRphi'), 'rphi'), vZ = createDiagram($('hRz'), 'rz')
 const VIEWS = [vR, vZ];
 for (const v of VIEWS) { v.labels = PREF.labels; v.outline = PREF.outline; v.hardware = PREF.hardware; }
 let v3 = null;   // the optional 3D view, made on first use
+// the Feynman diagram card: a hover or a click on a final-state line
+// focuses or selects its detector object, as in the other views
+const feyn = createFeynCard($('feyn'), {
+  onHover: k => { S.hover = k && S.ev ? S.ev.objs.byKey.get(k) || null : null; setFocus(); },
+  onSelect: k => { const o = S.ev && S.ev.objs.byKey.get(k); if (o) select(o); },
+  onFold: f => { PREF.feynFold = f; savePref(); },
+});
+feyn.setFold(!!PREF.feynFold);
 
 // ── workers ─────────────────────────────────────────────────────────────────
 const NW = Math.max(2, Math.min(COARSE ? 3 : 8, (navigator.hardwareConcurrency || 4) - 1));
@@ -117,6 +129,7 @@ function showEvent(E) {
   E.tEnd = Math.min(32, Math.max(14, tEnd + 1));
   $('tSlide').max = Math.ceil(E.tEnd);
   S.t = -4; setPlay(true);
+  feyn.show(E, S.t);
   closeDetail();
   if (!saverOn) fillCard();
 }
@@ -132,6 +145,7 @@ function setFocus() {
   for (const v of VIEWS) v.setFocus(o, set);
   lego.focusSet = set;
   if (v3) v3.focus(o, set);
+  feyn.focus(key);
   document.querySelectorAll('#card tr[data-k]').forEach(r => r.classList.toggle('sel', !!S.sel && r.dataset.k === S.sel.key));
 }
 function select(o, open = true) {
@@ -295,14 +309,14 @@ function setHardware(on) { PREF.hardware = on; savePref(); for (const v of VIEWS
 $('tOutline').addEventListener('click', () => setOutline(!PREF.outline));
 $('tHardware').addEventListener('click', () => setHardware(!PREF.hardware));
 // phone: one view at a time
-const phoneList = () => PREF.layout === 't' ? ['rphi', 'rz', 'lego'] : ['rphi', 'rz', 'lego', '3d'];
+const phoneList = () => PREF.layout === 't' ? ['rphi', 'rz', 'lego', 'feyn'] : ['rphi', 'rz', 'lego', '3d', 'feyn'];
 function setPhoneView(v, dir = 0) {
   if (PREF.layout === 't' && v === '3d') v = 'rphi';
   PREF.phoneView = v; savePref();
   document.querySelectorAll('#views .view').forEach(s => { s.classList.toggle('ph', s.dataset.v === v); s.classList.remove('from-l', 'from-r'); });
   if (dir) { const s = document.querySelector(`#views .view[data-v="${v}"]`); void s.offsetWidth; s.classList.add(dir > 0 ? 'from-r' : 'from-l'); }
   document.querySelectorAll('#vtabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  $('dockView').querySelector('span').textContent = { rphi: 'r-φ', rz: 'r-z', lego: 'Towers', '3d': '3D' }[v];
+  $('dockView').querySelector('span').textContent = { rphi: 'r-φ', rz: 'r-z', lego: 'Towers', '3d': '3D', feyn: 'Feynman' }[v];
   if (v === '3d') ensure3D();
 }
 document.querySelectorAll('#vtabs button').forEach(b => b.addEventListener('click', () => setPhoneView(b.dataset.v)));
@@ -335,7 +349,7 @@ async function ensure3D() {
   if (v3) return v3;
   const [THREE, { createStage, gradientBackground }, { createDisplay }, { buildDetector }, { hitTest }, { createOverlay3D }] = await Promise.all([import('three'), import('./stage.js'), import('./display.js'), import('./geometry.js'), import('./picking.js'), import('./overlay3d.js')]);
   const canvas = $('view3d'), ov = createOverlay3D($('over3d'));
-  const stage = createStage({ canvas, occluders: [], band: () => band3D, coarse: COARSE, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, onNoGL: () => {} });
+  const stage = createStage({ canvas, occluders: [$('feyn')], band: () => band3D, coarse: COARSE, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, onNoGL: () => {} });
   const scene = new THREE.Scene(); scene.background = gradientBackground('#05070d', '#04060b', '#020306');
   const disp = createDisplay(THREE), evScene = new THREE.Scene(); evScene.add(disp.group);
   // detector hardware: thin outlines only (no shells), off by default
@@ -452,10 +466,15 @@ function frame(now) {
   if (saverOn) { if (saverTick) saverTick(dt); return; }
   // the reserved corner: the time bar sits over the lower left of the views
   const vis = s => { const r = s.getBoundingClientRect(); return r.width > 0; };
-  if (vis($('hRphi'))) vR.render(S.t);
-  if (vis($('hRz'))) vZ.render(S.t);
+  // the Feynman card covers the top right of the views on a desktop: the
+  // labels of the views under it keep clear of it
+  const fr = PHONE_Q.matches ? null : $('feyn').getBoundingClientRect();
+  const under = host => { if (!fr || !fr.width) return []; const h = host.getBoundingClientRect(), x0 = Math.max(fr.left, h.left) - h.left, y0 = Math.max(fr.top, h.top) - h.top, x1 = Math.min(fr.right, h.right) - h.left, y1 = Math.min(fr.bottom, h.bottom) - h.top; return x1 - x0 > 1 && y1 - y0 > 1 ? [{ x: x0 - 6, y: y0 - 6, w: x1 - x0 + 12, h: y1 - y0 + 12 }] : []; };
+  if (vis($('hRphi'))) { vR.reserved = under($('hRphi')); vR.render(S.t); }
+  if (vis($('hRz'))) { vZ.reserved = under($('hRz')); vZ.render(S.t); }
   if (vis($('lego')) && (uiT += dt) > 0.05) { uiT = 0; lego.render(S.t); }
-  if (v3 && vis($('view3d'))) v3.frame(dt, S.t);
+  if (v3 && vis($('view3d'))) v3.frame(dt, S.t, { reserved: [{ x: 0, y: 0, w: 330, h: 28 }, ...under($('view3d'))] });
+  feyn.setTime(S.t);
   $('tSlide').value = S.t; $('tVal').textContent = `${S.t.toFixed(2)} ns`;
 }
 let saverTick = null;
@@ -465,8 +484,8 @@ let saverTick = null;
 // energies, the hypothetical ones named so). The main shots use the 3D
 // view: the camera orbits the vertex while the products fly out with
 // labels. The 3D view fills the clear band of the plate. The saver shows
-// no r-phi or r-z diagram and the plate has no code extract: the user
-// wants the collision alone. (The page itself keeps both diagrams.)
+// no r-phi or r-z diagram, no Feynman card, and the plate has no code
+// extract: the user wants the collision alone. (The page itself keeps both diagrams.)
 // The 3D camera moves (MOVES3): orbit, push in, from the side along the
 // beams, down the beam axis, pull out. A cut (a short fade) every 5-12 s.
 // The 3D WebGL canvas stays in the document but hidden; each frame it is
@@ -486,7 +505,7 @@ window.snSaver = {
     const label = typeof o.label === 'function' ? o.label : () => {};
     const st = document.createElement('style');
     // the 3D view stays laid out (full window) but hidden: the saver canvas draws it
-    st.textContent = '.topbar,#panel,#detail,#dock,#strip,#vtabs,#clock,#tip,#busy,#nogl,#gear{display:none!important}#stage{inset:0!important}'
+    st.textContent = '.topbar,#panel,#detail,#dock,#strip,#vtabs,#clock,#tip,#busy,#nogl,#gear,#feyn{display:none!important}#stage{inset:0!important}'
       + '#views{position:fixed!important;inset:0!important;display:block!important;visibility:hidden!important}#views .view{display:none!important}'
       + '#views .view[data-v="3d"]{display:block!important;position:absolute!important;inset:0!important;border:0!important;border-radius:0!important}#views .view header{display:none!important}';
     document.head.appendChild(st);

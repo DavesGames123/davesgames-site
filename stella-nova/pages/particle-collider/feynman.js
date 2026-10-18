@@ -42,6 +42,11 @@
 //    explicit stroke and fill attributes (no stylesheet needed). A label
 //    is a MathJax SVG string from opts.tex(tex), sized from its viewBox,
 //    or a <text> fallback.
+//  PAGE (grep -n 'export function drawState')  feynman-card.js reads:
+//    drawState(d, X) ....... per line its path, arrow and label at front X
+//    couplingText(d) ....... the couplings in words, with the vertex count
+//    lineObjects(d, info, objs)  the detector object key of each
+//                            final-state line (picking.js), or null
 // ============================================================================
 import { CLASS_COLOR, PART } from './particles.js';
 
@@ -478,7 +483,7 @@ export function toSVG(d, opts = {}) {
   const labs = d.lines.map(L => {
     if (!L.label) return '';
     const t = opts.tex && opts.tex(L.tex);
-    const op = lineFrac(L, X) >= 0.8 ? 1 : 0;
+    const op = lineFrac(L, X) >= LABEL_AT ? 1 : 0;
     const placed = t ? placeTexSVG(t, L.label.x, L.label.y, fontPx) : null;
     if (placed) {
       const b = placed.box; L.label.box = b; grow(b.x, b.y); grow(b.x + b.w, b.y + b.h);
@@ -500,7 +505,7 @@ export function toSVG(d, opts = {}) {
     s += `<path class="fy-l" data-i="${L.i}" d="${partialPath(L, f)}" stroke="${L.color}" stroke-width="${w}"${L.kind === 'scalar' ? ' stroke-dasharray="6 4.5"' : ''}/>`;
   }
   s += '</g>';
-  for (const L of d.lines) if (L.arrow) s += `<path class="fy-a" data-i="${L.i}" d="${arrowPath(L.arrow)}" fill="${L.color}" opacity="${lineFrac(L, X) >= 0.55 ? 1 : 0}"/>`;
+  for (const L of d.lines) if (L.arrow) s += `<path class="fy-a" data-i="${L.i}" d="${arrowPath(L.arrow)}" fill="${L.color}" opacity="${lineFrac(L, X) >= ARROW_AT ? 1 : 0}"/>`;
   for (const n of d.nodes) if (n.cpl) s += `<circle class="fy-v" data-n="${n.id}" cx="${f1(n.x)}" cy="${f1(n.y)}" r="2.7" fill="#eef2fb" opacity="${X >= n.x ? 1 : 0}"/>`;
     else if (n.id === 'src') s += `<circle cx="${f1(n.x)}" cy="${f1(n.y)}" r="3.4" fill="none" stroke="#eef2fb" stroke-width="1.4"/>`;
   // wide clear strokes over the final-state lines: the pointer targets
@@ -516,3 +521,61 @@ export const PROCESS_KEYS = [
   'gun', 'pp:zmm', 'pp:zee', 'pp:hgg', 'pp:h4l', 'pp:tt', 'pp:jj', 'pp:mb', 'ppbar:tt', 'ppbar:zmm',
   'ee:zmm', 'ee:zee', 'ee:hgg', 'ee:h4l', 'ee:tt', 'ee:jj', 'mumu:tt', 'mumu:jj', 'PbPb:mb',
 ];
+
+// ── the page: per-frame state, the detector object of each line ────────────
+// The drawing at front X as plain data, so the page can change the path
+// data and opacities in place each frame (no new SVG): per line its path,
+// whether its arrow and label show; per vertex whether it shows. toSVG
+// uses the same thresholds.
+export const ARROW_AT = 0.55, LABEL_AT = 0.8;
+export function drawState(d, X) {
+  return {
+    lines: d.lines.map(L => { const f = lineFrac(L, X); return { i: L.i, f, d: partialPath(L, f), arrow: !!L.arrow && f >= ARROW_AT, label: !!L.label && f >= LABEL_AT }; }),
+    nodes: d.nodes.filter(n => n.cpl).map(n => ({ id: n.id, on: X >= n.x })),
+  };
+}
+
+// The couplings named in plain words, for the line under the diagram:
+// "strong (g_s) at 2 vertices, ...". tex: the symbols as TeX for MathJax.
+export function couplingText(d) {
+  return d.couplings.map(c => ({ key: c.key, tex: c.tex, text: `${c.name} at ${c.n === 1 ? 'one vertex' : c.n + ' vertices'}` }));
+}
+
+// The detector object of each line (picking.js buildObjects keys), or
+// null. A lepton or a photon: the primary 'hard' track of that name along
+// the hard momentum (cos > 0.999); a quark or a gluon: the nearest jet
+// within dR 0.5; a neutrino: the MET arrow; the ISR photon: the 'isr'
+// track; a gun particle: its primary track. The same rules as the
+// lineage of physinfo.js.
+export function lineObjects(d, info, objs) {
+  const tracks = objs.filter(o => o.kind === 'track' && o.T);
+  const jets = objs.filter(o => o.kind === 'jet');
+  const met = objs.find(o => o.kind === 'met');
+  const hard = info.hard || [];
+  const used = new Set();
+  const dphi = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  return d.lines.map(L => {
+    if (L.ext !== 'out') return null;
+    if (L.isr) { const o = tracks.find(o => o.T.primary === 'isr'); return o ? o.key : null; }
+    if (L.hard == null || !hard[L.hard]) return null;
+    const [name, p] = hard[L.hard];
+    if (name === 'nu') return met ? met.key : null;
+    const pt = Math.hypot(p[1], p[2]), pm = Math.hypot(p[1], p[2], p[3]) || 1;
+    if (name === 'q' || name === 'g' || name === 'b') {
+      if (!pt) return null;
+      const eta = Math.asinh(p[3] / pt), phi = Math.atan2(p[2], p[1]);
+      let best = null, bd = 0.5;
+      for (const j of jets) { const r = Math.hypot(j.eta - eta, dphi(j.phi, phi)); if (r < bd && !used.has(j.key)) { bd = r; best = j; } }
+      if (best) used.add(best.key);
+      return best ? best.key : null;
+    }
+    let best = null, bc = 0.999;
+    for (const o of tracks) {
+      if (o.name !== name || o.T.primary !== 'hard' || used.has(o.key)) continue;
+      const u = o.T.u0, c = (p[1] * u[0] + p[2] * u[1] + p[3] * u[2]) / pm;
+      if (c > bc) { bc = c; best = o; }
+    }
+    if (best) used.add(best.key);
+    return best ? best.key : null;
+  });
+}
