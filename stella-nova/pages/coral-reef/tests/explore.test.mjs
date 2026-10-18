@@ -254,6 +254,43 @@ const metresOf = (F, p) => F.metres(p);
   ok(worst > LIMIT, 'follow and saver: the chase camera and saver goals in the rock keep the eye out of the rock', `${n} frames, nearest ${f2(worst)} m`);
 }
 
+// ── follow start at a wall ──────────────────────────────────────────────────
+// The user said (2026-10-18): "the camera for the ROV animation always
+// starts stuck up against a rock". An ROV hovers 1.2 m out from a rock wall
+// and looks away from it, so the boom straight behind it goes into the
+// rock. The camera starts at the page's overview eye. After 3 s the eye
+// must be clear of the rock, at least 2 m from the ROV, with a clear line
+// to it; with snap the same holds on the first frame.
+{
+  let tried = 0, squeezed = 0, stuck = 0, snapBad = 0, worstGap = Infinity, nearest = Infinity;
+  for (const { rock, F } of rocks) {
+    const S = rock.sampleSurface(400, rng(rock.seed + 5)).filter(s => Math.abs(s.n[1]) < 0.35);
+    for (const s of S.slice(0, 12)) {
+      const h = Math.hypot(s.n[0], s.n[2]) || 1;
+      const pos = [s.p[0] + s.n[0] / h * 1.2, s.p[1] + 0.2, s.p[2] + s.n[2] / h * 1.2];
+      if (F.metres(pos) < 0.8 || Math.hypot(pos[0], pos[2]) > 26) continue;
+      const veh = { pos, yaw: Math.atan2(s.n[2], s.n[0]) };
+      for (const snap of [false, true]) {
+        const cam = createExploreCamera({ rock, R: 30 });
+        cam.follow(1, { snap });
+        let first = null;
+        for (let i = 0; i < 180; i++) { cam.update(1 / 60, { getVehicle: () => veh }); if (!first) first = cam.eye.slice(); }
+        const E = cam.eye, d = Math.hypot(E[0] - pos[0], E[1] - pos[1], E[2] - pos[2]);
+        const dir = [(pos[0] - E[0]) / d, (pos[1] - E[1]) / d, (pos[2] - E[2]) / d];
+        const blocked = Number.isFinite(F.trace(E, dir, Math.max(0, d - 0.6), 0.05));
+        const m = F.metres(E); if (m < nearest) nearest = m;
+        if (!snap) { tried++; if (d < 2) squeezed++; if (blocked || d > 8) stuck++; if (d < worstGap) worstGap = d; }
+        else { const d0 = Math.hypot(first[0] - pos[0], first[1] - pos[1], first[2] - pos[2]); if (d0 > 8 || d0 < 1.5 || F.metres(first) < LIMIT) snapBad++; }
+      }
+    }
+  }
+  ok(tried >= 6, 'follow start: wall sites found', `${tried}`);
+  ok(squeezed === 0, 'follow start: the boom finds water round the ROV (eye 2 m or more from it)', `${squeezed} of ${tried} squeezed, nearest ${f2(worstGap)} m`);
+  ok(stuck === 0, 'follow start: the glide from the overview does not stick on rock (clear line to the ROV)', `${stuck} of ${tried} stuck`);
+  ok(snapBad === 0, 'follow start: a snap puts the eye beside the ROV on the first frame', `${snapBad} bad`);
+  ok(nearest > LIMIT, 'follow start: the eye stays out of the rock', `nearest ${f2(nearest)} m`);
+}
+
 // ── live rate ───────────────────────────────────────────────────────────────
 {
   const schedules = {

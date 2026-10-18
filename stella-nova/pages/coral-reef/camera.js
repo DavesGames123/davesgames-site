@@ -20,8 +20,11 @@
 //    tour .... a guided path through a canyon or under an arch
 //              (buildTours, from rock.features). Any user input takes
 //              over: the camera goes to swim at the same pose and speed.
-//    follow .. a chase camera behind one ROV, with free look (a drag)
-//              and a boom that the rock shortens. The look comes back
+//    follow .. a chase camera behind one ROV, with free look (a drag).
+//              When rock blocks the boom behind the ROV, pickBoom turns
+//              it round the ROV to the side or above that has water. A
+//              glide that rock holds for 0.4 s cuts to the boom, and
+//              follow(id, { snap }) cuts at once. The look comes back
 //              to the back of the vehicle after 3 s with no input.
 //    saver ... saverGoal(pos, look, cut) from the saver director of
 //              main.js; the springs of this module move the camera.
@@ -45,7 +48,7 @@
 //    "export function rayAt"             a screen ray of a pose
 //    "export function createExploreCamera"
 //    "  function orbitGoal"  "  function swimStep"  "  function tourStep"
-//    "  function followGoal" "  function update("
+//    "  function pickBoom"  "  function followGoal" "  function update("
 // ============================================================================
 
 import { createGrid, pullTight, pushOut as pilotPushOut } from './rov/pilot.js';
@@ -334,7 +337,7 @@ export function createExploreCamera(o = {}) {
   const orbit = { target: look0.slice(), yaw: a0.yaw, pitch: a0.pitch, dist: len(sub(eye0, look0)), wYaw: 0, wPitch: 0, pivot: null, grip: null, plane: null, auto: false };
   const swim = { pos: eye0.slice(), vel: [0, 0, 0], yaw: 0, pitch: 0, yawT: 0, pitchT: 0, speedK: 1, move: [0, 0, 0], boost: false };
   const tour = { T: null, s: 0, spd: 0, wait: true, look: null };
-  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0 };
+  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0, autoYaw: 0, autoPitch: 0, wantYaw: 0, wantPitch: 0, searchT: 0, snapNext: false, stuckT: 0 };
   const saver = { eye: eye0.slice(), look: look0.slice(), omega: 2.2 };
   let mode = 'orbit', blend = 0, idle = 0, tours = null, grid = null;
   let lastGood = eye0.slice();
@@ -390,6 +393,8 @@ export function createExploreCamera(o = {}) {
     } else if (m === 'follow') {
       if (opt.id != null) follow.id = opt.id;
       follow.yawOff = 0; follow.pitchOff = 0.28; follow.idle = 0;
+      follow.autoYaw = follow.autoPitch = follow.wantYaw = follow.wantPitch = 0;
+      follow.searchT = 0; follow.stuckT = 0; follow.snapNext = !!opt.snap;
     } else if (m === 'saver') {
       saver.eye = E.x.slice(); saver.look = L.x.slice();
     }
@@ -595,23 +600,60 @@ export function createExploreCamera(o = {}) {
 
   // ── follow ────────────────────────────────────────────────────────────────
   // getVehicle(id) -> { pos [x, y, z], yaw } (the ROV heading, from +x to +z)
-  cam.follow = (id) => setMode('follow', { id, force: true });
+  // opt.snap: cut to the boom on the next update (no glide from the old eye)
+  cam.follow = (id, opt = {}) => setMode('follow', { id, force: true, snap: !!opt.snap });
   cam.followLook = (dyaw, dpitch) => { follow.yawOff += dyaw; follow.pitchOff = clamp(follow.pitchOff + dpitch, -0.9, 1.3); follow.idle = 0; };
+  // The boom: the straight-back boom (with the free look) when it has
+  // water for most of follow.dist, else the best of BOOM_YAW x BOOM_PITCH
+  // offsets round the ROV (most water, least turn, near the last pick).
+  // The search runs 4 times a second (10 when the boom is short); the
+  // pick eases in.
+  const BOOM_YAW = [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.3, -2.3, Math.PI];
+  const BOOM_PITCH = [0, 0.35, 0.75, 1.1];
+  function boomLen(piv, d) {
+    const t = F.trace(piv, d, follow.dist, CLEAR_SOFT * 0.8);
+    return Number.isFinite(t) ? Math.max(0, t - 0.05) : follow.dist;
+  }
+  function pickBoom(piv, yaw0, pitch0) {
+    let best = null;
+    for (const dy of BOOM_YAW) for (const dp of BOOM_PITCH) {
+      const p = clamp(pitch0 + dp, -0.9, 1.3);
+      const l = boomLen(piv, dirOf(yaw0 + dy, p));
+      const turn = Math.abs(dy - follow.autoYaw) + Math.abs(dp - follow.autoPitch);
+      const score = (l / follow.dist) * 3 - Math.abs(dy) * 0.35 - dp * 0.3 - turn * 0.25;
+      if (!best || score > best.score) best = { dy, dp, score };
+    }
+    return best;
+  }
   function followGoal(dt, ctx) {
     const v = ctx && ctx.getVehicle ? ctx.getVehicle(follow.id) : null;
     if (!v) { setMode('orbit'); return; }
     follow.idle += dt;
     if (follow.idle > 3) { const e = 1 - Math.exp(-dt * 0.6); follow.yawOff -= follow.yawOff * e; follow.pitchOff += (0.28 - follow.pitchOff) * e; }
     const fw = [Math.cos(v.yaw), 0, Math.sin(v.yaw)];
-    const back = dirOf(v.yaw + Math.PI + follow.yawOff, follow.pitchOff);
+    const yaw0 = v.yaw + Math.PI + follow.yawOff, pitch0 = follow.pitchOff;
     const piv = add(v.pos, [0, 0.35, 0]);
-    let eye = add(piv, mul(back, follow.dist));
     if (F) {
-      const t = F.trace(piv, back, follow.dist, CLEAR_SOFT * 0.8);
-      if (Number.isFinite(t)) eye = add(piv, mul(back, Math.max(0.6, t - 0.05)));
+      follow.searchT -= dt;
+      const now = boomLen(piv, dirOf(yaw0 + follow.autoYaw, clamp(pitch0 + follow.autoPitch, -0.9, 1.3)));
+      const back = boomLen(piv, dirOf(yaw0, pitch0));
+      if (back >= follow.dist * 0.85) { follow.wantYaw = 0; follow.wantPitch = 0; }
+      else if (follow.searchT <= 0 || follow.snapNext) {
+        follow.searchT = now < follow.dist * 0.6 ? 0.1 : 0.25;
+        const b = pickBoom(piv, yaw0, pitch0);
+        follow.wantYaw = b.dy; follow.wantPitch = b.dp;
+      }
+      const e = follow.snapNext ? 1 : 1 - Math.exp(-dt * 2.2);
+      follow.autoYaw += (follow.wantYaw - follow.autoYaw) * e;
+      follow.autoPitch += (follow.wantPitch - follow.autoPitch) * e;
+    }
+    const dir = dirOf(yaw0 + follow.autoYaw, clamp(pitch0 + follow.autoPitch, -0.9, 1.3));
+    let eye = add(piv, mul(dir, follow.dist));
+    if (F) {
+      eye = add(piv, mul(dir, Math.max(0.6, boomLen(piv, dir))));
       if (F.metres(eye) < CLEAR_SOFT) { const q = F.pushOut(eye, CLEAR_SOFT); if (q) eye = q; }
     }
-    goal.eye = eye; goal.look = add(v.pos, mul(fw, 1.2 * Math.cos(follow.yawOff)));
+    goal.eye = eye; goal.look = add(v.pos, mul(fw, 1.2 * Math.cos(follow.yawOff + follow.autoYaw)));
     return 4.5;
   }
 
@@ -663,6 +705,18 @@ export function createExploreCamera(o = {}) {
       if (q !== prev && F.metres(q) >= CLEAR_HARD) { E.x = q; lastGood = q.slice(); }
       else if (F.metres(E.x) >= CLEAR_HARD && !Number.isFinite(F.trace(prev, norm(sub(E.x, prev)), len(sub(E.x, prev)), CLEAR_HARD))) lastGood = E.x.slice();
       else { E.x = (F.metres(prev) >= CLEAR_HARD ? prev : lastGood).slice(); E.v = [0, 0, 0]; }
+      // follow: rock between the eye and the boom holds the eye at the
+      // rock (moveSafe slides, the glide stops). After 0.4 s of that, or
+      // on a snap, cut to the boom eye (it has water by pickBoom).
+      if (mode === 'follow') {
+        const far = len(sub(goal.eye, E.x)) > 0.6, moved = len(sub(E.x, prev)) / Math.max(dt, 1e-3);
+        follow.stuckT = far && moved < 0.4 ? follow.stuckT + dt : 0;
+        if ((follow.snapNext || follow.stuckT > 0.4) && F.metres(goal.eye) >= CLEAR_HARD) {
+          E.x = goal.eye.slice(); L.x = goal.look.slice(); E.v = [0, 0, 0]; L.v = [0, 0, 0];
+          lastGood = E.x.slice(); follow.stuckT = 0; blend = 0;
+        }
+        follow.snapNext = false;
+      }
     }
     if (len(sub(L.x, E.x)) < 0.05) L.x = add(E.x, dirOf(swim.yaw, swim.pitch));
     return cam;

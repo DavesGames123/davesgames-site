@@ -369,7 +369,7 @@ function buildROVs() {
 function followDefault() {
   if (!cam || saverOn || camChoice || !rovs || !rovs.vehicles || !rovs.vehicles.length) return false;
   const V = rovs.vehicles, id = rovs.feed && V.some(v => v.id === rovs.feed.vehicle) ? rovs.feed.vehicle : V[0].id;
-  if (cam.mode !== 'follow' || cam.followId !== id) cam.follow(id);
+  if (cam.mode !== 'follow' || cam.followId !== id) cam.follow(id, { snap: true });   // a cut: a glide from the overview can stop on rock
   camUI();
   return true;
 }
