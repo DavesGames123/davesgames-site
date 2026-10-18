@@ -48,7 +48,7 @@
 //    targetDensity 0.6 projected bodies per pixel area for brightness 1
 //
 //  grep -n targets
-//    weights ............. "function weightsOf"
+//    weights ............. "function weightsOf"  (exported: actionWeights)
 //    trimmed centre ...... "function robustCenter"
 //    framing radius ...... "function percentileRadius"
 //    springs ............. "function spring"
@@ -177,6 +177,16 @@ export function createActionCamera(opts = {}) {
   }
 
   return { update, measure, follow, goal, reset() { st = null; }, options: o };
+}
+
+// The action weight of each body (mass x (1 + actionK x activity)), the
+// same numbers that measure() uses. For tests and for pages that report
+// the share of the action inside their view.
+export function actionWeights(s, actionK = DEF.actionK) {
+  const n = Math.max(0, s.count ?? Math.floor(s.pos.length / (s.stride || 3)));
+  const out = new Float64Array(n);
+  weightsOf(s, n, out).fill(actionK);
+  return out;
 }
 
 export { robustCenter, percentileRadius, spring };
