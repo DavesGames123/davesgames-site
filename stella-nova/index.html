@@ -278,14 +278,17 @@ let activeTab=null;
 // Safari then ran out of GPU memory and the tab did not recover.
 // The swap now does three things:
 //   releaseFrame  calls the page's lib/gpu-guard.js __snRelease (destroy
-//                 every device, lose every WebGL context, stop rAF), then
-//                 releases each canvas directly as a fallback
+//                 every device, lose every WebGL context, stop rAF). Only
+//                 a page with no guard gets the canvas sweep: getContext on
+//                 a canvas with no context makes a new one, so the sweep
+//                 made a WebGL context per unused canvas just before the
+//                 unload (a GPU memory burst where WebGPU is missing)
 //   doSwap        loads about:blank into the old iframe so the document
 //                 unloads now, then removes the iframe and mounts the new page
 //   pendingTab    clicks during a swap only change the target tab, so a
 //                 click series mounts one page, not one page per click
 var pendingTab=null,swapBusy=false,SWAP_SETTLE_MS=250,SWAP_UNLOAD_MS=300;
-function releaseFrame(f){try{var w=f.contentWindow;if(w&&w.__snRelease)w.__snRelease()}catch(e){}try{var d=f.contentDocument;if(!d)return;d.querySelectorAll('canvas').forEach(function(c){try{var g=c.getContext('webgpu');if(g){try{var cfg=g.getConfiguration&&g.getConfiguration();if(cfg&&cfg.device){cfg.device.destroy();return}}catch(e){}try{g.unconfigure()}catch(e){}return}var gl=c.getContext('webgl2')||c.getContext('webgl');if(gl){var x=gl.getExtension('WEBGL_lose_context');if(x)x.loseContext()}}catch(e){}})}catch(e){}}
+function releaseFrame(f){try{var w=f.contentWindow;if(w&&w.__snRelease){w.__snRelease();return}}catch(e){}try{var d=f.contentDocument;if(!d)return;d.querySelectorAll('canvas').forEach(function(c){try{var g=c.getContext('webgpu');if(g){try{var cfg=g.getConfiguration&&g.getConfiguration();if(cfg&&cfg.device){cfg.device.destroy();return}}catch(e){}try{g.unconfigure()}catch(e){}return}var gl=c.getContext('webgl2')||c.getContext('webgl');if(gl){var x=gl.getExtension('WEBGL_lose_context');if(x)x.loseContext()}}catch(e){}})}catch(e){}}
 /* ── history ──────────────────────────────────────────────────────────
    The shell owns the browser history. The URL is #<tab> or #<tab>/<route>,
    where <route> is the page's own hash without '#', for example
