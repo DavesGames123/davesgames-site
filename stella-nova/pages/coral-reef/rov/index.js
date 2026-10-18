@@ -58,7 +58,10 @@
 //    index.js ....... "export function createROVs", "function colonyBounds"
 //    build.js ....... the vehicle model ("export function buildVehicle")
 //    pilot.js ....... grid, A*, paths and motion, DOM-free ("export function createPilot")
-//    tether.js ...... the verlet rope ("export function createTether")
+//    tether.js ...... the verlet rope and its smooth tube ("export function createTether",
+//                     "export function createTetherTube"): high 56 points, 240 rings
+//                     x 16 sides; low 30 points, 96 rings x 8 sides; one geometry each,
+//                     updated in place every frame
 //    wash.js ........ thruster wash and silt ("export function createWash")
 //    link.js ........ the SSTV link over pages/sstv ("export class SstvLink")
 //    hud.js ......... the feed panel ("export function drawHud")
@@ -69,7 +72,7 @@
 // ============================================================================
 import { buildVehicle } from './build.js';
 import { createPilot, createGrid, hash, rng, zoomFov, trace, surfaceY } from './pilot.js';
-import { createTether } from './tether.js';
+import { createTether, createTetherTube, braidTexel } from './tether.js';
 import { createWash } from './wash.js';
 import { createFeed } from './feed.js';
 import { createStubRock } from './stub-rock.js';
@@ -183,11 +186,22 @@ export function createROVs(THREE, o = {}) {
 
   const wash = createWash(THREE, { count: low ? 500 : 1000, seed });
   if (scene) scene.add(wash.points);
-  const tetherMat = new THREE.MeshStandardMaterial({ color: 0xd8a21c, roughness: 0.65, metalness: 0 });
-  const tetherGeo = new THREE.CylinderGeometry(0.024, 0.024, 1, 6, 1, true);
+  // the tether cable: a braid texture (tether.js braidTexel) under the
+  // old cable colour; one tube geometry per vehicle (below)
+  const TQ = low ? { n: 30, rings: 96, radial: 8 } : { n: 56, rings: 240, radial: 16 };
+  const braid = new Uint8Array(64 * 64 * 4);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const b = Math.round(255 * braidTexel(x / 64, y / 64)), o = (y * 64 + x) * 4;
+    braid[o] = braid[o + 1] = braid[o + 2] = b; braid[o + 3] = 255;
+  }
+  const braidTex = new THREE.DataTexture(braid, 64, 64, THREE.RGBAFormat);
+  braidTex.wrapS = braidTex.wrapT = THREE.RepeatWrapping;
+  braidTex.magFilter = THREE.LinearFilter; braidTex.minFilter = THREE.LinearMipmapLinearFilter; braidTex.generateMipmaps = true;
+  braidTex.needsUpdate = true;
+  const tetherMat = new THREE.MeshStandardMaterial({ color: 0xd8a21c, roughness: 0.65, metalness: 0, map: braidTex });
 
   const vehicles = [];
-  const V = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3(1, 1, 1), M = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0);
+  const V = new THREE.Vector3(), Q = new THREE.Quaternion(), TA = [0, 0, 0];
   for (let i = 0; i < count; i++) {
     const id = i + 1, vs = hash(seed, i, 101);
     const parts = buildVehicle(THREE, {
@@ -202,15 +216,21 @@ export function createROVs(THREE, o = {}) {
     const a = parts.tetherPoint.getWorldPosition(new THREE.Vector3()).toArray();
     const r0 = rng(hash(seed, i, 202));
     const ship = [st.p[0] + (r0() - 0.5) * 12, top + 30, st.p[2] + (r0() - 0.5) * 12];
-    const tether = createTether({ n: low ? 18 : 28, a, b: ship });
-    const tmesh = new THREE.InstancedMesh(tetherGeo, tetherMat, tether.count - 1);
+    const tether = createTether({ n: TQ.n, a, b: ship });
+    const tube = createTetherTube({ rings: TQ.rings, radial: TQ.radial, radius: 0.024 }).update(tether.points, tether.count);
+    const tgeo = new THREE.BufferGeometry();
+    tgeo.setAttribute('position', new THREE.BufferAttribute(tube.positions, 3).setUsage(THREE.DynamicDrawUsage));
+    tgeo.setAttribute('normal', new THREE.BufferAttribute(tube.normals, 3).setUsage(THREE.DynamicDrawUsage));
+    tgeo.setAttribute('uv', new THREE.BufferAttribute(tube.uvs, 2).setUsage(THREE.DynamicDrawUsage));
+    tgeo.setIndex(new THREE.BufferAttribute(tube.indices, 1));
+    const tmesh = new THREE.Mesh(tgeo, tetherMat);
     tmesh.frustumCulled = false; tmesh.name = 'rov-tether-' + id;
     const L = parts.lights;
     L.forEach((l, j) => { l.userData.vehicle = id; l.userData.index = j; });
     if (scene) { scene.add(g); scene.add(tmesh); }
     const fl = rng(hash(seed, i, 303));
     vehicles.push({
-      id, group: g, lights: L, camera: parts.camera, target: new THREE.Vector3(...st.look), parts, pilot, tether, tmesh, ship,
+      id, group: g, lights: L, camera: parts.camera, target: new THREE.Vector3(...st.look), parts, pilot, tether, tube, tmesh, ship,
       shipOff: [(r0() - 0.5) * 10, (r0() - 0.5) * 10], flick: [fl() * 100, fl() * 100, fl() * 100], fov: 55,
       get mode() { return st.mode; }, get phase() { return st.phase; },
     });
@@ -303,17 +323,10 @@ export function createROVs(THREE, o = {}) {
     const sh = v.ship, e = 1 - Math.exp(-dt / 40);
     sh[0] += (st.p[0] + v.shipOff[0] - sh[0]) * e; sh[2] += (st.p[2] + v.shipOff[1] - sh[2]) * e;
     P.tetherPoint.getWorldPosition(V);
-    const pts = v.tether.step(dt, [V.x, V.y, V.z], sh, sdf);
-    const A = new THREE.Vector3(), B = new THREE.Vector3();
-    for (let k = 0; k < v.tether.count - 1; k++) {
-      A.fromArray(pts, k * 3); B.fromArray(pts, k * 3 + 3);
-      const dl = B.clone().sub(A), l = dl.length() || 1e-4;
-      Q.setFromUnitVectors(UP, dl.multiplyScalar(1 / l));
-      S.set(1, l * 1.02, 1);
-      M.compose(A.add(B).multiplyScalar(0.5), Q, S);
-      v.tmesh.setMatrixAt(k, M);
-    }
-    v.tmesh.instanceMatrix.needsUpdate = true;
+    TA[0] = V.x; TA[1] = V.y; TA[2] = V.z;
+    v.tube.update(v.tether.step(dt, TA, sh, sdf), v.tether.count);
+    const ga = v.tmesh.geometry.attributes;
+    ga.position.needsUpdate = true; ga.normal.needsUpdate = true; ga.uv.needsUpdate = true;
   }
 
   let clock = 0;
@@ -352,10 +365,10 @@ export function createROVs(THREE, o = {}) {
   function dispose() {
     for (const v of vehicles) {
       if (scene) { scene.remove(v.group); scene.remove(v.tmesh); }
-      v.parts.dispose(); v.tmesh.dispose();
+      v.parts.dispose(); v.tmesh.geometry.dispose();
     }
     if (scene) scene.remove(wash.points);
-    wash.dispose(); tetherGeo.dispose(); tetherMat.dispose(); feed.dispose();
+    wash.dispose(); braidTex.dispose(); tetherMat.dispose(); feed.dispose();
   }
 
   return {

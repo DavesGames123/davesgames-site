@@ -356,6 +356,75 @@ function receive(mode, noise, dt = 0.25, watch = null) {
   R.dispose();
 }
 
+// ── tether ──────────────────────────────────────────────────────────────────
+// The user said (2026-10-18): "rov cables not high res enough". The tether
+// is a smooth Catmull-Rom tube on the verlet rope, one geometry updated in
+// place (tether.js createTetherTube).
+{
+  const { createTether, createTetherTube } = await import('../rov/tether.js');
+  const say = (c, name, info = '') => { ok(c, name, info); if (c) console.log(`ok   ${name}${info !== '' ? '  ' + info : ''}`); };
+  const scene = new THREE.Scene();
+  const R = createROVs(THREE, { scene, rock: createStubRock({ seed: 1 }), seed: 1, count: 2, feed: noFeed });
+  const v = R.vehicles[0], tube = v.tube, geo = v.tmesh.geometry;
+  const buf0 = [geo.attributes.position.array, geo.attributes.normal.array, geo.attributes.uv.array, geo.index.array];
+  for (let i = 0; i < 100; i++) R.update(1 / 30, i / 30);
+  const buf1 = [geo.attributes.position.array, geo.attributes.normal.array, geo.attributes.uv.array, geo.index.array];
+  say(v.tether.count - 1 >= 48 && tube.rings >= 200 && tube.radial >= 14, 'tether: high quality has 48+ rope segments and a tube of 200+ rings x 14+ sides',
+    `${v.tether.count - 1} segments, ${tube.rings} rings x ${tube.radial} sides, ${geo.index.count / 3} tris`);
+  say(buf0.every((b, i) => b === buf1[i]) && buf0[0] === tube.positions, 'tether: one geometry, the same Float32Array buffers after 100 frames (no allocation)');
+  say(v.tmesh.isMesh && !v.tmesh.isInstancedMesh && v.tmesh.material.map && v.tmesh.material.color.getHex() === 0xd8a21c, 'tether: one mesh with the braid map in the cable colour');
+  const P = v.tether.points, n = v.tether.count, C = tube.curve, last = (tube.rings - 1) * 3;
+  const endErr = Math.max(...[0, 1, 2].map(k => Math.abs(C[k] - P[k])), ...[0, 1, 2].map(k => Math.abs(C[last + k] - P[(n - 1) * 3 + k])));
+  // every rope point is near the curve (the curve passes through it)
+  let through = 0;
+  for (let i = 0; i < n; i++) {
+    let best = Infinity;
+    for (let r = 0; r < tube.rings; r++) best = Math.min(best, Math.hypot(C[r * 3] - P[i * 3], C[r * 3 + 1] - P[i * 3 + 1], C[r * 3 + 2] - P[i * 3 + 2]));
+    through = Math.max(through, best);
+  }
+  const ringGap = tube.length / (tube.rings - 1);
+  say(endErr < 1e-5 && through < ringGap * 0.6, 'tether: the curve has the rope ends exactly and passes through every rope point', `end err ${endErr.toExponential(1)} m, worst point ${f3(through)} m (ring gap ${f3(ringGap)} m)`);
+  let nan = false, unit = 0, perp = 0, flip = 1;
+  const Np = tube.normals, T = tube.tangents, RN = tube.ringNormals, RV = tube.radial + 1;
+  for (let i = 0; i < tube.positions.length; i++) if (!Number.isFinite(tube.positions[i]) || !Number.isFinite(Np[i])) nan = true;
+  for (let r = 0; r < tube.rings; r++) {
+    for (let j = 0; j < RV; j++) {
+      const w = (r * RV + j) * 3, l = Math.hypot(Np[w], Np[w + 1], Np[w + 2]);
+      unit = Math.max(unit, Math.abs(l - 1));
+      perp = Math.max(perp, Math.abs(Np[w] * T[r * 3] + Np[w + 1] * T[r * 3 + 1] + Np[w + 2] * T[r * 3 + 2]));
+    }
+    if (r) flip = Math.min(flip, RN[r * 3] * RN[r * 3 - 3] + RN[r * 3 + 1] * RN[r * 3 - 2] + RN[r * 3 + 2] * RN[r * 3 - 1]);
+  }
+  say(!nan && unit < 1e-4 && perp < 1e-4, 'tether: no NaN, unit normals perpendicular to the tangent', `|n|-1 ${unit.toExponential(1)}, n.t ${perp.toExponential(1)}`);
+  say(flip > 0.5, 'tether: the ring frames do not flip (parallel transport)', `min dot of next ring normals ${f3(flip)}`);
+  // frame to frame: the first ring normal is stable
+  const n0 = [RN[0], RN[1], RN[2]];
+  R.update(1 / 30, 101 / 30);
+  say(n0[0] * RN[0] + n0[1] * RN[1] + n0[2] * RN[2] > 0.9, 'tether: the first ring frame is stable from frame to frame (no braid swim)');
+  R.dispose();
+  // the rope over the rock: a draped rope stays out of the stub rock
+  const rock = createStubRock({ seed: 1 });
+  const top = x => { let y = 20; while (y > -10 && rock.sdf(x, y, 0) > 0.05) y -= 0.05; return y; };
+  // from the ROV just over the rock at x 0 up into the water at x 2.2
+  // (heavy and slack, so it lies on the slope; the start line is in water)
+  const A = [0, top(0) + 0.3, 0], B = [2.2, top(0) + 9, 0];
+  const t = createTether({ n: 56, a: A, b: B, weight: 3 }), tb = createTetherTube({ rings: 240, radial: 16 });
+  let ms = 0;
+  for (let i = 0; i < 600; i++) { const t0 = performance.now(); t.step(1 / 30, A, B, rock.sdf); tb.update(t.points, t.count); if (i >= 100) ms += performance.now() - t0; }
+  let minRope = Infinity, minCurve = Infinity;
+  for (let i = 0; i < t.count; i++) minRope = Math.min(minRope, rock.sdf(t.points[i * 3], t.points[i * 3 + 1], t.points[i * 3 + 2]));
+  for (let r = 0; r < tb.rings; r++) minCurve = Math.min(minCurve, rock.sdf(tb.curve[r * 3], tb.curve[r * 3 + 1], tb.curve[r * 3 + 2]));
+  say(minRope > 0 && minCurve > -0.024, 'tether: a rope draped on the rock stays out of it (points, and the curve within the cable radius)', `min sdf rope ${f3(minRope)} curve ${f3(minCurve)} m`);
+  const lo = createTether({ n: 30, a: A, b: B }), lt = createTetherTube({ rings: 96, radial: 8 });
+  let msLo = 0;
+  for (let i = 0; i < 600; i++) { const t0 = performance.now(); lo.step(1 / 30, A, B, rock.sdf); lt.update(lo.points, lo.count); if (i >= 100) msLo += performance.now() - t0; }
+  say(ms / 500 < 1.5 && msLo / 500 < 1, 'tether: step + tube update per frame in the frame budget (stub rock sdf)', `high ${f3(ms / 500)} ms (56 pts, 240 x 16), low ${f3(msLo / 500)} ms (30 pts, 96 x 8)`);
+  const RL = createROVs(THREE, { scene: new THREE.Scene(), rock: createStubRock({ seed: 1 }), seed: 1, count: 2, quality: 'low', feed: noFeed });
+  const vl = RL.vehicles[0];
+  say(vl.tube.rings < tube.rings && vl.tube.radial === 8 && vl.tether.count - 1 <= 32, 'tether: low quality uses fewer points, rings and sides', `${vl.tether.count - 1} segments, ${vl.tube.rings} x ${vl.tube.radial}, ${vl.tmesh.geometry.index.count / 3} tris`);
+  RL.dispose();
+}
+
 export function done(tag = 'rov') {
   console.log(`${tag}: ${pass} passed, ${fail} failed`);
   return fail;
