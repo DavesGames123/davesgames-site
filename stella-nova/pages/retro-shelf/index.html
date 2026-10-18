@@ -28,6 +28,13 @@
      4. style.css, then ../../lib/sci.css (fonts)
    Script at the end of body: main.js (module), which imports saver.js.
 
+   SCREENSAVER (window.snSaver, for lib/screensaver.js)
+     saver.js       the hook: a 3D desk tour of the shelf, one game at a time
+     saver-plan.js  the seeded shot plan, the beats, the framing (pure)
+     saver-card.js  our own period art: attract screens, box covers, labels
+     saver-desk.js  the three r160 desk: CRT, PC, rack, joystick, keyboard
+   three loads only when the saver starts (a relative import).
+
    PLAYERS (one child iframe at a time, inside #player)
      play-dos.html      DOSBox: unpacks the DOS game and runs its .EXE
      play-scummvm.html  ScummVM: unpacks the game into /games/<id>

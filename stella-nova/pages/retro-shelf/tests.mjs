@@ -23,12 +23,19 @@
 //              $('id') of each script is in its html, every module links
 //              (a ReferenceError on a browser global is correct, a
 //              SyntaxError is a bug)
-//    saver.    planReel: every game before a repeat, no game twice in a
-//              row, 6..12 s, seeds differ
+//    saver.    planTour, per seed: every game once a round, no game twice
+//              in a row, the six beats in order (pick, plugin, poweron,
+//              tour, poweroff, eject), 8..15 s a beat; the CRT power
+//              curve and crtState per beat; frameFit and the desk camera
+//              keep the subject in the plate band at 16:9 and 9:16; the
+//              plate fields (title, year and maker, licence kind from
+//              LICENSES.md, no code); the desk choreography; no fetch to
+//              another origin; no game art or commercial asset path
 //    boot.     main.js and saver.js in a linkedom DOM: the shelf, credits
 //              and system list fill; a card opens the player iframe; Exit
 //              removes it; a wrong file type keeps Play off; the saver
-//              enters with a canvas in the document and exits. Skipped
+//              enters with a canvas in the document, runs its plan (the
+//              2D path: node has no WebGL) and exits. Skipped
 //              when linkedom is not found (set LINKEDOM).
 //  Exit code 1 on any failure.
 // ============================================================================
@@ -40,7 +47,9 @@ import { zipAll } from './unzip.js';
 import { DOS_KEYS, dosboxConf, doomCfg, unpackDos } from './play-dos.js';
 import { scummArgs, dataUrl } from './play-scummvm.js';
 import { ejsConfig, blockedUrl } from './play-emu.js';
-import { planReel } from './saver.js';
+import { planTour, BEATS, TOUR_MOVES, crtPower, crtState, locate, shotLabel, licenceKind, mediaOf, frameFit, fovFor, beatPose, blendPose, poseEye, span, sameOrigin } from './saver-plan.js';
+import { norm, hasGlyph } from './saver-card.js';
+import { THREE_URL } from './saver.js';
 import { playerUrl, extOk, fmtMB } from './main.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -199,7 +208,7 @@ if (haveFetched) {
   for (const h of ['play-dos.html', 'play-scummvm.html', 'play-emu.html']) ok(read(h).toString().includes('player.css'), `page: ${h} uses player.css`);
   for (const g of data.games) ok(/^play-(dos|scummvm)\.html\?game=/.test(playerUrl(g)), `page: player URL of ${g.id}`);
   ok(fmtMB(2450688) === '2.3 MB' && fmtMB(32842993) === '31 MB', 'page: fmtMB');
-  for (const f of ['main.js', 'saver.js', 'play-dos.js', 'play-scummvm.js', 'play-emu.js', 'player-common.js', 'unzip.js']) {
+  for (const f of ['main.js', 'saver.js', 'saver-plan.js', 'saver-card.js', 'saver-desk.js', 'play-dos.js', 'play-scummvm.js', 'play-emu.js', 'player-common.js', 'unzip.js']) {
     let err = null;
     try { await import(pathToFileURL(join(HERE, f)).href + '?link'); } catch (e) { err = e; }
     ok(!err || err instanceof ReferenceError, `page: ${f} links (${err ? err.name + ': ' + err.message : 'ok'})`);
@@ -210,13 +219,124 @@ if (haveFetched) {
 // -------------------------------------------------------------------- saver
 {
   const m = mark();
-  const ids = data.games.map(g => g.id);
-  const reel = planReel(ids, 42, 3);
-  ok(reel.length === ids.length * 3, 'saver: three rounds');
-  ok(new Set(reel.slice(0, ids.length).map(s => s.id)).size === ids.length, 'saver: every game before a repeat');
-  ok(reel.every((s, i) => i === 0 || s.id !== reel[i - 1].id), 'saver: no game twice in a row');
-  ok(reel.every(s => s.secs >= 6 && s.secs <= 12), 'saver: 6..12 s a shot');
-  ok(planReel(ids, 1).map(s => s.id).join() !== planReel(ids, 2).map(s => s.id).join(), 'saver: seeds differ');
+  const ids = data.games.map(g => g.id), N = ids.length, KINDS = BEATS.map(b => b.kind).join();
+  ok(KINDS === 'pick,plugin,poweron,tour,poweroff,eject', 'saver: the beat order is pick, plugin, poweron, tour, poweroff, eject');
+  for (const seed of [1, 7, 42, 9001, 0xdeadbeef]) {
+    const plan = planTour(ids, seed, { rounds: 3, calm: seed % 2 ? 0.2 : 0.9 });
+    ok(plan.length === N * 3, `saver: seed ${seed}: three rounds`);
+    let rounds = true, order = true, secs = true, moves = true;
+    for (let k = 0; k < 3; k++) {
+      const r = plan.slice(k * N, k * N + N).map(s => s.id);
+      if (new Set(r).size !== N || !ids.every(id => r.includes(id))) rounds = false;
+    }
+    for (const s of plan) {
+      if (s.beats.map(b => b.kind).join() !== KINDS) order = false;
+      if (!s.beats.every(b => b.secs >= 8 && b.secs <= 15)) secs = false;
+      if (!TOUR_MOVES.includes(s.beats[3].move)) moves = false;
+    }
+    ok(rounds, `saver: seed ${seed}: every game once a round, no repeat until all have played`);
+    ok(plan.every((s, i) => i === 0 || s.id !== plan[i - 1].id), `saver: seed ${seed}: no game twice in a row`);
+    ok(order, `saver: seed ${seed}: each game runs the six beats in order`);
+    ok(secs, `saver: seed ${seed}: 8..15 s a beat`);
+    ok(moves && plan.every((s, i) => i === 0 || s.beats[3].move !== plan[i - 1].beats[3].move), `saver: seed ${seed}: a tour move each game, not the last one`);
+    // locate walks the beats in order
+    const sh = plan[0], t = sh.beats[0].secs + sh.beats[1].secs + 1;
+    const L = locate(plan, t);
+    ok(L.si === 0 && L.bi === 2 && Math.abs(L.tb - 1) < 1e-9, `saver: seed ${seed}: locate finds beat 3 at ${t.toFixed(1)} s`);
+  }
+  ok(planTour(ids, 1).map(s => s.id).join() !== planTour(ids, 2).map(s => s.id).join(), 'saver: seeds differ');
+  ok(planTour(ids, 5).map(s => s.id).join() === planTour(ids, 5).map(s => s.id).join(), 'saver: one seed, one plan');
+  // the CRT
+  const on = [0, 0.1, 0.4, 0.9, 2].map(u => crtPower('on', u)), off = [0, 0.1, 0.3, 1, 3].map(u => crtPower('off', u));
+  ok(on[0].bright === 0 && on[1].sx < 0.05 && on[1].sy < 0.05 && on[2].sy < 0.05 && on[2].sx > 0.1 && on[4].sx === 1 && on[4].sy === 1, 'saver: power on goes dot, line, full picture');
+  ok(off[0].sy === 1 && off[1].sy < 1 && off[2].sx < 1 && off[3].sx < 0.05 && off[4].bright === 0, 'saver: power off goes line, dot, dark');
+  {
+    const s = planTour(ids, 3)[0], b = k => s.beats.findIndex(x => x.kind === k);
+    ok(crtState(s, b('pick'), 3).pw === null && crtState(s, b('plugin'), 3).pw === null && crtState(s, b('eject'), 3).pw === null, 'saver: the CRT is off in pick, plugin and eject');
+    ok(crtState(s, b('poweron'), 0.1).pw.bright === 0 && crtState(s, b('poweron'), s.beats[b('poweron')].secs - 0.01).pw.sy === 1, 'saver: the CRT comes on in the poweron beat');
+    const endOn = crtState(s, b('poweron'), s.beats[b('poweron')].secs).at, startTour = crtState(s, b('tour'), 0).at;
+    ok(Math.abs(endOn - startTour) < 1e-6, 'saver: the attract screen runs on from poweron into tour');
+    ok(crtState(s, b('poweroff'), s.beats[b('poweroff')].secs - 0.01).pw.bright < 0.05, 'saver: the CRT is dark at the end of poweroff');
+  }
+  // plate band framing, pure
+  for (const [w, h] of [[1920, 1080], [1080, 1920], [390, 844]]) {
+    for (const band of [null, { t: h * 0.24, b: h * 0.22 }]) {
+      const fov = fovFor(w, h), f = frameFit(w, h, band, fov, 0.25);
+      const ch = h - (band ? band.t + band.b : 0), tv = Math.tan(fov * Math.PI / 360);
+      const pxR = 0.25 / f.dist / tv * (h / 2);
+      ok(pxR <= ch / 2 + 1e-6 && pxR * 1 <= w / 2 + 1e-6, `saver: frameFit ${w}x${h} ${band ? 'band' : 'no band'}: the subject (${pxR.toFixed(0)} px) fits the band (${ch.toFixed(0)} px) and the width`);
+      ok(Math.abs(h / 2 - f.offY - f.cy) < 1e-9 && Math.abs(f.cy - ((band ? band.t : 0) + ch / 2)) < 1e-9, `saver: frameFit ${w}x${h}: the view offset puts the band centre on the subject`);
+    }
+  }
+  // the plate
+  for (const g of data.games) {
+    const row = licences.split('\n').find(l => l.includes('`' + g.file.split('/').pop() + '`')) || '';
+    ok((licenceKind(g) === 'Shareware') === /shareware/i.test(row) && row.length > 0, `saver: licence kind of ${g.id} (${licenceKind(g)}) agrees with LICENSES.md`);
+    ok(g.saver && ['floppy', 'cd'].includes(g.saver.media) && g.saver.genre && g.saver.motif && mediaOf(g) === g.saver.media, `saver: games.json saver fields of ${g.id}`);
+    for (const k of BEATS.map(b => b.kind)) {
+      const l = shotLabel(g, k);
+      ok(l.title === g.title && l.sub.includes(String(g.year)) && l.sub.includes(g.maker) && l.lines.length === 2 && l.lines[0].startsWith(licenceKind(g)) && l.lines[1].length > 8 && l.lines[1].length < 120 && !('code' in l) && !('tex' in l), `saver: plate of ${g.id} ${k}: title, year and maker, licence, a one-line note, no code`);
+    }
+    const text = norm(g.title + g.maker + g.year + g.sub + g.saver.genre + 'PRESS ANY KEY FREEWARE SHAREWARE');
+    ok([...text].every(hasGlyph), `saver: the bitmap font has every letter of ${g.id} (${[...text].filter(c => !hasGlyph(c)).join('')})`);
+  }
+  // the sources: no other origin, no game art, three from the vendor folder
+  const SAVER = ['saver.js', 'saver-plan.js', 'saver-card.js', 'saver-desk.js'];
+  for (const f of SAVER) {
+    const src = read(f).toString();
+    ok(!/https?:\/\//.test(src.replace(/^\s*\/\/.*$/gm, '')), `saver: ${f} names no absolute URL`);
+    ok(!/\.(png|jpe?g|gif|webp|avif|mp4|webm|ogv|iso|bin|cue|rom|wad|zip)\b['"`]/i.test(src), `saver: ${f} loads no image, video, disc or game file`);
+    ok(!/fetched\/|vendor\/retro/.test(src), `saver: ${f} reads nothing from the fetched games`);
+    const fetches = [...src.matchAll(/fetch\(([^)]*)\)/g)].map(x => x[1]);
+    ok(fetches.every(a => /^u$/.test(a.trim())) && (f !== 'saver.js' || /new URL\('games\.json', import\.meta\.url\)/.test(src)), `saver: ${f} fetches only games.json (${fetches.join(' | ') || 'none'})`);
+  }
+  ok(sameOrigin('games.json', 'https://davesgames.io/stella-nova/pages/retro-shelf/saver.js') && !sameOrigin('https://example.com/x.png', 'https://davesgames.io/a/'), 'saver: sameOrigin');
+  ok(/^\.\.\/\.\.\/vendor\/three@0\.160\.0\//.test(THREE_URL) && existsSync(join(HERE, THREE_URL)), 'saver: three r160 comes from the vendor folder');
+  // the desk: choreography and camera, with three in node (no WebGL)
+  const THREE = await import(pathToFileURL(join(HERE, THREE_URL)).href);
+  const { buildDesk } = await import('./saver-desk.js');
+  const ctx = () => new Proxy({ measureText: t => ({ width: String(t).length * 8 }) }, { get: (o, k) => (k in o ? o[k] : (k === 'createImageData' || k === 'createRadialGradient' || k === 'arc') ? undefined : () => {}), set: () => true });
+  const mk = (w, h) => { const c = ctx(); return { width: w, height: h, getContext: () => c }; };
+  const desk = buildDesk(THREE, data.games, { mk, coarse: true, tex: cv => { const t = new THREE.Texture(); t.image = cv; return t; } });
+  const rack = desk.parts.rack.boxes;
+  ok(rack.size === N, 'saver: the rack holds one box per game');
+  const cam = new THREE.PerspectiveCamera(34, 1, 0.01, 20), v = new THREE.Vector3();
+  let inBand = true, worst = '';
+  for (const s of planTour(ids, 11, { rounds: 1 })) {
+    const g = data.games.find(x => x.id === s.id), isCd = mediaOf(g) === 'cd', media = isCd ? desk.parts.cd : desk.parts.floppy;
+    desk.pose(g, 'pick', 0, 9);
+    ok(rack.get(g.id).mesh.position.distanceTo(rack.get(g.id).home) < 1e-6 && !media.visible, `saver: ${g.id} pick starts with the box in the rack`);
+    desk.pose(g, 'pick', 1, 9);
+    ok(rack.get(g.id).mesh.position.distanceTo(rack.get(g.id).home) > 0.2, `saver: ${g.id} pick ends with the box out on the desk`);
+    desk.pose(g, 'plugin', 1, 12);
+    const P = desk.points(g), drv = new THREE.Vector3(...P.drive), port = new THREE.Vector3(...P.port);
+    ok(media.visible && media.position.distanceTo(drv) < 0.12 && media.position.z < 0.02, `saver: ${g.id} plugin ends with the ${isCd ? 'CD' : 'disk'} in the drive`);
+    ok(desk.parts.stick.plug.position.distanceTo(port) < 0.04, `saver: ${g.id} plugin ends with the plug in the game port`);
+    ok(desk.parts.pc.pLed.material.emissiveIntensity > 0, `saver: ${g.id} the power LED is on after the plug click`);
+    const clicks = [0.6, 0.64, 0.88].map(u => desk.pose(g, 'plugin', u + 0.005, 12).click);
+    ok(clicks.some(c => c > 0.5), `saver: ${g.id} plugin has a click`);
+    desk.pose(g, 'eject', 1, 11);
+    ok(rack.get(g.id).mesh.position.distanceTo(rack.get(g.id).home) < 1e-6 && !media.visible, `saver: ${g.id} eject ends with the media in the box and the box in the rack`);
+    ok(desk.parts.stick.plug.position.distanceTo(port) > 0.1 && desk.parts.pc.pLed.material.emissiveIntensity === 0, `saver: ${g.id} eject ends with the plug out and the power LED off`);
+    // the camera: the pose target stays inside the plate band at 16:9 and 9:16
+    for (const [w, h] of [[1920, 1080], [1080, 1920]]) {
+      const band = { t: h * 0.24, b: h * 0.22 };
+      let last = null;
+      for (const b of s.beats) for (const u of [0, 0.25, 0.5, 0.75, 1]) {
+        desk.pose(g, b.kind, u, b.secs);
+        const tp = beatPose(b, u, desk.points(g)), pose = u === 0 && last ? last : blendPose(last || tp, tp, span(u, 0, 0.32));
+        if (u === 1) last = pose;
+        const fov = fovFor(w, h), f = frameFit(w, h, band, fov, pose.R), eye = poseEye(pose, f.dist);
+        cam.fov = fov; cam.aspect = w / h; cam.position.set(...eye); cam.lookAt(...pose.target); cam.setViewOffset(w, h, 0, f.offY, w, h); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+        v.set(...pose.target).project(cam);
+        const px = (v.x * 0.5 + 0.5) * w, py = (1 - (v.y * 0.5 + 0.5)) * h;
+        if (!(px > w * 0.3 && px < w * 0.7 && py > band.t && py < h - band.b)) { inBand = false; worst = `${g.id} ${b.kind} u=${u} ${w}x${h}: ${px.toFixed(0)},${py.toFixed(0)}`; }
+        if (eye[1] < 0.02 || eye[2] < -0.4) { inBand = false; worst = `${g.id} ${b.kind} u=${u}: the eye is under the desk or in the wall`; }
+      }
+    }
+  }
+  ok(inBand, 'saver: every beat aims the camera at its subject inside the plate band, 16:9 and 9:16 ' + worst);
+  desk.dispose();
   group('saver.', m);
 }
 
@@ -265,7 +385,11 @@ async function bootTest() {
     ok(!document.getElementById('byoPlay').disabled, 'boot: a PlayStation .cue and the owner box turn Play on');
     const res = window.snSaver.enter({ seed: 7, calm: 0.5 });
     ok(res && res.canvas && document.body.contains(res.canvas) && res.warmupMs > 0, 'boot: saver returns a canvas in the document');
-    for (let i = 0; i < 10; i++) { await new Promise(r => setTimeout(r, 2)); for (const fn of raf.splice(0)) { try { fn(2000 + i * 16); } catch (e) { errors.push(e.message); } } }
+    let dbg = null;
+    for (let i = 0; i < 300 && !(dbg && i > 20); i++) { await new Promise(r => setTimeout(r, 10)); for (const fn of raf.splice(0)) { try { fn(performance.now() + i * 500); } catch (e) { errors.push(e.message); } } dbg = window.snSaver.debug(); }
+    ok(dbg && dbg.shot && dbg.shot.beats.length === 6 && dbg.flat === true, 'boot: the saver runs its plan (2D path: node has no WebGL) ' + JSON.stringify(dbg && dbg.loc));
+    const live = [...document.querySelectorAll('canvas')].filter(c => /z-index:200/.test(c.getAttribute('style') || ''));
+    ok(live.length === 1, 'boot: one saver canvas is in the document while it runs');
     window.snSaver.exit();
     ok(!document.body.contains(res.canvas), 'boot: saver exit removes its canvas');
   } catch (e) { errors.push(e.stack || e.message); }

@@ -69,7 +69,12 @@
         "8": "Tab",
         "9": "Escape"
       },
-      "accent": "#c8321e"
+      "accent": "#c8321e",
+      "saver": {
+        "media": "floppy",
+        "genre": "First-person shooter",
+        "motif": "fire"
+      }
     },
     {
       "id": "sky",
@@ -89,7 +94,12 @@
       "blurb": "A cyberpunk point-and-click thriller with art by Dave Gibbons. Robert Foster and the robot Joey must learn the truth about his past and about Union City.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#3e8fb0"
+      "accent": "#3e8fb0",
+      "saver": {
+        "media": "floppy",
+        "genre": "Point-and-click adventure",
+        "motif": "city"
+      }
     },
     {
       "id": "queen",
@@ -109,7 +119,12 @@
       "blurb": "Pilot Joe King crashes in the Amazon jungle in the 1940s and finds Amazon women, six-foot pygmies and a very suspicious lederhosen company.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#d29a2e"
+      "accent": "#d29a2e",
+      "saver": {
+        "media": "floppy",
+        "genre": "Point-and-click adventure",
+        "motif": "jungle"
+      }
     },
     {
       "id": "lure",
@@ -129,7 +144,12 @@
       "blurb": "Revolution's first game. Diermot wakes in a dungeon in Turnvale, a town that the sorceress Selena holds with her Skorl.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#7a9a3a"
+      "accent": "#7a9a3a",
+      "saver": {
+        "media": "floppy",
+        "genre": "Point-and-click adventure",
+        "motif": "castle"
+      }
     },
     {
       "id": "drascula",
@@ -149,7 +169,12 @@
       "blurb": "A comedy adventure from Spain: estate agent John Hacker goes to Transylvania to save B.J. from Count Drascula.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#8c2a4a"
+      "accent": "#8c2a4a",
+      "saver": {
+        "media": "cd",
+        "genre": "Comedy adventure",
+        "motif": "bats"
+      }
     },
     {
       "id": "soltys",
@@ -169,7 +194,12 @@
       "blurb": "A comic point-and-click adventure from Poland. A sołtys is the elected head of a Polish village.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#5a7a3e"
+      "accent": "#5a7a3e",
+      "saver": {
+        "media": "floppy",
+        "genre": "Point-and-click adventure",
+        "motif": "village"
+      }
     },
     {
       "id": "sfinx",
@@ -189,7 +219,12 @@
       "blurb": "A fairy-tale point-and-click adventure from LK Avalon, the studio of Sołtys.",
       "controls": "Point and click with the mouse or touch. Ctrl+F5 opens the ScummVM menu (save, load, quit).",
       "keyboard": false,
-      "accent": "#b07a3a"
+      "accent": "#b07a3a",
+      "saver": {
+        "media": "floppy",
+        "genre": "Fairy-tale adventure",
+        "motif": "desert"
+      }
     }
   ],
   "engines": [
