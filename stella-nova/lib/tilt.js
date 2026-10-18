@@ -21,6 +21,7 @@
 //    const { yaw, pitch } = snTilt.get();    // radians, 0 when off
 //  or turn the eye of their own lookAt (import { tiltEye } from this file):
 //    view = lookAt(tiltEye(eye, target, up), target, up);
+//  A classic script uses window.snTilt.eye(eye, target, up) the same way.
 //  A page that draws only on demand also asks for a frame on each change:
 //    tilt && tilt.subscribe(() => { dirty = true; kick(); });
 //
@@ -282,6 +283,12 @@ export function createTilt(env = {}, tuning) {
     if (on !== ctl.enabled) core.reset();
     ctl.enabled = on;
     if (env.storage) writeSetting(env.storage, on);
+  };
+  // tiltEye for classic scripts: window.snTilt.eye(eye, target, up).
+  ctl.eye = (e, tg, up) => {
+    const o = ctl.get();
+    if (Math.abs(o.yaw) < 1e-7 && Math.abs(o.pitch) < 1e-7) return e;
+    return orbitEye(e, tg, o.yaw, o.pitch, up || [0, 1, 0]);
   };
   ctl.attach = (o) => { if (o && o.camera) ctl.attached.set(o.camera, o); return ctl; };
   ctl.detach = (camera) => { ctl.attached.delete(camera); };

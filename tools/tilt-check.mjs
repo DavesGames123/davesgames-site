@@ -169,8 +169,12 @@ function tilted(e, ctl) {
   const e = env(), ctl = createTilt(e);
   const o = tilted(e, ctl);
   ok(o.yaw > 0.5 * D, 'on: a tilt gives yaw', o.yaw / D);
+  const ee = ctl.eye([0, 0, 5], [0, 0, 0]);
+  ok(Math.abs(Math.hypot(...ee) - 5) < 1e-12 && Math.abs(ee[0]) > 0.02, 'snTilt.eye turns the eye', ee);
   e.sav = true; e.t += 16;
   ok(ctl.get().yaw === 0, 'saver: offset is 0 at once');
+  const e0 = [0, 0, 5];
+  ok(ctl.eye(e0, [0, 0, 0]) === e0, 'snTilt.eye in the saver gives the same eye');
   e.sav = false; e.rm = true; e.t += 16;
   ok(ctl.get().yaw === 0, 'reduced motion: off');
   e.rm = false; e.vis = false; e.t += 16;
