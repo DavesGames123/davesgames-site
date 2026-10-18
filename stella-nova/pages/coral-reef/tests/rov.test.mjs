@@ -21,6 +21,10 @@
 //                   its bounding sphere stays in the feed camera frustum,
 //                   and the orbit widens as it grows
 //    vehicle ...... the model has its parts, lights, camera and shadows
+//    capture ...... the render-target path of feed.js with a stand-in
+//                   renderer: a frame goes to the link, the AGC moves;
+//                   the camera curve shader passes glslangValidator (GLSL
+//                   ES 3.00 with the three.js prefix) when it is there
 // ============================================================================
 import * as THREE from '../../../vendor/three@0.160.0/build/three.module.js';
 import { createROVs, colonyBounds } from '../rov/index.js';
@@ -28,6 +32,11 @@ import { createStubRock } from '../rov/stub-rock.js';
 import { buildPath, createGrid, rng, pathAt } from '../rov/pilot.js';
 import { SstvLink, makeSamples, frameToMode, byId } from '../rov/link.js';
 import { hudFields, drawHud } from '../rov/hud.js';
+import { CURVE_VS, CURVE_FS } from '../rov/feed.js';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { psnr } from '../../sstv/codec.js';
 import { LEAD } from '../../sstv/session.js';
 import { VIS_MS } from '../../sstv/modes.js';
@@ -302,6 +311,36 @@ function receive(mode, noise, dt = 0.25, watch = null) {
   ok(top[1] > v.group.position.y + 20, 'vehicle: the tether goes up into the dark', `top y ${f2(top[1])}`);
   R.dispose();
   ok(scene.children.length === 0, 'vehicle: dispose removes everything from the scene', scene.children.length);
+}
+
+// ── capture ─────────────────────────────────────────────────────────────────
+{
+  const calls = [];
+  const fakeR = {
+    capabilities: { isWebGL2: true }, extensions: { has: () => true },
+    getRenderTarget: () => null, setRenderTarget: (t) => calls.push(['target', t && t.texture.type]), clear: () => {},
+    render: (sc, cam) => calls.push(['render', cam.type]),
+    readRenderTargetPixels: (rt, x, y, w, h, buf) => { for (let i = 0; i < w * h; i++) { buf[i * 4] = buf[i * 4 + 1] = buf[i * 4 + 2] = (i % w) * 255 / w * 0.3; buf[i * 4 + 3] = 255; } calls.push(['read', buf.length]); },
+  };
+  const R = createROVs(THREE, { scene: new THREE.Scene(), renderer: fakeR, rock: createStubRock({ seed: 1 }), seed: 1, feed: { worker: false, document: null } });
+  R.update(1 / 30, 0); R.update(1 / 30, 1 / 30);
+  const reads = calls.filter(c => c[0] === 'read').length, renders = calls.filter(c => c[0] === 'render').map(c => c[1]);
+  ok(reads === 1 && renders.includes('PerspectiveCamera') && renders.includes('OrthographicCamera'), 'capture: one frame renders the ROV camera, the curve pass, and one byte read', JSON.stringify(calls.slice(0, 6)));
+  ok(R.feed.link.state === 'rx', 'capture: the captured frame goes over the link', R.feed.link.state);
+  for (let i = 0; i < 30 * 2; i++) R.update(1 / 30, i / 30);
+  ok(R.feed.link.status().vis === 8, 'capture: the receiver decodes the VIS of the captured frame', R.feed.link.status().vis);
+  const GLSLANG = ['/opt/homebrew/bin/glslangValidator', '/usr/local/bin/glslangValidator'].find(p => fs.existsSync(p));
+  if (GLSLANG) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rov-glsl-'));
+    const fp = '#version 300 es\nprecision highp float;\n#define varying in\nout highp vec4 pc_fragColor;\n#define gl_FragColor pc_fragColor\n#define texture2D texture\n';
+    const vp = '#version 300 es\nprecision highp float;\n#define varying out\nin vec3 position;\nin vec2 uv;\n';
+    fs.writeFileSync(path.join(dir, 'c.frag'), fp + CURVE_FS); fs.writeFileSync(path.join(dir, 'c.vert'), vp + CURVE_VS);
+    let log = '', good = true;
+    for (const f of ['c.vert', 'c.frag']) { try { execFileSync(GLSLANG, [path.join(dir, f)]); } catch (e) { good = false; log += String(e.stdout || e.message); } }
+    fs.rmSync(dir, { recursive: true, force: true });
+    ok(good, 'capture: the camera curve shader passes glslangValidator (GLSL ES 3.00)', log);
+  } else console.log('  capture: glslangValidator not found, shader check skipped');
+  R.dispose();
 }
 
 export function done(tag = 'rov') {

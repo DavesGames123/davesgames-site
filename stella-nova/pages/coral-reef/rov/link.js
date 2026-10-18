@@ -48,12 +48,14 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // src: Float32Array / Uint8Array RGBA rows bottom-up (GL order), w x h.
 // o.gain: a fixed gain, or the auto gain (AGC) of o.agc { g } is used and
 // updated. The camera curve: gain, a soft knee, then the sRGB curve.
+// o.raw: the pixels are final bytes (the GPU did the curve): flip and
+// crop only.
 export function frameToMode(src, w, h, mode, o = {}) {
   const m = typeof mode === 'string' ? byId(mode) : mode;
   const W = m.W, H = m.H, out = new Uint8ClampedArray(W * H * 4);
   const lin = o.linear !== false, scale = src instanceof Uint8Array || src instanceof Uint8ClampedArray ? 1 / 255 : 1;
   // AGC from the 97th percentile of the luminance
-  let gain = o.gain;
+  let gain = o.raw ? 1 : o.gain;
   if (gain == null) {
     const hist = new Uint32Array(256);
     for (let i = 0; i < w * h; i += 3) {
@@ -70,7 +72,8 @@ export function frameToMode(src, w, h, mode, o = {}) {
     if (o.agc) o.agc.g = agc.g;
   }
   const curve = new Uint8Array(4096);
-  for (let i = 0; i < 4096; i++) {
+  if (o.raw) for (let i = 0; i < 4096; i++) curve[i] = Math.min(255, Math.round(i / 4095 * 4 * 255));   // bytes as they are (gain 1)
+  else for (let i = 0; i < 4096; i++) {
     let v = i / 4095 * 4;                           // 0..4 linear, after gain
     v = v / (1 + v * 0.35);                         // soft knee
     v = lin ? (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055) : v;
