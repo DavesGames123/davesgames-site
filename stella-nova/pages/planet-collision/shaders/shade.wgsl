@@ -177,7 +177,6 @@ fn fs_surface(in: VOut) -> SurfOut {
   let ndl = dot(n, L);
   let mode = i32(U0.mode.x + 0.5);
   let shadow = sunAt(P, n, select(0, 24, mode == 0));
-  let diff = max(ndl, 0.0) * shadow;
   var col = vec3f(0.0);
   if (mode == 0) {
     let bi = select(0, 1, b1 > 0.5);
@@ -187,26 +186,47 @@ fn fs_surface(in: VOut) -> SurfOut {
     let lod = clamp(log2(1024.0 / max(6.2832 * Rpx, 1.0)), 0.0, 6.0);
     let alb = matAlbedo(og, fIron, fIce, style, lod);
     let Tm = tMelt(fIron, fIce);
-    let hot = smoothstep(0.7 * Tm, Tm, T);
-    let melt = smoothstep(Tm, 1.2 * Tm, T);
+    // a cut face shows the hot inside of a planet (fn geotherm, drawn:
+    // the solver starts cold), layer by layer
+    let Ti = select(T, max(T, geotherm(length(og), fIron)), cutF > 0.5);
+    let hot = smoothstep(0.7 * Tm, Tm, Ti);
+    let melt = smoothstep(Tm, 1.2 * Tm, Ti);
+    // relief of the procedural bodies (pre-contact surfaces): bump the
+    // normal while the crust is cold and whole
+    let lo = length(og);
+    if (cutF < 0.5 && lo > 0.85 && T < 0.7 * Tm) {
+      n = normalize(n - 0.35 * smoothstep(0.85, 0.97, lo) * reliefGrad(style, og / max(lo, 1e-4)));
+    }
+    let ndl2 = dot(n, L);
+    let diff = max(ndl2, 0.0) * shadow;
     // hot rock darkens before it glows; a cut face shows the inside as it is
     let base = alb.rgb * (1.0 - 0.7 * hot);
     // the visible skin: flowing melt, a crust that skins over as it cools
     // and glowing seams (fn lavaSkin) (the frame of the target body: the
     // remnant, where most crust forms)
-    let skin = lavaSkin(T, (P - centres[0].xyz) / max(U0.bodies[0].y, 1e-4), 5.0);
+    var skin = lavaSkin(T, (P - centres[0].xyz) / max(U0.bodies[0].y, 1e-4), 5.0);
+    if (cutF > 0.5) { skin = vec2f(Ti, 0.0); }
+    // the cut face: a low gain (1/15), so the layers read: a yellow-white
+    // core, an orange mantle that darkens outward, a dark crust
+    let em = select(glow(skin.x), glowG(skin.x, 0.04), cutF > 0.5);
     let H = normalize(L + V);
-    let gloss = clamp(alb.w + 0.5 * melt * (1.0 - skin.y), 0.0, 1.0);
-    let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 160.0, melt)) * diff * (0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0) + 0.25);
-    col = base * (U0.sun.w * diff + U0.view.w) + vec3f(spec) * U0.sun.w * 0.6 + glow(skin.x);
-    col = col * (1.0 - 0.15 * cutF);
+    let gloss = clamp(alb.w + 0.8 * melt * (1.0 - skin.y), 0.0, 1.0);
+    // wet melt: a tight, bright highlight with a Fresnel rise (F0 0.05)
+    let fres = 0.05 + 0.95 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+    let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 220.0, melt)) * diff * (fres + 0.2) * mix(1.0, 3.0, melt);
+    // light from the glowing matter round about after contact (the night
+    // sides are not black): a warm fill at the skin cap
+    let fill = select(vec3f(0.0), glow(skinCap(0.6)) * (0.035 * (1.0 - 0.7 * crustShare())), coolH() >= 0.0);
+    // the crust is thin: some glow of the melt under it shows through
+    let under = glow(skinT(T, 0.6)) * (0.07 * skin.y * melt);
+    col = base * (U0.sun.w * diff + U0.view.w + fill * (0.5 + 0.5 * max(-ndl2, 0.0))) + vec3f(spec) * U0.sun.w * 0.6 + em + under;
   } else {
     let mc = modeColor(mode, T, b1, mixw, speed, fIron, fIce);
     col = mc * (0.30 + 0.70 * max(ndl, 0.0) * mix(1.0, shadow, 0.6));
   }
   // the shell in front of the disc: thinner than at the limb, so the
   // surface (crust, oceans) reads through it
-  col = col + 0.4 * atmosphere(e, Dn, dot(P - e, Dn));
+  col = col + 0.18 * atmosphere(e, Dn, dot(P - e, Dn));
   // premultiplied: the edge pixel lets the sky (and the atmosphere) through
   o.color = vec4f(col * edge + atmosphere(e, Dn, 1e9) * (1.0 - edge), edge);
   o.depth = select(0.0, depthOfZ(z), edge >= 0.5);

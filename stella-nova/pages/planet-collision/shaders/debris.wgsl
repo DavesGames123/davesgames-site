@@ -20,7 +20,8 @@
 //    vs_streak + fs_streak  a line from x back to x - v * U.mode.z (the
 //                           sim time of one frame: real motion blur), 1.3 px
 //                           wide, additive: hot pieces trail their glow,
-//                           cold ones a faint lit trail. Debris only.
+//                           cold ones a faint lit trail; the trail cools
+//                           (redder, dimmer) toward its tail. Debris only.
 //    vs_flash + fs_flash    up to 4 flashes (U.flash): a point of
 //                           incandescent light where the bodies first touch
 //                           (the page sets them from the stats).
@@ -97,7 +98,9 @@ fn vs_drop(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -
     o.alb = vec4f(a.rgb * (1.0 - 0.7 * smoothstep(0.7 * Tm, Tm, T)) * (0.8 + 0.4 * hashU(seed + 17u)), 0.3 * fIron + 0.4 * smoothstep(Tm, 1.2 * Tm, T));
     // a small drop cools faster than the bulk; some carry a cold skin
     let crust = select(0.0, 1.0, hashU(seed + 29u) < crustShare());
-    o.emit = glow(skinT(T, 0.25) * (1.0 - 0.55 * crust));
+    // each drop has its own size and so its own cooling: some are near
+    // the parcel's skin temperature, some a few hundred K cooler
+    o.emit = glow(skinT(T, 0.25) * (1.0 - 0.55 * crust) * (0.8 + 0.28 * hashU(seed + 41u)));
   } else {
     o.alb = vec4f(modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, sp, fIron, fIce), 0.0);
     o.emit = vec3f(0.0);
@@ -147,6 +150,7 @@ struct LOut {
   @location(0) @interpolate(flat) col: vec3f,
   @location(1) along: f32,
   @location(2) across: f32,
+  @location(3) @interpolate(flat) tailCol: vec3f,
 };
 @vertex
 fn vs_streak(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> LOut {
@@ -183,8 +187,13 @@ fn vs_streak(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -
     let fIce = select(0.0, 1.0, mt == 3u);
     let style = i32(U0.bodies[min(bodyOf(ii), 3u)].x + 0.5);
     let alb = matAlbedo(pOrig[ii].xyz, fIron, fIce, style, 3.0).rgb;
-    o.col = glow(skinT(T, 0.25)) * 0.55 + alb * U0.sun.w * 0.12;
+    // the trail cools behind the drop: the head at the skin temperature,
+    // the tail redder and dimmer (0.7 of it)
+    let Ts = skinT(T, 0.25);
+    o.col = glow(Ts) * 0.55 + alb * U0.sun.w * 0.12;
+    o.tailCol = glow(0.7 * Ts) * 0.55 + alb * U0.sun.w * 0.06;
   } else {
+    o.tailCol = vec3f(0.0);
     o.col = 0.25 * modeColor(mode, T, select(0.0, 1.0, bodyOf(ii) == 1u), 0.0, length(v), select(0.0, 1.0, matOf(ii) == 0u), select(0.0, 1.0, matOf(ii) == 3u));
   }
   return o;
@@ -193,7 +202,7 @@ fn vs_streak(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -
 fn fs_streak(in: LOut) -> @location(0) vec4f {
   let edge = 1.0 - smoothstep(0.55, 1.0, abs(in.across));
   let tail = 1.0 - in.along;
-  return vec4f(in.col * edge * tail * tail, 0.0);
+  return vec4f(mix(in.col, in.tailCol, in.along) * edge * tail * tail, 0.0);
 }
 
 // ── impact flashes ──────────────────────────────────────────────────────────

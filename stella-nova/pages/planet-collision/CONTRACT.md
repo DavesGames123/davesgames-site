@@ -248,6 +248,29 @@ skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn lavaSkin`):
   chance. No Voronoi cells.
 - Radiance: T^4 from the Draper point (750 K) times `glowGain`, with a
   soft limit at 3 (scene units): orange stays orange after the tone map.
+- Open melt has convection cells (0.84-1.0 of the skin temperature), a
+  tight wet highlight with a Fresnel rise, and under thin crust a little
+  of its glow shows through. After contact a warm fill light (the
+  glowing matter round about, drawn) keeps the night sides from black.
+- The cut face shows the hot inside (shaders/common.wgsl fn geotherm,
+  optics.js geotherm, drawn: the bodies start at 300 K): 5400 K at the
+  centre, 4000 K at the core boundary (0.55 R), 1600 K under the outer
+  6 %, at a low glow gain, so the yellow-white core, the orange mantle
+  and the dark crust read as layers; the mantle is olive peridotite, the
+  iron grey-brown.
+- Before contact the procedural bodies have relief (a bumped normal):
+  the proto-Earth has dark basalt land, shallow seas, red-brown plains,
+  steam clouds and a thin atmosphere; Theia has craters with bright rims
+  and a trace of atmosphere (fn protoHeight, fn craters, fn cloudCover).
+- Shadows: scene.wgsl fn sunAt marches the density volume toward the sun
+  (24 steps) from each surface pixel and each drop, so bodies, the neck
+  and the splash shade each other after contact; the smoke shades them
+  too (its light volume).
+- The density volume: an expanded particle (rho under 0.6 rho0) has a
+  wider, lower kernel and is drawn out along its velocity (up to 2.2 x),
+  so thinning sheets and arms stay smooth and pinch into drops.
+- Drops have their own cooling (0.8-1.08 of the skin temperature), and
+  their streaks cool (redder, dimmer) toward the tail.
 
 `coolH` (frame field) is the sim hours since the first contact; main.js
 sets it, and a negative value (the default) means before contact: no

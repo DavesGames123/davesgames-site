@@ -46,7 +46,8 @@
 //
 //  grep -n targets: "struct U", "fn klass", "fn spacing0", "fn blackbody",
 //  "fn glow", "fn skinT", "fn crustShare", "fn lavaSkin", "fn warped", "fn drift", "fn planetAlbedo", "fn matAlbedo", "fn modeColor", "fn rayAt",
-//  "fn depthOf", "fn removed", "fn toGrid", "fn inVolume", "fn kernelCells"
+//  "fn depthOf", "fn removed", "fn toGrid", "fn inVolume", "fn kernelCells",
+//  "fn protoHeight", "fn craters", "fn cloudCover", "fn reliefGrad", "fn geotherm"
 // ============================================================================
 
 struct U {
@@ -202,11 +203,12 @@ fn coolH() -> f32 { return U0.extra.z; }
 // Small free pieces cool faster than the bulk (a smaller rate).
 fn skinCap(rate: f32) -> f32 { return 1700.0 + 2300.0 * exp(-max(coolH(), 0.0) / rate); }
 fn skinT(T: f32, rate: f32) -> f32 { return min(T, skinCap(rate)); }
-fn glow(T: f32) -> vec3f {
+fn glowG(T: f32, gain: f32) -> vec3f {
   let on = smoothstep(750.0, 1100.0, T);
-  let k = U0.view.z * max(pow(T / 1500.0, 4.0) - 0.0625, 0.0);
+  let k = gain * max(pow(T / 1500.0, 4.0) - 0.0625, 0.0);
   return blackbody(T) * on * (GLOW_MAX * (1.0 - exp(-k / GLOW_MAX)));
 }
+fn glow(T: f32) -> vec3f { return glowG(T, U0.view.z); }
 // The share of a melt surface under a cooled crust: none before contact,
 // it grows with the sim hours since contact (0.22 at 0.1 h, 0.71 at 1 h,
 // 0.85 from 2.5 h).
@@ -268,7 +270,8 @@ fn lavaSkin(T: f32, o: vec3f, scale: f32) -> vec2f {
   // thin crust (near the edge of a plate) is hotter than a thick plate
   let thick = smoothstep(0.0, 0.25, edge);
   let Tcrust = max(mix(0.75, 0.42, thick) * Ts, 700.0);
-  let Topen = Ts * (0.93 + 0.07 * n);
+  // open melt: convection cells, hotter where it wells up, cooler sinks
+  let Topen = Ts * (0.84 + 0.16 * smoothstep(0.25, 0.75, n));
   return vec2f(mix(Topen, Tcrust, c), c);
 }
 
@@ -280,6 +283,66 @@ fn lavaSkin(T: f32, o: vec3f, scale: f32) -> vec2f {
 fn mapAt(layer: i32, n: vec3f, lod: f32) -> vec3f {
   let uv = vec2f(0.5 + atan2(n.y, n.x) / 6.2831853, 0.5 - asin(clamp(n.z, -1.0, 1.0)) / 3.14159265);
   return pow(textureSampleLevel(maps, linSamp, uv, layer, lod).rgb, vec3f(2.2));
+}
+// The relief of the procedural bodies (sea level 0): continents of a
+// warped fbm and ridged ranges (the proto-Earth)
+fn protoHeight(n: vec3f) -> f32 {
+  let w = fbm(n * 1.7 + vec3f(5.0)) - 0.5;
+  let c = fbm(n * 2.2 + vec3f(w * 1.5)) - 0.52;
+  let ridge = 1.0 - abs(2.0 * fbm(n * 7.0 + vec3f(2.0)) - 1.0);
+  return c + 0.12 * ridge * smoothstep(-0.02, 0.1, c);
+}
+// Craters on the unit sphere: x the bowl (1 inside), y the bright rim and
+// its rays; k: the cells per radius (one crater per cell at most)
+fn craters(n: vec3f, k: f32) -> vec2f {
+  let p = n * k;
+  let i = floor(p);
+  var bowl = 0.0;
+  var rim = 0.0;
+  for (var j = 0; j < 27; j++) {
+    let o = vec3f(f32(j % 3 - 1), f32((j / 3) % 3 - 1), f32(j / 9 - 1));
+    let c = i + o;
+    let hs = hash3(c + vec3f(7.1));
+    if (hs < 0.55) { continue; }
+    let q = c + vec3f(hash3(c + vec3f(1.3)), hash3(c + vec3f(2.9)), hash3(c + vec3f(4.7)));
+    let r = 0.18 + 0.32 * hash3(c + vec3f(9.2));
+    let d = length(p - q) / r;
+    bowl = max(bowl, smoothstep(1.0, 0.75, d));
+    rim = max(rim, smoothstep(0.75, 1.0, d) * smoothstep(1.35, 1.0, d));
+  }
+  return vec2f(bowl, rim);
+}
+// A cover of clouds (0..1) on the unit sphere: warped fbm, banded by
+// latitude; amount: the share covered
+fn cloudCover(n: vec3f, amount: f32) -> f32 {
+  let w = vec3f(fbm(n * 2.0 + vec3f(1.0)), fbm(n * 2.0 + vec3f(7.0)), 0.0) - vec3f(0.5);
+  let f = fbm(vec3f(n.x * 3.0, n.y * 3.0, n.z * 6.0) + 2.5 * w);
+  return smoothstep(1.0 - amount - 0.08, 1.0 - amount + 0.12, f);
+}
+// The bump of a body style at the unit direction n (body frame): the
+// tangential gradient of its relief, for the surface normal
+fn reliefGrad(style: i32, n: vec3f) -> vec3f {
+  if (style != 1 && style != 2) { return vec3f(0.0); }
+  let e = 0.004;
+  var g = vec3f(0.0);
+  for (var k = 0; k < 3; k++) {
+    var d = vec3f(0.0);
+    d[k] = e;
+    var h1 = 0.0;
+    var h0 = 0.0;
+    if (style == 1) { h1 = max(protoHeight(normalize(n + d)), 0.0); h0 = max(protoHeight(normalize(n - d)), 0.0); }
+    else { h1 = -craters(normalize(n + d), 9.0).x + fbm((n + d) * 16.0) * 0.5; h0 = -craters(normalize(n - d), 9.0).x + fbm((n - d) * 16.0) * 0.5; }
+    g[k] = (h1 - h0) / (2.0 * e);
+  }
+  return g - n * dot(g, n);
+}
+// The drawn temperature of the inside on a cut face (optics.js geotherm):
+// r the radius share, iron 1 in the core
+fn geotherm(r: f32, iron: f32) -> f32 {
+  let x = clamp(r, 0.0, 1.0);
+  if (iron > 0.5) { return 5400.0 + (4000.0 - 5400.0) * min(1.0, (x / 0.55) * (x / 0.55)); }
+  let m = 4000.0 + (1600.0 - 4000.0) * clamp((x - 0.55) / 0.39, 0.0, 1.0);
+  return select(m, 1600.0 + (300.0 - 1600.0) * (x - 0.94) / 0.06, x > 0.94);
 }
 fn planetAlbedo(style: i32, n: vec3f, lod: f32) -> vec4f {
   let w = fbm(n * 3.0) - 0.5;
@@ -293,15 +356,27 @@ fn planetAlbedo(style: i32, n: vec3f, lod: f32) -> vec4f {
     return vec4f(mix(c * 0.9, vec3f(0.92), cloud * 0.9), sea * (1.0 - cloud));
   }
   if (style == 1) {
-    // the proto-Earth: no map (it is a model body); a dark basalt crust
-    // broken by cooling cracks
-    let crack = smoothstep(0.47, 0.5, abs(vnoise(n * 22.0) - 0.5) + 0.48 * (1.0 - fine));
-    return vec4f(mix(vec3f(0.11, 0.10, 0.10), vec3f(0.22, 0.19, 0.17), fine) * (1.0 - 0.5 * crack), 0.0);
+    // the proto-Earth (a model body, about 4.5 Gyr ago): dark basalt
+    // land, shallow seas (zircons say water by 4.4 Gyr), red-brown
+    // weathered plains, a broken cover of steam clouds; w: the gloss of
+    // the seas
+    let h = protoHeight(n);
+    let sea = smoothstep(0.02, -0.02, h);
+    var land = mix(vec3f(0.10, 0.09, 0.08), vec3f(0.24, 0.19, 0.15), smoothstep(0.0, 0.25, h) * (0.6 + 0.4 * fine));
+    land = mix(land, vec3f(0.30, 0.16, 0.09), 0.5 * smoothstep(0.55, 0.7, fbm(n * 5.0 + vec3f(3.0))));
+    let water = mix(vec3f(0.015, 0.045, 0.075), vec3f(0.03, 0.09, 0.11), smoothstep(-0.12, 0.0, h));
+    let c = mix(land, water, sea);
+    let cl = cloudCover(n, 0.42);
+    return vec4f(mix(c, vec3f(0.88, 0.89, 0.92), cl), sea * (1.0 - cl));
   }
   if (style == 2) {
-    // Theia (a model body): grey-brown highlands, darker plains
+    // Theia (a model body, about Mars size): grey-brown regolith, dark
+    // basalt plains, craters with bright rims and rays
     let pl = smoothstep(0.5, 0.58, fbm(n * 2.4 + vec3f(4.0)));
-    return vec4f(mix(vec3f(0.34, 0.31, 0.28), vec3f(0.17, 0.16, 0.16), pl) * (0.85 + 0.3 * fine), 0.0);
+    var c = mix(vec3f(0.36, 0.31, 0.26), vec3f(0.15, 0.14, 0.14), pl) * (0.85 + 0.3 * fine);
+    let cr = craters(n, 9.0);
+    c = c * (1.0 - 0.35 * cr.x) + vec3f(0.18, 0.16, 0.14) * cr.y;
+    return vec4f(c, 0.0);
   }
   if (style == 3) { return vec4f(mapAt(2, n, lod), 0.0); }
   if (style == 4) { return vec4f(mapAt(3, n, lod), 0.0); }
@@ -335,9 +410,10 @@ fn matAlbedo(o: vec3f, fIron: f32, fIce: f32, style: i32, lod: f32) -> vec4f {
   let crust = smoothstep(0.86, 0.95, lo);
   let s = planetAlbedo(style, o / lo, lod);
   let deep = 1.0 - 0.45 * smoothstep(0.9, 0.3, lo);
-  let rock = mix(vec3f(0.16, 0.13, 0.11), vec3f(0.30, 0.25, 0.20), vnoise(o * 14.0)) * deep;
+  // the mantle is dark olive peridotite, the crust lighter rock
+  let rock = mix(mix(vec3f(0.12, 0.13, 0.09), vec3f(0.20, 0.21, 0.15), vnoise(o * 14.0)), mix(vec3f(0.16, 0.13, 0.11), vec3f(0.30, 0.25, 0.20), vnoise(o * 14.0)), smoothstep(0.8, 0.95, lo)) * deep;
   let ice = mix(vec3f(0.62, 0.70, 0.76), vec3f(0.82, 0.88, 0.92), vnoise(o * 10.0));
-  let iron = vec3f(0.46, 0.40, 0.35);
+  let iron = mix(vec3f(0.42, 0.40, 0.38), vec3f(0.55, 0.48, 0.40), vnoise(o * 9.0));
   let fRock = max(1.0 - fIron - fIce, 0.0);
   let body = mix(fRock * rock + fIce * ice, s.rgb * (fRock + fIce), crust);
   return vec4f(body + fIron * iron, mix(0.0, s.w, crust) + fIron * 0.6);

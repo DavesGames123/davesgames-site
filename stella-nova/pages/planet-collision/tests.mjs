@@ -756,6 +756,18 @@ async function renderTests() {
   const pre = scan(at);
   ok('R before contact: the target fills its disc, dark sky outside, no glow', cIn[0] + cIn[1] + cIn[2] > 90 && cOut[0] + cOut[1] + cOut[2] < 60 && pre.glow === 0,
     `centre rgb ${cIn.join(',')}, 1.35 R out ${cOut.join(',')}, ${pre.glow} glowing px, disc ${rpx.toFixed(0)} px`);
+  // the proto-Earth before contact (theia preset): seas, land and clouds
+  // on its lit face, not one flat grey
+  { const s1 = await SphGPU.create(device, 8192, await Deno.readTextFile(new URL('./shaders/sph.wgsl', import.meta.url)));
+    const su = buildScenario(PRESETS.find(p => p.key === 'theia'), 8192, 1); s1.upload(su, makeParams(su, { KG: 4 })); s1.relaxSteps(40); s1.launch();
+    ren.attach(s1, su); const Xp = su.bodies[0].X, Rp = su.bodies[0].R, g = defaultFrame();
+    Object.assign(g, { eye: [Xp[0] - 3.2 * Rp, Xp[1] - 1.2 * Rp, Xp[2] + 0.4 * Rp], target: Xp, sun: [-0.8, -0.5, 0.3] });
+    ren.render(g); const at4 = await rgb(), c = ren.project(Xp, W, H), rp = ren.focal * Rp / Math.hypot(3.2 * Rp, 1.2 * Rp, 0.4 * Rp);
+    let n = 0, sea = 0, cloud = 0, land = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (Math.hypot(x - c.x, y - c.y) > 0.85 * rp) continue; const q = at4(x, y); if (q[0] + q[1] + q[2] < 60) continue; n++;
+      if (q[2] > q[0] + 12) sea++; else if (Math.min(...q) > 150) cloud++; else land++; }
+    ok('R before contact the proto-Earth shows seas, land and clouds', n > 300 && sea > 0.1 * n && cloud > 0.05 * n && land > 0.05 * n, `lit disc px ${n}: sea ${sea}, cloud ${cloud}, land ${land}`);
+    ren.attach(sim, setup); s1.destroy(); }
   // vapour is a volume (smoke.wgsl): draw every particle of the settled
   // target as vapour (xvLo -2, xvHi -1; no drawn atmosphere). At 300 K it
   // is cold dust: a cloud that shades itself (the light march). Lit from
@@ -806,6 +818,14 @@ async function renderTests() {
     let disc = 0, face = 0;
     for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) { if (Math.hypot(x - c.x, y - c.y) > 0.8 * rp) continue; disc++; if (zr[(y * bz + x) * 2 + 1] > 0.5) face++; }
     ok('R the cutaway cuts the volume surface flat', face > 0.6 * disc, `${face} of ${disc} disc px on the cut face`); }
+  // the cut face shows the layers of a hot inside (fn geotherm, drawn):
+  // the core is brighter and yellower than the mantle, the mantle than
+  // the rim (the outer crust) of the cut
+  { ren.render(Object.assign({}, f, { grid: 144, cut: { on: true, n: [0, -1, 0], d: X0[1] * -1 } })); const at3 = await rgb(), c = ren.project(X0, W, H), rp = ren.focal * (H / H2) * R0 / (3 * R0);
+    const ring = (r0, r1) => { let n = 0, s = [0, 0, 0]; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const r = Math.hypot(x - c.x, y - c.y) / rp; if (r < r0 || r >= r1) continue; const q = at3(x, y); n++; for (let k = 0; k < 3; k++) s[k] += q[k]; } return s.map(v => v / Math.max(n, 1)); };
+    const core = ring(0, 0.3), mantle = ring(0.65, 0.8), rim = ring(0.95, 1.0), lum = q => q[0] + q[1] + q[2];
+    ok('R the cut face shows the layers: a bright core, an orange mantle, a dark rim', lum(core) > 1.15 * lum(mantle) && lum(mantle) > 1.3 * lum(rim) && mantle[0] > mantle[2] + 40 && core[1] / core[0] > mantle[1] / mantle[0],
+      `core ${core.map(v => v.toFixed(0)).join('/')}, mantle ${mantle.map(v => v.toFixed(0)).join('/')}, rim ${rim.map(v => v.toFixed(0)).join('/')} (mean rgb)`); }
   ren.resize(W, H);
   // run through the grazing hit; watch from the side
   f.eye = [0.6, -7, 2.0]; f.target = [0, 0, 0]; f.streakT = 0.05;

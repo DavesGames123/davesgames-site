@@ -102,8 +102,8 @@ export const MAP_SIZE = [1024, 512];
 // simulated, and thicker than real so it reads at this scale). 0: none.
 export const BODY_LOOK = {
   earth:      { style: 0, atm: [0.35, 0.60, 1.00], th: 0.035 },
-  protoEarth: { style: 1, atm: [0, 0, 0], th: 0 },
-  theia:      { style: 2, atm: [0, 0, 0], th: 0 },
+  protoEarth: { style: 1, atm: [0.55, 0.66, 0.92], th: 0.03 },
+  theia:      { style: 2, atm: [0.80, 0.66, 0.52], th: 0.012 },
   moon:       { style: 3, atm: [0, 0, 0], th: 0 },
   mars:       { style: 4, atm: [0.90, 0.58, 0.42], th: 0.015 },
   venus:      { style: 5, atm: [0.95, 0.85, 0.62], th: 0.05 },

@@ -44,7 +44,23 @@ fn cs_volScatter(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_ind
   if (klass(ii) == K_VAPOUR) { return; }
   let G = i32(U0.vol1.x);
   let g = toGrid(pPos[ii].xyz);
-  let rc = kernelCells(ii);
+  // An expanded particle (rho under 0.6 rho0) has a wider, lower kernel
+  // (up to 1.35 x, amplitude sqrt(rho / 0.6 rho0)): a thinning sheet stays
+  // smooth instead of breaking into one bead per particle. It is also
+  // drawn out along its velocity (up to 2.2 x along, volume kept), so
+  // the stretched flow joins into filaments and then pinches into drops.
+  let m = matOf(ii) & 3u;
+  let rr = clamp(pTh[ii].x / U0.mats[m].x, 0.05, 1.0);
+  let ex1 = select(1.0, clamp(pow(rr / 0.6, -1.0 / 3.0), 1.0, 1.35), rr < 0.6);
+  let v = pVel[ii].xyz;
+  let sp = length(v);
+  let sf = select(1.0, clamp(1.0 + 3.0 * (0.6 - rr), 1.0, 2.2), (rr < 0.6) && (sp > 1e-6));
+  let ax = select(vec3f(0.0, 0.0, 1.0), v / max(sp, 1e-9), sp > 1e-6);
+  let rc0 = kernelCells(ii) * ex1;
+  let ra = rc0 * pow(sf, 2.0 / 3.0);
+  let rx = rc0 * pow(sf, -1.0 / 3.0);
+  let amp = sqrt(select(1.0, max(rr / 0.6, 0.4), rr < 0.6));
+  let rc = ra;
   let lo = max(vec3i(ceil(g - vec3f(rc))), vec3i(0));
   let hi = min(vec3i(floor(g + vec3f(rc))), vec3i(G - 1));
   if (any(hi < lo)) { return; }
@@ -52,14 +68,16 @@ fn cs_volScatter(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_ind
   let ex = u32(ext.x);
   let exy = u32(ext.x * ext.y);
   let tot = exy * u32(ext.z);
-  let inv = 1.0 / (rc * rc);
+  let ia = 1.0 / (ra * ra);
+  let ix = 1.0 / (rx * rx);
   for (var k = li; k < tot; k = k + 64u) {
     let c = lo + vec3i(i32(k % ex), i32((k / ex) % u32(ext.y)), i32(k / exy));
     let d = vec3f(c) - g;
-    let q = dot(d, d) * inv;
+    let da = dot(d, ax);
+    let q = da * da * ia + (dot(d, d) - da * da) * ix;
     if (q < 1.0) {
       let u = 1.0 - q;
-      atomicAdd(&acc[cellIndex(c, G)], u32(u * u * u * FIX));
+      atomicAdd(&acc[cellIndex(c, G)], u32(amp * u * u * u * FIX));
     }
   }
 }
