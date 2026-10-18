@@ -55,10 +55,22 @@ MIT licence text of pysstv:
 
 ## Pictures
 
-Every picture (images.js: test card, planet, sunset, colour bars, zone
-plate, event card) is drawn by our own code from formulas. No photo or
-third-party art ships with the page. The event card is our own design;
-it is not an ARISS card and uses no ARISS mark.
+The receiver opens on a real photograph. Its first two picture buttons,
+Moonwalk and Earthrise, send NASA photographs from the Apollo missions.
+Apollo sent its first television from the Moon as slow-scan TV, so these
+are a fit. main.js (PHOTOS) loads each photo on first use and crops it to
+the mode, as for an uploaded picture.
+
+| File | Work | Source | Licence |
+| --- | --- | --- | --- |
+| `artwork/apollo11-aldrin-as11-40-5903.jpg` | NASA, photograph AS11-40-5903 by Neil Armstrong: Buzz Aldrin on the Moon near a leg of the Lunar Module, Apollo 11, 20 Jul 1969. Changes: the 1920 x 1874 "large" JPEG cropped to 1890 x 1454 (top, without the dark scan edge at the left), resized to 800 x 615, JPEG quality 82. | https://images.nasa.gov/details/as11-40-5903 (file https://images-assets.nasa.gov/image/as11-40-5903/as11-40-5903~large.jpg) | Public domain (a work of the United States government, NASA; NASA media guidelines https://www.nasa.gov/nasa-brand-center/images-and-media/) |
+| `artwork/apollo8-earthrise-as08-14-2383.jpg` | NASA, photograph AS08-14-2383 by William Anders: Earthrise, Apollo 8, 24 Dec 1968. Changes: the 1920 x 1920 "large" JPEG cropped to 1846 x 1420 round the Earth and the horizon, resized to 800 x 648, JPEG quality 82. | https://images.nasa.gov/details/as08-14-2383 (file https://images-assets.nasa.gov/image/as08-14-2383/as08-14-2383~large.jpg) | Public domain (a work of the United States government, NASA) |
+
+The other pictures (images.js: test card, planet, sunset, colour bars,
+zone plate, event card) are drawn by our own code from formulas. The
+figures, the node tests and the screensaver use only these drawn
+pictures. The event card is our own design; it is not an ARISS card and
+uses no ARISS mark.
 
 ## Reference only (no code used)
 

@@ -33,6 +33,7 @@
 //    grep -n 'function loop'       the one animation loop
 //    grep -n 'function modeTable'  the table of every mode
 //    grep -n 'class Finale'        the receiver
+//    grep -n 'const PHOTOS'        the real photographs (artwork/, CREDITS.md)
 //    grep -n 'class Decim'         low-pass and decimate to about 11 kHz
 //    grep -n 'class LiveRx'        microphone receiver
 //    grep -n 'function cleanup'    pagehide
@@ -240,14 +241,22 @@ class LiveRx {
 }
 
 // ---------------------------------------------------------------- receiver
+// Real photographs for the receiver, next to the drawn cards of images.js.
+// NASA photos are public domain (CREDITS.md). Each loads on first use. Until
+// it is ready, the receiver sends the drawn card in "until" instead.
+const PHOTOS = {
+  moon: { src: 'artwork/apollo11-aldrin-as11-40-5903.jpg', until: 'planet' },
+  earthrise: { src: 'artwork/apollo8-earthrise-as08-14-2383.jpg', until: 'sunset' },
+};
 class Finale {
   constructor() {
     this.cv = $('#rxCv'); this.g = this.cv.getContext('2d'); this.side = $('#rxSide'); this.sg = this.side.getContext('2d');
     this.crt = new CRT(); this.wf = new Waterfall(FS, { N: 512, rows: 300, cols: 200, f0: 1000, f1: 2500 });
-    this.mode = 'r36'; this.cardId = 'planet'; this.custom = null; this.snr = Infinity; this.clock = 0; this.slant = true;
+    this.mode = 'r36'; this.cardId = 'moon'; this.custom = null; this.photos = {}; this.snr = Infinity; this.clock = 0; this.slant = true;
     this.speed = 1; this.muted = false; this.vol = 0.15; this.playing = false; this.t = 0; this.kind = 'tx'; this.visible = false; this.hop = 0;
     this.T = 0;
     this.bind();
+    this.loadPhoto(this.cardId);
     this.build();
     new IntersectionObserver((e) => { this.visible = e[0].isIntersecting; }, { rootMargin: '200px' }).observe(this.cv);
   }
@@ -257,7 +266,7 @@ class Finale {
     sel.innerHTML = MODES.map(m => `<option value="${m.id}"${m.id === this.mode ? ' selected' : ''}>${m.name} · ${m.W}×${m.H} · ${fmtTime(totalMs(m))}</option>`).join('');
     sel.addEventListener('change', () => { this.mode = sel.value; this.reset(); });
     const seg = (id, fn) => $(id).addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; for (const x of $(id).querySelectorAll('button')) x.classList.toggle('on', x === b); fn(b.dataset.v); });
-    seg('#rxCard', (v) => { this.cardId = v; this.custom = null; this.reset(); });
+    seg('#rxCard', (v) => { this.cardId = v; this.custom = null; this.loadPhoto(v); this.reset(); });
     seg('#rxPh', (v) => this.crt.setPhosphor(v));
     seg('#rxSpeed', (v) => { const was = this.playing; if (was) this.pause(); this.speed = +v; if (was) this.play(); });
     $('#rxPlay').addEventListener('click', () => (this.playing ? this.pause() : this.play()));
@@ -273,10 +282,27 @@ class Finale {
     $('#rxAudio').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) this.loadAudio(f); e.target.value = ''; });
     $('#rxMic').addEventListener('click', () => (this.kind === 'mic' ? this.stopMic() : this.startMic()));
   }
+  // Load the photo for card id (no-op for a drawn card or a loaded photo).
+  // When it arrives and the receiver still waits on it, rebuild with it.
+  loadPhoto(id) {
+    const P = PHOTOS[id];
+    if (!P || this.photos[id] || P.loading) return;
+    P.loading = true;
+    const img = new Image(); img.decoding = 'async';
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0);
+      this.photos[id] = c;
+      if (this.cardId === id && !this.custom && !this.playing && this.kind === 'tx') this.reset();
+    };
+    img.onerror = () => { P.loading = false; };
+    img.src = new URL(P.src, import.meta.url).href;
+  }
   source(m) {
-    if (!this.custom) return cardFor(this.cardId, m);
+    const P = PHOTOS[this.cardId];
+    if (!this.custom && !P) return cardFor(this.cardId, m);
+    if (!this.custom && !this.photos[this.cardId]) return cardFor(P.until, m);
     const c = document.createElement('canvas'); c.width = m.W; c.height = m.H;
-    const g = c.getContext('2d'), s = this.custom, sa = s.width / s.height, da = m.aspect;
+    const g = c.getContext('2d'), s = this.custom || this.photos[this.cardId], sa = s.width / s.height, da = m.aspect;
     let sw = s.width, sh = s.height, sx = 0, sy = 0;
     if (sa > da) { sw = s.height * da; sx = (s.width - sw) / 2; } else { sh = s.width / da; sy = (s.height - sh) / 2; }
     g.imageSmoothingQuality = 'high'; g.drawImage(s, sx, sy, sw, sh, 0, 0, m.W, m.H);
