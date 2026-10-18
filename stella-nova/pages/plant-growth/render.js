@@ -502,7 +502,7 @@ function makeGround(U, tex) {
         vec3 meadC = texture(uMeadowT, p / 2.8).rgb;
         vec3 forC = texture(uForest, p / 3.0).rgb * 0.62;
         vec3 soilC = texture(uSoil, p / 2.2).rgb * (1.0 + 0.3 * (1.0 - mo));
-        soilC = mix(soilC, soilC * 1.9 + 0.015, pth * (1.0 - mo));   // a dry trodden path is lighter
+        soilC = mix(soilC, soilC * 2.4 + 0.03, pth * (1.0 - 0.6 * mo));   // a dry trodden path is lighter
         vec3 litC = mix(texture(uLitterC, p / 1.7).rgb, ${gv3(GROUND_COL.rot)}, uDecay * 0.9);
         vec3 mossC = ${gv3(GROUND_COL.moss)} * (0.7 + 0.6 * nz);
         vec3 gc = mix(meadC, turfC, turf);

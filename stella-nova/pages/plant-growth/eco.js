@@ -593,7 +593,7 @@ export function groundMix(x, z, env) {
   let c = mix3(G.meadow, G.turf, turf);
   c = mix3(c, G.forest.map(v => v * 0.62), shade * 0.85);
   c = mix3(c, G.moss, moss);
-  const soilC = mix3(G.soil, G.soil.map(v => v * 1.9 + 0.015), pth * (1 - mo));   // a dry trodden path is lighter
+  const soilC = mix3(G.soil, G.soil.map(v => v * 2.4 + 0.03), pth * (1 - 0.6 * mo));   // a dry trodden path is lighter
   c = mix3(c, soilC, soil);
   c = mix3(c, mix3(G.litter, G.rot, (env.decay ?? 0) * 0.9), litter);
   c = c.map(v => v * (1 - 0.45 * F.woodShade(x, z)));
