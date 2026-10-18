@@ -13,6 +13,9 @@
 //  and #info shows the same box turned to the front, with the back of the
 //  box beside it. Closing #info puts the box back and focuses it.
 //
+//  The player top bar has Controls (#helpPanel), Frame, Scanlines, Mute,
+//  Full screen and Exit. The view settings go to the iframe (sendView).
+//
 //  Your own disc: the File objects go to play-emu.html with postMessage
 //  (a structured clone in the same origin). Nothing is uploaded.
 //
@@ -22,12 +25,14 @@
 //    "async function boot"   "function buildShelf"   "function box("
 //    "function boxFaces"     "function artOf"        "function applyLayout"
 //    "function openInfo"     "function closeInfo"    "function onInfoClosed"
-//    "function play"         "function closePlayer"
+//    "function play"         "function closePlayer"  "function buildBar"
+//    "function toggleView"   "function sendView"     "function showHelp"
 //    "function goFull"       "function buildByo"     "function buildCredits"
 //    "export function playerUrl"  "export function extOk"
 // ============================================================================
 import './saver.js';
 import { licenceKind, mediaOf } from './saver-plan.js';
+import { PREF_KEY, readPrefs } from './player-common.js';
 import { systemMedia, coverPalette, shelfGroups, shelfLayout, boxPose, spineTitle, paintCover, paintSpine, COVER_W, COVER_H, SPINE_W, SPINE_H } from './shelf-art.js';
 
 export function fmtMB(bytes) { return (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0) + ' MB'; }
@@ -164,12 +169,14 @@ function onInfoClosed() {
 }
 
 // ----------------------------------------------------------------- player
-function play(g) { openPlayer(playerUrl(g), g.title); }
+function play(g) { openPlayer(playerUrl(g), g.title, null, g.controls); }
 
-function openPlayer(src, title, onReady) {
+function openPlayer(src, title, onReady, help) {
   closePlayer();
   if (window.snSaverActive) return;
   $('playerTitle').textContent = title;
+  $('helpText').textContent = help || '';
+  showHelp(false);
   const f = el('iframe', { src, title: title + ' (game)', allow: 'fullscreen; gamepad; autoplay' });
   if (onReady) {
     const onMsg = e => {
@@ -180,7 +187,7 @@ function openPlayer(src, title, onReady) {
     window.addEventListener('message', onMsg);
     f._off = () => window.removeEventListener('message', onMsg);
   }
-  f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) { /* cross-origin never happens here */ } });
+  f.addEventListener('load', () => { sendView(); try { f.contentWindow.focus(); } catch (e) { /* cross-origin never happens here */ } });
   $('playerStage').replaceChildren(f);
   S.frame = f;
   $('player').hidden = false;
@@ -210,6 +217,46 @@ function goFull() {
   } else if (p.requestFullscreen) p.requestFullscreen().catch(() => {});
   else if (p.webkitRequestFullscreen) p.webkitRequestFullscreen();
   if (S.frame) S.frame.focus();
+}
+
+// ------------------------------------------------------ player top bar
+// Frame, Scanlines and Mute are toggles (aria-pressed). The settings go to
+// localStorage (PREF_KEY, read by player-common.js in the iframe) and to
+// the iframe as a 'retro-view' message, so they change at once.
+function sendView() {
+  const f = S.frame;
+  try { if (f && f.contentWindow) f.contentWindow.postMessage({ type: 'retro-view', prefs: S.view }, location.origin); } catch (e) { /* the frame is gone */ }
+}
+
+function showView() {
+  $('frameBtn').setAttribute('aria-pressed', String(S.view.frame));
+  $('scanBtn').setAttribute('aria-pressed', String(S.view.scan));
+  $('muteBtn').setAttribute('aria-pressed', String(S.view.muted));
+}
+
+function toggleView(k) {
+  S.view = { ...S.view, [k]: !S.view[k] };
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(S.view)); } catch (e) { /* private mode: this session only */ }
+  showView();
+  sendView();
+  if (S.frame) S.frame.focus();
+}
+
+function showHelp(on) {
+  $('helpPanel').hidden = !on;
+  $('helpBtn').setAttribute('aria-expanded', String(on));
+  if (!on && S.frame && document.activeElement === $('helpClose')) S.frame.focus();
+}
+
+function buildBar() {
+  S.view = readPrefs();
+  showView();
+  $('frameBtn').addEventListener('click', () => toggleView('frame'));
+  $('scanBtn').addEventListener('click', () => toggleView('scan'));
+  $('muteBtn').addEventListener('click', () => toggleView('muted'));
+  $('helpBtn').addEventListener('click', () => showHelp($('helpPanel').hidden));
+  $('helpClose').addEventListener('click', () => showHelp(false));
+  $('helpPanel').addEventListener('keydown', e => { if (e.key === 'Escape') showHelp(false); });
 }
 
 // ----------------------------------------------------- bring your own disc
@@ -257,7 +304,7 @@ function playOwn() {
   if (!f || !$('own').checked) return;
   openPlayer('play-emu.html?system=' + encodeURIComponent(s.id), f.name + ' · ' + s.name, win => {
     win.postMessage({ type: 'retro-file', file: f, bios: b }, location.origin);
-  });
+  }, 'EmulatorJS has its own bar at the bottom of the game: the menu, save states, the gamepad keys and the on-screen pad on a touch screen. A gamepad works when you press a button on it.');
 }
 
 // ---------------------------------------------------------------- credits
@@ -288,6 +335,7 @@ async function boot() {
   buildShelf();
   buildByo();
   buildCredits();
+  buildBar();
   if (location.hash === '#byo') $('byoDrawer').open = true;
   $('info').addEventListener('close', onInfoClosed);
   // Exit: end the game, then focus the box that it came from.

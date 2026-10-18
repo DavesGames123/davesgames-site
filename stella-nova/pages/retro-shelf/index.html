@@ -51,7 +51,9 @@
                 #biosFile, #own, #byoPlay
      #credits   the credit tables on a paper manual sheet
                 (#gameRows #engineRows #coreRows)
-     #player    the full-window player: #playerFrame, #fsBtn, #exitBtn
+     #player    the full-window player: a top bar (#playerTitle, #helpBtn,
+                #frameBtn, #scanBtn, #muteBtn, #fsBtn, #exitBtn), the
+                controls panel #helpPanel and the iframe in #playerStage
      #info      the pull-out: the box turns to the front (#infoBox) next
                 to the back of the box (text, licence, #infoPlay)
 
@@ -134,9 +136,22 @@
 
 <div class="player" id="player" hidden role="dialog" aria-modal="true" aria-labelledby="playerTitle">
   <div class="player-bar">
+    <span class="player-led" aria-hidden="true"></span>
     <span class="player-title" id="playerTitle"></span>
-    <button type="button" id="fsBtn" title="Full screen">⛶ <span>Full screen</span></button>
-    <button type="button" id="exitBtn" class="exit" title="End the game">✕ <span>Exit</span></button>
+    <div class="player-tools">
+      <button type="button" id="helpBtn" aria-expanded="false" aria-controls="helpPanel" aria-label="Controls"><span class="ic" aria-hidden="true">?</span><span class="tx">Controls</span></button>
+      <button type="button" id="frameBtn" aria-pressed="true" aria-label="CRT frame"><span class="ic" aria-hidden="true">▣</span><span class="tx">Frame</span></button>
+      <button type="button" id="scanBtn" aria-pressed="false" aria-label="Scanlines"><span class="ic" aria-hidden="true">☰</span><span class="tx">Scanlines</span></button>
+      <button type="button" id="muteBtn" aria-pressed="false" aria-label="Mute"><span class="ic" aria-hidden="true">♪</span><span class="tx">Mute</span></button>
+      <button type="button" id="fsBtn" aria-label="Full screen"><span class="ic" aria-hidden="true">⛶</span><span class="tx">Full screen</span></button>
+      <button type="button" id="exitBtn" class="exit" aria-label="Exit: end the game"><span class="ic" aria-hidden="true">✕</span><span class="tx">Exit</span></button>
+    </div>
+  </div>
+  <div class="help-panel" id="helpPanel" hidden role="region" aria-labelledby="helpH">
+    <h3 id="helpH">Controls</h3>
+    <p id="helpText"></p>
+    <p class="help-more">Exit ends the game. Full screen hides this bar until you press Esc.</p>
+    <button type="button" class="ghost" id="helpClose">Close</button>
   </div>
   <div class="player-stage" id="playerStage"></div>
 </div>

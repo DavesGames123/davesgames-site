@@ -477,6 +477,13 @@ async function bootTest() {
     const f = document.querySelector('#playerStage iframe');
     ok(f && f.getAttribute('src') === 'play-dos.html?game=doom' && !document.getElementById('player').hasAttribute('hidden'), 'boot: a card opens the player iframe');
     ok(f && /fullscreen/.test(f.getAttribute('allow')) && /gamepad/.test(f.getAttribute('allow')), 'boot: the iframe may use full screen and gamepads');
+    ok(document.getElementById('helpText').textContent === data.games[0].controls && document.getElementById('helpPanel').hasAttribute('hidden'), 'boot: the controls panel has the game controls and starts closed');
+    document.getElementById('helpBtn').dispatchEvent(new window.Event('click'));
+    ok(!document.getElementById('helpPanel').hasAttribute('hidden') && document.getElementById('helpBtn').getAttribute('aria-expanded') === 'true', 'boot: Controls opens the panel');
+    const scan0 = document.getElementById('scanBtn').getAttribute('aria-pressed');
+    document.getElementById('scanBtn').dispatchEvent(new window.Event('click'));
+    ok(scan0 === 'false' && document.getElementById('scanBtn').getAttribute('aria-pressed') === 'true' && document.getElementById('frameBtn').getAttribute('aria-pressed') === 'true', 'boot: Scanlines toggles; the frame is on by default');
+    ok(['helpBtn', 'frameBtn', 'scanBtn', 'muteBtn', 'fsBtn', 'exitBtn'].every(id => document.getElementById(id).getAttribute('aria-label')), 'boot: every bar button has an aria-label (phones hide the text)');
     document.getElementById('exitBtn').dispatchEvent(new window.Event('click'));
     ok(!document.querySelector('#playerStage iframe') && document.getElementById('player').hasAttribute('hidden'), 'boot: Exit removes the iframe (' + !!document.querySelector('#playerStage iframe') + ' ' + document.getElementById('player').hasAttribute('hidden') + ')');
     const rom = document.getElementById('romFile');
