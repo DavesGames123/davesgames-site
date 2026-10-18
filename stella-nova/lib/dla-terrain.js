@@ -44,8 +44,16 @@
 //      onProgress({ stage, label, frac, stageFrac, snapshot })
 //      frac is the fraction of the whole run, stageFrac of the stage.
 //      snapshot = { n, height (m), worldSize, seaLevel, ...optional fields:
-//      dla, channel, flow, river, water, moisture, temperature, biome }.
-//      A snapshot n can be smaller than the final n (early stages).
+//      dla, channel, flow, river, water, moisture, temperature, biome,
+//      sediment, rays }. A snapshot n can be smaller than the final n
+//      (early stages).
+//      dla = { pos, parent, count, level, levels, start }: start is the
+//      particle count when that level began (the particles before it are
+//      the upscaled copy of the level before).
+//      rays (flow stage, branched flow on) = { pts Float32Array x, z
+//      world m, off Int32Array (ray k is points off[k] .. off[k+1] - 1),
+//      steps }: up to 480 of the traced rays, one point each 6 steps.
+//      sediment (last erosion snapshot): deposit thickness m.
 //    detailHeight(x, z, t)   JS twin of lib/dla-terrain-detail.wgsl
 //    sampleHeight(t, x, z)   bilinear height in metres (texel centres)
 //    terrainHeightAt(t, x, z) sampleHeight + detailHeight
@@ -738,13 +746,15 @@ async function growDLA(o, n, mask, emit) {
     const ws = o.worldSize, pos = new Float32Array(cnt * 2), k = ws / g;
     for (let i = 0; i < cnt; i++) { pos[i * 2] = m.pos[i * 3] * k; pos[i * 2 + 1] = m.pos[i * 3 + 1] * k; }
     return emit(frac, `Growing DLA ridges, level ${lvl + 1} of ${L}`, {
-      n: g, height: crisp, dla: { pos, parent: m.parent.slice(0, cnt), count: cnt },
+      n: g, height: crisp, dla: { pos, parent: m.parent.slice(0, cnt), count: cnt, level: lvl, levels: L, start: levelStart },
     });
   };
+  let levelStart = 0;
   for (let lvl = 0; lvl < L; lvl++) {
     const target = Math.min(maxParticles, Math.round(o.particles * g * g * (0.35 + 0.65 * (lvl + 1) / L)));
     const chunks = 4;
     const start = m.count;
+    levelStart = start;
     for (let c = 1; c <= chunks; c++) {
       const want = Math.round(start + (target - start) * c / chunks);
       while (m.count < want) m.addParticle();
@@ -1081,8 +1091,20 @@ function branchedFlow(o, nb, h01, seaQ, dlaInfo) {
   }
   const D = new Float32Array(N);
   const ds = 0.5, maxSteps = Math.round(nb * 2.5 / ds), deep = seaQ - 0.04;
+  // the paths of some rays, for the page ("Watch it build"): every
+  // rayStride-th ray, a point each RAY_EVERY steps. Read only: the paths
+  // do not change D or the rays.
+  const RAY_EVERY = 6, RAY_MAX = 480;
+  const rayPts = [], rayOff = [0];
+  let rayNo = 0, rayStride = 1;
   const trace = (x, y, dx, dy) => {
+    const rec = rayNo++ % rayStride === 0 && rayOff.length <= RAY_MAX;
+    if (rec) rayPts.push(x, y);
+    try { traceRay(x, y, dx, dy, rec); } finally { if (rec) rayOff.push(rayPts.length / 2); }
+  };
+  const traceRay = (x, y, dx, dy, rec) => {
     for (let k = 0; k < maxSteps; k++) {
+      if (rec && k % RAY_EVERY === RAY_EVERY - 1) rayPts.push(x, y);
       if (x < 1 || y < 1 || x > nb - 2 || y > nb - 2) return;
       const ix = x | 0, iy = y | 0, tx = x - ix, ty = y - iy, i = iy * nb + ix;
       const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
@@ -1098,6 +1120,7 @@ function branchedFlow(o, nb, h01, seaQ, dlaInfo) {
     }
   };
   const rays = o.bfRays;
+  rayStride = Math.max(1, Math.ceil((o.bfSource === 'edge' ? rays : Math.max(1, Math.round(rays / 24)) * 24) / RAY_MAX));
   if (o.bfSource === 'edge') {
     const a = o.bfAngle * D2R, dx = cosQ(a), dy = sinQ(a);
     // start on the line through the centre across dir, behind the map
@@ -1149,7 +1172,9 @@ function branchedFlow(o, nb, h01, seaQ, dlaInfo) {
   const q = quantile(C, 0.995, 3) || 1;
   for (let i = 0; i < N; i++) C[i] = Math.min(1, C[i] / q);
   boxBlur(C, nb, 1, 1);
-  return qArr(C, 65536);
+  qArr(C, 65536);
+  C.rays = { pts: Float32Array.from(rayPts), off: Int32Array.from(rayOff), grid: nb, steps: Math.ceil(maxSteps / RAY_EVERY) };
+  return C;
 }
 
 // ═══════════════ PRIORITY FLOOD ═══════════════
@@ -1925,7 +1950,11 @@ export async function generateTerrain(opts = {}, onProgress = null) {
   let channel = null;
   if (o.bfOn) {
     const chB = branchedFlow(o, nb, hb01, seaQb, dla);
-    channel = nb === n ? chB : resample(chB, nb, n);
+    const rg = chB.rays;
+    channel = nb === n ? Float32Array.from(chB) : resample(chB, nb, n);
+    // ray paths in world metres (x, z), for the page
+    const rk = ws / nb, rays = { pts: new Float32Array(rg.pts.length), off: rg.off, steps: rg.steps };
+    for (let i = 0; i < rg.pts.length; i++) rays.pts[i] = origin + rg.pts[i] * rk;
     const cBlur = boxBlur(Float32Array.from(channel), n, Math.max(1, Math.round(n / 512)), 2);
     // cut valleys along the branches on land (shallow on the plains)
     const cut = o.bfCarve * 0.07 * o.heightScale;
@@ -1936,7 +1965,7 @@ export async function generateTerrain(opts = {}, onProgress = null) {
       hm[i] -= cut * Math.pow(cBlur[i], 0.8) * w;
     }
     qArr(hm, 1000);
-    await emitFor(3)(1, 'Tracing branched flow', { n, height: Float32Array.from(hm), channel: Float32Array.from(channel) });
+    await emitFor(3)(1, 'Tracing branched flow', { n, height: Float32Array.from(hm), channel: Float32Array.from(channel), rays });
   } else {
     await emitFor(3)(1, 'Branched flow is off', { n, height: Float32Array.from(hm) });
   }
@@ -2020,7 +2049,7 @@ export async function generateTerrain(opts = {}, onProgress = null) {
   const rainF = resample(Pc, nc0, n);
   const hy = hydrology(o, n, hm, rainF, seaM, texel, origin, channel);
   qArr(hm, 1000); qArr(hy.flow, 1e5); qArr(hy.river, 1e4); qArr(hy.water, 1000);
-  await emE(1, 'Rivers and lakes', { n, height: Float32Array.from(hm), river: Float32Array.from(hy.river), water: Float32Array.from(hy.water), flow: Float32Array.from(hy.flow) });
+  await emE(1, 'Rivers and lakes', { n, height: Float32Array.from(hm), river: Float32Array.from(hy.river), water: Float32Array.from(hy.water), flow: Float32Array.from(hy.flow), sediment: Float32Array.from(sediment) });
   end();
 
   // climate
