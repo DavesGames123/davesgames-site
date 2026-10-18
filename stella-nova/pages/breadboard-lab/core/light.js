@@ -57,9 +57,10 @@ export const RIG = {
 };
 
 // UnrealBloomPass settings for the emitter-only image. threshold is a
-// luminance (bloomLuma) in linear units. radius 0 keeps the light in the
-// small mips: a halo round the die, not a haze over the screen.
-export const BLOOM = { threshold: 1.5, strength: 0.42, radius: 0.12 };
+// luminance (bloomLuma) in linear units, above the brightest lit white
+// (1.35, silk-white with a sun glint). radius 0 weights the small mips
+// most: a halo round the die, not a haze over the screen.
+export const BLOOM = { threshold: 1.5, strength: 0.3, radius: 0 };
 
 // Emitter peaks: the bloom luminance of the lit part at level 1.
 //   led  .. a 5 mm LED die at its rated current: blooms

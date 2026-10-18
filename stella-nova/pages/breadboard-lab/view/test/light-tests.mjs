@@ -247,6 +247,14 @@ function blur(src, W, H, sigma) {
   }
   return out;
 }
+// mean linear colour of a DataTexture (sRGB bytes), cached on the texture
+function texMean(t) {
+  if (t.userData.mean) return t.userData.mean;
+  const d = t.image.data, n = d.length / 4, s = [0, 0, 0];
+  const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) s[c] += lin(d[i * 4 + c]);
+  return (t.userData.mean = s.map(v => v / n));
+}
 const haloTex = r => r >= 1 ? 0 : Math.pow(1 - r, 2.2) * (0.6 + 0.4 * Math.exp(-r * r * 30));
 
 // cfg: { old: bool, env, rig, exposure, bloom: { threshold, strength, radius, selective } }
@@ -275,6 +283,8 @@ export function frameEstimate(THREE, view, cfg, L, W = 160, H = 100, canvasW = 1
     if (!h) { for (let c = 0; c < 3; c++) img[c][i] = bg[c]; continue; }
     const o = h.object, m = Array.isArray(o.material) ? o.material[0] : o.material;
     let rgb = [m.color ? m.color.r : 0.5, m.color ? m.color.g : 0.5, m.color ? m.color.b : 0.5];
+    const mt = m.map && m.map.image && m.map.image.data ? texMean(m.map) : null;   // the mat grid texture
+    if (mt) rgb = [rgb[0] * mt[0], rgb[1] * mt[1], rgb[2] * mt[2]];
     const ca = o.geometry.attributes.color;
     if (m.vertexColors && ca && h.face) rgb = [rgb[0] * ca.getX(h.face.a), rgb[1] * ca.getY(h.face.a), rgb[2] * ca.getZ(h.face.a)];
     let out;
