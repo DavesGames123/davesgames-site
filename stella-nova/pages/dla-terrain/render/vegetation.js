@@ -939,7 +939,8 @@ async function defaultBitmap(url, size) {
 
 // The asset prototypes per species: { key: [ { lods: [[parts]], height, radius, wind, sink, textures: Map name -> url } ] }
 // accept(asset) -> bool picks the assets to load (default: all).
-export async function loadAssetProtos(lib, texSize, log, accept = null) {
+// o = { variants, firstLod } (a phone profile: 1 model per species, LOD 1 up)
+export async function loadAssetProtos(lib, texSize, log, accept = null, o = {}) {
   const out = {};
   if (!lib || !lib.manifest) return out;
   const assets = (lib.manifest.assets || []).filter((a) => !accept || accept(a));
@@ -957,10 +958,10 @@ export async function loadAssetProtos(lib, texSize, log, accept = null) {
     const pick = [], seen = new Set();
     for (const a of fits) { const k = a.sourceAsset || a.sub || a.id; if (!seen.has(k)) { seen.add(k); pick.push(a); } }
     for (const a of fits) if (!pick.includes(a)) pick.push(a);
-    for (const a of pick.slice(0, VARIANTS(sp.key))) {
+    for (const a of pick.slice(0, o.variants || VARIANTS(sp.key))) {
       try {
         const lods = [], matUrl = new Map();
-        for (let l = 0; l < Math.min(3, a.lods.length); l++) {
+        for (let l = Math.min(o.firstLod || 0, a.lods.length - 1); l < Math.min(3, a.lods.length); l++) {
           // one retry after a short wait: a file that another process
           // writes at that moment (or a dropped request) fails once
           let got;
@@ -1226,7 +1227,10 @@ export async function createVegetation(gpu) {
   const q = gpu.quality ?? 0.75;
   const log = gpu.log || ((m) => console.warn(m));
   const BU = GPUBufferUsage, TU = GPUTextureUsage, SS = GPUShaderStage;
-  const texSize = q >= 0.5 ? 512 : 256;
+  // a phone profile (gpu/budget.js gpu.profile.veg) caps the sizes
+  const vp = (gpu.profile && gpu.profile.veg) || {};
+  const texSize = Math.min(q >= 0.5 ? 512 : 256, vp.texSize || 512);
+  const IMP_F = vp.impFrame || IMP_FRAME;
   const t0 = performance.now();
   const mark = (what) => { if (gpu.vegTimes) log('veg ' + what + ' ' + (performance.now() - t0).toFixed(0) + ' ms'); };
 
@@ -1374,7 +1378,7 @@ export async function createVegetation(gpu) {
   // range the impostor crown shading (props.wgsl fs_imp) stands for it.
   const shadowCap = (300 + 900 * q) * (coarse ? 0.6 : 1);   // q 0.75: 975 m
   const grassN = Math.ceil((2 * grassR0) / grassD / 8) * 8 + 8;
-  const grassCap = Math.min(Math.floor(device.limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6));
+  const grassCap = Math.min(Math.floor(device.limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6), vp.grassCap || Infinity);
   const bladeBuf = device.createBuffer({ label: 'veg blades', size: grassCap * 48, usage: BU.STORAGE });
   const gargsBuf = device.createBuffer({ label: 'veg grass args', size: 16, usage: BU.STORAGE | BU.INDIRECT | BU.COPY_DST });
   const gparamBuf = device.createBuffer({ label: 'veg grass params', size: 160, usage: BU.UNIFORM | BU.COPY_DST });
@@ -1407,6 +1411,7 @@ export async function createVegetation(gpu) {
     for (const k of ['specBuf', 'countsBuf', 'offsetsBuf', 'argsBuf', 'slotBuf', 'drawBuf', 'vbuf', 'ibuf', 'impA', 'impN']) L[k]?.destroy?.();
   }
   function installLibrary(protoSets, extraBitmaps) {
+    if (vp.assets) destroyLib();   // a phone: never two libraries at one time (L is set again below)
     const lib = buildLibrary(protoSets, tex.names);
     for (const [url, layer] of urlLayers) lib.slots.forEach((s) => { if (s.layer === 'url:' + url) s.layer = tex.levels.length + layer; });
     lib.slots.forEach((s) => { if (typeof s.layer !== 'number') s.layer = tex.names.rock; });
@@ -1432,9 +1437,9 @@ export async function createVegetation(gpu) {
     // impostor atlases
     const impProtos = lib.protos.map((p, i) => i).filter((i) => lib.protos[i].flags & FLAG.impostor);
     const nImp = Math.max(1, impProtos.length);
-    const impMips = Math.log2(IMP_FRAME * 2) + 1;
-    N.impA = device.createTexture({ label: 'veg impostor albedo', size: [IMP_FRAME * 4, IMP_FRAME * 2, nImp], format: 'rgba8unorm-srgb', mipLevelCount: impMips, usage: TU.TEXTURE_BINDING | TU.RENDER_ATTACHMENT | TU.COPY_SRC });
-    N.impN = device.createTexture({ label: 'veg impostor normal', size: [IMP_FRAME * 4, IMP_FRAME * 2, nImp], format: 'rgba8unorm', mipLevelCount: impMips, usage: TU.TEXTURE_BINDING | TU.RENDER_ATTACHMENT | TU.COPY_SRC });
+    const impMips = Math.log2(IMP_F * 2) + 1;
+    N.impA = device.createTexture({ label: 'veg impostor albedo', size: [IMP_F * 4, IMP_F * 2, nImp], format: 'rgba8unorm-srgb', mipLevelCount: impMips, usage: TU.TEXTURE_BINDING | TU.RENDER_ATTACHMENT | TU.COPY_SRC });
+    N.impN = device.createTexture({ label: 'veg impostor normal', size: [IMP_F * 4, IMP_F * 2, nImp], format: 'rgba8unorm', mipLevelCount: impMips, usage: TU.TEXTURE_BINDING | TU.RENDER_ATTACHMENT | TU.COPY_SRC });
     N.computeBG = device.createBindGroup({ label: 'veg props compute', layout: propsCL, entries: [
       { binding: 0, resource: { buffer: paramBuf } }, { binding: 1, resource: { buffer: N.specBuf } }, { binding: 2, resource: { buffer: instBuf } },
       { binding: 3, resource: { buffer: N.countsBuf } }, { binding: 4, resource: { buffer: N.offsetsBuf } }, { binding: 5, resource: { buffer: visBuf } },
@@ -1460,7 +1465,7 @@ export async function createVegetation(gpu) {
   // 8 side views of lod0 per tree prototype -> atlas layer
   function bakeImpostors(N) {
     const lib = N.lib;
-    const depth = device.createTexture({ size: [IMP_FRAME * 4, IMP_FRAME * 2], format: 'depth32float', usage: TU.RENDER_ATTACHMENT });
+    const depth = device.createTexture({ size: [IMP_F * 4, IMP_F * 2], format: 'depth32float', usage: TU.RENDER_ATTACHMENT });
     const bakeBuf = device.createBuffer({ size: Math.max(1, N.impProtos.length) * NVIEW * 256, usage: BU.UNIFORM | BU.COPY_DST });
     const bg = device.createBindGroup({ layout: bakeL, entries: [{ binding: 13, resource: matTex.createView({ dimension: '2d-array' }) }, { binding: 14, resource: sRep }, { binding: 17, resource: { buffer: bakeBuf, size: 80 } }] });
     const emptyBG = device.createBindGroup({ layout: empty, entries: [] });
@@ -1490,7 +1495,7 @@ export async function createVegetation(gpu) {
       pass.setBindGroup(0, emptyBG); pass.setBindGroup(2, emptyBG);
       pass.setVertexBuffer(0, N.vbuf); pass.setIndexBuffer(N.ibuf, 'uint32');
       for (let v = 0; v < NVIEW; v++) {
-        pass.setViewport((v % 4) * IMP_FRAME, Math.floor(v / 4) * IMP_FRAME, IMP_FRAME, IMP_FRAME, 0, 1);
+        pass.setViewport((v % 4) * IMP_F, Math.floor(v / 4) * IMP_F, IMP_F, IMP_F, 0, 1);
         pass.setBindGroup(1, bg, [(li * NVIEW + v) * 256]);
         lib.slots.forEach((s, k) => {
           if (s.pass !== 'camera' || s.proto !== pi || s.imp || s.list !== pi * LODS) return;
@@ -1608,7 +1613,7 @@ export async function createVegetation(gpu) {
     assetIds = ids;
     assetsState = 'loading';
     try {
-      const sets = await loadAssetProtos(lib, texSize, log, accept);
+      const sets = await loadAssetProtos(lib, texSize, log, accept, { variants: vp.variants, firstLod: vp.firstLod });
       if (!Object.keys(sets).length) { assetsState = 'none fit'; return; }
       // textures: one layer per albedo url
       const urls = [];
@@ -1638,7 +1643,7 @@ export async function createVegetation(gpu) {
   let assetChain = Promise.resolve();
   const queueAssets = (accept) => { assetChain = assetChain.then(() => loadAssets(accept)); return assetChain; };
   const isDefault = (a) => a.default !== false;
-  const assetsReady = gpu.assets ? queueAssets(isDefault) : Promise.resolve();
+  const assetsReady = gpu.assets && vp.assets !== 'none' ? queueAssets(isDefault) : Promise.resolve();
   // the biome keys that cover at least 0.3 % of a terrain
   function biomesOn(cpu) {
     const c = new Uint32Array(256);
@@ -1679,7 +1684,7 @@ export async function createVegetation(gpu) {
       stream = newStream();
       snapAll = true;
       // phase 2 of the assets: the ones whose biomes are on this terrain
-      if (gpu.assets && gpu.assets.manifest) {
+      if (gpu.assets && gpu.assets.manifest && !vp.assets) {
         const on = biomesOn(cpu);
         queueAssets((a) => isDefault(a) || (a.biomes || []).some((b) => on.has(normKey(b))));
       }
