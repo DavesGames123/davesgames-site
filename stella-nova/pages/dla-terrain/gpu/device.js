@@ -39,12 +39,20 @@
 //  module needs over them). device.lost: the next createGPU runs one profile
 //  lower; after a second loss createGPU throws (no restart loop).
 //
+//  SAFARI (gpu/budget.js header): Safari on a Mac, or an Apple GPU in the
+//  adapter info, takes the 'safari' profile when no profile is forced.
+//  opts.safeStart (main.js CRASH GUARD) takes 'safe' instead of the
+//  desktop or Safari profile. gpu.mem is the live GPU byte tally of the
+//  device (budget.js trackDevice): every createBuffer and createTexture of
+//  every module, less the destroyed ones; gpu/frame.js holds it under the
+//  profile budgetMB. gpu.profileWhy says why the profile was picked.
+//
 //  grep -n targets: "export async function createGPU", "function loadWGSL",
 //  "globalsLayout", "shadowSampleLayout", "shadowPassLayout",
 //  "export function phoneLimits", "export const recovery"
 // ============================================================================
 import { GLOBALS_BYTES } from './globals.js';
-import { detectProfile, pageEnv, profileFor, lostPolicy, pressureStep, PROFILES } from './budget.js';
+import { detectProfile, pageEnv, profileFor, lostPolicy, pressureStep, PROFILES, isAppleGPU, trackDevice, guardProfile } from './budget.js';
 
 const PAGE = new URL('../', import.meta.url);
 export const DETAIL_URLS = [new URL('../../../lib/dla-terrain-detail.wgsl', import.meta.url).href,
@@ -121,24 +129,34 @@ export function phoneLimits(lim) {
 // the state that outlives one device: the profile after a loss, the losses
 export const recovery = { losses: 0, next: null, blocked: false, oom: 0 };
 
-function chooseProfile(opts) {
-  if (opts.profile && PROFILES[opts.profile]) return opts.profile;
-  if (recovery.next) return recovery.next;
+// -> { id, why, forced }. A forced profile (opts.profile, a restart after a
+// loss, ?gpu=) is kept; else the detected one, then the crash guard.
+export function chooseProfile(opts = {}, adapterInfo = null) {
+  if (opts.profile && PROFILES[opts.profile]) return { id: opts.profile, why: 'opts', forced: true };
+  if (recovery.next) return { id: recovery.next, why: 'after a device loss', forced: true };
   let q = null;
   try { q = new URLSearchParams(globalThis.location ? location.search : '').get('gpu'); } catch { /* no location */ }
-  if (q && PROFILES[q]) return q;
+  if (q && PROFILES[q]) return { id: q, why: '?gpu=' + q, forced: true };
   const env = pageEnv();
   if (opts.coarse) env.coarse = true;
-  return detectProfile(env);
+  env.adapterInfo = adapterInfo;
+  const det = detectProfile(env);
+  const id = opts.safeStart ? guardProfile(det, { unclean: true, zoomed: true }) : det;
+  return { id, why: id !== det ? 'crash guard (was ' + det + ')' : det === 'safari' ? (isAppleGPU(adapterInfo) ? 'Apple GPU' : 'Safari') : 'detected', forced: false };
 }
 
 export async function createGPU(canvas, opts = {}) {
   if (!globalThis.navigator || !navigator.gpu) throw new Error('no WebGPU');
   if (recovery.blocked) throw new Error('the GPU was lost two times: no restart');
-  const profileId = chooseProfile(opts);
-  const profile = profileFor(profileId);
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: profile.raiseLimits ? 'high-performance' : 'low-power' });
+  let pick = chooseProfile(opts);
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: profileFor(pick.id).raiseLimits ? 'high-performance' : 'low-power' });
   if (!adapter) throw new Error('no WebGPU adapter');
+  // an Apple GPU (adapter.info, when the browser has it) takes the Safari caps
+  let info = null;
+  try { info = adapter.info || null; } catch { info = null; }
+  if (!pick.forced && pick.id === 'desktop' && isAppleGPU(info)) pick = chooseProfile(opts, info);
+  const profileId = pick.id;
+  const profile = profileFor(profileId);
   const want = [];
   for (const f of ['float32-filterable', 'rg11b10ufloat-renderable', 'timestamp-query']) if (adapter.features.has(f)) want.push(f);
   const lim = adapter.limits;
@@ -146,6 +164,8 @@ export async function createGPU(canvas, opts = {}) {
     requiredFeatures: want,
     requiredLimits: profile.raiseLimits ? deviceLimits(lim) : phoneLimits(lim),
   });
+  // the live GPU bytes of this device (every module allocates through it)
+  const mem = trackDevice(device, {});
   let context = null, canvasFormat = 'bgra8unorm';
   if (canvas && canvas.getContext) {
     context = canvas.getContext('webgpu');
@@ -196,7 +216,7 @@ export async function createGPU(canvas, opts = {}) {
     qualityIndex: qi, quality: QUALITY[qi].q, qualityPreset: QUALITY[qi],
     shadowSize: capped(Math.min(QUALITY[qi].shadow, device.limits.maxTextureDimension2D), profile.shadowSize),
     shadowCascades: capped(QUALITY[qi].cascades, profile.cascades),
-    profile, profileId, recovery, pressureFns: [],
+    profile, profileId, profileWhy: pick.why, adapterInfo: info, mem, recovery, pressureFns: [],
     onPressure(fn) { gpu.pressureFns.push(fn); },
     features: want,
     shadowDepthState: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater', depthBias: -2, depthBiasSlopeScale: -2.0, depthBiasClamp: 0 },
