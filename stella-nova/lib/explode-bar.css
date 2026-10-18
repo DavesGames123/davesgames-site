@@ -1,0 +1,76 @@
+/* ============================================================================
+   STELLA NOVA  ·  lib/explode-bar.css — the Explode pill of lib/explode-bar.js
+   ----------------------------------------------------------------------------
+   One glass pill at the top of a machine page's view: the Explode toggle
+   (icon, label, key cap) and three steps. explode-bar.js adds this sheet and
+   sets left and top in px. The colours come from the page tokens (--cream,
+   --ink2, --line-b, --text, --dim) with the machine-shell values as the
+   fallback, so the pill matches each page.
+
+   RULES OF THE LOOK (the same as lib/sn-panel.css)
+     targets ... 32 px on a desktop, 44 px on a coarse pointer or a phone
+     type ...... 13 px, sentence case
+     phone ..... the toggle only (icon + short label), no steps, no key cap
+     saver ..... never shown: html.sn-saver, or [hidden] (set by the module)
+
+   GREP MAP
+     grep -n 'PILL'    the box
+     grep -n 'TOGGLE'  the Explode button
+     grep -n 'STEPS'   Assembled / Partly / Exploded
+     grep -n 'TOUCH'   44 px targets
+     grep -n 'PHONE'   the compact form
+     grep -n 'SAVER'   hidden in the screensaver
+   ========================================================================== */
+
+/* PILL */
+.sn-xbar{
+  --sn-xbar-css:1;
+  --xb-acc:var(--cream,#ffe0aa); --xb-bg:rgba(8,9,15,0.84); --xb-raise:var(--ink2,#0f111b);
+  --xb-line:var(--line-b,rgba(217,179,106,0.24)); --xb-ink:var(--text,#dcdde6); --xb-dim:var(--dim,#8d90a6);
+  position:absolute; z-index:8; display:flex; align-items:center; gap:4px; padding:4px;
+  border:1px solid var(--xb-line); border-radius:999px; background:var(--xb-bg);
+  box-shadow:0 10px 28px rgba(0,0,0,0.38); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  font:500 13px/1 var(--sans,Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);
+  white-space:nowrap; user-select:none; -webkit-user-select:none;
+  transition:top 0.3s cubic-bezier(0.2,0.8,0.2,1),left 0.3s cubic-bezier(0.2,0.8,0.2,1);
+}
+.sn-xbar:not(.placed){transition:none}
+.sn-xbar button{
+  font:inherit; color:var(--xb-dim); background:transparent; border:1px solid transparent; border-radius:999px;
+  min-height:32px; padding:0 12px; display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+  transition:color 0.2s,background 0.2s,border-color 0.2s;
+}
+.sn-xbar button:hover{color:var(--xb-ink); border-color:var(--xb-line)}
+.sn-xbar button:focus-visible{outline:1px solid var(--xb-acc); outline-offset:1px}
+
+/* TOGGLE */
+.sn-xbar .sn-xbar-tog{color:var(--xb-acc); border-color:var(--xb-line); background:var(--xb-raise); padding:0 10px 0 9px; font-weight:600}
+.sn-xbar .sn-xbar-tog svg{flex:0 0 auto; transition:transform 0.35s cubic-bezier(0.2,0.8,0.2,1)}
+.sn-xbar .sn-xbar-tog.on{background:var(--xb-acc); color:#14110a; border-color:var(--xb-acc)}
+.sn-xbar .sn-xbar-tog.on svg{transform:scale(1.18)}
+.sn-xbar kbd{font:600 10px/1 var(--mono,ui-monospace,'SF Mono',Menlo,Consolas,monospace); padding:3px 5px; border-radius:5px; border:1px solid currentColor; opacity:0.55}
+
+/* STEPS */
+.sn-xbar-steps{display:flex; gap:2px; padding-left:4px; border-left:1px solid var(--xb-line)}
+.sn-xbar-steps button.on{color:var(--xb-acc); border-color:var(--xb-acc); background:rgba(255,224,170,0.08)}
+
+/* TOUCH. Any coarse pointer or narrow window: 44 px targets. */
+@media (pointer:coarse), (max-width:768px){
+  .sn-xbar button{min-height:44px; min-width:44px; padding:0 14px}
+  .sn-xbar kbd{display:none}
+}
+
+/* PHONE. The same query as PHONE_Q in the machine pages. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  .sn-xbar{padding:3px}
+  .sn-xbar-steps{display:none}
+  .sn-xbar .sn-xbar-tog{padding:0 14px 0 12px}
+}
+
+/* SAVER. The screensaver never shows the pill. */
+.sn-xbar[hidden], html.sn-saver .sn-xbar, body.sn-saver-on .sn-xbar{display:none!important}
+
+@media (prefers-reduced-motion:reduce){
+  .sn-xbar, .sn-xbar button, .sn-xbar .sn-xbar-tog svg{transition:none}
+}
