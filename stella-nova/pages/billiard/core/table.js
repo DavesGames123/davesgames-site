@@ -196,3 +196,24 @@ export function legalCuePlace(T, x, y, others, kitchen) {
   for (const o of others) if (Math.hypot(o.x - x, o.y - y) < 2 * R + 1e-4) return false;
   return true;
 }
+
+// The cushion rubber in plan view: one polygon per rail piece, from the
+// nose segment back to the wood, cut along the jaw lines. [[x, y], ...]
+export function cushionPolys(T) {
+  const W = T.spec.cushionW, out = [];
+  const jaws = T.segs.filter(s => s.kind === 'jaw');
+  // the jaw that starts at a nose end: its direction (out of the table)
+  const jawAt = (x, y) => jaws.find(j => Math.abs(j.ax - x) < 1e-9 && Math.abs(j.ay - y) < 1e-9);
+  for (const s of T.segs.filter(q => q.kind === 'rail')) {
+    const back = [-s.nx * W, -s.ny * W];
+    const ends = [[s.ax, s.ay], [s.bx, s.by]].map(([x, y]) => {
+      const j = jawAt(x, y);
+      if (!j) return [x + back[0], y + back[1]];
+      // walk along the jaw until W behind the nose line
+      const k = W / Math.max(0.2, -(j.tx * s.nx + j.ty * s.ny));
+      return [x + j.tx * k, y + j.ty * k];
+    });
+    out.push([[s.ax, s.ay], [s.bx, s.by], ends[1], ends[0]]);
+  }
+  return out;
+}

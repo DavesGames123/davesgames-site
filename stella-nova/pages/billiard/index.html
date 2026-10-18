@@ -6,43 +6,138 @@
 <script src="../../lib/stats-beacon.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Billiard — Stella Nova · davesgames.io</title>
+<meta name="color-scheme" content="dark">
+<title>Pool Physics — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   BILLIARD  ·  page shell
+   POOL PHYSICS  ·  page shell  (nav key: billiard)
   ───────────────────────────────────────────────────────────────────────────
-   Balls that collide with restitution: the upstream box, a pool break with pockets, a gas against the Maxwell-Boltzmann speeds, two gases mixing and Brownian motion. The page starts a random scene on load and keeps it running.
+   A regulation 9 ft American pool table in two linked views: the 2D
+   diagram (#c2d, Manim-like vector maths) and the 3D table (#c3d, three.js
+   r160). The computer plays 8-ball or 9-ball against itself. Each shot
+   writes its maths in step by step (#steps, MathJax SVG) with live
+   numbers (#readout). A tap or a click on either view takes over: plan
+   the shot (ball, pocket, aim, cue tip, speed) and shoot.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #03.
-   Upstream file: tenMinutePhysics/03-billiard.html in
-   https://github.com/matthias-research/pages (MIT License; the notice is
-   kept at the top of sim.js, which holds the upstream step).
-   Video tutorial: https://youtu.be/ThhdlMbGT5g
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js (site rule)
+     2. style.css, lib/sci.css (fonts, .m1-.m6), lib/sn-panel.css
+     3. the importmap for three r160, then lib/tilt.js (after the map)
+     4. main.js as a module at the end of the body
 
-   OUR ADDITIONS (davesgames.io, not upstream): layouts, a pool table with pockets, a round table, bumpers, rolling friction, gravity, a spatial grid, the cue shot, a speed histogram, the renderer, the sim kit GUI and the saver.
+   LAYOUT  (# marks an element main.js binds to)
+     #app      #top (title, #p0 #p1 scoreboard, #status, #msg)
+               #views data-view = both | 2d | 3d: #pane2d #pane3d,
+                      #banner (hand-off), #strikeCard (planning)
+               #maths: #steps (equation cards), #readout (live table)
+               #bar (desktop transport: #tPlay #tStep #tSpeed #tTake #tNew)
+     #panel    lib/sn-panel.js sections Game, Shot, Maths, View, About
+     #dock     the phone dock: play, take over or shoot, view, maths, menu
+     #saverCanvas  the screensaver frame (saver.js)
 
    FILES
-     sim.js      simulation, schema, guard (no DOM)
-     main.js     page controller: sim kit GUI, drawing, pointer
-     saver.js    screensaver shots (sim kit director)
-     tests.mjs   node tests (no browser)
-   Shared: ../../widgets/sim-kit/ (GUI, randomizer, saver, page2d frame),
-           ../../widgets/ten-minute-physics/kit.js (credit bar).
+     core/table.js  core/physics.js  core/geometry.js  core/rules.js
+     core/ai.js  core/shot.js          (no DOM; node tests in tests/)
+     view/diagram.js  view/scene3d.js  view/maths.js  view/strike.js
+     main.js  saver.js  style.css  tex/ (CC0 woods, tex/CREDITS.md)
 
    GREP MAP
-     grep -n 'export function makeSchema'  sim.js     controls and random rules
-     grep -n 'const SHOTS'                 saver.js   the screensaver shots
+     grep -n 'function startTurn'   main.js   the turn loop
+     grep -n 'export function think' core/ai.js  the AI planner
+     grep -n 'export function mathsOf' core/shot.js  the maths steps
+     grep -n 'export function tick'  core/physics.js  one physics tick
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Colliding balls with restitution: a pool break, a gas with its Maxwell-Boltzmann speeds, mixing and Brownian motion. After Matthias Müller's Ten Minute Physics #03.">
-<script src="../../widgets/ten-minute-physics/kit.js"></script>
-<link rel="stylesheet" href="../../lib/sci.css">
-<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
-<link rel="stylesheet" href="../../widgets/sim-kit/sim-kit.css">
+<meta name="description" content="A regulation American pool table in 2D and 3D. The computer plays 8-ball against itself near perfectly while the maths of every shot draws itself: ghost ball, cut angle, line of centres, v cos θ and v sin θ, sliding to rolling, cushion angles. Tap to take over and plan your own shot.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../lib/sn-panel.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="../../lib/tilt.js"></script>
 </head>
 <body>
-<canvas id="view" aria-label="Billiard simulation. Drag back from a ball and let go to shoot it."></canvas>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div id="app">
+  <header id="top">
+    <div class="ttl">
+      <h1>Pool Physics</h1>
+      <p class="sub">The computer plays itself; the maths draws itself</p>
+    </div>
+    <div id="score" aria-label="Players">
+      <div class="pl" id="p0"><span class="dot" aria-hidden="true"></span><b id="p0n">Left</b><span id="p0g">open</span></div>
+      <div class="pl" id="p1"><span class="dot" aria-hidden="true"></span><b id="p1n">Right</b><span id="p1g">open</span></div>
+    </div>
+    <div class="st"><span id="status" aria-live="polite"></span><span id="msg"></span></div>
+  </header>
+
+  <main id="views" data-view="both">
+    <section class="pane" id="pane2d" aria-label="2D diagram">
+      <canvas id="c2d" aria-label="Top view of the pool table with the shot maths drawn on it. Tap to take over."></canvas>
+      <span class="ptag">2D · diagram</span>
+    </section>
+    <section class="pane" id="pane3d" aria-label="3D table">
+      <canvas id="c3d" aria-label="3D pool table. Drag to turn the view, tap to take over."></canvas>
+      <span class="ptag">3D · table</span>
+      <div id="fallback3d" class="fallback" hidden>The 3D view needs WebGL. The 2D view and the maths still run.</div>
+    </section>
+    <div id="banner" class="banner"><span id="bannerText">The computer plays itself. Tap or click the table to take over.</span>
+      <span class="bb"><button id="bShoot" type="button" class="snp-btn snp-primary">Shoot</button><button id="bBack" type="button" class="snp-btn snp-secondary">Hand back</button></span></div>
+    <div id="strikeCard" class="snp-card" hidden>
+      <div class="sc-row"><div id="strikeHost"></div>
+        <div class="sc-col">
+          <label for="speedCard" class="sc-l">Speed <output id="speedCardVal">2.2 m/s</output></label>
+          <input id="speedCard" type="range" min="0.3" max="11" step="0.05" value="2.2" class="snp-range">
+          <button id="cardShoot" type="button" class="snp-btn snp-primary">Shoot</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <section id="maths" aria-label="The maths of the shot">
+    <div id="steps" class="empty" aria-live="polite"></div>
+    <div id="readout"></div>
+  </section>
+
+  <nav id="bar" aria-label="Transport">
+    <button id="tPlay" type="button" class="tb" aria-label="Pause" aria-pressed="true"><i data-icon="pause"></i></button>
+    <button id="tStep" type="button" class="tb" aria-label="Step one frame" title="Step one frame">⏭</button>
+    <div id="tSpeed" class="tseg" role="group" aria-label="Speed">
+      <button type="button" data-v="0.1" aria-pressed="false">0.1×</button>
+      <button type="button" data-v="0.25" aria-pressed="false">¼×</button>
+      <button type="button" data-v="0.5" aria-pressed="false">½×</button>
+      <button type="button" data-v="1" class="on" aria-pressed="true">1×</button>
+      <button type="button" data-v="2" aria-pressed="false">2×</button>
+    </div>
+    <button id="tTake" type="button" class="tb wide">Take over</button>
+    <button id="tNew" type="button" class="tb wide">New rack</button>
+  </nav>
+</div>
+
+<button id="gear" class="snp-gear" type="button" aria-label="Open controls" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i></button>
+<aside id="panel" class="snp" aria-label="Controls">
+  <button id="sheetGrip" class="snp-grip" type="button" aria-label="Resize controls" aria-controls="panel"><span></span></button>
+  <header class="snp-top">
+    <h2 class="snp-ptitle">Pool Physics</h2>
+    <button id="panelClose" class="snp-iconbtn" type="button" aria-label="Close controls"><i data-icon="close"></i></button>
+  </header>
+  <div id="panelBody"></div>
+</aside>
+
+<nav id="dock" class="snp-dock" aria-label="Quick controls">
+  <button id="dockPlay" type="button" aria-label="Play or pause"><i data-icon="pause"></i><span>Pause</span></button>
+  <button id="dockTake" type="button" aria-label="Take over or shoot"><i data-icon="target"></i><span>Take over</span></button>
+  <button id="dockView" type="button" aria-label="Change the view"><i data-icon="expand"></i><span id="dockViewText">2D + 3D</span></button>
+  <button id="dockMaths" type="button" aria-label="Show or hide the maths"><i data-icon="info"></i><span>Maths</span></button>
+  <button id="dockMenu" type="button" aria-label="Menu" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i><span>Menu</span></button>
+</nav>
+
+<canvas id="saverCanvas" hidden></canvas>
 <script type="module" src="main.js"></script>
 </body>
 </html>

@@ -237,8 +237,9 @@ export function* think(G, { skill = 'perfect', seed = 1 } = {}) {
         if (phi == null) continue;
         const e = evaluate(Gp, geo, vr, phi, place);
         if (e) { e.geo = geo; all.push(e); }
+        // one variant per step keeps a frame of the page short
+        yield { stage: 'test', candidates: geos.slice(0, 4), geo, tried: all.length };
       }
-      yield { stage: 'test', candidates: geos.slice(0, 4), geo, tried: all.length };
     }
   }
   all.sort((a, b) => b.score - a.score);

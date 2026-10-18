@@ -1,12 +1,146 @@
 /* ===========================================================================
-   BILLIARD  ·  style.css
+   POOL PHYSICS  ·  style.css
    ---------------------------------------------------------------------------
-   One full-window canvas under the sim kit GUI (widgets/sim-kit/sim-kit.css).
-   The theme colours are --sk-* tokens.
-   =========================================================================== */
-html, body { margin: 0; height: 100%; background: var(--sk-bg); overflow: hidden; }
-#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+   Desktop: the panel (lib/sn-panel.css) at the left, #app fills the rest:
+   the header, the two views side by side, the maths strip, the transport.
+   Phone (max-width 768 px, or a short landscape touch screen): the views
+   stack (2D over 3D) or one fills (the dock switches), the maths shows the
+   current step only, the dock replaces the transport, the panel is a sheet.
 
-/* Site rule: an element with the hidden attribute stays hidden, also when
-   a rule above gives it a display value. */
-[hidden] { display: none !important; }
+   GREP MAP
+     grep -n 'TOKENS'  grep -n 'APP'  grep -n 'VIEWS'  grep -n 'MATHS'
+     grep -n 'BAR'  grep -n 'PLAN'  grep -n 'PHONE'  grep -n 'SAVER'
+   =========================================================================== */
+
+/* TOKENS */
+:root{
+  --bg:#070a0c; --ink:#e9eef0; --dim:#9aabb2; --line:rgba(170,210,220,0.14);
+  --card:rgba(10,18,22,0.92); --felt:#14603f;
+  --snp-accent:#7fe0a8; --snp-accent-ink:#04230f; --snp-accent-soft:rgba(127,224,168,0.15);
+  --bar-h:52px;
+}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden;font-family:var(--sci-sans,Inter,system-ui,sans-serif)}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+
+/* APP */
+#app{position:fixed;top:0;right:0;bottom:0;left:var(--snp-w,300px);display:grid;grid-template-rows:auto minmax(0,1fr) minmax(150px,32vh) var(--bar-h);gap:6px;padding:8px 10px 0;transition:left 0.28s cubic-bezier(0.2,0.7,0.2,1)}
+body.panel-closed #app{left:0}
+body.no-maths #app{grid-template-rows:auto minmax(0,1fr) 0 var(--bar-h)}
+body.no-maths #maths{display:none}
+html:not(.in-frame) #app{top:44px}
+#top{display:flex;align-items:center;gap:16px;min-height:40px;flex-wrap:wrap}
+body.panel-closed #top{padding-left:48px}
+#top .ttl h1{margin:0;font:600 1.15rem/1.1 var(--sci-serif,serif)}
+#top .sub{margin:2px 0 0;font-size:0.75rem;color:var(--dim)}
+#score{display:flex;gap:8px}
+#score .pl{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,0.04);box-shadow:inset 0 0 0 1px var(--line);font-size:0.75rem;color:var(--dim)}
+#score .pl b{color:var(--ink);font-weight:600}
+#score .pl .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.15)}
+#score .pl.turn{box-shadow:inset 0 0 0 1px rgba(127,224,168,0.55);background:rgba(127,224,168,0.08)}
+#score .pl.turn .dot{background:var(--snp-accent)}
+#top .st{display:flex;flex-direction:column;min-width:0;flex:1 1 200px;font-size:0.75rem}
+#status{color:var(--ink)}
+#msg{color:#ffd9a8;min-height:1em}
+
+/* VIEWS */
+#views{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:8px;min-height:0}
+#views[data-view="2d"]{grid-template-columns:1fr}
+#views[data-view="3d"]{grid-template-columns:1fr}
+#views[data-view="2d"] #pane3d,#views[data-view="3d"] #pane2d{display:none}
+.pane{position:relative;min-width:0;min-height:0;border-radius:12px;overflow:hidden;background:#0b1712;box-shadow:inset 0 0 0 1px var(--line)}
+#pane3d{background:#07090b}
+.pane canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+.ptag{position:absolute;left:10px;top:8px;font-size:0.6875rem;color:var(--dim);pointer-events:none;letter-spacing:0}
+.fallback{position:absolute;inset:auto 12px 12px 12px;padding:10px 12px;border-radius:10px;background:var(--card);font-size:0.8125rem;color:var(--dim)}
+.banner{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:min(92%,640px);padding:6px 8px 6px 14px;border-radius:999px;background:rgba(6,12,15,0.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 0 0 1px var(--line);font-size:0.78rem;color:var(--ink);pointer-events:none}
+.banner .bb{display:none;gap:6px;pointer-events:auto}
+body.planning .banner{bottom:auto;top:10px;border-radius:14px}
+body.planning .banner .bb{display:inline-flex}
+.banner .snp-btn{min-height:30px;padding:2px 12px}
+
+/* PLAN: the floating strike card while the user plans */
+#strikeCard{position:absolute;right:10px;bottom:10px;padding:10px;z-index:3}
+.sc-row{display:flex;gap:12px;align-items:center}
+.sc-col{display:flex;flex-direction:column;gap:8px;min-width:150px}
+.sc-l{font-size:0.75rem;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
+.sc-l output{color:var(--ink);font-variant-numeric:tabular-nums}
+.strike{display:flex;flex-direction:column;align-items:center;gap:4px}
+.strike svg{cursor:crosshair;touch-action:none;border-radius:50%}
+.strike svg:focus-visible{outline:2px solid var(--snp-accent);outline-offset:2px}
+.strike-words{font-size:0.6875rem;color:var(--dim);text-align:center;font-variant-numeric:tabular-nums}
+
+/* MATHS */
+#maths{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:8px;min-height:0}
+#steps,#readout{min-height:0;overflow:auto;border-radius:12px;background:rgba(255,255,255,0.025);box-shadow:inset 0 0 0 1px var(--line);padding:8px;scrollbar-width:thin}
+#steps.empty::before{content:"The maths of the next shot writes itself here.";color:var(--dim);font-size:0.8125rem}
+.mstep{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 10px;padding:6px 8px;border-radius:8px;opacity:0.55;transition:opacity 0.4s,background 0.4s}
+.mstep.current{opacity:1;background:rgba(255,255,255,0.04)}
+body.planning .mstep{opacity:0.92}
+.mhead{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:92px;font-size:0.6875rem;color:var(--dim)}
+.mnum{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.08);color:var(--ink);font-size:0.6875rem}
+.mttl{line-height:1.25}
+.meq{font-size:0.95rem;min-height:22px;line-height:1.2}
+.meq .mplain{font:italic 0.9rem/1.35 var(--sci-serif,serif);color:var(--ink);white-space:normal}
+.meq svg{max-width:100%;height:auto}
+.mstep.write .meq{animation:write 0.9s cubic-bezier(0.2,0.7,0.2,1) both}
+@keyframes write{from{clip-path:inset(0 100% 0 0);opacity:0.2}to{clip-path:inset(0 0 0 0);opacity:1}}
+.rtab{width:100%;border-collapse:collapse;font-size:0.75rem;font-variant-numeric:tabular-nums}
+.rtab th{font:italic 600 0.8rem var(--sci-serif,serif);color:var(--dim);text-align:right;padding:2px 4px;border-bottom:1px solid var(--line)}
+.rtab th:first-child,.rtab th:nth-child(2),.rtab td:first-child,.rtab td:nth-child(2){text-align:left}
+.rtab td{padding:3px 4px;text-align:right;color:var(--ink)}
+.rtab td:nth-child(2){color:var(--dim)}
+.rnone{color:var(--dim)!important;text-align:left!important}
+.runits{margin:6px 2px 0;font-size:0.6875rem;color:var(--dim);line-height:1.4}
+.rb{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 4px;border-radius:10px;font-size:0.6875rem;font-weight:600;color:#111;background:#f4f1e8;box-sizing:border-box}
+.rb1,.rb9{background:#f3c11b}.rb2,.rb10{background:#1d4fbf;color:#fff}.rb3,.rb11{background:#d3302a;color:#fff}.rb4,.rb12{background:#4e2a8a;color:#fff}
+.rb5,.rb13{background:#f0731f}.rb6,.rb14{background:#137a3d;color:#fff}.rb7,.rb15{background:#7b1f26;color:#fff}.rb8{background:#121212;color:#fff}
+.rb9,.rb10,.rb11,.rb12,.rb13,.rb14,.rb15{box-shadow:inset 0 0 0 3px #f4f1e8}
+
+/* BAR */
+#bar{display:flex;align-items:center;gap:8px;padding:0 0 8px}
+.tb{min-width:40px;height:36px;padding:0 10px;border:0;border-radius:8px;background:rgba(255,255,255,0.05);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.tb:hover{background:rgba(255,255,255,0.09)}
+.tb .snp-ic{width:18px;height:18px}
+.tb.wide{padding:0 14px}
+#tTake{background:var(--snp-accent-soft);box-shadow:inset 0 0 0 1px rgba(127,224,168,0.45)}
+.tseg{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(0,0,0,0.3);box-shadow:inset 0 0 0 1px var(--line)}
+.tseg button{min-width:40px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;font-variant-numeric:tabular-nums}
+.tseg button.on{background:var(--snp-accent-soft);color:var(--ink)}
+#tNew{margin-left:auto}
+:focus-visible{outline:2px solid var(--snp-accent);outline-offset:2px}
+
+/* SAVER */
+#saverCanvas{position:fixed;inset:0;width:100vw;height:100vh;z-index:100;background:#05080a}
+html.saver #app,html.saver #panel,html.saver #dock,html.saver #gear{display:none!important}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #app{left:0!important;bottom:var(--snp-dock-h,64px);padding:6px 8px 0;grid-template-rows:auto minmax(0,1fr) auto 0;gap:6px}
+  html:not(.in-frame) #app{top:44px}
+  #bar{display:none}
+  #top{gap:8px;min-height:0}
+  #top .sub{display:none}
+  #top .ttl h1{font-size:1rem}
+  #score .pl{padding:2px 8px}
+  #top .st{flex-basis:100%}
+  #views{grid-template-columns:1fr;grid-template-rows:minmax(0,0.85fr) minmax(0,1fr)}
+  #views[data-view="2d"],#views[data-view="3d"]{grid-template-rows:1fr}
+  #maths{grid-template-columns:1fr;max-height:30vh}
+  #readout{display:none}
+  #steps{max-height:30vh;padding:4px}
+  .mstep{display:none}
+  .mstep.current,body.planning .mstep{display:grid}
+  body.planning #steps{max-height:24vh}
+  .mhead{min-width:70px}
+  .banner{font-size:0.72rem;bottom:6px}
+  #strikeCard{right:6px;bottom:6px;left:6px;padding:8px}
+  .sc-col{flex:1 1 auto;min-width:0}
+}
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #views{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+  #maths{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .mstep.write .meq{animation:none}
+}
