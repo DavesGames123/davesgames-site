@@ -62,6 +62,7 @@ const EXCLUDED = new Set([
 // a visitor types that the label does not hold (a game it is like, a
 // common name, the science term).
 const SEARCH_WORDS = {
+  billiard: 'pool billiards 8-ball eight ball 9-ball nine ball snooker cue ball pool table pocket rack break shot ghost ball cut angle 90 degree rule 30 degree rule throw english side spin top spin follow draw stun rolling sliding friction elastic collision momentum impulse line of centres tangent line vectors velocity acceleration components manim ai plays itself trick shot physics',
   'pattern-animator': 'animated patterns animation motion graphics loop seamless loop looping gif webm mp4 video export generative art pattern designer motion design kinetic op art moire truchet tiling guilloche spirograph colour cycle color cycle palette cycling morph keyframes timeline easing ease sine bounce noise wallpaper background screensaver svg png frames',
   'fly-duel': 'fruit fly drosophila brain connectome mushroom body neurons neuroscience card game trading card game tcg magic the gathering mtg deck duel play against ai reinforcement learning dopamine flywire hemibrain',
   diamond: 'gem gemstone jewel jewellery jewelry brilliant cut diamond ring sapphire ruby emerald moissanite cubic zirconia facets dispersion fire sparkle total internal reflection snell fresnel aset',
@@ -111,7 +112,7 @@ const CREDITS = {
   'halftone': 'glsl-halftone (MIT)',
   'context-free': 'Context Free by Mark Lentczner and John Horigan (GPL-2+)',
   'cannonball-2d': TMP(1), 'cannonball-3d': TMP(2), 'cannonball-vr': TMP(2),
-  'billiard': TMP(3), 'pinball': TMP(4), 'bead-on-wire': TMP(5),
+  'pinball': TMP(4), 'bead-on-wire': TMP(5),
   'many-beads': TMP(5), 'pendulum-short': TMP(6), 'triple-pendulum': TMP(6),
   'soft-body-interaction': TMP(8), 'soft-bodies': TMP(10),
   'spatial-hashing': TMP(11), 'soft-body-skinning': TMP(12), 'cloth': TMP(14),
@@ -164,7 +165,7 @@ const SECTOR_TEXT = {
   clockwork: { at: [950, 347], tilt: 28, lead: 'watch-movement',
     blurb: 'Mechanisms that step, tick and count: Geneva drives, cams and linkages, ratchets, a sewing machine, a watch movement, a pendulum clock, the Antikythera mechanism, mechanical calculators, the Enigma and a lock.' },
   dynamics: { at: [764, 443], tilt: -30, lead: 'triple-pendulum',
-    blurb: 'The physics of motion, from Ten Minute Physics by Matthias Müller: cannonballs, billiards and pinball, pendulums and beads on wires, joints and rigid bodies, and a MuJoCo lab.' },
+    blurb: 'The physics of motion: a pool table where the computer plays itself; cannonballs, pinball, pendulums, beads on wires, joints and rigid bodies from Ten Minute Physics by Matthias Müller; and a MuJoCo lab.' },
   softbody: { at: [611, 489], tilt: 15, lead: 'cloth',
     blurb: 'Things that bend, from Ten Minute Physics by Matthias Müller: soft bodies you can grab and skin, and cloth that drapes and collides with itself.' },
   papers: { at: [592, 229], tilt: 30, lead: 'gravitational-imaging',
@@ -410,11 +411,11 @@ const BLURBS = {
   effectcraft: 'The EffectCraft motion graphics compositor.',
   'manim-live': 'Write real ManimCE code and watch it render beside the editor.',
   printcraft: 'The PrintCraft PDF workbench.',
+  billiard: 'A pool table in 2D and 3D: the computer plays, the maths draws itself.',
   // Ten Minute Physics ports (Matthias Müller and contributors, MIT).
   'cannonball-2d': 'A ball under gravity in a box: physics in a few lines.',
   'cannonball-3d': 'The cannonball in 3D: balls bouncing in a box.',
   'cannonball-vr': 'The 3D cannonball box in a VR headset. Needs WebXR.',
-  billiard: 'Many balls collide; set the restitution from elastic to dead.',
   pinball: 'A playable pinball table: flippers, bumpers and borders.',
   'spatial-hashing': 'Thousands of balls collide, found fast by a spatial hash.',
   'pendulum-short': 'A chaotic pendulum, complete in about a hundred lines.',

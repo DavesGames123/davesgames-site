@@ -328,7 +328,7 @@ w.SN_NAV = [
       ["cannonball-2d", "Cannonball 2D", "SIM"],
       ["cannonball-3d", "Cannonball 3D", "3D"],
       ["cannonball-vr", "Cannonball VR", "VR"],
-      ["billiard", "Billiard", "SIM"],
+      ["billiard", "Pool Physics", "3D"],
       ["pinball", "Pinball", "SIM"],
       ["spatial-hashing", "Spatial Hashing", "3D"]
     ] },
