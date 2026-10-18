@@ -303,6 +303,7 @@ export function createUI(app, doc = globalThis.document) {
         ui.inputs.set(d.key, row);
         det.append(row);
       }
+      if (group === lib.WATER_GROUP && app.waterTool) det.append(waterToolRow(app.waterTool));
       host.append(det);
     }
     // presets
@@ -314,6 +315,24 @@ export function createUI(app, doc = globalThis.document) {
       pc.append(b);
     }
     syncOptions();
+  }
+  // WATER: the "Add water" mode and its undo (world/water-tool.js)
+  function waterToolRow(tool) {
+    const row = el('div', 'row bool');
+    row.title = 'Tap or click the ground to fill the basin there to its spill point (a new pond where there is no basin). Esc stops, Cmd/Ctrl+Z undoes.';
+    const add = el('button', '', 'Add water'); add.type = 'button'; add.id = 'waterAdd';
+    const undo = el('button', '', 'Undo'); undo.type = 'button'; undo.id = 'waterUndo';
+    add.addEventListener('click', () => tool.toggle());
+    undo.addEventListener('click', () => tool.undo());
+    const sync = () => {
+      add.setAttribute('aria-pressed', String(!!tool.active));
+      add.textContent = tool.active ? 'Adding water' : 'Add water';
+      undo.disabled = !tool.canUndo();
+    };
+    tool.onChange = sync;
+    sync();
+    row.append(el('label', '', 'Lake tool'), add, undo);
+    return row;
   }
   function syncOptions() {
     for (const [k, row] of ui.inputs) if (row._set && app.opts[k] !== undefined) row._set(app.opts[k]);

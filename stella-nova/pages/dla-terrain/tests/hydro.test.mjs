@@ -346,5 +346,37 @@ await test('splitRivers: a river through a lake ends in it and goes on from the 
   void splitRivers;
 });
 
+await test('the Add water mode: a tap floods, a drag does not, undo restores', async () => {
+  const { createWaterTool } = await import('../world/water-tool.js');
+  const hydro = await import('../world/hydro-lakes.js');
+  const handlers = {};
+  const canvas = { style: {}, addEventListener: (k, f) => { handlers[k] = f; }, getBoundingClientRect: () => ({ left: 0, top: 0, width: 640, height: 400 }) };
+  const keys = [];
+  globalThis.addEventListener = globalThis.addEventListener || ((k, f) => keys.push([k, f]));
+  const n = 64, H = twoBasins(n), t = terrain(n, H), h0 = Float32Array.from(H);
+  const app = { terrain: t };
+  let applied = 0;
+  const wx = (i) => (i + 0.5) * 10 - t.worldSize / 2;
+  const tool = createWaterTool({ canvas, app, hydro: () => hydro, pick: () => [wx(18), 0, wx(32)], apply: () => { applied++; }, toast: () => {} });
+  const ev = (x, y, extra = {}) => ({ pointerId: 1, pointerType: 'mouse', button: 0, clientX: x, clientY: y, ...extra });
+  handlers.pointerdown(ev(100, 100)); handlers.pointerup(ev(101, 100));
+  assert.equal(applied, 0, 'the mode is off: no flood');
+  tool.setActive(true);
+  handlers.pointerdown(ev(100, 100)); handlers.pointerup(ev(160, 100));
+  assert.equal(applied, 0, 'a drag moves the camera, it does not flood');
+  handlers.pointerdown(ev(100, 100)); handlers.pointerup(ev(103, 101));
+  assert.equal(applied, 1, 'a tap floods');
+  assert.ok(t.lakes.length === 1 && tool.canUndo());
+  assert.ok(tool.undo());
+  assert.equal(applied, 2);
+  assert.deepEqual(H, h0);
+  assert.equal(t.lakes.length, 0);
+  assert.ok(!tool.canUndo());
+  // a new terrain clears the undo list
+  tool.floodAt(wx(18), wx(32));
+  app.terrain = terrain(n, twoBasins(n));
+  assert.ok(!tool.canUndo(), 'undo belongs to one terrain');
+});
+
 console.log(`\n# hydro: ${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);

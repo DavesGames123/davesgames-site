@@ -386,6 +386,12 @@ async function loadLib() {
     const m = await import('../../lib/dla-terrain.js');
     if (m.OPTIONS && m.generateTerrain) { app.lib = m; app.libKind = 'lib'; }
   } catch (e) { console.warn('dla-terrain: lib/dla-terrain.js did not load, using the stub', e); }
+  // WATER: world/hydro-lakes.js wraps the LIB (the "Water bodies" options,
+  // the presets, the dice) and its worker adds the lakes after generation
+  if (app.libKind === 'lib') {
+    try { const h = await import('./world/hydro-lakes.js'); app.lib = h.withWaterBodies(app.lib); app.hydro = h; }
+    catch (e) { console.warn('dla-terrain: world/hydro-lakes.js did not load', e); }
+  }
   try {
     const s = await import('./sky-state.js');
     if (s.skyState && s.WEATHER) { app.skyLib = s; app.sky = s.createSky ? s.createSky() : null; }
@@ -416,7 +422,8 @@ function initialOptions() {
 }
 
 async function makeWorker() {
-  const libURL = new URL('../../lib/dla-terrain-worker.js', import.meta.url);
+  // WATER: the page worker runs the LIB and then the bodies of water
+  const libURL = app.hydro ? new URL('./world/hydro-worker.js', import.meta.url) : new URL('../../lib/dla-terrain-worker.js', import.meta.url);
   let ok = false;
   if (app.libKind === 'lib') {
     // a 404 skips the worker; a server that does not answer HEAD still tries it
@@ -665,6 +672,7 @@ function onWorker(m) {
     pendingSnap = null;
     const t = m.terrain;
     app.terrain = t;
+    if (app.waterTool) app.waterTool.reset();
     player.finish(t);
     firstTerrainDone();
     app.gen.running = false;
@@ -878,6 +886,20 @@ function statusLine(st) {
 // keys stay below (they fill input.keys for the movement)
 import { createInput } from './input.js';
 const input = createInput({ canvas, app, cam, world, ui: () => ui, hint: $('hint'), ready: () => !!tg, pickGround });
+
+// ── WATER TOOL  "Add water" (world/water-tool.js, Terrain > Water bodies):
+// a tap floods the basin under it; the edit goes to the GPU like a new
+// final terrain (tg.finish), so every module sees the new lake
+import { createWaterTool } from './world/water-tool.js';
+app.waterTool = createWaterTool({
+  canvas, app, hydro: () => app.hydro,
+  pick: (nx, ny) => cam.pick(nx, ny, world) || (app.lastMatrices ? pickGround(app.lastMatrices.invViewProj, nx, ny, world, world.size * 3) : null),
+  apply: t => {
+    if (tg) setTerrainAll(tg.finish(t, 0.35));
+    if (ui) ui.setTerrainMap({ ...t, worldSize: t.worldSize, stage: 'done' }, app.lib.BIOMES, t);
+  },
+  toast: s => ui && ui.toast(s),
+});
 const keys = input.keys;
 const takeInput = dt => input.take(dt);
 const leaveDrone = () => input.leaveDrone();

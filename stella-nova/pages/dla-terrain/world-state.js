@@ -145,7 +145,8 @@ export function cloneWorld(w) {
 export function rollGroup(world, group, seed, lib, ctx = {}) {
   const w = cloneWorld(world);
   const r = mulberry(seed ^ 0x5bd1e995);
-  if (LIB_GROUPS.includes(group)) {
+  // a LIB group, or a group that the wrapped LIB adds (WATER: "Water bodies")
+  if (LIB_GROUPS.includes(group) || ((lib && lib.OPTIONS) || []).some(d => d.group === group)) {
     let o;
     try { o = lib.randomOptions(seed, { ...w.opts }, group); } catch { o = lib.randomOptions(seed, { ...w.opts }); }
     const out = { ...w.opts };
