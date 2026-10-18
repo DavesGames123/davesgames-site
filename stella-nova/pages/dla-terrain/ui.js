@@ -451,7 +451,7 @@ export function createUI(app, doc = globalThis.document) {
     for (const b of doc.querySelectorAll('#layerToggles button')) b.setAttribute('aria-pressed', String(!!app.layers[b.dataset.layer]));
     $('camHint').textContent = camHints[app.camMode] || '';
     evSync(); blSync(); fovSync(); shaftSync();
-    for (const b of doc.querySelectorAll('#shaftSeg button')) b.classList.toggle('on', b.dataset.shafts === (app.look.shafts || 'auto'));
+    for (const b of doc.querySelectorAll('#shaftSeg button')) b.classList.toggle('on', b.dataset.shafts === ((app.look && app.look.shafts) || 'auto'));
   };
 
   // credits
