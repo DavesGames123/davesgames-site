@@ -105,7 +105,7 @@ export function grassMaterial(THREE, U, COMMON, proc = false) {
         if (pwd > 0.5) pkind = 2;
         float pdens = pkind == 0 ? pow(psw, 1.4) * (1.0 - 0.92 * ppth) : pkind == 1 ? (0.3 + 0.7 * psw) * (1.0 - 0.75 * ppth) : pkind == 2 ? 0.45 : 1.0;
         pdens *= 1.0 - 0.9 * smoothstep(0.85, 1.0, ppth);
-        if (ehash(ic, salt + 29u) >= pdens) procKeep = 0.0;
+        if (ehash(ic, salt + 29u) >= pdens * 1.8) procKeep = 0.0;
         vec2 GH = pkind == 0 ? vec2(${G[0].h[0]}, ${G[0].h[1]}) : pkind == 1 ? vec2(${G[1].h[0]}, ${G[1].h[1]}) : pkind == 2 ? vec2(${G[2].h[0]}, ${G[2].h[1]}) : vec2(${G[3].h[0]}, ${G[3].h[1]});
         vec2 GS = pkind == 0 ? vec2(${G[0].spread[0]}, ${G[0].spread[1]}) : pkind == 1 ? vec2(${G[1].spread[0]}, ${G[1].spread[1]}) : pkind == 2 ? vec2(${G[2].spread[0]}, ${G[2].spread[1]}) : vec2(${G[3].spread[0]}, ${G[3].spread[1]});
         float pwk = sqrt(cs / ${PROC.cell[0].toFixed(3)});

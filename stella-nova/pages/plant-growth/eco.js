@@ -206,7 +206,7 @@ export const FORBS = [
   { id: 'periwinkle', h0: 0.3, label: 'lesser periwinkle', kind: 'flower', assets: ['periwinkle_plant_a', 'periwinkle_plant_b', 'periwinkle_plant_c'], scale: [0.7, 1.0], niche: [0.0, 0.6], moist: 0.55, prior: 'shade', sigma: 0.55, mu: 16, n: 5, life: [0, 0.3, 0.95, 1], winter: 0.8, bloom: [0.27, 0.42], petal: '#7d7fd8' },
   { id: 'nettle', h0: 0.17, label: 'stinging nettle', kind: 'herb', assets: ['nettle_plant_a', 'nettle_plant_c'], scale: [2.2, 3.0], niche: [0.25, 0.92], moist: 0.65, prior: 'edge', sigma: 0.5, mu: 12, n: 4, life: [0.22, 0.4, 0.8, 0.92], winter: 0, bloom: null, petal: null },
   { id: 'plantain', h0: 0.064, label: 'greater plantain', kind: 'herb', assets: ['weed_plant_02_a', 'weed_plant_02_b'], scale: [1.2, 1.8], niche: [0.35, 1.3], moist: 0.5, prior: 'path', sigma: 0.4, mu: 5, n: 7, life: [0.2, 0.3, 0.85, 0.97], winter: 0.4, bloom: null, petal: null },
-  { id: 'fern', h0: 0.32, label: 'male fern', kind: 'fern', assets: ['fern_02_a', 'fern_02_b', 'fern_02_c', 'fern_02_d'], scale: [1.2, 2.0], niche: [-0.2, 0.55], moist: 0.7, prior: 'shade', sigma: 0.9, mu: 7, n: 6, life: [0.28, 0.4, 0.8, 0.92], winter: 0, bloom: null, petal: null },
+  { id: 'fern', h0: 0.32, label: 'male fern', kind: 'fern', assets: ['fern_02_a', 'fern_02_b', 'fern_02_c', 'fern_02_d'], scale: [1.2, 2.0], niche: [-0.2, 0.55], moist: 0.7, prior: 'shade', sigma: 0.6, mu: 6, n: 4, life: [0.28, 0.4, 0.8, 0.92], winter: 0, bloom: null, petal: null },
   { id: 'mushroom', h0: 0.135, label: 'bolete (with the tree roots)', kind: 'fungus', assets: ['rubberduck_mushrooms_a', 'rubberduck_mushrooms_b'], scale: [0.7, 1.0], niche: [-0.2, 0.7], moist: 0.6, prior: 'drip', sigma: 0.3, mu: 5, n: 4, life: [0.71, 0.75, 0.83, 0.88], winter: 0, bloom: null, petal: null },
   { id: 'moss', h0: 0.027, label: 'moss cushions', kind: 'moss', assets: ['moss_01_a', 'moss_01_b'], scale: [1.5, 3.0], niche: [-0.2, 0.75], moist: 0.7, prior: 'base', sigma: 0.35, mu: 9, n: 8, life: [0, 0.1, 0.95, 1], winter: 1, bloom: null, petal: null },
 ];
@@ -274,7 +274,7 @@ export function thomas(r, { R, parents, sigma, mu, intensity, max = Infinity, ce
 export const ECO_R = 24;
 export function buildEco(opts) {
   const seed = (opts.seed ?? 7) >>> 0, r = rng((seed * 48271 + 101) >>> 0 || 1);
-  const L = opts.limits || { tussocks: 26000, forbs: 700, stones: 1400, litter: 7000, woodland: 520, seedlings: 160 };
+  const L = opts.limits || { tussocks: 26000, forbs: 1100, stones: 1400, litter: 7000, woodland: 520, seedlings: 160 };
   const R = opts.R ?? ECO_R;
   const plants = opts.plants && opts.plants.length ? opts.plants : [{ x: 0, z: 0, species: 'oak', form: 'tree', rMature: 6.7 }];
   // the path runs across the view behind the tree; the wood is behind it
@@ -591,7 +591,7 @@ export function groundMix(x, z, env) {
   const north = clamp01(1 - (((x - (cr[0] ? cr[0].x : 0)) * SUN_XZ[0] + (z - (cr[0] ? cr[0].z : 0)) * SUN_XZ[1]) + 0.2) * 2);
   const moss = clamp01(clamp01((mo - 0.45) * 2.5) * shade * 0.75 + base * north * 0.9);
   const G = GROUND_COL;
-  let c = mix3(G.meadow, G.turf, turf);
+  let c = mix3(G.meadow.map((v, k) => v * [0.72, 0.85, 0.6][k]), G.turf, turf);   // grass shades the meadow soil
   c = mix3(c, G.forest.map(v => v * 0.62), shade * 0.85);
   c = mix3(c, G.moss, moss);
   const soilC = mix3(G.soil, G.soil.map(v => v * 2.4 + 0.03), pth * (1 - 0.6 * mo));   // a dry trodden path is lighter
@@ -686,7 +686,7 @@ export function procTussock(ix, iz, x, z, lvl, cx, cz, F, R, n) {
   if (wd > 0.5) kind = 2;
   let dens = kind === 0 ? Math.pow(sw, 1.4) * (1 - 0.92 * pth) : kind === 1 ? (0.3 + 0.7 * sw) * (1 - 0.75 * pth) : kind === 2 ? 0.45 : 1;
   dens *= 1 - 0.9 * ss(0.85, 1, pth);
-  const keep = (hash3(ix, iz, salt + 29) < dens ? 1 : 0) * disc * edge;
+  const keep = (hash3(ix, iz, salt + 29) < dens * 1.8 ? 1 : 0) * disc * edge;
   if (keep <= 0) return null;
   const G = GRASS[kind], r1 = hash3(ix, iz, salt + 31), r2 = hash3(ix, iz, salt + 37);
   const wk = Math.sqrt(cs / PROC.cell[0]);

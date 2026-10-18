@@ -149,7 +149,7 @@ export function pixelRatioStep(st, dt) {
 }
 
 export const ECO_LIMITS = {
-  desktop: { tussocks: 26000, forbs: 700, stones: 1400, litter: 7000, woodland: 520, seedlings: 160, lod: 1, R: 24, procN: 80 },
-  phone: { tussocks: 9000, forbs: 260, stones: 500, litter: 2200, woodland: 220, seedlings: 60, lod: 2, R: 20, procN: 44 },
+  desktop: { tussocks: 26000, forbs: 1100, stones: 1400, litter: 7000, woodland: 520, seedlings: 160, lod: 1, R: 24, procN: 80 },
+  phone: { tussocks: 9000, forbs: 360, stones: 500, litter: 2200, woodland: 220, seedlings: 60, lod: 2, R: 20, procN: 44 },
 };
 export function ecoLimits(coarse) { return coarse ? ECO_LIMITS.phone : ECO_LIMITS.desktop; }
