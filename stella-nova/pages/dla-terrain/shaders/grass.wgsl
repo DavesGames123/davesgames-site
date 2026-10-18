@@ -2,7 +2,7 @@
 //  DLA TERRAIN  ·  shaders/grass.wgsl — GPU grass blades (package VEG)
 // ----------------------------------------------------------------------------
 //  CORE joins common.wgsl + lib/dla-terrain-detail.wgsl in front of this
-//  file. render/vegetation.js runs cs_blades, cs_final, then draws
+//  file. render/vegetation.js runs cs_blades0..3, cs_final, then draws
 //  vs_grass / fs_grass with drawIndirect (one triangle strip per blade).
 //
 //  RINGS  A blade lives on a global fine grid of spacing d (GP.grid.y).
@@ -29,7 +29,9 @@
 //  The length correction keeps the blade length.
 //
 //  GREP MAP
-//    grep -n 'fn cs_blades'   ring grid, density, cull, the blade record
+//    grep -n 'fn gFrustum'    sphere against the view frustum
+//    grep -n 'fn cs_blades'   one entry per ring (near rings first)
+//    grep -n 'fn bladeAt'     ring grid, density, cull, the blade record
 //    grep -n 'fn grassBiome'  height, density and colour per biome
 //    grep -n 'fn bladeCurve'  Bezier control points with wind
 //    grep -n 'fn vs_grass'    the strip vertex
@@ -116,17 +118,40 @@ fn grassBiome(id: u32) -> GB {
 
 fn ringRadius(l: u32) -> f32 { return GP.rings[min(l, 3u)].w; }
 
+// Sphere against the view frustum: the same plane test as props.wgsl
+// fn inFrustum (side planes from the viewProj rows, scaled to metres, and
+// the reverse-Z near plane w = G.proj[3][2]). The old test took
+// r * proj[0][0] as the margin, which is too small by up to 30 % at the
+// screen edges, and cut blades at the feet out of the view.
 fn gFrustum(c: vec3f, r: f32) -> bool {
-  let q = G.viewProj * vec4f(c, 1.0);
-  if (q.w < -r) { return false; }
-  let m = r * max(G.proj[0][0], G.proj[1][1]) + 0.01 * max(q.w, 0.0);
-  return !(q.x < -q.w - m || q.x > q.w + m || q.y < -q.w - m || q.y > q.w + m);
+  let m = G.viewProj;
+  let q = m * vec4f(c, 1.0);
+  let r0 = vec3f(m[0].x, m[1].x, m[2].x);
+  let r1 = vec3f(m[0].y, m[1].y, m[2].y);
+  let r3 = vec3f(m[0].w, m[1].w, m[2].w);
+  if (q.w < G.proj[3][2] - (r * length(r3))) { return false; }
+  if ((q.w + q.x) < -(r * length(r3 + r0))) { return false; }
+  if ((q.w - q.x) < -(r * length(r3 - r0))) { return false; }
+  if ((q.w + q.y) < -(r * length(r3 + r1))) { return false; }
+  if ((q.w - q.y) < -(r * length(r3 - r1))) { return false; }
+  return true;
 }
 
+// One entry point per ring. render/vegetation.js dispatches ring 0 first,
+// then 1, 2, 3 (in order in one pass), so the blade buffer fills from the
+// camera outward: when it is full, the far blades are dropped, never the
+// blades at the feet (one dispatch of all rings took the slots in any order).
 @compute @workgroup_size(8, 8, 1)
-fn cs_blades(@builtin(global_invocation_id) gid: vec3u) {
+fn cs_blades0(@builtin(global_invocation_id) gid: vec3u) { bladeAt(gid, 0u); }
+@compute @workgroup_size(8, 8, 1)
+fn cs_blades1(@builtin(global_invocation_id) gid: vec3u) { bladeAt(gid, 1u); }
+@compute @workgroup_size(8, 8, 1)
+fn cs_blades2(@builtin(global_invocation_id) gid: vec3u) { bladeAt(gid, 2u); }
+@compute @workgroup_size(8, 8, 1)
+fn cs_blades3(@builtin(global_invocation_id) gid: vec3u) { bladeAt(gid, 3u); }
+
+fn bladeAt(gid: vec3u, L: u32) {
   let N = u32(GP.grid.x);
-  let L = gid.z;
   if (gid.x >= N || gid.y >= N || L > 3u) { return; }
   let stp = 1 << L;
   let gi = i32(GP.rings[L].x) + i32(gid.x) * stp;
@@ -177,7 +202,8 @@ fn cs_blades(@builtin(global_invocation_id) gid: vec3u) {
   hgt *= mix(0.65, 1.15, smoothstep(0.1, 0.7, moist));
   let snowC = G.weather2.y;
   hgt *= 1.0 - snowC * 0.8;
-  if (!gFrustum(vec3f(xz.x, y + hgt * 0.5, xz.y), hgt + 0.3)) { return; }
+  // the wind pushes the tip up to 1.25 h downwind (bladeCurve): radius 1.4 h
+  if (!gFrustum(vec3f(xz.x, y + hgt * 0.5, xz.y), (hgt * 1.4) + 0.3)) { return; }
   // colour (linear): the GROUND grass colour, lifted for the blade body
   let dry = clamp(gb.dryness + (0.35 - moist) + (patchN - 0.5) * 0.6, 0.0, 1.0);
   var col = grassSeason(gb.col, G.weather2.w, dry * 0.6);

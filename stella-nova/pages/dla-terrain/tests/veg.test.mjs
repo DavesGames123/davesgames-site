@@ -10,6 +10,10 @@
 //    Poisson spacing across tile edges, no instances in water, no trees on
 //    steep slopes, density per biome, species rules (cacti in desert, reeds
 //    on the shore), the tile stream and its distance bands.
+//    The GPU cull through its CPU twin (vegetation.js classifyCPU): no
+//    visible plant culled from many cameras (1 m from a trunk, inside a
+//    crown, looking up, high up), LOD0 near, no pop in 1 m steps, shadow
+//    casters out of view; the 3D stream bands; the page pool order.
 // ============================================================================
 import { makeField, scatterTile, tilesFor, createScatterStream, LAYERS, LAYER_INDEX,
   SPECIES, SPECIES_INDEX, STRIDE, SLOPE_TREE, BIOME_KEYS } from '../render/scatter.js';
@@ -267,6 +271,194 @@ console.log('       instances in the 2 km test world: ' + LAYERS.map((L) => L.ke
   fm.mix = null;
   const far = LAYERS[LAYER_INDEX.canopyFar];
   check('far canopy: a far fade band wider than the near band', far.farBand > far.band * 4, far.band + ' / ' + far.farBand);
+}
+
+// 9 the GPU cull, through its CPU twin (render/vegetation.js classifyCPU,
+// the same maths as props.wgsl classify). The truth is the LOD0 mesh of
+// each plant, placed as props.wgsl placeVertex does (scale, lean, yaw,
+// sink): a plant with a vertex in the view frustum and a layer fade over
+// 0 must be drawn. Cameras: eye height, 1 m from a trunk, inside a crown,
+// looking up, a 1.5 km high view, and a low fast flight in 1 m steps.
+{
+  const V = await import('../render/vegetation.js');
+  const { perspectiveRZ, lookAt, mul } = await import('../gpu/mat.js');
+  const fm = makeField(synthTerrain());
+  const protos = {};
+  const protoOf = (si) => (protos[si] ||= V.standInProto(SPECIES[si].key, 1000 + si * 37));
+  // the plants round a forest point: a boreal plain (x -700, z 800)
+  const cx0 = -700, cz0 = 760;
+  const inst = [];
+  for (const L of LAYERS) {
+    if (L.key === 'canopyFar') continue;
+    for (const w of tilesFor(fm, cx0, cz0).filter((t) => t.layer === L.key && t.d < 160)) {
+      const r = scatterTile(fm, L.key, w.tx, w.tz);
+      for (let i = 0; i < r.count; i++) {
+        const o = i * STRIDE;
+        inst.push({ it: new Float32Array([r.data[o], fm.heightAt(r.data[o], r.data[o + 2]), r.data[o + 2], r.data[o + 3], r.data[o + 4], r.data[o + 5] + 256 * LAYER_INDEX[L.key], r.data[o + 6], r.data[o + 7]]), si: r.data[o + 5] });
+      }
+    }
+  }
+  const trees = inst.filter((x) => SPECIES[x.si].kind === 'tree' && SPECIES[x.si].layer === 'canopy');
+  const W = 1280, H = 720, fov = 50 * Math.PI / 180, nearP = 0.5;
+  const camAt = (eye, fwd) => {
+    const proj = perspectiveRZ(fov, W / H, nearP);
+    const t = [eye[0] + fwd[0], eye[1] + fwd[1], eye[2] + fwd[2]];
+    const up = Math.abs(fwd[1]) > 0.999 ? [0, 0, -1] : [0, 1, 0];
+    const vp = mul(proj, lookAt(eye, t, up));
+    const P = V.writeCullParams(new Float32Array(64), { cam: eye, proj, H, q: 0.75, farK: 0.875, shadowFar: 975, shadowsOn: true, sun: [0.3, 0.5, 0.81], lists: 999, species: 40 });
+    return { eye, vp, proj, P, G: { viewProj: vp, proj, wind: [0, 0] } };
+  };
+  const dirOf = (yaw, pitch) => [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
+  // any LOD0 vertex in the frustum (every 2nd vertex)
+  function truthVisible(x, cam) {
+    const pr = protoOf(x.si), it = x.it, s = it[3], h = pr.spec[0] * s;
+    const lean = pr.spec[7] * (it[7] - 0.5) * 2, cl = Math.cos(lean), sl = Math.sin(lean), cy = Math.cos(it[4]), sy = Math.sin(it[4]);
+    const ry = it[1] - pr.spec[6] * h, m = cam.vp;
+    for (let k = 0; k < pr.pos.length; k += 6) {
+      let px = pr.pos[k] * s, py = pr.pos[k + 1] * s;
+      const pz = pr.pos[k + 2] * s;
+      const lx = px * cl - py * sl; py = px * sl + py * cl; px = lx;
+      const wx = it[0] + cy * px + sy * pz, wy = ry + py, wz = it[2] - sy * px + cy * pz;
+      const q = (j) => m[j] * wx + m[4 + j] * wy + m[8 + j] * wz + m[12 + j];
+      const w = q(3);
+      if (w >= nearP && Math.abs(q(0)) <= w && Math.abs(q(1)) <= w) return true;
+    }
+    return false;
+  }
+  // the old cull (before this fix): sphere max(0.55 h, radius) at the
+  // base + h/2, margin r * proj + 2 % of w, and no near plane
+  function oldCulls(x, cam) {
+    const pr = protoOf(x.si), it = x.it, h = pr.spec[0] * it[3], r = Math.max(h * 0.55, pr.spec[1] * it[3]);
+    const m = cam.vp, c = [it[0], it[1] + h * 0.5, it[2]];
+    const q = (j) => m[j] * c[0] + m[4 + j] * c[1] + m[8 + j] * c[2] + m[12 + j];
+    const qx = q(0), qy = q(1), qw = q(3);
+    if (qw < -r) return true;
+    const mx = r * cam.proj[0] + 0.02 * Math.max(qw, 0), my = r * cam.proj[5] + 0.02 * Math.max(qw, 0);
+    return qx < -qw - mx || qx > qw + mx || qy < -qw - my || qy > qw + my;
+  }
+  const keepOf = (c) => c.lists.reduce((a, l) => a + V.fadeKeep(l[1], l[2]), 0);
+  const cams = [];
+  const tr = trees.slice().sort((a, b) => Math.hypot(a.it[0] - cx0, a.it[2] - cz0) - Math.hypot(b.it[0] - cx0, b.it[2] - cz0)).slice(0, 6);
+  for (const t of tr) {
+    const [x, y, z] = t.it, h = protoOf(t.si).spec[0] * t.it[3];
+    for (let a = 0; a < 8; a++) {
+      const yaw = a * Math.PI / 4;
+      // 1 m from the trunk at eye height (2.2 m, camera.js CLEAR), trunk at the screen edge too
+      cams.push(camAt([x - Math.sin(yaw) * 1.0, y + 2.2, z + Math.cos(yaw) * 1.0], dirOf(yaw + 0.5, 0)));
+      cams.push(camAt([x - Math.sin(yaw) * 1.6, y + 2.2, z + Math.cos(yaw) * 1.6], dirOf(yaw, 0.1)));
+      // inside the crown, and under it looking up
+      cams.push(camAt([x + 0.8, y + h * 0.7, z + 0.6], dirOf(yaw, (a - 4) * 0.3)));
+      cams.push(camAt([x - Math.sin(yaw) * 2.5, y + 2.2, z + Math.cos(yaw) * 2.5], dirOf(yaw, 1.25)));
+    }
+  }
+  for (let a = 0; a < 12; a++) cams.push(camAt([cx0 + Math.cos(a) * 30, fm.heightAt(cx0, cz0) + 2.2 + a * 3, cz0 + Math.sin(a) * 30], dirOf(a * 0.53, -0.1 - a * 0.05)));
+  const nCull = cams.length;
+  let checked = 0, missed = 0, oldMissed = 0, nearBad = 0, nearN = 0, missInfo = '';
+  for (const cam of cams) for (const x of inst) {
+    const pr = protoOf(x.si);
+    const c = V.classifyCPU(x.it, pr.spec, cam.P, cam.G);
+    if (!(c.lf > 0.002)) continue;
+    if (!truthVisible(x, cam)) continue;
+    checked++;
+    if (c.n === 0 || keepOf(c) <= 0) { missed++; if (!missInfo) missInfo = SPECIES[x.si].key + ' d ' + c.d.toFixed(1); }
+    if (oldCulls(x, cam)) oldMissed++;
+    if (c.d < 12) { nearN++; if (!(c.n === 1 && c.lists[0][0] % 4 === 0 && c.lists[0][1] === 1)) nearBad++; }
+  }
+  check('cull twin: every plant with a LOD0 vertex in view and a layer fade is drawn (' + nCull + ' cameras)', checked > 1000 && missed === 0, checked + ' visible, ' + missed + ' culled ' + missInfo);
+  check('cull twin: the old cull dropped visible plants (the fault this fixes)', oldMissed > 0, oldMissed + ' of ' + checked + ' with the old sphere and margin');
+  check('cull twin: plants nearer than 12 m draw the full LOD0 mesh, no cross-fade', nearN > 100 && nearBad === 0, nearN + ' near, ' + nearBad + ' not LOD0');
+  // a fast low flight in 1 m steps: no plant in view jumps in coverage
+  let pops = 0, steps = 0, popInfo = '';
+  const yawF = 0.7, f0 = dirOf(yawF, -0.08);
+  let prev = null;
+  for (let k = 0; k <= 240; k++) {
+    const ex = cx0 - 120 * Math.sin(yawF) + k * Math.sin(yawF), ez = cz0 + 120 * Math.cos(yawF) - k * Math.cos(yawF);
+    const cam = camAt([ex, fm.heightAt(ex, ez) + 4, ez], f0);
+    const cur = inst.map((x) => { const c = V.classifyCPU(x.it, protoOf(x.si).spec, cam.P, cam.G); return { keep: c.n ? keepOf(c) : 0, view: c.inView }; });
+    if (prev) for (let i = 0; i < inst.length; i++) {
+      if (!(cur[i].view && prev[i].view)) continue;
+      steps++;
+      if (Math.abs(cur[i].keep - prev[i].keep) > 0.34) { pops++; if (!popInfo) popInfo = SPECIES[inst[i].si].key + ' ' + prev[i].keep.toFixed(2) + ' -> ' + cur[i].keep.toFixed(2); }
+    }
+    prev = cur;
+  }
+  check('cull twin: no pop on a 240 m flight in 1 m steps (coverage change under 0.34)', steps > 1000 && pops === 0, steps + ' plant steps, ' + pops + ' pops ' + popInfo);
+  // shadows: a tree outside the view whose shadow falls into it casts
+  {
+    const t = tr[0], [x, y, z] = t.it;
+    const sun = [0.25, 0.2, 0.95];
+    const sl = Math.hypot(...sun), sd = sun.map((v) => v / sl);
+    // the camera looks at the ground 25 m from the tree on the side away from the sun
+    const g = [x - sd[0] / Math.hypot(sd[0], sd[2]) * 40, y, z - sd[2] / Math.hypot(sd[0], sd[2]) * 40];
+    const eye = [g[0] + 6, y + 12, g[2] + 6];
+    const dir = [g[0] - eye[0], g[1] - eye[1], g[2] - eye[2]], dl = Math.hypot(...dir);
+    const cam = camAt(eye, dir.map((v) => v / dl));
+    V.writeCullParams(cam.P, { cam: eye, proj: cam.proj, H, q: 0.75, farK: 0.875, shadowFar: 975, shadowsOn: true, sun: sd, lists: 999, species: 40 });
+    const c = V.classifyCPU(t.it, protoOf(t.si).spec, cam.P, cam.G);
+    check('shadow: a tree out of view with its low sun shadow in view stays a caster', c.shadow >= 0, 'in view ' + c.inView + ', shadow list ' + c.shadow);
+  }
+}
+
+// 10 the stream in 3D: from a camera 1.5 km over the ground, every point
+// where the GPU band shows a layer has its tile in the stream set
+{
+  const fm = makeField(synthTerrain());
+  const farK = 0.875, cx = -300, cz = 200, cy = fm.heightAt(cx, cz) + 1500;
+  const covered = (set) => {
+    let need = 0, miss = 0;
+    for (let k = 0; k < 4000; k++) {
+      const a = k * 2.39996, rr = 1400 * Math.sqrt((k + 0.5) / 4000);
+      const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+      if (!fm.inside(x, z)) continue;
+      for (const L of LAYERS) {
+        const d = Math.hypot(x - cx, fm.heightAt(x, z) + 8 - cy, z - cz);
+        const near = L.near * farK, far = L.far * farK;
+        const lf = (near > 0 ? Math.min(1, Math.max(0, (d - near) / L.band)) : 1) * (d < far ? 1 : 0);
+        if (lf <= 0.002) continue;
+        need++;
+        const tx = Math.floor((x - fm.origin) / L.tile), tz = Math.floor((z - fm.origin) / L.tile);
+        if (!set.has(L.key + ':' + tx + ':' + tz)) miss++;
+      }
+    }
+    return { need, miss };
+  };
+  const s3 = covered(new Set(tilesFor(fm, cx, cz, { farScale: farK, cy }).map((t) => t.key)));
+  const s2 = covered(new Set(tilesFor(fm, cx, cz, { farScale: farK }).map((t) => t.key)));
+  check('stream 3D: a camera 1.5 km up has a tile under every point that the GPU band shows', s3.need > 1000 && s3.miss === 0, s3.need + ' points, ' + s3.miss + ' without a tile');
+  check('stream 3D: the xz stream (before this fix) left a hole under the high camera', s2.miss > 0, s2.miss + ' of ' + s2.need + ' points without a tile');
+  const tl = tilesFor(fm, cx, cz, { farScale: farK, cy: fm.heightAt(cx, cz) + 3 });
+  const firstFar = tl.findIndex((t) => t.layer === 'canopyFar'), lastNear = tl.map((t) => t.layer === 'canopy' && t.d < 300).lastIndexOf(true);
+  check('stream order: the near canopy streams before the far canopy', firstFar > lastNear, 'last near canopy ' + lastNear + ', first far ' + firstFar);
+  // a fast flight (300 m per frame, a fixed tile cost): the first tile made
+  // after each jump is one under the camera
+  let tick = 0;
+  const st = createScatterStream(fm, { farScale: farK, now: () => (tick += 1) });
+  let bad = 0;
+  for (let k = 0; k < 6; k++) {
+    const x = -800 + k * 300, z = -200;
+    const before = new Set(st.tiles.keys());
+    st.update(x, z, 4, fm.heightAt(x, z) + 3);
+    const made = [...st.tiles.keys()].filter((key) => !before.has(key));
+    const first = made[0] ? made[0].split(':') : null;
+    const L = first ? LAYERS[LAYER_INDEX[first[0]]] : null;
+    if (!first || tileDistOk(fm, L, +first[1], +first[2], x, z) > 1) bad++;
+  }
+  function tileDistOk(f, L, tx, tz, x, z) {
+    const x0 = f.origin + tx * L.tile, z0 = f.origin + tz * L.tile;
+    return Math.hypot(Math.max(x0 - x, 0, x - x0 - L.tile), Math.max(z0 - z, 0, z - z0 - L.tile));
+  }
+  check('stream: on a fast flight the first new tile is the one under the camera', bad === 0, bad + ' of 6 jumps');
+}
+
+// 11 the instance page pool: when it is full, the nearest tiles win
+{
+  const { planPages } = await import('../render/vegetation.js');
+  const have = [{ key: 'far1', d: 900, pages: 3 }, { key: 'far2', d: 600, pages: 2 }, { key: 'mid', d: 200, pages: 2 }];
+  const p = planPages([{ key: 'near', d: 5, need: 4 }, { key: 'next', d: 50, need: 1 }, { key: 'huge', d: 700, need: 50 }], have, 0);
+  check('pages: a near tile takes the pages of the farthest tiles', p.write.includes('near') && p.evict[0] === 'far1' && p.evict.includes('far2') && !p.evict.includes('mid'), JSON.stringify(p));
+  check('pages: a tile that cannot fit evicts nothing for itself', !p.write.includes('huge') && p.evict.length === 2, JSON.stringify(p));
+  const q = planPages([{ key: 'a', d: 10, need: 1 }], [{ key: 'b', d: 5, pages: 9 }], 0);
+  check('pages: a far tile never takes the pages of a nearer one', q.write.length === 0 && q.evict.length === 0, JSON.stringify(q));
 }
 
 // 8 the real LIB terrain, when it is there

@@ -58,9 +58,11 @@
 //    grep -n 'function buildLibrary'    VB/IB, parts, lists, draw slots
 //    grep -n 'function bakeImpostors'   the 8 view impostor bake
 //    grep -n 'function syncTiles'       stream -> instance pages
+//    grep -n 'export function planPages' nearest tiles win a full pool
+//    grep -n 'export function classifyCPU' CPU twin of the GPU cull
 //    grep -n 'export async function createVegetation'
 // ============================================================================
-import { makeField, createScatterStream, SPECIES, LAYERS, LAYER_INDEX, STRIDE, BIOME_KEYS, normKey, MIX0 } from './scatter.js';
+import { makeField, createScatterStream, tileDist, SPECIES, LAYERS, LAYER_INDEX, STRIDE, BIOME_KEYS, normKey, MIX0 } from './scatter.js';
 
 export const PAGE = 128;               // instances per page (props.wgsl PAGE)
 const LODS = 4;                         // camera lists per prototype
@@ -1069,6 +1071,155 @@ function buildLibrary(protoSets, texNames) {
   return { protos, speciesProtos, vb, ib, slots, nLists, ranges };
 }
 
+
+// ------------------------------------------------------------ cull twin
+// The CPU twin of the GPU cull (shaders/props.wgsl inFrustum,
+// instanceBounds, classify), for tests/veg.test.mjs. It reads the same
+// VegParams floats that update() writes (writeCullParams) and the Globals
+// fields that the cull reads. Keep it in step with props.wgsl.
+export const LOD_PX = [380, 150, 52, 2.5];
+export const NEAR_FULL = 7;   // m, props.wgsl NEAR_FULL: the least size for the LOD choice
+export function writeCullParams(P, o) {
+  P.fill(0);
+  P.set([o.cam[0], o.cam[1], o.cam[2], o.time ?? 0], 0);
+  P.set([o.shadowFar ?? 0, o.slots ?? 0, 0.6 + 0.6 * (o.q ?? 0.75), o.frame ?? 0], 4);
+  P.set([o.proj[0], o.proj[5], o.H ?? 720, o.q ?? 0.75], 8);
+  P.set(o.lodPx || LOD_PX, 12);
+  const sd = o.sun || [0, 1, 0];
+  P.set([sd[0], sd[1], sd[2], o.shadowsOn && sd[1] > -0.05 ? 1 : 0], 16);
+  P.set([o.lists ?? 0, o.nSlots ?? 0, o.species ?? 0, o.aerial ? 1 : 0], 20);
+  const fs = o.farK ?? 1;
+  LAYERS.forEach((lr, i) => {
+    const on = lr.key.startsWith('canopy') ? o.treesOn !== false : o.propsOn !== false;
+    P.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, (lr.farBand || 0) * fs], 28 + i * 4);
+  });
+  return P;
+}
+const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// m: viewProj column major; near: proj[14]. True when the sphere (c, r)
+// meets the view frustum (side planes and the near plane).
+export function sphereInFrustum(m, near, c, r) {
+  const q = (k) => m[k] * c[0] + m[4 + k] * c[1] + m[8 + k] * c[2] + m[12 + k];
+  const qx = q(0), qy = q(1), qw = q(3);
+  const len = (a, b, s) => Math.hypot(m[a] + s * m[b], m[4 + a] + s * m[4 + b], m[8 + a] + s * m[8 + b]);
+  if (qw < near - r * Math.hypot(m[3], m[7], m[11])) return false;
+  if (qw + qx < -r * len(3, 0, 1)) return false;
+  if (qw - qx < -r * len(3, 0, -1)) return false;
+  if (qw + qy < -r * len(3, 1, 1)) return false;
+  if (qw - qy < -r * len(3, 1, -1)) return false;
+  return true;
+}
+// it: 8 floats (x y z scale | yaw, species + 256 layer, tint, seed);
+// sp: 8 floats (height, radius, lods, flags | bend, flutter, sink, lean)
+export function instanceBounds(it, sp, P, wind = [0, 0]) {
+  const s = it[3], h = sp[0] * s;
+  const root = [it[0], it[1] - sp[6] * h, it[2]];
+  const c = [root[0], root[1] + h * 0.5, root[2]];
+  let rad = sp[1] * s;
+  if (Math.floor((it[5] + 0.5) / 256) === 1) rad *= 1 + 0.7 * smooth01(1200, 5000, Math.hypot(P[0] - root[0], P[1] - root[1], P[2] - root[2]));
+  const speed = Math.hypot(wind[0], wind[1]);
+  const w = 0.122 * speed * sp[4] * Math.min(h, 30) + 1.9 * sp[5] * (0.15 + 0.05 * speed);
+  return { c, r: Math.hypot(h * 0.5, rad) * 1.1 + h * 0.5 * Math.abs(sp[7]) + w, h, root };
+}
+// G = { viewProj, proj, wind }. Returns { n, lists: [[list, fade, layerFade]], shadow, px, d, lvl }
+// (fade as packFade: v > 0 keeps dither < v, v < 0 keeps dither >= -v).
+export function classifyCPU(it, sp, P, G) {
+  const out = { n: 0, lists: [], shadow: -1, px: 0, d: 0, lvl: -1, inView: false, lf: 0 };
+  if (!(it[3] > 0)) return out;
+  const s = Math.floor(it[5] + 0.5) % 256, L = Math.floor((it[5] + 0.5) / 256);
+  const b = instanceBounds(it, sp, P, G.wind);
+  const d = Math.hypot(b.c[0] - P[0], b.c[1] - P[1], b.c[2] - P[2]);
+  out.d = d;
+  const lb = P.subarray(28 + L * 4, 32 + L * 4);
+  const band = Math.max(lb[2], 1), farBand = Math.max(lb[3] > 0 ? lb[3] : band, 1);
+  let lf = 1;
+  if (lb[0] > 0) lf = smooth01(lb[0], lb[0] + band, d);
+  lf *= 1 - smooth01(Math.max(lb[1] - farBand, 0), Math.max(lb[1], 1), d);
+  out.lf = lf;
+  if (lf <= 0.002) return out;
+  const flags = Math.round(sp[3]);
+  const near = G.proj[14];
+  if (P[19] > 0.5 && !(flags & 4) && d < P[4]) {
+    const k = Math.min((b.h + 8) / Math.max(P[17], 0.12), 400);
+    const off = [-P[16] * k, -P[17] * k, -P[18] * k];
+    if (sphereInFrustum(G.viewProj, near, [b.c[0] + off[0] * 0.5, b.c[1] + off[1] * 0.5, b.c[2] + off[2] * 0.5], b.r + Math.hypot(...off) * 0.5)) {
+      out.shadow = Math.round(P[22]) * LODS + s * 2 + (d < 45 ? 0 : 1);
+    }
+  }
+  if (!sphereInFrustum(G.viewProj, near, b.c, b.r)) return out;
+  out.inView = true;
+  const size = Math.max(b.h, 2 * sp[1] * it[3]);
+  const pk = P[9] * 0.5 * P[10] / Math.max(d, 0.5) * P[6];
+  const pxC = size * pk, px = Math.max(size, NEAR_FULL) * pk;
+  out.px = px;
+  const lods = Math.round(sp[2]), imp = !!(flags & 1), last = imp ? lods + 1 : lods;
+  const th = [P[12], P[13], P[14]];
+  let lvl = 0, bb = 0;
+  for (;;) {
+    if (lvl >= 3 || lvl + 1 >= last) break;
+    const t = th[lvl];
+    if (px >= t) break;
+    const lo = t * 0.75;
+    if (px > lo) { bb = (t - px) / (t - lo); break; }
+    lvl++;
+  }
+  out.lvl = lvl;
+  const base = s * LODS, l0 = lvl < lods ? lvl : 3, l1i = lvl + 1, l1 = l1i < lods ? l1i : 3;
+  if (!imp && lvl + 1 >= lods) {
+    const cut = Math.max(P[15], 0.01);
+    if (pxC < cut) return out;
+    const fb = 1 - smooth01(cut, cut * 1.6, pxC);
+    out.n = 1; out.lists.push([base + l0, fb <= 0.001 ? 1 : -fb, lf]);
+    return out;
+  }
+  if (bb > 0 && l1i < last) { out.n = 2; out.lists.push([base + l0, -bb, lf], [base + l1, bb, lf]); }
+  else { out.n = 1; out.lists.push([base + l0, 1, lf]); }
+  return out;
+}
+// A stand-in prototype as buildLibrary makes it, for the tests: the species
+// row (8 floats, as the GPU species buffer) and the LOD0 vertex positions.
+export function standInProto(key, seed = 1000) {
+  const sp = SPECIES.find((x) => x.key === key);
+  const lods = GEN[key](seed, sp.h);
+  const g = SPEC_GPU[key] || { f: 0, bend: 0.5, flutter: 0.5, lean: 0.05 };
+  let top = 0, rad = 0.1, n = 0;
+  for (const part of lods[0]) n += part.n;
+  const pos = new Float32Array(n * 3);
+  let o = 0;
+  for (const part of lods[0]) for (let k = 0; k < part.n; k++) {
+    const x = part.v[k * VSTRIDE], y = part.v[k * VSTRIDE + 1], z = part.v[k * VSTRIDE + 2];
+    top = Math.max(top, y); rad = Math.max(rad, Math.hypot(x, z));
+    pos[o++] = x; pos[o++] = y; pos[o++] = z;
+  }
+  const spec = new Float32Array([Math.max(top, 0.05), rad, lods.length, g.f, g.bend, g.flutter, g.sink ?? 0, g.lean]);
+  return { spec, pos, species: SPECIES.indexOf(sp) };
+}
+// The share of pixels that a packed fade keeps (dither uniform 0..1).
+export const fadeKeep = (v, lf) => (v >= 0 ? Math.min(1, v) : 1 - Math.min(1, -v)) * Math.min(1, lf);
+
+// The page plan for the instance pool. want: tiles not yet written
+// [{ key, d, need }], have: written tiles [{ key, d, pages }], free: free
+// pages. Nearest wanted tiles first; a tile that does not fit takes the
+// pages of written tiles farther than itself (farthest first), and only
+// when that is enough. Returns { evict: [keys], write: [keys] }.
+export function planPages(want, have, free) {
+  const w = want.slice().sort((a, b) => a.d - b.d);
+  const h = have.slice().sort((a, b) => b.d - a.d);
+  const evict = [], write = [];
+  let hi = 0;
+  for (const t of w) {
+    if (t.need > free) {
+      // pages that eviction can give: written tiles from hi on, farther than t
+      let can = free, k = hi;
+      while (can < t.need && k < h.length && h[k].d > t.d) { can += h[k].pages; k++; }
+      if (can < t.need) continue;
+      for (; hi < k; hi++) { free += h[hi].pages; evict.push(h[hi].key); }
+    }
+    free -= t.need; write.push(t.key);
+  }
+  return { evict, write };
+}
+
 // ------------------------------------------------------------ module
 export async function createVegetation(gpu) {
   const device = gpu.device, queue = gpu.queue;
@@ -1124,9 +1275,10 @@ export async function createVegetation(gpu) {
     fragment: o.fs ? { module: o.mod, entryPoint: o.fs, targets: o.targets ?? [{ format: gpu.hdrFormat }] } : undefined,
     primitive: { topology: o.topology ?? 'triangle-list', cullMode: o.cull ?? 'none' },
     depthStencil: o.depth });
-  const [pSnap, pCount, pScan, pEmit, pBlades, pFinal, pBark, pLeaf, pImp, pShOpaque, pShLeaf, pBake, pGrass, pShImp] = await Promise.all([
+  const [pSnap, pCount, pScan, pEmit, pBlades0, pBlades1, pBlades2, pBlades3, pFinal, pBark, pLeaf, pImp, pShOpaque, pShLeaf, pBake, pGrass, pShImp] = await Promise.all([
     cpipe(propsMod, plProps, 'cs_snap'), cpipe(propsMod, plProps, 'cs_count'), cpipe(propsMod, plProps, 'cs_scan'), cpipe(propsMod, plProps, 'cs_emit'),
-    cpipe(grassMod, plGrassC, 'cs_blades'), cpipe(grassMod, plGrassC, 'cs_final'),
+    cpipe(grassMod, plGrassC, 'cs_blades0'), cpipe(grassMod, plGrassC, 'cs_blades1'), cpipe(grassMod, plGrassC, 'cs_blades2'), cpipe(grassMod, plGrassC, 'cs_blades3'),
+    cpipe(grassMod, plGrassC, 'cs_final'),
     rpipe({ label: 'bark', layout: plMesh, mod: propsMod, vs: 'vs_mesh', fs: 'fs_mesh', cull: 'back', depth: depthS }),
     rpipe({ label: 'leaf', layout: plMesh, mod: propsMod, vs: 'vs_mesh', fs: 'fs_mesh', cull: 'none', depth: depthS }),
     rpipe({ label: 'impostor', layout: plMesh, mod: propsMod, vs: 'vs_imp', fs: 'fs_imp', cull: 'none', depth: depthS }),
@@ -1138,6 +1290,7 @@ export async function createVegetation(gpu) {
     rpipe({ label: 'shadow impostor', layout: plShadow, mod: propsMod, vs: 'vs_imp_shadow', fs: 'fs_imp_shadow', targets: [], cull: 'none', depth: shadowS }),
   ]);
 
+  const pBlades = [pBlades0, pBlades1, pBlades2, pBlades3];
   mark('pipelines');
   // ---- textures: procedural layers, asset layers later
   const tex = await makeTextures(texSize, () => new Promise((r) => setTimeout(r, 0)));
@@ -1411,10 +1564,25 @@ export async function createVegetation(gpu) {
     for (const pg of e.pages) { queue.writeBuffer(instBuf, pg * PAGE * 32, zeroPage); freePages.push(pg); }
     tiles.delete(key);
   }
-  function syncTiles() {
+  // The stream tiles to the instance pages, nearest first. When the pool
+  // is full, a near tile takes the pages of written tiles that are farther
+  // (planPages); before, a new tile that did not fit was left out, and
+  // after a move the new tiles are the near ones: the plants at the camera
+  // were the ones that did not show.
+  let missing = 0, syncAt = -1, lastCam = null;
+  function syncTiles(cam = lastCam) {
     if (!stream) return;
+    if (cam) lastCam = cam;
     for (const key of [...tiles.keys()]) if (!stream.tiles.has(key)) freeTile(key);
-    for (const [key, t] of stream.tiles) if (!tiles.has(key) && t.count) writeTile(key, t);
+    const dist = (t) => (lastCam ? tileDist(field, LAYERS[LAYER_INDEX[t.layer]], t.tx, t.tz, lastCam[0], lastCam[2], lastCam[1])[0] : 0);
+    const want = [], have = [];
+    for (const [key, t] of stream.tiles) if (!tiles.has(key) && t.count) want.push({ key, d: dist(t), need: Math.ceil(t.count / PAGE) });
+    if (!want.length) { missing = 0; return; }
+    for (const [key, e] of tiles) have.push({ key, d: dist(e.tile), pages: e.pages.length });
+    const plan = planPages(want, have, freePages.length);
+    for (const key of plan.evict) freeTile(key);
+    for (const key of plan.write) writeTile(key, stream.tiles.get(key));
+    missing = want.length - plan.write.length;
   }
   function remapAllTiles() {      // a new library: proto ids change
     if (!stream) return;
@@ -1487,7 +1655,7 @@ export async function createVegetation(gpu) {
   // ---- per frame state
   let aerialOn = true;
   let shadowsOn = 1, propsCount = 0, grassOn = true, propsOn = true, treesOn = true, propsOn2 = true, snapUntil = -1;
-  const lodPx = [380, 150, 52, 2.5];
+  const lodPx = LOD_PX;
   const stats = { instances: 0, tiles: 0, pages: 0, grassCap, grassN, libMs: tLib, protos: () => L.lib.protos.length };
 
   let mix = MIX0, mixAt = -1;
@@ -1537,30 +1705,22 @@ export async function createVegetation(gpu) {
       const ly = frame.layers || {};
       grassOn = ly.grass !== false; treesOn = ly.trees !== false; propsOn2 = ly.props !== false;
       if (stream) {
-        const made = stream.update(cam[0], cam[2], frame.budgetMs ?? 3);
-        if (made || stream.version !== mod._sv) { mod._sv = stream.version; syncTiles(); }
+        const made = stream.update(cam[0], cam[2], frame.budgetMs ?? 3, cam[1]);
+        const t = frame.time ?? 0;
+        // tiles left out (a full page pool) are tried again 4 times a second:
+        // the camera moved, so the near ones can now take far tiles' pages
+        if (made || stream.version !== mod._sv || (missing && t - syncAt > 0.25)) { mod._sv = stream.version; syncAt = t; syncTiles(cam); }
       }
       let n = 0; for (const e of tiles.values()) n += e.tile.count;
       propsCount = n;
-      stats.instances = n; stats.tiles = tiles.size; stats.pages = maxPages - freePages.length;
+      stats.instances = n; stats.tiles = tiles.size; stats.pages = maxPages - freePages.length; stats.missingTiles = missing;
       const proj = frame.camera?.proj || g.subarray(GO.proj, GO.proj + 16);
       const H = g[GO.screen + 1] || 720;
       shadowsOn = frame.shadows === false || frame.shadowInfo === null ? 0 : 1;
       const shadowFar = Math.min(frame.shadowDistance ?? 1e9, frame.shadowInfo?.splits?.[frame.shadowInfo.count - 1] ?? 1e9, shadowCap);
-      const lodScale = 0.6 + 0.6 * q;
-      params.fill(0);
-      params.set([cam[0], cam[1], cam[2], g[GO.camPos + 3]], 0);
-      params.set([frame.shadowFar ?? shadowFar, highPage * PAGE, lodScale, g[GO.frame]], 4);
-      params.set([proj[0], proj[5], H, q], 8);
-      params.set(lodPx, 12);
-      const sd = [g[GO.sunDir], g[GO.sunDir + 1], g[GO.sunDir + 2]];
-      params.set([sd[0], sd[1], sd[2], shadowsOn && sd[1] > -0.05 ? 1 : 0], 16);
-      params.set([L.lib.nLists, L.lib.slots.length, L.lib.protos.length, aerialOn ? 1 : 0], 20);
-      LAYERS.forEach((lr, i) => {
-        const fs = farK;
-        const on = lr.key.startsWith('canopy') ? treesOn : propsOn2;
-        params.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, (lr.farBand || 0) * fs], 28 + i * 4);
-      });
+      writeCullParams(params, { cam, time: g[GO.camPos + 3], shadowFar: frame.shadowFar ?? shadowFar, slots: highPage * PAGE, q, proj, H,
+        frame: g[GO.frame], lodPx, sun: [g[GO.sunDir], g[GO.sunDir + 1], g[GO.sunDir + 2]], shadowsOn,
+        lists: L.lib.nLists, nSlots: L.lib.slots.length, species: L.lib.protos.length, aerial: aerialOn, farK, treesOn, propsOn: propsOn2 });
       // cloud shadow: rect (x0, z0, size) and the cloud base y; size 0 = none
       const cs = frame.cloudShadow || gpu.cloudShadow || null;
       if (cs && cs.view) {
@@ -1591,8 +1751,9 @@ export async function createVegetation(gpu) {
       if (!g0) return;
       if (grassOn && field) {
         const c = enc.beginComputePass({ label: 'veg grass' });
-        c.setPipeline(pBlades); c.setBindGroup(0, g0); c.setBindGroup(1, grassCBG);
-        c.dispatchWorkgroups(grassN / 8, grassN / 8, 4);
+        c.setBindGroup(0, g0); c.setBindGroup(1, grassCBG);
+        // ring 0 first: the near blades take the buffer slots before the far ones
+        for (let l = 0; l < 4; l++) { c.setPipeline(pBlades[l]); c.dispatchWorkgroups(grassN / 8, grassN / 8, 1); }
         c.setPipeline(pFinal); c.dispatchWorkgroups(1);
         c.end();
       }

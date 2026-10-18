@@ -32,6 +32,8 @@
 //  weight (distance from the branch).
 //
 //  GREP MAP
+//    grep -n 'fn inFrustum'     sphere against the 4 side planes and near
+//    grep -n 'fn instanceBounds' the bounding sphere of a plant
 //    grep -n 'fn classify'      band, frustum, LOD and shadow choice
 //    grep -n 'fn cs_scan'       offsets and indirect args
 //    grep -n 'fn windOffset'    tree sway and flutter
@@ -86,6 +88,7 @@ struct Bake { viewProj: mat4x4f, info: vec4f };   // info x view index
 
 const PAGE: u32 = 128u;      // render/vegetation.js PAGE
 const LODS: u32 = 4u;        // camera lists per species (3 meshes + impostor)
+const NEAR_FULL: f32 = 7.0;  // m: the least size for the LOD choice (vegetation.js NEAR_FULL)
 
 fn spOf(q: vec4f) -> u32 { return u32(q.y + 0.5) % 256u; }
 fn layerOf(q: vec4f) -> u32 { return u32(q.y + 0.5) / 256u; }
@@ -106,14 +109,49 @@ fn cs_snap(@builtin(global_invocation_id) gid: vec3u) {
 // ------------------------------------------------------------ classify --
 struct Cls { n: u32, list0: u32, fade0: u32, list1: u32, fade1: u32, shadow: u32 };
 
+// Sphere against the view frustum (render/vegetation.js sphereInFrustum
+// is the CPU twin). The four side planes come from the rows of viewProj
+// (w + x >= 0, w - x >= 0, w + y >= 0, w - y >= 0), each scaled to metres
+// by the length of its normal, so the margin is the true sphere radius at
+// every distance and screen edge (with the TAA jitter and the saver lens
+// shift in the matrix). The near plane: reverse-Z, infinite far, so
+// clip w is the view depth and the plane is w = near (G.proj[3][2]).
 fn inFrustum(c: vec3f, r: f32) -> bool {
-  let q = G.viewProj * vec4f(c, 1.0);
-  if (q.w < -r) { return false; }
-  let mx = r * VP.proj.x + 0.02 * max(q.w, 0.0);
-  let my = r * VP.proj.y + 0.02 * max(q.w, 0.0);
-  if (q.x < -q.w - mx || q.x > q.w + mx) { return false; }
-  if (q.y < -q.w - my || q.y > q.w + my) { return false; }
+  let m = G.viewProj;
+  let q = m * vec4f(c, 1.0);
+  let r0 = vec3f(m[0].x, m[1].x, m[2].x);
+  let r1 = vec3f(m[0].y, m[1].y, m[2].y);
+  let r3 = vec3f(m[0].w, m[1].w, m[2].w);
+  if (q.w < G.proj[3][2] - (r * length(r3))) { return false; }
+  if ((q.w + q.x) < -(r * length(r3 + r0))) { return false; }
+  if ((q.w - q.x) < -(r * length(r3 - r0))) { return false; }
+  if ((q.w + q.y) < -(r * length(r3 + r1))) { return false; }
+  if ((q.w - q.y) < -(r * length(r3 - r1))) { return false; }
   return true;
+}
+
+// The bounding sphere of one instance (CPU twin: vegetation.js
+// instanceBounds). The sphere holds the whole plant: centre at half height
+// over the sunk root, radius from the half height and the crown radius
+// (the old max(0.55 h, crown radius) missed the crown rim at the top), plus
+// the lean (a tilt round the root moves the centre by h/2 sin lean), the
+// wider crown of far impostors, and the most that the wind moves a vertex
+// (windOffset: bend at most 0.122 speed bend min(h, 30), flutter at most
+// 1.9 flutter (0.15 + 0.05 speed)). LOD 1 and 2 cards are a little larger:
+// 10 % more.
+struct Bounds { c: vec3f, r: f32 };
+fn instanceBounds(it: Inst, sp: Species) -> Bounds {
+  var b: Bounds;
+  let s = it.p.w;
+  let h = sp.a.x * s;
+  let root = it.p.xyz - vec3f(0.0, sp.b.z * h, 0.0);
+  b.c = root + vec3f(0.0, h * 0.5, 0.0);
+  var rad = sp.a.y * s;
+  if (layerOf(it.q) == 1u) { rad = rad * (1.0 + (0.7 * smoothstep(1200.0, 5000.0, distance(VP.cam.xyz, root)))); }
+  let speed = length(G.wind.xy);
+  let wind = (0.122 * speed * sp.b.x * min(h, 30.0)) + (1.9 * sp.b.y * (0.15 + (0.05 * speed)));
+  b.r = (length(vec2f(h * 0.5, rad)) * 1.1) + (h * 0.5 * abs(sp.b.w)) + wind;
+  return b;
 }
 
 // fade value packing: v > 0 keeps dither < v (1 keeps all), v < 0 keeps
@@ -130,8 +168,9 @@ fn classify(i: u32) -> Cls {
   let L = layerOf(it.q);
   let sp = species[s];
   let h = sp.a.x * it.p.w;
-  let center = it.p.xyz + vec3f(0.0, h * 0.5, 0.0);
-  let r = max(h * 0.55, sp.a.y * it.p.w);
+  let bd = instanceBounds(it, sp);
+  let center = bd.c;
+  let r = bd.r;
   let d = distance(center, VP.cam.xyz);
   // layer band
   let lb = VP.layers[L];
@@ -144,16 +183,26 @@ fn classify(i: u32) -> Cls {
   lf = lf * (1.0 - smoothstep(max(lb.y - farBand, 0.0), max(lb.y, 1.0), d));
   if (lf <= 0.002) { return c; }
   let flags = u32(sp.a.w + 0.5);
-  // shadow list: near the camera, and the sphere or its shadow in view
+  // shadow list: near the camera, and the sphere or its shadow in view.
+  // The shadow reaches (h + 8) / sun height from the plant (to 400 m), so
+  // a low sun keeps the casters outside the view whose shadows fall in it
   if (VP.sun.w > 0.5 && (flags & 4u) == 0u && d < VP.misc.x) {
-    let off = -VP.sun.xyz * (h * 1.5 + 8.0);
+    let off = -VP.sun.xyz * min((h + 8.0) / max(VP.sun.y, 0.12), 400.0);
     if (inFrustum(center + off * 0.5, r + length(off) * 0.5)) {
       let near = select(1u, 0u, d < 45.0);
       c.shadow = u32(VP.counts.z) * LODS + s * 2u + near;
     }
   }
   if (!inFrustum(center, r)) { return c; }
-  let px = h * VP.proj.y * 0.5 * VP.proj.z / max(d, 0.5) * VP.misc.z;
+  // screen size: the larger of the height and the crown width (a log is
+  // 0.6 m high and 4.5 m long). The LOD takes at least NEAR_FULL m, so a
+  // fern or a flower near the camera draws its full LOD0 mesh (by height
+  // alone a 0.45 m flower was LOD 1 or 2 from 1 m out); the small prop cut
+  // takes the true size.
+  let size = max(h, 2.0 * sp.a.y * it.p.w);
+  let pk = VP.proj.y * 0.5 * VP.proj.z / max(d, 0.5) * VP.misc.z;
+  let pxC = size * pk;
+  let px = max(size, NEAR_FULL) * pk;
   let lods = u32(sp.a.z + 0.5);
   let imp = (flags & 1u) != 0u;
   let last = select(lods, lods + 1u, imp);   // levels incl. impostor
@@ -177,8 +226,8 @@ fn classify(i: u32) -> Cls {
   // small props without an impostor fade out below the cull size
   if (!imp && lvl + 1u >= lods) {
     let cut = max(VP.lodPx.w, 0.01);
-    if (px < cut) { return c; }
-    let fb = 1.0 - smoothstep(cut, cut * 1.6, px);
+    if (pxC < cut) { return c; }
+    let fb = 1.0 - smoothstep(cut, cut * 1.6, pxC);
     c.n = 1u; c.list0 = base + l0; c.fade0 = select(packFade(-fb, lf), packFade(1.0, lf), fb <= 0.001);
     return c;
   }
@@ -499,12 +548,23 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
     let tx = textureSample(tMat, sRep, o.uv, D.layer);
     if (leaf) {
       var a = cutAlpha(tx.a, o.uv);
+      // near leaves (under 40 m): alpha to coverage done by hand (the HDR
+      // target has one sample). The alpha is sharpened to a 1 px ramp
+      // (alpha - 0.5) / fwidth(alpha), then a per pixel threshold that
+      // moves each frame cuts it, so TAA resolves an anti-aliased leaf
+      // edge instead of a hard stair-step. Far leaves keep the 0.5 cut.
+      let fw = max(fwidth(tx.a), 1e-3);
+      let sharp = clamp(((tx.a - 0.5) / fw) + 0.5, 0.0, 1.0);
+      let nearK = 1.0 - smoothstep(25.0, 40.0, distance(o.wp, G.camPos.xyz));
+      let thr = fract(cm_ign(o.pos.xy + vec2f(5.0, 13.0)) + (G.frame.x * 0.7548777));
       // winter: broadleaf crowns go bare (most of the leaves drop)
       if ((flags & 2u) != 0u) {
         let drop = winterF() * 0.9 + autumnF() * 0.15;
         if (fract(it.q.w * 13.7 + o.uv.x * 0.37) < drop) { a = 0.0; }
       }
-      if (a < 0.5) { discard; }
+      if (a <= 0.0) { discard; }
+      if (nearK > 0.0) { if (sharp <= mix(0.5, thr, nearK)) { discard; } }
+      else if (a < 0.5) { discard; }
       if (!ff) { n = -n; }
       rough = 0.55;
     }
