@@ -526,6 +526,13 @@ const eco7 = E.buildEco({ seed: 7, plants: OAK_PLANT });
   ok(hs.length > 500 && hs[Math.floor(hs.length * 0.5)] >= 0.2 && hs[Math.floor(hs.length * 0.95)] <= 0.7, `far meadow blades: median ${(hs[Math.floor(hs.length * 0.5)] * 100).toFixed(0)} cm`);
 }
 {
+  // distance LOD of the grass: fewer, wider blades far from the camera, the same cover
+  const T = eco7.tussocks, F = eco7.fields;
+  const cover = cam => { let w = 0, n = 0; for (let q = 0; q < T.length; q += 8 * 11) for (let b = 0; b < E.BLADES; b++) { const B = E.bladeAt(T, q, b, { p: 0.5, snow: 0, crowns: [], F, R: E.ECO_R, cam }); if (B) { w += B.width * B.h; n++; } } return { w, n }; };
+  const near = cover([0, 0]), far = cover([200, 0]);
+  ok(far.n < near.n * 0.3 && Math.abs(far.w / near.w - 1) < 0.25, `grass LOD: ${far.n} blades far against ${near.n} near, cover ratio ${(far.w / near.w).toFixed(2)}`);
+}
+{
   // phones: the caps of layout.js
   const ph = ecoLimits(true), dk = ecoLimits(false);
   ok(ph === ECO_LIMITS.phone && dk === ECO_LIMITS.desktop && ph.tussocks < dk.tussocks / 2 && ph.forbs < dk.forbs && ph.stones < dk.stones && ph.litter < dk.litter && ph.lod >= dk.lod && ph.procN * ph.procN < dk.procN * dk.procN / 3, `phones get smaller ecosystem caps (far meadow ${2 * ph.procN * ph.procN} against ${2 * dk.procN * dk.procN} tussocks)`);

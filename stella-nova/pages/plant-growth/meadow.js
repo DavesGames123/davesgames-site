@@ -41,7 +41,7 @@
 //    asset loading ......... "function loadAsset"
 //    the meadow object ..... "export function createMeadow"
 // ============================================================================
-import { FORBS, BLADES, BLADE_W, LEAN, GRASS_COL, GROUND_COL, GRASS, PROC } from './eco.js';
+import { FORBS, BLADES, BLADE_W, LEAN, LOD_D, GRASS_COL, GROUND_COL, GRASS, PROC } from './eco.js';
 import { groundY } from './ground.js';
 import { parseGLB } from '../../lib/glb-lite.js';
 
@@ -123,6 +123,13 @@ export function grassMaterial(THREE, U, COMMON, proc = false) {
         const vec2 LEAN[4] = vec2[4](${LEAN.map(l => `vec2(${l[0].toFixed(3)}, ${l[1].toFixed(3)})`).join(', ')});`)
       .replace('#include <beginnormal_vertex>', (proc ? PROC_GLSL : 'vec4 T0 = aT0, T1 = aT1; float procKeep = 1.0;') + /* glsl */`
         float bI = position.z, tt = position.y, side = position.x;
+        // distance LOD: 8 blades near the camera, 4 past 18 m, 2 past 40 m
+        // (wider); the dropped blades skip all the work below
+        float camD = distance(cameraPosition.xz, T0.xy);
+        float nB = camD > ${LOD_D[1].toFixed(1)} ? 2.0 : camD > ${LOD_D[0].toFixed(1)} ? 4.0 : 8.0;
+        vec3 bladeP = vec3(0.0, -50.0, 0.0), objectNormal = vec3(0.0, 1.0, 0.0);
+        vGc = vec3(0.0); vGt = 0.0; vGsnow = 0.0;
+        if (bI < 0.5 || bI > 8.5 - nB) {   // the culm blade and the last nB - 1 leaves (eco.js bladeAt)
         int kind = int(T0.z + 0.5);
         float rb = fract(T1.y * 31.7 + bI * 0.618), rb2 = fract(T1.y * 17.3 + bI * 0.377);
         float ang = bI * 2.39996 + T1.y * 6.2832;
@@ -140,18 +147,18 @@ export function grassMaterial(THREE, U, COMMON, proc = false) {
         float lean = culm ? 0.05 + 0.3 * lodge : LEAN[kind].x + LEAN[kind].y * rb2 + 0.6 * lodge;
         float gs = gust(bp, uTime, uWindDir);
         float wv = uWind * (0.25 + 1.2 * gs) * (1.0 - 0.5 * lodge);
-        float wdt = culm ? (tt > 0.8 ? 0.0022 + 0.0045 * st.z * sin(3.14159 * (tt - 0.8) / 0.2) : 0.0016) : BLADE_W[kind] * (0.75 + 0.5 * rb) * T1.w * (1.0 - 0.8 * tt);
+        float wdt = culm ? (tt > 0.8 ? 0.0022 + 0.0045 * st.z * sin(3.14159 * (tt - 0.8) / 0.2) : 0.0016) : BLADE_W[kind] * (0.75 + 0.5 * rb) * T1.w * (7.0 / (nB - 1.0)) * (1.0 - 0.8 * tt);
         float hz = lean * h * pow(tt, 1.6) + (culm ? 0.12 * h * tt * tt * tt * tt : 0.0);
         float vy = h * tt * (1.0 - 0.55 * min(lean, 1.2) * tt) - 0.3 * wv * h * tt * tt;
         float fl = 0.03 * uWind * h * tt * tt * sin(uTime * 6.0 + rb * 30.0 + bp.x * 2.0);
         float sway = wv * h * tt * tt * 0.8 + fl;
-        vec3 bladeP = vec3(bp.x + dir.x * hz + uWindDir.x * sway - dir.y * wdt * side,
+        bladeP = vec3(bp.x + dir.x * hz + uWindDir.x * sway - dir.y * wdt * side,
                            groundY(bp.x, bp.y) + max(0.002, vy),
                            bp.y + dir.y * hz + uWindDir.y * sway + dir.x * wdt * side);
         if (h < 0.004) bladeP = vec3(0.0, -50.0, 0.0);
         vec3 tng = normalize(vec3(dir.x * lean * 1.6 + uWindDir.x * wv * 1.6 * tt, 1.0 - lean * tt, dir.y * lean * 1.6 + uWindDir.y * wv * 1.6 * tt));
         vec3 acr = vec3(-dir.y, 0.0, dir.x);
-        vec3 objectNormal = normalize(mix(cross(acr, tng), vec3(0.0, 1.0, 0.0), 0.45));
+        objectNormal = normalize(mix(cross(acr, tng), vec3(0.0, 1.0, 0.0), 0.45));
         float tint = fract(T1.y * 7.31), tint2 = fract(T1.y * 3.17);
         vec3 fresh = mix(${v3(GRASS_COL.base)}, ${v3(GRASS_COL.tip)}, 0.5) * (0.82 + 0.36 * tint);
         fresh = mix(fresh, fresh * vec3(1.2, 1.0, 0.7), tint2 * 0.6);
@@ -162,7 +169,8 @@ export function grassMaterial(THREE, U, COMMON, proc = false) {
         gc *= (0.55 + 0.6 * tt) * (1.0 - 0.5 * fWoodShade(bp));
         if (culm && tt > 0.8) gc = mix(mix(gc, mix(${v3(GRASS_COL.flower)}, ${v3(GRASS_COL.flower2)}, tint), 0.6), ${v3(GRASS_COL.ripe)}, st.w);
         vGc = gc * (1.0 + 0.2 * gs * uWind);
-        vGt = tt; vGsnow = uSnow * tt;`)
+        vGt = tt; vGsnow = uSnow * tt;
+        }`)
       .replace('#include <begin_vertex>', 'vec3 transformed = bladeP;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGc; varying float vGt, vGsnow;')

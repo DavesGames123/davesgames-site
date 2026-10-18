@@ -603,16 +603,22 @@ export function groundMix(x, z, env) {
 }
 
 // ------------------------------------------------------------ grass blades
-// One tussock instance has BLADES blades. bladeAt() is the CPU twin of the
+// One tussock instance has BLADES blades (fewer far from the camera, see
+// LOD_D; bladeAt returns null for a dropped blade). bladeAt() is the CPU twin of the
 // grass vertex shader (render.js makeGrass): where blade b of tussock q
 // stands, how tall it is, its lean, width and colour, at env { p (year
 // phase), snow, time, wind, dir, crowns, F (fields), R (grass radius) }.
 // bladePoint() gives a point at t (0 base .. 1 tip) and side (-1 .. 1).
 export const BLADES = 8, BLADE_W = [0.0062, 0.0038, 0.0058, 0.0045];
 export const LEAN = [[0.3, 0.65], [0.3, 0.6], [0.6, 0.6], [0.35, 0.5]];   // [base, + rand] per kind
+// distance LOD (m from the camera): 8 blades, 4 past LOD_D[0], 2 past LOD_D[1]
+export const LOD_D = [18, 40];
 export const GRASS_COL = { base: [0.07, 0.14, 0.03], tip: [0.2, 0.33, 0.08], straw: [0.55, 0.47, 0.26], dead: [0.3, 0.23, 0.13], flower: [0.17, 0.14, 0.11], flower2: [0.15, 0.16, 0.08], ripe: [0.42, 0.34, 0.17] };
 export function bladeAt(T, q, b, env, keep = -1) {
   const x = T[q], z = T[q + 1], kind = T[q + 2] | 0, H = T[q + 3], spread = T[q + 4], rand = T[q + 5], rank = T[q + 6], wk = T[q + 7];
+  // env.cam ([x, z]): the distance LOD of the shader
+  const camD = env.cam ? Math.hypot(env.cam[0] - x, env.cam[1] - z) : 0, nB = camD > LOD_D[1] ? 2 : camD > LOD_D[0] ? 4 : 8;
+  if (b > 0 && b < BLADES - (nB - 1)) return null;   // keep the culm blade and the last nB - 1 leaves
   const rb = frac(rand * 31.7 + b * 0.618), rb2 = frac(rand * 17.3 + b * 0.377);
   const ang = b * 2.39996 + rand * 6.2832, rr = spread * Math.sqrt((b + 0.5) / BLADES);
   const bx = x + Math.cos(ang) * rr, bz = z + Math.sin(ang) * rr;
@@ -626,7 +632,7 @@ export function bladeAt(T, q, b, env, keep = -1) {
   const dir = [Math.cos(ang + tw), Math.sin(ang + tw)];
   const lean = culm ? 0.05 + 0.3 * st[4] : LEAN[kind][0] + LEAN[kind][1] * rb2 + 0.6 * st[4];
   const gs = gust(bx, bz, env.time || 0, env.dir || WIND_XZ), wind = env.wind ?? 0.35;
-  const width = culm ? 0.0016 : BLADE_W[kind] * (0.75 + 0.5 * rb) * wk;
+  const width = culm ? 0.0016 : BLADE_W[kind] * (0.75 + 0.5 * rb) * wk * (7 / (nB - 1));
   const tint = frac(rand * 7.31), tint2 = frac(rand * 3.17);
   let fresh = mix3(GRASS_COL.base, GRASS_COL.tip, 0.5).map(v => v * (0.82 + 0.36 * tint));
   fresh = mix3(fresh, [fresh[0] * 1.2, fresh[1], fresh[2] * 0.7], tint2 * 0.6);
