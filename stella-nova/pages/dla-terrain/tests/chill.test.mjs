@@ -19,6 +19,7 @@
 //  cloud drift caps of render/sky.js.
 // ============================================================================
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createSky, SUN_ILLUM, RATE_MIN, RATE_MAX, RATE_FRONT, FRONT_BOOST_S, frontBoost, weatherRate } from '../sky-state.js';
 import { todRate } from '../ui.js';
 import { CLOUD_DRIFT_RATE, HAZE_DRIFT_RATE, CLOUD_RISE } from '../render/sky.js';
@@ -30,7 +31,8 @@ function check(name, fn) {
 }
 
 export const MAX = { frac: 0.1, wind: 2.5, fogLog: 0.6, light: 0.25 };
-const DEFAULT_TOD_SPEED = 0.07;   // main.js app.todSpeed
+// main.js app.todSpeed (the day length slider): read from the source
+const DEFAULT_TOD_SPEED = +(/todSpeed: ([0-9.]+)/.exec(readFileSync(new URL('../main.js', import.meta.url), 'utf8')) || [0, 0.04])[1];
 
 const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 function runDay(todSpeed, fps = 20) {
@@ -93,6 +95,15 @@ check('the haze changes by less than ' + MAX.fogLog + ' (log) per s', () => {
 check('sun and sky light change by less than ' + MAX.light + ' x SUN_ILLUM per s', () => {
   assert.ok(day.worst.light < MAX.light, `sun ${day.worst.light.toFixed(3)} at ${day.where.light}`);
   assert.ok(day.worst.amb < MAX.light, `ambient ${day.worst.amb.toFixed(3)} at ${day.where.amb}`);
+});
+check('the default day is calm: 20 real minutes or more for a full day', () => {
+  assert.ok(day.daySec >= 1200, `day ${day.daySec.toFixed(0)} s at todSpeed ${DEFAULT_TOD_SPEED}`);
+});
+const fast = runDay(0.15);
+console.log(`  chill: one day at todSpeed 0.15 = ${fast.daySec.toFixed(0)} s real, worst per s: ${fmt(fast.worst)}`);
+check('at a fast day (todSpeed 0.15) the weather values still change slowly', () => {
+  for (const k of ['cover', 'rain', 'snow', 'storm']) assert.ok(fast.worst[k] < MAX.frac, `${k} ${fast.worst[k].toFixed(3)} at ${fast.where[k]}`);
+  assert.ok(fast.worst.wind < MAX.wind, 'wind ' + fast.worst.wind.toFixed(2));
 });
 check('the weather clock stays in RATE_MIN .. RATE_FRONT (6 .. 60 x real time)', () => {
   assert.ok(RATE_MIN === 6 && RATE_MAX === 40 && RATE_FRONT <= 60, `${RATE_MIN} .. ${RATE_MAX}, front ${RATE_FRONT}`);

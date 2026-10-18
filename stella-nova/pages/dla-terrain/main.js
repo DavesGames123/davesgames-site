@@ -133,7 +133,7 @@ export const MODULES = [
 const app = {
   lib: TerrainStub, libKind: 'stub', skyLib: null, sky: null,
   opts: {}, preset: null,
-  tod: clamp(+(Q.get('tod') ?? 0.27), 0, 1), todSpeed: 0.07, playing: true,
+  tod: clamp(+(Q.get('tod') ?? 0.27), 0, 1), todSpeed: 0.04, playing: true,
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
   qualityIndex: clamp(Math.round(+(Q.get('q') ?? (coarse ? 0 : 2))) || 0, 0, 3),   // phones start on Low; a bad ?q= is Low
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
