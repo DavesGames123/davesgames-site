@@ -147,7 +147,7 @@ w.SN_NAV = [
     ] },
     { h: "Growth & Spread", p: [
       ["plant-growth", "Plant Growth", "3D"],
-      ["coral-reef", "Coral Reef Growth", "3D"],
+      ["coral-reef", "Deep Ocean Explorer", "3D"],
       ["coral-species", "Coral Species", "3D"],
       ["outbreak", "Outbreak", "SIM"]
     ] }

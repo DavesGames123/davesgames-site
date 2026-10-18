@@ -193,8 +193,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `neuron-lab` | Neuron Lab | Life Sciences > Neuroscience | SIM | A 3D neuron: watch a spike run along its branches. |  | shown | hook, tier 3, default | yes |
 | `neuron-network` | Neural Network | Life Sciences > Neuroscience | SIM | A cortical column of spiking cells in a gamma rhythm. |  | shown | hook, tier 3, default | yes |
 | `plant-growth` | Plant Growth | Life Sciences > Growth & Spread | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
-| `coral-reef` | Coral Reef Growth | Life Sciences > Growth & Spread | 3D | Coral colonies grow live as marine snow sticks to their tips. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
-| `coral-species` | Coral Species | Life Sciences > Growth & Spread | 3D | Pick a coral and watch one colony grow from a seed on a rock. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | no |
+| `coral-reef` | Deep Ocean Explorer | Life Sciences > Growth & Spread | 3D | An ROV squad explores an endless seafloor, from sunlit reefs down to the abyss. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
+| `coral-species` | Coral Species | Life Sciences > Growth & Spread | 3D | Pick a coral and watch one colony grow from a seed on a rock. | coral grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |
 | `outbreak` | Outbreak | Life Sciences > Growth & Spread | SIM | Diseases spread between cities on a 3D globe (a toy model). |  | shown | hook, tier 3, default | yes |
 | `fluidlab` | Stable Fluids | Fluids > Fluid Solvers | GPU | Jos Stam stable fluids on the GPU. |  | shown | hook, tier 2, default | yes |
 | `euler-fluid` | Euler Fluid | Fluids > Fluid Solvers | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
