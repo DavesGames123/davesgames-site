@@ -19,7 +19,7 @@
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
 // ============================================================================
-import { divePlan, shotAt, shotPose, pickSite, clearPath, frameFit, projectedBox, projectSphere, SHOT_KINDS, SAVER_GRADIENTS } from '../saver.js';
+import { divePlan, growSeconds, createGovernor, shotAt, shotPose, pickSite, clearPath, frameFit, projectedBox, projectSphere, SHOT_KINDS, SAVER_GRADIENTS } from '../saver.js';
 import { createStubRock } from '../rov/stub-rock.js';
 import { GRADIENTS } from '../../../lib/growth-gradients.js';
 import * as SH from '../shaders.js';
@@ -114,7 +114,7 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
   const sp = ['staghorn', 'fan', 'table', 'boulder', 'finger'];
   const a = divePlan(42, { n: 8, species: sp }), b = divePlan(42, { n: 8, species: sp }), c = divePlan(43, { n: 8, species: sp });
   ok(JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c), 'saver: one seed gives one run, another seed another');
-  ok(a.every(d => sp.includes(d.species) && GRADIENTS[d.gradient] && d.grow >= 110 && d.grow <= 200), 'saver: each dive grows one colony of a species for 110 to 200 s');
+  ok(a.every(d => sp.includes(d.species) && GRADIENTS[d.gradient] && d.grow >= 0.9 * growSeconds(0.7) && d.grow <= 1.1 * growSeconds(0.7)), 'saver: each dive grows one colony of a species for the whole dive');
   ok(a.every((d, i) => i === 0 || d.species !== a[i - 1].species), 'saver: no species twice in a row');
   ok(new Set(a.map(d => d.seed)).size === a.length && new Set(a.map(d => d.siteKind)).size >= 4, 'saver: every dive has a new seed, and the sites vary');
   ok(SAVER_GRADIENTS.every(g => GRADIENTS[g]), 'saver: the gradients exist');
@@ -134,6 +134,39 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
   ok(twice === 0 && holdOk && calmOk && cover, 'saver: no shot kind twice in a row, 7 to 14 s holds, calm turns, shots cover the growth');
   ok(wide > 0 && wide / shots <= 0.25, 'saver: some wide shots of the ROV in the dark, at most one in four', `${wide}/${shots}`);
   ok(shotAt(a[0], 0).i === 0 && shotAt(a[0], a[0].shots[1].t0 + 0.1).i === 1 && shotAt(a[0], 1e6).u === 1, 'saver: shotAt finds the shot on at a time');
+
+  // growth: slow and calm (the user: "corals grow way too fast")
+  const g7 = growSeconds(0.7), g1 = growSeconds(1), g0 = growSeconds(0);
+  console.log(`saver growth: ${g0} s at calm 0, ${g7} s at calm 0.7, ${g1} s at calm 1; 120 s saver slot: ${growSeconds(0.7, 120)} s`);
+  ok(g7 >= 120 && g7 <= 240 && g1 > g7 && g7 > g0, 'saver growth: 2 to 4 minutes from seed to full size at calm 0.7, slower when calmer');
+  ok(growSeconds(0.7, 120) <= 108 && growSeconds(0.7, 40) >= 90 && divePlan(5, { calm: 0.7, seconds: 120 }).every(d => d.grow <= 120), 'saver growth: a short saver slot (opts.seconds) shortens the dive, never under 90 s');
+  {
+    // any frame schedule: the particles stay under rate x t + the stock cap
+    const rate = 24, cap = Math.max(1, rate * 0.1);
+    let worstOver = -Infinity, worstWin = 0, total = 0;
+    const scheds = {
+      steady60: () => 1 / 60, steady144: () => 1 / 144, slow15: () => 1 / 15,
+      jitter: (i, r) => 0.004 + r() * 0.06, spikes: (i, r) => (i % 97 === 0 ? 0.5 + r() : 1 / 60), stall: (i) => (i === 300 ? 30 : 1 / 60),
+    };
+    for (const [name, f] of Object.entries(scheds)) {
+      let rs = 9; const r = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
+      const G2 = createGovernor(rate, { ramp: 10 });
+      let t = 0, n = 0; const hist = [];
+      for (let i = 0; i < 6000 && t < 240; i++) {
+        const dt = f(i, r); t += dt;
+        const q = G2.take(dt); G2.used(q); n += q; hist.push([t, n]);
+        worstOver = Math.max(worstOver, n - (rate * t + cap));
+      }
+      // the most in any 1 s window
+      for (let i = 0, j = 0; i < hist.length; i++) { while (hist[i][0] - hist[j][0] > 1) j++; worstWin = Math.max(worstWin, hist[i][1] - (j ? hist[j - 1][1] : 0)); }
+      total += n;
+      if (name === 'steady60') ok(Math.abs(n - rate * (t - 5)) < rate * 1.5, 'saver growth: at 60 fps the meter gives the full rate after the ease-in', `${n} in ${t.toFixed(0)} s`);
+    }
+    console.log(`saver growth meter: rate ${rate}/s, most over rate x t ${worstOver.toFixed(2)} (cap ${cap}), most in any 1 s ${worstWin}`);
+    ok(worstOver <= 1e-9 && worstWin <= Math.ceil(rate + cap), 'saver growth: no frame schedule (60, 144, 15 fps, jitter, spikes, a 30 s stall) goes over the target particles per second');
+    const e = createGovernor(100, { ramp: 10 }); let first = 0; for (let i = 0; i < 60; i++) { const q = e.take(1 / 60); e.used(q); first += q; }
+    ok(first < 100 * 0.05, 'saver growth: a smooth ease-in, not a burst at the start', first);
+  }
 
   // framing: each shot keeps its subject in the clear band (16:9, 9:16)
   const subj = { c: [2, 1.2, -1], r: 1.4, front: [2.3, 2.1, -0.8], rov: [5.5, 2.6, 1.8] };

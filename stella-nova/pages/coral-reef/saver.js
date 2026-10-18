@@ -31,7 +31,17 @@
 //  text bands of the saver plate. setViewOffset(w, h, ox, oy, w, h) then
 //  moves the subject to the centre of the clear part.
 //
+//  GROWTH. The user found the saver growth "way too fast". A dive grows
+//  its one colony for several minutes: growSeconds(calm, seconds) is 120
+//  + 150 x calm s (225 s at calm 0.7), less when the saver gives the page
+//  fewer seconds. createGovernor(rate) meters the particles per second
+//  with a smooth ease-in, and caps the stock it can carry, so no frame
+//  schedule (slow device, a long frame, a tab that comes back) gives a
+//  burst. main.js grows only the particles that the governor gives.
+//
 //  grep -n targets
+//    growth time .......... "export function growSeconds"
+//    the rate meter ....... "export function createGovernor"
 //    the dives ............ "export function divePlan"
 //    the shots ............ "function shotList"
 //    a camera pose ........ "export function shotPose"
@@ -69,6 +79,40 @@ function deck(pool, rand) {
   };
 }
 
+// Seconds from the seed to full size, for the saver calm (0..1) and the
+// seconds that the saver shows this page (opts.seconds, or none).
+export function growSeconds(calm = 0.7, seconds) {
+  let g = 120 + 150 * Math.max(0, Math.min(1, calm));
+  if (seconds > 0) g = Math.min(g, Math.max(90, seconds * 0.9));
+  return g;
+}
+
+// The rate meter: rate particles per second at full speed, an ease-in
+// over ramp s (smoothstep), and a stock of at most cap particles (0.1 s
+// of growth, at least 1). take(dt) -> the particles this frame may add;
+// used(n) books the ones that joined (a walker can fail, so the rest
+// stays in the stock up to cap). The total up to time t is at most
+// rate x t + cap, whatever the frame times are.
+export function createGovernor(rate, { ramp = 8, cap } = {}) {
+  const C = cap ?? Math.max(1, rate * 0.1);
+  let t = 0, stock = 0;
+  return {
+    get rate() { return rate; }, get t() { return t; },
+    setRate(r) { rate = Math.max(0, r); },
+    take(dt) {
+      dt = Math.max(0, dt);
+      const t1 = t + dt;
+      // the integral of rate x smoothstep over [t, t1]
+      const I = u => (u < 1 ? (u * u * u - 0.5 * u * u * u * u) * ramp : ramp * 0.5 + (u - 1) * ramp);
+      const add = rate * (I(t1 / ramp) - I(t / ramp));
+      t = t1;
+      stock = Math.min(C, stock + add);
+      return Math.floor(stock);
+    },
+    used(n) { stock = Math.max(0, stock - n); },
+  };
+}
+
 // Shots that cover dur seconds. calm 0..1 makes the moves slower.
 function shotList(rand, dur, calm) {
   const out = [];
@@ -102,14 +146,15 @@ function shotList(rand, dur, calm) {
 }
 
 // n dives. species: the ids to pick from (reef.js SPECIES_IDS). Each dive:
-// { species, siteKind, siteR, seed, grow (s), gradient, reversed, mode,
+// { species, siteKind, siteR, seed, grow (s, growSeconds +-10%), gradient, reversed, mode,
 //   current, shots: [{ kind, t0, hold, az, spin, elev, zoom, zoom1, side, lift }] }
-export function divePlan(seed = 1, { n = 6, species = ['staghorn', 'fan', 'table', 'boulder', 'finger'], modes = ['natural', 'age', 'natural', 'height', 'natural', 'flow'], calm = 0.7 } = {}) {
+export function divePlan(seed = 1, { n = 6, species = ['staghorn', 'fan', 'table', 'boulder', 'finger'], modes = ['natural', 'age', 'natural', 'height', 'natural', 'flow'], calm = 0.7, seconds } = {}) {
+  const G0 = growSeconds(calm, seconds);
   const rand = mulberry((seed >>> 0) * 2654435761 + 7);
   const sp = deck(species, rand), site = deck(SITE_KINDS, rand), grad = deck(SAVER_GRADIENTS, rand), mode = deck(modes, rand);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const grow = 110 + rand() * 90;              // s from seed to full size
+    const grow = G0 * (0.9 + 0.2 * rand());      // s from seed to full size
     out.push({
       species: sp(), siteKind: site(), siteR: rand(), seed: 1 + Math.floor(rand() * 1e6), grow,
       gradient: grad(), reversed: rand() < 0.15, mode: mode(), current: Math.floor(rand() * 360),
