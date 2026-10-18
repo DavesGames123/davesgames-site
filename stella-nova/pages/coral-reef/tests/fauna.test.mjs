@@ -289,6 +289,16 @@ const W7 = createWorld({ seed: 7 }), W11 = createWorld({ seed: 11 });
     hit = F.lookAt(p, [1, 0, 0], 10);
   }
   ok(hit && hit.name && hit.dist > 0, 'lookAt finds the animal on a view ray (the ROV HUD label)', hit ? `${hit.name}${hit.sci ? ' (' + hit.sci + ')' : ''}, ${hit.src}, ${hit.dist.toFixed(1)} m` : '');
+  // the saver escort: swimming groups near a point take a home by it
+  let g0 = null; for (const G of F.sim.groups.values()) if (!G.benthic && G.habit !== 'still' && !G.onCoral) { g0 = G; break; }
+  if (g0) {
+    const pt = [g0.centre[0] + 20, g0.centre[1], g0.centre[2]];
+    F.setEscort(() => pt);
+    F.update(1 / 30, cam, far, [0, 0]);
+    let by = 0; for (const G of F.sim.groups.values()) if (Math.hypot(G.home[0] - pt[0], G.home[2] - pt[2]) < 10) by++;
+    ok(by >= 1, 'saver escort: swimming groups near the lead ROV take a home by it', `${by} groups`);
+    F.setEscort(null);
+  } else ok(false, 'saver escort: a swimming group to test');
   F.dispose();
   ok(root.children.length === 0, 'dispose removes every fauna mesh');
 }

@@ -22,8 +22,8 @@
 //    F.addColonies(chunkKey, colonies) / F.removeColonies(chunkKey)
 //    F.lookAt(p, dir, maxDist) -> { name, sci, src, family, dist } | null
 //    F.setEnabled(on), F.enabled
-//    F.setEscort(fn | null)  fn() -> [x, y, z]: keep a group of animals
-//                            near that point (the saver shots)
+//    F.setEscort(fn | null)  fn() -> [x, y, z]: bring up to three swimming
+//                            groups near that point (the saver shots)
 //    F.stats() -> { chunks, pending, agents, drawn, halos, species, tris,
 //                   bytes, scans, regions, capacity }
 //    F.dispose()
@@ -360,23 +360,27 @@ export function createFauna(o) {
   }
 
   // ── the saver escort: a few animals near a point ──────────────────────────
+  // Every 30 s, up to three swimming groups within 45 m of the point take a
+  // new home near it (the depth range of each species still holds: the
+  // group goal keeps inside it). No spawn, so no hitch on the main thread.
   function tickEscort(dt) {
     if (!escort) return;
     escortT -= dt;
     if (escortT > 0) return;
-    escortT = 45;
+    escortT = 30;
     const p = escort(); if (!p) return;
-    sim.removeChunk('escort');
-    const i = Math.floor(p[0] / FAUNA_CH), j = Math.floor(p[2] / FAUNA_CH);
-    const r = spawnChunk({ W, seed: seed + 101 + Math.floor(p[0]) * 7 + Math.floor(p[2]), i, j, budget: Object.assign({}, B, { maxPerChunk: Math.round(B.maxPerChunk * 0.4) }) });
-    const grid = gridFrom(r.grid);
-    // move the groups to the point (the same depth band: the spawn read it)
-    for (const g of r.groups.slice(0, 3)) {
-      const dx = p[0] - g.centre[0], dz = p[2] - g.centre[2];
-      g.centre = [p[0], g.centre[1], p[2]];
-      for (const m of g.members) { m.x += dx; m.z += dz; m.y = Math.max(m.y, grid.ground(m.x, m.z) + 0.6); }
-      g.sp = canonical(g.sp);
-      if (g.sp.habit === 'school' || g.sp.habit === 'swim' || g.sp.habit === 'hover' || g.sp.habit === 'drift') sim.addGroup(g, 'escort', null);
+    const near = [];
+    for (const G of sim.groups.values()) {
+      if (G.benthic || G.onCoral || G.habit === 'still') continue;
+      const d = Math.hypot(G.centre[0] - p[0], G.centre[2] - p[2]);
+      if (d < 45) near.push([d, G]);
+    }
+    near.sort((x, y) => x[0] - y[0]);
+    let k = 0;
+    for (const [, G] of near.slice(0, 3)) {
+      const a = k++ * 2.1 + clock * 0.1, r = 3 + k * 1.5;
+      G.home = [p[0] + Math.cos(a) * r, Math.min(G.home[1], p[1] + 2), p[2] + Math.sin(a) * r];
+      G.retarget = 0;
     }
   }
 
