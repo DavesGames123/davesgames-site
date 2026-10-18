@@ -15,7 +15,9 @@
 //  lattice every K cells decides which cells can hold surface) is also
 //  global, so both chunks skip the same cells. The sand grid is on the
 //  global lattice too. Between two LODs (cells) there can be a small
-//  crack; the LOD rings put it 30 m or more from the eye, in the fog.
+//  crack; the LOD rings put it 30 m or more from the eye. meshChunk hangs
+//  a skirt from the open border edges of the rock and the sand (addSkirt),
+//  so the crack does not show the water through it.
 //
 //  OUTPUT. Positions are chunk-local: x and z from the chunk centre, y in
 //  world metres (|x|, |z| <= 16 + 2 cells: float32 keeps 2 um). Per rock
@@ -26,10 +28,11 @@
 //                                   indices, verts, tris, exact, ms } | null
 //    meshSand(W, ci, cj, cell) -> { positions, normals, indices, tris } | null
 //    meshChunk(W, ci, cj, lod, c0) -> { rock, sand, lod, cell, ms, bytes }
+//    addSkirt(m, cell, depth, down) -> m with the skirt (m.skirt vertices)
 //    chunkCentre(ci, cj) -> [x, z]; CH (m); lodCell(c0, lod)
 //
 //  grep -n targets: "export function meshRock", "export function meshSand",
-//  "export function meshChunk", "function vert("
+//  "export function meshChunk", "function vert(", "export function addSkirt"
 // ============================================================================
 import { SDF_SCALE, D_OUT, D_IN } from './field.js';
 
@@ -212,11 +215,61 @@ export function meshSand(W, ci, cj, cell) {
   return { positions: P, normals: Nn, indices: I, tris: idx.length / 3 };
 }
 
+// SKIRTS. Two chunks of different LOD (cells) do not meet on the same
+// vertices, so a thin crack can open on their common border. addSkirt
+// finds the open edges of a mesh near the chunk square border (edges of
+// one triangle only, both ends within 2 cells of the border) and hangs a
+// strip from each: the edge copied `depth` metres along -normal (rock:
+// into the rock) or straight down (sand). The strip has both windings (the
+// materials draw the front side only) and the normals of the edge, so it
+// has the shade of the surface over it. It goes under the surface of the
+// neighbour chunk, so it shows only where there is a crack.
+// The skirt vertices follow the surface vertices: m.verts stays the count
+// of the surface vertices, m.skirt is the count of the skirt vertices.
+export function addSkirt(m, cell, depth, down = false) {
+  if (!m) return m;
+  const nv = m.positions.length / 3, I = m.indices, near = CH / 2 - 2 * cell;
+  const P = m.positions, Nn = m.normals;
+  const edges = new Map();
+  for (let t = 0; t < I.length; t += 3) for (let e = 0; e < 3; e++) {
+    const a = I[t + e], b = I[t + (e + 1) % 3], k = a < b ? a * nv + b : b * nv + a;
+    edges.set(k, edges.has(k) ? -1 : (a * nv + b));
+  }
+  const onBorder = v => Math.max(Math.abs(P[v * 3]), Math.abs(P[v * 3 + 2])) >= near;
+  const open = [];
+  for (const d of edges.values()) { if (d < 0) continue; const a = Math.floor(d / nv), b = d % nv; if (onBorder(a) && onBorder(b)) open.push(a, b); }
+  if (!open.length) { m.skirt = 0; return m; }
+  const copy = new Map(), pos = [], nrm = [], extra = [];
+  const keys = ['cavity', 'band'].filter(k => m[k]);
+  const dup = (v) => {
+    if (copy.has(v)) return copy.get(v);
+    const q = nv + pos.length / 3, nx = Nn[v * 3], ny = Nn[v * 3 + 1], nz = Nn[v * 3 + 2];
+    if (down) pos.push(P[v * 3], P[v * 3 + 1] - depth, P[v * 3 + 2]);
+    else pos.push(P[v * 3] - nx * depth, P[v * 3 + 1] - ny * depth, P[v * 3 + 2] - nz * depth);
+    nrm.push(nx, ny, nz);
+    keys.forEach((k, i) => { (extra[i] = extra[i] || []).push(m[k][v]); });
+    copy.set(v, q); return q;
+  };
+  const idx = Array.from(I);
+  for (let e = 0; e < open.length; e += 2) {
+    const a = open[e], b = open[e + 1], a2 = dup(a), b2 = dup(b);
+    idx.push(a, b2, b, a, a2, b2, a, b, b2, a, b2, a2);
+  }
+  const n2 = nv + pos.length / 3;
+  const P2 = new Float32Array(n2 * 3); P2.set(P); P2.set(pos, nv * 3);
+  const N2 = new Float32Array(n2 * 3); N2.set(Nn); N2.set(nrm, nv * 3);
+  keys.forEach((k, i) => { const A = new Float32Array(n2); A.set(m[k]); A.set(extra[i], nv); m[k] = A; });
+  m.positions = P2; m.normals = N2;
+  m.indices = n2 < 65536 ? new Uint16Array(idx) : new Uint32Array(idx);
+  m.skirt = n2 - nv; m.skirtTris = (idx.length - I.length) / 3; m.tris = idx.length / 3;
+  return m;
+}
+
 const bytesOf = m => (m ? m.positions.byteLength + m.normals.byteLength + m.indices.byteLength + (m.cavity ? m.cavity.byteLength : 0) + (m.band ? m.band.byteLength : 0) : 0);
 export function meshChunk(W, ci, cj, lod, c0) {
   const t0 = now(), cell = lodCell(c0, lod);
-  const rock = meshRock(W, ci, cj, cell);
-  const sand = meshSand(W, ci, cj, Math.min(4, cell * 2));
+  const rock = addSkirt(meshRock(W, ci, cj, cell), cell, 2.5 * cell);
+  const sc = Math.min(4, cell * 2), sand = addSkirt(meshSand(W, ci, cj, sc), sc, 2 * sc + 0.3, true);
   return { rock, sand, lod, cell, ms: now() - t0, bytes: bytesOf(rock) + bytesOf(sand) };
 }
 export { bytesOf as meshBytes };
