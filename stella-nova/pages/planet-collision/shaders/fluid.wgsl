@@ -25,17 +25,13 @@
 //                           the front layer counts; where pass 1 drew
 //                           nothing, the kernel only). Three rgba16float
 //                           targets, additive:
-//                             a0  w, w T / 1000, w iron, w ice
+//                             a0  w, w log2(T) / 16, w iron, w ice
 //                             a1  w o.x, w o.y, w o.z, w body 1
 //                             a2  w speed, w mixing, w cut, w
-//    vs_thick + fs_thick    pass 3 (half size): vapour particles, the
-//                           chord length of each sphere in front of the
-//                           fluid surface, weighted by the column
-//                           density (s0 / r)^3, additive (rg16float:
-//                           chord, chord T / 1e4)
+//    (the vapour is a volume now: smoke.wgsl)
 //
 //  grep -n targets: "fn vs_sphere", "fn hitSphere", "fn fs_depth",
-//  "fn fs_attr", "fn vs_thick", "fn fs_thick"
+//  "fn fs_attr"
 // ============================================================================
 
 @group(2) @binding(0) var frontZ: texture_2d<f32>;
@@ -154,63 +150,8 @@ fn fs_attr(in: SOut) -> AOut {
   let k = (1.0 - q2) * (1.0 - q2);
   let w = k * exp(-dz * dz) + 1e-7;
   var o: AOut;
-  o.a0 = w * vec4f(1.0, in.f0.x / 1000.0, in.f0.y, in.f0.z);
+  o.a0 = w * vec4f(1.0, log2(max(in.f0.x, 1.0)) / 16.0, in.f0.y, in.f0.z);
   o.a1 = w * vec4f(in.f1.xyz, in.f0.w);
   o.a2 = w * vec4f(in.f1.w, in.f2.x, zf.y, 1.0);
   return o;
-}
-
-// ── vapour thickness ────────────────────────────────────────────────────────
-struct TOut {
-  @builtin(position) pos: vec4f,
-  @location(0) @interpolate(flat) centre: vec4f,
-  @location(1) @interpolate(flat) temp: vec2f,   // T, weight
-};
-@vertex
-fn vs_thick(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> TOut {
-  var o: TOut;
-  o.pos = vec4f(2.0, 2.0, 2.0, 1.0);
-  if (ii >= arrayLength(&pTag)) { return o; }
-  let xv = pAux[ii].w;
-  let wv = smoothstep(U0.vap.y, U0.vap.z, xv);
-  if (wv <= 0.0) { return o; }
-  let x = pPos[ii].xyz;
-  if (removed(x)) { return o; }
-  let s0 = spacing0(ii);
-  let r = clamp(pPos[ii].w, 0.8 * s0, 3.0 * s0);
-  let toEye = U0.eye.xyz - x;
-  let dist = length(toEye);
-  if (dot(-toEye, U0.fwd.xyz) < r) { return o; }
-  let n = toEye / dist;
-  let side = normalize(cross(U0.up.xyz, n));
-  let upv = cross(n, side);
-  let c = quadCorner(vi % 6u);
-  let s = r * dist / sqrt(max(dist * dist - r * r, 1e-8));
-  o.pos = U0.vp * vec4f(x + (c.x * side + c.y * upv) * s + n * r, 1.0);
-  o.centre = vec4f(x, r);
-  // the optical depth goes with the column mass: a particle spread over a
-  // sphere of radius r has the density (s0 / r)^3 of a packed one, so
-  // thin, expanded vapour is faint
-  let dens = clamp(pow(s0 / r, 3.0), 0.04, 1.0);
-  o.temp = vec2f(pAux[ii].x, wv * dens);
-  return o;
-}
-@fragment
-fn fs_thick(in: TOut) -> @location(0) vec4f {
-  let D = rayAt(in.pos.xy * 2.0);
-  let e = U0.eye.xyz;
-  let oc = e - in.centre.xyz;
-  let a = dot(D, D);
-  let b = dot(oc, D);
-  let h = b * b - a * (dot(oc, oc) - in.centre.w * in.centre.w);
-  if (h <= 0.0) { discard; }
-  let sq = sqrt(h);
-  var t0 = max((-b - sq) / a, 0.0);
-  var t1 = (-b + sq) / a;
-  // only the part in front of the fluid surface shows
-  let zf = textureLoad(frontZ, vec2i(in.pos.xy * 2.0), 0).x;
-  if (zf > 0.0) { t1 = min(t1, zf); }
-  let chord = max(t1 - t0, 0.0) * length(D) * in.temp.y;
-  if (chord <= 0.0) { discard; }
-  return vec4f(chord, chord * in.temp.x / 10000.0, 0.0, 0.0);
 }

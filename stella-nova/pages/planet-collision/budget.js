@@ -24,8 +24,14 @@
 //  density volume; memory volBytes). The governor in main.js steps the
 //  volume down GRID_TIERS when the frame stays slow at one step a frame.
 //
+//  SMOKE (render.js "_smoke", shaders/smoke.wgsl): the vapour and dust
+//  volume, its march steps (half size), its light steps and the detail
+//  strength. Phones: 48^3 cells, 24 steps, one octave of detail. The
+//  governor steps it down with the density volume (lowerSmoke).
+//
 //  EXPORTS  PROFILES, pickProfile, stepMs, stepsPerFrame, gpuBytes, LIMIT,
-//           PIXELS, renderBudget, GRID, GRID_TIERS, volBytes, lowerGrid
+//           PIXELS, renderBudget, GRID, GRID_TIERS, volBytes, lowerGrid,
+//           SMOKE_TIERS, smokeBytes, lowerSmoke
 // ============================================================================
 import { sphBytes } from './engine.js';
 
@@ -64,12 +70,24 @@ export const GRID = { desktop: 144, touch: 96 };
 export const GRID_TIERS = [144, 128, 112, 96, 80, 64];
 // GPU bytes of a G^3 volume: u32 sums, rgba16float field, brick marks
 export function volBytes(G) { return G * G * G * (4 + 8) + Math.pow(G / 8, 3) * 4; }
+// the smoke volume per profile, and its steps down
+export const SMOKE_TIERS = [
+  { grid: 80, steps: 56, light: 20, detail: 1 },
+  { grid: 64, steps: 44, light: 16, detail: 1 },
+  { grid: 48, steps: 24, light: 10, detail: 0.6 },
+  { grid: 40, steps: 18, light: 8, detail: 0.5 },
+];
+// GPU bytes of a G^3 smoke volume: 8 i32 sums, three rgba16float textures
+export function smokeBytes(G) { return G * G * G * (32 + 24) + Math.pow(G / 8, 3) * 4; }
+// the next smoke tier under s (s when it is the last)
+export function lowerSmoke(s) { const t = SMOKE_TIERS.find(x => x.grid < s.grid); return Object.assign({}, t || s); }
 // the next tier under G (G when it is the last)
 export function lowerGrid(G) { const t = GRID_TIERS.find(x => x < G); return t || G; }
-// o: { cssW, cssH, dpr, touch, phone } -> { ratio, w, h, frags, smooth }
+// o: { cssW, cssH, dpr, touch, phone } -> { ratio, w, h, frags, smooth, grid, smoke }
 export function renderBudget(o) {
   const touch = !!(o.touch || o.phone), cap = touch ? PIXELS.touch : PIXELS.desktop;
   const css = Math.max(1, o.cssW * o.cssH);
   const ratio = Math.max(0.5, Math.min(o.dpr || 1, 2, Math.sqrt(cap / css)));
-  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 4 : 10, smooth: 2, grid: touch ? GRID.touch : GRID.desktop };
+  return { ratio, w: Math.round(o.cssW * ratio), h: Math.round(o.cssH * ratio), frags: touch ? 4 : 10, smooth: 2, grid: touch ? GRID.touch : GRID.desktop,
+    smoke: Object.assign({}, SMOKE_TIERS[touch ? 2 : 0]) };
 }

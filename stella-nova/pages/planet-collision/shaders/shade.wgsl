@@ -1,6 +1,6 @@
 // ============================================================================
 //  PLANET COLLISION  ·  shaders/shade.wgsl — sky, the lit fluid surface,
-//  atmospheres and the vapour (after common.wgsl)
+//  atmospheres and the smoke composite (after common.wgsl, scene.wgsl)
 // ----------------------------------------------------------------------------
 //  Full-screen passes on one triangle (vs_full), in the scene pass:
 //    fs_sky       stars and the sun disc (the roche-limit sky, cut down).
@@ -9,29 +9,23 @@
 //                 the sphere of fluid.wgsl), else from the depth;
 //                 the coverage -> the outline, blended over one pixel;
 //                 the fields of fluid.wgsl fs_attr -> albedo, temperature,
-//                 speed; lit by the sun with shadows of the bodies (spheres
-//                 at centres[b], only while U.bodies[b].w > 0), a gloss on
+//                 speed; lit by the sun with shadows (scene.wgsl fn sunAt:
+//                 a march of the density volume toward the sun, the sphere
+//                 shadows while U.bodies[b].w > 0, and the smoke), a gloss on
 //                 oceans, iron and melt, and the glow of hot matter (fn glow
 //                 in common.wgsl). The atmospheres of the bodies (spheres
 //                 at centres[b], drawn, not simulated) add along each ray
 //                 up to the surface. Writes depth, so debris and streaks
 //                 hide behind the surface. Premultiplied: alpha 0 where
 //                 there is no fluid (the sky shows, the atmosphere adds).
-//    fs_vapour    the vapour thickness of fluid.wgsl fs_thick (half size,
-//                 filtered) -> opacity 0.6 (1 - exp(-k chord)), sharpened
-//                 at the edge; lit condensate plus a weak glow at the
-//                 skin temperature (fn skinT). Premultiplied.
+//    fs_smokeComp the smoke (smoke.wgsl, half size, after the temporal
+//                 pass) over the scene, premultiplied; scene.wgsl fn
+//                 smokeAt upsamples it with the depth of each pixel.
+//  The bindings of group 2 and the shadow helpers are in scene.wgsl.
 //
-//  grep -n targets: "fn vs_full", "fn fs_sky", "fn normalAt", "fn shadowAt",
-//  "fn atmosphere", "fn fs_surface", "fn fs_vapour"
+//  grep -n targets: "fn vs_full", "fn fs_sky", "fn normalAt",
+//  "fn atmosphere", "fn fs_surface", "fn fs_smokeComp"
 // ============================================================================
-
-@group(2) @binding(0) var sZ: texture_2d<f32>;      // smoothed view depth, coverage (rg32float)
-@group(2) @binding(1) var a0Tex: texture_2d<f32>;
-@group(2) @binding(2) var a1Tex: texture_2d<f32>;
-@group(2) @binding(3) var a2Tex: texture_2d<f32>;
-@group(2) @binding(4) var thickTex: texture_2d<f32>;
-@group(2) @binding(5) var nTex: texture_2d<f32>;    // the normal of the depth pass (w 1 where set)
 
 struct VOut { @builtin(position) pos: vec4f };
 @vertex
@@ -101,25 +95,6 @@ fn normalAt(p: vec2i, z: f32, P: vec3f) -> vec3f {
   if (dot(n, U0.eye.xyz - P) < 0.0) { n = -n; }
   return n;
 }
-// The sun light at P left by the other bodies: spheres at centres[b] with
-// the drawn radius, while the page says the bodies are whole (bodies[b].w).
-fn shadowAt(P: vec3f) -> f32 {
-  var s = 1.0;
-  let L = U0.sun.xyz;
-  for (var b = 0; b < 4; b++) {
-    let amt = U0.bodies[b].w;
-    if (amt <= 0.0 || centres[b].w < 1.0) { continue; }
-    let c = centres[b].xyz;
-    let R = U0.bodies[b].y;
-    let oc = P - c;
-    if (length(oc) < 1.03 * R) { continue; }
-    let along = -dot(oc, L);
-    if (along <= 0.0) { continue; }
-    let miss = length(oc + along * L);
-    s = s * mix(1.0, 0.04, amt * smoothstep(1.04 * R, 0.96 * R, miss));
-  }
-  return s;
-}
 // The atmosphere shells along the ray e + t D (D unit) up to tEnd:
 // optical path through the shell, lit by the sun, a red edge at the
 // terminator (roche-limit fs_atmo, one shell per body).
@@ -187,7 +162,9 @@ fn fs_surface(in: VOut) -> SurfOut {
   let a1 = textureLoad(a1Tex, p, 0);
   let a2 = textureLoad(a2Tex, p, 0);
   let w = max(a0.x, 1e-7);
-  let T = 1000.0 * a0.y / w;
+  // the mean of log T (a geometric mean): one wall-heated particle does
+  // not paint its own hot bead on the surface
+  let T = exp2(16.0 * a0.y / w);
   let fIron = clamp(a0.z / w, 0.0, 1.0);
   let fIce = clamp(a0.w / w, 0.0, 1.0);
   let og = a1.xyz / w;
@@ -198,9 +175,9 @@ fn fs_surface(in: VOut) -> SurfOut {
   let L = U0.sun.xyz;
   let V = -Dn;
   let ndl = dot(n, L);
-  let shadow = shadowAt(P);
-  let diff = max(ndl, 0.0) * shadow;
   let mode = i32(U0.mode.x + 0.5);
+  let shadow = sunAt(P, n, select(0, 24, mode == 0));
+  let diff = max(ndl, 0.0) * shadow;
   var col = vec3f(0.0);
   if (mode == 0) {
     let bi = select(0, 1, b1 > 0.5);
@@ -236,22 +213,13 @@ fn fs_surface(in: VOut) -> SurfOut {
   return o;
 }
 
+// The smoke over the scene (premultiplied): the half-size result of
+// smoke.wgsl, upsampled with the depth of this pixel (fn smokeAt).
 @fragment
-fn fs_vapour(in: VOut) -> @location(0) vec4f {
-  let uv = in.pos.xy * U0.vpSize.zw;
-  let t = textureSampleLevel(thickTex, linSamp, uv, 0.0);
-  if (t.x <= 1e-6) { discard; }
-  let T = 10000.0 * t.y / t.x;
-  let op = 1.0 - exp(-U0.vap.x * t.x);
-  // a crisp edge: the opacity rises over a short range, then saturates
-  // the opacity follows the column (thick columns show as denser gas),
-  // up to 0.6, so the remnant shows through
-  let a = clamp(smoothstep(0.02, 0.12, op) * 0.6 * op, 0.0, 1.0);
-  if (a <= 0.002) { discard; }
-  let D = normalize(rayAt(in.pos.xy));
-  let fwdS = pow(max(dot(D, U0.sun.xyz), 0.0), 6.0);
-  // silicate condensate: grey, lit from the sun (more toward it)
-  let lit = vec3f(0.42, 0.40, 0.39) * U0.sun.w * (0.25 + 0.5 * fwdS) + vec3f(U0.view.w);
-  let col = lit + glow(skinT(T, 0.6)) * U0.vap.w;
-  return vec4f(col * a, a);
+fn fs_smokeComp(in: VOut) -> @location(0) vec4f {
+  let p = vec2i(in.pos.xy);
+  let z = zAt(p);
+  let s = smokeAt(in.pos.xy, select(1e9, z, z > 0.0));
+  if (s.c.a <= 0.001 && max(s.c.r, max(s.c.g, s.c.b)) <= 1e-5) { discard; }
+  return s.c;
 }

@@ -17,7 +17,8 @@ All modules are static ES modules with no DOM. Only `engine.js` needs WebGPU.
 | `analysis.js` | `outcome(readback, n, bodies)`: the largest body, the disk and the escaping mass (Canup 2004 orbits), T99. |
 | `arc.js` | `previewArc(setup)`: the point-mass path of the approach, for the aim panel. |
 | `budget.js` | `PROFILES`, `pickProfile`, `stepMs`, `stepsPerFrame`, `gpuBytes`. |
-| `render.js` | `Renderer`: the density volume and its iso surface, debris, vapour, sky and post (step 2). `shaders/common.wgsl` + `vol`, `march`, `fluid`, `smooth`, `shade`, `debris`, `centres`, `post`. |
+| `render.js` | `Renderer`: the density volume and its iso surface, debris, the smoke volume, sky and post (step 2). `shaders/common.wgsl` + `vol`, `march`, `fluid`, `smooth`, `smoke`; `common` + `scene` + `shade`, `debris`; `centres`, `post`. |
+| `optics.js` | The light and matter rules of the renderer on the CPU: the black body (Planck x CIE 1931), Henyey-Greenstein phase, the gas and dust share of a particle (`smokeWeights`), the temperature -> material map (`matterState`, `skinCap`, `crustShare`, `geotherm`). tests.mjs 13 checks them. |
 | `view.js` | The camera: the eye looks at the contact point from the side (perpendicular to the approach axis), frames both bodies and the ejecta, the user's orbit as an offset (no DOM). tests.mjs 11 checks it. |
 | `main.js`, `index.html`, `style.css` | The page: boot, one run, the frame loop, the bar, the aim panel, the phone dock and sheets, the caption and the outcome numbers. `window.__pc = { S, startRun, frameOf, setSpeed, SPEEDS }`; `S.dir` is the hook for a camera director. |
 | `saver-plan.js`, `saver.js` | The screensaver: the seeded reel (presets and five random draws), the shots (approach, slow-motion impact held 8 s past contact, splash, ejecta, then a late cutaway no sooner than 18 s after contact, disk; cut on contact and on escaping mass), the plate text; `window.snSaver` and the director `S.dir`. |
@@ -203,7 +204,7 @@ ren.render(f);                          // one submit
 Frame fields (`defaultFrame`): `eye target up fov near time`, `grid` (density volume cells per side; 0 = particle spheres), `vol {c, r}` (the sphere the volume must hold; main.js passes view.js frameTarget's target and rad), `sun sunI`,
 `mode` (0 real, 1 temperature, 2 origin body, 3 speed, 4 material),
 `cut {on, n, d}` (dot(n, x) > d is cut away; the cut face is flat),
-`streakT` (code time of one frame: motion streaks; 0 = off), `frags`
+`streakT` (code time of one frame: motion streaks; 0 = off), `smoke {grid, steps, light, detail}` (the smoke volume: cells per side, 0 off; budget.js SMOKE_TIERS), `smokeLive` (false: no smoke passes; main.js before contact), `simT` (sim time, code: the smoke detail flows with it), `frags`
 (droplets drawn per debris particle, 1-16; desktop 10, phones 4), `smooth` (filter
 iterations), `debrisQ`, `vapK`, `vapGlow`, `xvLo`, `xvHi`, `glowGain`,
 `ambient`, `coolH` (sim hours since contact, < 0 before), `bodies[b] {atm, shadow}` (0..1: fade the drawn atmosphere and
@@ -216,7 +217,7 @@ Particle classes (common.wgsl `fn klass`, CPU copy `classify(rb, n, hmax)`;
 
 | Class | Test | Drawn as |
 |---|---|---|
-| vapour | `xv > xvHi` (0.5) | translucent layer, opacity 0.6 (1 - exp(-vapK chord)), crisp edge |
+| vapour | `xv > xvHi` (0.5) | the smoke volume only (below) |
 | debris | `rho < rho0 / debrisQ^3` (the summed density, `th.x`; 0.24 rho0) | small molten droplets (sphere impostors, radius 0.07-0.19 spacing), `frags` per particle, and streaks; a clump also joins the iso surface |
 | fluid | all others | the iso surface of the density volume (vol.wgsl, march.wgsl; debris adds to it too); outside the volume, spheres |
 
@@ -250,10 +251,27 @@ skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn lavaSkin`):
 
 `coolH` (frame field) is the sim hours since the first contact; main.js
 sets it, and a negative value (the default) means before contact: no
-crust, the 4000 K cap. Vapour opacity is 0.6 (1 - exp(-vapK chord)),
-with the chord weighted by the column density (s0 / r)^3, so thin,
-expanded vapour is faint. Bloom: only light over `bloomThreshold` (2.0),
+crust, the 4000 K cap. Bloom: only light over `bloomThreshold` (2.0),
 strength 0.035: the hottest melt only.
+
+Smoke (smoke.wgsl, optics.js `smokeWeights`): each particle has a gas
+share (the vapour weight xv from `xvLo` 0.05 to `xvHi` 0.5, or hot,
+expanded rock: T 2600-4200 K and rho under 0.6 rho0) and a dust share
+(free debris sheds 0.35 of its mass as fine dust; gas under 2400-1800 K
+condenses to dust). The drawn gas temperature is the particle T capped
+by 2200 K + 3000 K exp(-coolH / 1 h) (2200 K: about the photosphere of a
+silicate vapour cloud). The shares go into a 80^3 volume (phones 48^3)
+with the temperature, the velocity and the iron share. The march: single
+scattering of the sun with the optical depth of a light pass (and the
+shadow of the bodies), two Henyey-Greenstein lobes (g 0.62 and -0.22,
+weights 0.82 and 0.18), three multiple-scattering octaves, the glow of the
+hot remnant as a second light, black-body emission at the gas and dust
+temperatures, a brown, grey or white albedo by composition (rock dust,
+condensate, hot gas; iron darkens it), and detail: two octaves of a
+Perlin-Worley noise, warped by curl noise and carried along the SPH
+velocity, that erodes the edges into billows. `vapK` scales the
+extinction, `vapGlow` the emission. Drawn, not simulated: the solver has
+no radiation, no condensation and no dust.
 
 GPU cost (Apple M4 Pro, Deno, `deno run -A tests.mjs --gpu --time`, the
 camera 4 radii from the impact): 5.8 ms per frame at 32k particles and

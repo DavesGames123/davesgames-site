@@ -21,7 +21,7 @@
 
 @group(2) @binding(0) var volTex: texture_3d<f32>;
 @group(2) @binding(1) var<storage, read> bricks: array<u32>;
-@group(2) @binding(2) var clampSamp: sampler;
+@group(2) @binding(2) var mSamp: sampler;
 
 struct MV { @builtin(position) pos: vec4f };
 @vertex
@@ -32,7 +32,7 @@ fn vs_march(@builtin(vertex_index) vi: u32) -> MV {
   return o;
 }
 fn volAt(g: vec3f) -> vec4f {
-  return textureSampleLevel(volTex, clampSamp, (g + vec3f(0.5)) / U0.vol1.x, 0.0);
+  return textureSampleLevel(volTex, mSamp, (g + vec3f(0.5)) / U0.vol1.x, 0.0);
 }
 // the field at e + t D (none on the removed side of the cut)
 fn fieldAt(e: vec3f, D: vec3f, t: f32) -> f32 {

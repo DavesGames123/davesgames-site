@@ -1,17 +1,21 @@
 // ============================================================================
 //  PLANET COLLISION  ·  shaders/common.wgsl — the prelude of the render shaders
 // ----------------------------------------------------------------------------
-//  render.js puts this text in front of fluid.wgsl, smooth.wgsl, shade.wgsl
-//  and debris.wgsl before it compiles them (WGSL has no include). The
-//  tests and the naga check do the same concatenation.
+//  render.js puts this text in front of fluid.wgsl, smooth.wgsl, vol.wgsl,
+//  march.wgsl and smoke.wgsl, and in front of scene.wgsl + shade.wgsl and
+//  scene.wgsl + debris.wgsl, before it compiles them (WGSL has no
+//  include). The tests and the naga check do the same concatenation.
 //
 //  BIND GROUP 0 (every render pass and the smooth compute)
-//    0 U          the frame uniform (render.js "writeFrame", 576 bytes)
+//    0 U          the frame uniform (render.js "writeFrame", 752 bytes)
 //    1 centres    vec4f per body: the mean particle position, the count
 //                 (centres.wgsl writes it each frame)
 //    2 maps       texture_2d_array: equirectangular surface maps
 //                 (render.js "setMaps"; 1 x 1 grey until they load)
 //    3 linSamp    a linear sampler (repeat on u, clamp on v)
+//    4 bbLut      the black-body colours (optics.js blackbodyLUT)
+//    5 clampSamp  linear, clamp on all axes (the 3D volumes, the table)
+//    6 linSamp3   linear, repeat on all axes (the tileable smoke noise)
 //  VOLUME (U.vol0, U.vol1; render.js "_volume"): a cube of G^3 cells round
 //  the framed bodies. vol.wgsl adds a smooth kernel (1 - r^2/Rk^2)^3 of
 //  each particle (Rk = U.vol1.z spacing0) to it; march.wgsl marches the
@@ -67,11 +71,22 @@ struct U {
   extra: vec4f,             // x h_max of the solver (code), y view depth of the target, z sim hours since contact (< 0 before)
   vol0: vec4f,              // the density volume: origin xyz (world, cell 0), w cell size (world; 0 = no volume)
   vol1: vec4f,              // x cells per side G, y iso level, z kernel radius over spacing0, w -
+  smoke0: vec4f,            // the smoke volume: origin xyz (world, cell 0), w cell size (0 = off)
+  smoke1: vec4f,            // x cells per side, y march steps, z light steps, w frame number (jitter)
+  smoke2: vec4f,            // x extinction per unit gas density, y per unit dust density, z emission gain, w detail cycles per world unit
+  smoke3: vec4f,            // optics.js SMOKE: boilLo, boilHi (K), rhoLo, rhoHi (rho / rho0)
+  smoke4: vec4f,            // condLo, condHi (K), the vapour cap now (K), dustShed
+  smoke5: vec4f,            // optics.js PHASE g1, g2, w; flow phase (runs 0..1 and on)
+  misc: vec4f,              // x 1 when the smoke history is valid, y -, z detail strength 0..1, w -
+  prevVP: mat4x4f,          // the view-projection of the frame before (smoke reprojection)
 };
 @group(0) @binding(0) var<uniform> U0: U;
 @group(0) @binding(1) var<storage, read> centres: array<vec4f>;
 @group(0) @binding(2) var maps: texture_2d_array<f32>;
 @group(0) @binding(3) var linSamp: sampler;
+@group(0) @binding(4) var bbLut: texture_2d<f32>;   // optics.js blackbodyLUT (BB_N x 1)
+@group(0) @binding(5) var clampSamp: sampler;       // linear, clamp on all axes
+@group(0) @binding(6) var linSamp3: sampler;        // linear, repeat on all axes (tileable noise)
 
 @group(1) @binding(0) var<storage, read> pPos: array<vec4f>;
 @group(1) @binding(1) var<storage, read> pVel: array<vec4f>;
@@ -155,21 +170,17 @@ fn fbm(p: vec3f) -> f32 {
 }
 
 // ── light ───────────────────────────────────────────────────────────────────
-// The colour of a black body at T (K), linear RGB, the brightest channel 1.
-// A fit of the Planck locus in sRGB (T. Helland 2012), then decoded.
+// The colour of a black body at T (K), linear RGB, the brightest channel 1:
+// the Planck spectrum through the CIE 1931 matching functions to linear
+// sRGB (optics.js blackbodyRGB), a table of BB_N rows in log T from
+// BB_T0 to BB_T1 (render.js writes it from optics.js blackbodyLUT).
+const BB_T0: f32 = 500.0;
+const BB_T1: f32 = 16000.0;
+const BB_N: f32 = 128.0;
 fn blackbody(T: f32) -> vec3f {
-  let t = clamp(T, 800.0, 40000.0) / 100.0;
-  var r = 1.0;
-  var g = 0.0;
-  var b = 1.0;
-  if (t <= 66.0) {
-    g = clamp(0.39008157 * log(t) - 0.63184144, 0.0, 1.0);
-    if (t <= 19.0) { b = 0.0; } else { b = clamp(0.54320678 * log(t - 10.0) - 1.19625408, 0.0, 1.0); }
-  } else {
-    r = clamp(1.29293618 * pow(t - 60.0, -0.1332047592), 0.0, 1.0);
-    g = clamp(1.12989086 * pow(t - 60.0, -0.0755148492), 0.0, 1.0);
-  }
-  return pow(vec3f(r, g, b), vec3f(2.2));
+  let x = clamp(log(max(T, BB_T0) / BB_T0) / log(BB_T1 / BB_T0), 0.0, 1.0);
+  let u = (0.5 + x * (BB_N - 1.0)) / BB_N;
+  return textureSampleLevel(bbLut, clampSamp, vec2f(u, 0.5), 0.0).rgb;
 }
 // The radiance of incandescent matter, in scene units. Three steps:
 //  1 the skin temperature (fn skinT): SPH gives the mean T of a parcel

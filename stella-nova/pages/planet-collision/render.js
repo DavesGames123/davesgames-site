@@ -22,14 +22,24 @@
 //              normal (rgba16float) + reversed-Z depth
 //    fields    fluid.wgsl fs_attr: T, material, start position, body, speed,
 //              mixing, weighted to the front layer (3 x rgba16float, additive)
-//    vapour    fluid.wgsl fs_thick: the chord through vapour particles in
-//              front of the surface (rg16float, half size, additive)
+//    smoke     smoke.wgsl (fn _smoke, "_smokeBox"): a second cube of
+//              f.smoke.grid^3 cells, 1.3 x the framed sphere. The gas and
+//              dust share of each particle (optics.js smokeWeights) is
+//              splatted into it with its temperature, velocity and iron
+//              share; a light pass finds the optical depth to the sun and
+//              the body shadow per cell. Rebuilt with the density volume.
+//              Skipped while f.smokeLive is false (before contact).
 //    smooth    smooth.wgsl: bilateral filter on the depth and a blur of the
 //              coverage (the outline), X then Y, f.smooth times (rg32float
 //              ping-pong)
+//    march     smoke.wgsl fs_smokeMarch (half size): the ray march of the
+//              smoke to the smoothed surface depth; fs_smokeTAA blends it
+//              with the reprojected history (ping-pong smHist)
 //    scene     rgba16float + depth: sky, the lit surface with atmospheres
-//              (shade.wgsl), debris droplets and their streaks
-//              (debris.wgsl), the vapour, the impact flashes
+//              and shadows (shade.wgsl, scene.wgsl fn sunAt), the impact
+//              flashes, the smoke (fs_smokeComp, a depth-aware upsample),
+//              debris droplets (under the smoke when behind its 0.5
+//              depth) and their streaks (debris.wgsl)
 //    bloom     post.wgsl (the roche-limit chain, a copy): only light above
 //              f.bloomThreshold (hot melt, the sun) blooms
 //    final     exposure, ACES, vignette, sRGB -> canvas
@@ -56,8 +66,14 @@
 //  and to the cell lattice, so the surface does not shimmer as the camera
 //  moves. f.grid 0 turns the volume off (all spheres: the old look).
 //
+//  SMOKE SIZE (f.smoke, budget.js SMOKE_TIERS): desktop 80^3 cells
+//  (16.4 MB of i32 sums + 12.3 MB in three rgba16float textures), 56 march
+//  steps; phones 48^3 (3.5 + 2.7 MB), 24 steps, one octave of detail.
+//  Plus a 64^3 noise and a 32^3 curl texture (1.3 MB), made once.
+//
 //  grep -n targets
 //    volume ............... "_volume(", "_makeVolume(", "export const VOL_K"
+//    smoke ................ "_smoke(", "_smokeBox(", "_makeSmoke(", "export const SMOKE_K", "_shadeBG("
 //    looks of the bodies .. "export const BODY_LOOK"
 //    frame defaults ....... "export function defaultFrame"
 //    uniform layout ....... "writeFrame("
@@ -70,11 +86,12 @@
 // ============================================================================
 import { MATERIALS, MAT_LIST, UNIT } from './data.js';
 import { ETA_H } from './build.js';
+import { blackbodyLUT, BB_N, PHASE, SMOKE, vapourCap } from './optics.js';
 
 const HDR = 'rgba16float';
 const DEPTH = 'depth32float';
 const BLOOM_LEVELS = 6;
-const FRAME_BYTES = 576;
+const FRAME_BYTES = 752;
 export const MAP_LAYERS = ['earth', 'earth_clouds', 'moon', 'mars', 'mercury', 'venus'];
 export const MAP_SIZE = [1024, 512];
 
@@ -103,6 +120,10 @@ export const VOL_K = 1.8, VOL_ISO = 1.1;
 // debris droplets: at most DROPS_MAX per particle, radius 0.55 DROP_K to
 // 1.45 DROP_K spacings (debris.wgsl "const DROP_K")
 export const DROPS_MAX = 16, DROP_K = 0.13;
+// the smoke optics in code units: extinction per unit of gas and dust
+// density (code mass per code volume), the emission gain, the detail
+// cycles across the smoke cube, the flow period of the detail (code time)
+export const SMOKE_K = { gas: 500, dust: 400, emit: 1.0, cycles: 9, flowT: 0.25 };
 
 // ── 4x4 matrices, column-major (a copy of roche-limit render.js M4) ───────
 export const M4 = {
@@ -124,7 +145,7 @@ export function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 export function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
 export function norm(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
 
-const SHADERS = ['common', 'fluid', 'smooth', 'shade', 'debris', 'centres', 'post', 'vol', 'march'];
+const SHADERS = ['common', 'scene', 'fluid', 'smooth', 'shade', 'debris', 'centres', 'post', 'vol', 'march', 'smoke'];
 export async function loadRenderCode(read) {
   const out = {};
   await Promise.all(SHADERS.map(async n => {
@@ -157,7 +178,7 @@ export function defaultFrame() {
     frags: 10,                    // droplets drawn per debris particle (1-16)
     smooth: 2,                    // bilateral X+Y iterations
     debrisQ: 1.6,                 // h / h0 over this (or h at h_max): debris
-    vapK: 1.5, vapGlow: 0.15, xvLo: 0.3, xvHi: 0.5,
+    vapK: 1.5, vapGlow: 1.0, xvLo: 0.05, xvHi: 0.5,
     glowGain: 0.6, ambient: 0.012,
     bodies: [{ atm: 1, shadow: 1 }, { atm: 1, shadow: 1 }, { atm: 0, shadow: 0 }, { atm: 0, shadow: 0 }],
     flashes: [],                  // [{ p, r, I, T }]
@@ -165,6 +186,11 @@ export function defaultFrame() {
     coolH: -1,                    // sim hours since the first contact (< 0 before): the skin cools
     grid: 144,                    // volume cells per side (0: no volume, particle spheres)
     vol: null,                    // { c, r }: the sphere the volume must hold (default: the view at the target)
+    // the smoke volume (smoke.wgsl): cells per side (0 off), march and
+    // light steps, detail strength 0..1 (budget.js renderBudget sets them)
+    smoke: { grid: 80, steps: 56, light: 20, detail: 1 },
+    simT: null,                   // sim time (code): the smoke detail flows with it (default: wall time)
+    smokeLive: true,              // false: skip the smoke passes (main.js: before contact, no gas or dust)
   };
 }
 
@@ -175,7 +201,9 @@ export class Renderer {
     this.frame = new Float32Array(FRAME_BYTES / 4);
     this.modules = {};
     const pre = code.common;
-    for (const k of ['fluid', 'smooth', 'shade', 'debris', 'vol', 'march']) this.modules[k] = device.createShaderModule({ code: pre + '\n' + code[k], label: 'pc ' + k + '.wgsl' });
+    for (const k of ['fluid', 'smooth', 'vol', 'march', 'smoke']) this.modules[k] = device.createShaderModule({ code: pre + '\n' + code[k], label: 'pc ' + k + '.wgsl' });
+    // the scene pass: common + scene (its bindings and light helpers) + the pass
+    for (const k of ['shade', 'debris']) this.modules[k] = device.createShaderModule({ code: pre + '\n' + code.scene + '\n' + code[k], label: 'pc ' + k + '.wgsl' });
     for (const k of ['centres', 'post']) this.modules[k] = device.createShaderModule({ code: code[k], label: 'pc ' + k + '.wgsl' });
     this.look = { surf: [SPHERE_K, 0.05, 1, 1.6], bodies: [], speed: 1, unit: 1, s0min: 0 };
     this._make();
@@ -192,13 +220,18 @@ export class Renderer {
     this.frameBuf = dev.createBuffer({ size: FRAME_BYTES, usage: U.UNIFORM | U.COPY_DST, label: 'pc frame' });
     this.centresBuf = dev.createBuffer({ size: 64, usage: U.STORAGE | U.COPY_DST, label: 'pc centres' });
     this.cpBuf = dev.createBuffer({ size: 16, usage: U.UNIFORM | U.COPY_DST, label: 'pc centres params' });
+    this.sampC = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge', addressModeW: 'clamp-to-edge' });
+    this.sampR = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', addressModeW: 'repeat' });
     this.samp = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'clamp-to-edge' });
     this.sampClamp = dev.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     this.bgl0 = dev.createBindGroupLayout({ label: 'pc g0', entries: [
       { binding: 0, visibility: ALL, buffer: { type: 'uniform' } },
       { binding: 1, visibility: ALL, buffer: ro },
       { binding: 2, visibility: ALL, texture: { sampleType: 'float', viewDimension: '2d-array' } },
-      { binding: 3, visibility: ALL, sampler: { type: 'filtering' } }] });
+      { binding: 3, visibility: ALL, sampler: { type: 'filtering' } },
+      { binding: 4, visibility: ALL, texture: { sampleType: 'float' } },
+      { binding: 5, visibility: ALL, sampler: { type: 'filtering' } },
+      { binding: 6, visibility: ALL, sampler: { type: 'filtering' } }] });
     this.bgl1 = dev.createBindGroupLayout({ label: 'pc g1', entries: [0, 1, 2, 3, 4, 5].map(b => ({ binding: b, visibility: VF, buffer: ro })) });
     // the volume compute: the particle buffers it reads (8 storage buffers at most per stage)
     this.bgl1c = dev.createBindGroupLayout({ label: 'pc g1 volume', entries: [0, 1, 2, 3, 5].map(b => ({ binding: b, visibility: S.COMPUTE, buffer: ro })) });
@@ -207,9 +240,26 @@ export class Renderer {
       { binding: 0, visibility: S.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
       { binding: 1, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float' } }] });
     this.bglShade = dev.createBindGroupLayout({ label: 'pc gShade', entries: [
-      ...[0, 1, 2, 3].map(b => ({ binding: b, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } })),
-      { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
-      { binding: 5, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }] });
+      ...[0, 1, 2, 3].map(b => ({ binding: b, visibility: VF, texture: { sampleType: 'unfilterable-float' } })),
+      { binding: 4, visibility: VF, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 5, visibility: VF, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 6, visibility: VF, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 7, visibility: VF, texture: { sampleType: 'float', viewDimension: '3d' } },
+      { binding: 8, visibility: VF, texture: { sampleType: 'float', viewDimension: '3d' } }] });
+    // the smoke (smoke.wgsl): one group-2 layout per stage
+    const st = (b, format, dim = '3d') => ({ binding: b, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format, viewDimension: dim } });
+    const t3 = (b, vis = S.FRAGMENT) => ({ binding: b, visibility: vis, texture: { sampleType: 'float', viewDimension: '3d' } });
+    const rw = b => ({ binding: b, visibility: S.COMPUTE, buffer: { type: 'storage' } });
+    this.bglSmS = dev.createBindGroupLayout({ label: 'pc smoke scatter', entries: [rw(0)] });
+    this.bglSmR = dev.createBindGroupLayout({ label: 'pc smoke resolve', entries: [rw(0), rw(1), st(2, 'rgba16float'), st(3, 'rgba16float')] });
+    this.bglSmL = dev.createBindGroupLayout({ label: 'pc smoke light', entries: [t3(4, S.COMPUTE), st(6, 'rgba16float'), t3(10, S.COMPUTE)] });
+    this.bglSmN = dev.createBindGroupLayout({ label: 'pc smoke noise', entries: [st(13, 'rgba8unorm'), st(14, 'rgba16float')] });
+    this.bglSmM = dev.createBindGroupLayout({ label: 'pc smoke march', entries: [t3(4), t3(5), t3(7), t3(8), t3(9),
+      { binding: 11, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }, { binding: 12, visibility: S.FRAGMENT, buffer: ro }] });
+    this.bglSmT = dev.createBindGroupLayout({ label: 'pc smoke taa', entries: [
+      { binding: 15, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 16, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 17, visibility: S.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }] });
     this.bglVolC = dev.createBindGroupLayout({ label: 'pc gVolC', entries: [
       { binding: 0, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 1, visibility: S.COMPUTE, buffer: { type: 'storage' } },
       { binding: 2, visibility: S.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '3d' } }] });
@@ -222,6 +272,18 @@ export class Renderer {
       { binding: 4, visibility: S.COMPUTE, buffer: { type: 'storage' } }] });
     this.mapTex = dev.createTexture({ size: [1, 1, MAP_LAYERS.length], format: 'rgba8unorm', usage: T.TEXTURE_BINDING | T.COPY_DST, label: 'pc maps' });
     dev.queue.writeTexture({ texture: this.mapTex }, new Uint8Array(4 * MAP_LAYERS.length).fill(110), { bytesPerRow: 4, rowsPerImage: 1 }, [1, 1, MAP_LAYERS.length]);
+    // the black-body colours (optics.js), linear, 8 bits
+    this.bbTex = dev.createTexture({ size: [BB_N, 1], format: 'rgba8unorm', usage: T.TEXTURE_BINDING | T.COPY_DST, label: 'pc black body' });
+    dev.queue.writeTexture({ texture: this.bbTex }, Uint8Array.from(blackbodyLUT(), v => Math.round(255 * Math.min(1, Math.max(0, v)))), { bytesPerRow: 4 * BB_N }, [BB_N, 1]);
+    // the noise of the smoke detail (made once, at the first frame)
+    this.noiseTex = dev.createTexture({ size: [64, 64, 64], dimension: '3d', format: 'rgba8unorm', usage: T.STORAGE_BINDING | T.TEXTURE_BINDING, label: 'pc smoke noise' });
+    this.curlTex = dev.createTexture({ size: [32, 32, 32], dimension: '3d', format: 'rgba16float', usage: T.STORAGE_BINDING | T.TEXTURE_BINDING, label: 'pc smoke curl' });
+    this.noiseMade = false;
+    // stand-ins for a volume that is off (all zero, light 1)
+    this.dummy3 = dev.createTexture({ size: [1, 1, 1], dimension: '3d', format: 'rgba16float', usage: T.TEXTURE_BINDING | T.COPY_DST, label: 'pc 3d zero' });
+    this.light1 = dev.createTexture({ size: [1, 1, 1], dimension: '3d', format: 'rgba16float', usage: T.TEXTURE_BINDING | T.COPY_DST, label: 'pc 3d light 1' });
+    dev.queue.writeTexture({ texture: this.light1 }, new Uint16Array([0, 0x3c00, 0, 0]), { bytesPerRow: 8, rowsPerImage: 1 }, [1, 1, 1]);
+    this.frameNo = 0; this.vpPrev = null; this.histValid = false;
     this._makeBG0();
     const M = this.modules, pl = (...g) => dev.createPipelineLayout({ bindGroupLayouts: g });
     const add = { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'one', dstFactor: 'one' } };
@@ -241,14 +303,20 @@ export class Renderer {
     this.pVolScatter = dev.createComputePipeline({ label: 'pc volScatter', layout: LV, compute: { module: M.vol, entryPoint: 'cs_volScatter' } });
     this.pVolResolve = dev.createComputePipeline({ label: 'pc volResolve', layout: LV, compute: { module: M.vol, entryPoint: 'cs_volResolve' } });
     this.pAttr = rp(M.fluid, 'vs_sphereWide', 'fs_attr', L01Z, [tgt(HDR, add), tgt(HDR, add), tgt(HDR, add)], undefined, 'fields');
-    this.pThick = rp(M.fluid, 'vs_thick', 'fs_thick', L01Z, [tgt('rg16float', add)], undefined, 'vapour');
     const LSm = pl(this.bgl0, this.bgl1, this.bglSm);
     this.pSmX0 = dev.createComputePipeline({ label: 'pc smoothX0', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothX0' } });
     this.pSmX = dev.createComputePipeline({ label: 'pc smoothX', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothX' } });
     this.pSmY = dev.createComputePipeline({ label: 'pc smoothY', layout: LSm, compute: { module: M.smooth, entryPoint: 'cs_smoothY' } });
     this.pSky = rp(M.shade, 'vs_full', 'fs_sky', LS, [tgt(HDR)], dNone, 'sky');
     this.pSurf = rp(M.shade, 'vs_full', 'fs_surface', LS, [tgt(HDR, premul)], dAlwaysW, 'surface');
-    this.pVap = rp(M.shade, 'vs_full', 'fs_vapour', LS, [tgt(HDR, premul)], dNone, 'vapour composite');
+    this.pSmComp = rp(M.shade, 'vs_full', 'fs_smokeComp', LS, [tgt(HDR, premul)], dNone, 'smoke composite');
+    const cp = (layout, entryPoint, label) => dev.createComputePipeline({ label: 'pc ' + label, layout, compute: { module: M.smoke, entryPoint } });
+    this.pSmNoise = cp(pl(this.bgl0, this.bgl1c, this.bglSmN), 'cs_noise', 'smoke noise');
+    this.pSmScatter = cp(pl(this.bgl0, this.bgl1c, this.bglSmS), 'cs_smokeScatter', 'smoke scatter');
+    this.pSmResolve = cp(pl(this.bgl0, this.bgl1c, this.bglSmR), 'cs_smokeResolve', 'smoke resolve');
+    this.pSmLight = cp(pl(this.bgl0, this.bgl1c, this.bglSmL), 'cs_smokeLight', 'smoke light');
+    this.pSmMarch = rp(M.smoke, 'vs_smokeFull', 'fs_smokeMarch', pl(this.bgl0, this.bgl1, this.bglSmM), [tgt(HDR), tgt('rgba32float')], undefined, 'smoke march');
+    this.pSmTAA = rp(M.smoke, 'vs_smokeFull', 'fs_smokeTAA', pl(this.bgl0, this.bgl1, this.bglSmT), [tgt(HDR)], undefined, 'smoke taa');
     this.pDrop = rp(M.debris, 'vs_drop', 'fs_drop', LS, [tgt(HDR)], dW, 'droplets');
     this.pStreak = rp(M.debris, 'vs_streak', 'fs_streak', LS, [tgt(HDR, add)], dT, 'streaks');
     this.pFlash = rp(M.debris, 'vs_flash', 'fs_flash', LS, [tgt(HDR, add)], dNone, 'flash');
@@ -272,7 +340,8 @@ export class Renderer {
   _makeBG0() {
     this.bg0 = this.dev.createBindGroup({ layout: this.bgl0, label: 'pc g0', entries: [
       { binding: 0, resource: { buffer: this.frameBuf } }, { binding: 1, resource: { buffer: this.centresBuf } },
-      { binding: 2, resource: this.mapTex.createView({ dimension: '2d-array' }) }, { binding: 3, resource: this.samp }] });
+      { binding: 2, resource: this.mapTex.createView({ dimension: '2d-array' }) }, { binding: 3, resource: this.samp },
+      { binding: 4, resource: this.bbTex.createView() }, { binding: 5, resource: this.sampC }, { binding: 6, resource: this.sampR }] });
   }
   // bitmaps: MAP_LAYERS order, all MAP_SIZE. Mip levels are made here by
   // halving (createImageBitmap resize) down to 16 px wide.
@@ -335,20 +404,26 @@ export class Renderer {
     this.smA = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING, [w, h], 'smooth A');
     this.smB = mk('rg32float', T.STORAGE_BINDING | T.TEXTURE_BINDING | T.COPY_SRC, [w, h], 'smooth B');
     this.attr = [0, 1, 2].map(k => mk(HDR, RT, [w, h], 'field ' + k));
-    this.thick = mk('rg16float', RT, [Math.max(1, w >> 1), Math.max(1, h >> 1)], 'vapour');
+    const hw = Math.max(1, w >> 1), hh = Math.max(1, h >> 1);
+    this.smCur = mk(HDR, RT, [hw, hh], 'smoke');
+    this.smAux = mk('rgba32float', RT, [hw, hh], 'smoke aux');
+    this.smHist = [0, 1].map(k => mk(HDR, RT, [hw, hh], 'smoke history ' + k));
+    this.histValid = false;
     this.hdr = mk(HDR, RT | T.COPY_SRC, [w, h], 'hdr');
     this.bloom = [];
     let bw = w, bh = h;
     for (let i = 0; i < BLOOM_LEVELS; i++) { bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1); this.bloom.push(mk(HDR, RT, [bw, bh], 'bloom ' + i)); }
-    this.targets = [this.rawZ, this.nrm, this.depthTex, this.smA, this.smB, ...this.attr, this.thick, this.hdr, ...this.bloom];
+    this.targets = [this.rawZ, this.nrm, this.depthTex, this.smA, this.smB, ...this.attr, this.smCur, this.smAux, ...this.smHist, this.hdr, ...this.bloom];
     this.v = { rawZ: this.rawZ.createView(), nrm: this.nrm.createView(), depth: this.depthTex.createView(), smA: this.smA.createView(), smB: this.smB.createView(),
-      attr: this.attr.map(t => t.createView()), thick: this.thick.createView(), hdr: this.hdr.createView(), bloom: this.bloom.map(t => t.createView()) };
+      attr: this.attr.map(t => t.createView()), smCur: this.smCur.createView(), smAux: this.smAux.createView(), smHist: this.smHist.map(t => t.createView()),
+      hdr: this.hdr.createView(), bloom: this.bloom.map(t => t.createView()) };
     this.bgZ = dev.createBindGroup({ layout: this.bglZ, entries: [{ binding: 0, resource: this.v.rawZ }] });
     const sm = (a, b) => dev.createBindGroup({ layout: this.bglSm, entries: [{ binding: 0, resource: a }, { binding: 1, resource: b }] });
     this.bgSm = { rawA: sm(this.v.rawZ, this.v.smA), AB: sm(this.v.smA, this.v.smB), BA: sm(this.v.smB, this.v.smA) };
-    this.bgShade = dev.createBindGroup({ layout: this.bglShade, entries: [
-      { binding: 0, resource: this.v.smB }, ...this.v.attr.map((v, i) => ({ binding: 1 + i, resource: v })), { binding: 4, resource: this.v.thick },
-      { binding: 5, resource: this.v.nrm }] });
+    this.bgShade = null; this.shadeKey = '';
+    this.bgSmT = [0, 1].map(k => dev.createBindGroup({ layout: this.bglSmT, entries: [
+      { binding: 15, resource: this.v.smHist[1 - k] }, { binding: 16, resource: this.v.smCur }, { binding: 17, resource: this.v.smAux }] }));
+    this.bgSmM = null;
     const pg = (buf, src, bl) => dev.createBindGroup({ layout: this.bglPost, entries: [
       { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.sampClamp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
     this.downBG = this.bloom.map((t, i) => pg(this.postBufs[i], i === 0 ? this.hdr : this.bloom[i - 1]));
@@ -387,10 +462,22 @@ export class Renderer {
     d[132] = this.sim && this.sim.prm ? this.sim.prm.hmax : 1e9;
     d[133] = Math.max(f.near, dot(sub(f.target, f.eye), view.f));
     d[134] = f.coolH ?? -1;
+    d.set(this.vpPrev || vp, 172);
     const vb = this.volBox;
     d.set(vb ? [vb.o[0], vb.o[1], vb.o[2], vb.cell, vb.G, VOL_ISO, VOL_K, 0] : [0, 0, 0, 0, 0, VOL_ISO, VOL_K, 0], 136);
+    const sb = this.smBox, sm = f.smoke || {};
+    d.set(sb ? [sb.o[0], sb.o[1], sb.o[2], sb.cell] : [0, 0, 0, 0], 144);
+    d.set([sb ? sb.G : 0, sm.steps || 56, sm.light || 20, this.frameNo % 1024], 148);
+    const vk = (f.vapK ?? 1.5) / 1.5;
+    d.set([SMOKE_K.gas * vk, SMOKE_K.dust * vk, (f.vapGlow ?? 1) * SMOKE_K.emit, sb ? SMOKE_K.cycles / (sb.cell * sb.G) : 1], 152);
+    d.set([SMOKE.boilLo, SMOKE.boilHi, SMOKE.rhoLo, SMOKE.rhoHi], 156);
+    d.set([SMOKE.condLo, SMOKE.condHi, vapourCap(f.coolH ?? -1), SMOKE.dustShed], 160);
+    const flow = f.simT != null ? f.simT / SMOKE_K.flowT : (f.time || 0) * 0.08;
+    d.set([PHASE.g1, PHASE.g2, PHASE.w, flow % 4096], 164);
+    d.set([this.histValid ? 1 : 0, 0, sm.detail ?? 1, 0], 168);
     this.dev.queue.writeBuffer(this.frameBuf, 0, d);
     this.view = view; this.vp = vp; this.focal = focal;
+    this.vpPrev = vp;
   }
   // world point -> CSS px of the canvas (null behind the eye)
   project(p, cssW, cssH) {
@@ -404,6 +491,13 @@ export class Renderer {
     if (!this.sim || !this.W) return;
     const dev = this.dev, n = this.sim.n, enc = dev.createCommandEncoder({ label: 'pc frame' });
     const rebuild = this._volBox(f);
+    const smRebuild = this._smokeBox(f);
+    // the smoke history is good while the eye moves a little
+    const eyeK = f.eye.join();
+    if (this.lastEye) { const de = Math.hypot(...sub(f.eye, this.lastEye)), dd = Math.hypot(...sub(f.target, f.eye)); if (de > 0.2 * dd) this.histValid = false; }
+    if (!this.smBox) this.histValid = false;
+    this.lastEye = f.eye.slice();
+    this.frameNo++;
     this.writeFrame(f);
     // centres
     { const p = enc.beginComputePass(); p.setBindGroup(0, this.bgC);
@@ -411,6 +505,7 @@ export class Renderer {
       p.setPipeline(this.pCFinal); p.dispatchWorkgroups(1); p.end(); }
     const clear0 = { r: 0, g: 0, b: 0, a: 0 };
     if (rebuild) this._volume(enc);
+    if (this.smBox && (smRebuild || rebuild)) this._smoke(enc);
     // depth: the iso surface of the volume, and the fluid spheres outside it
     { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.rawZ, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }, { view: this.v.nrm, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }],
         depthStencilAttachment: { view: this.v.depth, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' } });
@@ -422,10 +517,6 @@ export class Renderer {
     { const p = enc.beginRenderPass({ colorAttachments: this.v.attr.map(view => ({ view, loadOp: 'clear', storeOp: 'store', clearValue: clear0 })) });
       p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgZ);
       p.setPipeline(this.pAttr); p.draw(6, n); p.end(); }
-    // vapour thickness
-    { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.thick, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }] });
-      p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgZ);
-      p.setPipeline(this.pThick); p.draw(6, n); p.end(); }
     // bilateral smoothing: raw -> A -> B (-> A -> B ...); the result is in B
     { const p = enc.beginComputePass(); p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1);
       const gx = Math.ceil(this.W / 8), gy = Math.ceil(this.H / 8), it = Math.max(1, Math.min(4, f.smooth ?? 2));
@@ -434,17 +525,30 @@ export class Renderer {
         p.setPipeline(this.pSmY); p.setBindGroup(2, this.bgSm.AB); p.dispatchWorkgroups(gx, gy);
       }
       p.end(); }
+    // the smoke: the march (half size) and the temporal pass
+    const hk = this.frameNo & 1;
+    if (this.smBox) {
+      this._smokeBG();
+      { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.smCur, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }, { view: this.v.smAux, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }] });
+        p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgSmM);
+        p.setPipeline(this.pSmMarch); p.draw(3); p.end(); }
+      { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.smHist[hk], loadOp: 'clear', storeOp: 'store', clearValue: clear0 }] });
+        p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgSmT[hk]);
+        p.setPipeline(this.pSmTAA); p.draw(3); p.end(); }
+      this.histValid = true;
+    }
+    this._shadeBG(hk);
     // the scene
     { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.hdr, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0, g: 0, b: 0, a: 1 } }],
         depthStencilAttachment: { view: this.v.depth, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' } });
       p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1); p.setBindGroup(2, this.bgShade);
       p.setPipeline(this.pSky); p.draw(3);
       p.setPipeline(this.pSurf); p.draw(3);
+      if (f.flashes && f.flashes.length) { p.setPipeline(this.pFlash); p.draw(6, Math.min(4, f.flashes.length)); }
+      if (this.smBox) { p.setPipeline(this.pSmComp); p.draw(3); }
       const F = Math.max(1, Math.min(DROPS_MAX, f.frags | 0 || 1));
       p.setPipeline(this.pDrop); p.draw(6, n * F);
       if (f.streakT > 0) { p.setPipeline(this.pStreak); p.draw(6, n); }
-      p.setPipeline(this.pVap); p.draw(3);
-      if (f.flashes && f.flashes.length) { p.setPipeline(this.pFlash); p.draw(6, Math.min(4, f.flashes.length)); }
       p.end(); }
     this._bloom(enc, f); this._final(enc, f);
     dev.queue.submit([enc.finish()]);
@@ -460,6 +564,7 @@ export class Renderer {
       tex: dev.createTexture({ size: [G, G, G], dimension: '3d', format: 'rgba16float', usage: T.STORAGE_BINDING | T.TEXTURE_BINDING, label: 'pc volume field' }),
     };
     const v = this.vol, view = v.tex.createView({ dimension: '3d' });
+    v.view = view;
     this.bgVolC = dev.createBindGroup({ layout: this.bglVolC, entries: [
       { binding: 0, resource: { buffer: v.acc } }, { binding: 1, resource: { buffer: v.bricks } }, { binding: 2, resource: view }] });
     this.bgMarch = dev.createBindGroup({ layout: this.bglMarch, entries: [
@@ -498,6 +603,86 @@ export class Renderer {
     p.end();
     return NB;
   }
+  // The smoke cube of this frame (this.smBox: { o, cell, G }, or null) and
+  // whether it moved. It holds 1.3 x the framed sphere; the cell snaps
+  // like the body volume's, so the smoke does not shimmer.
+  _smokeBox(f) {
+    const sm = f.smoke || {}, G = Math.max(0, Math.floor((sm.grid ?? 80) / 8) * 8);
+    if (!G) { this._dropSmoke(); return false; }
+    // nothing to draw (the page: before contact): no smoke passes at all
+    if (f.smokeLive === false) { this.smBox = null; return false; }
+    if (!this.smVol || this.smVol.G !== G) this._makeSmoke(G);
+    const c = f.vol && f.vol.c ? f.vol.c : f.target;
+    const r = 1.3 * (f.vol && f.vol.r > 0 ? f.vol.r : Math.hypot(...sub(f.target, f.eye)) * Math.tan(f.fov / 2));
+    let cell = 2.2 * r / (G - 1);
+    cell = Math.pow(2, Math.round(4 * Math.log2(cell)) / 4);
+    const o = c.map(x => (Math.round(x / cell) - (G - 1) / 2) * cell);
+    this.smBox = { o, cell, G };
+    const key = [G, cell, ...o, ...(f.sun || [])].join();
+    const again = key !== this.smKey;
+    this.smKey = key;
+    return again;
+  }
+  _makeSmoke(G) {
+    const dev = this.dev, U = GPUBufferUsage, T = GPUTextureUsage, NB = G / 8;
+    this._dropSmoke();
+    const t3 = label => dev.createTexture({ size: [G, G, G], dimension: '3d', format: 'rgba16float', usage: T.STORAGE_BINDING | T.TEXTURE_BINDING, label: 'pc smoke ' + label });
+    this.smVol = { G,
+      acc: dev.createBuffer({ size: G * G * G * 32, usage: U.STORAGE | U.COPY_DST, label: 'pc smoke sums' }),
+      bricks: dev.createBuffer({ size: Math.max(16, NB * NB * NB * 4), usage: U.STORAGE | U.COPY_DST, label: 'pc smoke bricks' }),
+      med: t3('medium'), vel: t3('velocity'), light: t3('light') };
+    const v = this.smVol;
+    this.bgSmS = dev.createBindGroup({ layout: this.bglSmS, entries: [{ binding: 0, resource: { buffer: v.acc } }] });
+    this.bgSmR = dev.createBindGroup({ layout: this.bglSmR, entries: [{ binding: 0, resource: { buffer: v.acc } }, { binding: 1, resource: { buffer: v.bricks } },
+      { binding: 2, resource: v.med.createView() }, { binding: 3, resource: v.vel.createView() }] });
+    this.smKey = ''; this.bgSmM = null; this.smLightBody = null; this.histValid = false;
+  }
+  _dropSmoke() {
+    if (!this.smVol) return;
+    for (const k of ['acc', 'bricks', 'med', 'vel', 'light']) this.smVol[k].destroy();
+    this.smVol = null; this.smBox = null; this.bgSmM = null;
+  }
+  _smoke(enc) {
+    const v = this.smVol, G = v.G, np = this.sim.np;
+    const bodyView = this.vol ? this.vol.view : (this.dummy3View || (this.dummy3View = this.dummy3.createView({ dimension: '3d' })));
+    if (this.smLightBody !== bodyView) {
+      this.smLightBody = bodyView;
+      this.bgSmL = this.dev.createBindGroup({ layout: this.bglSmL, entries: [{ binding: 4, resource: v.med.createView() }, { binding: 6, resource: v.light.createView() }, { binding: 10, resource: bodyView }] });
+    }
+    enc.clearBuffer(v.acc); enc.clearBuffer(v.bricks);
+    const p = enc.beginComputePass({ label: 'pc smoke' });
+    p.setBindGroup(0, this.bg0); p.setBindGroup(1, this.bg1c);
+    if (!this.noiseMade) {
+      this.bgSmN = this.bgSmN || this.dev.createBindGroup({ layout: this.bglSmN, entries: [{ binding: 13, resource: this.noiseTex.createView() }, { binding: 14, resource: this.curlTex.createView() }] });
+      p.setBindGroup(2, this.bgSmN); p.setPipeline(this.pSmNoise); p.dispatchWorkgroups(16, 16, 16); this.noiseMade = true;
+    }
+    p.setBindGroup(2, this.bgSmS); p.setPipeline(this.pSmScatter); p.dispatchWorkgroups(Math.min(np, 65535), Math.ceil(np / 65535));
+    const w = Math.ceil(G / 4);
+    p.setBindGroup(2, this.bgSmR); p.setPipeline(this.pSmResolve); p.dispatchWorkgroups(w, w, w);
+    p.setBindGroup(2, this.bgSmL); p.setPipeline(this.pSmLight); p.dispatchWorkgroups(w, w, w);
+    p.end();
+  }
+  _smokeBG() {
+    if (this.bgSmM && this.bgSmMKey === this.smVol && this.bgSmMZ === this.v.smB) return;
+    const v = this.smVol;
+    this.bgSmM = this.dev.createBindGroup({ layout: this.bglSmM, entries: [
+      { binding: 4, resource: v.med.createView() }, { binding: 5, resource: v.vel.createView() }, { binding: 7, resource: v.light.createView() },
+      { binding: 8, resource: this.noiseTex.createView() }, { binding: 9, resource: this.curlTex.createView() },
+      { binding: 11, resource: this.v.smB }, { binding: 12, resource: { buffer: v.bricks } }] });
+    this.bgSmMKey = this.smVol; this.bgSmMZ = this.v.smB;
+  }
+  // the scene pass group 2: the targets, the smoke result, the volumes
+  _shadeBG(hk) {
+    const body = this.vol ? this.vol.view : null, light = this.smVol || null;
+    const key = [this.W, this.H, hk, !!this.smBox].join();
+    if (this.bgShade && key === this.shadeKey && this.shadeBody === body && this.shadeLight === light) return;
+    const z3 = this.dummy3.createView({ dimension: '3d' }), l1 = this.light1.createView({ dimension: '3d' });
+    this.bgShade = this.dev.createBindGroup({ layout: this.bglShade, entries: [
+      { binding: 0, resource: this.v.smB }, ...this.v.attr.map((v, i) => ({ binding: 1 + i, resource: v })),
+      { binding: 4, resource: this.v.smHist[hk] }, { binding: 5, resource: this.v.nrm }, { binding: 6, resource: this.v.smAux },
+      { binding: 7, resource: body || z3 }, { binding: 8, resource: light ? light.light.createView() : l1 }] });
+    this.shadeKey = key; this.shadeBody = body; this.shadeLight = light;
+  }
   _bloom(enc, f) {
     const dev = this.dev, pb = this._pb || (this._pb = new Float32Array(8));
     let sw = this.W, sh = this.H;
@@ -528,7 +713,8 @@ export class Renderer {
   destroy() {
     for (const t of this.targets || []) t.destroy();
     for (const b of [this.frameBuf, this.centresBuf, this.cpBuf, this.origBuf, this.partBuf, ...this.postBufs]) if (b) b.destroy();
-    this.mapTex.destroy(); this.dummy.destroy(); this._dropVolume();
+    this.mapTex.destroy(); this.dummy.destroy(); this._dropVolume(); this._dropSmoke();
+    for (const t of [this.bbTex, this.noiseTex, this.curlTex, this.dummy3, this.light1]) t.destroy();
     this.targets = null; this.sim = null;
   }
 }

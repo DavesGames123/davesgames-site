@@ -59,7 +59,7 @@ import { SphGPU, loadSphCode } from './engine.js';
 import { buildScenario } from './build.js';
 import { makeParams } from './sph.js';
 import { PRESETS, presetByKey, randomScenario, composition, VARIANTS, titleOf } from './scenarios.js';
-import { pickProfile, renderBudget, lowerGrid } from './budget.js';
+import { pickProfile, renderBudget, lowerGrid, lowerSmoke } from './budget.js';
 import { Renderer, loadRenderCode, loadMaps, defaultFrame, norm, cross, sub } from './render.js';
 import { makeView, frameTarget, stepView, cameraOf, impactYaw, sideFor, bandFrom } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
@@ -133,6 +133,7 @@ function resize() {
   c.width = b.w; c.height = b.h;
   S.f.frags = b.frags; S.f.smooth = b.smooth;
   S.f.grid = Math.min(b.grid, S.gridCap || b.grid);
+  S.f.smoke = S.smokeCap && S.smokeCap.grid < b.smoke.grid ? Object.assign({}, S.smokeCap) : b.smoke;
   S.ren.resize(b.w, b.h);
   const a = $('arc'); a.width = Math.round(innerWidth * Math.min(2, devicePixelRatio || 1)); a.height = Math.round(innerHeight * Math.min(2, devicePixelRatio || 1));
 }
@@ -147,7 +148,7 @@ export function startRun(sc, seed = 1, o = {}) {
   S.sim.upload(S.setup, S.prm);
   S.ren.attach(S.sim, S.setup);
   S.phase = 'relax'; S.relaxDone = 0; S.acc = 0;
-  S.stats = null; S.contact = null; S.peak = { P: 0, melt: 0, vap: 0, esc: 0, T99: 0 };
+  S.stats = null; S.contact = null; S.simT = 0; S.peak = { P: 0, melt: 0, vap: 0, esc: 0, T99: 0 };
   S.out = null; S.outAt = 0;
   S.arc = previewArc(S.setup);
   S.f.flashes = [];
@@ -206,6 +207,7 @@ function govern(ms) {
   else if (S.dtAvg < 17 && S.cap < 8) S.cap++;
   else if (S.dtAvg > 30 && S.cap === 1 && S.f.grid && S.now - (S.gridAt || 0) > 3000) {
     S.gridCap = lowerGrid(S.f.grid); S.f.grid = S.gridCap; S.gridAt = S.now;
+    S.smokeCap = lowerSmoke(S.f.smoke); S.f.smoke = Object.assign({}, S.smokeCap);
   }
 }
 
@@ -243,6 +245,10 @@ export function frameOf(now, dt, steps) {
   f.exposure = S.dir && S.dir.exposure != null ? S.dir.exposure : 1;
   // sim hours since contact: the visible skin of the melt cools (render.js)
   f.coolH = sinceH == null ? -1 : sinceH;
+  f.smokeLive = !!S.contact;
+  // the smoke detail flows with the sim time (the last stats, then on by
+  // the steps of this frame, so it does not jump)
+  if (S.stats) { S.simT = Math.max(S.simT || 0, S.stats.t) + (steps ? S.stats.dt * steps : 0); f.simT = S.simT; } else f.simT = null;
   // events: the flash decays, atmospheres and shadows fade after contact
   if (S.contact) {
     const s = (now - S.contact.wall) / 1000;

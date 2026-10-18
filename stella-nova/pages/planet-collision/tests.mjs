@@ -63,6 +63,10 @@
 //     iso level, two touching ones join; the volume tiers and bytes;
 //     debris drops are small (radius under 2.5 % of the body radius, under
 //     a third of the old rock size) and the rock primitives are gone
+//  13 optics.js: the black body (red, orange, white, blue; the table and
+//     the WGSL constants), Henyey-Greenstein lobes integrate to 1, the
+//     vapour flagging (smokeWeights), the temperature -> material map
+//     (matterState, skinCap, crustShare, geotherm)
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -459,6 +463,42 @@ function cpuTests() {
   console.log(`INFO  CPU solver tests: ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
+// 13 ─ optics.js: the black body, the phase, the smoke and matter rules
+async function opticsTests() {
+  const O = await import('./optics.js');
+  const bb = T => O.blackbodyRGB(T), f3 = c => c.map(v => v.toFixed(3)).join('/');
+  const c1 = bb(1000), c15 = bb(1500), c65 = bb(6500), c12 = bb(12000);
+  let mono = true, prev = 0; for (let T = 800; T <= 6500; T += 100) { const c = bb(T), q = c[1] / c[0]; if (q < prev - 1e-9) mono = false; prev = q; }
+  ok('13 black body: red at 1000 K, orange at 1500 K, white at 6500 K, blue at 12000 K; green share rises with T',
+    c1[0] === 1 && c1[1] < 0.06 && c1[2] < 0.01 && c15[1] > 0.08 && c15[1] < 0.25 && c15[2] < 0.02 && Math.min(...c65) > 0.9 && c12[2] === 1 && c12[0] < 0.8 && mono,
+    `1000 K ${f3(c1)}, 1500 K ${f3(c15)}, 6500 K ${f3(c65)}, 12000 K ${f3(c12)} (linear sRGB)`);
+  const lut = O.blackbodyLUT(), last = O.blackbodyRGB(O.BB_T1);
+  let inR = true; for (const v of lut) if (!(v >= 0 && v <= 1)) inR = false;
+  const wg = fs => fs.readFileSync(new URL('./shaders/common.wgsl', import.meta.url), 'utf8');
+  const fsm = await import('node:fs'), cw = wg(fsm), num = k => Number((cw.match(new RegExp('const ' + k + ': f32 = ([0-9.]+)')) || [])[1]);
+  ok('13 the black-body table: BB_N rows in [0, 1], ends at BB_T0 and BB_T1, the WGSL constants match', lut.length === 4 * O.BB_N && inR && Math.abs(lut[4 * O.BB_N - 2] - last[2]) < 1e-6 && num('BB_T0') === O.BB_T0 && num('BB_T1') === O.BB_T1 && num('BB_N') === O.BB_N,
+    `${O.BB_N} rows ${O.BB_T0}-${O.BB_T1} K; common.wgsl BB_T0 ${num('BB_T0')}, BB_T1 ${num('BB_T1')}, BB_N ${num('BB_N')}`);
+  const integ = fn => { let s = 0; const n = 40000; for (let i = 0; i < n; i++) { const c = -1 + 2 * (i + 0.5) / n; s += fn(c) * 2 * Math.PI * 2 / n; } return s; };
+  const ints = [O.PHASE.g1, O.PHASE.g2, 0.9, 0].map(g => integ(c => O.hg(g, c))), mixI = integ(c => O.phase(c));
+  ok('13 Henyey-Greenstein: each lobe and the two-lobe mix integrate to 1; forward scattering wins', ints.every(v => Math.abs(v - 1) < 2e-3) && Math.abs(mixI - 1) < 2e-3 && O.phase(1) > 10 * O.phase(-1),
+    `lobes ${ints.map(v => v.toFixed(4)).join(', ')}; mix ${mixI.toFixed(4)}; forward / back ${(O.phase(1) / O.phase(-1)).toFixed(1)}`);
+  const sw = O.smokeWeights, r = (o, k) => o[k].toFixed(2);
+  const cold = sw({ xv: 0, T: 300, rhoRatio: 1.1, debris: false, coolH: -1 }), vap = sw({ xv: 0.8, T: 9000, rhoRatio: 0.1, coolH: 0.1 }),
+    vapLate = sw({ xv: 0.8, T: 9000, rhoRatio: 0.1, coolH: 8 }), coolV = sw({ xv: 0.8, T: 1500, rhoRatio: 0.1, coolH: 1 }),
+    deb = sw({ xv: 0, T: 400, rhoRatio: 0.15, debris: true, coolH: 1 }), hotExp = sw({ xv: 0, T: 5000, rhoRatio: 0.2, coolH: 0.2 }), hotDense = sw({ xv: 0, T: 5000, rhoRatio: 1.0, coolH: 0.2 });
+  ok('13 vapour flagging: settled rock none; vapour (xv) and hot expanded rock gas; cool vapour and free debris dust; hot dense rock none',
+    cold.gas === 0 && cold.dust === 0 && vap.gas > 0.95 && vapLate.gas > 0.5 && vapLate.Tgas < 2300 && coolV.dust > 0.95 && coolV.gas < 0.05 && Math.abs(deb.dust - O.SMOKE.dustShed) < 1e-9 && deb.gas === 0 && hotExp.gas > 0.9 && hotDense.gas === 0 && hotDense.dust === 0,
+    `cold ${r(cold, 'gas')}/${r(cold, 'dust')}, vapour +0.1 h ${r(vap, 'gas')} at ${vap.Tgas.toFixed(0)} K, +8 h ${r(vapLate, 'gas')} at ${vapLate.Tgas.toFixed(0)} K, 1500 K vapour dust ${r(coolV, 'dust')}, debris dust ${r(deb, 'dust')}, hot expanded gas ${r(hotExp, 'gas')}, hot dense ${r(hotDense, 'gas')}`);
+  const st = [O.matterState(300, 1500, -1), O.matterState(1200, 1500, -1), O.matterState(2500, 1500, 0.1), O.matterState(2500, 1500, 3), O.matterState(9000, 1500, 0.2, 0.8)].map(m => m.state);
+  let skinMono = true, crMono = true, gtMono = true;
+  for (let h = 0; h < 10; h += 0.1) { if (O.skinCap(h + 0.1) > O.skinCap(h)) skinMono = false; if (O.crustShare(h + 0.1) < O.crustShare(h)) crMono = false; }
+  for (let x = 0; x < 1; x += 0.01) { if (O.geotherm(x + 0.01, 0) > O.geotherm(x, 0) + 1e-9) gtMono = false; }
+  const melt = O.matterState(2500, 1500, 0.1), crust = O.matterState(2500, 1500, 3);
+  ok('13 temperature -> material: solid, hot, melt, crust, vapour; the skin cools, the crust grows, the crust is darker; the geotherm falls outward',
+    st.join() === 'solid,hot,melt,crust,vapour' && skinMono && crMono && crust.L < 0.5 * melt.L && O.crustShare(-1) === 0 && O.crustShare(100) === 0.85 && gtMono && O.geotherm(0, 1) === O.GEOTHERM.centre && Math.abs(O.geotherm(1, 0) - O.GEOTHERM.surface) < 1e-6,
+    `${st.join(', ')}; skin cap ${O.skinCap(0).toFixed(0)} -> ${O.skinCap(3).toFixed(0)} K at 3 h; radiance melt ${melt.L.toFixed(2)}, crust ${crust.L.toFixed(2)}; geotherm ${O.geotherm(0, 1)} K centre, ${O.geotherm(0.6, 0).toFixed(0)} K at 0.6 R, ${O.geotherm(1, 0).toFixed(0)} K surface`);
+}
+
 async function presetTests() {
   let bad = [], minT = Infinity, maxT = 0;
   for (const p of [...PRESETS, randomScenario(1), randomScenario(2), randomScenario(99)]) {
@@ -509,14 +549,16 @@ async function presetTests() {
     const { spawnSync } = await import('node:child_process');
     const tmp = fs.mkdtempSync((await import('node:os')).tmpdir() + '/pc-naga-'), bad = [];
     const src = f => fs.readFileSync(new URL('./shaders/' + f, import.meta.url), 'utf8');
-    for (const f of files.filter(f => f !== 'common.wgsl')) {
-      const code = ['fluid.wgsl', 'smooth.wgsl', 'shade.wgsl', 'debris.wgsl', 'vol.wgsl', 'march.wgsl'].includes(f) ? src('common.wgsl') + '\n' + src(f) : src(f);
+    for (const f of files.filter(f => f !== 'common.wgsl' && f !== 'scene.wgsl')) {
+      // as render.js builds them: the scene pass gets common + scene
+      const pre = ['shade.wgsl', 'debris.wgsl'].includes(f) ? src('common.wgsl') + '\n' + src('scene.wgsl') + '\n' : ['fluid.wgsl', 'smooth.wgsl', 'vol.wgsl', 'march.wgsl', 'smoke.wgsl'].includes(f) ? src('common.wgsl') + '\n' : '';
+      const code = pre + src(f);
       fs.writeFileSync(tmp + '/' + f, code);
       const r = spawnSync(naga, [tmp + '/' + f], { encoding: 'utf8' });
       if (r.status !== 0) bad.push(f + ': ' + (r.stderr || r.stdout).trim().split('\n').slice(0, 3).join(' '));
     }
     fs.rmSync(tmp, { recursive: true, force: true });
-    ok('8 naga validates every shader module', bad.length === 0, bad.join(' | ') || files.filter(f => f !== 'common.wgsl').join(', '));
+    ok('8 naga validates every shader module', bad.length === 0, bad.join(' | ') || files.filter(f => f !== 'common.wgsl' && f !== 'scene.wgsl').join(', '));
   } else console.log('SKIP  8 naga: ~/.cargo/bin/naga is not installed');
 }
 
@@ -684,13 +726,19 @@ async function renderTests() {
   const pre = scan(at);
   ok('R before contact: the target fills its disc, dark sky outside, no glow', cIn[0] + cIn[1] + cIn[2] > 90 && cOut[0] + cOut[1] + cOut[2] < 60 && pre.glow === 0,
     `centre rgb ${cIn.join(',')}, 1.35 R out ${cOut.join(',')}, ${pre.glow} glowing px, disc ${rpx.toFixed(0)} px`);
-  // vapour is a translucent haze, not a pale fog: draw every particle of
-  // the settled target as vapour (xvLo -2, xvHi -1; no drawn atmosphere);
-  // the disc stays dim and the sky shows through it (opacity at most 0.6)
-  { const g = Object.assign({}, f, { xvLo: -2, xvHi: -1, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })) }); ren.render(g); const at2 = await rgb();
-    let n = 0, sum = 0, white = 0;
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { if (Math.hypot(x - ctr.x, y - ctr.y) >= 0.8 * rpx) continue; const c = at2(x, y); n++; sum += (c[0] + c[1] + c[2]) / 3; if (c[0] > 235 && c[1] > 235) white++; }
-    ok('R an all-vapour body is a dim haze, not a pale fog', n > 100 && sum / n < 110 && white === 0, `mean ${(sum / Math.max(n, 1)).toFixed(0)} of 255 over ${n} disc px, ${white} near-white`); }
+  // vapour is a volume (smoke.wgsl): draw every particle of the settled
+  // target as vapour (xvLo -2, xvHi -1; no drawn atmosphere). At 300 K it
+  // is cold dust: a cloud that shades itself (the light march). Lit from
+  // the eye's side it is bright; lit from behind, the disc is dark but
+  // for the forward-scattered rim; never a white fog.
+  { const disc = async sun => { const g = Object.assign({}, f, { sun, xvLo: -2, xvHi: -1, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })) }); for (let k = 0; k < 6; k++) ren.render(g); const at2 = await rgb();
+      let n = 0, white = 0, sum = 0, rim = 0, nr = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const c = at2(x, y), l = (c[0] + c[1] + c[2]) / 3, r = Math.hypot(x - ctr.x, y - ctr.y);
+        if (r < 0.6 * rpx) { n++; sum += l; if (c[0] > 235 && c[1] > 235) white++; } else if (r < 1.05 * rpx) { rim += l; nr++; } }
+      return { n, white, mean: sum / Math.max(n, 1), rim: rim / Math.max(nr, 1) }; };
+    const front = await disc([0.3, -0.9, 0.3]), back = await disc([-0.3, 0.9, -0.3]);
+    ok('R an all-vapour body is a self-shadowed cloud: bright lit from the front, dark lit from behind', front.n > 100 && front.white < 0.02 * front.n && front.mean > 40 && back.mean < 0.5 * front.mean,
+      `centre mean ${front.mean.toFixed(0)} lit from the eye's side, ${back.mean.toFixed(0)} lit from behind (rim ${back.rim.toFixed(0)}); ${front.white} near-white of ${front.n} px`); }
   // the surface of a settled body before contact: one smooth planet, not
   // a heap of particle spheres. A close view (960 x 600, 3 radii) drawn
   // with the density volume (f.grid 144) and with the old particle
@@ -873,7 +921,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); await volumeTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); await volumeTests(); await opticsTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

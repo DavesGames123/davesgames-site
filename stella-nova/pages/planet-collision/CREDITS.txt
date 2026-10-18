@@ -19,9 +19,24 @@ Colour maps (shaders/common.wgsl fn inferno, fn viridis)
   (matplotlib colour maps by Nathaniel Smith and Stefan van der Walt,
   CC0), fit by Matt Zucker (shadertoy "Matplotlib colormaps", CC0).
 
-Black-body colour (shaders/common.wgsl fn blackbody)
-  The curve fit of the Planck locus in sRGB by Tanner Helland (2012),
-  "How to convert temperature (K) to RGB".
+Black-body colour (optics.js blackbodyRGB, shaders/common.wgsl fn blackbody)
+  The Planck spectrum through the CIE 1931 colour matching functions, in
+  the multi-lobe Gaussian fit of C. Wyman, P.-P. Sloan and P. Shirley,
+  "Simple analytic approximations to the CIE XYZ color matching
+  functions", JCGT 2(2), 2013; XYZ to linear sRGB by IEC 61966-2-1.
+
+Smoke (shaders/smoke.wgsl) — written for this page; the method follows
+  published work (ideas, no code): A. Schneider, "Real-time volumetric
+  cloudscapes" (GPU Pro 7, 2016); S. Hillaire, "Physically based sky,
+  atmosphere and cloud rendering in Frostbite" (SIGGRAPH 2016 course)
+  for the erosion, the energy-conserving step and the octaves of
+  multiple scattering (after M. Wrenninge et al., SIGGRAPH 2013 talk);
+  R. Bridson, J. Hourihan and M. Nordenstam, "Curl-noise for procedural
+  fluid flow" (SIGGRAPH 2007); L. G. Henyey and J. L. Greenstein (1941)
+  for the phase function. The site page volume-noise (an MIT port of
+  TileableVolumeNoise by S. Hillaire) uses the same cloud model; no code
+  is copied from it. The silicate vapour photosphere near 2300 K is from
+  S. J. Lock and S. T. Stewart, JGR Planets 122 (2017).
 
 Rendering method
   Screen-space fluid rendering: W. J. van der Laan, S. Green and M. Sainz,

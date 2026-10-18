@@ -1,6 +1,6 @@
 // ============================================================================
 //  PLANET COLLISION  ·  shaders/debris.wgsl — ejecta fragments, motion
-//  streaks and the impact flash (after common.wgsl)
+//  streaks and the impact flash (after common.wgsl, scene.wgsl)
 // ----------------------------------------------------------------------------
 //    vs_drop + fs_drop      one instance per debris particle and droplet
 //                           (instance = particle * F + f, F = U.mode.w):
@@ -13,7 +13,10 @@
 //                           drops are drawn, not simulated: the particle
 //                           is the simulated mass. Colour: the body's
 //                           surface map at the start position, rock, iron
-//                           or ice inside, and the glow of fn glow.
+//                           or ice inside, and the glow of fn glow. Lit
+//                           by the sun light left at the drop (scene.wgsl
+//                           fn sunAt: bodies and smoke); a drop behind the
+//                           0.5 depth of the smoke shows through it.
 //    vs_streak + fs_streak  a line from x back to x - v * U.mode.z (the
 //                           sim time of one frame: real motion blur), 1.3 px
 //                           wide, additive: hot pieces trail their glow,
@@ -38,6 +41,7 @@ struct ROut {
   @location(0) @interpolate(flat) centre: vec4f,  // xyz, radius
   @location(1) @interpolate(flat) alb: vec4f,     // albedo, specular
   @location(2) @interpolate(flat) emit: vec3f,
+  @location(3) @interpolate(flat) sun: f32,       // the sun light left (bodies, smoke)
 };
 fn dropCorner(vi: u32) -> vec2f {
   var q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
@@ -75,6 +79,10 @@ fn vs_drop(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -
   let s = r * dist / sqrt(max(dist * dist - r * r, 1e-12));
   o.pos = U0.vp * vec4f(c + (q.x * side + q.y * upv) * s + n * r, 1.0);
   o.centre = vec4f(c, r);
+  // the light left by the bodies and the smoke (scene.wgsl fn sunAt; the
+  // first drop of a particle marches the body volume, the others share
+  // its smoke term)
+  o.sun = sunAt(c, normalize(U0.sun.xyz), select(0, 10, f == 0u));
   // colour
   let mt = matOf(ii);
   let og = pOrig[ii].xyz;
@@ -115,7 +123,7 @@ fn fs_drop(in: ROut) -> DropOut {
   let t = s * dot(Dn, U0.fwd.xyz);
   let n = normalize(q + (s + b) * Dn);
   let L = U0.sun.xyz;
-  let ndl = max(dot(n, L), 0.0);
+  let ndl = max(dot(n, L), 0.0) * in.sun;
   var o: DropOut;
   o.depth = depthOfZ(t);
   let mode = i32(U0.mode.x + 0.5);
@@ -125,7 +133,11 @@ fn fs_drop(in: ROut) -> DropOut {
   let spec = in.alb.w * pow(max(dot(n, H), 0.0), 60.0) * ndl * U0.sun.w;
   // the glow is brighter where the drop faces the eye (limb darkening)
   let mu = max(dot(n, V), 0.0);
-  o.color = vec4f(in.alb.rgb * (U0.sun.w * ndl + U0.view.w) + in.emit * (0.55 + 0.45 * mu) + vec3f(spec), 1.0);
+  var col = in.alb.rgb * (U0.sun.w * ndl + U0.view.w) + in.emit * (0.55 + 0.45 * mu) + vec3f(spec);
+  // a drop behind the half-opacity depth of the smoke shows through it
+  let sm = smokeAt(in.pos.xy, t);
+  if (t > sm.t50) { col = sm.c.rgb + col * (1.0 - sm.c.a); }
+  o.color = vec4f(col, 1.0);
   return o;
 }
 
