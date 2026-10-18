@@ -8,8 +8,9 @@
 //                 box with the shader log and the source line
 //    lost ....... a context loss reloads one time, one profile lower
 //                 (sessionStorage), and a second loss stops with a message
-//    worker ..... no module Worker, and a Worker that fails: the rock and
-//                 the reef fall back to the main thread, the reef grows
+//    worker ..... a world Worker that fails: the world jobs fall back to the
+//                 main thread (world/pool.js) at the lowest detail, the rock
+//                 and the corals still come
 //    errors ..... window error and unhandledrejection show in the box
 //    phone ...... a coarse 390 x 844 boots with the phone profile loads
 //  coral-link.js alone: the replay of the state after a worker failure.
@@ -130,16 +131,17 @@ if (arg === 'lost2') {
   P.close(); process.exit(0);
 }
 if (arg === 'worker') {
+  // module workers that crash: the world falls back to the main thread
+  // (world/pool.js), with the lowest detail, and the world still builds
   const P = await bootPage({ w: 1280, h: 720, search: '?profile=phone', worker: CrashWorker });
-  const grew = await until(P, () => { const d = P.win.__coralDebug(); return d.coral && d.coral.count > 50; }, 60000);
+  const built = await until(P, () => { const d = P.win.__coralDebug(); return d.pool && d.pool.local && d.detail === 'phone-min' && d.stream && d.stream.rock > 2 && d.coralChunks > 0; }, 120000);
   const D = P.win.__coralDebug();
-  say(D.rockQuality === 'low', 'a failed rock worker gives the low rock on the main thread', D.rockQuality);
-  say(D.coral && D.coral.local && /reef worker stopped/.test(D.coral.why), 'a failed reef worker gives the main-thread runner', D.coral && D.coral.why);
-  say(grew, 'the reef grows on the main thread', D.coral && D.coral.count);
-  say(D.coral && D.coral.budget && D.coral.budget.particles === 25000, 'the page budget is the phone budget (the runner gets half of it)');
+  say(D.pool && D.pool.local && /world worker failed/.test(D.fallback || ''), 'a failed world worker gives the main-thread jobs', D.fallback);
+  say(D.detail === 'phone-min', 'the fall back uses the lowest world detail', D.detail);
+  say(built, 'the rock and the corals still come (on the main thread)', JSON.stringify({ rock: D.stream && D.stream.rock, coral: D.coralChunks }));
   const txt = P.doc.getElementById('errBox').textContent;
   say(/main thread/.test(txt), 'the box notes the fall back', txt.slice(0, 160));
-  info(`worker fall back: rock ${D.rockQuality}, reef local ${D.coral && D.coral.local}, ${D.coral && D.coral.count} particles, "${D.coral && D.coral.why}"`);
+  info(`worker fall back: local ${D.pool && D.pool.local}, detail ${D.detail}, ${D.stream && D.stream.rock} rock chunks, ${D.coralChunks} coral chunks, "${D.fallback}"`);
   P.close(); process.exit(0);
 }
 if (arg === 'errors') {
@@ -154,7 +156,7 @@ if (arg === 'errors') {
   txt = P.doc.getElementById('errBox').textContent;
   say(/fetch failed/.test(txt) && /2 messages/.test(txt), 'unhandledrejection shows in the box too', txt.slice(0, 200));
   W.dispatchEvent(new W.ErrorEvent('error', { message: 'Script error.' }));
-  say(P.win.__coralDebug().box === 2 + (P.win.__coralDebug().coral && P.win.__coralDebug().coral.local ? 1 : 0), '"Script error." (no detail) does not show');
+  say(P.win.__coralDebug().box === 2, '"Script error." (no detail) does not show');
   P.doc.querySelector('#errBox .eb-x').dispatchEvent(new W.MouseEvent('click', { bubbles: true }));
   say(P.doc.getElementById('errBox').hidden, 'the close button hides the box');
   P.close(); process.exit(0);
@@ -164,14 +166,14 @@ if (arg === 'phone') {
   const ready = await until(P, () => P.win.__coralDebug().worldReady, 60000);
   const D = P.win.__coralDebug();
   say(D.profile === 'phone', 'coarse 390 x 844 boots with the phone profile', D.profile);
-  say(ready && D.rockQuality === 'low' && D.quality === 'phone' && D.rovs === 2, 'phone: low rock, Few colonies, 2 ROVs', JSON.stringify({ r: D.rockQuality, q: D.quality, rovs: D.rovs }));
-  say(D.loads && D.loads.shadow === 1024 && D.loads.volScale === 0.35 && D.loads.polypDraw === 30000, 'phone: the scene loads come from the profile', JSON.stringify(D.loads));
+  say(ready && D.rovs === 2 && D.stream && D.stream.rock > 0, 'phone: the world and 2 ROVs', JSON.stringify({ rovs: D.rovs, rock: D.stream && D.stream.rock }));
+  say(D.loads && D.loads.shadow === 1024 && D.loads.shadowExtra === 512 && D.loads.volScale === 0.35 && D.loads.polypDraw === 30000, 'phone: the scene loads come from the profile', JSON.stringify(D.loads));
   const pr = P.fake.canvas.width / 390;
   say(pr <= 1.5 + 1e-6, 'phone: the pixel ratio is at most 1.5', pr);
   const q = [...P.doc.querySelectorAll('#quality button')];
-  say(q.length === 3 && q.filter(b => b.disabled).length === 2, 'phone: the Many and Most chips are off', q.map(b => `${b.dataset.id}${b.disabled ? ' off' : ''}`).join());
+  say(q.length === 4 && q.find(b => b.dataset.id === 'desktop').disabled && q.find(b => b.dataset.id === 'laptop-low').disabled, 'phone: the High and Medium world detail chips are off', q.map(b => `${b.dataset.id}${b.disabled ? ' off' : ''}`).join());
   say(D.post && D.post.on && !D.post.failed, 'phone: the post chain passes its first-frame check', JSON.stringify(D.post));
   say(P.errors.length === 0, 'phone: no console errors', P.errors.slice(0, 3).join(' | '));
-  info(`phone boot: ${JSON.stringify({ profile: D.profile, rock: D.rockQuality, quality: D.quality, rovs: D.rovs, pr, colonies: D.coral && D.coral.colonies, local: D.coral && D.coral.local })}`);
+  info(`phone boot: ${JSON.stringify({ profile: D.profile, detail: D.detail, rovs: D.rovs, pr, rock: D.stream && D.stream.rock, local: D.pool && D.pool.local })}`);
   P.close(); process.exit(0);
 }

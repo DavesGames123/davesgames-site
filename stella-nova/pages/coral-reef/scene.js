@@ -41,7 +41,14 @@
 //  colony (the sway). A colour change writes texels only.
 //  setParticles(from, to, f): f(g, A, B, o, C) writes the texels at o.
 //
+//  WORLD (CONTRACT-V4.md). On the infinite seafloor the page uses the
+//  world group instead of setRock and applyBricks: worldRoot at minus the
+//  floating origin, a group per chunk (rock and sand, coarse coral) and per
+//  fine colony, the caustic square round the eye (setCausticCentre), no
+//  plot fade (setWorldMode). grep -n 'the infinite world'.
+//
 //  grep -n targets
+//    world chunks ........... "the infinite world (CONTRACT-V4.md"
 //    shared uniforms ........ "const U = {"
 //    caustic pass ........... "function makeCaustics"
 //    lamps .................. "function setLights"
@@ -114,13 +121,22 @@ function makeCaustics(renderer, U, coarse, R, cfg) {
     box.set(-size / 2, -size / 2, size, 0.06);
     U.uCaustBox.value.set(-size / 2, -size / 2, size, 0);
   }
+  // The infinite world (CONTRACT-V4.md): a square of `size` m round the eye
+  // (render space). The rays start at absolute positions, so the pattern
+  // at a point does not change when the square moves; the centre snaps to
+  // 4 m steps.
+  function setCentre(x, z, size = 96) {
+    const cx = Math.round(x / 4) * 4, cz = Math.round(z / 4) * 4;
+    box.set(cx - size / 2, cz - size / 2, size, 0.06);
+    U.uCaustBox.value.set(cx - size / 2, cz - size / 2, size, 0);
+  }
   setSeed(1); setPlot(R);
   U.uCaustTex.value = rt.texture;
   U.uCaustScale.value = half ? 1 : 4;
   const T0 = refractY(mat.uniforms.uSunDir.value);
   U.uSunXZ.value.set(T0[0] / -T0[1], T0[2] / -T0[1], 0);
   return {
-    rt, half, setSeed, setPlot,
+    rt, half, setSeed, setPlot, setCentre,
     render(t) {
       mat.uniforms.uT.value = t;
       const prev = renderer.getRenderTarget();
@@ -680,9 +696,150 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     post.exposure = exposureFrom(passes.lumBuf, post.exposure);
     passes.compU.uExposure.value = post.exposure;
   }
+  // ── the infinite world (CONTRACT-V4.md, world/stream.js) ─────────────────
+  // worldRoot sits at minus the floating origin O (render space = world -
+  // O). Each chunk group sits at its true chunk centre under it, so three
+  // makes the model matrix in double precision and the GPU gets small
+  // numbers. The streamer gives finished results only:
+  //   addWorldRock(key, [cx, cz], { rock, sand })   the rock and sand of a
+  //       chunk (chunk-local arrays, world/mesh.js); it replaces the old
+  //       LOD of the chunk in the same call
+  //   addWorldCoral(key, co)   all the coarse coral meshes of a chunk
+  //       (world/corals.js), group at (cx, oy, cz); gids + co.base (the
+  //       slab of the chunk in the data textures)
+  //   addWorldFine(fkey, co, mesh)   one colony: fine mesh and polyps
+  //   removeWorld*(key)   a fine group goes after one more render (the
+  //       page shows the coarse part first: no frame with neither)
+  // Each add returns the bytes it gave to the GPU. The arrays are dropped
+  // after the upload (onUpload), so the page keeps no copy of them.
+  const worldRoot = new THREE.Group(); worldRoot.name = 'world'; scene.add(worldRoot);
+  const W3 = { rock: new Map(), coral: new Map(), fine: new Map(), dying: [], gpu: 0, origin: [0, 0], on: false };
+  function release() { this.array = null; }
+  function attr(arr, n) { const a = new THREE.BufferAttribute(arr, n); a.onUpload(release); return a; }
+  function geoBytes(g) { let b = 0; for (const k in g.attributes) { const a = g.attributes[k]; b += a.isInterleavedBufferAttribute ? 0 : (a.array ? a.array.byteLength : 0); } if (g.index && g.index.array) b += g.index.array.byteLength; return b; }
+  function setWorldMode(on = true) {
+    W3.on = !!on;
+    U.uR.value = on ? 1e7 : R;               // no plot fade: the fog takes the far world
+    if (!on) caus.setPlot(R);
+  }
+  function setOrigin(ox, oz) { W3.origin = [ox, oz]; worldRoot.position.set(-ox, 0, -oz); worldRoot.updateMatrixWorld(true); }
+  function worldGeo(m, extra) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', attr(m.positions, 3));
+    g.setAttribute('normal', attr(m.normals, 3));
+    if (extra) extra(g);
+    g.setIndex(attr(m.indices, 1));
+    g.computeBoundingSphere();
+    return g;
+  }
+  function disposeGroup(grp) {
+    grp.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    if (grp.parent) grp.parent.remove(grp);
+  }
+  function addWorldRock(key, pos, r) {
+    const old = W3.rock.get(key);
+    const grp = new THREE.Group(); grp.position.set(pos[0], 0, pos[1]); grp.name = 'rock ' + key;
+    let b = 0;
+    if (r.rock) {
+      const n = r.rock.positions.length / 3;
+      const g = worldGeo(r.rock, g2 => {
+        g2.setAttribute('cavity', attr(r.rock.cavity && r.rock.cavity.length === n ? r.rock.cavity : new Float32Array(n), 1));
+        g2.setAttribute('band', attr(r.rock.band && r.rock.band.length === n ? r.rock.band : new Float32Array(n), 1));
+      });
+      b += geoBytes(g);
+      const m = new THREE.Mesh(g, rockMat); m.castShadow = true; m.receiveShadow = true; m.userData.rock = true;
+      grp.add(m);
+    }
+    if (r.sand) {
+      const n = r.sand.positions.length / 3;
+      const g = worldGeo(r.sand, g2 => { g2.setAttribute('cavity', attr(new Float32Array(n), 1)); g2.setAttribute('band', attr(new Float32Array(n), 1)); });
+      b += geoBytes(g);
+      const m = new THREE.Mesh(g, sandMat); m.receiveShadow = true; m.castShadow = false; m.userData.sand = true;
+      grp.add(m);
+    }
+    worldRoot.add(grp);
+    if (old) { disposeGroup(old.grp); W3.gpu -= old.bytes; }
+    W3.rock.set(key, { grp, bytes: b, lod: r.lod });
+    W3.gpu += b;
+    return b;
+  }
+  function removeWorldRock(key) { const o = W3.rock.get(key); if (!o) return; disposeGroup(o.grp); W3.gpu -= o.bytes; W3.rock.delete(key); }
+  function gidAttr(gids, base) { const g = new Float32Array(gids.length); for (let i = 0; i < gids.length; i++) g[i] = gids[i] < 0 ? -1 : gids[i] + base; return attr(g, 1); }
+  function addWorldCoral(key, co) {
+    removeWorldCoral(key);
+    const grp = new THREE.Group(); grp.position.set(co.cx, co.oy, co.cz); grp.name = 'coral ' + key;
+    let b = 0;
+    for (const sp of Object.keys(co.coarse || {})) {
+      const m = co.coarse[sp]; if (!m || !m.indices.length) continue;
+      const g = worldGeo(m, g2 => g2.setAttribute('aGid', gidAttr(m.gids, co.base)));
+      if (g.boundingSphere) g.boundingSphere.radius += 0.2;
+      b += geoBytes(g);
+      const id = SPECIES_CODE[sp] !== undefined ? sp : 'staghorn';
+      const mesh = new THREE.Mesh(g, coarseMats[id]); mesh.castShadow = true; mesh.receiveShadow = true; mesh.customDepthMaterial = coralDepth[1];
+      grp.add(mesh);
+    }
+    worldRoot.add(grp);
+    W3.coral.set(key, { grp, bytes: b });
+    W3.gpu += b;
+    return b;
+  }
+  function removeWorldCoral(key) { const o = W3.coral.get(key); if (!o) return; disposeGroup(o.grp); W3.gpu -= o.bytes; W3.coral.delete(key); }
+  function addWorldFine(fkey, co, m) {
+    removeWorldFine(fkey, true);
+    const grp = new THREE.Group(); grp.position.set(co.cx, co.oy, co.cz); grp.name = 'fine ' + fkey;
+    const id = SPECIES_CODE[m.sp] !== undefined ? m.sp : 'staghorn';
+    const g = worldGeo(m, g2 => g2.setAttribute('aGid', gidAttr(m.gids, co.base)));
+    if (g.boundingSphere) g.boundingSphere.radius += 0.2;
+    let b = geoBytes(g);
+    const mesh = new THREE.Mesh(g, coralMats[id]); mesh.castShadow = true; mesh.receiveShadow = true; mesh.customDepthMaterial = coralDepth[0];
+    grp.add(mesh);
+    const np = m.polyps ? m.polyps.length / 8 : 0;
+    if (np) {
+      const PP = m.polyps;
+      for (let q = 6; q < PP.length; q += 8) PP[q] += co.base;
+      const pg = new THREE.InstancedBufferGeometry();
+      pg.setAttribute('position', tplPos.clone()); pg.setAttribute('aT', tplAT.clone()); pg.setIndex(tplIndex.clone());
+      const ib = new THREE.InstancedInterleavedBuffer(PP, 8, 1);
+      ib.onUpload(release);
+      pg.setAttribute('iPos', new THREE.InterleavedBufferAttribute(ib, 3, 0));
+      pg.setAttribute('iNrm', new THREE.InterleavedBufferAttribute(ib, 3, 3));
+      pg.setAttribute('iData', new THREE.InterleavedBufferAttribute(ib, 2, 6));
+      pg.instanceCount = np;
+      pg.boundingSphere = g.boundingSphere ? g.boundingSphere.clone() : null;
+      if (pg.boundingSphere) pg.boundingSphere.radius += 0.05;
+      b += PP.byteLength;
+      const pm = new THREE.Mesh(pg, polypMats[id]); pm.castShadow = LD.polypShadow; pm.customDepthMaterial = polypDepth[id]; pm.userData.polyps = true;
+      grp.add(pm);
+    }
+    polypTotal += np;
+    worldRoot.add(grp);
+    W3.fine.set(fkey, { grp, bytes: b, np });
+    W3.gpu += b;
+    return b;
+  }
+  // now: at once (a replace); else after one more render
+  function removeWorldFine(fkey, now = false) {
+    const o = W3.fine.get(fkey); if (!o) return;
+    W3.fine.delete(fkey);
+    polypTotal -= o.np; W3.gpu -= o.bytes;
+    if (now) disposeGroup(o.grp); else { o.dieAt = frameN; W3.dying.push(o); }
+  }
+  function reapWorld() {
+    for (let i = W3.dying.length - 1; i >= 0; i--) { const o = W3.dying[i]; if (frameN <= o.dieAt) continue; disposeGroup(o.grp); W3.dying.splice(i, 1); }
+  }
+  function clearWorld() {
+    for (const k of [...W3.rock.keys()]) removeWorldRock(k);
+    for (const k of [...W3.coral.keys()]) removeWorldCoral(k);
+    for (const k of [...W3.fine.keys()]) removeWorldFine(k, true);
+    for (const o of W3.dying) disposeGroup(o.grp);
+    W3.dying.length = 0;
+  }
+  function setWorldPolyps(on) { for (const o of W3.fine.values()) o.grp.traverse(q => { if (q.userData.polyps) q.visible = on; }); }
+
   // cam: the camera to draw with (the main camera, or a saver camera).
   function render(dt, nowMs = performance.now()) {
     if (dying.length) reapDying();
+    if (W3.dying.length) reapWorld();
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
     const k = 1 - Math.exp(-dt * 6);
     view.ox += (view.tox - view.ox) * k; view.oy += (view.toy - view.oy) * k;
@@ -728,6 +885,10 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     setFineGate, showFine, dropFine, takeShown, fineState, get fineGroups() { return fineGroups; }, get dyingGroups() { return dying.length; },
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },
     PART_W, maxParticles: NP,
+    // the infinite world (CONTRACT-V4.md)
+    worldRoot, setWorldMode, setOrigin, addWorldRock, removeWorldRock, addWorldCoral, removeWorldCoral, addWorldFine, removeWorldFine, clearWorld, setWorldPolyps,
+    setCausticCentre: (x, z, size) => caus.setCentre(x, z, size),
+    get world() { return { rock: W3.rock.size, coral: W3.coral.size, fine: W3.fine.size, dying: W3.dying.length, gpu: W3.gpu, origin: W3.origin.slice() }; },
   };
 }
 

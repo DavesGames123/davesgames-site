@@ -47,7 +47,12 @@
 //  schedule (slow device, a long frame, a tab that comes back) gives a
 //  burst. main.js grows only the particles that the governor gives.
 //
+//  SQUAD (v4, CONTRACT-V4.md): on the infinite seafloor the saver films
+//  the ROV squad as it explores (squadPlan, squadShotPose); the dive plan
+//  above stays for the node tests of the plot and for coral-species.
+//
 //  grep -n targets
+//    squad shots .......... "export function squadPlan", "export function squadShotPose"
 //    growth time .......... "export function growSeconds"
 //    the rate meter ....... "export function createGovernor"
 //    the dives ............ "export function divePlan"
@@ -328,6 +333,69 @@ export function safeCamera(sdf, scale, tgt, pos, r = 0.3, o = {}) {
   if (!best) best = [tgt[0] + u[0] * (r + 0.8), tgt[1] + u[1] * (r + 0.8), tgt[2] + u[2] * (r + 0.8)];
   for (let i = 0; i < 40 && free(best) <= margin; i++) best[1] += 0.25;
   return { pos: best, how: 'near' };
+}
+
+// ── the squad saver (CONTRACT-V4.md) ───────────────────────────────────────
+// The user said (2026-10-18): the world is "explored constantly by the ROV
+// squad". The saver of the infinite seafloor films the squad as it
+// explores: calm shots of 8 to 14 s, cut on a seeded plan, framed in the
+// clear band of the plate (plateBand) for 16:9 and 9:16:
+//   chase .. behind and over the lead ROV, along its heading
+//   side ... a tracking shot beside the squad, at its height
+//   front .. ahead of the lead, looking back at the squad and its lamps
+//   wide ... high and far: the squad and its beams small in the black
+//            (at most one in four shots, never two in a row)
+//   colony . when the lead inspects a colony: a slow orbit round it, the
+//            squad in the frame
+// squadPlan(seed, n) -> [{ kind, hold, az, spin, elev, zoom, side }].
+// squadShotPose(shot, ts, subj, fitDist) -> { pos, tgt, r }: subj is
+// { lead [x, y, z], yaw (lead heading, from +x to +z), c (squad centre),
+// r (squad radius), colony ({ center, radius } or null) }.
+export const SQUAD_SHOTS = ['chase', 'side', 'front', 'wide', 'colony'];
+export function squadPlan(seed = 1, n = 40) {
+  const rand = mulberry((seed >>> 0) * 2654435761 + 31);
+  const out = [];
+  let prev = null, nWide = 0;
+  for (let i = 0; i < n; i++) {
+    let kind = null;
+    for (let g = 0; g < 20 && !kind; g++) {
+      const k = SQUAD_SHOTS[Math.floor(rand() * 4)];          // colony is chosen by the task, not the plan
+      if (k === prev) continue;
+      if (k === 'wide' && (nWide + 1) * 4 > i + 1) continue;
+      kind = k;
+    }
+    kind = kind || 'chase';
+    if (kind === 'wide') nWide++;
+    out.push({ kind, hold: 8 + rand() * 6, az: rand() * Math.PI * 2, spin: (rand() < 0.5 ? -1 : 1) * (0.02 + rand() * 0.03), elev: 0.25 + rand() * 0.35, zoom: 0.95 + rand() * 0.35, side: rand() < 0.5 ? -1 : 1 });
+    prev = kind;
+  }
+  return out;
+}
+export function squadShotPose(shot, ts, subj, fitDist) {
+  const L = subj.lead, c = subj.c, fw = [Math.cos(subj.yaw), 0, Math.sin(subj.yaw)], rt = [-fw[2], 0, fw[0]];
+  const R = Math.max(2.2, subj.r + 1.4);
+  const at = (tgt, dist, az, el) => [tgt[0] + Math.cos(az) * Math.cos(el) * dist, tgt[1] + Math.sin(el) * dist, tgt[2] + Math.sin(az) * Math.cos(el) * dist];
+  const yawB = Math.atan2(-fw[2], -fw[0]);                 // the direction behind the lead
+  if (shot.kind === 'colony' && subj.colony) {
+    const cc = subj.colony.center, r = Math.max(subj.colony.radius, R * 0.6);
+    return { pos: at(cc, fitDist(r) * shot.zoom, shot.az + shot.spin * ts, shot.elev), tgt: cc, r };
+  }
+  if (shot.kind === 'chase') {
+    const tgt = [L[0] + fw[0] * 2, L[1] - 0.4, L[2] + fw[2] * 2];
+    const d = Math.max(4, fitDist(R * 0.7) * shot.zoom);
+    return { pos: at(tgt, d, yawB + shot.side * 0.35 + 0.08 * Math.sin(ts * 0.15), 0.32 + shot.elev * 0.3), tgt, r: R * 0.7 };
+  }
+  if (shot.kind === 'front') {
+    const tgt = c.slice(), d = fitDist(R) * shot.zoom;
+    return { pos: at(tgt, d, subj.yaw + shot.side * 0.45 + shot.spin * ts * 0.5, 0.18 + shot.elev * 0.25), tgt, r: R };
+  }
+  if (shot.kind === 'wide') {
+    const tgt = c.slice(), d = fitDist(R * 1.6) * 1.2;
+    return { pos: at(tgt, d, shot.az + shot.spin * ts * 0.6, 0.55 + shot.elev * 0.4), tgt, r: R * 1.6 };
+  }
+  // side: a tracking shot beside the squad
+  const tgt = c.slice(), d = fitDist(R) * shot.zoom;
+  return { pos: [tgt[0] + rt[0] * shot.side * d * 0.95 - fw[0] * d * 0.2, tgt[1] + d * 0.25 + 0.4 * Math.sin(ts * 0.2), tgt[2] + rt[2] * shot.side * d * 0.95 - fw[2] * d * 0.2], tgt, r: R };
 }
 
 // The feed card in the saver: right of the clear band in a wide frame

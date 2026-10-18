@@ -44,6 +44,19 @@
 //    rovs.lights      every SpotLight, rovs.wash the wash Points
 //    rovs.dispose()
 //
+//  WORLD (CONTRACT-V4.md): the infinite seafloor. Options for it:
+//    pilots: [state, ...]   the vehicle states of rov/squad.js (the squad
+//                           steps them; update() only poses the models)
+//    sdf: f(x, y, z)        the solid (world/physics.js); no coral grid
+//    tether: false          no tether (hybrid ROVs: a fibre-optic
+//                           micro-tether that the camera does not see)
+//    root: THREE.Group      the vehicles go under it (the page puts it at
+//                           minus the floating origin); the wash stays in
+//                           the scene, in render space
+//    origin: () => [ox, oz] the floating origin (render = world - origin)
+//    count: 1 to 4
+//  The states (p, look) are in world metres; v.target too.
+//
 //  SCENE notes: lights[0] of vehicle 1 casts shadows; each light has
 //  light.userData.base (its intensity before the flicker) and
 //  light.userData.vehicle. The SpotLight targets are children of the
@@ -139,7 +152,10 @@ export function colonyBounds(reef, c) {
 }
 
 export function createROVs(THREE, o = {}) {
-  const seed = o.seed ?? 1, count = clamp(o.count ?? 3, 1, 3), radius = o.radius ?? 30, low = o.quality === 'low';
+  const seed = o.seed ?? 1, external = Array.isArray(o.pilots), count = external ? clamp(o.pilots.length, 1, 4) : clamp(o.count ?? 3, 1, 3), radius = o.radius ?? 30, low = o.quality === 'low';
+  const withTether = o.tether !== false;
+  const origin = o.origin || (() => ZERO2);
+  const root = o.root || o.scene || null;
   const rock = o.rock || createStubRock({ seed, radius });
   // the water: free of the rock and of the sand floor (ROCK keeps the sand
   // out of rock.sdf; its height field is near enough to a distance)
@@ -152,8 +168,9 @@ export function createROVs(THREE, o = {}) {
   // them too (coral-field.js, about 1.3 m from the coral skeleton). The
   // A* grid is of the rock only (it is built once); the path push-out
   // and the motion guard read the full field.
-  const coralF = createCoralField({ radius, ymin: (rock.bounds ? rock.bounds.min[1] : -4) - 1, ymax: top + 8, clear });
-  const sdf = (x, y, z) => Math.min(sdfRock(x, y, z), coralF.dist(x, y, z));
+  // the world gives its own solid (o.sdf, with the coral in it): no grid
+  const coralF = o.sdf ? { sync() { return 0; }, dist: () => Infinity } : createCoralField({ radius, ymin: (rock.bounds ? rock.bounds.min[1] : -4) - 1, ymax: top + 8, clear });
+  const sdf = o.sdf || ((x, y, z) => Math.min(sdfRock(x, y, z), coralF.dist(x, y, z)));
   const depthBase = o.depthBase ?? 26;
 
   // inspection targets: the colonies, else exposed rock points
@@ -182,7 +199,7 @@ export function createROVs(THREE, o = {}) {
 
   // the free-water grid for A* routes, shared by the vehicles (about 350k
   // SDF calls once; 0.8 m cells on low quality)
-  const grid = o.grid !== false ? createGrid(sdfRock, { radius, ymin: rock.bounds ? rock.bounds.min[1] : -4, ymax: top + 6, cell: low ? 0.8 : 0.6 }) : null;
+  const grid = o.grid !== false && !external ? createGrid(sdfRock, { radius, ymin: rock.bounds ? rock.bounds.min[1] : -4, ymax: top + 6, cell: low ? 0.8 : 0.6 }) : null;
 
   const wash = createWash(THREE, { count: low ? 500 : 1000, seed });
   if (scene) scene.add(wash.points);
@@ -206,28 +223,33 @@ export function createROVs(THREE, o = {}) {
     const id = i + 1, vs = hash(seed, i, 101);
     const parts = buildVehicle(THREE, {
       id, seed: vs, quality: o.quality, lights: i === 0 ? 2 : 1, shadows: i === 0 && o.shadows !== false,
-      shadowSize: low ? 512 : 1024, scale, lightIntensity: o.lightIntensity ?? 420, foam: [0xf2b705, 0xf0a800, 0xe8b818][i],
+      shadowSize: low ? 512 : 1024, scale, lightIntensity: o.lightIntensity ?? 420, foam: [0xf2b705, 0xf0a800, 0xe8b818, 0xeec01a][i],
     });
-    const pilot = createPilot({ sdf, bounds: rock.bounds, features: rock.features || [], radius, seed, index: i, targets, clear, grid });
+    // an external state (the squad) or a pilot of our own
+    const pilot = external ? { state: o.pilots[i], step() {} } : createPilot({ sdf, bounds: rock.bounds, features: rock.features || [], radius, seed, index: i, targets, clear, grid });
     const st = pilot.state;
     const g = parts.group;
     g.position.set(...st.p); g.rotation.order = 'YXZ'; g.rotation.y = -st.yaw;
+    if (root) root.add(g);
     g.updateMatrixWorld(true);
     const a = parts.tetherPoint.getWorldPosition(new THREE.Vector3()).toArray();
     const r0 = rng(hash(seed, i, 202));
     const ship = [st.p[0] + (r0() - 0.5) * 12, top + 30, st.p[2] + (r0() - 0.5) * 12];
-    const tether = createTether({ n: TQ.n, a, b: ship });
-    const tube = createTetherTube({ rings: TQ.rings, radial: TQ.radial, radius: 0.024 }).update(tether.points, tether.count);
-    const tgeo = new THREE.BufferGeometry();
-    tgeo.setAttribute('position', new THREE.BufferAttribute(tube.positions, 3).setUsage(THREE.DynamicDrawUsage));
-    tgeo.setAttribute('normal', new THREE.BufferAttribute(tube.normals, 3).setUsage(THREE.DynamicDrawUsage));
-    tgeo.setAttribute('uv', new THREE.BufferAttribute(tube.uvs, 2).setUsage(THREE.DynamicDrawUsage));
-    tgeo.setIndex(new THREE.BufferAttribute(tube.indices, 1));
-    const tmesh = new THREE.Mesh(tgeo, tetherMat);
-    tmesh.frustumCulled = false; tmesh.name = 'rov-tether-' + id;
+    let tether = null, tube = null, tmesh = null;
+    if (withTether) {
+      tether = createTether({ n: TQ.n, a, b: ship });
+      tube = createTetherTube({ rings: TQ.rings, radial: TQ.radial, radius: 0.024 }).update(tether.points, tether.count);
+      const tgeo = new THREE.BufferGeometry();
+      tgeo.setAttribute('position', new THREE.BufferAttribute(tube.positions, 3).setUsage(THREE.DynamicDrawUsage));
+      tgeo.setAttribute('normal', new THREE.BufferAttribute(tube.normals, 3).setUsage(THREE.DynamicDrawUsage));
+      tgeo.setAttribute('uv', new THREE.BufferAttribute(tube.uvs, 2).setUsage(THREE.DynamicDrawUsage));
+      tgeo.setIndex(new THREE.BufferAttribute(tube.indices, 1));
+      tmesh = new THREE.Mesh(tgeo, tetherMat);
+      tmesh.frustumCulled = false; tmesh.name = 'rov-tether-' + id;
+      if (scene) scene.add(tmesh);
+    }
     const L = parts.lights;
     L.forEach((l, j) => { l.userData.vehicle = id; l.userData.index = j; });
-    if (scene) { scene.add(g); scene.add(tmesh); }
     const fl = rng(hash(seed, i, 303));
     vehicles.push({
       id, group: g, lights: L, camera: parts.camera, target: new THREE.Vector3(...st.look), parts, pilot, tether, tube, tmesh, ship,
@@ -250,9 +272,10 @@ export function createROVs(THREE, o = {}) {
   }
 
   // ── per-step pose of one vehicle ──────────────────────────────────────────
-  const loc = new THREE.Vector3();
+  const loc = new THREE.Vector3(), TR = new THREE.Vector3();
+  const ZERO2 = [0, 0];
   function pose(v, dt, t) {
-    const st = v.pilot.state, P = v.parts, g = v.group;
+    const st = v.pilot.state, P = v.parts, g = v.group, O = origin();
     g.position.set(st.p[0], st.p[1], st.p[2]);
     g.rotation.y = -st.yaw;
     // a little pitch and roll from the thrust, as the frame reacts
@@ -260,13 +283,15 @@ export function createROVs(THREE, o = {}) {
     g.rotation.x = clamp(st.thrust.lat, -1, 1) * 0.03 + 0.008 * Math.sin(t * 0.53 + v.id * 2);
     g.updateMatrixWorld(true);
     v.target.set(st.look[0], st.look[1], st.look[2]);
+    // the look point in render space (the group matrices hold the origin)
+    TR.set(st.look[0] - O[0], st.look[1], st.look[2] - O[1]);
     // pan and tilt the camera pod at the look point
-    loc.copy(v.target); P.body.worldToLocal(loc); loc.sub(P.cameraPod.position);
+    loc.copy(TR); P.body.worldToLocal(loc); loc.sub(P.cameraPod.position);
     const pan = clamp(Math.atan2(-loc.z, loc.x), -1.75, 1.75), tilt = clamp(Math.atan2(loc.y, Math.hypot(loc.x, loc.z)), -1.5, 0.6);
     P.cameraPod.rotation.y = pan; P.cameraTilt.rotation.z = tilt;
     // zoom: hold the target sphere when inspecting, wide on a survey
     P.cameraPod.updateMatrixWorld(true);
-    const d = Math.max(0.1, v.target.distanceTo(P.camera.getWorldPosition(V)));   // from the lens, not the hull
+    const d = Math.max(0.1, TR.distanceTo(P.camera.getWorldPosition(V)));   // from the lens, not the hull
     const want = st.mode === 'survey' ? 60 : zoomFov(d, st.lookR, P.camera.aspect || 1.25, { margin: 1.3, min: 8, max: 70 });
     v.fov += (want - v.fov) * (1 - Math.exp(-dt * 1.5));
     if (st.mode !== 'survey') v.fov = Math.max(v.fov, want);   // never tighter than the colony
@@ -275,7 +300,7 @@ export function createROVs(THREE, o = {}) {
     // lights: aim at the look point, a warm flicker
     for (let j = 0; j < v.lights.length; j++) {
       const l = v.lights[j], T = P.lightTargets[j];
-      loc.copy(v.target); g.worldToLocal(loc);
+      loc.copy(TR); g.worldToLocal(loc);
       T.position.lerp(loc, 1 - Math.exp(-dt * 3));
       const f = v.flick, k = 1 + 0.03 * Math.sin(t * 7.3 + f[j]) * Math.sin(t * 2.1 + f[2]) + 0.012 * Math.sin(t * 31 + f[j] * 3) + (Math.sin(t * 0.37 + f[0]) > 0.995 ? -0.25 : 0);
       l.intensity = l.userData.base * k;
@@ -307,7 +332,7 @@ export function createROVs(THREE, o = {}) {
     // silt: the vertical jets on rock close under the vehicle
     if (st.thrust.up > 0.25 && (t * 10 | 0) % 2 === 0) {
       const h = trace(sdf, st.p, [0, -1, 0], 2.2);
-      if (h < 2.2) wash.emit([st.p[0], st.p[1] - h + 0.1, st.p[2]], [0, 0.05, 0], 1, 1);
+      if (h < 2.2) wash.emit([st.p[0] - O[0], st.p[1] - h + 0.1, st.p[2] - O[1]], [0, 0.05, 0], 1, 1);
     }
     // LEDs
     for (const L of P.leds) {
@@ -320,6 +345,7 @@ export function createROVs(THREE, o = {}) {
     P.arm.wrist.rotation.x += ((insp ? Math.sin(t * 0.4) * 0.6 : 0) - P.arm.wrist.rotation.x) * (1 - Math.exp(-dt));
     P.arm.elbow.rotation.z += ((insp ? 2.1 : 2.55) - P.arm.elbow.rotation.z) * (1 - Math.exp(-dt * 0.5));
     // tether: the top end follows the vehicle slowly (ship drift)
+    if (!v.tether) return;
     const sh = v.ship, e = 1 - Math.exp(-dt / 40);
     sh[0] += (st.p[0] + v.shipOff[0] - sh[0]) * e; sh[2] += (st.p[2] + v.shipOff[1] - sh[2]) * e;
     P.tetherPoint.getWorldPosition(V);
@@ -335,7 +361,8 @@ export function createROVs(THREE, o = {}) {
     clock = t;
     if (reef) coralF.sync(reef, 4000);      // new coral particles into the ROV field
     const n = Math.max(1, Math.ceil(dt / (1 / 30))), h = dt / n;
-    for (let s = 0; s < n; s++) {
+    // external states (the squad) are stepped by their owner
+    if (!external) for (let s = 0; s < n; s++) {
       for (const v of vehicles) v.pilot.step(h, vehicles.filter(w => w !== v).map(w => w.pilot.state.p));
     }
     for (const v of vehicles) pose(v, dt, t);
@@ -364,8 +391,9 @@ export function createROVs(THREE, o = {}) {
 
   function dispose() {
     for (const v of vehicles) {
-      if (scene) { scene.remove(v.group); scene.remove(v.tmesh); }
-      v.parts.dispose(); v.tmesh.geometry.dispose();
+      if (v.group.parent) v.group.parent.remove(v.group);
+      if (v.tmesh) { if (v.tmesh.parent) v.tmesh.parent.remove(v.tmesh); v.tmesh.geometry.dispose(); }
+      v.parts.dispose();
     }
     if (scene) scene.remove(wash.points);
     wash.dispose(); braidTex.dispose(); tetherMat.dispose(); feed.dispose();

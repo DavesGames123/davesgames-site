@@ -1,21 +1,19 @@
 // ============================================================================
 //  CORAL REEF  ·  the page shell: dock, sheet, drawer, explainer (DOM only)
 // ----------------------------------------------------------------------------
-//  No three.js and no reef here, so mobile-check.mjs runs this module in
+//  No three.js and no world here, so mobile-check.mjs runs this module in
 //  jsdom at each phone viewport. main.js gives the callbacks.
 //
-//  DOCK (phone). Five one-tap buttons: #dockPreset (the next reef preset),
-//  #dockPlay (grow or pause), #dockRegrow, #dockPlant (plant mode) and
-//  #dockMenu (the sheet with all the other controls).
+//  DOCK (phone). Five one-tap buttons: #dockCam (the camera: follow, orbit,
+//  swim), #dockFeed (the next ROV on the camera feed), #dockMode (the next
+//  colour mode), #dockSeed (a new world) and #dockMenu (the sheet with all
+//  the other controls). There is no growth control: the corals grew once
+//  and are just there (CONTRACT-V4.md).
 //
 //  SHEET. In portrait the panel is a bottom sheet above the dock. The grip
 //  (#sheetGrip) drags it between half height, full height and closed
 //  (layout.js sheetSnap). In landscape the panel is a drawer at the right
 //  edge with a close button. On a desktop the panel is at the left.
-//
-//  PLANT MODE. A tap on the seabed plants a colony only in plant mode, so
-//  a tap does not fight the orbit. body.planting shows #plantBar (phone:
-//  the species chips and the last result) and a crosshair cursor.
 //
 //  FEED. #feed is the SSTV camera card of the lead ROV (the ROV package
 //  draws its canvas into #feedSlot). A tap on the card (#feedSize, a
@@ -25,17 +23,16 @@
 //  GREP MAP
 //    grep -n 'function setFeedBig'  the feed card size
 //    grep -n 'function setOpen'     open or close the panel, sheet state
-//    grep -n 'function setPlant'    plant mode on or off
-//    grep -n 'function setPlaying'  the grow and pause labels
+//    grep -n 'function setDock'     the dock labels
 //    grep -n 'function bindGrip'    the sheet grip drag
 //    grep -n 'function openAbout'   the explainer sheet
 // ============================================================================
 import { sheetSnap } from './layout.js';
 
-export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
+export function mountShell({ doc = document, phoneQ, on = {} }) {
   const $ = id => doc.getElementById(id);
   const panel = $('panel'), body = doc.body, about = $('about');
-  const st = { open: false, sheet: 'closed', plant: false, playing: true, about: false, feedBig: false };
+  const st = { open: false, sheet: 'closed', about: false, feedBig: false };
   const call = (k, ...a) => { if (typeof on[k] === 'function') on[k](...a); };
 
   // sheet: 'half' | 'full' (phone portrait). A closed panel is 'closed'.
@@ -51,26 +48,10 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
     call('open', st.open);
   }
 
-  function setPlant(v) {
-    st.plant = !!v;
-    body.classList.toggle('planting', st.plant);
-    for (const id of ['dockPlant', 'tPlant']) {
-      const b = $(id); if (!b) continue;
-      b.classList.toggle('on', st.plant); b.setAttribute('aria-pressed', String(st.plant));
-    }
-    const bar = $('plantBar'); if (bar) bar.hidden = !st.plant;
-    call('plant', st.plant);
-  }
-
-  function setPlaying(p) {
-    st.playing = !!p;
-    const b = $('bPlay'), d = $('dockPlay');
-    if (b) { b.textContent = p ? '❚❚ Pause' : '▶ Grow'; b.classList.toggle('on', st.playing); }
-    if (d) {
-      d.innerHTML = p ? '<i>❚❚</i><span>Pause</span>' : '<i>▶</i><span>Grow</span>';
-      d.setAttribute('aria-label', p ? 'Pause the growth' : 'Grow');
-      d.classList.toggle('on', !st.playing);
-    }
+  // The dock labels: { cam, feed, mode } (text of each button)
+  function setDock(o = {}) {
+    const put = (id, t) => { const e = $(id); if (e && t != null) e.textContent = t; };
+    put('dockCamName', o.cam); put('dockFeedName', o.feed); put('dockModeName', o.mode);
   }
 
   function setFeedBig(v) {
@@ -80,8 +61,6 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
     if (b) { b.setAttribute('aria-pressed', String(st.feedBig)); b.setAttribute('aria-label', st.feedBig ? 'Make the camera feed smaller' : 'Make the camera feed larger'); }
     call('feed', st.feedBig);
   }
-
-  function setPresetLabel(text) { const s = $('dockPresetName'); if (s) s.textContent = text; }
 
   // The grip: the sheet follows the finger down, then snaps on release.
   function bindGrip() {
@@ -123,12 +102,10 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
   click('gear', () => setOpen(true));
   click('panelClose', () => setOpen(false));
   click('dockMenu', () => setOpen(!st.open));
-  click('dockPreset', () => call('preset'));
-  click('dockPlay', () => call('play'));
-  click('dockRegrow', () => call('regrow'));
-  click('dockPlant', () => { setPlant(!st.plant); if (st.plant && phoneQ.matches) setOpen(false); });
-  click('tPlant', () => setPlant(!st.plant));
-  click('plantDone', () => setPlant(false));
+  click('dockCam', () => call('cam'));
+  click('dockFeed', () => call('feedNext'));
+  click('dockMode', () => call('mode'));
+  click('dockSeed', () => call('seed'));
   click('feedSize', () => setFeedBig(!st.feedBig));
   click('aboutOpen', openAbout);
   click('aboutClose', closeAbout);
@@ -138,16 +115,13 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
   });
   bindGrip();
 
-  // The dlaf parameters: an advanced section, closed on a phone.
-  const adv = $('adv'); if (adv) adv.open = !phoneQ.matches;
   setOpen(!phoneQ.matches);
-  setPlant(plant);
-  const onQ = e => { setOpen(!e.matches); if (adv) adv.open = !e.matches; };
+  const onQ = e => { setOpen(!e.matches); };
   if (phoneQ.addEventListener) phoneQ.addEventListener('change', onQ);
   else if (phoneQ.addListener) phoneQ.addListener(onQ);
 
   return {
-    st, setOpen, setPlant, setPlaying, setPresetLabel, setFeedBig, openAbout, closeAbout,
-    get open() { return st.open; }, get plant() { return st.plant; }, get sheet() { return st.sheet; },
+    st, setOpen, setDock, setFeedBig, openAbout, closeAbout,
+    get open() { return st.open; }, get sheet() { return st.sheet; },
   };
 }

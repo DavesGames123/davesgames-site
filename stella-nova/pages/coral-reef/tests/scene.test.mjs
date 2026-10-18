@@ -16,12 +16,15 @@
 //                   it needs jsdom (JSDOM_DIR or NODE_PATH), else it skips
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
+//    squad saver .. saver.js squadPlan and squadShotPose: seeded, calm, few
+//                   wide shots; the subject in the clear band (16:9, 9:16)
 //  Retired (2026-10-18, CONTRACT-V4.md: "we shouldn't grow corals, they
 //  should just grow once"): the dive plan of one growing colony, the
 //  growth meter and the single-colony saver reef. The squad saver tests
 //  come with the v4 page.
 // ============================================================================
 import * as SH from '../shaders.js';
+import { squadPlan, squadShotPose, frameFit, projectSphere } from '../saver.js';
 import { checkPrograms } from '../glsl-check.mjs';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -106,6 +109,32 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
     ok(mono && jump < 0.02, `fade R ${R}: falls smoothly, no step (largest step ${f3(jump)} per 0.2% of R)`);
     ok(fadeAt(R * 1.005, R) > 0.998 && fadeAt(R * 1.295, R) < 0.002, `fade R ${R}: no edge at R or at ${FADE_K} R (the slope is 0 at both ends)`);
   }
+}
+
+// ── the squad saver (v4) ─────────────────────────────────────────────────────
+{
+  const a = squadPlan(42, 40), b = squadPlan(42, 40), c = squadPlan(43, 40);
+  ok(JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c), 'squad saver: one seed gives one plan, another seed another');
+  const wide = a.filter(s => s.kind === 'wide').length, twice = a.filter((s, i) => i && s.kind === a[i - 1].kind).length;
+  ok(twice === 0 && a.every(s => s.hold >= 8 && s.hold <= 14 && Math.abs(s.spin) <= 0.05) && wide > 0 && wide / a.length <= 0.25, 'squad saver: no kind twice in a row, 8 to 14 s holds, calm turns, at most one wide shot in four', `${wide}/${a.length} wide`);
+  // each shot keeps its subject in the clear band of the plate (16:9, 9:16)
+  const subjects = [
+    { lead: [2, -10, 3], yaw: 0.7, c: [0, -10.3, 1], r: 4.5, colony: null },
+    { lead: [2, -10, 3], yaw: 2.2, c: [0.5, -10, 2], r: 3, colony: { center: [6, -11, 5], radius: 2.4 } },
+  ];
+  let n = 0, out = 0;
+  for (const [w, h] of [[1920, 1080], [1080, 1920]]) for (const band of [{ t: 0.2 * h, b: 0.27 * h }, { t: 0.3 * h, b: 0.32 * h }]) {
+    const fit = r => frameFit({ w, h, clear: band, radius: r, fov: 40 }).dist, f0 = frameFit({ w, h, clear: band, radius: 1, fov: 40 });
+    for (const subj of subjects) for (const s0 of a.slice(0, 12)) for (const kind of [s0.kind, 'colony']) for (const ts of [0, 5, 12]) {
+      const s = Object.assign({}, s0, { kind });
+      const P = squadShotPose(s, ts, subj, fit);
+      const box = projectSphere({ w, h, fov: 40, ox: f0.ox, oy: f0.oy }, P.pos, P.tgt, P.tgt, P.r * 0.8);
+      const tol = 0.04 * h;
+      n++;
+      if (!box || box.y0 < band.t - tol || box.y1 > h - band.b + tol || box.x0 < -tol || box.x1 > w + tol) out++;
+    }
+  }
+  ok(out <= n * 0.02, 'squad saver: the shots keep the squad (or the colony) in the clear band in 16:9 and 9:16', `${out} of ${n} poses out of the band`);
 }
 
 // ── glsl ────────────────────────────────────────────────────────────────────

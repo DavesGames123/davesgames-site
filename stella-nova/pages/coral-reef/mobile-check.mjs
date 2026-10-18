@@ -11,14 +11,14 @@
 //  real main.js. jsdom has no WebGL, so scene.js gives no scene and the
 //  page runs without the reef render. The shell, the dock, the sheet, the
 //  chips, the gradient picker and the reef model run as on a phone.
-//    dock ......... five buttons with labels: preset, grow, regrow, plant, menu
+//    dock ......... five buttons with labels: camera, feed, colour mode, new
+//                   world, menu; no growth control is left (v4)
 //    sheet ........ menu opens the half sheet; the grip drags it to full,
 //                   back to half and closed; Escape closes it
-//    plant ........ plant mode on and off, the plant bar, the species chips
 //    explainer .... opens over the sheet, closes with Escape
 //    feed ......... the SSTV camera card: a tap makes it large, a second
-//                   tap or Escape small again; the dive controls (plot
-//                   radius, colonies, ROVs, SSTV mode) are in the sheet
+//                   tap or Escape small again; the squad controls (world
+//                   detail, ROVs, feed and SSTV mode) are in the sheet
 //    css .......... 44 px targets and 11 px text in the touch block,
 //                   safe-area insets, no fixed widths over the viewport
 // ============================================================================
@@ -106,25 +106,19 @@ for (const [w, h, coarse] of VIEWS) {
   const click = id => $(id).dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   ok(!$('nogl').hidden, `${tag}: no WebGL shows the message (jsdom has none)`);
 
-  // dock
+  // dock (v4: no growth controls, CONTRACT-V4.md)
   const dock = [...doc.querySelectorAll('#dock > button')];
-  ok(dock.map(b => b.id).join() === 'dockPreset,dockPlay,dockRegrow,dockPlant,dockMenu', `${tag}: the dock has preset, grow, regrow, plant, menu`, dock.map(b => b.id).join());
+  ok(dock.map(b => b.id).join() === 'dockCam,dockFeed,dockMode,dockSeed,dockMenu', `${tag}: the dock has camera, feed, colour mode, new world, menu`, dock.map(b => b.id).join());
   ok(dock.every(b => b.getAttribute('aria-label') && b.querySelector('span').textContent.trim()), `${tag}: each dock button has a label`);
   const panel = $('panel');
   ok(panel.classList.contains('open') === !phone, `${tag}: the panel is ${phone ? 'closed' : 'open'} at load`);
-  ok($('adv').open === !phone, `${tag}: the dlaf parameters are ${phone ? 'closed' : 'open'} at load`);
-  ok($('dockPlant').getAttribute('aria-pressed') === String(!coarse) && doc.body.classList.contains('planting') === !coarse, `${tag}: plant mode is ${coarse ? 'off' : 'on'} at load`);
+  ok(!$('dockPlay') && !$('dockPlant') && !$('bRegrow') && !$('sSpeed') && !$('sNut') && !$('plantBar') && !$('spParams'), `${tag}: no growth control is left (grow, plant, regrow, speed, nutrients, dlaf parameters)`);
 
-  // grow, pause, preset
-  click('dockPlay');
-  ok(/Grow/.test($('dockPlay').textContent) && /Grow/.test($('bPlay').textContent), `${tag}: the dock pauses the growth`);
-  click('dockPlay');
-  ok(/Pause/.test($('dockPlay').textContent), `${tag}: the dock starts the growth again`);
-  const p0 = $('dockPresetName').textContent;
-  click('dockPreset');
-  ok($('dockPresetName').textContent !== p0 && doc.querySelector('#presets button.on').textContent.startsWith($('dockPresetName').textContent), `${tag}: the dock preset button goes to the next preset`, `${p0} -> ${$('dockPresetName').textContent}`);
-  click('dockRegrow');
-  ok(/Pause/.test($('dockPlay').textContent), `${tag}: regrow keeps the growth on`);
+  // colour mode
+  const m0 = $('dockModeName').textContent;
+  click('dockMode');
+  const on = doc.querySelector('#modes button.on');
+  ok($('dockModeName').textContent !== m0 && on && on.textContent === $('dockModeName').textContent, `${tag}: the dock colour button goes to the next colour mode`, `${m0} -> ${$('dockModeName').textContent}`);
 
   // the sheet
   if (phone) {
@@ -143,25 +137,10 @@ for (const [w, h, coarse] of VIEWS) {
     click('dockMenu');
     win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
     ok(!panel.classList.contains('open'), `${tag}: Escape closes the sheet`);
-    for (const g of ['dive', 'colour', 'water', 'reef', 'species']) ok(panel.querySelector(`.grp[data-grp=${g}]`), `${tag}: the sheet holds the ${g} group`);
-    ok(['gradPick', 'modes', 'sDir', 'sCur', 'sNut', 'sTemp', 'sCaust', 'spParams', 'sR', 'quality', 'rovCount', 'sstvMode', 'tBeam', 'tFeed'].every(id => panel.contains($(id))), `${tag}: gradient, colour by, current, nutrients, temperature, caustics, plot radius, colonies, ROVs, SSTV mode, beams, feed and dlaf parameters are in the sheet`);
-    ok($('quality').querySelectorAll('button').length === 3 && $('rovCount').querySelectorAll('button').length === 2 && $('sstvMode').querySelectorAll('button').length === 2, `${tag}: colony, ROV and SSTV mode chips`);
-    ok(panel.querySelectorAll('#spParams input[type=range]').length === 5 && $('adv').contains($('spParams')), `${tag}: the five dlaf parameters are in the advanced section`);
+    for (const g of ['squad', 'feed', 'colour', 'water']) ok(panel.querySelector(`.grp[data-grp=${g}]`), `${tag}: the sheet holds the ${g} group`);
+    ok(['gradPick', 'modes', 'sDir', 'sCur', 'sTemp', 'sCaust', 'quality', 'rovCount', 'feedMode', 'sstvMode', 'tBeam', 'tFeed', 'bSeed', 'bLead'].every(id => panel.contains($(id))), `${tag}: gradient, colour by, current, temperature, caustics, world detail, ROVs, feed and SSTV modes, beams, feed, new world and follow the lead are in the sheet`);
+    ok($('quality').querySelectorAll('button').length === 4 && $('rovCount').querySelectorAll('button').length === 3 && $('sstvMode').querySelectorAll('button').length === 2, `${tag}: detail, ROV and SSTV mode chips`);
   }
-
-  // plant mode
-  const wasPlant = doc.body.classList.contains('planting');
-  if (wasPlant) click('dockPlant');
-  if (phone) click('dockMenu');
-  click('dockPlant');
-  ok(doc.body.classList.contains('planting') && !$('plantBar').hidden && $('tPlant').classList.contains('on'), `${tag}: the dock turns plant mode on, with the plant bar`);
-  if (phone) ok(!panel.classList.contains('open'), `${tag}: plant mode closes the sheet, so the seabed is clear`);
-  const quick = [...$('plantQuick').querySelectorAll('button')];
-  ok(quick.length === 5, `${tag}: the plant bar has the five species`, quick.length);
-  quick[1].dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-  ok(doc.querySelector('#plant button.on').dataset.id === quick[1].dataset.id && /sea fan/i.test($('plantMsg').textContent), `${tag}: a plant bar chip picks the species everywhere`, $('plantMsg').textContent);
-  click('plantDone');
-  ok(!doc.body.classList.contains('planting') && $('plantBar').hidden && $('dockPlant').getAttribute('aria-pressed') === 'false', `${tag}: Done ends plant mode`);
 
   // the feed card (no scene in jsdom: show it by hand to test the toggle)
   $('feed').hidden = false;
@@ -195,10 +174,10 @@ for (const [w, h, coarse] of VIEWS) {
   const touch = block('@media (pointer:coarse), (max-width:768px)');
   const phoneB = block('@media (max-width:768px), (max-height:500px) and (pointer:coarse)');
   ok(touch && phoneB, 'css: the touch block and the phone block are there');
-  for (const sel of ['.chips button', '#adv summary', '.linkbtn', '.row{min-height:44px', '#aboutClose{width:44px;height:44px', '#panelClose{width:44px;height:44px']) ok(touch.includes(sel), `css: the touch block sizes ${sel.split('{')[0]} to 44 px`);
+  for (const sel of ['.chips button', '.linkbtn', '.row{min-height:44px', '#aboutClose{width:44px;height:44px', '#panelClose{width:44px;height:44px']) ok(touch.includes(sel), `css: the touch block sizes ${sel.split('{')[0]} to 44 px`);
   ok(/::-webkit-slider-thumb\{[^}]*width:26px;height:26px/.test(touch) && /input\[type=range\][^{]*\{[^}]*height:44px/.test(touch), 'css: thumb sliders, 26 px thumbs on a 44 px track');
   ok(/#feed\{[^}]*width:150px/.test(phoneB) && /#feed\.big\{[^}]*width:calc\(100vw - 16px\)/.test(phoneB), 'css: the phone feed card is small (150 px) and full width when large');
-  ok(/#dock > button\{[^}]*height:48px/.test(phoneB) && /#sheetGrip\{[^}]*height:44px/.test(phoneB) && /#plantDone\{[^}]*min-height:44px/.test(phoneB), 'css: dock buttons 48 px, grip and Done 44 px');
+  ok(/#dock > button\{[^}]*height:48px/.test(phoneB) && /#sheetGrip\{[^}]*height:44px/.test(phoneB), 'css: dock buttons 48 px, grip 44 px');
   ok(['safe-area-inset-bottom', 'safe-area-inset-left', 'safe-area-inset-right', 'safe-area-inset-top'].every(s => phoneB.includes(s)), 'css: the phone block uses all four safe-area insets');
   const small = [...css.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?([\d.]+)rem/g)].map(m => +m[1]).filter(v => v < 0.6875);
   ok(small.length === 0, 'css: no text under 11 px (0.6875rem)', small.join());

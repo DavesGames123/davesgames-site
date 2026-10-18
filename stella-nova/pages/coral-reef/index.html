@@ -7,19 +7,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="An ROV dive on a growing coral reef: in dark deep water, work-class ROVs light craggy rock arches and canyons while dozens of coral colonies grow by 3D diffusion-limited aggregation (a port of fogleman/dlaf), compete and fuse, with fine SDF branches, dense polyps, broken caustics and a live SSTV camera feed.">
+<meta name="description" content="An endless ROV dive: a squad of work-class ROVs explores an infinite, procedurally generated seafloor of seamounts, canyons, arches and ridges in dark deep water, lighting fully grown coral colonies (3D diffusion-limited aggregation, a port of fogleman/dlaf) with their lamps, with a live slow-scan TV camera feed.">
 <title>Coral Reef Growth — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   CORAL REEF GROWTH  ·  page shell (v3: the ROV dive)
+   CORAL REEF  ·  page shell (v4: the infinite seafloor and the ROV squad)
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. rock/ (ROCK) makes the craggy reef rock of one
-   circular plot. reef.js and coral-sdf.js (CORAL) grow the colonies on it
-   by 3D DLA and mesh them as SDF surfaces with polyps. rov/ (ROV) flies
-   the vehicles and sends the lead camera over a simulated SSTV link.
-   water.js, scene.js and shaders.js (SCENE) draw the dark water, the lamp
-   beams, the marine snow and the broken caustics. saver.js plans the
-   screensaver dives. main.js binds it all and runs the loop.
+   Static markup only. world/ makes the endless seafloor in 32 m chunks
+   (seamounts, canyons, arches, sand plains) in workers; reef.js and
+   coral-sdf.js grow the corals of each chunk ONCE, to the end, and the
+   page shows them grown. rov/squad.js flies the ROV squad that explores
+   it for ever; rov/ draws the vehicles and the SSTV camera feed.
+   water.js, scene.js and shaders.js draw the dark water, the lamp beams,
+   the marine snow and the caustics. saver.js plans the screensaver shots.
+   main.js binds it all and runs the loop. CONTRACT-V4.md is the spec.
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
@@ -27,24 +28,21 @@
      3. importmap for three r160, then main.js as a module
 
    LAYOUT  (# marks an element id that main.js binds)
-     desktop ... #panel at the left, #view fills the frame, #read at the
-                 upper right, #legend under it, #feed (the SSTV card) at
-                 the lower right, #about a drawer at the right
-     phone ..... #dock at the base: preset, grow or pause, regrow, plant
-                 mode and menu. Menu opens #panel as a bottom sheet
+     desktop ... #panel at the left, #view fills the frame, #read (the
+                 squad stats) at the upper right, #legend under it, #feed
+                 (the SSTV card) at the lower right, #about a drawer
+     phone ..... #dock at the base: camera, next ROV feed, colour mode, new
+                 world and menu. Menu opens #panel as a bottom sheet
                  (portrait) or a drawer (landscape). #feed is a small card
                  above the dock at the right: a tap makes it large.
-     camera .... #camBar: Orbit, Swim, Follow ROV and Tours (camera.js,
-                 input.js); #tourList the tour menu. On #feed, #feedCycle
-                 (a tap) shows the next ROV, a long press or #feedSize
-                 (the corner button) makes the card large.
-                 shell.js binds the dock, the sheet, the feed card and the
-                 explainer; layout.js has the layout logic (no DOM)
+     camera .... #camBar: Follow ROV, Orbit, Swim and Tours (camera.js,
+                 input.js); #tourList the tour menu (the canyons and arches
+                 near the eye). On #feed, #feedCycle (a tap) shows the next
+                 ROV, a long press or #feedSize makes the card large.
 
    GREP MAP  (main.js)
-     grep -n 'function buildWorld'   rock, reef, ROVs for a plot
-     grep -n 'function syncCoral'    new particles to the mesher and the GPU
-     grep -n 'function clearArea'    the parts of the canvas that overlays cover
+     grep -n 'function buildWorld'   the streamer, the squad and the ROVs
+     grep -n 'const view = {'        the streamer view: chunks to scene.js
      grep -n 'function frame'        the loop
      grep -n 'window.snSaver'        the screensaver hook
   ═══════════════════════════════════════════════════════════════════════════
@@ -61,24 +59,24 @@
   <div class="pagetitle">Coral Reef Growth</div>
 </div>
 
-<canvas id="view" aria-label="ROVs light a coral reef that grows in dark water"></canvas>
-<div id="nogl" hidden>WebGL is not available in this browser, so the reef cannot render.</div>
+<canvas id="view" aria-label="A squad of ROVs explores an endless dark seafloor with coral colonies"></canvas>
+<div id="nogl" hidden>WebGL is not available in this browser, so the seafloor cannot render.</div>
 <button id="gear" type="button" aria-label="Open controls">☰</button>
 
 <div id="read" aria-live="off">
-  <div><span>Particles</span><b id="rPolyps">0</b></div>
-  <div><span>Colonies</span><b id="rCol">0</b></div>
-  <div><span>Tallest colony</span><b id="rH">0</b></div>
-  <div><span>Contacts</span><b id="rContact">0</b></div>
-  <div><span>Particles / s</span><b id="rRate">0</b></div>
+  <div><span>Explored</span><b id="rDist">0 m</b></div>
+  <div><span>Depth</span><b id="rDepth">0 m</b></div>
+  <div><span>Colonies seen</span><b id="rCol">0</b></div>
+  <div><span>Chunks</span><b id="rChunks">0</b></div>
+  <div><span>Task</span><b id="rTask">—</b></div>
   <div id="rState" class="state"></div>
 </div>
-<div id="hint">Drag to turn round the rock · pinch or scroll to zoom to it · double tap to fly there · Swim (F) to go through the canyons · Plant mode, then tap the rock to plant a colony</div>
+<div id="hint">The ROV squad explores on its own · Orbit, Swim or Tours to look round yourself · Follow ROV to go back to them</div>
 <div id="camBar" role="toolbar" aria-label="Camera">
-  <button type="button" data-cam="orbit" class="on" aria-pressed="true" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i>⟲</i><span>Orbit</span></button>
+  <button type="button" data-cam="follow" class="on" aria-pressed="true" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i>◎</i><span id="camFollowLbl">Follow ROV</span></button>
+  <button type="button" data-cam="orbit" aria-pressed="false" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i>⟲</i><span>Orbit</span></button>
   <button type="button" data-cam="swim" aria-pressed="false" title="Swim (F): WASD to move, E and Q up and down, Shift fast, click to look with the mouse"><i>≈</i><span>Swim</span></button>
-  <button type="button" data-cam="follow" aria-pressed="false" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i>◎</i><span id="camFollowLbl">Follow ROV</span></button>
-  <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches"><i>➶</i><span>Tours</span></button>
+  <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches near you"><i>➶</i><span>Tours</span></button>
 </div>
 <div id="tourList" hidden role="menu" aria-label="Tours"></div>
 <div id="feed" hidden>
@@ -87,45 +85,32 @@
   <div id="feedSlot"></div>
 </div>
 <div id="tapMark" aria-hidden="true"></div>
-<div id="plantBar" hidden>
-  <div class="pb-head"><span id="plantMsg">Plant mode: tap open sand or rock</span><button id="plantDone" type="button">Done</button></div>
-  <div class="chips sp" id="plantQuick"></div>
-</div>
 <div id="legend"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
 
 <aside id="panel" class="open" aria-label="Controls">
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
-  <h1 class="ptitle">Coral reef growth</h1>
-  <p class="lede">An ROV dive in dark water. Marine snow falls and drifts with the current. A flake that touches a coral sticks: the tips meet the snow first, so the tips grow. Neighbour colonies compete for the same snow and fuse where they meet. You can swim through the reef yourself; the ROV camera comes up as live video or over a slow-scan TV link.</p>
+  <h1 class="ptitle">Coral reef dive</h1>
+  <p class="lede">A squad of ROVs explores an endless seafloor in the dark: seamounts, canyons, arches and sand plains. The corals grew once, long ago, by diffusion-limited aggregation; they are just there. The ROVs pick unexplored ground, follow canyons, pass under arches and stop to light up big colonies. Look round yourself any time.</p>
 
-  <section class="grp" data-grp="reef">
-    <div class="sec-label">Reef</div>
-    <div class="chips" id="presets"></div>
-    <div class="grid3 runrow">
-      <button id="bPlay" type="button" class="on">❚❚ Pause</button>
-      <button id="bRegrow" type="button">↻ Regrow</button>
-      <button id="bSeed" type="button">⚄ New seed</button>
+  <section class="grp" data-grp="squad">
+    <div class="sec-label">Squad</div>
+    <div class="chips" id="rovCount"></div>
+    <div class="grid2 runrow">
+      <button id="bSeed" type="button">⚄ New world</button>
+      <button id="bLead" type="button">◎ Follow the lead</button>
     </div>
-    <div class="row"><label for="sSpeed">Growth speed</label><input type="range" id="sSpeed" min="0.1" max="4" step="0.05" value="1"><span class="val" id="vSpeed"></span></div>
-    <div class="sec-label">Plant a colony</div>
-    <div class="chips sp" id="plant"></div>
-    <button class="tog wide" id="tPlant" type="button" aria-pressed="false">Plant mode</button>
-    <p class="note">In plant mode, tap the seabed to plant the chosen species there. Out of plant mode, a tap only moves the view.</p>
+    <div class="sec-label sub">World detail</div>
+    <div class="chips" id="quality"></div>
+    <p class="note" id="worldNote">The world streams in round the camera in 32 m chunks. The rock near you is finest; the corals of a chunk show when they are all there.</p>
   </section>
 
-  <section class="grp" data-grp="dive">
-    <div class="sec-label">Dive</div>
-    <div class="row"><label for="sR">Reef plot radius</label><input type="range" id="sR" min="20" max="45" step="1" value="30"><span class="val" id="vR"></span></div>
-    <div class="sec-label sub">Colonies</div>
-    <div class="chips" id="quality"></div>
-    <div class="sec-label sub">ROVs</div>
-    <div class="chips" id="rovCount"></div>
-    <div class="sec-label sub">Camera feed</div>
+  <section class="grp" data-grp="feed">
+    <div class="sec-label">Camera feed</div>
     <div class="chips" id="feedMode"></div>
     <div class="sec-label sub">Slow-scan mode</div>
     <div class="chips" id="sstvMode"></div>
-    <p class="note">The lead ROV camera goes over a simulated slow-scan TV radio link, so the picture comes in line by line, with noise and a little slant.</p>
+    <p class="note">The lead ROV camera comes up over a simulated slow-scan TV link (the low data rate of an acoustic link), so the picture comes in line by line, with noise and a little slant.</p>
   </section>
 
   <section class="grp" data-grp="colour">
@@ -139,10 +124,9 @@
     <div class="sec-label">Water</div>
     <div class="row"><label for="sDir">Current direction</label><input type="range" id="sDir" min="0" max="359" step="1" value="20"><span class="val" id="vDir"></span></div>
     <div class="row"><label for="sCur">Current strength</label><input type="range" id="sCur" min="0" max="1.5" step="0.01" value="0.5"><span class="val" id="vCur"></span></div>
-    <div class="row"><label for="sNut">Nutrient rate</label><input type="range" id="sNut" min="0.1" max="3" step="0.05" value="1"><span class="val" id="vNut"></span></div>
     <div class="row"><label for="sTemp">Water temperature</label><input type="range" id="sTemp" min="24" max="33" step="0.1" value="27"><span class="val" id="vTemp"></span></div>
-    <p class="note" id="bleachNote">Above about 30 °C the corals bleach: they lose their colour and stop growing.</p>
-    <div class="row"><label for="sCaust">Caustics</label><input type="range" id="sCaust" min="0" max="1.5" step="0.05" value="0.7"><span class="val" id="vCaust"></span></div>
+    <p class="note" id="bleachNote">Above about 30 °C the corals bleach: they lose their colour.</p>
+    <div class="row"><label for="sCaust">Caustics</label><input type="range" id="sCaust" min="0" max="1.5" step="0.05" value="0.5"><span class="val" id="vCaust"></span></div>
     <div class="grid2">
       <button class="tog on" id="tBeam" type="button">Lamp beams</button>
       <button class="tog on" id="tSnow" type="button">Marine snow</button>
@@ -153,53 +137,33 @@
     </div>
   </section>
 
-  <section class="grp" data-grp="species">
-    <details id="adv">
-    <summary class="sec-label">Advanced: species (dlaf parameters)</summary>
-    <div class="chips sp" id="spPick"></div>
-    <p class="note" id="spNote"></p>
-    <div id="spParams"></div>
-    <button id="spReset" type="button" class="wide">Reset this species</button>
-    </details>
-  </section>
-
-  <div class="credit">Growth engine: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). <button id="aboutOpen" type="button" class="linkbtn">How it works and credits</button></div>
+  <div class="credit">Coral growth: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). <button id="aboutOpen" type="button" class="linkbtn">How it works and credits</button></div>
 </aside>
 
 <aside id="about" aria-label="How it works" hidden>
   <div class="ab-head"><span>How it works</span><button id="aboutClose" type="button" aria-label="Close">✕</button></div>
+  <h2>An endless seafloor</h2>
+  <p>The seafloor has no edge. One seeded field makes it everywhere: an abyssal plain about 40 m down with sand in the low ground, seamounts and flat-topped guyots that rise 35 to 60 m, ridges, terraced plateaus and drop-off cliffs. Canyons cut into the slopes with vertical, undercut walls and a sand floor. Natural arches, pinnacles with hoodoo caps, boulders and scree sit on it, and the rock has strata ledges and craggy joints. The same seed always gives the same world.</p>
+  <p>The page keeps only the part near the camera, in chunks of 32 m. Workers mesh each chunk with surface nets on one global lattice, so two chunks meet with the same vertices and no seam. The rock near you is finest; far chunks are coarser and go into the black water.</p>
   <h2>Why coral looks like DLA</h2>
-  <p>Many corals feed on food that drifts in the water. Near the colony the water is slow, so the food reaches the coral mostly by diffusion, a random walk. A random walker that comes near a branched shape almost always touches a tip first: the gaps between branches are screened. So tips catch more food, grow faster, and stay ahead. That is diffusion-limited aggregation (DLA), and it is why a nutrient-limited coral grows branches.</p>
-  <p>A current changes the picture. The snow comes from one side, so the side that faces the current gets more and the colony grows upstream. Calm, food-rich water gives compact forms; thin food gives thin branches. Kaandorp and co-workers showed this with DLA in a flow (Kaandorp, Lowe, Frenkel and Sloot, Phys. Rev. Lett. 77, 2328, 1996), and grew whole colonies with an accretive model (Kaandorp and Kübler, <i>The Algorithmic Beauty of Seaweeds, Sponges and Corals</i>, 2001).</p>
+  <p>Many corals feed on food that drifts in the water. Near the colony the water is slow, so the food reaches the coral mostly by diffusion, a random walk. A random walker that comes near a branched shape almost always touches a tip first: the gaps between branches are screened. So tips catch more food, grow faster, and stay ahead. That is diffusion-limited aggregation (DLA), and it is why a nutrient-limited coral grows branches (Kaandorp, Lowe, Frenkel and Sloot, Phys. Rev. Lett. 77, 2328, 1996; Kaandorp and Kübler, <i>The Algorithmic Beauty of Seaweeds, Sponges and Corals</i>, 2001).</p>
   <canvas id="diag" aria-label="A walker falls and joins a tip"></canvas>
   <p class="cap">The real dlaf walk of one particle. Far from the cluster it jumps by its distance to the cluster, then it steps until it is near enough to join. It nearly always joins a tip.</p>
-  <h2>Which dlaf hook makes which coral</h2>
-  <table class="hooks">
-    <tr><th>Staghorn</th><td><code>shouldJoin</code> refuses a join on a busy particle or from below, so tips grow up. Low <code>AttractionDistance</code>, high <code>Stickiness</code>.</td></tr>
-    <tr><th>Sea fan</th><td><code>motionVector</code> and <code>randomStartingPosition</code> keep the walk in a vertical plane across the current.</td></tr>
-    <tr><th>Table</th><td><code>shouldJoin</code> lets a short stalk grow up, then only horizontal joins stick; <code>placeParticle</code> flattens the plate.</td></tr>
-    <tr><th>Brain</th><td>High <code>Stubbornness</code>; <code>placeParticle</code> lays each polyp on a compact dome (accretive growth).</td></tr>
-    <tr><th>Finger</th><td>Low <code>Stickiness</code> and a slow fall: walkers creep in, so the lobes get thick.</td></tr>
-    <tr><th>All</th><td><code>randomStartingPosition</code> puts the snow on a disc above the colony, upstream; <code>motionVector</code> adds the fall and the current; <code>shouldReset</code> starts again at the seabed or out of the reef box.</td></tr>
-  </table>
-  <h2>From particles to a living surface</h2>
-  <p>Each joined particle is a round cone from its parent, as thick as the branch it feeds: the radius grows with the number of particles above it (the pipe rule), so trunks are thick and tips are thin and round. A smooth minimum blends the cones into one signed distance field. The field lives in small bricks, and only the bricks near a new particle are recomputed and meshed again (surface nets, in a worker), so the coral grows live. Each species adds its own shape term: a web in the plane of a sea fan, a flat plate for a table coral, meandering valleys on a brain coral. Polyps sit on the surface, more at the tips, and open and close in the current.</p>
-  <h2>The rock</h2>
-  <p>The reef rock is a seeded signed distance field: winding canyons with undercut walls, bridges and free arches, pinnacles, caves, ledges and scree, with strata and crag detail. It is meshed with surface nets and textured with scanned CC0 stone. The colonies seed on exposed rock and grow on it; a walker that touches the rock near a colony base can start a new root.</p>
-  <h2>The dive</h2>
-  <p>The plot is a circle in deep water. Past its edge the rock and the sand go into the black over 30% of the radius. The light comes from the ROV lamps: each lamp has a cone in the turbid water, the lead lamp casts shadows, and the marine snow shows in the beams. A faint blue light comes down from the surface, with caustics: the sun refracted by a random sea of 28 waves (swell, wind sea and chop), so the net of light is irregular, and it breaks into patches that come and go.</p>
-  <p>The camera card shows the lead ROV camera sent over a slow-scan TV link with the encoder and decoder of the SSTV page of this site: Robot 36 or Martin M1, with noise, fades and a little slant.</p>
+  <h2>Corals that grew long ago</h2>
+  <p>Each chunk gets its colonies from its habitat: more on the shallow seamount tops and ridges, few on the deep sand plains. Sites are exposed rock; the species comes from the site (tables and staghorn on open tops, sea fans on walls across the current, brain and finger corals in shelter). A worker grows every colony of the chunk to its end with the shared DLA model, so neighbours compete and fuse, then meshes them as signed distance surfaces. The chunk shows its corals only when all of them are done: they do not grow in front of you, they are just there.</p>
+  <h2>The ROV squad</h2>
+  <p>Two to four hybrid ROVs explore for ever. The lead picks unexplored ground, follows canyons and ridges, passes under arches and stops to circle big colonies; the others keep a loose formation, or follow its trail where the water is narrow. Every path keeps clear of the rock and the coral. They carry no surface cable: a hair-thin fibre-optic micro-tether does not show on camera, and the low data rate of the link is why the camera feed comes as slow-scan pictures (the SSTV encoder and decoder of this site: Robot 36 or Martin M1).</p>
   <h2>Colour by</h2>
-  <p>Age is the order of joining, so the growing front is at the hot end of the gradient and the colours move while the reef grows. Depth counts the hops from the seed. Flow is the size of the subtree that a polyp feeds. Light is an estimate from the height and the number of close neighbours.</p>
+  <p>Age is the order of joining in each chunk. Depth counts the hops from the seed. Height is over the colony base. Flow is the size of the subtree that a polyp feeds. Light is an estimate from the height and the number of close neighbours.</p>
   <h2>Credits</h2>
-  <p class="cr">Growth engine: a JavaScript port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a>, Copyright (C) 2019 Michael Fogleman, MIT licence. The coral hooks, the reef, the shaders and the page are our own code. Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r160, MIT. Stone and sand textures: CC0 scans (see CREDITS.txt). Ideas: Kaandorp et al. 1996; Kaandorp and Kübler 2001; Quilez (round cone distance, smooth minimum); the mesh-area caustics of our photon caustics page. Full text in CREDITS.txt next to this page.</p>
+  <p class="cr">Growth engine: a JavaScript port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a>, Copyright (C) 2019 Michael Fogleman, MIT licence. The world, the coral hooks, the squad, the shaders and the page are our own code. Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r160, MIT. Stone and sand textures: CC0 scans (see CREDITS.txt). Ideas: Kaandorp et al. 1996; Kaandorp and Kübler 2001; Quilez (round cone and ellipsoid distance, smooth minimum); the mesh-area caustics of our photon caustics page. Full text in CREDITS.txt next to this page.</p>
 </aside>
 
 <nav id="dock" aria-label="Controls">
-  <button id="dockPreset" type="button" aria-label="Next reef preset"><i>◎</i><span id="dockPresetName">Mixed</span></button>
-  <button id="dockPlay" type="button" aria-label="Pause the growth"><i>❚❚</i><span>Pause</span></button>
-  <button id="dockRegrow" type="button" aria-label="Regrow"><i>↻</i><span>Regrow</span></button>
-  <button id="dockPlant" type="button" aria-label="Plant mode" aria-pressed="false"><i>✚</i><span>Plant</span></button>
+  <button id="dockCam" type="button" aria-label="Camera: follow, orbit or swim"><i>◎</i><span id="dockCamName">Follow</span></button>
+  <button id="dockFeed" type="button" aria-label="Show the next ROV camera"><i>▣</i><span id="dockFeedName">ROV 1</span></button>
+  <button id="dockMode" type="button" aria-label="Next colour mode"><i>◐</i><span id="dockModeName">Natural</span></button>
+  <button id="dockSeed" type="button" aria-label="A new world"><i>⚄</i><span>New world</span></button>
   <button id="dockMenu" type="button" aria-label="Menu" aria-expanded="false"><i>☰</i><span>Menu</span></button>
 </nav>
 

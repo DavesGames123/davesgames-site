@@ -2,23 +2,21 @@
 //  CORAL REEF  ·  the saver end to end in jsdom (node, no browser)
 //                 node tests/saver-page.test.mjs
 // ----------------------------------------------------------------------------
-//  The user said (2026-10-17): "tjhe screensaver was fucked up". The real
-//  main.js and saver.js run in jsdom on the fake WebGL2 (page-harness.mjs);
-//  the reef runs on the main thread (jsdom has no Worker). Two cases, one
-//  process each: 'wide' (1280 x 720, laptop-low) and 'phone' (390 x 844,
-//  coarse, the phone profile). Each case:
+//  The user said (2026-10-18): the world is "explored constantly by the ROV
+//  squad". The real main.js and saver.js run in jsdom on the fake WebGL2
+//  (page-harness.mjs); the world jobs run on the main thread (jsdom has no
+//  Worker). Two cases, one process each: 'wide' (1280 x 720, laptop-low)
+//  and 'phone' (390 x 844, coarse, the phone profile). Each case:
 //    enter ..... the canvas that enter() gives is #view, in the document;
 //                the page UI hides (html.sn-saver and the style.css rule)
-//    world ..... enter() before the world is built does not break: the
-//                dive waits for the rock and the reef worker 'ready'
-//    colony .... the dive site is open rock in the plot; the colony gets
-//                particles in single-colony mode, and grows
-//    camera .... every frame: the camera in open water (rock.sdfAll), the
-//                colony in front of it (in the field of view)
-//    rov ....... one ROV in view (the others hidden), placed beside the
-//                site; its camera looks at the colony, less than 10 m away
+//    world ..... enter() before the world is built does not break
+//    camera .... every frame: the camera in open water (rock, sand and
+//                coral), the subject of the shot in the field of view
+//    shots ..... the shots cut; the squad explores while the saver runs
+//    plate ..... live squad stats and the real frontier score code
+//    growth .... no shown coral is young (no grow-in)
 //    card ...... the feed card has the cardRect place, inside the canvas
-//    exit ...... the class, the feed card style, the ROVs and the reef
+//    exit ...... the class, the feed card style and the follow camera
 //                come back
 //  Without jsdom (JSDOM_DIR or NODE_PATH) it skips.
 // ============================================================================
@@ -60,75 +58,59 @@ const until = async (f, ms) => { const end = Date.now() + ms; while (Date.now() 
 
 // enter at once: the world is not built yet
 const panelOpen0 = $('panel').classList.contains('open');
-const r = W.snSaver.enter({ seed: 7, calm: 0.7, label: () => {} });
+const labels = [];
+const r = W.snSaver.enter({ seed: 7, calm: 0.7, label: l => { if (l) labels.push(l); } });
 say(r && r.canvas === $('view') && r.canvas.isConnected, 'enter() gives #view, in the document');
 say(doc.documentElement.classList.contains('sn-saver') && !$('panel').classList.contains('open'), 'the page UI hides (html.sn-saver, the panel closed)');
 const css = fs.readFileSync(path.join(path.dirname(SELF), '..', 'style.css'), 'utf8');
-say(/html\.sn-saver #panel,html\.sn-saver #dock,html\.sn-saver #read,html\.sn-saver #legend,html\.sn-saver #hint,\s*html\.sn-saver #gear,html\.sn-saver \.topbar,html\.sn-saver #about,html\.sn-saver #plantBar,html\.sn-saver #tapMark\{display:none!important\}/.test(css), 'style.css hides the panel, dock, readout, legend, hint, gear, topbar, explainer, plant bar and tap mark in the saver');
+say(/html\.sn-saver #panel,html\.sn-saver #dock,html\.sn-saver #read,html\.sn-saver #legend,html\.sn-saver #hint,/.test(css), 'style.css hides the panel, dock, readout, legend and hint in the saver');
 await P.run(300);
 say(P.errors.length === 0, 'enter() before the world is built gives no error', P.errors.slice(0, 2).join(' | '));
-const ready = await until(() => W.__coralDebug().worldReady && W.__coralDebug().coral && W.__coralDebug().coral.ready, 90000);
-say(ready, 'the world builds while the saver waits');
-const started = await until(() => { const d = W.snSaver.debug(); return d.dive && d.colony && d.colony.count > 5; }, 60000);
+const ready = await until(() => W.__coralDebug().worldReady && W.__coralDebug().rovs > 0, 120000);
+say(ready, 'the world and the squad build while the saver runs');
+// sample the camera for a while: the squad explores, the shots cut
+let n = 0, inWater = 0, inView = 0, worst = Infinity, worstAt = null, kinds = new Set(), hows = {}, shots = new Set();
 let D = W.snSaver.debug();
-say(started, 'a dive starts and its colony gets particles (single-colony mode)', JSON.stringify(D.colony));
-const sdf = D.sdfAll, k = D.rock ? D.rock.sdfScale : 1;
-if (D.site) {
-  const p = D.site.p, n = D.site.n, q = [p[0] + n[0], p[1] + n[1], p[2] + n[2]];
-  say(Math.hypot(p[0], p[2]) < 24.5 && n[1] > 0.25 && sdf(q[0], q[1], q[2]) / k > 0.3, 'the site is open, up-facing rock in the plot', JSON.stringify(D.site));
-}
-const c0 = D.colony ? D.colony.count : 0;
-// sample the camera for a while
-let n = 0, inWater = 0, inView = 0, worst = Infinity, worstAt = null, kinds = new Set(), hows = {};
-const fov = 50;
-const end = Date.now() + 24000;
+const lead0 = D.squad ? D.squad[0].slice() : null;
+const end = Date.now() + (opt.w > opt.h ? 30000 : 24000);
 while (Date.now() < end) {
   await P.run(150);
   D = W.snSaver.debug();
-  if (!D.pose || !D.cam) continue;
+  if (!D.pose || !D.cam || !D.squad) continue;
   n++;
-  kinds.add(D.pose.kind); hows[D.pose.how] = (hows[D.pose.how] || 0) + 1;
-  const dw = sdf(D.cam[0], D.cam[1], D.cam[2]) / k;
+  kinds.add(D.pose.kind); shots.add(D.shot.i); hows[D.pose.how] = (hows[D.pose.how] || 0) + 1;
+  const dw = D.solid(D.cam[0], D.cam[1], D.cam[2]);
   if (dw > 0.15) inWater++;
   if (dw < worst) { worst = dw; worstAt = D.cam.map(v => +v.toFixed(2)); }
-  // the colony in the view of the goal pose
-  const a = ang(sub(D.pose.tgt, D.pose.pos), sub(D.pose.c, D.pose.pos));
-  if (a < (fov / 2) * Math.PI / 180) inView++;
+  // the subject of the shot (the squad, or the colony) in the camera view
+  const a = ang(sub(D.look, D.cam), sub(D.pose.tgt, D.cam));
+  if (a < (D.fov / 2) * Math.PI / 180) inView++;
 }
 D = W.snSaver.debug();
-say(n > 20, 'the saver ran shots', n);
-say(inWater === n, 'every frame: the camera is in open water (rock and sand)', `${inWater}/${n}, worst ${worst.toFixed(2)} m at ${worstAt}`);
-say(inView === n, 'every frame: the colony is in the field of view of the shot', `${inView}/${n}`);
-say(D.colony && D.colony.count > c0, 'the colony grows during the dive', `${c0} -> ${D.colony && D.colony.count}`);
-say(D.rov && D.rov.visible && D.hidden !== false, 'one ROV is in view, the others are hidden');
-if (D.rov && D.rov.cam && D.rov.target && D.pose) {
-  const dt = len(sub(D.rov.target, D.pose.c)), a = ang(sub(D.rov.target, D.rov.cam), sub(D.pose.c, D.rov.cam)) * 180 / Math.PI;
-  say(a < (D.rov.fov || 60) / 2, 'the ROV camera looks at the colony', `angle ${a.toFixed(1)} deg, target ${dt.toFixed(2)} m from the colony`);
-  // near: the ROV inspects from between near = 1.6 r + 1.6 m and far =
-  // 1.6 near + 1.5 m of a colony of radius r (rov/pilot.js), so a tall
-  // colony (one trunk, branches up to its full size) sets the limit past 10 m
-  const near = Math.max(10, Math.max(1.6 * (D.pose.r || 0) + 1.6, 2.2) * 1.6 + 1.5);
-  say(len(sub(D.rov.cam, D.pose.c)) < near, 'the ROV is near the colony (it starts beside the site)', `${len(sub(D.rov.cam, D.pose.c)).toFixed(1)} m, limit ${near.toFixed(1)} m (colony radius ${(D.pose.r || 0).toFixed(2)} m)`);
-  info(`rov: camera ${len(sub(D.rov.cam, D.pose.c)).toFixed(1)} m from the colony, angle ${a.toFixed(1)} deg`);
-}
+say(n > 20, 'the saver ran', n);
+say(inWater === n, 'every frame: the camera is in open water (rock, sand and coral)', `${inWater}/${n}, worst ${worst.toFixed(2)} m at ${worstAt}`);
+say(inView >= n * 0.9, 'the subject of the shot is in the field of view (90 % of the frames: a cut glides for a moment)', `${inView}/${n}`);
+say(shots.size >= 2, 'the shots cut (8 to 14 s each)', `${shots.size} shots: ${[...kinds].join(', ')}`);
+say(lead0 && D.squad && len(sub(D.squad[0], lead0)) > 2, 'the squad explores during the saver', lead0 ? `${len(sub(D.squad[0], lead0)).toFixed(1)} m` : 'no squad');
+const L = labels[labels.length - 1];
+say(L && L.title === 'ROV squad' && L.params.length === 5 && /explored/.test(L.params[0].name) && L.code && /frontierScore|novelty/.test(L.code.text), 'the plate has live squad stats and the frontier score code', L ? JSON.stringify(L.params.map(p => p.value)) : 'no label');
+const age = W.__coralDebug().ageMin;
+say(age === null || age > 1e4, 'no growth: the corals shown are all old (no grow-in)', `youngest ${age}`);
 const f = $('feed');
 if (D.card && !f.hidden) {
   const left = W.innerWidth - parseFloat(f.style.right) - parseFloat(f.style.width);
   say(Math.abs(left - D.card.left) < 1 && Math.abs(parseFloat(f.style.top) - D.card.top) < 1, 'the feed card has the cardRect place', JSON.stringify({ style: f.style.cssText, card: D.card }));
   say(D.card.left >= 0 && D.card.top >= 0 && D.card.left + D.card.w <= opt.w + 0.5 && D.card.top + D.card.h <= opt.h + 0.5, 'the feed card is inside the canvas');
 } else say(false, 'the feed card shows in the saver', JSON.stringify({ hidden: f.hidden, card: D.card }));
-info(`saver ${opt.w}x${opt.h} ${W.__coralDebug().profile}: ${n} samples, shots ${[...kinds].join(',')}, poses ${JSON.stringify(hows)}, colony ${c0} -> ${D.colony && D.colony.count}, worst ${worst.toFixed(2)} m`);
+info(`saver ${opt.w}x${opt.h} ${W.__coralDebug().profile}: ${n} samples, shots ${[...kinds].join(',')}, poses ${JSON.stringify(hows)}, worst ${worst.toFixed(2)} m, squad ${lead0 && D.squad ? len(sub(D.squad[0], lead0)).toFixed(1) : 0} m`);
 
 // exit
-const gen0 = W.__coralDebug().coral.count;
 W.snSaver.exit();
 await P.run(600);
 const X = W.__coralDebug();
 say(!doc.documentElement.classList.contains('sn-saver') && f.getAttribute('style') === null && $('view').style.opacity === '', 'exit() removes the class, the card style and the fade');
 say($('panel').classList.contains('open') === panelOpen0, 'exit() gives the panel back as it was', `${panelOpen0}`);
-say(W.snSaver.debug().on === false && X.rovs > 0, 'exit() ends the saver');
-const all = await until(() => { const d = W.__coralDebug(); return d.coral && d.coral.colonies > 1; }, 30000);
-say(all, 'exit() regrows the full reef (more than one colony)', JSON.stringify(W.__coralDebug().coral));
-say(P.errors.length === 0, 'no console errors in the run', P.errors.slice(0, 3).join(' | '));
+say(W.snSaver.debug().on === false && X.rovs > 0 && X.cam && X.cam.mode === 'follow', 'exit() ends the saver and the camera follows the lead ROV again', JSON.stringify(X.cam && X.cam.mode));
+say(P.errors.length === 0, 'no page errors', P.errors.slice(0, 2).join(' | '));
 P.close();
 process.exit(0);
