@@ -16,11 +16,21 @@
 //    glsl ......... every program of shaders.js passes naga (as GLSL 450)
 //                   and glslangValidator as GLSL ES 3.00 with the prefix
 //                   that three.js r160 adds (the browser form)
+//    saver reef ... the saver path end to end: the reef runner of
+//                   mesh-worker.js in this process, single-colony mode,
+//                   the rate of the meter sent twice a second; the
+//                   particles stay under the eased rate
+//    boot ......... mobile-check.mjs: main.js boots in jsdom at five phone
+//                   sizes and a desktop (dock, sheet, feed card, controls);
+//                   it needs jsdom (JSDOM_DIR or NODE_PATH), else it skips
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
 // ============================================================================
 import { divePlan, growSeconds, createGovernor, shotAt, shotPose, pickSite, clearPath, frameFit, projectedBox, projectSphere, SHOT_KINDS, SAVER_GRADIENTS } from '../saver.js';
 import { createStubRock } from '../rov/stub-rock.js';
+import { createRock } from '../rock/index.js';
+import { createReefRunner } from '../mesh-worker.js';
+import { createReefMirror } from '../reef.js';
 import { GRADIENTS } from '../../../lib/growth-gradients.js';
 import * as SH from '../shaders.js';
 import { checkPrograms } from '../glsl-check.mjs';
@@ -213,6 +223,41 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
   ok(JSON.stringify(clearPath(rock.sdf, [0, 6, 0], free, 0.5)) === JSON.stringify(free), 'saver: clearPath keeps a camera with a free line');
 }
 
+// ── saver reef (mesh-worker.js runner, single colony) ─────────────────────
+{
+  const rock = createRock({ seed: 3, radius: 30, quality: 'low', mesh: false });
+  const mirror = createReefMirror(1024);
+  let gen = -1, cols = null, bricks = 0, err = null;
+  const run = createReefRunner({ makeRock: () => rock, post: m => {
+    if (m.gen !== undefined && m.gen > gen) { gen = m.gen; mirror.reset(); }
+    if (m.type === 'colonies') { mirror.setColonies(m.list); cols = m.list; }
+    else if (m.type === 'particles') mirror.addParticles(m.from, m.data);
+    else if (m.type === 'bricks') bricks += m.list.length;
+    else if (m.type === 'error') err = m.message;
+  } });
+  await run.onMessage({ type: 'init', seed: 3, quality: 'phone', radius: 30, rockSeed: 3, rockQuality: 'low', sites: [], colonies: 0 });
+  await run.onMessage({ type: 'single', site: { p: [0, rock.sand.heightAt(0, 0) + 0.02, 0], n: [0, 1, 0] }, species: 'staghorn', rate: 0, seed: 9 });
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  await sleep(200);
+  const rate = 12, gov = createGovernor(rate, { ramp: 2 });
+  const t0 = Date.now(); let last = t0, sent = -1, worst = -Infinity, n0 = mirror.count;
+  while (Date.now() - t0 < 6000) {
+    await sleep(40 + (Date.now() % 3) * 30);
+    const now = Date.now(), dt = (now - last) / 1000; last = now;
+    gov.used(gov.take(dt));
+    if (Math.abs(gov.current - sent) > 0.2) { sent = gov.current; await run.onMessage({ type: 'rate', value: sent }); }
+    const t = (now - t0) / 1000;
+    // the most the meter allows: the eased integral, plus the reef stock (rate x 0.25 + 2)
+    const allow = rate * (t < 2 ? (t / 2) ** 3 * 2 * (1 - 0.25 * t) : 1 + (t - 2)) + rate * 0.25 + 2 + 1;
+    worst = Math.max(worst, (mirror.count - n0) - allow);
+  }
+  const grown = mirror.count - n0, t = (Date.now() - t0) / 1000;
+  console.log(`saver reef: one ${cols && cols[0] ? cols[0].id : '?'} colony (cap ${cols && cols[0] ? cols[0].cap : '?'}) grew ${grown} particles in ${t.toFixed(1)} s at a meter rate of ${rate}/s (most over the allowance ${worst.toFixed(1)}), ${bricks} brick meshes`);
+  ok(!err && cols && cols.length === 1 && gen >= 2, 'saver reef: the runner grows one colony in single mode', err || '');
+  ok(worst <= 0 && grown >= rate * (t - 2) * 0.5, 'saver reef: growth follows the meter and never goes over it', `${grown} in ${t.toFixed(1)} s`);
+  ok(bricks > 0, 'saver reef: the colony is meshed while it grows');
+}
+
 // ── glsl ────────────────────────────────────────────────────────────────────
 // The prefix of three.js r160 for a GLSL3 ShaderMaterial (WebGLProgram),
 // cut to what these programs use. Raw programs get the version line only.
@@ -262,6 +307,18 @@ function checkES(progs) {
   // the GLSL noise is the water.js noise (the CPU tests measure the screen)
   ok(SH.NOISE2.includes('374761393u') && SH.NOISE2.includes('668265263u') && SH.NOISE2.includes('1274126177u') && SH.NOISE2.includes('2.03') && SH.WATER.includes('4.4') && SH.WATER.includes('0.026'), 'glsl: NOISE2 and causticAt use the water.js hash, warp and patch numbers');
   ok(SH.WATER.includes('0.30 * uR') && SH.WATER.includes('length(w.xz) - uR'), 'glsl: fadeAt is the water.js plot fade');
+}
+
+// ── boot in jsdom (mobile-check.mjs) ──────────────────────────────────────
+{
+  const mc = new URL('../mobile-check.mjs', import.meta.url).pathname;
+  let out = '', code = 0;
+  try { out = execFileSync(process.execPath, [mc], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 240000 }); }
+  catch (e) { out = String(e.stdout || '') + String(e.stderr || ''); code = e.status || 1; }
+  const last = out.trim().split('\n').filter(l => /^mobile-check:/.test(l)).pop() || out.trim().split('\n').pop();
+  console.log(`boot: ${last}`);
+  if (/SKIPPED/.test(last)) console.log('boot: jsdom not found, the jsdom boot did not run');
+  else ok(code === 0 && / 0 failed/.test(last), 'boot: main.js boots in jsdom at 360x740, 390x844, 430x932, 768x1024, 844x390 and 1440x900 with the dock, sheet and feed card', out.split('\n').filter(l => /^FAIL/.test(l)).slice(0, 5).join('\n'));
 }
 
 export function done(tag = 'scene') {

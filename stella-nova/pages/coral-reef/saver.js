@@ -98,6 +98,9 @@ export function createGovernor(rate, { ramp = 8, cap } = {}) {
   let t = 0, stock = 0;
   return {
     get rate() { return rate; }, get t() { return t; },
+    // the eased rate now (particles per second): what a worker that meters
+    // by itself (mesh-worker.js { type: 'rate' }) gets
+    get current() { const u = Math.min(1, t / ramp); return rate * u * u * (3 - 2 * u); },
     setRate(r) { rate = Math.max(0, r); },
     take(dt) {
       dt = Math.max(0, dt);
