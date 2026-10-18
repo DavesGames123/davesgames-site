@@ -28,7 +28,7 @@
 // ============================================================================
 import './saver.js';
 import { licenceKind, mediaOf } from './saver-plan.js';
-import { coverPalette, shelfGroups, shelfLayout, boxPose, spineTitle, paintCover, paintSpine, COVER_W, COVER_H, SPINE_W, SPINE_H } from './shelf-art.js';
+import { systemMedia, coverPalette, shelfGroups, shelfLayout, boxPose, spineTitle, paintCover, paintSpine, COVER_W, COVER_H, SPINE_W, SPINE_H } from './shelf-art.js';
 
 export function fmtMB(bytes) { return (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0) + ' MB'; }
 
@@ -216,9 +216,13 @@ function goFull() {
 function buildByo() {
   const box = $('sys');
   for (const s of S.data.systems) {
-    const r = el('input', { type: 'radio', name: 'sys', value: s.id });
+    const r = el('input', { type: 'radio', name: 'sys', value: s.id, class: 'sr' });
     r.addEventListener('change', () => pickSystem(s));
-    box.append(el('label', null, r, el('span', null, s.name), el('small', null, s.core)));
+    // A cartridge or a disc of our own drawing: the system name only, no logo.
+    const kind = systemMedia(s);
+    box.append(el('label', { class: 'media ' + kind },
+      r, el('span', { class: 'shell', 'aria-hidden': 'true' }, el('span', { class: 'lbl' }, s.name)),
+      el('span', { class: 'name' }, s.name), el('small', null, s.core)));
   }
   $('romFile').addEventListener('change', checkByo);
   $('biosFile').addEventListener('change', checkByo);
@@ -284,6 +288,7 @@ async function boot() {
   buildShelf();
   buildByo();
   buildCredits();
+  if (location.hash === '#byo') $('byoDrawer').open = true;
   $('info').addEventListener('close', onInfoClosed);
   // Exit: end the game, then focus the box that it came from.
   $('exitBtn').addEventListener('click', () => { closePlayer(); if (S.last && S.last.isConnected) S.last.focus(); });

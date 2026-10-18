@@ -46,8 +46,11 @@
      #shelf     the bookcase: one shelf per engine, one 3D box per game
                 (built from games.json; shelf-art.js paints the boxes)
      #touchNote the keyboard note for phones and tablets
-     #byo       bring your own disc: #sys, #romFile, #biosFile, #own, #byoPlay
-     #credits   the credit tables (#gameRows #engineRows #coreRows)
+     #byo       bring your own disc, a drawer (#byoDrawer, a details
+                element): #sys (cartridges and a disc), #romFile,
+                #biosFile, #own, #byoPlay
+     #credits   the credit tables on a paper manual sheet
+                (#gameRows #engineRows #coreRows)
      #player    the full-window player: #playerFrame, #fsBtn, #exitBtn
      #info      the pull-out: the box turns to the front (#infoBox) next
                 to the back of the box (text, licence, #infoPlay)
@@ -86,30 +89,37 @@
 </section>
 
 <section class="sec byo" id="byo" aria-labelledby="byoH">
-  <h2 id="byoH">Bring your own disc</h2>
-  <p class="lead">An emulator for games that you own. This page hosts <b>no games and no BIOS files</b>. Pick a dump of a game that you own from your own device. Your browser reads the file here; it is <b>not uploaded</b> and it stays on your device.</p>
-  <div class="byo-grid">
-    <fieldset class="sys" id="sys">
-      <legend>1. System</legend>
-    </fieldset>
-    <div class="byo-files">
-      <label class="pick"><span>2. Your game file</span>
-        <input type="file" id="romFile">
-        <small id="romHint"></small>
-      </label>
-      <label class="pick" id="biosPick" hidden><span>BIOS file (optional)</span>
-        <input type="file" id="biosFile">
-        <small id="biosHint"></small>
-      </label>
-      <label class="own"><input type="checkbox" id="own"> <span>I own this game, and I made this copy from my own disc or cartridge.</span></label>
-      <button type="button" class="play-btn" id="byoPlay" disabled>Play my game</button>
-      <p class="status" id="byoStatus" aria-live="polite"></p>
+  <details class="drawer" id="byoDrawer">
+    <summary class="drawer-front">
+      <span class="drawer-label"><h2 id="byoH">Bring your own disc</h2><small>An emulator for games that you own. We host no games; your file stays on your device.</small></span>
+      <span class="handle" aria-hidden="true"></span>
+    </summary>
+    <div class="drawer-body">
+      <p class="lead">An emulator for games that you own. This page hosts <b>no games and no BIOS files</b>. Pick a dump of a game that you own from your own device. Your browser reads the file here; it is <b>not uploaded</b> and it stays on your device.</p>
+      <div class="byo-grid">
+        <fieldset class="sys" id="sys">
+          <legend>1. System</legend>
+        </fieldset>
+        <div class="byo-files">
+          <label class="pick"><span>2. Your game file</span>
+            <input type="file" id="romFile">
+            <small id="romHint"></small>
+          </label>
+          <label class="pick" id="biosPick" hidden><span>BIOS file (optional)</span>
+            <input type="file" id="biosFile">
+            <small id="biosHint"></small>
+          </label>
+          <label class="own"><input type="checkbox" id="own"> <span>I own this game, and I made this copy from my own disc or cartridge.</span></label>
+          <button type="button" class="play-btn" id="byoPlay" disabled>Play my game</button>
+          <p class="status" id="byoStatus" aria-live="polite"></p>
+        </div>
+      </div>
+      <p class="note">Only play games that you own, from a copy that you made yourself. In many countries a copy downloaded from the internet is not legal, even when you own the game. Save files stay in this browser. Super Nintendo and Mega Drive are not here: the only cores for them have non-commercial licences.</p>
     </div>
-  </div>
-  <p class="note">Only play games that you own, from a copy that you made yourself. In many countries a copy downloaded from the internet is not legal, even when you own the game. Save files stay in this browser. Super Nintendo and Mega Drive are not here: the only cores for them have non-commercial licences.</p>
+  </details>
 </section>
 
-<section class="sec" id="credits" aria-labelledby="credH">
+<section class="sec manual" id="credits" aria-labelledby="credH">
   <h2 id="credH">Credits and licences</h2>
   <p>Every game below is © its owner and is here under the owner's own free-distribution terms. The full review, the exact licence text of each game and the games that we left out (and why) are in <a href="LICENSES.md">LICENSES.md</a>.</p>
   <div class="tbl"><table><thead><tr><th>Game</th><th>Owner</th><th>Terms</th><th>Archive</th></tr></thead><tbody id="gameRows"></tbody></table></div>

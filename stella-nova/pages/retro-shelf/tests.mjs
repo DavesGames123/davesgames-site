@@ -414,6 +414,10 @@ async function bootTest() {
     ok(/^\d+px$/.test(document.documentElement.style.getPropertyValue('--bw')) && document.getElementById('shelf').dataset.mode === 'scroll', 'boot: the phone layout is in the CSS variables (' + document.documentElement.style.getPropertyValue('--bw') + ')');
     ok(document.querySelectorAll('#gameRows tr').length === data.games.length && document.querySelectorAll('#engineRows tr').length === data.engines.length && document.querySelectorAll('#coreRows tr').length === data.systems.length, 'boot: the credit tables fill (' + ['gameRows', 'engineRows', 'coreRows'].map(id => document.querySelectorAll('#' + id + ' tr').length).join('/') + ')');
     ok(document.querySelectorAll('#sys input[type=radio]').length === data.systems.length, 'boot: the system list fills');
+    ok(document.querySelectorAll('#sys label.media.cart').length === 4 && document.querySelectorAll('#sys label.media.disc').length === 1, 'boot: four cartridges and one disc in the drawer');
+    ok([...document.querySelectorAll('#sys label.media')].every(l => l.querySelector('input.sr') && l.querySelector('.name').textContent), 'boot: every slot keeps its radio and a text name');
+    ok(document.getElementById('byoDrawer').tagName === 'DETAILS' && document.getElementById('byoDrawer').contains(document.getElementById('byoPlay')) && !document.getElementById('byoDrawer').hasAttribute('open'), 'boot: the form is in the closed drawer');
+    ok(document.getElementById('credits').classList.contains('manual'), 'boot: the credits are on the manual sheet');
     ok(document.getElementById('touchNote').hasAttribute('hidden'), 'boot: the touch note stays hidden with a fine pointer');
     document.querySelector('#shelf .box').dispatchEvent(new window.Event('click'));
     const box0 = document.querySelector('#shelf .box');
