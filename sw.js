@@ -56,6 +56,7 @@
 //    local-server guard ... "const DEV_OFF"
 //    live data rules ...... "const LIVE_PATH"
 //    pass-through paths ... "const PASS_PATH"
+//    share stubs .......... "const SHARE_PATH"
 //    cache key ............ "function key"
 //    install / precache ... "async function precache"
 //    old-format copy ...... "async function fromOldCore"
@@ -83,6 +84,12 @@ const LIVE_PATH = /^stella-nova\/pages\/leo-catalog\/data\/[^/]+\.txt$/;
 const LIVE_HOSTS = new Set(['davesgames.io', 'www.nhc.noaa.gov', 'celestrak.org', 'alphafold.ebi.ac.uk']);
 // Model files: the page keeps them in its own cache (stem-splitter engine).
 const PASS_PATH = /^stella-nova\/pages\/stem-splitter\/models\//;
+// Share stubs: stella-nova/<key>/index.html, written at deploy by
+// tools/share-pages.mjs (not in git, not in the manifest). Each one only
+// sends the browser to /stella-nova/#<key>. The worker does not store them:
+// it gives the network answer, and with no network it sends the redirect
+// itself, so the cached shell opens. Manifest paths match first.
+const SHARE_PATH = /^stella-nova\/([a-z0-9][a-z0-9-]*)\/index\.html$/;
 
 // Site path of a same-origin URL: no leading slash, "dir/" -> "dir/index.html".
 function sitePath(url) {
@@ -257,6 +264,12 @@ async function staleWhileRevalidate(e, req) {
   return net;
 }
 
+// Share stub: the network, else the redirect that the stub would do.
+function shareStub(req, url, key) {
+  const to = SCOPE + 'stella-nova/' + url.search + '#' + key + (url.hash.length > 1 ? '/' + url.hash.slice(1) : '');
+  return fetch(req).catch(() => Response.redirect(to, 302));
+}
+
 // Manifest file: the stored copy, else the network (and keep a lazy file).
 async function fromManifest(req, path) {
   const inCore = coreHash.has(path);
@@ -287,6 +300,8 @@ function route(e) {
     if (PASS_PATH.test(path)) return null;
     if (LIVE_PATH.test(path)) return liveFirst(req);
     if (coreHash.has(path) || lazyHash.has(path)) return fromManifest(req, path);
+    const share = SHARE_PATH.exec(path);
+    if (share) return shareStub(req, url, share[1]);
     return staleWhileRevalidate(e, req);
   }
   if (LIVE_HOSTS.has(url.hostname)) {
