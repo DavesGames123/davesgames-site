@@ -43,6 +43,8 @@
 //                                     keys 1 to 4), one feed card per ROV
 //                                     (rov/feeds.js), the 3D tags, the minimap
 //    grep -n 'function onSelectRov'   a selected ROV: the camera follows it
+//    grep -n 'mountManual'            manual.js: WASD drives the followed ROV,
+//                                     a click on its feed card gives it back
 //    grep -n 'function followDefault' the default camera: follow the lead ROV
 //    grep -n 'function setMode'       colour by
 //    grep -n 'function applyCamera'   the render eye (origin, tilt)
@@ -58,6 +60,7 @@ import { SHAPES } from './coral-sdf.js';
 import { createROVs } from './rov/index.js';
 import { createFeedSet } from './rov/feeds.js';
 import { mountSquadHud } from './squad-hud.js';
+import { mountManual } from './manual.js';
 import { mountDiscoveries } from './discoveries.js';
 import { createSquad, frontierScore } from './rov/squad.js';
 import { squadPlan, squadShotPose, safeCamera, cardRect, frameFit } from './saver.js';
@@ -111,6 +114,7 @@ const G = {
 };
 let shell = null, saverOn = false, saver = null;
 let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
+let manual = null;                     // manual.js: the user drives the followed ROV (control mode)
 let disc = null;                       // discoveries.js: what the ROVs found, the orbit and the highlight
 // The world API for other packages (FAUNA, SNOW; NOTES.md): events of the
 // world ('world', 'rock', 'unload', 'coral', 'uncoral') and its queries.
@@ -468,6 +472,7 @@ function followDefault() {
 // squad-hud.js select(id): the camera follows that ROV (the default view
 // again, so a new ROV count or the saver exit keeps it)
 function onSelectRov(id, how) {
+  if (manual) manual.onSelect(id);
   if (shell) shell.setDock({ feed: `ROV ${id}` });
   if (!how.follow || saverOn || !cam) return;
   camChoice = null; $('tourList').hidden = true;
@@ -681,7 +686,9 @@ function buildUI() {
       feed: () => { feedT = 0; },
     },
   });
-  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: () => {}, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => true });
+  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: () => {}, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => true,
+    drive: cmd => !!manual && manual.drive(cmd), onEscape: () => manual && manual.escape() });
+  manual = mountManual({ doc: document, getSquad: () => squad, getCam: () => cam, flash, coarse: COARSE });
   bindCamBar();
   // the discoveries (discoveries.js): the log, the map marks, the card,
   // the toast, the orbit and the 3D highlight with its marine snow
@@ -711,7 +718,7 @@ function buildUI() {
   hud = mountSquadHud({
     doc: document, win: window, THREE: S ? S.THREE : null, canvas, camera: () => (S ? S.camera : null),
     getSquad: () => squad, getRovs: () => rovs, getField: () => W, getCam: () => cam, surfaceY: SURFACE_Y,
-    phoneQ: PHONE_Q, isSaver: () => saverOn, feedOn: () => G.feed, onSelect: onSelectRov, flash,
+    phoneQ: PHONE_Q, isSaver: () => saverOn, feedOn: () => G.feed, onSelect: onSelectRov, flash, onCardTap: id => !!manual && manual.onCardTap(id),
     // the large map (map-view.js): region shortcuts, the free camera, the colonies found
     goRegion: id => goRegion(id), moveCam: moveCamTo, colonies: () => (streamer ? streamer.colonies() : []),
     speciesLabel: id => (SPECIES[id] && SPECIES[id].label) || null,
@@ -789,7 +796,7 @@ function readout(dt) {
   $('rDepth').textContent = `${(DEPTH_BASE - lp[1]).toFixed(0)} m`;
   if (W) { const rg = W.regionAt(lp[0], lp[2]); $('rRegion').textContent = rg.name; curRegion = rg.id; }
   $('rCol').textContent = String(st.colonies);
-  $('rTask').textContent = squad.task.label;
+  $('rTask').textContent = squad.isManual(squad.vehicles[0].id) ? 'manual control' : squad.task.label;
   if (performance.now() > flashT && streamer) {
     const s = streamer.stats;
     setState(!streamer.ready(cam ? cam.eye : squad.vehicles[0].state.p) ? 'Building the seafloor…' : s.pending > 0 && s.coral === 0 ? 'Growing the corals of the first chunks…' : '');
@@ -831,6 +838,7 @@ function frame(t) {
   if (!S) return;
   if (cam) {
     if (!saverOn && input) input.take(dt);
+    if (manual) { manual.tick(dt); if (manual.id != null && hud && hud.cycle) hud.cycle.input(); }   // no Cycle while the user drives
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
     cam.setProjection({ fov: S.camera.fov, aspect: w / h, shift: [2 * S.view.ox / w, -2 * S.view.oy / h] });
     if (P) cam.update(dt, camCtx);

@@ -63,10 +63,15 @@
 //    S.setCount(n), S.reset(start), S.goTo(id, [x, z]) (one ROV to a point)
 //    S.tasks() -> [{ id, kind, label, aim, subject }], S.overlap(), S.claims
 //    options: spread (true), leash (180 m), minSep (18 m), regroupEvery (480 s)
+//    S.setManual(id, on), S.drive(id, { fwd, lat, up, yaw, boost }),
+//      S.isManual(id), S.manualOf(id) -> { cmd, leash, warn } | null: the
+//      user drives one ROV (main.js manual.js). The planner skips it, the
+//      others plan round it; off, the planner plans from where it is.
 //
 //  grep -n targets: "export function createSquad", "function nextTask", "export function frontierScore",
 //  "function frontier", "function frontierPick", "function spreadScore",
-//  "function planOwn", "function regroup", "function tasks", "function followerGoal", "function move("
+//  "function planOwn", "function regroup", "function tasks", "function followerGoal", "function move(",
+//  "function guard(", "function manualMove", "function setManual", "function drive("
 // ============================================================================
 import { marchPath, pathAt, pushOut, trace, orbitPose, rng, hash } from './pilot.js';
 import { SPECIES } from '../reef.js';
@@ -80,6 +85,7 @@ const CELL = 12, CHUNK = 32;
 export const TASK_LABEL = {
   frontier: 'surveying unexplored ground', ridge: 'following a ridge', dropoff: 'dropping down a cliff', climb: 'climbing a seamount flank',
   canyon: 'following a canyon', arch: 'passing under an arch', inspect: 'inspecting a colony', regroup: 'regrouping', goto: 'going to the marked point',
+  manual: 'manual control',
 };
 
 function gradient(sdf, p) {
@@ -417,6 +423,7 @@ export function createSquad(o = {}) {
   function regroup() {
     const L = S.vehicles[0].state;
     for (let i = 1; i < S.vehicles.length; i++) {
+      if (S.vehicles[i].manual) continue;
       const v = S.vehicles[i], a = L.yaw + Math.PI + (i - (S.vehicles.length) / 2) * 0.9;
       const q = pushOut(sdf, [L.p[0] + Math.cos(a) * 6, L.p[1] + 0.6 * i, L.p[2] + Math.sin(a) * 6], clear);
       const path = marchPath(sdf, [v.state.p.slice(), q], clear, { budget: 30000, step: 0.3 });
@@ -443,20 +450,7 @@ export function createSquad(o = {}) {
     if (vl > vmax) for (let i = 0; i < 3; i++) st.v[i] *= vmax / vl;
     const prev = st.p.slice();
     for (let i = 0; i < 3; i++) st.p[i] += st.v[i] * dt;
-    // the move may not cross rock: a trace from the last point
-    const mv = sub(st.p, prev), ml = len(mv);
-    if (ml > 1e-6) {
-      const t = trace(sdf, prev, [mv[0] / ml, mv[1] / ml, mv[2] / ml], ml);
-      if (t < ml) { st.p = prev; for (let i = 0; i < 3; i++) st.v[i] *= 0.3; }
-    }
-    // guard: keep the clearance shell; no speed into the rock
-    const d = sdf(st.p[0], st.p[1], st.p[2]);
-    if (d < clear * 0.85) {
-      const n = gradient(sdf, st.p);
-      pushOut(sdf, st.p, clear * 0.85);
-      const vn = st.v[0] * n[0] + st.v[1] * n[1] + st.v[2] * n[2];
-      if (vn < 0) for (let i = 0; i < 3; i++) st.v[i] -= vn * n[i];
-    }
+    guard(st, prev);
     st.a = a;
     const e = 1 - Math.exp(-dt * (st.mode === 'survey' ? 1.2 : 2.5));
     for (let i = 0; i < 3; i++) st.look[i] += (G.look[i] - st.look[i]) * e;
@@ -471,6 +465,93 @@ export function createSquad(o = {}) {
     st.thrust.fwd = (a[0] * cy + a[2] * sy) / amax; st.thrust.lat = (-a[0] * sy + a[2] * cy) / amax; st.thrust.up = a[1] / amax; st.thrust.yaw = st.yawRate / 0.35;
     return st;
   }
+  // the move from prev may not cross rock, and the clearance shell holds
+  // (the planner moves and the manual moves)
+  function guard(st, prev) {
+    const mv = sub(st.p, prev), ml = len(mv);
+    if (ml > 1e-6) {
+      const t = trace(sdf, prev, [mv[0] / ml, mv[1] / ml, mv[2] / ml], ml);
+      if (t < ml) { st.p = prev; for (let i = 0; i < 3; i++) st.v[i] *= 0.3; }
+    }
+    // guard: keep the clearance shell; no speed into the rock
+    const d = sdf(st.p[0], st.p[1], st.p[2]);
+    if (d < clear * 0.85) {
+      const n = gradient(sdf, st.p);
+      pushOut(sdf, st.p, clear * 0.85);
+      const vn = st.v[0] * n[0] + st.v[1] * n[1] + st.v[2] * n[2];
+      if (vn < 0) for (let i = 0; i < 3; i++) st.v[i] -= vn * n[i];
+    }
+  }
+  // ── manual control (the user drives one ROV with the keys or the stick) ───
+  // cmd = { fwd, lat, up, yaw } in -1..1 and boost. The thrust is in the body
+  // frame, a linear drag gives the top speed (0.75 m/s, 1.5 m/s with boost),
+  // the yaw rate eases to the command. The guard and the separation of
+  // move() hold, so the ROV slides along rock and the others. The leash:
+  // past 85 % of it (from the centroid of the others) the outward thrust
+  // fades, past it a spring pulls the ROV back.
+  function manualMove(v, h, others) {
+    const st = v.state, c = v.manual.cmd, boost = c.boost ? 2 : 1;
+    st.t += h;
+    const cy = Math.cos(st.yaw), sy = Math.sin(st.yaw), A = 0.45 * boost, drag = 0.6;
+    const a = [(c.fwd * cy - c.lat * sy) * A - st.v[0] * drag, c.up * A * 0.8 - st.v[1] * drag, (c.fwd * sy + c.lat * cy) * A - st.v[2] * drag];
+    for (const q of others) {
+      const d = sub(st.p, q), l = len(d);
+      if (l > 1e-6 && l < 4) { const f = 0.8 * (4 - l) / 4 / l; a[0] += d[0] * f; a[1] += d[1] * f * 0.4; a[2] += d[2] * f; }
+    }
+    v.manual.leash = 0; v.manual.warn = false;
+    if (S.vehicles.length > 1) {
+      const m = [0, 0, 0]; let n = 0;
+      for (const u of S.vehicles) if (u !== v) { for (let i = 0; i < 3; i++) m[i] += u.state.p[i]; n++; }
+      const r = Math.hypot(st.p[0] - m[0] / n, st.p[2] - m[2] / n), ux = (st.p[0] - m[0] / n) / (r || 1), uz = (st.p[2] - m[2] / n) / (r || 1);
+      v.manual.leash = r / leash; v.manual.warn = r > leash * 0.85;
+      if (v.manual.warn) {
+        const out = a[0] * ux + a[2] * uz, fade = clamp((r - leash * 0.85) / (leash * 0.15), 0, 1);
+        if (out > 0) { a[0] -= out * fade * ux; a[2] -= out * fade * uz; }
+        if (r > leash) { const k = 0.3 * (r - leash) + 0.2; a[0] -= ux * k; a[2] -= uz * k; }
+      }
+    }
+    for (let i = 0; i < 3; i++) st.v[i] += a[i] * h;
+    const vl = len(st.v), vmax = 0.9 * boost;
+    if (vl > vmax) for (let i = 0; i < 3; i++) st.v[i] *= vmax / vl;
+    const prev = st.p.slice();
+    for (let i = 0; i < 3; i++) st.p[i] += st.v[i] * h;
+    guard(st, prev);
+    st.a = a;
+    st.yawRate += (c.yaw * 0.6 - st.yawRate) * (1 - Math.exp(-h * 3));
+    st.yaw += st.yawRate * h;
+    // the camera looks ahead and down
+    const fw = [Math.cos(st.yaw), -0.45, Math.sin(st.yaw)], fl = len(fw), dir = [fw[0] / fl, fw[1] / fl, fw[2] / fl];
+    const hit = trace(sdf, st.p, dir, 12), e = 1 - Math.exp(-h * 2.5);
+    for (let i = 0; i < 3; i++) st.look[i] += (st.p[i] + dir[i] * hit - st.look[i]) * e;
+    st.lookR += (1.6 - st.lookR) * e;
+    st.mode = 'survey'; st.phase = 'manual';
+    const ax = a[0] * Math.cos(st.yaw) + a[2] * Math.sin(st.yaw), az = -a[0] * Math.sin(st.yaw) + a[2] * Math.cos(st.yaw);
+    st.thrust.fwd = clamp(ax / 0.9, -1, 1); st.thrust.lat = clamp(az / 0.9, -1, 1); st.thrust.up = clamp(a[1] / 0.9, -1, 1); st.thrust.yaw = clamp(st.yawRate / 0.6, -1, 1);
+  }
+  // setManual(id, on): take the ROV from the planner (on) or give it back
+  // (off: the planner plans from where it is). drive(id, cmd) sets the
+  // command; isManual(id); manualOf(id) -> { cmd, leash, warn } | null
+  function setManual(id, on) {
+    const vi = S.vehicles.findIndex(q => q.id === id), v = S.vehicles[vi]; if (!v) return false;
+    if (on) {
+      if (!v.manual) v.manual = { cmd: { fwd: 0, lat: 0, up: 0, yaw: 0, boost: false }, leash: 0, warn: false };
+      claim(vi, null);
+      if (vi === 0) { orbit = null; leg = null; } else { v.leg = null; v.goal = null; }
+      v.aim = null;
+      return true;
+    }
+    if (!v.manual) return false;
+    v.manual = null;
+    if (vi === 0) { orbit = null; leg = null; S.vehicles[0].state.mode = 'survey'; nextTask(); } else { v.leg = null; v.planT = 0; v.goal = null; }
+    return true;
+  }
+  function drive(id, cmd) {
+    const v = S.vehicles.find(q => q.id === id); if (!v || !v.manual) return false;
+    const c = v.manual.cmd;
+    for (const k of ['fwd', 'lat', 'up', 'yaw']) c[k] = clamp(+cmd[k] || 0, -1, 1);
+    c.boost = !!cmd.boost;
+    return true;
+  }
 
   function step(dt) {
     dt = clamp(dt || 0, 0, 0.1);
@@ -479,14 +560,15 @@ export function createSquad(o = {}) {
       S.stats.t += h; S.task.t += h;
       if (spread && S.vehicles.length > 1 && (regroupT -= h) <= 0) { regroupT = regroupEvery; regroup(); }
       const L = S.vehicles[0].state, before = L.p.slice();
-      const G0 = leaderGoal(h);
       const pos = S.vehicles.map(v => v.state.p);
-      move(L, G0, h, pos.slice(1));
+      if (S.vehicles[0].manual) manualMove(S.vehicles[0], h, pos.slice(1));
+      else move(L, leaderGoal(h), h, pos.slice(1));
       S.stats.distance += len(sub(L.p, before));
       if (len(sub(L.p, trail[trail.length - 1])) > 0.5) { trail.push(L.p.slice()); if (trail.length > 240) trail.shift(); }
       for (let i = 1; i < S.vehicles.length; i++) {
         // the goal of a follower changes slowly: 5 times a second
         const v = S.vehicles[i];
+        if (v.manual) { manualMove(v, h, pos.filter((_, j) => j !== i)); continue; }
         v.goalT = (v.goalT || 0) - h;
         if (spread && !v.leg && (v.planT = (v.planT || 0) - h) <= 0) { if (!planOwn(v, i)) v.planT = 1; }
         if (v.leg) { v.goal = ownLegGoal(v, h); v.goalT = 0; }
@@ -515,7 +597,7 @@ export function createSquad(o = {}) {
   // formation, flies there on its own path, looks round for 20 s and comes
   // back. false when no path plans.
   function goTo(id, xz) {
-    const v = S.vehicles.find(q => q.id === id); if (!v) return false;
+    const v = S.vehicles.find(q => q.id === id); if (!v || v.manual) return false;
     const y = ground(xz[0], xz[1]) + 3;
     const goal = pushOut(sdf, [xz[0], y, xz[1]], clear);
     if (v === S.vehicles[0]) { orbit = null; return planLeg([goal], 'goto', { label: 'going to the marked point' }) && (S.task.label = 'going to the marked point', true); }
@@ -544,6 +626,7 @@ export function createSquad(o = {}) {
   // aim [x, y, z] | null (the leg end), subject (a colony key) | null }
   function tasks() {
     return S.vehicles.map((v, i) => {
+      if (v.manual) return { id: v.id, kind: 'manual', label: TASK_LABEL.manual, aim: null, subject: null };
       if (i === 0) return { id: v.id, kind: S.task.kind, label: S.task.label, aim: v.aim || null, subject: S.task.kind === 'inspect' && S.task.target ? S.task.target.key ?? null : null };
       if (v.leg) return { id: v.id, kind: v.leg.kind || 'goto', label: v.leg.label || TASK_LABEL.goto, aim: v.aim || null, subject: v.leg.subject ?? null };
       if (!spread) return { id: v.id, kind: 'follow', label: v.state.mode === 'inspect' ? 'lighting the colony' : `following ROV ${S.vehicles[0].id}`, aim: null, subject: null };
@@ -557,6 +640,9 @@ export function createSquad(o = {}) {
     return owners.size ? multi / owners.size : 0;
   }
   S.goTo = goTo;
+  S.setManual = setManual; S.drive = drive;
+  S.isManual = id => { const v = S.vehicles.find(q => q.id === id); return !!(v && v.manual); };
+  S.manualOf = id => { const v = S.vehicles.find(q => q.id === id); return v && v.manual ? v.manual : null; };
   S.step = step; S.setCount = setCount;
   S.reset = (start, n = S.vehicles.length) => { place(start, n); setTask('frontier'); orbit = null; };
   S.tasks = tasks; S.overlap = overlap; S.owners = owners; S.claims = claims;

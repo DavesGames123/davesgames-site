@@ -1,7 +1,7 @@
 // ============================================================================
 //  CORAL REEF  ·  input.js  ·  pointer, touch, wheel and keys for camera.js
 // ----------------------------------------------------------------------------
-//  createInput({ canvas, cam, onTap, onMode, hint, flyOk }) -> { take(dt), keys,
+//  createInput({ canvas, cam, onTap, onMode, hint, flyOk, drive, onEscape }) -> { take(dt), keys,
 //  dispose() }. main.js calls take(dt) each frame before cam.update.
 //
 //  ORBIT  mouse: a left drag turns round the rock under the pointer; a
@@ -16,7 +16,9 @@
 //    looks. Touch: the left 42 % of the canvas is a stick (move), a drag
 //    on the right looks.
 //  FOLLOW  a drag looks round the ROV; the wheel and pinch set the
-//    distance.
+//    distance. With o.drive (manual.js) a move key drives the ROV:
+//    o.drive({ fwd, lat, up, yaw, boost }) each frame, true while it
+//    drives (then no look or zoom keys); Esc calls o.onEscape.
 //  TOUR  a drag, a key, a pinch or the wheel takes over: swim mode at the
 //    same pose and speed.
 //  SAVER  no input.
@@ -198,6 +200,7 @@ export function createInput(o) {
       return;
     }
     if (e.repeat) return;
+    if (e.code === 'Escape' && o.onEscape && mode() === 'follow') { o.onEscape(); return; }
     if (e.code === 'KeyF') { cam.setMode(mode() === 'swim' ? 'orbit' : 'swim'); if (o.onMode) o.onMode(cam.mode); }
     else if (e.code === 'KeyG') { cam.follow(cam.followId); if (o.onMode) o.onMode(cam.mode); }
   }
@@ -230,6 +233,10 @@ export function createInput(o) {
       const zoom = (k('KeyQ') ? 1 : 0) - (k('KeyE') ? 1 : 0);
       cam.orbitKeys(side, fwd, zoom, dt * (boost ? 3 : 1));
     } else if (m === 'follow') {
+      // control mode (manual.js): the keys drive the followed ROV
+      const lat = (k('ArrowRight') ? 1 : 0) - (k('ArrowLeft') ? 1 : 0);
+      const yaw = (k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0), up = (k('KeyE') || k('Space') ? 1 : 0) - (k('KeyQ') || k('KeyC') ? 1 : 0);
+      if (o.drive && o.drive({ fwd, lat, up, yaw, boost })) return;
       const zoom = (k('KeyQ') ? 1 : 0) - (k('KeyE') ? 1 : 0);
       if (zoom) cam.zoomAt(null, null, Math.exp(zoom * dt * 1.2));
       if (side) cam.followLook(side * dt * 1.4, 0);
