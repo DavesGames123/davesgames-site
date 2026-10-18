@@ -31,9 +31,13 @@
    LAYOUT  (# marks an element id that main.js binds)
      desktop ... #panel at the left, #view fills the frame, #read at the
                  upper right, #about a drawer at the right
-     phone ..... #dock at the base: four tabs, play and regrow. A tab opens
-                 #panel with only its .grp, as a bottom sheet (portrait)
-                 or a drawer (landscape)
+     phone ..... #dock at the base: preset, grow or pause, regrow, plant
+                 mode and menu. Menu opens #panel with all the groups as a
+                 bottom sheet (portrait, half or full height) or a drawer
+                 (landscape). The dlaf parameters are in #adv. #plantBar
+                 shows in plant mode. #about is a full-height sheet.
+                 shell.js binds the dock, the sheet and the explainer;
+                 layout.js has the layout logic (no DOM)
 
    GREP MAP  (main.js)
      grep -n 'function loadPreset'   regrow a preset
@@ -68,7 +72,12 @@
   <div><span>Walker steps / s</span><b id="rWalk">0</b></div>
   <div id="rState" class="state"></div>
 </div>
-<div id="hint">Tap the seabed to plant a colony · drag to orbit · pinch or scroll to zoom</div>
+<div id="hint">Drag to orbit · pinch or scroll to zoom · double tap to re-frame · Plant mode, then tap the seabed to plant a colony</div>
+<div id="tapMark" aria-hidden="true"></div>
+<div id="plantBar" hidden>
+  <div class="pb-head"><span id="plantMsg">Plant mode: tap open sand or rock</span><button id="plantDone" type="button">Done</button></div>
+  <div class="chips sp" id="plantQuick"></div>
+</div>
 <div id="legend"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
 
 <aside id="panel" class="open" aria-label="Controls">
@@ -88,7 +97,8 @@
     <div class="row"><label for="sSpeed">Growth speed</label><input type="range" id="sSpeed" min="0.1" max="4" step="0.05" value="1"><span class="val" id="vSpeed"></span></div>
     <div class="sec-label">Plant a colony</div>
     <div class="chips sp" id="plant"></div>
-    <p class="note">Tap the seabed to plant the chosen species there.</p>
+    <button class="tog wide" id="tPlant" type="button" aria-pressed="false">Plant mode</button>
+    <p class="note">In plant mode, tap the seabed to plant the chosen species there. Out of plant mode, a tap only moves the view.</p>
   </section>
 
   <section class="grp" data-grp="colour">
@@ -116,18 +126,20 @@
   </section>
 
   <section class="grp" data-grp="species">
-    <div class="sec-label">Species (dlaf parameters)</div>
+    <details id="adv">
+    <summary class="sec-label">Advanced: species (dlaf parameters)</summary>
     <div class="chips sp" id="spPick"></div>
     <p class="note" id="spNote"></p>
     <div id="spParams"></div>
     <button id="spReset" type="button" class="wide">Reset this species</button>
+    </details>
   </section>
 
   <div class="credit">Growth engine: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). <button id="aboutOpen" type="button" class="linkbtn">How it works and credits</button></div>
 </aside>
 
 <aside id="about" aria-label="How it works" hidden>
-  <button id="aboutClose" type="button" aria-label="Close">✕</button>
+  <div class="ab-head"><span>How it works</span><button id="aboutClose" type="button" aria-label="Close">✕</button></div>
   <h2>Why coral looks like DLA</h2>
   <p>Many corals feed on food that drifts in the water. Near the colony the water is slow, so the food reaches the coral mostly by diffusion, a random walk. A random walker that comes near a branched shape almost always touches a tip first: the gaps between branches are screened. So tips catch more food, grow faster, and stay ahead. That is diffusion-limited aggregation (DLA), and it is why a nutrient-limited coral grows branches.</p>
   <p>A current changes the picture. The snow comes from one side, so the side that faces the current gets more and the colony grows upstream. Calm, food-rich water gives compact forms; thin food gives thin branches. Kaandorp and co-workers showed this with DLA in a flow (Kaandorp, Lowe, Frenkel and Sloot, Phys. Rev. Lett. 77, 2328, 1996), and grew whole colonies with an accretive model (Kaandorp and Kübler, <i>The Algorithmic Beauty of Seaweeds, Sponges and Corals</i>, 2001).</p>
@@ -153,12 +165,11 @@
 </aside>
 
 <nav id="dock" aria-label="Controls">
-  <button class="tab" data-grp="reef" type="button"><i>◎</i><span>Reef</span></button>
-  <button class="tab" data-grp="colour" type="button"><i>◐</i><span>Colour</span></button>
-  <button class="tab" data-grp="water" type="button"><i>≈</i><span>Water</span></button>
-  <button class="tab" data-grp="species" type="button"><i>✱</i><span>Species</span></button>
-  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+  <button id="dockPreset" type="button" aria-label="Next reef preset"><i>◎</i><span id="dockPresetName">Mixed</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause the growth"><i>❚❚</i><span>Pause</span></button>
   <button id="dockRegrow" type="button" aria-label="Regrow"><i>↻</i><span>Regrow</span></button>
+  <button id="dockPlant" type="button" aria-label="Plant mode" aria-pressed="false"><i>✚</i><span>Plant</span></button>
+  <button id="dockMenu" type="button" aria-label="Menu" aria-expanded="false"><i>☰</i><span>Menu</span></button>
 </nav>
 
 <script type="importmap">

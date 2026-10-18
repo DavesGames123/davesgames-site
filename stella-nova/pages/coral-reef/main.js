@@ -13,7 +13,14 @@
 //  nowMs (reef.birth), and the shader gets nowMs / 1000 as uTime, so a new
 //  polyp scales in and glows from the frame where it joined.
 //
-//  FRAMING. clearArea() measures the panel and the dock. The camera view
+//  PHONE. shell.js binds the dock, the sheet and the explainer. layout.js
+//  (no DOM) has the breakpoints, the tap and double-tap test, the sheet
+//  snap and the pixel ratio cap. A tap plants a colony only in plant mode
+//  (on by default with a mouse, off on a touch screen). A double tap out
+//  of plant mode re-frames the reef. One finger orbits, two fingers pinch
+//  zoom and pan (OrbitControls).
+//
+//  FRAMING. clearArea() measures the panel, the dock and the plant bar. The camera view
 //  offset (setViewOffset) puts the reef in the middle of the clear part.
 //  A preset load also sets the camera distance with frameFit (saver.js).
 //  The saver uses the same fit with the clear band of the label plate.
@@ -28,7 +35,8 @@
 //    grep -n 'function clearArea'    the parts of the canvas under overlays
 //    grep -n 'function plantAt'      tap the seabed to plant a colony
 //    grep -n 'function buildUI'      the controls
-//    grep -n 'function setOpen'      the panel, the phone sheet and the dock
+//    grep -n 'mountShell'            the dock, the phone sheet and the explainer (shell.js)
+//    grep -n 'function tapFeedback'  the ring and the message after a plant tap
 //    grep -n 'function frame'        the loop
 //    grep -n 'window.snSaver'        the screensaver hook
 // ============================================================================
@@ -42,9 +50,11 @@ import { shotList, frameFit } from './saver.js';
 import { lut, cssGradient, mountGradientPicker, GRADIENTS } from '../../lib/growth-gradients.js';
 import { PARAM_INFO } from '../../lib/dla-engine.js';
 import { mountDiagram } from './diagram.js';
+import { PHONE_QUERY, clearFromRects, tapGesture, pixelRatio, nextPreset } from './layout.js';
+import { mountShell } from './shell.js';
 
 const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const PHONE_Q = matchMedia(PHONE_QUERY);
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CAP = COARSE ? 6000 : 16000;          // particles (polyps) on the whole reef
@@ -57,8 +67,9 @@ const G = {
   preset: 'mixed', seed: 1, mode: 'natural', gradient: 'reef', rev: false,
   playing: true, speed: 1, dir: 20, cur: 0.5, nutrient: 1, temp: 27,
   caust: true, snow: true, shaft: true, orbit: false, plant: 'staghorn', spSel: 'staghorn',
-  polyps: true, detail: !COARSE,
+  polyps: true, detail: !COARSE, plantMode: !COARSE,
 };
+let shell = null;
 let saverOn = false, saver = null;
 
 // ── scene and reef ──────────────────────────────────────────────────────────
@@ -135,13 +146,14 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = true) {
 function afterReset(fit) {
   synced = 0; hMax = 0; refreshAt = 0;
   mesherReset();
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.id === reef.preset));
+  if (shell && PRESETS[reef.preset]) shell.setPresetLabel(presetShort(reef.preset));
   if (!S) return;
   S.clearColonies();
   S.setRocks(reef.rocks, meshRockAsync);
   placeDecor();
   syncPolyps(); refresh();
   if (fit) fitCamera(true);
-  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.id === reef.preset));
 }
 
 // New particles (synced..count): to the mesher (local frame of the
@@ -254,16 +266,13 @@ function setTemp(t) {
 // wider than tall (in canvas terms) covers the top or the base; any other
 // covers a side. Small corner boxes (readout, legend) do not count.
 function clearArea(w, h) {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  for (const el of [$('panel'), $('dock')]) {
-    if (!el || el.offsetParent === null && getComputedStyle(el).position !== 'fixed') continue;
+  const rects = [];
+  for (const el of [$('panel'), $('dock'), $('plantBar')]) {
+    if (!el || el.hidden || getComputedStyle(el).display === 'none') continue;
     const q = el.getBoundingClientRect();
-    const x0 = Math.max(0, q.left), x1 = Math.min(w, q.right), y0 = Math.max(0, q.top), y1 = Math.min(h, q.bottom);
-    if (x1 - x0 < 1 || y1 - y0 < 1) continue;
-    const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
-    if (fw >= fh) { if (fw < 0.5) continue; if (y0 + y1 > h) o.b = Math.max(o.b, h - y0); else o.t = Math.max(o.t, y1); }
-    else { if (fh < 0.5) continue; if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0); }
+    rects.push({ x0: q.left, y0: q.top, x1: q.right, y1: q.bottom });
   }
+  const o = clearFromRects(rects, w, h);
   if (saverOn && saver && saver.band) { o.t = Math.max(o.t, saver.band.t); o.b = Math.max(o.b, saver.band.b); }
   return o;
 }
@@ -287,19 +296,25 @@ function fitCamera(dist) {
   }
 }
 
-// ── tap to plant ────────────────────────────────────────────────────────────
-let downs = new Map(), tap = null;
+// ── tap to plant, double tap to re-frame ───────────────────────────────────
+// A tap is one finger (or the main button) that moves less than 10 px in
+// less than 450 ms (layout.js tapGesture). A second finger cancels it.
+let downs = new Map(), tap = null, lastTap = null;
 function onDown(e) {
   downs.set(e.pointerId, true);
-  tap = downs.size === 1 ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
+  tap = downs.size === 1 && e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
   hideHint();
 }
 function onUp(e) {
   downs.delete(e.pointerId);
   if (!tap || tap.id !== e.pointerId || saverOn) return;
-  const moved = Math.hypot(e.clientX - tap.x, e.clientY - tap.y), dt = performance.now() - tap.t;
+  const up = { x: e.clientX, y: e.clientY, t: performance.now() };
+  const g = tapGesture(tap, up, lastTap);
   tap = null;
-  if (moved < 7 && dt < 450 && e.button === 0) plantAt(e.clientX, e.clientY);
+  if (g === 'drag') return;
+  lastTap = g === 'double' ? null : up;
+  if (G.plantMode) { if (g === 'tap') plantAt(e.clientX, e.clientY); }
+  else if (g === 'double') { fitCamera(true); tapFeedback(e.clientX, e.clientY, true, ''); }
 }
 let ray = null;
 async function plantAt(cx, cy) {
@@ -311,19 +326,34 @@ async function plantAt(cx, cy) {
   ray.setFromCamera(v, S.camera);
   // the nearest hit on a rock or the seabed: a rock hit plants on that rock
   const hit = ray.intersectObjects([S.ground, ...S.rocks.children], false)[0];
-  if (!hit) return;
+  const bad = msg => { tapFeedback(cx, cy, false, msg); };
+  if (!hit) return bad('Tap the seabed, not the water.');
   const x = hit.point.x, z = hit.point.z, onRock = hit.object.userData.rock || null;
-  if (Math.hypot(x, z) > 140) return flash('Plant nearer to the reef.');
-  if (reef.colonies.some(c => Math.hypot(c.user.bx - x, c.user.bz - z) < 10)) return flash('Too near a colony: tap open rock or sand.');
-  if (reef.count >= reef.limit - 60) return flash('The reef is at its polyp cap. Regrow to plant again.');
+  if (Math.hypot(x, z) > 140) return bad('Plant nearer to the reef.');
+  if (reef.colonies.some(c => Math.hypot(c.user.bx - x, c.user.bz - z) < 10)) return bad('Too near a colony: tap open rock or sand.');
+  if (reef.count >= reef.limit - 60) return bad('The reef is at its polyp cap. Regrow to plant again.');
   const c = reef.addColony(G.plant, x, z, onRock ? { share: Math.max(6, reef.colonies.length + 1), rock: onRock, at: [x, hit.point.y, z] } : { share: Math.max(6, reef.colonies.length + 1) });
-  if (!c) return;
+  if (!c) return bad('No room for a colony there.');
   if (!onRock) S.addRock(c.user.rock, meshRockAsync);
   syncPolyps();
-  flash(`Planted: ${SPECIES[G.plant].label}`);
+  tapFeedback(cx, cy, true, `Planted: ${SPECIES[G.plant].label}`);
 }
 let flashT = 0;
 function flash(msg) { const el = $('rState'); el.textContent = msg; flashT = performance.now() + 2600; }
+// A ring at the tap point (accent: done, warm: refused) and the message in
+// the readout and the plant bar.
+let markT = 0;
+function tapFeedback(cx, cy, good, msg) {
+  const m = $('tapMark');
+  m.style.left = `${cx}px`; m.style.top = `${cy}px`;
+  m.classList.remove('go'); m.classList.toggle('bad', !good);
+  void m.offsetWidth;                   // restart the animation
+  m.classList.add('go');
+  clearTimeout(markT); markT = setTimeout(() => m.classList.remove('go'), 1300);
+  if (!msg) return;
+  flash(msg);
+  const pm = $('plantMsg'); pm.textContent = msg; pm.classList.toggle('warn', !good);
+}
 
 // ── UI ──────────────────────────────────────────────────────────────────────
 function hideHint() { $('hint').classList.add('gone'); }
@@ -348,11 +378,9 @@ const rgbCss = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
 
 function setPlaying(p) {
   G.playing = p;
-  const t = p ? '❚❚ Pause' : '▶ Grow';
-  $('bPlay').textContent = t; $('bPlay').classList.toggle('on', p);
-  $('dockPlay').innerHTML = p ? '<i>❚❚</i><span>Pause</span>' : '<i>▶</i><span>Grow</span>';
-  $('dockPlay').setAttribute('aria-label', p ? 'Pause' : 'Grow');
+  if (shell) shell.setPlaying(p);
 }
+const presetShort = id => PRESETS[id].label.split(' ')[0];
 
 function buildSpeciesParams() {
   const id = G.spSel, box = $('spParams'), sp = SPECIES[id];
@@ -374,7 +402,13 @@ function buildSpeciesParams() {
 function buildUI() {
   chips($('presets'), PRESET_IDS.map(id => ({ id, label: PRESETS[id].label })), G.preset, id => { loadPreset(id, G.seed); });
   const spItems = SPECIES_IDS.map(id => ({ id, label: SPECIES[id].label, sw: rgbCss(SPECIES[id].base) }));
-  chips($('plant'), spItems, G.plant, id => { G.plant = id; });
+  const pickPlant = (id) => {
+    G.plant = id;
+    for (const box of ['plant', 'plantQuick']) $(box).querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.id === id));
+    $('plantMsg').textContent = `Plant mode: tap open sand or rock for ${SPECIES[id].label.toLowerCase()}`; $('plantMsg').classList.remove('warn');
+  };
+  chips($('plant'), spItems, G.plant, pickPlant);
+  chips($('plantQuick'), SPECIES_IDS.map(id => ({ id, label: SPECIES[id].label.replace(' coral', '').replace('Finger leather', 'Finger'), sw: rgbCss(SPECIES[id].base) })), G.plant, pickPlant);
   chips($('spPick'), spItems, G.spSel, id => { G.spSel = id; buildSpeciesParams(); });
   chips($('modes'), MODES, G.mode, id => setMode(id));
   mountGradientPicker($('gradPick'), { value: G.gradient, reversed: G.rev, onChange: (id, rev) => setGradient(id, rev) });
@@ -402,43 +436,28 @@ function buildUI() {
   tog('tDetail', 'detail', () => {});
 
   $('bPlay').addEventListener('click', () => setPlaying(!G.playing));
-  $('dockPlay').addEventListener('click', () => setPlaying(!G.playing));
   const regrow = () => { loadPreset(G.preset, G.seed, false); setPlaying(true); };
   $('bRegrow').addEventListener('click', regrow);
-  $('dockRegrow').addEventListener('click', regrow);
   $('bSeed').addEventListener('click', () => { loadPreset(G.preset, 1 + Math.floor(Math.random() * 1e6), false); setPlaying(true); });
 
-  // explainer
-  const about = $('about'); let diag = null;
-  $('aboutOpen').addEventListener('click', () => {
-    about.hidden = false;
-    if (!diag) diag = mountDiagram($('diag'), { gradient: () => G.gradient });
-    requestAnimationFrame(() => diag.start());
-    if (PHONE_Q.matches) setOpen(false);
+  // the dock, the phone sheet and the explainer (shell.js)
+  let diag = null;
+  shell = mountShell({
+    phoneQ: PHONE_Q, plant: G.plantMode,
+    on: {
+      play: () => setPlaying(!G.playing),
+      regrow,
+      preset: () => { const id = nextPreset(PRESET_IDS, G.preset); loadPreset(id, G.seed, true); setPlaying(true); },
+      plant: v => { G.plantMode = v; },
+      about: open => {
+        if (!open) { if (diag) diag.stop(); return; }
+        if (!diag) diag = mountDiagram($('diag'), { gradient: () => G.gradient });
+        requestAnimationFrame(() => diag.start());
+      },
+      open: () => { frameN = 0; },
+    },
   });
-  $('aboutClose').addEventListener('click', () => { about.hidden = true; if (diag) diag.stop(); });
-  addEventListener('keydown', e => { if (e.key === 'Escape' && !about.hidden) { about.hidden = true; if (diag) diag.stop(); } });
-
-  // panel, phone sheet and dock
-  const panel = $('panel');
-  $('gear').addEventListener('click', () => setOpen(true));
-  $('panelClose').addEventListener('click', () => setOpen(false));
-  document.querySelectorAll('#dock .tab').forEach(t => t.addEventListener('click', () => {
-    const same = panel.dataset.grp === t.dataset.grp && panel.classList.contains('open');
-    panel.dataset.grp = t.dataset.grp;
-    setOpen(!same);
-  }));
-  setOpen(!PHONE_Q.matches);
-  PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
-  const grip = $('sheetGrip'); let gy = null;
-  grip.addEventListener('pointerdown', e => { gy = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* old browser */ } });
-  grip.addEventListener('pointerup', e => {
-    if (gy === null) return; const dy = e.clientY - gy; gy = null;
-    if (Math.abs(dy) < 8) panel.classList.toggle('full');
-    else if (dy < -40) panel.classList.add('full');
-    else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
-  });
-  grip.addEventListener('pointercancel', () => { gy = null; });
+  setPlaying(G.playing);
 
   canvas.addEventListener('pointerdown', onDown);
   canvas.addEventListener('pointerup', onUp);
@@ -446,14 +465,7 @@ function buildUI() {
   setTimeout(hideHint, 9000);
 }
 
-function setOpen(open) {
-  const panel = $('panel');
-  if (!panel.dataset.grp) panel.dataset.grp = 'reef';
-  panel.classList.toggle('open', open);
-  if (!open) panel.classList.remove('full');
-  document.body.classList.toggle('panel-closed', !open);
-  document.querySelectorAll('#dock .tab').forEach(t => t.classList.toggle('on', open && t.dataset.grp === panel.dataset.grp));
-}
+function setOpen(open) { if (shell) shell.setOpen(open); }
 
 // ── readout ─────────────────────────────────────────────────────────────────
 let rate = 0, walkRate = 0, lastWalks = 0, lastJoined = 0, readT = 0;
@@ -483,7 +495,9 @@ function frame(t) {
     const n = saverOn && saver ? reef.step(dtMs, BUDGET, now, saver.base) : reef.step(dtMs, BUDGET, now, RATE);
     if (n) { syncPolyps(); dirty = true; }
   }
-  if (dirty && now > refreshAt) { refresh(); refreshAt = now + (reef.count > 8000 ? 600 : 350); }
+  // A full refresh costs about 15 ms at 6000 particles on a desktop (node),
+  // more on a phone, so a touch screen does it less often.
+  if (dirty && now > refreshAt) { refresh(); refreshAt = now + (COARSE ? (reef.count > 3000 ? 1000 : 500) : reef.count > 8000 ? 600 : 350); }
   if (S) {
     if (local) S.applyBricks(local.update(COARSE ? 3 : 4));
     S.flushChunks(COARSE ? 2.5 : 3.5, now);
@@ -518,7 +532,14 @@ function polypVis(S, on) {
   S.scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.isInstancedBufferGeometry && o.geometry.attributes.iPos) o.visible = on; });
 }
 
-function onResize() { if (S) { S.resize(); fitCamera(false); } }
+// The pixel ratio is capped by the device and by the drawn pixel count
+// (layout.js pixelRatio): a phone draws at most 2.2 M pixels.
+function onResize() {
+  if (!S) return;
+  const r = pixelRatio(devicePixelRatio, canvas.clientWidth || 1, canvas.clientHeight || 1, COARSE);
+  if (Math.abs(S.renderer.getPixelRatio() - r) > 0.01) S.renderer.setPixelRatio(r);
+  S.resize(); fitCamera(false);
+}
 addEventListener('resize', onResize);
 
 // ── start ───────────────────────────────────────────────────────────────────
@@ -528,7 +549,7 @@ setMode(G.mode);
 setCurrent();
 setTemp(G.temp);
 startMesher();
-if (S) { S.resize(); loadPreset(G.preset, G.seed, true); loadDecor(); requestAnimationFrame(frame); }
+if (S) { onResize(); loadPreset(G.preset, G.seed, true); loadDecor(); requestAnimationFrame(frame); }
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // A seeded shuffle of shots (saver.js shotList). Each shot regrows a reef
@@ -543,7 +564,7 @@ window.snSaver = {
     if (!S) return { canvas, warmupMs: 0 };
     saverOn = true;
     document.documentElement.classList.add('sn-saver');
-    setOpen(false); $('about').hidden = true;
+    setOpen(false); if (shell) shell.closeAbout();
     const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
     const label = typeof o.label === 'function' ? o.label : () => {};
     const shots = shotList((o.seed >>> 0) || 1, 40);

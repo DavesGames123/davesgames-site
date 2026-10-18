@@ -7,13 +7,16 @@
    right, and the explainer is a drawer at the right.
 
    PHONE (max-width 768px, or a short landscape touch screen): the pattern
-   of pages/wave-membrane. A dock at the base holds four tabs, play and
-   regrow. A tab opens the panel with only its group: a bottom sheet in
-   portrait, a drawer on the right in landscape. Every target is 44px or
-   more on a coarse pointer.
+   of pages/wave-membrane. A dock at the base holds preset, grow or pause,
+   regrow, plant mode and menu. Menu opens the panel with all its groups:
+   a bottom sheet in portrait (half or full height, a drag grip), a drawer
+   on the right in landscape. #plantBar shows in plant mode. The explainer
+   is a full-height sheet. Every target is 44px or more and all text is
+   11px or more on a coarse pointer. layout.js has the same breakpoints.
      grep -n 'TOUCH'      target sizes for any touch screen
      grep -n 'PHONE'      the phone block
      grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'PLANT'      plant mode: the plant bar and the tap mark
      grep -n 'sn-saver'   the screensaver mode
    ========================================================================== */
 [hidden]{display:none!important}
@@ -42,7 +45,7 @@ html.in-frame #gear{top:12px}
 #panel{
   position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
   background:rgba(3,18,27,0.94);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  border-right:1px solid var(--line-b);padding:62px 18px 22px;overflow-y:auto;
+  border-right:1px solid var(--line-b);padding:62px 18px 22px;overflow-y:auto;overflow-x:hidden;
   transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
 #panel.open{transform:translateX(0)}
 html.in-frame #panel{padding-top:20px}
@@ -65,6 +68,10 @@ html.in-frame #panelClose{top:12px}
 .runrow{margin-top:10px}
 .wide{width:100%;margin-top:10px}
 #gradPick{margin-top:14px}
+#adv summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
+#adv summary::-webkit-details-marker{display:none}
+#adv summary::after{content:'▸';color:var(--dim);transition:transform 0.2s}
+#adv[open] summary::after{transform:rotate(90deg)}
 
 .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 8px;margin:10px 0}
 .row label{grid-row:1;grid-column:1;font-size:0.78rem;color:var(--ink)}
@@ -92,20 +99,29 @@ html:not(.in-frame) #read{top:58px}
 #lgBar{width:180px;height:10px;border-radius:2px}
 .lg-ticks{display:flex;justify-content:space-between;font-size:0.72rem;color:var(--ink);margin-top:4px}
 
-#about{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);z-index:60;overflow-y:auto;padding:22px 22px 30px;background:rgba(3,16,24,0.97);border-left:1px solid var(--line-b);font-size:0.82rem;line-height:1.6;color:var(--ink)}
+#about{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);z-index:60;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:0 22px 30px;background:rgba(3,16,24,0.97);border-left:1px solid var(--line-b);font-size:0.82rem;line-height:1.6;color:var(--ink)}
 #about h2{font-family:var(--sci-serif);font-weight:500;font-size:1.08rem;margin:18px 0 8px;color:#eef8f8}
-#about h2:first-of-type{margin-top:4px;margin-right:40px}
+#about h2:first-of-type{margin-top:4px}
+.ab-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -22px 4px;padding:12px 22px 10px;background:rgba(3,16,24,0.98);border-bottom:1px solid var(--line);font-size:0.78rem;color:var(--dim)}
 #about p{color:#b6cfd3;margin-bottom:8px}
 #about .cap{font-size:0.74rem;color:var(--dim)}
 #about .cr{font-size:0.76rem}
-#aboutClose{position:absolute;top:14px;right:14px;width:34px;height:34px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#aboutClose{flex:0 0 auto;width:34px;height:34px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
 #diag{display:block;width:100%;height:220px;border-radius:8px;border:1px solid var(--line);margin:10px 0 4px}
 .hooks{border-collapse:collapse;font-size:0.76rem;width:100%}
 .hooks th{text-align:left;vertical-align:top;color:var(--accent);font-weight:500;padding:6px 10px 6px 0;white-space:nowrap}
 .hooks td{color:#b6cfd3;padding:6px 0;border-bottom:1px solid var(--line)}
 .hooks code{font:0.72rem var(--sci-mono);color:var(--warm)}
 
-#dock,#sheetGrip{display:none}
+#dock,#sheetGrip,#plantBar{display:none}
+
+/* PLANT mode: a crosshair, and a ring where a tap lands (ok or not). */
+body.planting #view{cursor:crosshair}
+#tapMark{position:fixed;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:25;border:2px solid var(--accent);border-radius:50%;pointer-events:none;opacity:0}
+#tapMark.go{animation:tapgo 0.7s ease-out}
+#tapMark.bad{border-color:var(--warm)}
+@keyframes tapgo{0%{opacity:1;transform:scale(0.4)}100%{opacity:0;transform:scale(1.6)}}
+@media (prefers-reduced-motion:reduce){#tapMark.go{animation-duration:1.2s}}
 
 @media(min-width:769px){
   .topbar{padding-left:calc(var(--panel-w) + 20px)}
@@ -120,6 +136,8 @@ html:not(.in-frame) #read{top:58px}
   #aboutClose{width:44px;height:44px;top:8px;right:8px}
   .chips button,.grid2 button,.grid3 button,.wide{min-height:44px;font-size:0.78rem;border-radius:10px}
   .linkbtn{min-height:44px}
+  #adv summary{min-height:44px}
+  .hooks th{white-space:normal}
   .row{min-height:44px;margin:4px 0}
   .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
   .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
@@ -135,17 +153,24 @@ html:not(.in-frame) #read{top:58px}
   .pagetitle{display:none}
   #gear,body.panel-closed #gear{display:none}
   .ptitle,.lede{display:none}
-  #panel .grp{display:none}
-  #panel[data-grp=reef] .grp[data-grp=reef],#panel[data-grp=colour] .grp[data-grp=colour],
-  #panel[data-grp=water] .grp[data-grp=water],#panel[data-grp=species] .grp[data-grp=species]{display:block}
-  .sec-label:first-child{margin-top:4px}
+  /* all groups in the sheet: colour and water first (the dock has the reef actions) */
+  #panel{display:flex;flex-direction:column}
+  #panel > *{flex:0 0 auto}
+  #sheetGrip{order:0}
+  #panel .grp[data-grp=colour]{order:1}
+  #panel .grp[data-grp=water]{order:2}
+  #panel .grp[data-grp=reef]{order:3}
+  #panel .grp[data-grp=species]{order:4;margin-top:8px;border-top:1px solid var(--line)}
+  #panel .credit{order:5}
+  .grp > .sec-label:first-child{margin-top:4px}
 
   #dock{
     display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:stretch;
     padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
     background:rgba(3,16,24,0.95);border-top:1px solid var(--line-b)}
-  #dock > button{flex:1 1 0;min-width:0;height:48px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);color:var(--dim);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:0.68rem}
-  #dock > button i{font-style:normal;font-size:1rem;line-height:1}
+  #dock > button{flex:1 1 0;min-width:0;height:48px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:0.7rem}
+  #dock > button i{font-style:normal;font-size:1.05rem;line-height:1}
+  #dock > button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
   #dock > button.on{border-color:var(--accent);color:var(--accent)}
 
   #read{top:auto;bottom:calc(var(--dock-h) + 8px);right:8px;min-width:0;padding:6px 9px;font-size:0.7rem}
@@ -157,6 +182,21 @@ html:not(.in-frame) #read{top:58px}
   #hint{bottom:auto;top:calc(52px + env(safe-area-inset-top));left:16px;right:16px;transform:none;line-height:1.5}
   html.in-frame #hint{top:10px}
   body:not(.panel-closed) #hint,body:not(.panel-closed) #legend,body:not(.panel-closed) #read{opacity:0}
+  body.planting #hint{opacity:0}
+
+  /* PLANT bar: the species chips and the last result, under the topbar */
+  #plantBar{
+    display:block;position:fixed;z-index:41;left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));
+    top:calc(50px + env(safe-area-inset-top));padding:8px 10px 10px;border:1px solid var(--line-b);border-radius:14px;
+    background:rgba(3,18,27,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  html.in-frame #plantBar{top:8px}
+  body:not(.panel-closed) #plantBar{display:none}
+  .pb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:0.76rem;color:var(--ink);margin-bottom:6px}
+  .pb-head span{min-width:0}
+  #plantMsg.warn{color:var(--warm)}
+  #plantDone{flex:0 0 auto;min-height:44px;min-width:64px;border:1px solid var(--accent);border-radius:10px;background:transparent;color:var(--accent);font-size:0.78rem;cursor:pointer}
+  #plantBar .chips{gap:5px}
+  #plantBar .chips button{min-height:44px;padding:6px 9px;font-size:0.74rem}
 
   /* The panel is a bottom sheet above the dock. */
   #panel{
@@ -174,7 +214,11 @@ html:not(.in-frame) #read{top:58px}
     display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px;
     background:linear-gradient(180deg,rgba(3,18,27,1) 65%,rgba(3,18,27,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
-  #about{width:100vw;padding:18px calc(18px + env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left))}
+  /* the explainer: a full-height sheet over the dock */
+  #about{left:0;width:100%;border-left:0;padding:0 calc(18px + env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left))}
+  .ab-head{margin:0 calc(-18px - env(safe-area-inset-right)) 4px calc(-18px - env(safe-area-inset-left));padding:calc(8px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 8px calc(18px + env(safe-area-inset-left))}
+  #aboutClose{width:44px;height:44px}
+  #diag{height:190px}
 }
 
 /* LANDSCAPE phone: the panel is a drawer on the right edge, the dock a tab
@@ -193,10 +237,12 @@ html:not(.in-frame) #read{top:58px}
   #panel.open{transform:translateX(0)}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
-  #about{width:min(60vw,460px)}
+  #about{left:auto;width:min(64vw,520px);border-left:1px solid var(--line-b)}
+  #plantBar{top:8px;right:auto;width:min(58vw,460px)}
+  body.planting #legend{opacity:0}
 }
 
 /* screensaver (lib/screensaver.js): the reef alone fills the frame */
 html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #read,html.sn-saver #legend,html.sn-saver #hint,
-html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #about{display:none!important}
+html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #about,html.sn-saver #plantBar,html.sn-saver #tapMark{display:none!important}
 html.sn-saver #view{cursor:none;transition:opacity 0.8s ease}
