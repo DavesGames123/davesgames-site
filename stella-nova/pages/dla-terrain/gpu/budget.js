@@ -25,6 +25,31 @@
 //                  one time, one profile lower; a second loss stops
 //  pressureStep(state) -> the profile id after an out-of-memory error
 //
+//  SAFARI (2026-10-18, the user: "let's make sure we stop crashing my
+//  computer when we're zoomed all the way in", Safari on a Mac). WebKit has
+//  no memory budget API, and on Apple silicon the GPU and the system share
+//  one memory. A frame that fills the GPU for a long time also starves the
+//  window server. So:
+//    safari    the default for Safari on a Mac and for an Apple GPU
+//              (adapter info). Desktop look, but pxCap 3.5 Mpx of output,
+//              nearPxCap 1.6 Mpx of render size near the ground, 2048 x 3
+//              shadow cascades, budgetMB 1300, 1 frame in flight, HEAVY
+//              at 50 ms, and an idle gap after each heavy frame (dutyIdle).
+//    safe      the start after a crash (the guard below): pxCap 2 Mpx,
+//              nearPxCap 1 Mpx, 1024 x 2 cascades, govMin 1 (no POM, no
+//              vertex relief), screen shafts, smaller impostors.
+//  pixelCap(profile, view) -> { outW, outH, w, h, near } the swap chain size
+//              and the render size (the caps of the profile, the quality
+//              pixel ratio, the 8.3 Mpx desktop cap)
+//  trackDevice(device, mem) wraps createBuffer and createTexture of one
+//              device: mem.live, mem.peak, mem.count, mem.made, mem.freed
+//              (bytes; destroy() frees one time). texBytes(desc) as Deno.
+//  CRASH GUARD guardRead(store, now), guardMark(store, state, now),
+//              guardClean(store): a flag in localStorage that a session
+//              writes while it is zoomed in and clears on a clean unload.
+//              A flag that is still there at the next start means that the
+//              last session did not end cleanly: start in 'safe'.
+//
 //  MEASURED (Deno, gpu/mem-tally.mjs, 2026-10-17): phone 390 x 844 at Low:
 //  409 MB live, 592 MB peak before the profile; 117 MB live, 118 MB peak
 //  with it. Desktop 1280 x 800 at High: 700 MB live, 883 MB peak (no
@@ -34,7 +59,9 @@
 //
 //  grep -n targets: "export const PROFILES", "export function detectProfile",
 //  "export function estimate", "export function resolveSizes",
-//  "export function lostPolicy", "ASSET_MB", "GROUND_SETS"
+//  "export function lostPolicy", "ASSET_MB", "GROUND_SETS", "export function isSafari",
+//  "export function pixelCap", "export function trackDevice", "export function guardRead",
+//  "GUARD_KEY", "safari: {", "safe: {"
 // ============================================================================
 
 export const MB = 1048576;
@@ -71,6 +98,24 @@ export const PROFILES = {
     startDelayMs: 2500,
     shafts: 'screen',
   },
+  // SAFARI (see the header): the desktop look with caps that do not let
+  // one frame or the memory grow with the zoom. pxCap: swap chain pixels;
+  // nearPxCap: render pixels when the eye is near the ground (main.js
+  // fg.setNear); maxInFlight, heavyMs, dutyIdle: gpu/frame.js HANG GUARD
+  safari: {
+    id: 'safari', label: 'Safari / Apple GPU', budgetMB: 1300, raiseLimits: true, budgetMs: 1000 / 50,
+    dprCap: 2, pxCap: 3.5e6, nearPxCap: 1.6e6, maxN: 2048, shadowSize: 2048, cascades: 3, taa: null,
+    froxel: null, cloudK: null, cloudNoise: null, groundRes: null, groundLayers: null,
+    veg: null, startDelayMs: 0, shafts: 'volume',
+    maxInFlight: 1, heavyMs: 50, dutyIdle: 0.5, govMin: 0, memGuard: true,
+  },
+  safe: {
+    id: 'safe', label: 'Safe (after a crash)', budgetMB: 700, raiseLimits: true, budgetMs: 1000 / 40,
+    dprCap: 1.5, pxCap: 2.0e6, nearPxCap: 1.0e6, maxN: 1024, shadowSize: 1024, cascades: 2, taa: null,
+    froxel: [96, 54, 32], cloudK: 0.34, cloudNoise: null, groundRes: null, groundLayers: null,
+    veg: { impFrame: 128 }, startDelayMs: 1500, shafts: 'screen',
+    maxInFlight: 1, heavyMs: 40, dutyIdle: 1, govMin: 1, memGuard: true,
+  },
   'phone-min': {
     id: 'phone-min', label: 'Phone (low memory)', budgetMB: 180, raiseLimits: false, budgetMs: 1000 / 30,
     dprCap: 1, maxN: 256, shadowSize: 1024, cascades: 1, taa: false,
@@ -81,18 +126,35 @@ export const PROFILES = {
     shafts: 'off',
   },
 };
-export const PROFILE_ORDER = ['desktop', 'phone', 'phone-min'];
+export const PROFILE_ORDER = ['desktop', 'safari', 'safe', 'phone', 'phone-min'];
+// the step after a loss or an out-of-memory error (desktop -> phone as
+// before; the Safari line goes through safe)
+const DOWN = { desktop: 'phone', safari: 'safe', safe: 'phone', phone: 'phone-min', 'phone-min': null };
 
 export function isIOS(env) {
   const ua = String(env.ua || '');
   return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (env.maxTouchPoints || 0) > 1);
 }
 
+// Safari (desktop WebKit): the UA has Safari/ and Version/, and none of
+// the other engines on WebKit or Blink (Chrome, Edge, Firefox on iOS, ...)
+export function isSafari(env) {
+  const ua = String(env.ua || '');
+  return /Safari\//.test(ua) && /Version\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\/|OPR\/|Android/.test(ua);
+}
+// an Apple GPU from adapter.info (vendor 'apple', or an architecture or
+// description with 'apple' or 'metal-3' in it); info may be undefined
+export function isAppleGPU(info) {
+  if (!info) return false;
+  const s = [info.vendor, info.architecture, info.description, info.device].map(v => String(v || '')).join(' ');
+  return /apple/i.test(s);
+}
+
 export function detectProfile(env = {}) {
   const w = env.w || 1280, h = env.h || 800, short = Math.min(w, h);
   const mem = Number.isFinite(env.deviceMemory) && env.deviceMemory > 0 ? env.deviceMemory : null;
   const phone = !!env.coarse || short < 600 || isIOS(env) || (mem !== null && mem <= 4);
-  if (!phone) return 'desktop';
+  if (!phone) return isSafari(env) || isAppleGPU(env.adapterInfo) ? 'safari' : 'desktop';
   if ((mem !== null && mem <= 2) || short < 360) return 'phone-min';
   return 'phone';
 }
@@ -111,11 +173,103 @@ export function pageEnv() {
 
 const clone = o => JSON.parse(JSON.stringify(o));
 export function profileFor(id) { return clone(PROFILES[id] || PROFILES.desktop); }
-export function stepDown(id) {
-  const i = PROFILE_ORDER.indexOf(id);
-  return i >= 0 && i < PROFILE_ORDER.length - 1 ? PROFILE_ORDER[i + 1] : null;
-}
+export function stepDown(id) { return DOWN[id] ?? null; }
 const capMin = (a, cap) => (cap == null ? a : Math.min(a, cap));
+
+// DESKTOP_PX: the render cap of every profile (4K and up)
+export const DESKTOP_PX = 8.3e6;
+export const QUALITY_DPR = Q.map(x => x.dpr);
+// view = { cssW, cssH, dpr, qualityIndex, scale (the dynamic scale),
+// near (the eye near the ground), pressure }. outW x outH: the swap chain
+// (post output) under min(pxCap, 8.3 Mpx); w x h: the render size =
+// out x scale, then under nearPxCap when near. Pure: gpu/frame.js and the
+// memory model both call it.
+export function pixelCap(profile, view = {}) {
+  const p = profile || PROFILES.desktop;
+  const qi = Math.max(0, Math.min(3, view.qualityIndex ?? 2));
+  let cap = QUALITY_DPR[qi];
+  if (p.dprCap) cap = Math.min(cap, p.dprCap);
+  if (view.pressure) cap = Math.min(cap, 1);
+  const dpr = Math.min(view.dpr || 1, cap);
+  let outW = Math.max(16, Math.round((view.cssW || 1280) * dpr)), outH = Math.max(16, Math.round((view.cssH || 800) * dpr));
+  const pxMax = Math.min(DESKTOP_PX, p.pxCap || DESKTOP_PX);
+  if (outW * outH > pxMax) { const k = Math.sqrt(pxMax / (outW * outH)); outW = Math.max(16, Math.floor(outW * k)); outH = Math.max(16, Math.floor(outH * k)); }
+  const scale = view.scale ?? Q[qi].scale;
+  let w = Math.max(16, Math.round(outW * scale)), h = Math.max(16, Math.round(outH * scale));
+  const near = !!view.near && !!p.nearPxCap;
+  if (near && w * h > p.nearPxCap) { const k = Math.sqrt(p.nearPxCap / (w * h)); w = Math.max(16, Math.floor(w * k)); h = Math.max(16, Math.floor(h * k)); }
+  return { dpr, outW, outH, w, h, near };
+}
+
+// ── GPU memory tally (the browser twin of gpu/mem-tally.mjs)
+const BPT = {
+  r8uint: 1, r8unorm: 1, r8snorm: 1, rg8unorm: 2, rgba8unorm: 4, 'rgba8unorm-srgb': 4, bgra8unorm: 4, 'bgra8unorm-srgb': 4,
+  r16float: 2, rg16float: 4, rgba16float: 8, r32float: 4, rg32float: 8, rgba32float: 16, r32uint: 4, rg32uint: 8, rgba32uint: 16,
+  depth32float: 4, depth24plus: 4, 'depth24plus-stencil8': 4, depth16unorm: 2, rg11b10ufloat: 4, rgb10a2unorm: 4,
+};
+export function texBytes(d) {
+  const sz = d.size || [1, 1, 1];
+  const s = Array.isArray(sz) ? sz : [sz.width, sz.height || 1, sz.depthOrArrayLayers || 1];
+  const w = s[0] || 1, h = s[1] || 1, z = s[2] || 1, b = BPT[d.format] ?? 4, is3 = d.dimension === '3d';
+  let t = 0;
+  for (let i = 0; i < (d.mipLevelCount || 1); i++) t += Math.max(1, w >> i) * Math.max(1, h >> i) * (is3 ? Math.max(1, z >> i) : z) * b;
+  return t * (d.sampleCount || 1);
+}
+// wraps the two allocation calls of one device (an own property over the
+// prototype, so every module that calls device.createX is counted). A
+// destroy() frees the bytes one time. mem.byLabel: live bytes per label.
+const TRACKED = new WeakSet();
+export function trackDevice(device, mem = {}) {
+  Object.assign(mem, { live: 0, peak: 0, count: 0, made: 0, freed: 0, byLabel: new Map() });
+  if (!device || TRACKED.has(device)) return mem;
+  TRACKED.add(device);
+  const add = (label, n) => { const k = label || '?'; mem.byLabel.set(k, (mem.byLabel.get(k) || 0) + n); if (mem.byLabel.get(k) <= 0) mem.byLabel.delete(k); };
+  const wrap = (o, bytes, label) => {
+    if (!o || typeof o !== 'object' && typeof o !== 'function') return o;
+    mem.live += bytes; mem.count++; mem.made++; mem.peak = Math.max(mem.peak, mem.live); add(label, bytes);
+    const od = typeof o.destroy === 'function' ? o.destroy : null;
+    let done = false;
+    try {
+      Object.defineProperty(o, 'destroy', { configurable: true, writable: true, value: function () {
+        if (!done) { done = true; mem.live -= bytes; mem.count--; mem.freed++; add(label, -bytes); }
+        return od ? od.call(o) : undefined;
+      } });
+    } catch { /* a frozen object: counted, never freed */ }
+    return o;
+  };
+  const cB = device.createBuffer, cT = device.createTexture;
+  if (typeof cB === 'function') device.createBuffer = function (d) { return wrap(cB.call(device, d), (d && d.size) || 0, d && d.label); };
+  if (typeof cT === 'function') device.createTexture = function (d) { return wrap(cT.call(device, d), texBytes(d || {}), d && d.label); };
+  return mem;
+}
+
+// ── CRASH GUARD (see the header). store: localStorage (or a test object
+// with getItem / setItem / removeItem); every call has a try/catch, as a
+// private window or blocked site data can throw
+export const GUARD_KEY = 'dla-terrain-crash-guard';
+export const GUARD_MAX_AGE = 7 * 24 * 3600e3;   // ms: an older flag is stale
+export function guardRead(store, now = Date.now()) {
+  let v = null;
+  try { v = store && store.getItem(GUARD_KEY); } catch { return { unclean: false, zoomed: false, why: 'no storage' }; }
+  if (!v) return { unclean: false, zoomed: false, why: 'clean' };
+  let o = null;
+  try { o = JSON.parse(v); } catch { o = null; }
+  if (!o || typeof o !== 'object' || !Number.isFinite(o.t)) return { unclean: false, zoomed: false, why: 'bad flag' };
+  if (now - o.t > GUARD_MAX_AGE || o.t > now + 60e3) return { unclean: false, zoomed: false, why: 'stale' };
+  return { unclean: true, zoomed: !!o.zoomed, profile: o.profile || null, agl: o.agl, why: 'unclean' };
+}
+// state = { zoomed, profile, agl }: a write per call (main.js calls it
+// about once a second, and at once when the eye goes near the ground)
+export function guardMark(store, state = {}, now = Date.now()) {
+  try { store.setItem(GUARD_KEY, JSON.stringify({ t: now, zoomed: !!state.zoomed, profile: state.profile || null, agl: Number.isFinite(state.agl) ? Math.round(state.agl) : null })); return true; } catch { return false; }
+}
+export function guardClean(store) { try { store.removeItem(GUARD_KEY); return true; } catch { return false; } }
+// the start profile after a guard read: a session that stopped while it
+// was zoomed in starts in 'safe' (a phone keeps its own, smaller profile)
+export function guardProfile(detected, g) {
+  if (!g || !g.unclean || !g.zoomed) return detected;
+  return detected === 'phone' || detected === 'phone-min' ? detected : 'safe';
+}
 
 // the sizes in use for a profile and a view; the module formulas are the
 // ones in render/*.js on 2026-10-17 (a change there makes the model drift:
@@ -123,11 +277,11 @@ const capMin = (a, cap) => (cap == null ? a : Math.min(a, cap));
 export function resolveSizes(profile, view = {}) {
   const p = profile || PROFILES.desktop;
   const qi = Math.max(0, Math.min(3, view.qualityIndex ?? 2)), qp = Q[qi], q = qp.q;
-  const coarse = p.id !== 'desktop';
-  const dpr = Math.min(view.dpr || 1, qp.dpr, p.dprCap ?? 99);
-  let outW = Math.max(16, Math.round((view.cssW || 1280) * dpr)), outH = Math.max(16, Math.round((view.cssH || 800) * dpr));
-  if (outW * outH > 8.3e6) { const k = Math.sqrt(8.3e6 / (outW * outH)); outW = Math.round(outW * k); outH = Math.round(outH * k); }
-  const w = Math.max(16, Math.round(outW * qp.scale)), h = Math.max(16, Math.round(outH * qp.scale));
+  // the vegetation reads gpu.coarse (a touch screen), so only the phone
+  // profiles are coarse here
+  const coarse = p.id === 'phone' || p.id === 'phone-min';
+  const pc = pixelCap(p, { ...view, qualityIndex: qi, scale: qp.scale });
+  const { dpr, outW, outH, w, h } = pc;
   const gridFor = qq => (qq >= 0.75 ? [160, 90, 64] : qq >= 0.4 ? [128, 72, 48] : [96, 54, 32]);
   const veg = p.veg || {};
   // vegetation (render/vegetation.js createVegetation)
