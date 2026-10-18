@@ -198,7 +198,7 @@ export function spawnColony({ W, seed = 1, colony, budget }) {
       const a = R() * Math.PI * 2, size = sp.size[0] + (sp.size[1] - sp.size[0]) * R();
       if (benthic) {
         // on the colony: high on its crown (the fan edge is the best feeding place)
-        const y = top - R() * (top - c[1]) * 0.4, r = rad * (0.3 + 0.6 * R());
+        const ext = colony.ext || rad * 0.6, y = top - R() * (top - c[1]) * 0.4, r = ext * (0.15 + 0.55 * R());
         const p = { x: c[0] + Math.cos(a) * r, y, z: c[2] + Math.sin(a) * r, yaw: R() * Math.PI * 2, size, onCoral: true };
         if (inDepth(sp, sY - p.y)) members.push(p);
       } else {

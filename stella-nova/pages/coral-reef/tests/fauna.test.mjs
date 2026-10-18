@@ -34,7 +34,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MODELS, ALLOWED_LICENCES } from '../fauna/sources.js';
 import { SPECIES, FEATURES, REGIONS, generatedSpecies, ANIM } from '../fauna/species.js';
-import { spawnChunk, poolAt, FAUNA_CH, CLEAR, gridFrom } from '../fauna/spawn.js';
+import { spawnChunk, spawnColony, poolAt, FAUNA_CH, CLEAR, gridFrom } from '../fauna/spawn.js';
 import { createSim } from '../fauna/sim.js';
 import { genModel } from '../fauna/models.js';
 import { FAUNA_BUDGET } from '../fauna/budget.js';
@@ -191,6 +191,25 @@ const W7 = createWorld({ seed: 7 }), W11 = createWorld({ seed: 11 });
   ok(grows, 'the species pool grows with depth (300 to 4500 m over the shallows)', rows.join('; '));
   const featD = d => FEATURES.filter(f => d >= f.depth[0] && d <= f.depth[1]).length;
   ok(featD(500) > featD(15) && featD(2500) > featD(15), 'more kinds of features in the deep', `15 m: ${featD(15)}, 500 m: ${featD(500)}, 2500 m: ${featD(2500)}`);
+}
+
+// ── coral colony dwellers (world/stream.js 'coral' colonies) ──────────────────
+{
+  let n = 0, out = 0, onCol = 0, base = 0;
+  const fams = new Set();
+  for (let k = 0; k < 200; k++) {
+    const x = (k * 37) % 2000 - 1000, z = (k * 53) % 2000 - 1000, gy = W7.ground(x, z);
+    const col = { id: 'fan', base: [x, gy, z], center: [x, gy + 1.5, z], radius: 2, top: gy + 3, ext: 1.5, size: 3 };
+    for (const g of spawnColony({ W: W7, seed: 7, colony: col, budget: FAUNA_BUDGET.desktop })) {
+      fams.add(g.sp.family);
+      for (const m of g.members) {
+        n++; const d = 55 - m.y; if (d < g.sp.depth[0] || d > g.sp.depth[1]) out++;
+        if (g.feature === 'colony' && m.onCoral && Math.hypot(m.x - x, m.z - z) <= 1.5 && m.y <= gy + 3 + 1e-6) onCol++;
+        if (g.feature === 'colony-base') base++;
+      }
+    }
+  }
+  ok(n > 0 && out === 0 && onCol > 0 && base > 0, 'colony dwellers: on the colony (inside its extent) and at its base, in their depth', `${n} animals, ${onCol} on colonies, ${base} at bases, families ${[...fams].join('/')}`);
 }
 
 // ── rock: no swimmer in the solid over a long run ────────────────────────────
