@@ -179,12 +179,15 @@ function closeCam(kind, d, pick = 0) {
   let s = 977 + pick * 7919;
   const r = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
   const cands = [];
+  // a world with no steep faces (highlands) takes its steepest ground
+  let gMin = kind === 'rock' ? 0.9 : 0;
+  for (let pass = 0; pass < 2 && !cands.length; pass++, gMin *= 0.55)
   for (let k = 0; k < 40000 && cands.length < 400; k++) {
     const x = (r() - 0.5) * ws * 0.8, z = (r() - 0.5) * ws * 0.8;
     const [i, j] = ij(x, z), y = h[j * n + i];
     if (y < t.seaLevel + 3 || (t.water && t.water[j * n + i] > 0.02) || (t.river && t.river[j * n + i] > 0.1)) continue;
     const gx = (h[j * n + i + 1] - h[j * n + i - 1]) / (2 * cell), gz = (h[(j + 1) * n + i] - h[(j - 1) * n + i]) / (2 * cell), g = Math.hypot(gx, gz);
-    const ok = kind === 'rock' ? g > 0.9 && g < 3 : kind === 'scree' ? g > 0.45 && g < 0.75 : g < 0.25;
+    const ok = kind === 'rock' ? g > gMin && g < 3 : kind === 'scree' ? g > 0.45 && g < 0.75 : g < 0.25;
     if (ok) cands.push([x, z, gx, gz, g]);
   }
   if (!cands.length) { console.log('close: no', kind, 'site'); return false; }
