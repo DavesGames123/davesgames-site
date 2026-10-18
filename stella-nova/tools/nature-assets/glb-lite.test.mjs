@@ -229,7 +229,9 @@ if (!existsSync(mfile)) {
   let bytes = 0, defBytes = 0;
   for (const [f, def] of seen) { const n = statSync(f).size; bytes += n; if (def) defBytes += n; }
   ok(bytes < 160e6, `pack: ${(bytes / 1e6).toFixed(1)} MB under 160 MB`);
-  ok(defBytes < 45e6, `pack: default view ${(defBytes / 1e6).toFixed(1)} MB under 45 MB`);
+  // 45 MB until 2026-10-17; the four close-range rock and soil ground sets
+  // of dla-terrain (3.4 MB, always loaded on desktop) raise it to 49 MB
+  ok(defBytes < 49e6, `pack: default view ${(defBytes / 1e6).toFixed(1)} MB under 49 MB`);
   // Every second pack source is in CREDITS.txt with its author and link.
   const credits = existsSync(path.join(root, 'CREDITS.txt')) ? readFileSync(path.join(root, 'CREDITS.txt'), 'utf8') : '';
   for (const a of credited) ok(credits.includes(a.sourceAsset) && credits.includes(a.source) && credits.includes(a.id), `${a.id}: in CREDITS.txt with source and link`);

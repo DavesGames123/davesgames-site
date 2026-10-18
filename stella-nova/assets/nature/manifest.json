@@ -44,10 +44,14 @@
   "ground_sand",
   "ground_desert",
   "ground_snow",
-  "ground_mud"
+  "ground_mud",
+  "ground_layered_rock",
+  "ground_blocky_rock",
+  "ground_outcrop",
+  "ground_stony_soil"
  ],
  "totals": {
-  "assets": 202,
+  "assets": 206,
   "kinds": {
    "boulder": 7,
    "bush": 24,
@@ -64,11 +68,11 @@
    "stump": 2,
    "succulent": 12,
    "tree": 48,
-   "ground texture": 13
+   "ground texture": 17
   },
-  "files": 1751,
-  "bytes": 140583134,
-  "defaultBytes": 44250606
+  "files": 1763,
+  "bytes": 144021218,
+  "defaultBytes": 47688690
  },
  "assets": [
   {
@@ -17993,6 +17997,109 @@
    "source": "https://polyhaven.com/a/brown_mud_02",
    "sourceName": "Poly Haven",
    "sourceAsset": "brown_mud_02"
+  },
+  {
+   "id": "ground_layered_rock",
+   "name": "Layered rock face",
+   "kind": "ground texture",
+   "biomes": [
+    "bare_rock",
+    "desert",
+    "scree"
+   ],
+   "layer": 13,
+   "tile": 1.83,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/layered_rock_albedo.webp",
+    "normal": "ground/layered_rock_normal.webp",
+    "orm": "ground/layered_rock_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "James Ray Cock, Jenelle van Heerden, Dario Barresi",
+   "source": "https://polyhaven.com/a/cliff_side",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "cliff_side"
+  },
+  {
+   "id": "ground_blocky_rock",
+   "name": "Jointed rock blocks",
+   "kind": "ground texture",
+   "biomes": [
+    "bare_rock",
+    "scree",
+    "snow",
+    "tundra"
+   ],
+   "layer": 14,
+   "tile": 2.0,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/blocky_rock_albedo.webp",
+    "normal": "ground/blocky_rock_normal.webp",
+    "orm": "ground/blocky_rock_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Amal Kumar",
+   "source": "https://polyhaven.com/a/dry_riverbed_rock",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "dry_riverbed_rock"
+  },
+  {
+   "id": "ground_outcrop",
+   "name": "Rock outcrops (aerial, 50 m)",
+   "kind": "ground texture",
+   "biomes": [
+    "bare_rock",
+    "tundra",
+    "alpine_meadow"
+   ],
+   "layer": 15,
+   "tile": 50.0,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/outcrop_albedo.webp",
+    "normal": "ground/outcrop_normal.webp",
+    "orm": "ground/outcrop_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Rob Tuytel",
+   "source": "https://polyhaven.com/a/aerial_rocks_02",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "aerial_rocks_02"
+  },
+  {
+   "id": "ground_stony_soil",
+   "name": "Stony soil",
+   "kind": "ground texture",
+   "biomes": [
+    "grassland",
+    "savanna",
+    "tundra",
+    "scree",
+    "alpine_meadow"
+   ],
+   "layer": 16,
+   "tile": 2.0,
+   "size": 1024,
+   "textures": {
+    "albedo": "ground/stony_soil_albedo.webp",
+    "normal": "ground/stony_soil_normal.webp",
+    "orm": "ground/stony_soil_orm.webp"
+   },
+   "ormLayout": "r ambient occlusion, g roughness, b height (0..1 stretched), normal map is OpenGL (+y)",
+   "default": true,
+   "licence": "CC0-1.0",
+   "author": "Amal Kumar",
+   "source": "https://polyhaven.com/a/rocky_trail",
+   "sourceName": "Poly Haven",
+   "sourceAsset": "rocky_trail"
   }
  ]
 }

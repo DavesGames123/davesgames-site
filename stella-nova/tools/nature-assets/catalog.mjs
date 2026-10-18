@@ -258,6 +258,12 @@ export const GROUND = [
   { id: 'desert', from: PH, src: 'dry_ground_01', name: 'Cracked dry ground', tile: 4.0, biomes: ['desert', 'savanna'] },
   { id: 'snow', from: PH, src: 'snow_02', name: 'Snow', tile: 2.0, biomes: ['snow', 'tundra'] },
   { id: 'mud', from: PH, src: 'brown_mud_02', name: 'Mud', tile: 1.3, biomes: ['wetland', 'river', 'lake'] },
+  // close and mid-range rock for the dla-terrain ground (2026-10-17, built
+  // from the 2k maps with the same recipe as writeGroundSet)
+  { id: 'layered_rock', from: PH, src: 'cliff_side', name: 'Layered rock face', tile: 1.83, biomes: ['bare_rock', 'desert', 'scree'] },
+  { id: 'blocky_rock', from: PH, src: 'dry_riverbed_rock', name: 'Jointed rock blocks', tile: 2.0, biomes: ['bare_rock', 'scree', 'snow', 'tundra'] },
+  { id: 'outcrop', from: PH, src: 'aerial_rocks_02', name: 'Rock outcrops (aerial, 50 m)', tile: 50.0, biomes: ['bare_rock', 'tundra', 'alpine_meadow'] },
+  { id: 'stony_soil', from: PH, src: 'rocky_trail', name: 'Stony soil', tile: 2.0, biomes: ['grassland', 'savanna', 'tundra', 'scree', 'alpine_meadow'] },
 ];
 
 // Archives for the second pack. fetch.mjs downloads each into
