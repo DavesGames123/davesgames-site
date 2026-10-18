@@ -10,7 +10,7 @@
 //  (deep noise) no picture arrives; the link tells the HUD "no VIS".
 //
 //  NOISE. makeSamples() adds, per frame, from a seeded generator:
-//    snr ..... white noise over the audio band (codec.channel), 14 to 26 dB
+//    snr ..... white noise over the audio band (codec.channel), 21 to 30 dB
 //    fades ... codec.channel slow fades, plus 0 to 2 deep fades: the
 //              signal drops to 8 to 25 % for 0.6 to 2.5 s (a bad line
 //              band in the picture)
@@ -118,7 +118,7 @@ export function makeSamples(img, p) {
 
 // The noise of one frame, from a seeded generator.
 export function frameParams(R, o = {}) {
-  const snr = o.snr != null ? o.snr : 14 + 12 * R();
+  const snr = o.snr != null ? o.snr : 21 + 9 * R();
   const clock = o.clock != null ? o.clock : (R() * 2 - 1) * 0.0003;
   const lean = o.lean != null ? o.lean : (R() < 0.5 ? -1 : 1) * (0.00005 + 0.00015 * R());
   const dips = [];
