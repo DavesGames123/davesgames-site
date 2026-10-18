@@ -1,28 +1,31 @@
 // ============================================================================
 //  CORAL REEF  ·  terrain (DOM-free: page, worker, node tests)
 // ----------------------------------------------------------------------------
-//  The seabed is real. seabed-data.js holds a 160 x 160 crop of NOAA NCEI
-//  lidar bathymetry (CUDEM 1/9 arc-second, about 3.3 m a sample) of the
-//  lagoon of Buck Island Reef, St. Croix: sand with patch reefs (knolls)
-//  and the back-reef ridge. This module turns it into scene units:
-//    - one sample is SCALE.xz units across (the scene is not to scale:
-//      corals are drawn large, the relief is the real shape, compressed)
+//  V3: THE ROCK MOVED TO rock/ (rock/index.js createRock, CONTRACT-V3.md).
+//  This file is now a compatibility layer. It re-exports the ROCK API and
+//  keeps the v2 exports below (lidar seabed, knoll rocks) only until SCENE
+//  (scene.js, main.js, tests.mjs, thumb.mjs) and CORAL (reef.js,
+//  coral-sdf.js, mesh-worker.js, assets.js) import from rock/. Do not add
+//  to the v2 part. When no file imports it, delete it and seabed-data.js.
+//
+//  v2 description (kept for the importers that still use it): the seabed
+//  is real. seabed-data.js holds a 160 x 160 crop of NOAA NCEI lidar
+//  bathymetry (CUDEM 1/9 arc-second, about 3.3 m a sample) of the lagoon
+//  of Buck Island Reef, St. Croix. This module turns it into scene units:
+//    - one sample is SCALE.xz units across
 //    - the depth splits into a regional trend (a wide blur) and the local
-//      relief (depth minus trend). The trend keeps SCALE.trend of its
-//      height, the local relief is raised by SCALE.local, so the knolls
-//      read as rock outcrops at reef scale.
+//      relief (depth minus trend), scaled by SCALE.trend and SCALE.local
 //    - Catmull-Rom interpolation between samples, mirror repeat past the
 //      crop, and a far ring that fades to a flat sand plain.
-//  Procedural detail on top: sand ripples across the current, rubble
-//  bumps on the knolls (the rock mask), and rock SDFs (noisy boulders
-//  with overhangs and holes) that carry the colonies.
+//  Procedural detail on top: sand ripples, rubble bumps on the knolls, and
+//  rock SDFs (noisy boulders with overhangs and holes).
 //
 //  FRAMES. x east, z south, y up, scene units. groundY(x, z) is the
 //  heightfield. rockSdf(rk, x, y, z) is negative inside a rock.
-//  solidAt(x, y, z, rocks) is true in the ground or in a rock: the DLA
-//  walkers of reef.js start again there, and particles never sit there.
+//  solidAt(x, y, z, rocks) is true in the ground or in a rock.
 //
 //  grep -n targets
+//    v3 rock API ................ "export { createRock"
 //    scale of the real data ..... "export const SCALE"
 //    trend and relief grids ..... "function buildGrids"
 //    height of the ground ....... "export function groundY"
@@ -37,6 +40,7 @@
 //    ground mesh grid ........... "export function groundGrid"
 //    rock mesh .................. "export function meshRock"
 // ============================================================================
+export { createRock, createRockAsync } from './rock/index.js';
 import { SEABED_CM, SEABED_META } from './seabed-data.js';
 import { meshField } from '../../lib/dla-sdf.js';
 
