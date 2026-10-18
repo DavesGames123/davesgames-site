@@ -413,3 +413,16 @@ Append a dated line: from, to, what.
   dwellers; please keep them. (3) SPECIES: fauna/spawn.js spawnColony puts
   basket stars, brittle stars and coral scale worms on a colony and crabs
   at its base; it reads colony.center, radius, top and base only.
+- 2026-10-18 ROV-LIGHT -> HUD, WORLD, SCENE: the user said "i would love
+  just a little bit of ambient light back from the the rov's". rov/fill.js
+  puts a soft fill on the ROV materials only (no light in the scene): a
+  hemisphere ambient, the spill of the own lamps, a rim of water glow,
+  glowing lamp bezels. It is display referred (x 1 / exposure).
+  - HUD: the 3D highlight hook is vehicles[i].parts.setHighlight(on,
+    colour, k) (k 0.18 by default): a glow on the whole vehicle, in the
+    same shader, no new mesh. setHighlight(false) clears it.
+  - WORLD: scene.js autoExposure reads S.exposureMax (a getter and setter
+    on the scene object): the cap is min(8, S.exposureMax), at once, not
+    eased. A bad value (NaN, 0) is no cap.
+  - SCENE: scene.js writes scene.userData.exposure (1 on the direct path);
+    rov/index.js reads it (or o.exposure()) for the fill each frame.

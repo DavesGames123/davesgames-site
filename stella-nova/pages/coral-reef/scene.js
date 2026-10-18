@@ -699,9 +699,12 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // centre pixel after the composite (gpu-safe.js SENTINEL); two misses
   // and the page draws the scene straight to the canvas.
   const post = { on: !!passes, checks: 0, misses: 0, failed: false, exposure: passes ? passes.compU.uExposure.value : 1, reason: '' };
+  scene.userData.exposure = post.exposure;
+  let expoMax = Infinity;                                // S.exposureMax (WORLD, per depth region)
   const px1 = new Uint8Array(4);
   function postFail(why) {
     post.on = false; post.failed = true; post.reason = why;
+    scene.userData.exposure = 1;                         // the direct path has no exposure
     renderer.setClearColor(0x000000, 1);
     console.warn('coral-reef: the post chain did not draw; the scene goes straight to the canvas (' + why + ')');
   }
@@ -719,8 +722,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     try { renderer.readRenderTargetPixels(passes.rtLum, 0, 0, passes.LUM_N, passes.LUM_N, passes.lumBuf); } catch (e) { return; }
     // max 8 (was 24): a dark frame does not lift the far water (the user:
     // "it is dark up close and then bright at a distance")
-    post.exposure = exposureFrom(passes.lumBuf, post.exposure, { max: 8 });
+    // WORLD sets S.exposureMax per depth region (main.js depthLook): the
+    // smaller of the two caps holds at once (no ease past it), so the deep
+    // water stays dark
+    const cap = Math.min(8, expoMax);
+    post.exposure = Math.min(cap, exposureFrom(passes.lumBuf, post.exposure, { max: cap }));
     passes.compU.uExposure.value = post.exposure;
+    scene.userData.exposure = post.exposure;           // rov/fill.js reads it (the ROV fill is display referred)
   }
   // ── the infinite world (CONTRACT-V4.md, world/stream.js) ─────────────────
   // worldRoot sits at minus the floating origin O (render space = world -
@@ -929,6 +937,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   }
 
   return {
+    get exposureMax() { return expoMax; }, set exposureMax(v) { expoMax = Number.isFinite(v) && v > 0 ? v : Infinity; },
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
     // marine snow (lib/marine-snow.js): depth in metres (null: from the eye height), density 0..1 (user)
     marineSnow: snowFx, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },

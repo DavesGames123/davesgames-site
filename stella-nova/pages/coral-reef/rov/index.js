@@ -61,6 +61,11 @@
 //    count: 1 to 4
 //  The states (p, look) are in world metres; v.target too.
 //
+//  LIGHT: each vehicle has the soft fill of rov/fill.js (only on the ROV
+//  materials); update() feeds it the exposure (o.exposure() or
+//  scene.userData.exposure, which scene.js writes) and the lamp level.
+//  vehicles[i].parts.setHighlight(on, colour) adds a glow (the HUD).
+//
 //  SCENE notes: lights[0] of vehicle 1 casts shadows; each light has
 //  light.userData.base (its intensity before the flicker) and
 //  light.userData.vehicle. The SpotLight targets are children of the
@@ -167,6 +172,8 @@ export function createROVs(THREE, o = {}) {
   const sand = rock.sand && typeof rock.sand.heightAt === 'function' ? rock.sand : null;
   const sdfRock = sand ? (x, y, z) => Math.min(rock.sdf(x, y, z), (y - sand.heightAt(x, z)) * 0.9) : rock.sdf;
   const scene = o.scene || null, reef = o.reef || null;
+  // the exposure of the composite: o.exposure() or scene.userData.exposure
+  const exposureNow = () => (typeof o.exposure === 'function' ? o.exposure() : scene && scene.userData && scene.userData.exposure) || 4;
   const scale = o.scale ?? 0.6, clear = o.clear ?? 1.45 * scale + 0.05;
   const top = (rock.bounds ? rock.bounds.max[1] : 8);
   // the corals grow to 8 m: the vehicles and the tethers keep clear of
@@ -313,7 +320,11 @@ export function createROVs(THREE, o = {}) {
       const f = v.flick, k = 1 + 0.03 * Math.sin(t * 7.3 + f[j]) * Math.sin(t * 2.1 + f[2]) + 0.012 * Math.sin(t * 31 + f[j] * 3) + (Math.sin(t * 0.37 + f[0]) > 0.995 ? -0.25 : 0);
       l.intensity = l.userData.base * k;
     }
-    for (const m of P.lamps) m.material.emissiveIntensity = 3 * (v.lights[0].intensity / v.lights[0].userData.base);
+    const lampK = v.lights[0].intensity / v.lights[0].userData.base;
+    for (const m of P.lamps) m.material.emissiveIntensity = 3 * lampK;
+    // the soft fill on the vehicle (rov/fill.js): the exposure of the page
+    // (scene.js puts it in scene.userData.exposure), the lamp level
+    if (P.fill) { P.materials.lampRing.emissiveIntensity = 0.6 * lampK; P.fill.update(exposureNow(), lampK, P.lamps); }
     // props
     const T = st.thrust;
     for (const pr of P.props) {

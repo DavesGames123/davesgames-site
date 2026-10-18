@@ -40,11 +40,19 @@
 //  moving parts (props, camera pod, arm, lamp faces, LEDs) stay separate.
 //  rovTris(parts) gives the triangles near and far.
 //
+//  LIGHT. Each material gets the soft fill of rov/fill.js (ambient from
+//  above, the spill of the own lamps, a rim of water glow, a highlight):
+//  only the ROV, not the scene. The lamp heads have a glowing bezel ring
+//  (materials.lampRing), the lamp faces and the LEDs are emissive.
+//  rov/index.js calls parts.fill.update(exposure, lampK, lamps) each frame.
+//  setHighlight(on, colour, k): a glow on the whole vehicle (the HUD
+//  selection, NOTES.md).
+//
 //  RETURNS { group, body, detail, props: [{ spin, kind, side, group,
 //  rpm }], leds: [{ mesh, colour, phase, rate }], lights, lightTargets,
 //  lamps, camera, cameraPod, cameraTilt, arm: { shoulder, up, elbow,
-//  wrist, jawL, jawR }, tetherPoint, sonar, materials, textures,
-//  dispose() }
+//  wrist, jawL, jawR }, tetherPoint, sonar, materials, textures, fill,
+//  setHighlight(on, colour, k), dispose() }
 //
 //  grep -n targets
 //    "function roundBox"        a box with round edges and smooth normals
@@ -57,6 +65,8 @@
 //    "export function rovTris"  the triangle count near and far
 //    "export function buildVehicle"
 // ============================================================================
+
+import { createFill } from './fill.js';
 
 const TAU = Math.PI * 2;
 
@@ -131,10 +141,13 @@ export function buildVehicle(THREE, o = {}) {
     hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0, map: textures.hazard }),
     cable: new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.55, metalness: 0 }),
     anode: new THREE.MeshStandardMaterial({ color: 0x8e9294, roughness: 0.75, metalness: 0.5, vertexColors: true }),
+    lampRing: new THREE.MeshStandardMaterial({ color: 0x202224, emissive: 0xffe2b8, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4 }),
   };
   const WEAR = { foam: 'foam', frame: 'edge', black: 'edge', steel: 'tint', housing: 'tint', orange: 'tint', stripe: 'tint', anode: 'tint' };
-  for (const k in M) { M[k].userData.wear = WEAR[k] || null; M[k].userData.rov = k; }
-  const ledMat = (c) => { const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 2.5, roughness: 0.3 }); m.userData.rov = 'led'; return m; };
+  // the soft fill on every ROV material (rov/fill.js), never on the scene
+  const fill = createFill(THREE, { scale: o.scale ?? 1 });
+  for (const k in M) { M[k].userData.wear = WEAR[k] || null; M[k].userData.rov = k; fill.apply(M[k]); }
+  const ledMat = (c) => { const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 2.5, roughness: 0.3 }); m.userData.rov = 'led'; return fill.apply(m); };
 
   const add = (geo, mat, x, y, z, parent = body) => { const m = new THREE.Mesh(G(geo), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
   // a tube between two points
@@ -447,10 +460,12 @@ export function buildVehicle(THREE, o = {}) {
     return G(new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg(16)));
   })();
   const lampFace = G(new THREE.CircleGeometry(0.05, seg(20)));
+  const ringGeo = G(new THREE.TorusGeometry(0.054, 0.0065, 4, seg(16)));
   for (const z of [-0.56, -0.2, 0.2, 0.56]) {
     const g = new THREE.Group(); g.position.set(1.14, yt - 0.02, z); body.add(g);
     const c = new THREE.Mesh(lampGeo, M.black); c.rotation.z = -Math.PI / 2; c.castShadow = true; g.add(c);
     const f = new THREE.Mesh(lampFace, M.lamp); f.position.x = 0.051; f.rotation.y = Math.PI / 2; f.userData.keep = true; g.add(f);
+    const rg = new THREE.Mesh(ringGeo, M.lampRing); rg.position.x = 0.05; rg.rotation.y = Math.PI / 2; g.add(rg);   // the glowing bezel
     g.rotation.z = -0.18; g.rotation.y = z * -0.12;
     lamps.push(f);
   }
@@ -643,7 +658,8 @@ export function buildVehicle(THREE, o = {}) {
   group.scale.setScalar(s);
   return {
     group, body, detail, props, leds, lights, lightTargets, lamps, camera, cameraPod, cameraTilt, arm, tetherPoint, sonar,
-    materials: M, textures, detailFar,
+    materials: M, textures, detailFar, fill,
+    setHighlight: (on, colour, k) => fill.setHighlight(on, colour, k),
     dispose() {
       for (const g of own) g.dispose();
       for (const k in M) M[k].dispose();
