@@ -75,11 +75,10 @@ function share() {
   return Promise.resolve();
 }
 
-var CSS = '#tb-share{display:inline-flex;flex:none;align-items:center;gap:7px;min-height:36px;padding:0 13px;border:1px solid var(--border-b,rgba(150,200,255,.18));border-radius:999px;background:none;color:var(--dim,#7f91ad);font:500 .78rem/1 var(--f-sans,system-ui);cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s}' +
+var CSS = '#tb-share{display:inline-flex;flex:none;align-items:center;gap:7px;min-width:44px;min-height:44px;padding:0 14px 0 12px;justify-content:center;border:1px solid var(--border-b,rgba(150,200,255,.18));border-radius:999px;background:none;color:var(--dim,#7f91ad);font:500 .78rem/1 var(--f-sans,system-ui);cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s}' +
   '#tb-share:hover,#tb-share:focus-visible{color:var(--ink,#eef3fb);border-color:var(--blue,#96c8ff)}' +
-  '#tb-share svg{width:15px;height:15px}' +
-  '@media (pointer:coarse){#tb-share{min-height:44px;min-width:44px;justify-content:center}}' +
-  '@media (max-width:520px){#tb-share{padding:0 11px}#tb-share .tb-share-lab{display:none}}';
+  '#tb-share svg{width:18px;height:18px;flex:none}' +
+  '@media (max-width:520px){#tb-share{padding:0}#tb-share .tb-share-lab{display:none}}';
 
 function addButton() {
   var bar = document.getElementById('topbar');
