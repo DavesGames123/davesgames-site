@@ -71,7 +71,8 @@
 //    grep -n 'function plantAt'       tap the rock to plant a colony
 //    grep -n 'function buildUI'       the controls
 //    grep -n 'function frame'         the loop
-//    grep -n 'window.snSaver'         the screensaver hook
+//    grep -n 'window.snSaver'         the screensaver hook (one colony grows once a session)
+//    grep -n 'function restoreReef'   the saver exit: the grown main reef comes back
 // ============================================================================
 import { createScene } from './scene.js';
 import { SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, QUALITY, polypRadius, speciesHook, bleachLevel, createReefMirror } from './reef.js';
@@ -179,6 +180,10 @@ function makeCoral(rk, quality, seed) {
   const D = {
     reef: mirror, params, quality, fine: Q.fine, limit: Q.particles, prog: null, gen: -1, want: 0, joined: 0,
     colTop: [], colExt: [], post: null, kill: null, local: null, off: Infinity,
+    // mainReal: the worker has the real main reef (not the one-colony init
+    // of a saver start). parked: the saver posted a 'single', so the worker
+    // parked the main reef (mesh-worker.js 'restore' brings it back).
+    mainReal: !saverOn, parked: false,
   };
   mirror.env = { temp: G.temp };
   // the reef worker, or the same runner on this thread when it fails
@@ -316,7 +321,21 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = false) {
   if (!coral) return;
   // colonies: the profile count (the init of a saver start asked for 1)
   coralNewGen({ type: 'reset', seed, preset: pid, colonies: coral.budget ? coral.budget.colonies : undefined });
+  coral.mainReal = true; coral.parked = false;
   if (fit) fitCamera(true);
+}
+// The saver exit: the main reef comes back already grown (the worker
+// kept it: mesh-worker.js 'restore'), with no grow-in. Only a reef that
+// never grew (the page started in the saver) grows now, one time.
+function restoreReef(pid = G.preset) {
+  G.preset = pid;
+  presetUI();
+  if (!coral) return;
+  if (coral.parked && coral.mainReal) {
+    coral.parked = false;
+    coralNewGen({ type: 'restore', seed: G.seed, preset: pid, colonies: coral.budget ? coral.budget.colonies : undefined });
+  } else if (!coral.mainReal) loadPreset(pid, G.seed);
+  else coral.parked = false;
 }
 
 // ── the ROVs ────────────────────────────────────────────────────────────────
@@ -827,11 +846,19 @@ function onResize() {
 }
 addEventListener('resize', onResize);
 
+// The age (s) of the youngest of the first n particles, as the shaders
+// see it (uTime - birth).
+function youngestAge(n = Infinity) {
+  if (!coral || !coral.reef.count || !Number.isFinite(coral.off)) return null;
+  let b = -Infinity; const B = coral.reef.birth, m = Math.min(n, coral.reef.count);
+  for (let g = 0; g < m; g++) if (B[g] > b) b = B[g];
+  return (nowMs() - (b + coral.off)) / 1000;
+}
 // The state for the node checks (tests/robust.test.mjs, tests/saver-page.test.mjs).
 window.__coralDebug = () => ({
   profile: PROFILE_ID, worldReady, lostNow, cam: cam ? { mode: cam.mode, followId: cam.followId, choice: camChoice } : null,
   camOn: [...document.querySelectorAll('#camBar button.on')].map(b => b.dataset.cam), quality: G.quality, rockQuality: rock ? rock.quality : null, rovs: rovs ? rovs.vehicles.length : 0,
-  coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget } : null,
+  coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget, gen: coral.gen, parked: coral.parked, mainReal: coral.mainReal, ageMin: youngestAge() } : null, youngest: n => youngestAge(n),
   post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
 });
 // ── start ───────────────────────────────────────────────────────────────────
@@ -847,8 +874,9 @@ if (S) {
 
 // ── screensaver ─────────────────────────────────────────────────────────────
 // One ROV analyses ONE coral colony while it grows (saver.js divePlan).
-// A dive: a site with a view (pickSite: an arch top, a canyon wall, ...),
-// reef.growColony there from a seed, rovs.focusOn that colony with the
+// The first dive: a site with a view (pickSite: an arch top, a canyon
+// wall, ...) and reef.growColony there from a seed, ONE time a session
+// (the worker parks the main reef). Each dive: rovs.focusOn that colony with the
 // feed vehicle, the other vehicles hidden, and calm camera shots that cut
 // every 7 to 14 s (shotPose; clearPath keeps rock out of the line). The
 // feed card shows the ROV camera. The plate has live colony stats.
@@ -867,7 +895,7 @@ window.snSaver = {
     if (cam) { cam.setMode('saver'); $('tourList').hidden = true; }
     setPlaying(true);
     const st = { i: -1, dive: null, t: 0, colony: null, fading: false, bandFn: null, bandT: 0, labT: 0, pos: null, tgt: null, shotI: -1, cut: true };
-    saver = { band: null, card: null, gov: null, tick, st, saved, obs: 0, obsN: 0, obsH: 0, hRate: 0 };
+    saver = { band: null, card: null, gov: null, tick, st, saved, obs: 0, obsN: 0, obsH: 0, hRate: 0, next: () => next() };
     import('../../lib/saver-clear.js').then(m => { st.bandFn = m.plateBand; }).catch(() => { /* no plate */ });
     let rr = seed; const rand = () => { rr = (rr * 16807) % 2147483647; return rr / 2147483647; };
     // a dive starts only on a built world: the rock, the ROVs and a reef
@@ -879,9 +907,10 @@ window.snSaver = {
     function colonyNow() { const reef = coral && coral.reef; return reef && st.colony && coral.gen > st.gen0 ? reef.colonies[st.colony.k] || null : null; }
     function makeLabel() {
       const d = st.dive, c = colonyNow(); if (!d || !c) return null;
-      const sp = SPECIES[d.species], h = Math.max(0, c.top - c.base[1]);
-      const years = h / (EXT_RATE[d.species] || 0.05);
-      const H = speciesHook(d.species), src = H.fn.toString();
+      const spId = st.species || d.species;
+      const sp = SPECIES[spId], h = Math.max(0, c.top - c.base[1]);
+      const years = h / (EXT_RATE[spId] || 0.05);
+      const H = speciesHook(spId), src = H.fn.toString();
       const modeLbl = (MODES.find(m => m.id === d.mode) || MODES[0]).label;
       const site = st.site && st.site.feature ? st.site.feature.kind : 'rock';
       return {
@@ -902,20 +931,29 @@ window.snSaver = {
       };
     }
 
+    // GROW ONCE. The first dive grows ONE colony from its seed (a 'single'
+    // to the worker). The later dives keep that colony, grown or still
+    // growing, and change only the shots, the gradient, the colour mode
+    // and the ROV inspection: no second 'single' in a saver session.
     function start(d) {
-      st.dive = d; st.t = 0; st.shotI = -1; st.cut = true; st.capSet = false; st.rateSent = -1;
+      const first = !st.colony;
+      st.dive = d; st.t = 0; st.shotI = -1; st.cut = true; st.rateSent = -1;
       G.dir = d.current; G.cur = 0.3 + 0.3 * (1 - calm); setCurrent();
       setGradient(d.gradient, d.reversed);
-      st.site = pickSite(rock, d.siteKind, d.siteR, rand, G.R) || { p: [0, rock && rock.bounds ? rock.bounds.max[1] * 0.5 : 2, 0], n: [0, 1, 0], feature: null };
-      st.colony = { k: 0 }; st.gen0 = coral.gen;
-      // one colony takes the whole dive: cap / grow particles per second
-      // (the cap comes with the colony list); the worker gets the eased
-      // rate of the meter (saver.js createGovernor) twice a second
-      saver.gov = createGovernor(20, { ramp: 10 });
-      saver.obs = 0; saver.obsN = 0; saver.obsH = 0; saver.hRate = 0;
-      coralNewGen({ type: 'single', site: { p: st.site.p, n: st.site.n }, species: d.species, rate: 0, seed: d.seed });
-      coral.post({ type: 'env', env: { speed: 1, nutrient: 1 } });
-      coral.post({ type: 'play', on: true });
+      if (first) {
+        st.site = pickSite(rock, d.siteKind, d.siteR, rand, G.R) || { p: [0, rock && rock.bounds ? rock.bounds.max[1] * 0.5 : 2, 0], n: [0, 1, 0], feature: null };
+        st.species = d.species; st.singles = (st.singles || 0) + 1;
+        st.colony = { k: 0 }; st.gen0 = coral.gen; st.capSet = false;
+        // one colony takes the first dive: cap / grow particles per second
+        // (the cap comes with the colony list); the worker gets the eased
+        // rate of the meter (saver.js createGovernor) twice a second
+        saver.gov = createGovernor(20, { ramp: 10 });
+        coral.parked = true;
+        coralNewGen({ type: 'single', site: { p: st.site.p, n: st.site.n }, species: d.species, rate: 0, seed: d.seed });
+        coral.post({ type: 'env', env: { speed: 1, nutrient: 1 } });
+        coral.post({ type: 'play', on: true });
+      }
+      saver.obs = 0; saver.obsN = coral.reef.count; saver.obsH = 0; saver.hRate = 0;
       setMode(d.mode);
       if (rovs) {
         // the ROV starts beside the site (under the fade), not across the
@@ -1023,6 +1061,8 @@ window.snSaver = {
     if (worldOk()) next();
     return { canvas, warmupMs: 1800 };
   },
+  // the next dive now (node checks: tests/grow-once.test.mjs)
+  skip() { if (saverOn && saver && saver.next) saver.next(); },
   // the state for the node checks (tests/saver-page.test.mjs)
   debug() {
     const sv = saver, st = sv && sv.st;
@@ -1030,6 +1070,7 @@ window.snSaver = {
     const P = S ? S.camera.position : null;
     return {
       on: saverOn, dive: st && st.dive ? { i: st.i, species: st.dive.species, kind: st.dive.siteKind } : null,
+      singles: st ? st.singles || 0 : 0, species: st ? st.species || null : null, gen0: st ? st.gen0 : null,
       site: st && st.site ? { p: st.site.p, n: st.site.n, feature: st.site.feature ? st.site.feature.kind : null } : null,
       colony: st && st.colony && coral && coral.gen > st.gen0 ? (coral.reef.colonies[st.colony.k] ? { count: coral.reef.count, cap: coral.reef.colonies[st.colony.k].cap } : null) : null,
       pose: st ? st.pose || null : null, cam: P ? [P.x, P.y, P.z] : null,
@@ -1061,7 +1102,8 @@ window.snSaver = {
       G.dir = sv.dir; G.cur = sv.cur; setCurrent(); setTemp(sv.temp);
       G.speed = sv.speed; G.nutrient = sv.nutrient; G.feed = sv.feed;
       setGradient(sv.gradient, sv.rev);
-      loadPreset(sv.preset, G.seed, true);
+      restoreReef(sv.preset);
+      fitCamera(true);
       if (coral) { coral.post({ type: 'env', env: { speed: sv.speed, nutrient: sv.nutrient } }); coral.post({ type: 'rate', value: Math.max(20, Math.round(coral.limit / PAGE_FILL_S)) }); }
       setMode(sv.mode); setPlaying(sv.playing); showFeed();
     }

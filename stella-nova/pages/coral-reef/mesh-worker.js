@@ -18,8 +18,23 @@
 //        depends on the quality; default 'high'). rate: polyps per second (default
 //        Infinity: as fast as the budget allows).
 //    { type: 'single', site, species, size?, cap?, rate?, seed? }
-//        single-colony mode (the saver): one colony from a seed
+//        single-colony mode (the saver): one colony from a seed. The
+//        first 'single' parks the main reef (its particles, colonies and
+//        growth state; its mesher is dropped) and grows the colony in a
+//        second reef on the same rock. A later 'single' starts that
+//        second reef again.
+//    { type: 'restore', seed?, preset?, colonies?, sites? }
+//        the saver exit. With a parked main reef: it comes back as it
+//        was (no regrowth): gen + 1, the colonies, ALL its particles
+//        with their old births (so the page shows no grow-in), then a
+//        new mesher that gets every particle at once and meshes them in
+//        the ticks (about 1 s to feed and 3 s to mesh 48 k particles in
+//        node). A colony at its cap stays full; a colony that still grew
+//        goes on. With no parked reef: the same as 'reset'.
+//        Cost note: a full regrow (R.growAll) of the main reef takes
+//        24 s (phone) to 42 s (mid) in node, so the worker parks it.
 //    { type: 'reset', seed?, preset?, colonies?, sites? }   new colonies, same rock
+//        (a parked main reef is dropped)
 //    { type: 'play', on }            grow or pause (meshing goes on)
 //    { type: 'rate', value }         polyps per second (Infinity = max)
 //    { type: 'env', env }            speed, nutrient, temp, strength
@@ -59,6 +74,8 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
   let rock = null, R = null, M = null, gen = 0, timer = 0, playing = true;
   let growMs = 9, meshMs = 9, maxPost = 4000, sent = 0, fed = 0, idleSent = false;
   let lastT = 0, progAt = 0, viewPts = null, viewBudget = 0, viewAt = 0, cfg = {};
+  // parked: the main reef while the saver grows its colony (single), or null
+  let parked = null, reefOpts = null;
   const T0 = clock();
 
   function newMesher() {
@@ -76,7 +93,9 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
     const ro = { seed: m.rockSeed ?? m.seed ?? 1, radius: m.radius ?? 30, detail: m.detail ?? 1, quality: m.rockQuality || 'high', mesh: !m.sites };
     rock = makeRock ? await makeRock(ro) : (await import('./rock/index.js')).createRock(ro);
     const rockMs = clock() - t0;
-    R = createReef({ rock, seed: m.seed ?? 1, quality: m.quality, radius: ro.radius, env: m.env, rate: m.rate ?? Infinity, budget: m.budget });
+    reefOpts = { rock, seed: m.seed ?? 1, quality: m.quality, radius: ro.radius, rate: m.rate ?? Infinity, budget: m.budget };
+    R = createReef(Object.assign({ env: m.env }, reefOpts));
+    parked = null;
     gen++;
     newMesher();
     R.populate({ preset: m.preset, colonies: m.colonies, sites: m.sites });
@@ -88,6 +107,12 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
 
   function single(m) {
     if (!R) return;
+    // the first single parks the main reef; the saver colony grows in a
+    // reef of its own (same rock, same water)
+    if (!parked && !R.single) {
+      parked = { R };
+      R = createReef(Object.assign({}, reefOpts, { env: Object.assign({}, parked.R.env, { cur: parked.R.env.cur.slice() }) }));
+    }
     gen++;
     if (m.rate !== undefined) R.setRate(m.rate);
     R.growColony(m.site, m.species, { size: m.size, cap: m.cap, seed: m.seed });
@@ -99,11 +124,34 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
 
   function reset(m) {
     if (!R) return;
+    if (parked) { R = parked.R; parked = null; }
     gen++;
     R.populate({ preset: m.preset ?? cfg.preset, colonies: m.colonies ?? cfg.colonies, sites: m.sites ?? cfg.sites, seed: m.seed });
     newMesher();
     sendColonies();
     viewFocus(true);
+    schedule();
+  }
+
+  // The saver exit: the parked main reef comes back as it was. All its
+  // particles go to the page at once (old births: no grow-in), and a new
+  // mesher gets all of them now, so each brick meshes about once.
+  function restore(m) {
+    if (!R) return;
+    if (!parked) { reset(m); return; }
+    R = parked.R; parked = null;
+    gen++;
+    newMesher();
+    sendColonies();
+    for (let from = 0; from < R.count; from += maxPost) {
+      const to = Math.min(R.count, from + maxPost), data = packParticles(R, from, to);
+      post({ type: 'particles', gen, from, data }, [data.buffer]);
+    }
+    sent = R.count;
+    for (let g = 0; g < R.count; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+    fed = R.count;
+    viewFocus(true);
+    idleSent = false;
     schedule();
   }
 
@@ -171,6 +219,7 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
         case 'init': await init(m); break;
         case 'single': single(m); break;
         case 'reset': reset(m); break;
+        case 'restore': restore(m); break;
         case 'play': playing = !!m.on; schedule(); break;
         case 'rate': if (R) R.setRate(m.value); schedule(); break;
         case 'env': if (R) Object.assign(R.env, m.env || {}); schedule(); break;
@@ -186,7 +235,7 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
       post({ type: 'error', message: String(e && e.stack || e) });
     }
   }
-  return { onMessage, get reef() { return R; }, get mesher() { return M; }, get gen() { return gen; }, QUALITY };
+  return { onMessage, get reef() { return R; }, get mesher() { return M; }, get gen() { return gen; }, get parked() { return parked ? parked.R : null; }, QUALITY };
 }
 
 // In a worker: wire the runner to self. (Node tests set self.__reefTest

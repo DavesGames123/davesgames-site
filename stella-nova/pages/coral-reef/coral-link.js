@@ -6,7 +6,9 @@
 //  error message before 'ready'), the link stops it and runs the same
 //  runner on the main thread (createReefRunner), with a lower budget and
 //  small time slices. It replays the state messages (init, budget, current,
-//  env, play, rate, and the last reset or single), so the page goes on.
+//  env, play, rate, and the last reset, single or restore), so the page
+//  goes on. The new runner has no parked reef, so a replayed 'restore'
+//  acts as 'reset': after a fall back the reef grows again (one time).
 //  DOM-free: tests/robust.test.mjs drives it with a fake Worker.
 //
 //  createCoralLink({ makeWorker, makeRunner, onMessage, onFallback, lower })
@@ -39,7 +41,7 @@ export function createCoralLink({ makeWorker, makeRunner, onMessage, onFallback,
   function remember(m) {
     if (!m || !m.type) return;
     if (m.type === 'init') { state.init = m; state.last = null; }
-    else if (m.type === 'reset' || m.type === 'single') state.last = m;
+    else if (m.type === 'reset' || m.type === 'single' || m.type === 'restore') state.last = m;
     else if (m.type === 'env') Object.assign(state.env, m.env || {});
     else if (KEEP.includes(m.type)) state.keep[m.type] = m;
   }

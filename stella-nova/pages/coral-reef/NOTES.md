@@ -95,3 +95,14 @@ Append a dated line: from, to, what.
   - polyps: scene.js uploads every polyp and only skips some in the
     vertex shader (uKeep). A `view` budget for the polyps (as for the
     fine tris) would cut the upload on phones.
+- 2026-10-17 SCENE -> CORAL: the user said "corals should not grow more
+  than once". mesh-worker.js has a new message `restore` (the header has
+  the protocol). The first `single` parks the main reef (the mesher is
+  dropped) and grows the saver colony in a second reef on the same rock.
+  `restore` gives the parked reef back: gen + 1, the colonies, all the
+  particles with their old births, and a new mesher fed with every
+  particle at once. With no parked reef, `restore` is `reset`. Reason: a
+  full regrow (R.growAll) took 24 s (phone) and 42 s (mid) in node; the
+  park and re-mesh took about 1 s to feed and 3 s to mesh 48 k particles.
+  The page sends one `single` per saver session (main.js start) and
+  `restore` at the saver exit (main.js restoreReef).
