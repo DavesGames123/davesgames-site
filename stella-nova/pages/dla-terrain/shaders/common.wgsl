@@ -56,7 +56,7 @@ struct Globals {
   terrain: vec4f,       // x world size m, y height scale m, z sea level m, w texel size m
   terrainOrigin: vec4f, // xy world xz origin, z min height m, w max height m
   screen: vec4f,        // xy size px, zw 1 / size
-  frame: vec4f,         // x frame index, y dt s, z quality 0..1, w is coarse pointer
+  frame: vec4f,         // x frame index, y dt s, z quality 0..1, w 1 coarse pointer + 2 TAA off
 };
 @group(0) @binding(0) var<uniform> G: Globals;
 @group(0) @binding(1) var tHeight: texture_2d<f32>;   // r32float, metres, textureLoad only
@@ -252,7 +252,9 @@ fn sunShadowSoft(wp: vec3f, nrm: vec3f, fc: vec2f) -> f32 {
   if (n <= 0) { return 1.0; }
   let z = viewDistance(wp);
   var c = cascadeOf(z);
-  let r = fract(cm_ign(fc) + (G.frame.x * 0.6180339));
+  // the noise turns each frame only while TAA resolves it (+ 2 in G.frame.w: TAA off)
+  let taaOff = (u32(G.frame.w) & 2u) != 0u;
+  let r = fract(cm_ign(fc) + select(G.frame.x * 0.6180339, 0.0, taaOff));
   let far = cascades.splits[c];
   let edge = far * 0.9;
   if ((c + 1 < n) && (z > edge)) {

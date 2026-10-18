@@ -49,7 +49,7 @@ const put = (f, k, a) => {
 // moonIlluminance, ambient, fog, fogDensity, wind, gust, windPhase, cover,
 // rain, snow, lightning, wetness, snowCover, storminess, season}, exposure,
 // terrain {worldSize, heightScale, seaLevel, n, minH, maxH}, width, height,
-// frame, dt, quality, coarse }. Missing values pack as 0.
+// frame, dt, quality, coarse, taa }. Missing values pack as 0 (taa: on).
 export function packGlobals(f, s) {
   const sky = s.sky || {}, t = s.terrain || {};
   put(f, 'viewProj', s.viewProj); put(f, 'invViewProj', s.invViewProj);
@@ -74,7 +74,9 @@ export function packGlobals(f, s) {
   put(f, 'terrainOrigin', [-ws / 2, -ws / 2, t.minH || 0, t.maxH || 0]);
   const W = s.width || 1, H = s.height || 1;
   put(f, 'screen', [W, H, 1 / W, 1 / H]);
-  put(f, 'frame', [s.frame || 0, s.dt || 0, s.quality ?? 1, s.coarse ? 1 : 0]);
+  // frame.w: 1 for a coarse pointer, plus 2 when TAA is off (s.taa ===
+  // false; then the shadow noise of common.wgsl fn sunShadowSoft stands still)
+  put(f, 'frame', [s.frame || 0, s.dt || 0, s.quality ?? 1, (s.coarse ? 1 : 0) + (s.taa === false ? 2 : 0)]);
   return f;
 }
 
