@@ -29,11 +29,21 @@
 //  A leg is planned by rov/pilot.js marchPath on field.sdf (rock, sand and
 //  the coral term), so every vertex has the clearance.
 //
-//  THE OTHERS keep a loose formation: a slot behind and beside the leader
-//  (turned with its heading), when the line to it is free. Where the water
-//  is narrow (a canyon, an arch) they fall back to the leader's trail (its
-//  past positions, free water by construction) at 4.5 m x their rank.
-//
+//  THE OTHERS (spread, the default; the user, 2026-10-18: "the ROV's
+//  neeed to run to explore different areas", "each of them need to be
+//  looking at a different thing as they explore"). Each ROV flies legs of
+//  its own on the shared cell map (visited): a colony near that no ROV
+//  has claimed (the claims map: one subject, one ROV), else the frontier
+//  point of its own sector (exploreYaw + i 2 pi / n, a bearing from the
+//  centroid). spreadScore pushes a point away from the other ROVs and
+//  their aims (minSep, 18 m) and holds it in the leash (180 m from the
+//  centroid: the support cage of rov/tether.js follows the centroid).
+//  Every regroupEvery s (480) they regroup near the leader for 10 s.
+//  S.tasks() gives the task, the aim and the subject of each ROV;
+//  S.overlap() the share of the cells that two or more ROVs saw.
+//  spread: false gives the old loose formation: a slot behind and beside
+//  the leader, or the leader's trail where the water is narrow.
+
 //  MOTION (all): a damped spring to the goal, speed and thrust limits,
 //  separation under 4 m, and a guard that keeps the clearance shell (the
 //  push-out of rov/pilot.js). Yaw turns to the travel or to the target.
@@ -51,9 +61,12 @@
 //    S.task = { kind, label, target?, t }; S.stats = { distance, cells,
 //      chunks, colonies, depth, legs, t }
 //    S.setCount(n), S.reset(start), S.goTo(id, [x, z]) (one ROV to a point)
+//    S.tasks() -> [{ id, kind, label, aim, subject }], S.overlap(), S.claims
+//    options: spread (true), leash (180 m), minSep (18 m), regroupEvery (480 s)
 //
 //  grep -n targets: "export function createSquad", "function nextTask", "export function frontierScore",
-//  "function frontier", "function followerGoal", "function move("
+//  "function frontier", "function frontierPick", "function spreadScore",
+//  "function planOwn", "function regroup", "function tasks", "function followerGoal", "function move("
 // ============================================================================
 import { marchPath, pathAt, pushOut, trace, orbitPose, rng, hash } from './pilot.js';
 import { SPECIES } from '../reef.js';
@@ -92,11 +105,18 @@ export function createSquad(o = {}) {
   const seed = o.seed ?? 1;
   const rand = rng(hash(seed, 77, 1013));
   const cruise = o.cruise ?? 0.55;
+  // SPREAD (2026-10-18, the user: "the ROV's neeed to run to explore
+  // different areas"): every ROV plans its own legs on the shared cell map.
+  const spread = o.spread ?? true, leash = o.leash ?? 180, minSep = o.minSep ?? 18;
+  const regroupEvery = o.regroupEvery ?? 480;
   const S = { vehicles: [], task: { kind: 'frontier', label: TASK_LABEL.frontier, t: 0 }, stats: { distance: 0, cells: 0, chunks: 0, colonies: 0, depth: 0, legs: 0, t: 0 } };
+  const claims = new Map();                // subject key (a colony) -> the slot index of the ROV that looks at it
+  const claim = (vi, key) => { for (const [k, w] of claims) if (w === vi) claims.delete(k); if (key != null) claims.set(key, vi); };
+  const owners = new Map();                // cell key -> bit mask of the ROVs (slot index) that saw it
   const visited = new Map(), chunksSeen = new Set(), inspected = new Set(), passed = new Set(), seenCols = new Set();
   const trail = [];                        // leader positions every 0.5 m (newest last)
   const visitedReset = () => { orbit = null; };
-  let exploreYaw = rand() * TAU, leg = null, s = 0, lastS = 0, stuckT = 0, markT = 0, orbit = null;
+  let regroupT = regroupEvery, exploreYaw = rand() * TAU, leg = null, s = 0, lastS = 0, stuckT = 0, markT = 0, orbit = null;
 
   function makeState(p, yaw) {
     return { p: p.slice(), v: [0, 0, 0], a: [0, 0, 0], yaw, yawRate: 0, look: [p[0] + Math.cos(yaw) * 4, p[1] - 2, p[2] + Math.sin(yaw) * 4], lookR: 1.5,
@@ -120,10 +140,11 @@ export function createSquad(o = {}) {
       const off = i === 0 ? [0, 0, 0] : [-Math.cos(yaw) * 4 * i, 0.5 * i, -Math.sin(yaw) * 4 * i];
       const p = pushOut(sdf, [p0[0] + off[0], p0[1] + off[1], p0[2] + off[2]], clear * 1.1);
       const st = makeState(p, yaw);
-      if (old[i]) { for (const k of Object.keys(old[i].state)) delete old[i].state[k]; Object.assign(old[i].state, st); old[i].goal = null; S.vehicles.push(old[i]); }
+      if (old[i]) { for (const k of Object.keys(old[i].state)) delete old[i].state[k]; Object.assign(old[i].state, st); old[i].goal = null; old[i].leg = null; old[i].aim = null; S.vehicles.push(old[i]); }
       else S.vehicles.push({ id: i + 1, state: st });
     }
     visitedReset();
+    if (typeof claims !== 'undefined') claims.clear();
     trail.length = 0; trail.push(p0.slice());
     leg = null;
   }
@@ -132,16 +153,17 @@ export function createSquad(o = {}) {
   // ── bookkeeping: cells, chunks, colonies seen ────────────────────────────
   const ck = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
   function mark() {
-    for (const v of S.vehicles) {
+    S.vehicles.forEach((v, vi) => {
       const p = v.state.p;
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const x = p[0] + dx * 6, z = p[2] + dz * 6, k = ck(x, z);
         if (!visited.has(k)) S.stats.cells++;
         visited.set(k, (visited.get(k) || 0) + 1);
+        owners.set(k, (owners.get(k) || 0) | (1 << vi));
       }
       const c = `${Math.floor(p[0] / CHUNK)},${Math.floor(p[2] / CHUNK)}`;
       if (!chunksSeen.has(c)) { chunksSeen.add(c); S.stats.chunks++; }
-    }
+    });
     if (F.colonies) for (const c of F.colonies()) {
       if (seenCols.has(c.key)) continue;
       for (const v of S.vehicles) if (len(sub(c.center, v.state.p)) < 9 + c.radius) { seenCols.add(c.key); S.stats.colonies++; break; }
@@ -157,19 +179,50 @@ export function createSquad(o = {}) {
     if (!path || path.length < 1.5) return false;
     leg = path; s = 0; lastS = 0; stuckT = 0; S.stats.legs++;
     setTask(kind, extra);
+    S.vehicles[0].aim = ctrl[ctrl.length - 1].slice();
     return true;
   }
-  function frontier() {
-    const L = S.vehicles[0].state, p = L.p;
+  // ── spread: the compass, the centroid, the score of a far point ─────────
+  const COMPASS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+  // north is -z, east is +x (as rov/index.js headingOf)
+  const compass = (dx, dz) => COMPASS[((Math.round(Math.atan2(dz, dx) / (TAU / 8)) % 8) + 8) % 8];
+  function centroid() {
+    const c = [0, 0, 0];
+    for (const v of S.vehicles) for (let i = 0; i < 3; i++) c[i] += v.state.p[i] / S.vehicles.length;
+    return c;
+  }
+  const KIND_TEXT = { frontier: d => `surveying ${d} ground`, ridge: d => `surveying the ${d} ridge`, dropoff: d => `dropping down the ${d} cliff`, climb: d => `climbing the ${d} flank` };
+  // the other ROVs and their aims push a point away; the leash (from the
+  // centroid, where the support cage is) holds it in
+  function spreadScore(vi, x, z, c) {
+    let sc = 0;
+    S.vehicles.forEach((u, j) => {
+      if (j === vi) return;
+      for (const q of [u.state.p, u.aim]) {
+        if (!q) continue;
+        const d = Math.hypot(x - q[0], z - q[2]);
+        if (d < minSep * 2) sc -= 2.5 * (1 - d / (minSep * 2));
+      }
+    });
+    const dc = Math.hypot(x - c[0], z - c[2]);
+    if (dc > leash) sc -= 6 + (dc - leash) * 0.2;
+    return sc;
+  }
+  // The best frontier point of vehicle vi: 32 candidates round it. The
+  // leader keeps the slow exploration heading; ROV vi > 0 has its own
+  // sector (exploreYaw + vi 2 pi / n, a bearing from the centroid).
+  function frontierPick(vi) {
+    const V = S.vehicles[vi], L = V.state, p = L.p;
     const g0 = ground(p[0], p[2]);
+    const n = S.vehicles.length, c = centroid(), sect = exploreYaw + vi * TAU / n;
     let best = null;
-    const tgt = typeof o.target === 'function' ? o.target() : null;
-    exploreYaw += (rand() - 0.5) * 0.35;
+    const tgt = vi === 0 && typeof o.target === 'function' ? o.target() : null;
     for (let i = 0; i < 16; i++) {
       const a = L.yaw + (i / 16) * TAU;
       for (const dist of [22, 34]) {
         const x = p[0] + Math.cos(a) * dist, z = p[2] + Math.sin(a) * dist, g = ground(x, z);
-        const turn = Math.abs(angDiff(L.yaw, a)), toward = angDiff(exploreYaw, a), nov = novelty(x, z), jitter = rand();
+        const turn = Math.abs(angDiff(L.yaw, a)), nov = novelty(x, z), jitter = rand();
+        const toward = vi === 0 || !spread ? angDiff(exploreYaw, a) : angDiff(sect, Math.atan2(z - c[2], x - c[0]));
         const hab = F.habitat ? F.habitat(x, z) : 0.5;
         // interest: a ridge (higher than the ring round it), a drop-off
         const ring = (ground(x + 8, z) + ground(x - 8, z) + ground(x, z + 8) + ground(x, z - 8)) / 4;
@@ -178,21 +231,28 @@ export function createSquad(o = {}) {
         // a target region far away (the page changes it every 20 to 40 min):
         // the squad drifts there while it explores
         if (tgt) sc += 1.6 * Math.cos(angDiff(Math.atan2(tgt[2] - p[2], tgt[0] - p[0]), a));
+        if (spread && n > 1) sc += spreadScore(vi, x, z, c);
         if (!best || sc > best.sc) best = { sc, x, z, g, kind: ridge > 0.5 ? 'ridge' : drop > 0.6 ? 'dropoff' : climb > 0.6 ? 'climb' : 'frontier', a };
       }
     }
     const alt = 2.6 + rand() * 1.4;
     const goal = pushOut(sdf, [best.x, best.g + alt, best.z], clear);
     const mid = pushOut(sdf, [(p[0] + goal[0]) / 2, Math.max(goal[1], ground((p[0] + goal[0]) / 2, (p[2] + goal[2]) / 2) + alt), (p[2] + goal[2]) / 2], clear);
-    exploreYaw += angDiff(exploreYaw, best.a) * 0.15;
-    return planLeg([mid, goal], best.kind);
+    const label = KIND_TEXT[best.kind](compass(goal[0] - c[0], goal[2] - c[2]));
+    return { ctrl: [mid, goal], kind: best.kind, a: best.a, goal, label };
+  }
+  function frontier() {
+    exploreYaw += (rand() - 0.5) * 0.35;
+    const f = frontierPick(0);
+    exploreYaw += angDiff(exploreYaw, f.a) * 0.15;
+    return planLeg(f.ctrl, f.kind, { label: f.label });
   }
   function tryInspect() {
     if (!F.colonies) return false;
     const p = S.vehicles[0].state.p;
     let best = null;
     for (const c of F.colonies()) {
-      if (inspected.has(c.key) || c.size < 3) continue;
+      if (inspected.has(c.key) || claims.has(c.key) || c.size < 3) continue;
       const d = len(sub(c.center, p));
       if (d > 28) continue;
       const sc = c.size * 0.6 - d * 0.1 + rand() * 0.5;
@@ -200,7 +260,7 @@ export function createSquad(o = {}) {
     }
     if (!best || rand() < 0.25) return false;
     const c = best.c;
-    inspected.add(c.key);
+    inspected.add(c.key); claim(0, c.key);
     const ph = rand() * TAU, pose = orbitPose(c.center, c.radius, 0, ph, {});
     if (!planLeg([pushOut(sdf, pose.p, clear)], 'inspect', { target: c, ph })) return false;
     orbit = { c, ph, t: 0, dur: 20 + rand() * 15, climb: 0 };
@@ -258,13 +318,13 @@ export function createSquad(o = {}) {
       const hidden = trace(sdf, pose.p, [to[0] / tl, to[1] / tl, to[2] / tl], tl) < tl - c.radius * 1.1 - 0.2;
       orbit.climb = clamp(orbit.climb + (hidden ? 14 : -4) * dt, 0, 45);
       L.mode = 'inspect'; L.phase = 'orbit';
-      if (orbit.t > orbit.dur) { orbit = null; leg = null; L.mode = 'survey'; nextTask(); return leaderGoal(0); }
+      if (orbit.t > orbit.dur) { orbit = null; leg = null; L.mode = 'survey'; claim(0, null); nextTask(); return leaderGoal(0); }
       const g = pushOut(sdf, pose.p, clear);
       // the orbit point jumps behind rock: plan a leg round it
       if (len(sub(g, L.p)) > 5 && !freeLine(L.p, g)) { leg = null; planLeg([g], 'inspect', { target: c }); orbit.t = Math.max(0, orbit.t - 3); }
       return { g, look: c.center, lookR: c.radius, face: null };
     }
-    if (!leg || s >= leg.length - 0.05) { L.mode = 'survey'; L.phase = 'path'; nextTask(); }
+    if (!leg || s >= leg.length - 0.05) { L.mode = 'survey'; L.phase = 'path'; if (!(S.task.kind === 'inspect' && orbit)) claim(0, null); nextTask(); }
     const lag = len(sub(pathAt(leg, s).p, L.p));
     s += cruise * dt * clamp(1.6 - lag / 1.5, 0.1, 1);
     s = Math.min(s, leg.length);
@@ -317,6 +377,56 @@ export function createSquad(o = {}) {
     return { g, look, lookR: insp ? S.task.target.radius : 1.6, face: insp ? null : [cy, 0, sy], mode: insp ? 'inspect' : 'survey' };
   }
 
+  // ── spread: the own legs of ROV vi > 0 ───────────────────────────────────
+  // A colony near that no ROV has claimed or inspected: a leg to an orbit
+  // point and a hold of 12 to 20 s with the camera on it. Else the frontier
+  // point of its own sector. A leg that does not plan: try again in 1 s.
+  function planOwn(v, vi) {
+    const p = v.state.p;
+    if (F.colonies && rand() < 0.75) {
+      let best = null;
+      for (const c of F.colonies()) {
+        if (inspected.has(c.key) || claims.has(c.key) || c.size < 3) continue;
+        const d = len(sub(c.center, p));
+        if (d > 28) continue;
+        const sc = c.size * 0.6 - d * 0.1 + rand() * 0.5;
+        if (!best || sc > best.sc) best = { sc, c };
+      }
+      if (best) {
+        const c = best.c, pose = orbitPose(c.center, c.radius, 0, rand() * TAU, {});
+        const goal = pushOut(sdf, pose.p, clear);
+        const path = marchPath(sdf, [p.slice(), goal], clear, { budget: 16000, step: 0.3 });
+        if (path && path.length >= 0.5) {
+          inspected.add(c.key); claim(vi, c.key);
+          const lab = SPECIES[c.id] && SPECIES[c.id].label ? SPECIES[c.id].label.toLowerCase() : 'coral';
+          v.leg = { path, s: 0, lastS: 0, stuckT: 0, hold: 12 + rand() * 8, kind: 'inspect', label: `inspecting a ${lab} colony`, look: c.center, lookR: c.radius, subject: c.key };
+          v.aim = goal; return true;
+        }
+      }
+    }
+    const f = frontierPick(vi);
+    const path = marchPath(sdf, [p.slice(), ...f.ctrl], clear, { budget: 16000, step: 0.3 });
+    if (!path || path.length < 1.5) return false;
+    claim(vi, null);
+    v.leg = { path, s: 0, lastS: 0, stuckT: 0, hold: 0, kind: f.kind, label: f.label };
+    v.aim = f.goal;
+    return true;
+  }
+  // every regroupEvery s the others fly to a slot near the leader and hold
+  // 10 s, so the operation (and its cage) can move on to a new region
+  function regroup() {
+    const L = S.vehicles[0].state;
+    for (let i = 1; i < S.vehicles.length; i++) {
+      const v = S.vehicles[i], a = L.yaw + Math.PI + (i - (S.vehicles.length) / 2) * 0.9;
+      const q = pushOut(sdf, [L.p[0] + Math.cos(a) * 6, L.p[1] + 0.6 * i, L.p[2] + Math.sin(a) * 6], clear);
+      const path = marchPath(sdf, [v.state.p.slice(), q], clear, { budget: 30000, step: 0.3 });
+      if (!path || path.length < 0.5) continue;
+      claim(i, null);
+      v.leg = { path, s: 0, lastS: 0, stuckT: 0, hold: 10, kind: 'regroup', label: `regrouping with ROV ${S.vehicles[0].id}` };
+      v.aim = q;
+    }
+  }
+
   // ── motion (rov/pilot.js createPilot step, for a goal) ─────────────────────
   function move(st, G, dt, others) {
     st.t += dt;
@@ -367,6 +477,7 @@ export function createSquad(o = {}) {
     const n = Math.max(1, Math.ceil(dt / (1 / 30))), h = dt / n;
     for (let q = 0; q < n; q++) {
       S.stats.t += h; S.task.t += h;
+      if (spread && S.vehicles.length > 1 && (regroupT -= h) <= 0) { regroupT = regroupEvery; regroup(); }
       const L = S.vehicles[0].state, before = L.p.slice();
       const G0 = leaderGoal(h);
       const pos = S.vehicles.map(v => v.state.p);
@@ -377,7 +488,9 @@ export function createSquad(o = {}) {
         // the goal of a follower changes slowly: 5 times a second
         const v = S.vehicles[i];
         v.goalT = (v.goalT || 0) - h;
+        if (spread && !v.leg && (v.planT = (v.planT || 0) - h) <= 0) { if (!planOwn(v, i)) v.planT = 1; }
         if (v.leg) { v.goal = ownLegGoal(v, h); v.goalT = 0; }
+        else if (spread) { const st = v.state; v.goal = { g: st.p.slice(), look: st.look.slice(), lookR: st.lookR, face: null, mode: 'survey' }; }
         else if (!v.goal || v.goalT <= 0) { v.goal = followerGoal(v, i, h); v.goalT = 0.2; }
         const G = v.goal;
         v.state.mode = G.mode; v.state.phase = G.mode === 'inspect' ? 'orbit' : 'path';
@@ -408,7 +521,9 @@ export function createSquad(o = {}) {
     if (v === S.vehicles[0]) { orbit = null; return planLeg([goal], 'goto', { label: 'going to the marked point' }) && (S.task.label = 'going to the marked point', true); }
     const path = marchPath(sdf, [v.state.p.slice(), goal], clear, { budget: 30000, step: 0.3 });
     if (!path || path.length < 0.5) return false;
-    v.leg = { path, s: 0, hold: 20 };
+    claim(S.vehicles.indexOf(v), null);
+    v.leg = { path, s: 0, hold: 20, kind: 'goto', label: TASK_LABEL.goto };
+    v.aim = goal;
     return true;
   }
   function ownLegGoal(v, dt) {
@@ -416,14 +531,36 @@ export function createSquad(o = {}) {
     const lag = len(sub(pathAt(L.path, L.s).p, st.p));
     L.s = Math.min(L.path.length, L.s + cruise * dt * clamp(1.6 - lag / 1.5, 0.1, 1));
     const g = pathAt(L.path, L.s);
-    if (L.s >= L.path.length - 0.05) { L.hold -= dt; if (L.hold <= 0) v.leg = null; }
+    const end = L.s >= L.path.length - 0.05;
+    if (end) { L.hold -= dt; if (L.hold <= 0) { v.leg = null; if (L.subject) claim(S.vehicles.indexOf(v), null); } }
+    // stuck: no progress on the path for 8 s, plan again
+    else if (L.s - (L.lastS || 0) > 0.25) { L.lastS = L.s; L.stuckT = 0; } else if ((L.stuckT = (L.stuckT || 0) + dt) > 8) v.leg = null;
+    if (L.look) return { g: g.p, look: L.look, lookR: L.lookR, face: null, mode: 'inspect' };
     const fw = [Math.cos(st.yaw), -0.45, Math.sin(st.yaw)], fl = len(fw), dir = [fw[0] / fl, fw[1] / fl, fw[2] / fl];
     const hit = trace(sdf, st.p, dir, 12);
     return { g: g.p, look: [st.p[0] + dir[0] * hit, st.p[1] + dir[1] * hit, st.p[2] + dir[2] * hit], lookR: 1.6, face: g.t, mode: 'survey' };
   }
+  // The task of each ROV for the HUD and the maps: { id, kind, label,
+  // aim [x, y, z] | null (the leg end), subject (a colony key) | null }
+  function tasks() {
+    return S.vehicles.map((v, i) => {
+      if (i === 0) return { id: v.id, kind: S.task.kind, label: S.task.label, aim: v.aim || null, subject: S.task.kind === 'inspect' && S.task.target ? S.task.target.key ?? null : null };
+      if (v.leg) return { id: v.id, kind: v.leg.kind || 'goto', label: v.leg.label || TASK_LABEL.goto, aim: v.aim || null, subject: v.leg.subject ?? null };
+      if (!spread) return { id: v.id, kind: 'follow', label: v.state.mode === 'inspect' ? 'lighting the colony' : `following ROV ${S.vehicles[0].id}`, aim: null, subject: null };
+      return { id: v.id, kind: 'plan', label: 'planning the next leg', aim: null, subject: null };
+    });
+  }
+  // the share of the explored cells that two or more ROVs saw
+  function overlap() {
+    let multi = 0;
+    for (const m of owners.values()) if (m & (m - 1)) multi++;
+    return owners.size ? multi / owners.size : 0;
+  }
   S.goTo = goTo;
   S.step = step; S.setCount = setCount;
   S.reset = (start, n = S.vehicles.length) => { place(start, n); setTask('frontier'); orbit = null; };
+  S.tasks = tasks; S.overlap = overlap; S.owners = owners; S.claims = claims;
+  Object.defineProperty(S, 'spread', { get: () => spread });
   S.trail = trail; S.visited = visited; S.chunksSeen = chunksSeen;
   Object.defineProperty(S, 'leader', { get: () => S.vehicles[0] });
   Object.defineProperty(S, 'leg', { get: () => leg });
