@@ -19,6 +19,10 @@
 //    glsl ......... every program of shaders.js passes naga (GLSL 450 form)
 //    worker ....... mesh-worker.js in this process: messages cloned with
 //                   their transfer lists, bricks and a rock come back
+//    phone ........ layout.js: the form at each phone viewport, the reef
+//                   fits in the clear area above the sheet and the dock,
+//                   the sheet snap, tap and double tap, the pixel ratio
+//                   cap, the dock targets (mobile-check.mjs: jsdom)
 // ============================================================================
 import { createReef, growPreset, shapeOf, SPECIES, SPECIES_IDS, PRESETS, PRESET_IDS, sandY, bleachLevel, speciesHook } from './reef.js';
 import { groundY, rockSdf } from './terrain.js';
@@ -35,6 +39,7 @@ import * as SH from './shaders.js';
 import { checkPrograms } from './glsl-check.mjs';
 import fs from 'node:fs';
 import { rng } from '../../lib/dla-engine.js';
+import { layoutFor, overlayRects, clearFromRects, sheetSnap, tapGesture, pixelRatio, nextPreset, PHONE_QUERY, DOCK_H, DOCK_LAND_W, DOCK_LAND_MAX } from './layout.js';
 
 let pass = 0, fail = 0;
 function ok(cond, name, info = '') {
@@ -350,6 +355,58 @@ function colony(id, o = {}) {
   ok(out.some(m => m.type === 'idle') && list.length > 50 && list.every(b => b.positions.length === b.normals.length && b.gids.length * 3 === b.positions.length), 'worker: brick meshes come back whole, then idle');
   ok(list.every(b => b.indices.length === 0 || b.indices.length % 3 === 0) && gids.size > r.count * 0.5, 'worker: the meshes carry the particle ids', gids.size);
   ok(rock && rock.id === 7 && rock.indices.length > 300, 'worker: a rock mesh comes back with its id');
+}
+
+// ── phone (layout.js) ───────────────────────────────────────────────────────
+{
+  const VIEWS = [[360, 740, 'sheet'], [390, 844, 'sheet'], [430, 932, 'sheet'], [768, 1024, 'sheet'], [844, 390, 'drawer'], [1440, 900, 'desktop']];
+  for (const [w, h, want] of VIEWS) ok(layoutFor({ w, h, coarse: w < 1000 }) === want, `phone: ${w}x${h} is a ${want}`);
+  ok(layoutFor({ w: 1000, h: 480, coarse: false }) === 'desktop' && layoutFor({ w: 1000, h: 480, coarse: true }) === 'drawer', 'phone: a short window is a drawer only on a touch screen');
+  ok(fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8').includes(`@media ${PHONE_QUERY.replace(/, /g, ', ')}`), 'phone: style.css PHONE block uses PHONE_QUERY');
+  // The mixed reef (main.js subjectSize) inside the clear area, each sheet state.
+  const R = PRESETS.mixed.R + 18, rx = R, ry = 0.62 * R;
+  let worst = 1;
+  for (const [w, h] of VIEWS.slice(0, 5)) for (const sheet of ['closed', 'half', 'full']) {
+    for (const inset of [0, 34]) {
+      const { rects } = overlayRects({ w, h, coarse: true, sheet, inset });
+      const clear = clearFromRects(rects, w, h);
+      const fit = frameFit({ w, h, clear, rx, ry, fov: 40 });
+      const box = projectedBox({ w, h, fov: 40 }, fit, undefined, rx, ry);
+      const inside = box.x0 >= clear.l - 0.5 && box.x1 <= w - clear.r + 0.5 && box.y0 >= clear.t - 0.5 && box.y1 <= h - clear.b + 0.5;
+      const fill = Math.max((box.x1 - box.x0) / (w - clear.l - clear.r), (box.y1 - box.y0) / (h - clear.t - clear.b));
+      worst = Math.min(worst, fill);
+      if (sheet === 'full' && w < h) {  // the full sheet does not count: the framing is the closed one
+        const c0 = clearFromRects(overlayRects({ w, h, coarse: true, sheet: 'closed', inset }).rects, w, h);
+        if (JSON.stringify(c0) !== JSON.stringify(clear)) ok(false, `phone: the full sheet keeps the framing ${w}x${h}`, JSON.stringify({ c0, clear }));
+      }
+      if (!inside || fill < 0.6) ok(false, `phone: reef in the clear area ${w}x${h} ${sheet} inset ${inset}`, JSON.stringify({ clear, box }));
+    }
+  }
+  ok(worst >= 0.6, 'phone: the reef fills 60% or more of the clear area at every viewport and sheet state', worst.toFixed(2));
+  const c1 = clearFromRects(overlayRects({ w: 390, h: 844, coarse: true, sheet: 'half' }).rects, 390, 844);
+  ok(Math.abs(c1.b - (DOCK_H + Math.min(0.46 * 844, 500))) < 0.01 && c1.t === 0 && c1.l === 0, 'phone: the half sheet and the dock cover the base', JSON.stringify(c1));
+  const c2 = clearFromRects(overlayRects({ w: 844, h: 390, coarse: true, sheet: 'half' }).rects, 844, 390);
+  ok(c2.r > 300 && c2.b === DOCK_H, 'phone: the landscape drawer covers the right, the dock the base', JSON.stringify(c2));
+  ok(clearFromRects([{ x0: 200, y0: 700, x1: 390, y1: 790 }], 390, 844).b === 0, 'phone: a corner box (the readout) does not count');
+  // the sheet grip
+  ok(sheetSnap('half', -80) === 'full' && sheetSnap('full', 80) === 'half' && sheetSnap('half', 80) === 'closed', 'phone: the grip drags half to full, full to half, half to closed');
+  ok(sheetSnap('half', 2) === 'full' && sheetSnap('full', -3) === 'half' && sheetSnap('half', 20) === 'half', 'phone: a grip tap toggles half and full; a short drag keeps the state');
+  // tap, double tap, drag
+  const d = { x: 100, y: 100, t: 0 };
+  ok(tapGesture(d, { x: 103, y: 102, t: 120 }, null) === 'tap', 'phone: a short still touch is a tap');
+  ok(tapGesture(d, { x: 140, y: 100, t: 120 }, null) === 'drag' && tapGesture(d, { x: 100, y: 100, t: 900 }, null) === 'drag', 'phone: a move or a long press is not a tap (orbit wins)');
+  ok(tapGesture({ x: 104, y: 98, t: 200 }, { x: 105, y: 99, t: 290 }, { x: 100, y: 100, t: 120 }) === 'double', 'phone: a second tap near and soon is a double tap');
+  ok(tapGesture({ x: 104, y: 98, t: 800 }, { x: 105, y: 99, t: 900 }, { x: 100, y: 100, t: 120 }) === 'tap' && tapGesture({ x: 300, y: 98, t: 200 }, { x: 300, y: 99, t: 290 }, { x: 100, y: 100, t: 120 }) === 'tap', 'phone: a late or far second tap is a new tap');
+  // pixel ratio
+  ok(pixelRatio(3, 390, 844, true) === 1.6 && pixelRatio(3, 768, 1024, true) <= 1.6 && 768 * 1024 * pixelRatio(3, 768, 1024, true) ** 2 <= 2.21e6, 'phone: the pixel ratio is 1.6 at most, 2.2 M px at most', pixelRatio(3, 768, 1024, true));
+  ok(pixelRatio(1, 390, 844, true) === 1 && pixelRatio(2, 1440, 900, false) === 2, 'phone: a low ratio is kept; a desktop gets 2');
+  ok(nextPreset(PRESET_IDS, PRESET_IDS[PRESET_IDS.length - 1]) === PRESET_IDS[0] && nextPreset(PRESET_IDS, 'mixed') === PRESET_IDS[1], 'phone: the dock preset button cycles the presets');
+  // dock targets: five buttons, 8 px padding at each side, 6 px gaps
+  const dockBtn = w => (w - 16 - 4 * 6) / 5;
+  ok([360, 390, 430, 768].every(w => dockBtn(w) >= 44) && dockBtn(Math.min(DOCK_LAND_W * 844, DOCK_LAND_MAX)) >= 44, 'phone: each dock button is 44 px wide or more', dockBtn(360));
+  // caps on a touch screen (main.js and scene.js)
+  const mainSrc = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8'), sceneSrc = fs.readFileSync(new URL('./scene.js', import.meta.url), 'utf8');
+  ok(/CAP = COARSE \? 6000/.test(mainSrc) && /polypBudget = coarse \? 9000/.test(sceneSrc), 'phone: 6000 particles and 9000 drawn polyps on a touch screen');
 }
 
 console.log(`${pass} passed, ${fail} failed`);
