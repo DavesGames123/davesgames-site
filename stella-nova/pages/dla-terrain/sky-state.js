@@ -41,8 +41,11 @@
 //          presets across the model's fronts. Lightning comes from the
 //          model's storm cells, as the mean flash over the frame
 //          (lightningCells), so 30 and 144 fps give the same light.
-//  CLOCK   weather time = sky time x RATE; RATE follows the day clock
-//          (game s per sky s from the change of tod), RATE_MIN .. RATE_MAX.
+//  CLOCK   weather time = sky time x RATE; RATE = WEATHER_SHARE x the day
+//          clock (game s per sky s from the change of tod), in RATE_MIN ..
+//          RATE_MAX (6 .. 40 x; 60 x for a minute after a weather change):
+//          slow, so nothing in the weather pops. The values at the camera
+//          follow the model with a lag (CAM_LAG_S).
 //          The model steps a fixed 60 s; the driver interpolates the two
 //          snapshots round the weather time, so the result does not depend
 //          on the frame times. A new world or reset() spins the model up
@@ -353,7 +356,8 @@ function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
   const fogCol = amb.map((a, c) => a * 0.12 + sunColor[c] * 0.025 + flash * 0.4);
 
   // ---- wind --------------------------------------------------------------------
-  const gust = clamp(0.5 + 0.35 * Math.sin(t * 0.43) * Math.sin(t * 0.17 + 2.0) + 0.15 * Math.sin(t * 1.3), 0, 1);
+  // gusts: slow and smooth (periods of 15 to 40 s), no flutter
+  const gust = clamp(0.5 + 0.35 * Math.sin(t * 0.21) * Math.sin(t * 0.083 + 2.0) + 0.15 * Math.sin(t * 0.37), 0, 1);
   let ang, speed;
   if (extra.windVec) {
     // the low wind of the model at the camera (it turns with the terrain)
@@ -434,11 +438,40 @@ export function writeSkyGlobals(f, s) {
 }
 
 // ── the weather model (weather-model.js) and its clock ────────────────────
-// Weather time runs RATE x faster than sky time: RATE follows the day clock
-// (game seconds per sky second, from the change of tod), kept in
-// RATE_MIN .. RATE_MAX. A front at its real speed (m/s of weather time)
-// then crosses the world in the time the sun needs for the same hours.
-export const RATE_MIN = 30, RATE_MAX = 400;
+// Weather time runs RATE x faster than sky time: RATE is WEATHER_SHARE of
+// the day clock (game seconds per sky second, from the change of tod), kept
+// in RATE_MIN .. RATE_MAX. The user said the page had "no CHILL to the
+// dynamics": with RATE equal to the day clock (30 .. 400), a front crossed
+// the world in 20 to 30 s. Now the weather runs at about a third of the
+// day clock and at most 40 x real time: a front takes minutes, cover
+// changes over minutes, and a still day (no clock) still drifts at 6 x.
+// The model sees the sun of its own weather time (weatherEnv with the
+// follow factor), so the day and the weather stay in step.
+export const RATE_MIN = 6, RATE_MAX = 40, WEATHER_SHARE = 0.3;
+export function weatherRate(dayRate) { return clamp(WEATHER_SHARE * Math.max(dayRate, 0), RATE_MIN, RATE_MAX); }
+// A new preset from the UI (a weather chip) starts a front at the upwind
+// edge. So that the new weather arrives in about a minute and storm cells
+// have the hours they need to grow, the clock eases up to RATE_FRONT for
+// FRONT_BOOST_S real seconds (in over 4 s, out over the last 20 s) and then
+// back to the calm rate. The model fields still change step by step, so
+// the boost adds no jump. frontBoost(s) -> 0..1, s = seconds since the change.
+export const RATE_FRONT = 60, FRONT_BOOST_S = 60;
+// the lag of the camera values (cover, rain, snow, storm, fog, valley fog)
+export const CAM_LAG_S = 6;
+const LAG_KEYS = ['cover', 'rain', 'snow', 'storm', 'cumulus', 'fog'];
+export function frontBoost(sec) {
+  if (!(sec >= 0) || sec >= FRONT_BOOST_S) return 0;
+  return smooth(0, 4, sec) * (1 - smooth(FRONT_BOOST_S - 20, FRONT_BOOST_S, sec));
+}
+// the integral of frontBoost from 0 to sec (Simpson, 400 intervals)
+export function frontBoostArea(sec) {
+  const x = clamp(sec, 0, FRONT_BOOST_S);
+  if (x <= 0) return 0;
+  const n = 400, h = x / n;
+  let sum = frontBoost(0) + frontBoost(x);
+  for (let i = 1; i < n; i++) sum += (i & 1 ? 4 : 2) * frontBoost(i * h);
+  return sum * h / 3;
+}
 
 export function weatherEnv(tod, season, latitude) {
   const s = solarPosition(((tod % 1) + 1) % 1, season, latitude).dir, a = airTemps(tod, season, latitude);
@@ -646,7 +679,7 @@ export function createSky(opts = {}) {
   const memo = new Map();
   const L = new Float32Array(CH), tmp = new Float32Array(CH);
   const sim = {
-    driver: drv, cam: [0, 300, 0], terrain: null, wantReset: true, id: null, rate: 100, follow: 1,
+    driver: drv, cam: [0, 300, 0], terrain: null, wantReset: true, id: null, rate: 100, follow: 1, boostT: null,
     setCamera(p) { sim.cam[0] = p[0]; sim.cam[1] = p[1]; sim.cam[2] = p[2]; },
     // a new final terrain: the model starts again for it (a new world)
     setTerrain(ter) {
@@ -672,8 +705,15 @@ export function createSky(opts = {}) {
           sim.rate += (obs - sim.rate) * (1 - Math.exp(-dt / 1.5));
         }
       }
-      const R = clamp(sim.rate, RATE_MIN, RATE_MAX);
-      sim.follow = clamp(sim.rate / R, 0, 1);
+      if (dt > 0 && sim.boostT !== null) sim.boostT += dt;
+      const R0 = weatherRate(sim.rate), Rf = Math.max(R0, RATE_FRONT), bT = sim.boostT ?? -1;
+      const R = mix(R0, Rf, frontBoost(bT));
+      // the weather step of this frame: the integral of the rate over the
+      // frame, so that any frame schedule gives the same weather time
+      const gStep = dt > 0 ? R0 * dt + (Rf - R0) * (frontBoostArea(bT) - frontBoostArea(bT - dt)) : 0;
+      // day seconds per weather second (the sun of the model's own time)
+      sim.follow = clamp(sim.rate / R, 0, 1 / WEATHER_SHARE + 1);
+      sim.weatherRate = R;
       if (dt === null || sim.wantReset || !prev) {
         // spin up over the 4 h before now, so the state fits the hour
         const envs = [];
@@ -681,9 +721,9 @@ export function createSky(opts = {}) {
         drv.reset(id, over, envs);
         sim.wantReset = false; sim.id = id;
       } else {
-        if (id !== sim.id) { drv.setPreset(id, over); sim.id = id; }
+        if (id !== sim.id) { drv.setPreset(id, over); sim.id = id; sim.boostT = 0; }
         const g0 = drv.gT, follow = sim.follow;
-        drv.advance(dt * R, (gt) => weatherEnv(tod + (gt - g0) * follow / 86400, season, latitude));
+        drv.advance(gStep, (gt) => weatherEnv(tod + (gt - g0) * follow / 86400, season, latitude));
       }
       const cam = sim.cam;
       const have = drv.sample(cam[0], cam[2], L);
@@ -713,6 +753,28 @@ export function createSky(opts = {}) {
         windVec = [L[9], L[10]];
         valleyFog = L[5];
         light = lightningCells(prev ? prev.t : t, t, br.a.cells || [], cam, seed, memo);
+      }
+      // CHILL: the values at the camera follow the model with a lag of
+      // CAM_LAG_S real seconds. When a front line or a cloud edge passes
+      // over the camera, the light and the rain then change over seconds
+      // and not in one frame (the clouds on screen still come from the
+      // model texture, at the model's own pace)
+      // (two first-order stages of CAM_LAG_S / 2: a step starts and ends
+      // smoothly; its fastest change is about step / (1.36 CAM_LAG_S) per s)
+      if (prev && dt > 0 && sim.lag) {
+        const k = 1 - Math.exp(-dt / (CAM_LAG_S / 2));
+        const lag2 = (key, v) => {
+          const a = sim.lag[key], b = sim.lag2[key];
+          sim.lag[key] = a + (v - a) * k;
+          sim.lag2[key] = b + (sim.lag[key] - b) * k;
+          return sim.lag2[key];
+        };
+        for (const key of LAG_KEYS) wx[key] = lag2(key, wx[key]);
+        valleyFog = lag2('fogV', valleyFog);
+      } else {
+        sim.lag = { fogV: valleyFog };
+        for (const key of LAG_KEYS) sim.lag[key] = wx[key];
+        sim.lag2 = { ...sim.lag };
       }
       const out = composeSky(tod, id, season, latitude, t, wx, prev && dt !== null ? prev : null, dt || null,
         { front: { from: wx, to: wx, progress: 1 }, light, windVec, valleyFog });

@@ -272,7 +272,11 @@ function runSky(schedule, T, wx = 'rain', change = null) {
   let t = 0, st = sky.update(0.45, wx, 0.35, 46, 0), k = 0;
   const frames = [st];
   while (t < T - 1e-9) {
-    const dt = Math.min(schedule[k++ % schedule.length], T - t);
+    // a weather change from the UI lands on a frame at change.at in every
+    // schedule (it starts the front boost of sky-state.js createSky, which
+    // then runs the same in both)
+    const toChange = change && t < change.at - 1e-9 ? change.at - t : Infinity;
+    const dt = Math.min(schedule[k++ % schedule.length], T - t, toChange);
     t += dt;
     st = sky.update(0.45 + t * 100 / 86400, change && t >= change.at ? change.id : wx, 0.35, 46, t);
     frames.push(st);

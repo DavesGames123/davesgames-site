@@ -67,6 +67,11 @@ import { ATMO, SUN_ILLUM, SUN_RADIUS, GLOBALS, createSky as createSkyState } fro
 import { CH as WX_CH, N as WX_N } from '../weather-model.js';
 import { createWeather, precipPhases } from './weather.js';
 
+// CHILL (the user: "it feels so computer generated with no CHILL to the
+// dynamics"): the visible motion of the sky is capped in real time.
+export const CLOUD_DRIFT_RATE = 6;     // cloud shapes: at most 6 x the upper wind
+export const CLOUD_RISE = [1.2, 3.0];  // m/s: shape and detail noise rise (evolution)
+export const HAZE_DRIFT_RATE = 6;      // haze banks: at most 6 x the low wind
 export const SKYU_FLOATS = 26 * 4;   // struct SkyU: 26 vec4 (416 bytes)
 const U = (typeof GPUBufferUsage !== 'undefined') ? GPUBufferUsage : { UNIFORM: 64, COPY_DST: 8, STORAGE: 128 };
 const T = (typeof GPUTextureUsage !== 'undefined') ? GPUTextureUsage : { COPY_SRC: 1, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
@@ -421,13 +426,19 @@ export async function createSky(gpu) {
     st.lastGameT = s.gameT;
     const up = s.upperWind || [g[GLOBALS.wind] * 2.5, g[GLOBALS.wind + 1] * 2.5];
     st.cloudPrev[0] = st.cloudOff[0]; st.cloudPrev[1] = st.cloudOff[1];
-    st.cloudOff[0] += up[0] * gdt; st.cloudOff[1] += up[1] * gdt;
-    st.evolve = (st.evolve || 0) + gdt;
+    // CHILL: the cloud shapes drift at most CLOUD_DRIFT_RATE x real time
+    // (a 15 m/s upper wind moves them 90 m/s: a cloud 3 km away crosses
+    // about 2 deg a second); the model's cover moves at the weather rate,
+    // so clouds form and fade as it passes, slowly
+    const cdt = Math.min(gdt, rdt * CLOUD_DRIFT_RATE);
+    st.cloudOff[0] += up[0] * cdt; st.cloudOff[1] += up[1] * cdt;
+    // the shapes evolve (rise and boil) in real time, slowly
+    st.evolve = (st.evolve || 0) + rdt;
     put(SKYU.cloud1, clamp(wx.storm ?? 0, 0, 1), clamp(wx.cirrus ?? 0.3, 0, 1), -st.cloudOff[0], -st.cloudOff[1]);
-    put(SKYU.anim0, st.cloudOff[0] - st.cloudPrev[0], st.cloudOff[1] - st.cloudPrev[1], (st.evolve * 0.25) % 6800, (st.evolve * 0.8) % 560);
-    // haze banks drift with the low wind (at most 20 x real time)
+    put(SKYU.anim0, st.cloudOff[0] - st.cloudPrev[0], st.cloudOff[1] - st.cloudPrev[1], (st.evolve * CLOUD_RISE[0]) % 3000, (st.evolve * CLOUD_RISE[1]) % 520);
+    // haze banks drift with the low wind (at most HAZE_DRIFT_RATE x real time)
     const lw = s.local ? [s.local[9], s.local[10]] : [g[GLOBALS.wind], g[GLOBALS.wind + 1]];
-    const hdt = Math.min(gdt, rdt * 20);
+    const hdt = Math.min(gdt, rdt * HAZE_DRIFT_RATE);
     st.hazeOff[0] = (st.hazeOff[0] + lw[0] * hdt) % 1400; st.hazeOff[1] = (st.hazeOff[1] + lw[1] * hdt) % 1400;
     // rain and snow: real time and the gusty ground wind, wrapped exactly
     // by the box spans (render/weather.js precipPhases)
