@@ -20,10 +20,16 @@
 //  rock.sdf (negative inside; a bound: steps use sdf / rock.lipschitz,
 //  thresholds sdf / rock.sdfScale), rock.normal, rock.sampleSurface, and
 //  rock.sand.heightAt (the sand is not in rock.sdf). Walkers that touch
-//  the rock or the sand are lost, except next to the coral of a colony
-//  whose species encrusts: there a walker can stick as a new root, so the
-//  base creeps over the rock. No particle centre is ever inside the rock
-//  or under the sand (the tests check it).
+//  the rock or the sand are lost. No particle centre is ever inside the
+//  rock or under the sand (the tests check it).
+//
+//  ONE ROOT. The user said (2026-10-18): "real coral start with one root
+//  and branch futher and further out, not multiple roots like a piece of
+//  grass". Each colony has one root particle (its seed, parent -1). Every
+//  other particle of the colony joins a particle of that colony, so its
+//  parent chain ends at that root (tests/form.test.mjs). No walker starts
+//  a new root on the rock. Two colonies can still meet and fuse
+//  (R.bridges), but each keeps its own root.
 //
 //  SIZE. The user said (2026-10-18): "we should be able to simulate much
 //  large growing coral reef structures these are pathetically small for
@@ -113,15 +119,13 @@ export const QUALITY = {
 // range of colony sizes (m). dim: the mass dimension, for the cap of a
 // colony of a size (cap = fill x (size / spacing)^dim). r0, thick: the
 // particle radius for the page data (polypRadius). tpp: coral triangles
-// per particle (measured), for the triangle budget. encrust, roots, reach:
-// a walker that hits the rock within reach x size of the base sticks as a
-// new root with chance encrust, up to roots roots. base, tip: natural
+// per particle (measured), for the triangle budget. base, tip: natural
 // colours (linear 0..1). sway: soft corals move with the water.
 export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
     params: { particleSpacing: 0.04, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 0, stickiness: 0.9 },
-    size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 7, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.3, roots: 80, reach: 0.5,
+    size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 2.6, r0: 0.013, thick: 0.17, sway: 0,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
     hooks: {
       // Tips favoured: a busy particle, or a walker from the side or below,
@@ -138,7 +142,7 @@ export const SPECIES = {
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
     params: { particleSpacing: 0.022, attractionDistance: 0.03, minMoveDistance: 0.016, stubbornness: 0, stickiness: 0.75 },
-    size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 2.3, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
+    size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 2.3, r0: 0.006, thick: 0.1, sway: 1,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
     hooks: {
       // The new particle goes into the vertical plane of the fan, across the
@@ -156,7 +160,7 @@ export const SPECIES = {
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
     params: { particleSpacing: 0.045, attractionDistance: 0.065, minMoveDistance: 0.03, stubbornness: 1, stickiness: 0.9 },
-    size: [3.0, 8.5], tall: 0.4, tpp: 25, dim: 1.6, fill: 7, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
+    size: [3.0, 8.5], tall: 0.4, tpp: 25, dim: 1.6, fill: 7, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
@@ -180,7 +184,7 @@ export const SPECIES = {
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
     params: { particleSpacing: 0.12, attractionDistance: 0.1, minMoveDistance: 0.05, stubbornness: 6, stickiness: 0.6 },
-    size: [2.2, 5.0], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.45, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0.35, roots: 40, reach: 0.45,
+    size: [2.2, 5.0], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
       // Accretive growth: the tissue lays each new particle on the surface
@@ -199,7 +203,7 @@ export const SPECIES = {
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
     params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 3, stickiness: 0.2 },
-    size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 2.1, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
+    size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.1, r0: 0.02, thick: 0.15, sway: 0.6,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
     hooks: {
       // dlaf ShouldJoin with a low stickiness: the walkers creep into the
@@ -668,29 +672,6 @@ export function createReef(opts = {}) {
     return rock.sdf(out[0] * U, out[1] * U, out[2] * U) > 0;
   }
 
-  // A walker that hits the rock next to the coral of a colony that
-  // encrusts (the nearest particle is of that colony, within 0.55 m) can
-  // stick there: a new root of that colony. So the base creeps over the
-  // rock from the coral that is there, never into a neighbour's ground.
-  function encrust(x, y, z) {
-    const n0 = R.m.nearest(P);
-    if (n0.id < 0 || n0.d * U > 0.55) return false;
-    const c = R.colonies[R.col[n0.id]];
-    if (c.full || c.count >= c.cap) return false;
-    const s = c.sp; if (!s.encrust || c.roots >= s.roots) return false;
-    const reach = c.size * s.reach;
-    const dx = x - c.base[0], dz = z - c.base[2];
-    if (dx * dx + dz * dz > reach * reach || Math.abs(y - c.base[1]) > reach) return false;
-    if (random() > s.encrust) return false;
-    const n = rock.normal(x, y, z), sp = params[c.id].particleSpacing;
-    QP[0] = (x + n[0] * sp * 0.6) / U; QP[1] = (y + n[1] * sp * 0.6) / U; QP[2] = (z + n[2] * sp * 0.6) / U;
-    if (!outOfRock(QP, sp * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) return false;
-    c.roots++;
-    rootColony = c.k;
-    R.m.add(QP, -1);
-    return true;
-  }
-
   // One walker from its start to a join, a loss (rock, plot, lid) or the
   // step limit. Returns the new particle id, or -1.
   function walkOne() {
@@ -724,7 +705,6 @@ export function createReef(opts = {}) {
       const x = P[0] * U, y = P[1] * U, z = P[2] * U;
       const dr = rockD.dist(x, y, z);
       if (dr < 0.003 * R.fine + 0.001) {
-        if (encrust(x, y, z)) return R.count - 1;
         R.lost++; return -1;
       }
       const step = Math.max(minMoveU, Math.min(d - A, dr * 0.9 / U));

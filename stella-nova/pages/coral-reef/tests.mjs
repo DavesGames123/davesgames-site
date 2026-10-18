@@ -22,6 +22,7 @@
 //    tests/lock.test.mjs .... CORAL, SCENE: a grown reef stays locked in while
 //                             the cameras move (no fine mesh made again, one
 //                             full mesh per colony in each frame)
+//    tests/form.test.mjs .... CORAL: the colony form (one root per colony)
 //    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
 //                             extents, budgets) and the ROVs keep clear
 //                             of the coral (rov/coral-field.js)
