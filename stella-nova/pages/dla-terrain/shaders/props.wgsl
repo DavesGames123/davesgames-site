@@ -425,13 +425,76 @@ fn vegCloud(p: vec3f) -> f32 {
   return mix(1.0, T, smoothstep(-0.04, 0.03, G.sunDir.y));
 }
 
-fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, trans: f32, specK: f32, fc: vec2f) -> vec3f {
+// LIGHT AT EVERY LEVEL (2026-10-18, the user: "this is albedo only, it's
+// got no shading when under shadow from cloud cover and the trees
+// themselves aren't getting any shadows"). The terms below do not need the
+// shadow map, so the governor emergency level (no casters) and the Low
+// profiles keep a shaded crown: fn crownTerms (sun through the crown
+// ellipsoid, crown AO), fn terrainSunVis (the ridge shadow, a march on the
+// coarse height), the cloud shadow, the hemisphere sky and the bounce.
+
+// The crown of a tree as an ellipsoid round root + (0, cy h, 0). x: the sun
+// visibility through the crown from wp (the optical depth of the chord to
+// the sun), y: the crown AO (darker toward the centre and the bottom).
+// Both are 1 for plants with no impostor flag (rocks, ferns, flowers).
+fn crownTerms(wp: vec3f, it: Inst, sp: Species) -> vec2f {
+  let flags = u32(sp.a.w + 0.5);
+  if ((flags & 1u) == 0u) { return vec2f(1.0, 1.0); }
+  let h = sp.a.x * it.p.w;
+  let root = it.p.xyz - vec3f(0.0, sp.b.z * h, 0.0);
+  let con = (flags & 16u) != 0u;
+  let rad = max(sp.a.y * it.p.w, 0.2 * h);
+  let ax = vec3f(rad, select(0.34, 0.46, con) * h, rad);
+  let c = root + vec3f(0.0, select(0.64, 0.52, con) * h, 0.0);
+  let q = (wp - c) / ax;
+  let l = normalize(G.sunDir.xyz) / ax;
+  let a = max(dot(l, l), 1e-6);
+  let b = dot(q, l);
+  let cc = dot(q, q) - 1.0;
+  let disc = (b * b) - (a * cc);
+  let t = select(0.0, max((-b + sqrt(max(disc, 0.0))) / a, 0.0), disc > 0.0);
+  // t sqrt(a): the chord in crown radii (2 through the middle)
+  let sun = mix(0.16, 1.0, exp(-1.7 * t * sqrt(a)));
+  let r = length(q);
+  let ao = mix(0.45, 1.0, smoothstep(0.1, 1.0, r)) * mix(0.7, 1.0, clamp((q.y * 0.5) + 0.5, 0.0, 1.0));
+  return vec2f(sun, ao);
+}
+
+// The ridge shadow: march from p toward the sun over the coarse height
+// (common.wgsl baseHeight), 8 steps from 10 m to 2.5 km. 1 = lit. The
+// vertex shaders call it once per vertex at the crown centre, and only
+// where the cascades do not cover the plant (VP.sun.w 0, or past
+// VP.misc.x).
+const VEG_MARCH: u32 = 8u;
+fn terrainSunVis(p: vec3f) -> f32 {
+  let L = normalize(G.sunDir.xyz);
+  if (L.y < -0.04) { return 0.0; }
+  var vis = 1.0;
+  var dist = 10.0;
+  for (var i = 0u; i < VEG_MARCH; i++) {
+    let q = p + (L * dist);
+    let gap = q.y - baseHeight(q.xz);
+    vis = min(vis, clamp((gap / (dist * 0.04)) + 0.5, 0.0, 1.0));
+    dist = dist * 2.2;
+  }
+  return vis;
+}
+fn needMarch(p: vec3f) -> bool {
+  return (VP.sun.w < 0.5) || (distance(p, VP.cam.xyz) > (VP.misc.x * 0.85));
+}
+
+fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, trans: f32, specK: f32, fc: vec2f, extSh: f32) -> vec3f {
   let V = normalize(G.camPos.xyz - wp);
   var n = n0;
   let L = normalize(G.sunDir.xyz);
   let sunE = G.sunColor.rgb;   // radiance at ground (GROUND and WATER read it so)
-  var sh = 1.0;
-  if (L.y > -0.05) { sh = sunShadowSoft(wp, n, fc) * vegCloud(wp); }
+  var sh = extSh;
+  if (L.y > -0.05) {
+    // the cascades only while VP.sun.w says they hold casters
+    var map = 1.0;
+    if (VP.sun.w > 0.5) { map = sunShadowSoft(wp, n, fc); }
+    sh = sh * map * vegCloud(wp);
+  }
   sh *= smoothstep(-0.06, 0.05, L.y);
   let ndl = dot(n, L);
   var diff: f32;
@@ -474,6 +537,7 @@ struct VOut {
   @location(3) ao: f32,
   @location(4) @interpolate(flat) ii: vec2u,   // instance index, fade
   @location(5) lp: vec3f,                     // local position (triplanar)
+  @location(6) tsh: f32,                      // ridge shadow (fn terrainSunVis), 1 = lit
 };
 
 fn placeVertex(v: VIn, it: Inst, sp: Species) -> VOut {
@@ -497,6 +561,7 @@ fn placeVertex(v: VIn, it: Inst, sp: Species) -> VOut {
   o.uv = v.uv;
   o.ao = v.ao.x;
   o.lp = v.pos * s;
+  o.tsh = 1.0;
   return o;
 }
 
@@ -508,6 +573,8 @@ fn vs_mesh(v: VIn, @builtin(instance_index) k: u32) -> VOut {
   var o = placeVertex(v, it, sp);
   o.pos = G.viewProj * vec4f(o.wp, 1.0);
   o.ii = rec;
+  let cc = it.p.xyz + vec3f(0.0, sp.a.x * it.p.w * 0.5, 0.0);
+  if (needMarch(cc)) { o.tsh = terrainSunVis(cc); }
   return o;
 }
 
@@ -637,7 +704,12 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   if (leaf) { foot = mix(0.55, 1.0, smoothstep(0.0, max(0.5 * hgt, 0.15), yl)); }
   else { foot = mix(0.45, 1.0, foot); }
   let ao = mix(1.0, o.ao, 0.85) * terrainAO(it.p.xz) * foot;
-  var col = shadeVeg(alb, n, o.wp, leaf, rough, ao, select(0.0, 1.0, leaf), select(1.0, 0.35, leaf), o.pos.xy);
+  // the crown: sun through the crown ellipsoid and the crown AO (trees);
+  // with the cascades on they carry part of the self shadow, so the
+  // analytic term is softer then
+  let ct = crownTerms(o.wp, it, sp);
+  let crownSun = mix(ct.x, sqrt(ct.x), VP.sun.w);
+  var col = shadeVeg(alb, n, o.wp, leaf, rough, ao * ct.y, select(0.0, 1.0, leaf), select(1.0, 0.35, leaf), o.pos.xy, o.tsh * crownSun);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
 }
@@ -664,6 +736,7 @@ struct IOut {
   @location(3) @interpolate(flat) views: vec2u,
   @location(4) blendW: f32,
   @location(5) @interpolate(flat) basis: vec4f,  // right.xz, toward cam.xz
+  @location(6) @interpolate(flat) tsh: f32,      // ridge shadow, 1 = lit
 };
 
 const NVIEW: u32 = 8u;
@@ -700,6 +773,8 @@ fn vs_imp(v: VIn, @builtin(instance_index) k: u32) -> IOut {
   o.uv = vec2f(v.pos.x + 0.5, 1.0 - v.pos.y);
   o.ii = rec;
   o.basis = vec4f(right, toC);
+  let cc = root + vec3f(0.0, h * 0.5, 0.0);
+  o.tsh = select(1.0, terrainSunVis(cc), needMarch(cc));
   return o;
 }
 
@@ -755,7 +830,18 @@ fn fs_imp(o: IOut) -> @location(0) vec4f {
   let hgt = 1.0 - o.uv.y;
   let rim = abs(o.uv.x - 0.5) * 2.0;
   let crown = mix(0.42, 1.0, pow(clamp(hgt, 0.0, 1.0), 0.8)) * mix(1.0, 0.85, 1.0 - rim);
-  var col = shadeVeg(alb * crown, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz), select(0.0, 0.5, leafy), 0.12, o.pos.xy);
+  // the sun through the crown: the frame point lies in the crown plane
+  // facing the camera; lift it toward the camera by the depth of the
+  // crown at that point, so the lit side of the crown is the sun side
+  let hh = sp.a.x * it.p.w;
+  let rootI = it.p.xyz - vec3f(0.0, sp.b.z * hh, 0.0);
+  let crR = max(sp.a.y * it.p.w, 0.2 * hh);
+  let ex = abs(o.uv.x - 0.5) * 2.0;
+  let toCam3 = vec3f(o.basis.z, 0.0, o.basis.w);
+  let wpC = o.wp + (toCam3 * (crR * sqrt(max(1.0 - (ex * ex), 0.0)) * 0.8));
+  let ct = crownTerms(wpC, it, sp);
+  let crownSun = mix(ct.x, sqrt(ct.x), VP.sun.w);
+  var col = shadeVeg(alb * crown, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz) * mix(1.0, ct.y, 0.5), select(0.0, 0.5, leafy), 0.12, o.pos.xy, o.tsh * crownSun);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
 }
@@ -788,6 +874,7 @@ fn vs_imp_shadow(v: VIn, @builtin(instance_index) k: u32) -> IOut {
   o.uv = vec2f(v.pos.x + 0.5, 1.0 - v.pos.y);
   o.ii = rec;
   o.basis = vec4f(right, toS);
+  o.tsh = 1.0;
   return o;
 }
 

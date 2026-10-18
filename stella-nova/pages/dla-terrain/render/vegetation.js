@@ -1280,6 +1280,35 @@ export function classifyCPU(it, sp, P, G) {
   else { out.n = 1; out.lists.push([base + l0, 1, lf]); }
   return out;
 }
+// VP.sun.w: 1 when the cascades hold the plant casters. The governor
+// emergency level (frame.govLevel 5, gov key 'emergency') draws no
+// casters, so the map is empty then: props.wgsl skips it and takes its own
+// terms (fn crownTerms, fn terrainSunVis, the cloud shadow).
+export function vegShadowsOn(frame) {
+  const emergency = (frame.govLevel | 0) >= 5 || !!(frame.gov && Array.isArray(frame.gov.keys) && frame.gov.keys.includes('emergency'));
+  return frame.shadows === false || frame.shadowInfo === null || emergency ? 0 : 1;
+}
+// CPU twin of props.wgsl fn crownTerms (tests): wp world point, it the 8
+// instance floats, sp the 8 species floats, sun unit vector toward the sun.
+// -> [sun visibility through the crown, crown AO]
+export function crownTermsCPU(wp, it, sp, sun) {
+  const flags = Math.round(sp[3]);
+  if (!(flags & FLAG.impostor)) return [1, 1];
+  const h = sp[0] * it[3], con = !!(flags & FLAG.conifer);
+  const rad = Math.max(sp[1] * it[3], 0.2 * h);
+  const ax = [rad, (con ? 0.46 : 0.34) * h, rad];
+  const c = [it[0], it[1] - sp[6] * h + (con ? 0.52 : 0.64) * h, it[2]];
+  const q = [0, 1, 2].map((k) => (wp[k] - c[k]) / ax[k]);
+  const sl = Math.hypot(...sun) || 1;
+  const l = [0, 1, 2].map((k) => sun[k] / sl / ax[k]);
+  const a = Math.max(l[0] * l[0] + l[1] * l[1] + l[2] * l[2], 1e-6), b = q[0] * l[0] + q[1] * l[1] + q[2] * l[2];
+  const cc = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] - 1, disc = b * b - a * cc;
+  const t = disc > 0 ? Math.max((-b + Math.sqrt(disc)) / a, 0) : 0;
+  const sunV = 0.16 + 0.84 * Math.exp(-1.7 * t * Math.sqrt(a));
+  const r = Math.hypot(...q), s01 = (e0, e1, x) => { const u = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return u * u * (3 - 2 * u); };
+  const ao = (0.45 + 0.55 * s01(0.1, 1, r)) * (0.7 + 0.3 * Math.min(1, Math.max(0, q[1] * 0.5 + 0.5)));
+  return [sunV, ao];
+}
 // The stand-in LOD parts of a species (tests: the normals audit)
 export function standInLods(key, seed = 1000) {
   const sp = SPECIES.find((x) => x.key === key);
@@ -1893,7 +1922,7 @@ export async function createVegetation(gpu) {
       stats.instances = n; stats.tiles = tiles.size; stats.pages = maxPages - freePages.length; stats.missingTiles = missing;
       const proj = frame.camera?.proj || g.subarray(GO.proj, GO.proj + 16);
       const H = g[GO.screen + 1] || 720;
-      shadowsOn = frame.shadows === false || frame.shadowInfo === null ? 0 : 1;
+      shadowsOn = vegShadowsOn(frame);
       const shadowFar = Math.min(frame.shadowDistance ?? 1e9, frame.shadowInfo?.splits?.[frame.shadowInfo.count - 1] ?? 1e9, shadowCap);
       writeCullParams(params, { cam, time: g[GO.camPos + 3], shadowFar: frame.shadowFar ?? shadowFar, slots: highPage * PAGE, q, proj, H,
         frame: g[GO.frame], lodPx, sun: [g[GO.sunDir], g[GO.sunDir + 1], g[GO.sunDir + 2]], shadowsOn,
