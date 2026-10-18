@@ -39,9 +39,9 @@ if (!loadJsdom()) {
   const state = () => { const d = dbg(), h = d.hud; return JSON.stringify({ sel: h.sel, main: h.mainCard, bar: h.barSel, tag: h.tagSel, feed: h.feedMain, cam: d.cam.followId, mode: d.cam.mode, arrow: h.map && h.map.selArrow }); };
   let h = dbg().hud;
   const n = dbg().rovs;
-  ok(n === 3 && h.cards.join() === '1,2,3' && $('rovPick').querySelectorAll('button').length === 3, 'page: 3 ROVs give 3 feed cards and 3 ROV buttons on the camera bar', JSON.stringify(h.cards));
+  ok(n === 4 && h.cards.join() === '1,2,3,4' && $('rovPick').querySelectorAll('button').length === 4, 'page: 4 ROVs (the default, the user: "four ROV\'s total please") give 4 feed cards and 4 ROV buttons on the camera bar', JSON.stringify(h.cards));
   ok(agree(1), 'page: by default ROV 1 is selected everywhere and followed', state());
-  ok([...$('feedSlot').querySelectorAll('.fcard canvas')].length === 3, 'page: each card holds the HUD canvas of its own feed');
+  ok([...$('feedSlot').querySelectorAll('.fcard canvas')].length === 4, 'page: each card holds the HUD canvas of its own feed');
   $('rovPick').querySelector('button[data-rov="2"]').click();
   await P.run(300);
   ok(agree(2), 'page: a click on ROV 2 in the camera bar selects it in the bar, the cards, the tags, the minimap, the feed and the follow camera', state());
@@ -56,8 +56,10 @@ if (!loadJsdom()) {
   await P.run(300);
   ok(agree(2), 'page: the keypad key 2 selects ROV 2', state());
   W.dispatchEvent(new W.KeyboardEvent('keydown', { code: 'Digit4', key: '4' }));
-  await P.run(200);
-  ok(dbg().hud.sel === 2, 'page: the key 4 does nothing with 3 ROVs');
+  await P.run(300);
+  ok(agree(4), 'page: with 4 ROVs the key 4 selects ROV 4', state());
+  W.dispatchEvent(new W.KeyboardEvent('keydown', { code: 'Digit2', key: '2' }));
+  await P.run(300);
   // the camera bar Orbit: the selection holds, the ROV button is not on
   $('camBar').querySelector('button[data-cam="orbit"]').click();
   await P.run(200);
@@ -74,16 +76,16 @@ if (!loadJsdom()) {
   // the minimap follows the selected ROV
   const m = dbg().hud.map, L = dbg().squad.p[2];
   ok(m && near(m.view.cx, L[0], 3) && near(m.view.cz, L[2], 3) && m.painted > 0, 'page: the minimap is centred on the selected ROV and shows explored cells', JSON.stringify(m && m.view) + ' painted ' + (m && m.painted));
-  // 4 ROVs
-  const b4 = $('rovCount') && $('rovCount').querySelector('button[data-id="4"]');
-  if (b4) b4.click();
-  const want4 = await until(() => dbg().rovs === 4 && dbg().hud.cards.length === 4, 20000);
-  if (want4) {
-    ok(dbg().hud.cards.join() === '1,2,3,4' && $('rovPick').querySelectorAll('button').length === 4 && agree(3), 'page: 4 ROVs give 4 cards and 4 buttons; the selection holds', state());
+  // 3 ROVs (the squad-size control)
+  const b3 = $('rovCount') && $('rovCount').querySelector('button[data-id="3"]');
+  if (b3) b3.click();
+  const want3 = await until(() => dbg().rovs === 3 && dbg().hud.cards.length === 3, 20000);
+  if (want3) {
+    ok(dbg().hud.cards.join() === '1,2,3' && $('rovPick').querySelectorAll('button').length === 3 && agree(3), 'page: 3 ROVs give 3 cards and 3 buttons; the selection holds', state());
     W.dispatchEvent(new W.KeyboardEvent('keydown', { code: 'Digit4', key: '4' }));
     await P.run(300);
-    ok(agree(4), 'page: with 4 ROVs the key 4 selects ROV 4', state());
-  } else ok(false, 'page: the ROV count control gives 4 ROVs', `${dbg().rovs} ROVs`);
+    ok(dbg().hud.sel === 3, 'page: the key 4 does nothing with 3 ROVs', state());
+  } else ok(false, 'page: the ROV count control gives 3 ROVs', `${dbg().rovs} ROVs`);
   // the saver: one card, the lead, at the cardRect place
   W.snSaver.enter({ seed: 3, calm: 0.7, label: () => {} });
   await P.run(1200);
@@ -91,7 +93,7 @@ if (!loadJsdom()) {
   ok(dbg().hud.feedMain === 1 && dbg().hud.mainCard === '1' && sv.card && Math.abs(parseFloat($('feed').style.width) - sv.card.w) < 1, 'page: the saver shows the lead feed as the one card at the cardRect place', JSON.stringify({ main: dbg().hud.mainCard, card: sv.card, style: $('feed').style.cssText }));
   W.snSaver.exit();
   await P.run(300);
-  ok(dbg().hud.sel === 4 && dbg().cam.followId === 4, 'page: the saver exit gives the selection back and follows it', state());
+  ok(dbg().hud.sel === 3 && dbg().cam.followId === 3, 'page: the saver exit gives the selection back and follows it', state());
   ok(P.errors.length === 0, 'page: no console errors', P.errors.slice(0, 3).join(' | '));
   P.close();
 
