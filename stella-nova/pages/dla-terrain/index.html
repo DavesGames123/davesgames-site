@@ -175,6 +175,14 @@
     <div class="row"><label for="ev">Exposure</label><input type="range" id="ev" min="-3" max="3" step="0.05" value="0"><span class="val" id="evV"></span></div>
     <div class="row"><label for="bloom">Bloom</label><input type="range" id="bloom" min="0" max="0.2" step="0.005" value="0.045"><span class="val" id="bloomV"></span></div>
     <div class="row"><label for="fov">Lens</label><input type="range" id="fov" min="25" max="90" step="1" value="50"><span class="val" id="fovV"></span></div>
+    <div class="sec-label">Light shafts</div>
+    <div class="seg" id="shaftSeg">
+      <button type="button" data-shafts="auto">Auto</button>
+      <button type="button" data-shafts="off">Off</button>
+      <button type="button" data-shafts="screen">Screen</button>
+      <button type="button" data-shafts="volume">Volumetric</button>
+    </div>
+    <div class="row"><label for="shaftK">Shafts</label><input type="range" id="shaftK" min="0" max="2.5" step="0.05" value="1"><span class="val" id="shaftKV"></span></div>
     <div class="sec-label">About</div>
     <p class="about">Mountain ranges here grow like frost: <b>diffusion-limited aggregation</b> builds a branching tree, and each level of the tree is blurred and sharpened again, so ridges branch the way real drainage divides do. <b>Branched flow</b> (rays bent by a smooth random field) gathers into channels that cut valleys and deltas, then stream-power erosion, sediment, climate and biomes finish the land.</p>
     <div class="btns"><button type="button" id="viewSaver">Screensaver</button><button type="button" id="creditsBtn">Credits</button></div>

@@ -442,12 +442,16 @@ export function createUI(app, doc = globalThis.document) {
   const evSync = look('ev', v => app.setLook('ev', v), v => (v > 0 ? '+' : '') + v.toFixed(2) + ' EV');
   const blSync = look('bloom', v => app.setLook('bloom', v), v => v.toFixed(3));
   const fovSync = look('fov', v => app.setLook('fov', v), v => v.toFixed(0) + '°');
+  // light shafts (SKY render/weather.js shaftPlan): mode and strength
+  const shaftSync = look('shaftK', v => app.setLook('shaftK', v), v => v.toFixed(2) + ' x');
+  for (const b of doc.querySelectorAll('#shaftSeg button')) b.addEventListener('click', () => { app.setLook('shafts', b.dataset.shafts); ui.syncView(); });
   ui.syncView = () => {
     for (const b of doc.querySelectorAll('#camSeg button')) b.classList.toggle('on', b.dataset.cam === app.camMode);
     for (const b of doc.querySelectorAll('#qualSeg button')) b.classList.toggle('on', +b.dataset.q === app.qualityIndex);
     for (const b of doc.querySelectorAll('#layerToggles button')) b.setAttribute('aria-pressed', String(!!app.layers[b.dataset.layer]));
     $('camHint').textContent = camHints[app.camMode] || '';
-    evSync(); blSync(); fovSync();
+    evSync(); blSync(); fovSync(); shaftSync();
+    for (const b of doc.querySelectorAll('#shaftSeg button')) b.classList.toggle('on', b.dataset.shafts === (app.look.shafts || 'auto'));
   };
 
   // credits
