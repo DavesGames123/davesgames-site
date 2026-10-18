@@ -154,8 +154,8 @@ export const SPECIES = {
   },
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
-    params: { particleSpacing: 0.08, attractionDistance: 0.1, minMoveDistance: 0.045, stubbornness: 14, stickiness: 0.5 },
-    size: [1.2, 2.6], tall: 0.6, tpp: 23, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
+    params: { particleSpacing: 0.12, attractionDistance: 0.1, minMoveDistance: 0.05, stubbornness: 6, stickiness: 0.6 },
+    size: [1.2, 2.6], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0.35, roots: 40, reach: 0.45,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
       // Accretive growth: the tissue lays each new particle on the surface
@@ -413,7 +413,7 @@ export function createReef(opts = {}) {
     const colony = {
       k, id, sp, base, normal: n.slice(), plane: [env.cur[0] / cl, env.cur[1] / cl], size,
       cap: Math.max(20, Math.min(o.cap ?? capFor(id, size), R.limit - R.count)),
-      count: 0, ids: [], top: base[1], ext: 0, roots: 1, born: R.now, full: false, tries: 0, lastTry: 0,
+      count: 0, ids: [], top: base[1], ext: 0, roots: 1, born: R.now, full: false, tries: 0, lastTry: 0, winT: 0, winN: 0,
       stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / 3) / params[id].particleSpacing)),
       user: { bx: base[0], by: base[1], bz: base[2], normal: [env.cur[0] / cl, env.cur[1] / cl] },
     };
@@ -729,10 +729,20 @@ export function createReef(opts = {}) {
     return k;
   }
   // A colony that gets no join in STARVE walkers of its own disc stops: it
-  // is shaded out, or overgrown by its neighbours.
-  const STARVE = 6000;
+  // is shaded out, or overgrown by its neighbours. A colony past half its
+  // cap whose join rate over the last WIN walkers is under SLOW stops too:
+  // it has filled its outline, and more snow on it is mostly lost.
+  const STARVE = 6000, WIN = 1500, SLOW = 0.06;
   function starve() {
-    for (const c of R.colonies) if (!c.full && c.tries - c.lastTry > STARVE) { c.full = true; c.starved = true; liveAt = -1; }
+    for (const c of R.colonies) {
+      if (c.full) continue;
+      if (c.tries - c.lastTry > STARVE) { c.full = true; c.starved = true; liveAt = -1; continue; }
+      if (c.tries - c.winT >= WIN) {
+        const rate = (c.count - c.winN) / (c.tries - c.winT);
+        if (rate < SLOW && c.count >= 0.5 * c.cap) { c.full = true; c.filled = true; liveAt = -1; continue; }
+        c.winT = c.tries; c.winN = c.count;
+      }
+    }
   }
 
   // Progress for SCENE: particles, target, colonies live, fraction, contacts.

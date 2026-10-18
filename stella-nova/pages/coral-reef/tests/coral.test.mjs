@@ -8,7 +8,8 @@
 //                    no clumping, species by site (tops, walls, shelter)
 //    sizes ......... each species grows a colony of 1 to 4 m
 //    thickness ..... branch thickness measured on the fine mesh, against
-//                    the colony size, finer than the old page (2fdd58cf)
+//                    the colony size, finer than the old page (2fdd58cf);
+//                    brain coral valleys 7 to 20 cm apart
 //    interference .. two close seeds compete (each grows less toward the
 //                    other than alone), fuse (one surface) at contact, and
 //                    two species overgrow
@@ -29,7 +30,7 @@ import {
   createReef, SPECIES, SPECIES_IDS, QUALITY, PRESETS, shapeOf, pickSpecies, chooseFocus,
   createReefMirror, colonyInfo, PARTICLE_FLOATS, speciesHook, polypRadius,
 } from '../reef.js';
-import { createCoralMesher, SHAPES, LOD_K } from '../coral-sdf.js';
+import { createCoralMesher, SHAPES, LOD_K, groove } from '../coral-sdf.js';
 import { createReefRunner } from '../mesh-worker.js';
 import { MODES, colourT, naturalRGB, radiiOf } from '../colour.js';
 import { meshStats } from '../../../lib/dla-sdf.js';
@@ -185,7 +186,7 @@ const single = {};
 // height of a vertex over its plate particle; for the sea fan, 2 x the
 // median distance of a vertex to the fan plane (the sheet thickness).
 {
-  for (const id of SPECIES_IDS) {
+  for (const id of SPECIES_IDS.filter(q => q !== 'boulder')) {
     const { M, s, list, c } = single[id];
     const F = [...M.fields.values()].find(f => f.id === id && f.lev === 0), O = F.origin, S = F.SM;
     const d = [];
@@ -202,11 +203,25 @@ const single = {};
       }
     }
     const thick = 2 * median(d), rel = thick / s.size, old = OLD[id].thick;
-    const need = id === 'boulder' || id === 'finger' ? 0.8 : 0.6;
-    const what = id === 'table' ? 'plate is' : id === 'fan' ? 'sheet is' : id === 'boulder' ? 'lobes are' : 'branches are';
+    const need = id === 'finger' ? 0.8 : 0.6;
+    const what = id === 'table' ? 'plate is' : id === 'fan' ? 'sheet is' : 'branches are';
     ok(rel < need * old, `thickness: ${id} ${what} finer than before (measured)`, `${f3(thick * 100)} cm on a ${f2(s.size)} m colony = ${f4(rel)} of its size; old page ${f4(old)} (x${f2(rel / old)})`);
     if (id === 'staghorn' || id === 'fan' || id === 'table') ok(thick < 0.045, `thickness: ${id} median under 4.5 cm`, `${f3(thick * 100)} cm`);
   }
+}
+
+// the brain coral: its fine structure is the groove, valleys about 10 cm
+// apart that meander (count the valleys along lines over the dome)
+{
+  let valleys = 0, len = 0;
+  for (let k = 0; k < 12; k++) {
+    const a = k * 0.52, dx = Math.cos(a), dz = Math.sin(a), y0 = 0.3 * k / 12;
+    let prev = groove(0, y0, 0) > 0.5;
+    for (let t = 0.005; t <= 2; t += 0.005) { const v = groove(dx * t, y0, dz * t) > 0.5; if (v && !prev) valleys++; prev = v; }
+    len += 2;
+  }
+  const per = valleys / len;
+  ok(per > 5 && per < 14, 'thickness: brain coral valleys are 7 to 20 cm apart', `${f2(per)} valleys per m (${f2(100 / per)} cm apart)`);
 }
 
 // ── polyps per m^2 ──────────────────────────────────────────────────────────

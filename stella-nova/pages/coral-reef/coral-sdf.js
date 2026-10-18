@@ -68,7 +68,7 @@
 //    the coarse field ....... "function makeField"
 //    focus change ........... "function setFocus"
 // ============================================================================
-import { createTreeSdf, smin } from '../../lib/dla-sdf.js';
+import { createSdf, pipeRadius, smin } from '../../lib/dla-sdf.js';
 
 // Metres. cell: lattice spacing. k: blend. bend, hold: branch smoothing
 // (the cone ends keep part of the parent direction, then move back toward
@@ -83,8 +83,8 @@ export const SHAPES = {
     web: 0.011, half: 0.0028, polyp: { density: 14000, tip: 1, size: 0.0016, max: 900 } },
   table: { cell: 0.016, k: 0.02, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034,
     inflate: 0.012, half: 0.011, polyp: { density: 5000, tip: 1.5, size: 0.003, max: 700 } },
-  boulder: { cell: 0.022, k: 0.08, rTip: 0.06, pipe: 4, rMax: 0.08, sub0: 3, quant: 0.25, rootScale: 1.4, band: 0.035,
-    groove: 0.03, polyp: { density: 240, tip: 0, size: 0.006, max: 160 } },
+  boulder: { cell: 0.025, k: 0.1, rTip: 0.12, pipe: 4, rMax: 0.12, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.045,
+    groove: 0.045, polyp: { density: 240, tip: 0, size: 0.006, max: 160 } },
   finger: { cell: 0.012, k: 0.018, bend: 0.4, hold: 0.3, rTip: 0.013, pipe: 3.4, rMax: 0.032, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03,
     polyp: { density: 5000, tip: 1, size: 0.0045, max: 700 } },
 };
@@ -113,12 +113,13 @@ export function noise3(x, y, z) {
   return e + (f - e) * w;
 }
 
-// Brain coral valleys: the contour lines of a slow noise field f (metres),
-// so the valleys run side by side and meander, about 9 cm apart. 0 on a
-// ridge, 1 in the middle of a valley.
+// Brain coral valleys: stripes about 10 cm apart, bent by two octaves of
+// noise (domain warp), so the valleys run side by side and meander, as on
+// a brain coral, with no closed rings. 0 on a ridge, 1 in a valley.
 export function groove(x, y, z) {
-  const f = noise3(x * 1.6 + 3.1, y * 1.6, z * 1.6) * 3.4 + noise3(x * 5.5, y * 5.5 + 5, z * 5.5) * 0.35;
-  const s = Math.abs(Math.sin(f * Math.PI * 2));
+  const w = noise3(x * 1.7 + 3.1, y * 1.7, z * 1.7) * 2.6 + noise3(x * 4.3, y * 4.3 + 5, z * 4.3) * 0.8;
+  const f = (0.62 * x + 0.35 * y + 0.7 * z) * 10 + w;
+  const s = Math.abs(Math.sin(f * Math.PI));
   const t = Math.min(1, s / 0.42);
   return 1 - t * t * (3 - 2 * t);
 }
@@ -201,6 +202,65 @@ export function scatterPolyps(mesh, pol, tipOf, gidOf, seed) {
 
 export const LOD_K = 3;         // coarse cell = LOD_K x fine cell
 
+// ── tree to cones ───────────────────────────────────────────────────────────
+// A copy of createTreeSdf of lib/dla-sdf.js with one change: the radii are
+// Float64. The lib keeps them in a Float32Array and compares the new
+// pipeRadius (a double) with the stored one, so nearly every add sees a
+// "change" on every ancestor and queues a recompute of its bricks. Here a
+// radius changes only when its quantised step changes.
+export function createTree(opts = {}) {
+  const sdf = createSdf(opts);
+  const rTip = opts.rTip ?? 0.5, pipe = opts.pipe ?? 3, rMax = opts.rMax ?? 4 * rTip, quant = opts.quant ?? 0.12, sub0 = opts.sub0 ?? 2;
+  const rootScale = opts.rootScale ?? 1;
+  let cap = 1024, n = 0;
+  let X = new Float64Array(cap * 3), par = new Int32Array(cap), sub = new Int32Array(cap), rad = new Float64Array(cap);
+  const kids = [];
+  let mark = new Int32Array(cap), stamp = 0, CH = new Int32Array(4096);
+  function grow() {
+    cap *= 2;
+    const x = new Float64Array(cap * 3); x.set(X); X = x;
+    const p = new Int32Array(cap); p.set(par); par = p;
+    const s = new Int32Array(cap); s.set(sub); sub = s;
+    const r = new Float64Array(cap); r.set(rad); rad = r;
+    const mk = new Int32Array(cap); mk.set(mark); mark = mk;
+  }
+  function cone(i) {
+    const p = par[i], ri = rad[i];
+    if (p < 0) sdf.setPrim(i, X[i * 3], X[i * 3 + 1], X[i * 3 + 2], ri * rootScale, X[i * 3], X[i * 3 + 1], X[i * 3 + 2], ri * rootScale);
+    else sdf.setPrim(i, X[p * 3], X[p * 3 + 1], X[p * 3 + 2], rad[p], X[i * 3], X[i * 3 + 1], X[i * 3 + 2], ri);
+  }
+  function add(i, x, y, z, p) {
+    if (i !== n) throw new Error(`coral-sdf: tree ids must come in order (got ${i}, want ${n})`);
+    if (n === cap) grow();
+    if (CH.length < n + 1) CH = new Int32Array(CH.length * 2);
+    n++;
+    X[i * 3] = x; X[i * 3 + 1] = y; X[i * 3 + 2] = z; par[i] = p; sub[i] = 1;
+    rad[i] = pipeRadius(1, rTip, pipe, rMax, quant, sub0);
+    kids.push(null);
+    if (p >= 0) (kids[p] || (kids[p] = [])).push(i);
+    cone(i);
+    let nch = 0;
+    for (let a = p; a >= 0; a = par[a]) {
+      sub[a]++;
+      const r = pipeRadius(sub[a], rTip, pipe, rMax, quant, sub0);
+      if (Math.abs(r - rad[a]) > 1e-12 * rTip) { rad[a] = r; CH[nch++] = a; }
+    }
+    if (!nch) return;
+    stamp++;
+    for (let q = 0; q < nch; q++) {
+      const a = CH[q];
+      if (mark[a] !== stamp) { mark[a] = stamp; cone(a); }
+      const K = kids[a];
+      if (K) for (const c of K) if (mark[c] !== stamp) { mark[c] = stamp; cone(c); }
+    }
+  }
+  return {
+    sdf, add, update: (ms, out) => sdf.update(ms, out),
+    radius: i => rad[i], sub: i => sub[i], parent: i => par[i],
+    get count() { return n; },
+  };
+}
+
 export function createCoralMesher(opts = {}) {
   const polypScale = opts.polyps ?? 1;
   const fine = opts.fine ?? 1;
@@ -250,7 +310,7 @@ export function createCoralMesher(opts = {}) {
     F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O,
       X: new Float64Array(3 * 1024), Y: new Float64Array(1024), SM: new Float64Array(3 * 1024), DIR: new Float64Array(3 * 1024),
       depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
-    F.tree = createTreeSdf({
+    F.tree = createTree({
       cell, brick: BRICK, k: sh.k, band: sh.band, rTip: sh.rTip, pipe: sh.pipe, rMax: sh.rMax,
       sub0: sh.sub0, quant: sh.quant, rootScale: sh.rootScale, maxPrims: 1 << 22,
       post: wrapPost(postFor(id, sh, F), O),
