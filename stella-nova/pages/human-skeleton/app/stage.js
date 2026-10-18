@@ -8,7 +8,7 @@
 //
 //  GREP MAP
 //    const canvas / let renderer                     the WebGL 2 renderer
-//    const scene / envRT / camera / pickCam          scene and cameras
+//    const scene / envRT / camera                    scene and camera
 //    const key / rim                                 the lights
 //    const floor / poolTex / pool / trays            floor, light pool, trays
 //    const U                                         colour uniforms
@@ -37,8 +37,6 @@ export const scene = new THREE.Scene();
 export const envRT = studioEnvironment(renderer);
 scene.environment = envRT.texture;
 export const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 60);
-export const pickCam = new THREE.PerspectiveCamera();
-pickCam.layers.set(1);
 export const key = new THREE.DirectionalLight(0xfff0dc, 2.1);
 key.castShadow = true;
 key.shadow.mapSize.set(COARSE ? 1024 : 2048, COARSE ? 1024 : 2048);

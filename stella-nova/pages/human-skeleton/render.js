@@ -15,7 +15,6 @@
 //                    tint, roughness noise, picked-bone glow
 //    depth material  the shadow map sees the same moves
 //    ghost material  isolate mode: the other bones as faint glass
-//    pick material   the bone row as a colour, read back round a tap
 //  A hidden bone (or a ghost in the opaque pass) folds all its vertices
 //  to one point, so the GPU draws no triangle for it.
 //
@@ -24,7 +23,6 @@
 //    function boneMaterial    onBeforeCompile for the physical material
 //    function depthMaterial   for the shadow pass
 //    function ghostMaterial   fresnel glass for isolate mode
-//    function pickMaterial    id colour for GPU picking
 //    function groupMesh       decoded arrays to a BufferGeometry + meshes
 //    function studioEnvironment  procedural PMREM: softboxes in a dome
 // ============================================================================
@@ -58,7 +56,7 @@ uniform float uPass;
 attribute float aBone;
 ivec2 boneTexel(float id, int row) { int i = int(id + 0.5); return ivec2(i - (i / 256) * 256, (i / 256) * 4 + row); }
 vec3 qrot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
-// pass 0: opaque (hide hidden + ghost), 1: ghost (only ghosts), 2: pick
+// pass 0: opaque (hide hidden + ghost), 1: ghost (only ghosts)
 float boneHidden(float flag) {
   if (uPass > 0.5 && uPass < 1.5) return abs(flag - 2.0) < 0.5 ? 0.0 : 1.0;
   return flag > 0.5 ? 1.0 : 0.0;
@@ -159,28 +157,9 @@ export function ghostMaterial(state, U) {
   });
 }
 
-export function pickMaterial(state) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uBones: { value: state.tex }, uPass: { value: 2 } },
-    vertexShader: /* glsl */`${GLSL_COMMON}
-      flat varying float vId;
-      void main() {
-        float hide, appear;
-        vec3 p = boneMove(position, hide, appear);
-        vId = aBone + 1.0;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-      }`,
-    fragmentShader: /* glsl */`
-      flat varying float vId;
-      void main() {
-        float id = floor(vId + 0.5);
-        gl_FragColor = vec4(mod(id, 256.0) / 255.0, floor(id / 256.0) / 255.0, 0.0, 1.0);
-      }`,
-  });
-}
-
-// decoded group (decode.js) to geometry; the same geometry feeds the bone,
-// ghost and pick passes. Bounds move with the bones, so no frustum culling.
+// decoded group (decode.js) to geometry; the same geometry feeds the bone
+// and ghost passes. The ray pick (focus.js) reads the same arrays on the CPU.
+// Bounds move with the bones, so no frustum culling.
 export function groupMesh(g, mats) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(g.pos, 3));
@@ -193,7 +172,6 @@ export function groupMesh(g, mats) {
   mesh.castShadow = true;
   mesh.receiveShadow = mats.receive;
   mesh.frustumCulled = false;
-  mesh.layers.enable(1);
   const ghost = new THREE.Mesh(geo, mats.ghost);
   ghost.frustumCulled = false;
   ghost.renderOrder = 5;

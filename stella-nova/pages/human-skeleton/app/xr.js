@@ -12,10 +12,9 @@
 //
 //  HEADSET PANEL  size switch, Explode / Assemble, explode mode, bone names
 //                 on hover, reset, exit.
-//  PICK           the controller ray selects the bone whose centre sphere
-//                 (0.6 of the bone radius) it passes through first. The
-//                 normal select() glows the bone. No GPU pick render is used,
-//                 because three replaces the camera with the XR camera.
+//  PICK           the controller ray selects the first bone whose triangles
+//                 it meets (app/pick.js, on the CPU, so the XR camera does
+//                 not matter). The normal select() glows the bone.
 //
 //  GREP MAP
 //    function bounds ................ model box for placement
@@ -29,7 +28,8 @@ import { $ } from './env.js';
 import { renderer, scene, camera, controls } from './stage.js';
 import { S } from './state.js';
 import { exploded, explode, reconstruct, setMode } from './layouts.js';
-import { boneCentre, select } from './select.js';
+import { select } from './select.js';
+import { pickRay as pickSceneRay } from './pick.js';
 
 const NEXT_MODE = { radial: 'regional', regional: 'catalogue', catalogue: 'radial' };
 const MODE_LABEL = { radial: 'Radial', regional: 'Regions', catalogue: 'Tray', assembled: 'Assembled' };
@@ -44,23 +44,18 @@ function bounds() {
   return new THREE.Box3(new THREE.Vector3(...b.lo), new THREE.Vector3(...b.hi));
 }
 
-const inv = new THREE.Matrix4(), c = new THREE.Vector3(), q = new THREE.Vector3();
+const inv = new THREE.Matrix4();
 // The first bone along the ray, or -1. The ray is in room space; the bones
 // are in scene space, so the ray goes through the inverse scene transform.
-function pickRay(ray) {
+// The pick is the page pick (app/pick.js) on the real triangles, with a
+// tolerance of 0.7 deg for the hand tremor.
+export function pickRay(ray) {
   if (!S.ready) return -1;
   scene.updateMatrixWorld();
   const r = ray.clone().applyMatrix4(inv.copy(scene.matrixWorld).invert());
-  let best = -1, bt = Infinity;
-  for (const b of S.bones) {
-    if (!S.loaded[b.i] || !S.vis[b.i]) continue;
-    boneCentre(b.i, c);
-    const rad = Math.max(0.012, b.r * 0.6);
-    if (r.distanceSqToPoint(c) > rad * rad) continue;
-    const t = r.closestPointToPoint(c, q).distanceTo(r.origin);
-    if (t < bt) { bt = t; best = b.i; }
-  }
-  return best;
+  r.direction.normalize();
+  const h = pickSceneRay(r.origin, r.direction, 0.012);
+  return h ? h.i : -1;
 }
 
 export const xr = attachXR({

@@ -19,9 +19,11 @@
      build-data.py  Z-Anatomy blend to data/*.bin.gz + data/manifest.json
      decode.js      the binary format (no DOM, no THREE)
      layout.js      radial, regional and tray layouts (no DOM, no THREE)
-     render.js      bone state texture, materials, picking, studio light
+     render.js      bone state texture, materials, studio light
+     focus.js       ray pick on the meshes, framing, the camera flight
      main.js        state, loading, UI, picking, camera, loop
-     tests.mjs      node tests.mjs
+     tests.mjs      node tests.mjs (data, layout, saver)
+     tests-focus.mjs, tests-dom.mjs   pick, framing, isolate (jsdom)
      data/          meshes, CC BY-SA 4.0 (data/LICENSE.txt)
 
    HEAD LOAD ORDER
@@ -56,7 +58,7 @@
    GREP MAP  (main.js)
      grep -n 'function loadAll'     manifest, then the groups by priority
      grep -n 'function setMode'     assembled, radial, regional, tray
-     grep -n 'function pickAt'      GPU pick in a window round the tap
+     grep -n 'function pickAt'      ray pick on the meshes (app/pick.js)
      grep -n 'function select'      highlight, card, keep it in view
      grep -n 'function isolate'     ghost the rest, fly to the bone
      grep -n 'function buildList'   the searchable bone list

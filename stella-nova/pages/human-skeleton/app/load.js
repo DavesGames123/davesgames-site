@@ -10,12 +10,13 @@
 //  GREP MAP
 //    function fetchBuf                               fetch + gunzip
 //    function loadAll                                manifest, then groups
-//    function addGroup                               decode, mesh, appear
+//    function addGroup                               decode, mesh, pick index, appear
 //    function ensureCartilage                        lazy cartilage group
 // ============================================================================
 import { gunzip, decodeGroup } from '../decode.js';
 import * as L from '../layout.js';
-import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from '../render.js';
+import { BoneState, boneMaterial, depthMaterial, ghostMaterial, groupMesh } from '../render.js';
+import { meshIndex } from '../focus.js';
 import { $, COARSE, LOAD_ORDER } from './env.js';
 import { scene, U } from './stage.js';
 import { T, S, dirty, toast } from './state.js';
@@ -47,7 +48,7 @@ export async function loadAll() {
   S.state.dirty();
   S.mats = {
     bone: boneMaterial(S.state, U, { physical: !COARSE }), depth: depthMaterial(S.state),
-    ghost: ghostMaterial(S.state, U), pick: pickMaterial(S.state), receive: !COARSE,
+    ghost: ghostMaterial(S.state, U), receive: !COARSE,
   };
   buildList(); syncUI();
   fitView(true);
@@ -76,6 +77,8 @@ function addGroup(g, buf) {
   const bones = S.bones.filter(b => b.file === g);
   const dec = decodeGroup(buf, bones);
   const gm = groupMesh(dec, S.mats);
+  // the rest box and sphere of each bone, for the ray pick (app/pick.js)
+  for (const r of dec.ranges) S.pick[r.i] = meshIndex(dec.pos, dec.idx, r);
   scene.add(gm.mesh, gm.ghost);
   gm.ghost.visible = S.iso >= 0;
   S.groups.set(g, gm);

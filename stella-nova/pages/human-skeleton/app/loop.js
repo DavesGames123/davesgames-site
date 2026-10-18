@@ -19,7 +19,6 @@ import { renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, contr
 import { T, S } from './state.js';
 import { occ, occlusion, resize, fitShadow } from './camera.js';
 import { placeLabels } from './tray.js';
-import { pickRT } from './pick.js';
 import { dVelZero, hoverPick } from './pointer.js';
 
 let last = performance.now(), raf = 0, running = true;
@@ -113,11 +112,11 @@ window.addEventListener('pagehide', () => {
   running = false; cancelAnimationFrame(raf);
   try {
     for (const g of S.groups.values()) g.geo.dispose();
-    if (S.mats) for (const k of ['bone', 'depth', 'ghost', 'pick']) S.mats[k].dispose();
+    if (S.mats) for (const k of ['bone', 'depth', 'ghost']) S.mats[k].dispose();
     if (S.state) S.state.dispose();
     for (const c of trays.children) { c.geometry.dispose(); c.material.dispose(); }
     floor.geometry.dispose(); floor.material.dispose(); pool.geometry.dispose(); pool.material.dispose(); poolTex.dispose();
-    pickRT.dispose(); envRT.dispose(); key.shadow.map && key.shadow.map.dispose();
+    envRT.dispose(); key.shadow.map && key.shadow.map.dispose();
     controls.dispose(); renderer.dispose();
     if (!renderer.getContext().isContextLost()) renderer.forceContextLoss();
   } catch (e) { /* the page is going */ }

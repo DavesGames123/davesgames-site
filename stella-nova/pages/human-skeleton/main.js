@@ -12,9 +12,9 @@
 //  MODES    radial, regional (layout.js), catalogue (the tray). An amount
 //           per region scales radial and regional, so one hand can open
 //           while the rest stays put. Reconstruct plays the stagger back.
-//  PICK     the bones render their row as a colour into a small target
-//           round the tap (view offset of the main camera); the nearest
-//           coloured pixel wins. Radius 4 px (mouse) or 22 px (touch).
+//  PICK     the camera ray meets the real bone triangles on the CPU
+//           (focus.js, app/pick.js); the nearest hit wins, and a bone
+//           within 4 px (mouse) or 14 px (touch) of the ray picks too.
 //  SELECT   the bone glows, the card opens, the list marks it, and the
 //           camera pans if the bone sits under the card or the panel.
 //  ISOLATE  the other bones become fresnel ghosts; the camera flies to
@@ -30,7 +30,7 @@
 //    visibility.js  refreshVisibility: S.vis and the bone flags
 //    layouts.js     setMode / explode / reconstruct / retarget
 //    tray.js        buildTrays / placeLabels
-//    pick.js        pickAt
+//    pick.js        pickAt / pickInfo / pickRay (mesh ray pick)
 //    select.js      select / clearSelection / step / boneCentre
 //    card.js        showCard / hideCard and the card buttons
 //    inspect.js     isolate / exitIsolate / focusBone / focusRegion

@@ -1,50 +1,60 @@
 // ============================================================================
-//  HUMAN SKELETON  ·  app/pick.js — GPU picking
+//  HUMAN SKELETON  ·  app/pick.js — ray picks on the bone meshes (CPU)
 // ────────────────────────────────────────────────────────────────────────────
-//  pickAt renders the bones into a small target round the tap point. The
-//  pick material writes the bone row + 1 as a colour. A view offset of a
-//  copy of the main camera gives the small target. The nearest coloured
-//  pixel inside the radius gives the bone, or -1.
+//  pickAt casts the camera ray through a canvas point against the real
+//  triangles of the bones (focus.js pickBones). Each bone moves in the
+//  vertex shader, so the ray takes the same move from S.cur and S.dOff.
+//  The tolerance in px becomes an angle, so a thin bone near the ray
+//  still picks. When one bone is isolated, only that bone is solid. A
+//  ghost takes the pick only on a direct hit that misses the solid bone
+//  (the user clicked it on purpose). With the others hidden, no ghost
+//  picks. pickRay does the same for a ray in scene space (WebXR).
 //
 //  GREP MAP
-//    const pickRT / let pickBuf                      the target and readback
-//    function pickAt                                 bone under a point
+//    const TOL_PX                                    tolerance, mouse / touch
+//    function drawn / pose / pickOpts                which bones, where
+//    function pickRay                                bone on a scene ray
+//    function pickAt / pickInfo                      bone under a canvas point
 // ============================================================================
 import * as THREE from 'three';
 import { COARSE } from './env.js';
-import { canvas, renderer, scene, camera, pickCam } from './stage.js';
+import { canvas, camera } from './stage.js';
 import { S } from './state.js';
+import { pickBones } from '../focus.js';
 
-export const pickRT = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true });
-let pickBuf = new Uint8Array(4);
-export function pickAt(cx, cy, r = COARSE ? 22 : 4) {
-  if (!S.ready || !S.groups.size) return -1;
-  const cr = canvas.getBoundingClientRect();
-  const px = Math.round(cx - cr.left), py = Math.round(cy - cr.top);
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  const size = 2 * r + 1;
-  if (pickRT.width !== size) { pickRT.setSize(size, size); pickBuf = new Uint8Array(size * size * 4); }
-  pickCam.copy(camera);
-  pickCam.layers.set(1);
-  const ox = camera.view ? camera.view.offsetX : 0, oy = camera.view ? camera.view.offsetY : 0;
-  pickCam.setViewOffset(w, h, ox + px - r, oy + py - r, size, size);
-  pickCam.updateProjectionMatrix();
-  scene.overrideMaterial = S.mats.pick;
-  renderer.setRenderTarget(pickRT);
-  renderer.setClearColor(0x000000, 0);
-  renderer.clear();
-  renderer.render(scene, pickCam);
-  renderer.setRenderTarget(null);
-  scene.overrideMaterial = null;
-  renderer.readRenderTargetPixels(pickRT, 0, 0, size, size, pickBuf);
-  let best = -1, bd = Infinity;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const k = (y * size + x) * 4;
-    const id = pickBuf[k] + pickBuf[k + 1] * 256;
-    if (!id) continue;
-    // readRenderTargetPixels rows run bottom up
-    const d = (x - r) ** 2 + (size - 1 - y - r) ** 2;
-    if (d < bd && d <= r * r) { bd = d; best = id - 1; }
-  }
-  return best;
+export const TOL_PX = { mouse: 4, touch: 14 };
+// the bone is in the scene now: loaded, and no toggle hides it
+export const drawn = i => !!(S.loaded && S.loaded[i] && S.vis[i]);
+// the move of bone i, as the vertex shader does it (render.js)
+export function pose(i) {
+  const b = S.bones[i], o = S.cur.off, d = S.dOff, q = S.cur.q;
+  return { c: b.c, off: [o[i * 3] + d[i * 3], o[i * 3 + 1] + d[i * 3 + 1], o[i * 3 + 2] + d[i * 3 + 2]], q: [q[i * 4], q[i * 4 + 1], q[i * 4 + 2], q[i * 4 + 3]] };
 }
+export function pickOpts(tol) {
+  const iso = S.iso;
+  return {
+    n: S.n, mesh: i => S.pick[i] || null, pose, tol,
+    solid: iso >= 0 ? i => i === iso && drawn(i) : drawn,
+    ghost: iso >= 0 && !S.isoHide ? i => i !== iso && drawn(i) : null,
+  };
+}
+// a ray in scene space: origin, unit direction (THREE.Vector3), the
+// tolerance as tan of an angle. { i, ghost } or null.
+export function pickRay(o, d, tol) {
+  if (!S.ready || !S.groups.size) return null;
+  const h = pickBones([o.x, o.y, o.z], [d.x, d.y, d.z], pickOpts(tol));
+  return h ? { i: h.i, ghost: h.ghost, exact: h.exact, t: h.t } : null;
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+export function pickInfo(cx, cy, px = COARSE ? TOL_PX.touch : TOL_PX.mouse) {
+  if (!S.ready || !S.groups.size) return null;
+  const cr = canvas.getBoundingClientRect();
+  if (!cr.width || !cr.height) return null;
+  ndc.set(((cx - cr.left) / cr.width) * 2 - 1, -((cy - cr.top) / cr.height) * 2 + 1);
+  camera.updateMatrixWorld();
+  ray.setFromCamera(ndc, camera);
+  // px to an angle: the view is 2 tan(fov / 2) tall in tan units
+  const tol = px * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) / cr.height;
+  return pickRay(ray.ray.origin, ray.ray.direction, tol);
+}
+export function pickAt(cx, cy, px) { const h = pickInfo(cx, cy, px); return h ? h.i : -1; }
