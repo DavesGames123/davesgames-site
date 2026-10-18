@@ -5,7 +5,10 @@
    with a moss accent. Type comes from lib/sci.css (loaded after this file).
    Labels are sentence case. The pattern of pages/wave-membrane: a panel at
    the left on a desktop; on a phone, a dock at the base, the panel as a
-   bottom sheet (portrait) or a right drawer (landscape), 44px targets.
+   bottom sheet (portrait) or a right drawer (landscape), 44px targets,
+   11px text or more. dom-check.mjs (jsdom) checks these rules at five
+   phone viewports.
+     grep -n 'DOCK'       the dock: species, clock, grow again, play
      grep -n 'EXPLAIN'    the "How it grows" drawer
      grep -n 'TOUCH'      target and text sizes for any touch screen
      grep -n 'PHONE'      the phone block
@@ -46,7 +49,7 @@ html.in-frame #gear{top:12px}
 #gear:hover{border-color:var(--warm);color:var(--warm)}
 
 #panel{
-  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
+  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;overflow-x:hidden;
   background:rgba(12,17,11,0.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   border-right:1px solid var(--line-b);padding:64px 18px 22px;overflow-y:auto;
   transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
@@ -104,7 +107,7 @@ html.in-frame #panel{padding-top:24px}
 
 /* EXPLAIN. A drawer at the right with the 2D diagram and the text. */
 #explain{
-  position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:42;overflow-y:auto;
+  position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:42;overflow-y:auto;overflow-x:hidden;
   padding:22px 22px 30px;background:rgba(12,17,11,0.96);border-left:1px solid var(--line-b);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 #explain h2{font-family:var(--sci-serif);font-weight:500;font-size:1.35rem;margin:2px 44px 12px 0;color:#f4f7ee}
@@ -112,7 +115,7 @@ html.in-frame #panel{padding-top:24px}
 #explain p{font-size:0.82rem;line-height:1.62;color:#cdd6c3;margin:0 0 8px}
 #explain code{font:0.78rem var(--sci-mono);color:#e8f0d8}
 #explainClose{position:sticky;top:0;float:right;width:36px;height:36px;margin:-6px -6px 0 0;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);cursor:pointer;z-index:2}
-#diagram{display:block;width:100%;aspect-ratio:1.15;border-radius:8px;background:#f2efe6}
+#diagram{display:block;width:100%;max-width:calc(62vh * 1.15);margin:0 auto;aspect-ratio:1.15;border-radius:8px;background:#f2efe6}
 .dg-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 4px;font-size:0.74rem;color:var(--dim)}
 .dg-key i{display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-2px;border-radius:50%}
 .k-shade{background:rgba(40,60,90,0.45);border-radius:2px!important}
@@ -138,6 +141,11 @@ html.in-frame #panel{padding-top:24px}
   .row{min-height:44px;margin:4px 0}
   .seedrow input,.seedrow button{height:44px}
   .readout td{padding:7px 0}
+  #timeline{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  #timeline::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  #timeline::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #18200f}
+  #timeline::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  #timeline::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #18200f}
   .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
   .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
   .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #18200f;box-shadow:0 0 0 1px var(--warm)}
@@ -158,12 +166,22 @@ html.in-frame #panel{padding-top:24px}
     background:rgba(12,17,11,0.95);border-top:1px solid var(--line-b)}
   #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
   #dock > button.on{border-color:var(--warm);color:var(--warm)}
-  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
-  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-size:0.78rem;cursor:pointer}
-  .seg button:last-child{border-right:0}
-  .seg button.on{background:rgba(198,226,122,0.14);color:var(--warm)}
+  /* DOCK. Menu, species, clock, grow again, play. */
+  #dock > #dockSpecies,#dock > #dockClock{flex:1 1 0;min-width:64px;height:48px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;
+    border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);line-height:1.15;overflow:hidden}
+  #dock > #dockSpecies{cursor:pointer;padding:0 6px}
+  #dock > #dockClock{flex-grow:1.4;min-width:84px;position:relative;padding:0 6px 4px}
+  #dockSpecies small,#dockClock small{font-size:11px;color:var(--dim);white-space:nowrap}
+  #dockSpecies b{font-size:15px;font-weight:600;white-space:nowrap;color:var(--warm)}
+  #dockClock b{font:600 15px var(--sci-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+  #dkBar{position:absolute;left:8px;right:8px;bottom:4px;height:3px;border-radius:2px;background:var(--faint);overflow:hidden}
+  #dkFill{display:block;height:100%;width:0;background:var(--warm)}
+  #dkFill[data-season=winter]{background:#cfe3f0}
+  #dkFill[data-season=spring]{background:#9fdc6a}
+  #dkFill[data-season=autumn]{background:#e3a04a}
   #status{left:0;right:0;bottom:var(--dock-h);max-width:none;border-radius:0;gap:10px;padding:6px calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));white-space:nowrap;overflow:hidden}
   #status span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  #status .right{display:none}
   #legend{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;top:calc(50px + env(safe-area-inset-top));bottom:auto;
     display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center;padding:6px 10px}
   html.in-frame #legend{top:8px}
@@ -187,7 +205,11 @@ html.in-frame #panel{padding-top:24px}
     display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px 0;
     background:linear-gradient(180deg,rgba(12,17,11,1) 65%,rgba(12,17,11,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
-  #explain{width:100vw;bottom:var(--dock-h);border-left:0;padding:16px calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left))}
+  #explain{left:0;right:0;top:0;bottom:0;width:auto;z-index:50;border-left:0;
+    padding:calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  #explain h2{font-size:1.2rem}
+  #explain p{font-size:0.86rem}
 }
 
 /* LANDSCAPE phone. The panel is a drawer on the right edge; the dock is a
@@ -204,7 +226,8 @@ html.in-frame #panel{padding-top:24px}
   #panel.open{transform:translateX(0)}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
-  #explain{bottom:0;width:min(60vw,460px);left:auto}
+  #explain{top:0;bottom:0;width:min(60vw,460px);left:auto;border-left:1px solid var(--line-b);
+    padding:10px calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) 16px}
 }
 
 /* screensaver (lib/screensaver.js): the plant alone fills the frame */

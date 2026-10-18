@@ -38,15 +38,19 @@
      saver.js       screensaver shots and framing maths (no DOM)
      render.js      three.js: tubes, leaves, sky, ground, grass, shadows
      diagram.js     the 2D diagram of the model (#diagram)
+     layout.js      phone layout, occlusion, gestures, dock clock (no DOM)
      main.js        the time-lapse, the controls, the screensaver hook
 
    LAYOUT  (# marks an element id main.js binds to)
      desktop ... #panel at the left, #gl fills the frame, #legend at the
                  lower right, #status at the base with the #timeline,
                  #explain a drawer at the right ("How it grows").
-     phone ..... #dock at the base: panel, three colour modes, sow again,
-                 play. #panel is a bottom sheet in portrait and a right
-                 drawer in landscape. #explain is a full sheet.
+     phone ..... #dock at the base: the panel, the species (a tap goes
+                 to the next one), the clock (#dkYear, #dkSub, #dkFill),
+                 grow again, play. #panel is a bottom sheet in portrait
+                 (grip: half and full height) and a right drawer in
+                 landscape. #explain is a full-height sheet. layout.js
+                 has the layout, occlusion and gesture logic.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="stylesheet" href="style.css">
@@ -63,7 +67,7 @@
 
 <canvas id="gl" aria-label="A plant that grows from a seed over many years"></canvas>
 <div id="nogl" hidden>This page needs WebGL 2. The plant cannot render in this browser.</div>
-<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to follow the plant again</div>
+<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to re-frame</div>
 <button id="gear" type="button" aria-label="Controls">☰</button>
 
 <div id="legend" hidden>
@@ -175,12 +179,12 @@
 
 <nav id="dock" aria-label="Quick controls">
   <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
-  <div id="dockColours" class="seg">
-    <button type="button" data-mode="natural" class="on">Natural</button>
-    <button type="button" data-mode="age">Age</button>
-    <button type="button" data-mode="light">Light</button>
+  <button id="dockSpecies" type="button" aria-label="Next species"><small>species</small><b id="dockSpeciesName">Oak</b></button>
+  <div id="dockClock" aria-label="Time">
+    <b id="dkYear">Year 1</b><small id="dkSub">Mar · spring</small>
+    <i id="dkBar"><i id="dkFill"></i></i>
   </div>
-  <button id="dockSow" type="button" aria-label="Sow a new seed">↻</button>
+  <button id="dockSow" type="button" aria-label="Grow again from a new seed">↻</button>
   <button id="dockPlay" type="button" aria-label="Pause">❚❚</button>
 </nav>
 

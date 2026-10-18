@@ -13,15 +13,21 @@
 //  end of the life the clock stops in the last summer.
 //
 //  CAMERA. With "follow" on, the camera glides to fit the plant (its box in
-//  the pack), so a seedling fills the frame and a tree does too. A drag or
-//  a wheel turns follow off; a double tap or the Follow button turns it on.
-//  occlusion() measures the panel, dock, status bar and drawer, and
-//  camera.setViewOffset puts the plant in the clear part of the canvas.
+//  the pack), so a seedling fills the frame and a tree does too, as the
+//  crown grows. A one-finger (or left button) drag orbits and keeps follow
+//  on. A pinch, a two-finger pan, a wheel or a right drag turns follow off.
+//  A double tap or the Follow button turns it on (layout.js
+//  createGestures). occlusion() measures the panel, dock, status bar and
+//  drawer, and camera.setViewOffset puts the plant in the clear part of
+//  the canvas, above an open sheet.
 //
 //  LEAVES. Over the leaf budget (130 000, or 40 000 on a phone) a share of
 //  the leaves is left out and the rest drawn larger (pose.js packYear).
 //  PHONES. A coarse pointer caps the live metamers (24 000), uses fewer
-//  grass blades and smaller maps.
+//  grass blades, a 2048 shadow map and a pixel ratio of 1.6 or less. Slow
+//  frames lower the pixel ratio to 1 by steps (layout.js pixelRatioStep).
+//  The dock shows the species, the clock (year, month, season) and the
+//  main actions (function dockReadout).
 //
 //  grep -n targets
 //    state ................. "const S = "
@@ -33,6 +39,7 @@
 //    camera ................ "function frameTarget"
 //    overlays .............. "function occlusion"
 //    readout ............... "function readout"
+//    dock species, clock ... "function dockReadout"
 //    controls .............. "function buildUI"
 //    screensaver ........... "window.snSaver"
 // ============================================================================
@@ -43,11 +50,12 @@ import { seasonOf, snowCover, smoothstep } from './season.js';
 import { fitDistance, bandFrame, makeShots, codeExtract, shotPlan } from './saver.js';
 import { createRender } from './render.js';
 import { createDiagram } from './diagram.js';
+import { PHONE_QUERY, occlusion as occlude, clearFractions, createGestures, dockClock, nextId, pixelRatioStep } from './layout.js';
 import { GRADIENTS, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
 import { rng } from '../../lib/dla-engine.js';
 
 const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const PHONE_Q = matchMedia(PHONE_QUERY);
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const MAX_NODES = COARSE ? 24000 : 60000, LEAF_BUDGET = COARSE ? 40000 : 130000, ROOTS_MAX = COARSE ? 1200 : 2400;
 const FOV = 40;
@@ -208,7 +216,9 @@ function frame(now) {
   R.camera.setViewOffset(w, h, (occ.r - occ.l) / 2, (occ.b - occ.t) / 2, w, h);
   R.render();
   if (++frameNo % 8 === 0) readout();
+  if (COARSE && !saver.on && pixelRatioStep(dpr, dt)) { R.renderer.setPixelRatio(dpr.ratio); R.resize(); }
 }
+const dpr = { ratio: ok ? R.renderer.getPixelRatio() : 1, min: 1, slow: 0 };
 
 // ----------------------------------------------------------------- camera
 // The sphere round what the camera frames: the plants, and the cut-away.
@@ -224,7 +234,7 @@ function frameTarget() {
 function followStep(dt) {
   const s = frameTarget(), cam = R.camera, ctl = R.controls;
   const w = innerWidth, h = innerHeight, o = occlusion(w, h);
-  const hF = Math.max(0.3, (h - o.t - o.b) / h), wF = Math.max(0.3, (w - o.l - o.r) / w);
+  const { hF, wF } = clearFractions(o, w, h);
   const d = fitDistance(s.r, FOV, w / h, hF, wF, 0.86);
   const dir = cam.position.clone().sub(ctl.target);
   if (dir.lengthSq() < 1e-8) dir.set(1, 0.3, 1);
@@ -246,18 +256,8 @@ function setFollow(on) {
 // it spans half of that edge or more. In the saver, the plate band counts.
 const OVERLAYS = ['panel', 'dock', 'status', 'explain', 'legend'].map($).concat([document.querySelector('.topbar')]).filter(Boolean);
 function occlusion(w, h) {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  if (saver.on) { const f = bandFrame(saver.band, w, h); o.t = f.t; o.b = f.b; return o; }
-  for (const el of OVERLAYS) {
-    if (el.hidden) continue;
-    const q = el.getBoundingClientRect();
-    const x0 = Math.max(0, q.left), x1 = Math.min(w, q.right), y0 = Math.max(0, q.top), y1 = Math.min(h, q.bottom);
-    if (x1 - x0 < 1 || y1 - y0 < 1) continue;
-    const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
-    if (fw >= fh) { if (fw < 0.5) continue; if (y0 + y1 > h) o.b = Math.max(o.b, h - y0); else o.t = Math.max(o.t, y1); }
-    else { if (fh < 0.5) continue; if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0); }
-  }
-  return o;
+  if (saver.on) { const f = bandFrame(saver.band, w, h); return { l: 0, r: 0, t: f.t, b: f.b }; }
+  return occlude(OVERLAYS.filter(el => !el.hidden).map(el => el.getBoundingClientRect()), w, h);
 }
 
 // ----------------------------------------------------------------- readout
@@ -281,7 +281,22 @@ function readout(force) {
   $('stRight').textContent = `year ${se.year + 1} · ${se.month} · ${h < 1 ? (h * 100).toFixed(0) + ' cm' : h.toFixed(1) + ' m'}`;
   const tl = $('timeline');
   if (tl && !tl.matches(':active')) { tl.max = snap ? String(snap.years) : '40'; tl.value = String(clock); }
+  dockReadout();
   if (force) legend();
+}
+// the dock: the species name and the clock
+let dockKey = '';
+function dockReadout() {
+  const c = dockClock(clock, seasonOf), name = SPECIES[S.species].label;
+  const key = c.label + '|' + S.species + '|' + Math.round(c.frac * 100);
+  if (key === dockKey) return;
+  dockKey = key;
+  $('dkYear').textContent = c.year; $('dkSub').textContent = c.sub;
+  $('dkFill').style.width = (c.frac * 100).toFixed(0) + '%';
+  $('dkFill').dataset.season = c.season;
+  $('dockClock').setAttribute('aria-label', c.label);
+  $('dockSpeciesName').textContent = name.split(' ').pop().replace(/^./, ch => ch.toUpperCase());
+  $('dockSpecies').setAttribute('aria-label', `Species: ${name}. Tap for the next species`);
 }
 function legend() {
   const m = COLOUR_MODES.find(c => c.id === S.mode);
@@ -371,6 +386,7 @@ function buildUI() {
 
   $('playBtn').addEventListener('click', () => setPaused(!S.paused));
   $('dockPlay').addEventListener('click', () => setPaused(!S.paused));
+  $('dockSpecies').addEventListener('click', () => setSpecies(nextId(SPECIES_IDS, S.species)));
   const again = () => { setPaused(false); setFollow(true); sow(); };
   $('sowBtn').addEventListener('click', again);
   $('dockSow').addEventListener('click', () => { S.seed = 1 + Math.floor(Math.random() * 999998); syncSliders(); again(); });
@@ -408,15 +424,17 @@ function buildUI() {
   });
   grip.addEventListener('pointercancel', () => { gripY = null; });
 
-  // the canvas: a drag or a wheel stops the follow; a double tap restores it
-  const gl = $('gl');
-  let lastTap = 0;
-  gl.addEventListener('pointerdown', e => {
-    setFollow(false); $('hint').classList.add('gone');
-    if (e.pointerType === 'touch') { if (e.timeStamp - lastTap < 320) setFollow(true); lastTap = e.timeStamp; }
-  });
+  // the canvas: one finger orbits and keeps the follow; a pinch, a pan or a
+  // wheel stops it; a double tap restores it (layout.js createGestures)
+  const gl = $('gl'), G = createGestures();
+  const ev = e => ({ id: e.pointerId, type: e.pointerType, x: e.clientX, y: e.clientY, t: e.timeStamp, button: e.button, mod: e.ctrlKey || e.metaKey || e.shiftKey });
+  const act = r => { if (r) setFollow(r.follow); };
+  gl.addEventListener('pointerdown', e => { $('hint').classList.add('gone'); act(G.down(ev(e))); });
+  gl.addEventListener('pointermove', e => act(G.move(ev(e))));
+  gl.addEventListener('pointerup', e => act(G.up(ev(e))));
+  gl.addEventListener('pointercancel', e => act(G.cancel(ev(e))));
   gl.addEventListener('dblclick', () => setFollow(true));
-  gl.addEventListener('wheel', () => setFollow(false), { passive: true });
+  gl.addEventListener('wheel', () => act(G.wheel()), { passive: true });
   setTimeout(() => $('hint').classList.add('gone'), 8000);
   addEventListener('resize', () => ok && R.resize());
 }
