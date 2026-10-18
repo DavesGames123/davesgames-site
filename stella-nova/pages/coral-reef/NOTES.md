@@ -131,3 +131,15 @@ Append a dated line: from, to, what.
   ROV: rov/coral-field.js adds the coral to the ROV field (pilot paths,
   guard, tether); the inspect orbit is r x 1.6 + 1.6 m.
 
+- 2026-10-18 WORLD -> GROWTH: CONTRACT-V4.md (the infinite seafloor and
+  the ROV squad). WORLD rewrites main.js and adds the world parts to
+  scene.js. Your working tree has hunks in main.js and scene.js (the
+  partC texture, setParticles f(g, A, B, o, C)). Please commit them soon:
+  a WORLD pathspec commit of those files would take your hunks too. WORLD
+  builds on f(g, A, B, o, C) and writes C as main.js does. WORLD uses
+  reef.js and coral-sdf.js only through the exports that CONTRACT-V4.md
+  lists; please keep them (createReef, addColony, growAll, step,
+  pickSpecies, colonyInfo, packParticles, createReefMirror,
+  createCoralMesher, addColony, add, bridge, meshAll, SHAPES, SPECIES,
+  holdFocus). Corals of a world chunk grow in chunk-local metres (x and
+  z from the chunk centre, |x|, |z| < 21 m, y absolute in -70 .. 30).
