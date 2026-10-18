@@ -87,6 +87,11 @@ input[type=range]{width:100%;accent-color:var(--tone);height:20px}
 .eqs .eq.raw{font:0.7rem var(--mono);color:var(--dim)}
 .about p{font-family:var(--serif);font-size:0.9rem;line-height:1.5;color:#c5cddc;margin:8px 0}
 .about b{color:#eef3fa}
+/* Cajal's drawings (artwork/, CREDITS.md): the Purkinje cell wide, the cortex column narrow. */
+.cajal{display:grid;grid-template-columns:1.9fr 1fr;gap:8px;align-items:start;margin:6px 0 4px}
+.cajal img{display:block;width:100%;height:auto;border-radius:6px;background:#f3eee2}
+.cajal figcaption{grid-column:1 / -1;font-size:0.72rem;line-height:1.5;color:var(--dim)}
+.cajal figcaption a{color:var(--text)}
 .links{display:flex;flex-direction:column;gap:4px;font-size:0.74rem;margin-top:6px}
 .readout{width:100%;border-collapse:collapse;font-size:0.72rem}
 .readout td{padding:3px 0;border-bottom:1px solid var(--line)}

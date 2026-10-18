@@ -64,3 +64,16 @@ bounds of HH-type models.
 engine/multicell.js connects full cells with NetCon and Exp2Syn as a
 NEURON script would. The AMPA-like and GABA_A-like time constants are
 textbook values, not taken from any one model file.
+
+## Artwork
+
+The "Real cells, drawn by hand" block in the Learn panel shows two
+drawings by Santiago Ramón y Cajal (1852-1934). Cajal's works are in the
+public domain: he died more than 80 years ago (Spain) and the drawings
+were made before 1931 (United States). The cells on the page are our
+own procedural shapes and do not trace these drawings.
+
+| File | Work | Source | Licence |
+| --- | --- | --- | --- |
+| `artwork/cajal-purkinje-cell.jpg` | Santiago Ramón y Cajal, *A Purkinje neuron from the human cerebellum*, ink drawing, about 1900, Instituto Cajal, Madrid. Changes: resized from 720 x 1024 to 480 px wide, JPEG quality 80. | https://commons.wikimedia.org/wiki/File:Cajal_-_a_purkinje_neuron_from_the_human_cerebellum.jpg | Public domain (marked so on the file page, read 2026-10-18) |
+| `artwork/cajal-cortex-golgi.jpg` | Santiago Ramón y Cajal, Golgi-stained column of human cortex, from *Comparative study of the sensory areas of the human cortex*, 1899 (the right of the three panels of the Commons file). Changes: cropped to that panel (252 x 777), JPEG quality 82. | https://commons.wikimedia.org/wiki/File:Cajal_cortex_drawings.png | Public domain (marked so on the file page, read 2026-10-18) |
