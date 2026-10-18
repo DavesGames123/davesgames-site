@@ -596,6 +596,11 @@ section('layout (layout.js: phone modes, framing, gestures; no DOM)');
     if (L.mediaMatches(L.PHONE_Q, env) !== (m !== 'desk') || L.mediaMatches(L.LAND_Q, env) !== (m === 'drawer')) { agree = false; bad = `${w}x${h} ${c}`; }
   }
   check('PHONE_Q and LAND_Q (the CSS queries) agree with layoutMode on a grid of sizes', agree, bad);
+  {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+    check('style.css uses PHONE_Q and LAND_Q as its @media queries', css.includes(`@media ${L.PHONE_Q} {`) && css.includes(`@media ${L.LAND_Q} {`));
+  }
   const D = L.DOCK;
   check('the dock fits 360 px: four 48 px buttons, a two-target view switch, gaps and pads', 4 * D.button + 2 * D.target + 5 * D.gap + 2 * D.pad <= 360 && D.target >= 44);
   // portrait sheet: head 120 px, half sheet + dock from 400 px down
