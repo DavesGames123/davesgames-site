@@ -371,6 +371,45 @@ for (const { world: w, t } of [A, F]) {
   ok(minD >= 1.0 - 1e-6, `fly into a trunk (r 0.6 m): the eye stays ${minD.toFixed(3)} m from its axis (>= r + 0.4)`);
 }
 
+// ── input.js with a fake canvas (no DOM): the events reach the camera
+{
+  const L = {}, G = {};
+  const target = map => ({ addEventListener: (k, f) => { (map[k] ||= []).push(f); } });
+  const fire = (map, k, e) => (map[k] || []).forEach(f => f({ preventDefault() {}, clientX: 0, clientY: 0, pointerId: 1, pointerType: 'mouse', button: 0, ...e }));
+  globalThis.addEventListener ||= target(G).addEventListener;
+  globalThis.document ||= { pointerLockElement: null, addEventListener() {}, createElement: () => ({ style: {}, setAttribute() {}, appendChild() {}, firstChild: { style: {} } }), body: { appendChild() {} } };
+  globalThis.matchMedia ||= () => ({ matches: false });
+  const canvas = { ...target(L), focus() {}, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: W, height: H }) };
+  const { createInput } = await import('../input.js');
+  const w = A.world, cam = createCamera();
+  const app = { camMode: 'orbit', lastInput: 0, saverRun: null, flyTo: (x, z) => cam.flyTo(x, z, w) };
+  const input = createInput({ canvas, app, cam, world: w, ui: () => ({ syncView() {}, toast() {} }), ready: () => true });
+  cam.orbit = { target: [0, ground(w, 0, 0), 0], yaw: 0.5, pitch: -0.6, dist: 5000 };
+  cam.update(1, {}, w); cam.matrices(W, H);
+  const P = cam.pick(0.3, -0.2, w);
+  fire(L, 'wheel', { clientX: W * 0.65, clientY: H * 0.6, deltaY: -300, deltaMode: 0 });
+  for (let f = 0; f < 90; f++) cam.update(1 / 60, input.take(), w);
+  const e1 = px(ndcOf(cam, P, [0, 0]), [0.3, -0.2]);
+  ok(cam.orbit.dist < 5000 * 0.6 && e1 < 0.5, `input: the wheel zooms to the cursor (dist ${Math.round(cam.orbit.dist)} m, point ${e1.toFixed(3)} px off)`);
+  const y0 = cam.orbit.yaw;
+  fire(L, 'pointerdown', { clientX: 600, clientY: 500 });
+  for (let i = 1; i <= 10; i++) { fire(L, 'pointermove', { clientX: 600 + i * 10, clientY: 500 }); cam.update(1 / 60, input.take(), w); }
+  fire(L, 'pointerup', { clientX: 700, clientY: 500 });
+  ok(Math.abs(cam.orbit.yaw - y0) > 0.2, `input: a left drag turns the orbit (yaw ${(cam.orbit.yaw - y0).toFixed(3)} rad)`);
+  const d0 = cam.orbit.dist;
+  fire(L, 'pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 500, clientY: 400 });
+  fire(L, 'pointerdown', { pointerId: 3, pointerType: 'touch', clientX: 700, clientY: 400 });
+  for (let i = 1; i <= 10; i++) { fire(L, 'pointermove', { pointerId: 2, pointerType: 'touch', clientX: 500 - i * 10, clientY: 400 }); fire(L, 'pointermove', { pointerId: 3, pointerType: 'touch', clientX: 700 + i * 10, clientY: 400 }); cam.update(1 / 60, input.take(), w); }
+  fire(L, 'pointerup', { pointerId: 2, pointerType: 'touch', clientX: 400, clientY: 400 }); fire(L, 'pointerup', { pointerId: 3, pointerType: 'touch', clientX: 800, clientY: 400 });
+  ok(Math.abs(cam.orbit.dist / d0 - 0.5) < 0.05, `input: a pinch from 200 to 400 px halves the distance (x ${(cam.orbit.dist / d0).toFixed(3)})`);
+  app.camMode = 'fly'; cam.setMode('fly', w); cam.update(1, {}, w);
+  fire(L, 'pointerdown', { pointerId: 4, pointerType: 'touch', clientX: 200, clientY: 600 });
+  fire(L, 'pointermove', { pointerId: 4, pointerType: 'touch', clientX: 200, clientY: 540 });
+  const mv = input.take().move;
+  fire(L, 'pointerup', { pointerId: 4, pointerType: 'touch', clientX: 200, clientY: 540 });
+  ok(mv[2] > 0.8 && Math.abs(mv[0]) < 1e-9 && input.take().move[2] === 0, `input: the left touch stick pushed up flies forward (move z ${mv[2].toFixed(2)}), the release stops it`);
+}
+
 console.log(`# camera: ${pass} pass, ${fail} fail`);
 if (fail) process.exitCode = 1;
 export default { pass, fail };
