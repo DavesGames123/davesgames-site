@@ -49,10 +49,10 @@
 //  light.userData.vehicle. The SpotLight targets are children of the
 //  vehicle group. The tether, wash and vehicles are added to o.scene.
 //
-//  Colony bounds (from reef.colonies[k], CORAL reef.js header): centre
-//  [base.x, (base.y + top) / 2, base.z], radius hypot(ext, (top - base.y)
-//  / 2) + 0.05. reef.colonyBounds(k) -> { center, radius } wins if CORAL
-//  adds it.
+//  Colony bounds: reef.colonyBounds(k) -> { center, radius } if CORAL
+//  adds it; else the box of the particles of colony k (reef or its
+//  mirror: count, px, py, pz, col; updated with the new particles only)
+//  and the base; else base, top and ext of reef.colonies[k].
 //
 //  FILES (grep -n targets)
 //    index.js ....... "export function createROVs", "function colonyBounds"
@@ -92,6 +92,28 @@ function normBounds(b) {
   }
   return null;
 }
+// The particle box of each colony, from the particle arrays of the reef
+// or its main-thread mirror (count, px, py, pz, col). New particles are
+// added each call, so the cost per frame is the growth of that frame. A
+// count that goes down (a reset) starts the boxes again.
+const TRACK = new WeakMap();
+function particleBox(reef, k) {
+  if (!reef || reef.count == null || !reef.px || !reef.col) return null;
+  let T = TRACK.get(reef);
+  if (!T) { T = { seen: 0, box: new Map() }; TRACK.set(reef, T); }
+  if (reef.count < T.seen) { T.seen = 0; T.box.clear(); }
+  for (let i = T.seen; i < reef.count; i++) {
+    const c = reef.col[i], x = reef.px[i], y = reef.py[i], z = reef.pz[i];
+    let b = T.box.get(c);
+    if (!b) { b = [x, y, z, x, y, z, 0]; T.box.set(c, b); }
+    if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (z < b[2]) b[2] = z;
+    if (x > b[3]) b[3] = x; if (y > b[4]) b[4] = y; if (z > b[5]) b[5] = z;
+    b[6]++;
+  }
+  T.seen = reef.count;
+  return T.box.get(k) || null;
+}
+
 export function colonyBounds(reef, c) {
   const k = typeof c === 'number' ? c : c && c.k;
   if (reef && typeof reef.colonyBounds === 'function') { const b = normBounds(reef.colonyBounds(k ?? c)); if (b) return b; }
@@ -99,6 +121,13 @@ export function colonyBounds(reef, c) {
   if (!c) return null;
   if (c.bounds) { const b = normBounds(typeof c.bounds === 'function' ? c.bounds() : c.bounds); if (b) return b; }
   const base = c.base || c.position || c.center || (c.user ? [c.user.bx, c.user.by, c.user.bz] : null);
+  const box = k != null ? particleBox(reef, k) : null;
+  if (box) {
+    // the particle box and the base; 0.04 m for the particle radius
+    const lo = base ? [Math.min(box[0], base[0]), Math.min(box[1], base[1]), Math.min(box[2], base[2])] : box.slice(0, 3);
+    const hi = base ? [Math.max(box[3], base[0]), Math.max(box[4], base[1]), Math.max(box[5], base[2])] : box.slice(3, 6);
+    return { center: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], radius: Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 + 0.04 };
+  }
   if (!base) return null;
   const top = c.top ?? base[1], ext = c.ext ?? c.radius ?? 0.1, h = Math.max(0, top - base[1]);
   return { center: [base[0], base[1] + h / 2, base[2]], radius: Math.hypot(ext, h / 2) + 0.05 };

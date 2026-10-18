@@ -281,6 +281,19 @@ function receive(mode, noise, dt = 0.25, watch = null) {
     R.focusOn(null);
     ok(v.mode === 'survey', `focus seed ${seed}: focusOn(null) gives the vehicle back to the survey`);
   }
+  // a reef mirror: the bounds come from the particles of the colony
+  {
+    const M = { count: 0, px: new Float32Array(64), py: new Float32Array(64), pz: new Float32Array(64), col: new Uint16Array(64), colonies: [{ k: 0, base: [1, 0, 2], count: 0 }, { k: 1, base: [5, 0, 5], count: 0 }] };
+    const add = (k, x, y, z) => { const i = M.count++; M.px[i] = x; M.py[i] = y; M.pz[i] = z; M.col[i] = k; };
+    add(0, 1, 0.1, 2); add(1, 5, 0.2, 5);
+    const b0 = colonyBounds(M, 0);
+    add(0, 1.5, 1.1, 2); add(0, 0.5, 0.6, 2.4);
+    const b1 = colonyBounds(M, 0);
+    ok(b0.radius < 0.2 && b1.radius > 0.6 && Math.abs(b1.center[1] - 0.55) < 1e-6, 'focus: colony bounds follow the particles of a reef mirror', `${f3(b0.radius)} -> ${f3(b1.radius)} centre y ${f3(b1.center[1])}`);
+    M.count = 0; add(0, 3, 0, 3);
+    const b2 = colonyBounds(M, 0);
+    ok(b2.radius < 1.5 && Math.abs(b2.center[0] - 2) < 1e-6, 'focus: a reset of the mirror (count down) starts the boxes again', `${f3(b2.radius)} ${b2.center.map(f2)}`);
+  }
   // a point target, orbit mode
   const R = createROVs(THREE, { rock: createStubRock({ seed: 2 }), seed: 2, feed: noFeed });
   const v = R.focusOn([3, 0, 4], 'orbit', { radius: 0.5, vehicle: 2 });
