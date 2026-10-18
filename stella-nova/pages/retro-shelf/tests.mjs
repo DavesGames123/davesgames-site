@@ -31,7 +31,12 @@
 //              plate fields (title, year and maker, licence kind from
 //              LICENSES.md, no code); the desk choreography; no fetch to
 //              another origin; no game art or commercial asset path
-//    boot.     main.js and saver.js in a linkedom DOM: the shelf, credits
+//    shelf.    shelf-art.js: a cover palette per game (own colour, ink
+//              4.5:1 on the cover), seeded box poses, spine titles, one
+//              shelf per engine, the layout breakpoints (two boxes on a
+//              375 px phone, six in one row from 1024 px), disc or cart
+//              per system; reduced motion and focus rules in style.css
+//    boot.     main.js and saver.js in a linkedom DOM: the bookcase, credits
 //              and system list fill; a card opens the player iframe; Exit
 //              removes it; a wrong file type keeps Play off; the saver
 //              enters with a canvas in the document, runs its plan (the
@@ -51,6 +56,7 @@ import { planTour, BEATS, TOUR_MOVES, crtPower, crtState, locate, shotLabel, lic
 import { norm, hasGlyph } from './saver-card.js';
 import { THREE_URL } from './saver.js';
 import { playerUrl, extOk, fmtMB } from './main.js';
+import { coverPalette, contrast, shelfGroups, shelfLayout, shelfRoom, LAYOUTS, boxPose, spineTitle, systemMedia, platformBand } from './shelf-art.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SN = join(HERE, '..', '..');
@@ -208,7 +214,7 @@ if (haveFetched) {
   for (const h of ['play-dos.html', 'play-scummvm.html', 'play-emu.html']) ok(read(h).toString().includes('player.css'), `page: ${h} uses player.css`);
   for (const g of data.games) ok(/^play-(dos|scummvm)\.html\?game=/.test(playerUrl(g)), `page: player URL of ${g.id}`);
   ok(fmtMB(2450688) === '2.3 MB' && fmtMB(32842993) === '31 MB', 'page: fmtMB');
-  for (const f of ['main.js', 'saver.js', 'saver-plan.js', 'saver-card.js', 'saver-desk.js', 'play-dos.js', 'play-scummvm.js', 'play-emu.js', 'player-common.js', 'unzip.js']) {
+  for (const f of ['main.js', 'shelf-art.js', 'saver.js', 'saver-plan.js', 'saver-card.js', 'saver-desk.js', 'play-dos.js', 'play-scummvm.js', 'play-emu.js', 'player-common.js', 'unzip.js']) {
     let err = null;
     try { await import(pathToFileURL(join(HERE, f)).href + '?link'); } catch (e) { err = e; }
     ok(!err || err instanceof ReferenceError, `page: ${f} links (${err ? err.name + ': ' + err.message : 'ok'})`);
@@ -340,6 +346,42 @@ if (haveFetched) {
   group('saver.', m);
 }
 
+// -------------------------------------------------------------------- shelf
+{
+  const m = mark();
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  for (const g of data.games) {
+    const p = coverPalette(g);
+    ok(['accent', 'base', 'dark', 'light', 'ink'].every(k => /^#[0-9a-f]{6}$/.test(p[k])), `shelf: ${g.id} palette has five hex colours`);
+    ok(contrast(rgb(p.ink), rgb(p.base)) >= 4.5, `shelf: ${g.id} ink on base is 4.5:1 or more (${contrast(rgb(p.ink), rgb(p.base)).toFixed(2)})`);
+    ok(p.accent === g.accent.toLowerCase(), `shelf: ${g.id} palette keeps the accent`);
+    const q = boxPose(g.id);
+    ok(q.ry >= 18 && q.ry <= 31 && q.dz >= 0 && q.dz <= 8 && JSON.stringify(q) === JSON.stringify(boxPose(g.id)), `shelf: ${g.id} pose in range and the same each time (${q.ry}, ${q.dz})`);
+    ok(spineTitle(g).length > 0 && !spineTitle(g).includes(':'), `shelf: ${g.id} spine title "${spineTitle(g)}"`);
+    ok(/^PC {2}· {2}(DOSBOX|SCUMMVM)$/.test(platformBand(g)) && [...norm(platformBand(g))].every(hasGlyph), `shelf: ${g.id} band "${platformBand(g)}" has glyphs`);
+  }
+  ok(new Set(data.games.map(g => coverPalette(g).base)).size === data.games.length, 'shelf: each game has its own cover colour');
+  ok(spineTitle({ title: 'Drascula: The Vampire Strikes Back' }) === 'Drascula', 'shelf: spineTitle cuts at the colon');
+  const groups = shelfGroups(data.games);
+  ok(groups.map(x => x.id).join() === 'dos,scummvm' && groups.reduce((n, x) => n + x.games.length, 0) === data.games.length, 'shelf: one shelf per engine, every game once');
+  ok(groups.every(x => x.label && x.engine), 'shelf: every shelf has a label and an engine name');
+  ok(shelfLayout(320).name === 'phone' && shelfLayout(390).mode === 'scroll' && shelfLayout(600).name === 'tablet' && shelfLayout(1100).mode === 'row' && shelfLayout(1600).name === 'wide', 'shelf: layout breakpoints');
+  ok(shelfLayout(1023).mode === 'scroll' && shelfLayout(1024).mode === 'row', 'shelf: the row mode starts at 1024 px');
+  ok(shelfLayout(NaN).name === 'phone' && shelfLayout(-5).name === 'phone', 'shelf: a bad width gives the phone layout');
+  ok(LAYOUTS.every((L, i) => i === 0 || (L.min > LAYOUTS[i - 1].min && L.bw >= LAYOUTS[i - 1].bw)), 'shelf: layouts grow with the width');
+  // A phone shows at least two boxes side by side; a desk shows the six adventures in one row.
+  const fits = (w, n) => { const L = shelfLayout(w); return L.bd + L.gap + n * (L.bw + L.gap) <= shelfRoom(w); };
+  ok(fits(375, 2) && fits(430, 2) && fits(600, 3), 'shelf: two boxes fit on a 375 px phone, three on a 600 px tablet');
+  ok([1024, 1280, 1600, 2560].every(w => fits(w, groups[1].games.length)), 'shelf: the six adventures fit in one row from 1024 px');
+  ok(['bw', 'bh', 'bd', 'gap'].every(k => shelfLayout(390)[k] > 0) && shelfLayout(390).bh === Math.round(112 * 4 / 3), 'shelf: box height is 4:3 of the width');
+  ok(data.systems.map(systemMedia).join() === 'disc,cart,cart,cart,cart', 'shelf: PlayStation is a disc, the others cartridges');
+  const css = read('style.css').toString();
+  ok(/prefers-reduced-motion:reduce/.test(css), 'shelf: style.css has a reduced-motion rule');
+  ok(/\.box:focus-visible/.test(css), 'shelf: a focused box shows a focus ring');
+  ok(!/url\((?!data:|"data:|\$)[^)]*\.(png|jpe?g|webp|gif)/i.test(css), 'shelf: style.css loads no image file (the grain is SVG turbulence)');
+  group('shelf.', m);
+}
+
 // --------------------------------------------------------------------- boot
 await bootTest();
 async function bootTest() {
@@ -363,12 +405,18 @@ async function bootTest() {
   try {
     await import(pathToFileURL(join(HERE, 'main.js')).href + '?boot');
     await import(pathToFileURL(join(HERE, 'saver.js')).href + '?boot');
-    for (let i = 0; i < 20 && !document.querySelector('#shelf .card'); i++) await new Promise(r => setTimeout(r, 5));
-    ok(document.querySelectorAll('#shelf .card').length === data.games.length, 'boot: the shelf has every game');
+    for (let i = 0; i < 20 && !document.querySelector('#shelf .box'); i++) await new Promise(r => setTimeout(r, 5));
+    ok(document.querySelectorAll('#shelf .box').length === data.games.length, 'boot: the bookcase has a box for every game');
+    ok(document.querySelectorAll('#shelf .bay').length === shelfGroups(data.games).length && document.querySelectorAll('#shelf .bay .plank').length === document.querySelectorAll('#shelf .bay').length, 'boot: one bay with a plank per engine');
+    ok([...document.querySelectorAll('#shelf .box')].every(b => b.tagName === 'BUTTON' && /Take the box off the shelf/.test(b.getAttribute('aria-label')) && b.querySelectorAll('.face').length === 3), 'boot: every box is a labelled button with three faces');
+    ok([...document.querySelectorAll('#shelf .bay')].every(b => document.getElementById(b.getAttribute('aria-labelledby'))), 'boot: every bay has its plate as its label');
+    ok(/^\d+px$/.test(document.documentElement.style.getPropertyValue('--bw')) && document.getElementById('shelf').dataset.mode === 'scroll', 'boot: the phone layout is in the CSS variables (' + document.documentElement.style.getPropertyValue('--bw') + ')');
     ok(document.querySelectorAll('#gameRows tr').length === data.games.length && document.querySelectorAll('#engineRows tr').length === data.engines.length && document.querySelectorAll('#coreRows tr').length === data.systems.length, 'boot: the credit tables fill (' + ['gameRows', 'engineRows', 'coreRows'].map(id => document.querySelectorAll('#' + id + ' tr').length).join('/') + ')');
     ok(document.querySelectorAll('#sys input[type=radio]').length === data.systems.length, 'boot: the system list fills');
     ok(document.getElementById('touchNote').hasAttribute('hidden'), 'boot: the touch note stays hidden with a fine pointer');
-    document.querySelector('#shelf .card .open').dispatchEvent(new window.Event('click'));
+    document.querySelector('#shelf .box').dispatchEvent(new window.Event('click'));
+    ok(document.getElementById('info').hasAttribute('open') && document.getElementById('infoTitle').textContent === data.games[0].title, 'boot: a box opens its info');
+    document.getElementById('infoPlay').dispatchEvent(new window.Event('click'));
     const f = document.querySelector('#playerStage iframe');
     ok(f && f.getAttribute('src') === 'play-dos.html?game=doom' && !document.getElementById('player').hasAttribute('hidden'), 'boot: a card opens the player iframe');
     ok(f && /fullscreen/.test(f.getAttribute('allow')) && /gamepad/.test(f.getAttribute('allow')), 'boot: the iframe may use full screen and gamepads');

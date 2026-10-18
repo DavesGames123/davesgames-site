@@ -1,7 +1,8 @@
 // ============================================================================
 //  RETRO SHELF  ·  main.js — the shelf, the player frame, your own disc
 // ----------------------------------------------------------------------------
-//  Boot: read games.json, build the shelf cards, the system list of the
+//  Boot: read games.json, build the bookcase (one shelf per engine, one
+//  3D box per game; shelf-art.js paints the box art), the system list of the
 //  bring-your-own-disc form and the credit tables. Play opens #player over
 //  the whole window with one child iframe (play-dos.html, play-scummvm.html
 //  or play-emu.html). The Exit button, pagehide and the saver all call
@@ -14,12 +15,14 @@
 //  Pure helpers (node tests import them): playerUrl, extOk, fmtMB.
 //
 //  grep -n targets
-//    "async function boot"   "function buildShelf"   "function card"
+//    "async function boot"   "function buildShelf"   "function box("
+//    "function boxFaces"     "function artOf"        "function applyLayout"
 //    "function openInfo"     "function play"         "function closePlayer"
 //    "function goFull"       "function buildByo"     "function buildCredits"
 //    "export function playerUrl"  "export function extOk"
 // ============================================================================
 import './saver.js';
+import { coverPalette, shelfGroups, shelfLayout, boxPose, spineTitle, paintCover, paintSpine, COVER_W, COVER_H, SPINE_W, SPINE_H } from './shelf-art.js';
 
 export function fmtMB(bytes) { return (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0) + ' MB'; }
 
@@ -53,36 +56,74 @@ function el(tag, attrs, ...kids) {
 const link = (href, text) => el('a', { href, target: '_blank', rel: 'noopener' }, text);
 
 // ------------------------------------------------------------------ shelf
-function card(g) {
-  const engine = g.engine === 'dos' ? 'DOSBox' : 'ScummVM';
-  const c = el('div', { class: 'card', role: 'listitem', style: '--c:' + g.accent },
-    el('button', { type: 'button', class: 'open', 'aria-label': 'Play ' + g.title, onclick: () => play(g) },
-      el('span', { class: 'yr' }, g.year + ' · ' + g.maker),
-      el('span', { class: 'tt' }, g.title),
-      el('span', { class: 'sub' }, g.sub),
-      el('span', { class: 'bl' }, g.blurb)),
-    el('div', { class: 'foot' },
-      el('span', { class: 'chip' }, engine),
-      el('span', { class: 'chip' }, fmtMB(g.bytes)),
-      g.keyboard ? el('span', { class: 'chip' }, 'Keyboard') : el('span', { class: 'chip' }, 'Mouse or touch'),
-      el('button', { type: 'button', class: 'lic', onclick: () => openInfo(g) }, 'Licence'),
-      el('span', { class: 'go', 'aria-hidden': 'true' }, 'Play ▸')));
-  return c;
+// Each box is a button with three faces (front, spine, top) in CSS 3D.
+// The art is painted once per game into a canvas and kept as a data URL,
+// so the shelf box and the pulled-out box show the same picture.
+const ART = new Map();
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+function artOf(g) {
+  if (ART.has(g.id)) return ART.get(g.id);
+  let a = { front: '', spine: '' };
+  try {
+    const f = mkCanvas(COVER_W, COVER_H), sp = mkCanvas(SPINE_W, SPINE_H);
+    paintCover(f.getContext('2d'), g, mkCanvas);
+    paintSpine(sp.getContext('2d'), g);
+    a = { front: f.toDataURL() || '', spine: sp.toDataURL() || '' };
+  } catch (e) { /* no 2D canvas: the faces keep their CSS colours */ }
+  ART.set(g.id, a);
+  return a;
+}
+
+/** The three faces of a box; the caller sets the size variables. */
+function boxFaces(g) {
+  const pal = coverPalette(g), art = artOf(g);
+  const face = (cls, url) => el('span', { class: 'face ' + cls + (url ? '' : ' plain'), style: url ? 'background-image:url(' + url + ')' : '' });
+  const front = face('front', art.front);
+  if (!art.front) front.append(el('span', { class: 'plain-title' }, g.title));
+  front.append(el('span', { class: 'shine' }));
+  return el('span', { class: 'box3d', style: '--c:' + pal.accent + ';--cb:' + pal.base + ';--cd:' + pal.dark + ';--cl:' + pal.light + ';--ci:' + pal.ink },
+    front, face('spine', art.spine), el('span', { class: 'face top' }));
+}
+
+function box(g) {
+  const pose = boxPose(g.id);
+  const b = el('button', { type: 'button', class: 'box', 'data-id': g.id, 'aria-haspopup': 'dialog',
+    'aria-label': g.title + ', ' + g.year + ', ' + g.maker + '. Take the box off the shelf',
+    style: '--ry:' + pose.ry.toFixed(1) + 'deg;--dz:' + pose.dz + 'px',
+    onclick: () => openInfo(g, b) },
+  el('span', { class: 'floor-shadow' }), boxFaces(g));
+  return el('li', { class: 'slot' }, b, el('span', { class: 'tag', 'aria-hidden': 'true' }, spineTitle(g), el('small', null, String(g.year))));
 }
 
 function buildShelf() {
-  const shelf = $('shelf');
-  shelf.replaceChildren(...S.data.games.map(card));
+  const bays = shelfGroups(S.data.games).map(s => el('section', { class: 'bay', 'aria-labelledby': 'bay-' + s.id },
+    el('h3', { class: 'plate', id: 'bay-' + s.id }, s.label, el('small', null, ' · runs in ' + s.engine)),
+    el('div', { class: 'back', 'aria-hidden': 'true' }),
+    el('ul', { class: 'row', role: 'list' }, ...s.games.map(box)),
+    el('div', { class: 'plank', 'aria-hidden': 'true' })));
+  $('shelf').replaceChildren(...bays);
+  applyLayout();
+  window.addEventListener('resize', () => { cancelAnimationFrame(S.lay); S.lay = requestAnimationFrame(applyLayout); });
 }
 
-function openInfo(g) {
+/** Write the box size of shelfLayout into the CSS variables. */
+function applyLayout() {
+  const L = shelfLayout(document.documentElement.clientWidth || window.innerWidth || 390);
+  const st = document.documentElement.style;
+  st.setProperty('--bw', L.bw + 'px'); st.setProperty('--bh', L.bh + 'px');
+  st.setProperty('--bd', L.bd + 'px'); st.setProperty('--gap', L.gap + 'px');
+  $('shelf').dataset.mode = L.mode;
+}
+
+function openInfo(g, from) {
+  S.from = from || null;
   $('infoTitle').textContent = g.title;
   $('infoBy').textContent = g.year + ' · ' + g.maker + ' · ' + g.sub;
   $('infoBlurb').textContent = g.blurb;
   $('infoCtl').textContent = g.controls;
   $('infoLic').replaceChildren(g.licence + '. Full text: ', el('code', null, g.licenceFile), ' in the archive. Source: ', link(g.source, new URL(g.source).hostname), '.');
   $('infoFile').textContent = g.file.split('/').pop() + ' · sha256 ' + g.sha256;
-  $('infoPlay').onclick = () => { $('info').close(); play(g); };
+  $('infoPlay').onclick = () => { const d = $('info'); if (d.close) d.close(); else d.removeAttribute('open'); play(g); };
   const d = $('info');
   if (d.showModal) d.showModal(); else d.setAttribute('open', '');
 }

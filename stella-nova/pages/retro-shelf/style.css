@@ -1,16 +1,17 @@
 /* ============================================================================
    RETRO SHELF  ·  stylesheet
    ----------------------------------------------------------------------------
-   A scrolling document: hero, the shelf of game cards, the bring-your-own-
-   disc form and the credit tables. #player covers the whole window when a
-   game runs; the game itself is in a child iframe. Fonts come from
-   ../../lib/sci.css. Phone first: one card column, two from 560 px, three
-   from 900 px.
-     grep -n 'SHELF'  'CARD'  'BYO'  'TABLES'  'PLAYER'  'DIALOG'  'TOUCH'
+   A scrolling document: hero, a wooden bookcase with one shelf per engine
+   (one CSS 3D game box per game), the bring-your-own-disc drawer and the
+   credit tables. #player covers the whole window when a game runs; the
+   game itself is in a child iframe. Fonts come from ../../lib/sci.css.
+   Phone first: each shelf scrolls sideways with snap below 900 px.
+     grep -n 'SHELF'  'BOX'  'BYO'  'TABLES'  'PLAYER'  'DIALOG'
+     grep -n 'reduce'  (the reduced-motion rules)
    ========================================================================== */
 [hidden]{display:none!important}
 :root{
-  --bg:#07080b; --card:#0e1016; --card2:#151822;
+  --bg:#0b0907; --card:#0e1016; --card2:#151822;
   --ink:#ecebe6; --ink2:#c4c2ba; --dim:#8a8a90; --faint:#3b3d48;
   --line:rgba(255,255,255,0.08); --line2:rgba(255,255,255,0.16);
   --acc:#ffb347; --acc-bg:rgba(255,179,71,0.12); --acc-line:rgba(255,179,71,0.5);
@@ -23,7 +24,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 /* overflow-x stays on html only: on the body it breaks position:sticky. */
 html{background:var(--bg);overflow-x:hidden;-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(ellipse 90% 50% at 50% 0,#22170e,transparent 70%) no-repeat,var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
 html.in-frame{--top:0px}
 html.playing,html.playing body{overflow:hidden}
 button,select,input{font-family:inherit;font-size:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
@@ -38,7 +39,7 @@ code,.mono{font-family:var(--mono);font-size:0.84em}
 .pagetitle{font:400 1.1rem/1 var(--serif);color:var(--ink);margin-left:auto;white-space:nowrap}
 html.in-frame .topbar{display:none}
 
-main{max-width:1120px;margin:0 auto;padding:calc(var(--top) + 28px) calc(16px + var(--sr)) calc(48px + var(--sb)) calc(16px + var(--sl))}
+main{max-width:1240px;margin:0 auto;padding:calc(var(--top) + 28px) calc(16px + var(--sr)) calc(48px + var(--sb)) calc(16px + var(--sl))}
 .sec{margin:0 0 56px}
 .kicker{font:600 0.72rem/1.2 var(--sans);letter-spacing:0.14em;text-transform:uppercase;color:var(--acc);margin-bottom:10px}
 h1{font:400 clamp(2rem,6vw,3.4rem)/1.05 var(--serif);letter-spacing:-0.01em;margin-bottom:14px}
@@ -52,27 +53,86 @@ h3{font:600 0.95rem/1.3 var(--sans);margin:26px 0 8px;color:var(--ink2)}
 @media (hover:none) and (pointer:coarse){.kb-only{display:none}}
 
 /* ---------------------------------------------------------------- SHELF */
-.shelf{display:grid;grid-template-columns:1fr;gap:14px}
-@media (min-width:560px){.shelf{grid-template-columns:1fr 1fr}}
-@media (min-width:900px){.shelf{grid-template-columns:1fr 1fr 1fr}}
+/* The bookcase: oak side panels, a dark back panel lit by a warm lamp at
+   the top of each bay, and a plank with a lit front edge under each row.
+   The wood grain is SVG turbulence (no image file). main.js writes the box
+   size into --bw --bh --bd --gap from shelf-art.js shelfLayout. */
+:root{
+  --bw:112px; --bh:149px; --bd:26px; --gap:22px;
+  --oak:#6b4424; --oak2:#4a2e17; --oak3:#8a5a32; --backwood:#1d130c;
+  --grain-h:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.11' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.06 0 0 0 0 0.02 0 0 0 1.1 -0.32'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --grain-v:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='640'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.11 0.0035' numOctaves='3' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.06 0 0 0 0 0.02 0 0 0 1.1 -0.32'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+.room{position:relative}
+.touch-only{display:none}
+@media (hover:none) and (pointer:coarse){.touch-only{display:inline}}
+.bookcase{position:relative;margin:18px -6px 0;padding:14px 14px 0;border-radius:6px 6px 0 0;
+  background:var(--grain-v),linear-gradient(90deg,var(--oak2),var(--oak) 12%,var(--oak3) 50%,var(--oak) 88%,var(--oak2));
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.8),inset 0 2px 0 rgba(255,220,170,0.18)}
+@media (min-width:560px){.bookcase{margin:22px 0 0;padding:18px 18px 0}}
+.bookcase::before{content:"";position:absolute;left:0;right:0;top:0;height:10px;border-radius:6px 6px 0 0;background:linear-gradient(#a06a3c,#5a3a1e)}
+.bay{position:relative;padding:44px 0 0;margin-bottom:16px;isolation:isolate;--pk:30px}
+.bay .back{position:absolute;inset:0 0 var(--pk);z-index:-1;border-radius:2px;
+  background:radial-gradient(ellipse 60% 70% at 50% -10%,rgba(255,196,120,0.30),rgba(255,170,90,0.08) 45%,transparent 75%),
+    var(--grain-h),linear-gradient(var(--backwood),#120b07);
+  box-shadow:inset 0 14px 22px -8px rgba(0,0,0,0.85),inset 10px 0 18px -10px rgba(0,0,0,0.9),inset -10px 0 18px -10px rgba(0,0,0,0.9)}
+.plate{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;margin:0;max-width:calc(100% - 24px);
+  font:600 0.72rem/1 var(--sans);letter-spacing:0.06em;color:#2b1a08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:6px 12px;border-radius:3px;background:linear-gradient(#e9c77a,#b98d3e);box-shadow:0 1px 0 rgba(255,255,255,0.4) inset,0 2px 4px rgba(0,0,0,0.6)}
+.plate small{font-weight:500;font-size:inherit;color:#4a3210}
+.row{position:relative;z-index:1;list-style:none;display:flex;align-items:flex-end;gap:var(--gap);padding:26px calc(var(--gap) * 0.8) 0 calc(var(--gap) + var(--bd));
+  overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-left:calc(var(--gap) + var(--bd));overscroll-behavior-x:contain;
+  scrollbar-width:thin;scrollbar-color:#5a3a1e transparent;-webkit-overflow-scrolling:touch}
+.bookcase[data-mode="row"] .row{justify-content:center;scroll-snap-type:none}
+.slot{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;scroll-snap-align:start;padding-bottom:var(--pk)}
+.plank{position:absolute;left:-14px;right:-14px;bottom:0;height:var(--pk);border-radius:2px;
+  background:var(--grain-h),linear-gradient(#b07a46 0,#8a5a32 3px,#6b4424 9px,#3e2512);
+  box-shadow:0 10px 14px -6px rgba(0,0,0,0.75),inset 0 1px 0 rgba(255,226,180,0.35)}
+@media (min-width:560px){.plank{left:-18px;right:-18px}}
+/* The label strip on the plank edge under each box. */
+.tag{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);display:block;max-width:calc(var(--bw) + 12px);
+  padding:3px 7px;border-radius:2px;background:linear-gradient(#f4ead2,#d9caa6);box-shadow:0 1px 2px rgba(0,0,0,0.6);
+  font:600 0.66rem/1.15 var(--sans);color:#2a1c0c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag small{margin-left:5px;font:500 0.6rem/1.2 var(--mono);color:#6a5434}
 
-/* ---------------------------------------------------------------- CARD */
-/* A typographic card: no box art, no screenshots. The left edge is the
-   game's accent colour, like the spine of a box on a shelf. */
-.card{position:relative;display:flex;flex-direction:column;min-height:228px;border:1px solid var(--line);border-radius:12px;
-  background:linear-gradient(160deg,var(--card2),var(--card) 60%);overflow:hidden;color:var(--ink);text-align:left}
-.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:7px;background:var(--c,#888)}
-.card .open{flex:1;display:flex;flex-direction:column;gap:6px;padding:18px 18px 12px 26px;background:none;border:0;color:inherit;text-align:left}
-.card .open:focus-visible{outline:2px solid var(--acc);outline-offset:-4px;border-radius:12px}
-.card .yr{font:600 0.72rem/1 var(--mono);letter-spacing:0.08em;color:var(--c,#aaa)}
-.card .tt{font:400 1.55rem/1.1 var(--serif);letter-spacing:-0.005em}
-.card .sub{font-size:0.82rem;color:var(--dim)}
-.card .bl{font-size:0.88rem;color:var(--ink2);margin-top:4px}
-.card .foot{display:flex;align-items:center;gap:8px;padding:0 14px 14px 26px;flex-wrap:wrap}
-.chip{font:500 0.7rem/1 var(--sans);padding:5px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);white-space:nowrap}
-.card .lic{margin-left:auto;font:500 0.78rem/1 var(--sans);padding:6px 10px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink2)}
-.card .go{font:600 0.82rem/1 var(--sans);color:var(--c,#fff)}
-@media (hover:hover){.card:hover{border-color:var(--line2)} .card:hover .go{text-decoration:underline}}
+/* ---------------------------------------------------------------- BOX */
+/* A box is three faces in CSS 3D. --ry turns it to show the left spine;
+   rotateX(-7deg) shows a little of the top. The light comes from the lamp
+   above and to the left: the front has a sheen (.shine), the spine is
+   darker and the top is lighter. */
+.box{position:relative;display:block;width:var(--bw);height:var(--bh);padding:0;border:0;background:none;color:inherit;
+  border-radius:3px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.box3d{position:absolute;inset:0;transform-style:preserve-3d;
+  transform:perspective(1100px) translateZ(calc(var(--dz) * -1)) rotateX(-7deg) rotateY(var(--ry));
+  transition:transform 0.38s cubic-bezier(.2,.8,.25,1)}
+.face{position:absolute;display:block;background-color:var(--cb,#333);background-size:100% 100%;background-repeat:no-repeat;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.face.front{inset:0;transform:translateZ(calc(var(--bd) / 2));border-radius:1px 3px 3px 1px;overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.35)}
+.face.spine{top:0;height:var(--bh);width:var(--bd);left:calc((var(--bw) - var(--bd)) / 2);background-color:var(--cd,#222);
+  transform:rotateY(-90deg) translateZ(calc(var(--bw) / 2));filter:brightness(0.62)}
+.face.top{left:0;width:var(--bw);height:var(--bd);top:calc((var(--bh) - var(--bd)) / 2);
+  background:linear-gradient(90deg,var(--cd,#222),var(--cl,#888));transform:rotateX(90deg) translateZ(calc(var(--bh) / 2));filter:brightness(1.1)}
+.shine{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,240,210,0.26) 0%,rgba(255,240,210,0.06) 28%,transparent 45%,rgba(0,0,0,0.22) 100%),
+    linear-gradient(180deg,rgba(255,210,150,0.12),transparent 30%,rgba(0,0,0,0.28))}
+.face.plain{background-image:linear-gradient(160deg,var(--cl,#888),var(--cb,#333) 45%,var(--cd,#111))}
+.plain-title{position:absolute;inset:12% 8% auto;font:400 1.05rem/1.1 var(--serif);color:var(--ci,#fff);text-align:center}
+/* The contact shadow on the plank and the soft shadow on the back panel. */
+.floor-shadow{position:absolute;left:-6%;right:-14%;bottom:-6px;height:14px;border-radius:50%;
+  background:radial-gradient(ellipse at 40% 50%,rgba(0,0,0,0.75),transparent 70%);filter:blur(2px);transition:opacity 0.38s,transform 0.38s}
+.box::after{content:"";position:absolute;left:8%;right:-18%;top:6%;bottom:2%;z-index:-1;border-radius:4px;
+  background:rgba(0,0,0,0.55);filter:blur(10px);transform:translate(10px,-4px)}
+@media (hover:hover){
+  .box:hover .box3d{transform:perspective(1100px) translateY(-12px) translateZ(18px) rotateX(-5deg) rotateY(calc(var(--ry) * 0.45))}
+  .box:hover .floor-shadow{opacity:0.45;transform:scaleX(0.85)}
+}
+.box:focus-visible{outline:none}
+.box:focus-visible .box3d{transform:perspective(1100px) translateY(-12px) translateZ(18px) rotateX(-5deg) rotateY(calc(var(--ry) * 0.45))}
+.box:focus-visible .face.front{box-shadow:0 0 0 3px var(--acc),0 0 22px 4px rgba(255,179,71,0.45)}
+.box:active .box3d{transform:perspective(1100px) translateY(-6px) translateZ(8px) rotateX(-6deg) rotateY(calc(var(--ry) * 0.6))}
+/* The box is out of the shelf while its pull-out view is open. */
+.box.out .box3d{transform:perspective(1100px) translateY(-30px) translateZ(80px) rotateX(-4deg) rotateY(0deg);opacity:0;transition:transform 0.32s ease-in,opacity 0.32s ease-in}
+.box.out .floor-shadow{opacity:0}
 
 /* ---------------------------------------------------------------- BYO */
 .byo-grid{display:grid;grid-template-columns:1fr;gap:18px;margin:18px 0 8px}
@@ -118,3 +178,10 @@ td .mono{color:var(--dim);word-break:break-all}
 .info .by{color:var(--dim)}
 .info .mono{word-break:break-all;color:var(--dim)}
 .info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink)}
+
+/* ---------------------------------------------------------------- MOTION */
+/* reduce: no lift, no turn, no pull-out animation; the states still show. */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:0.01ms!important;animation-duration:0.01ms!important;animation-iteration-count:1!important}
+  .row{scroll-behavior:auto}
+}

@@ -26,7 +26,8 @@
      2. wishlist      ../../lib/wishlist.js
      3. stats-beacon  ../../lib/stats-beacon.js
      4. style.css, then ../../lib/sci.css (fonts)
-   Script at the end of body: main.js (module), which imports saver.js.
+   Script at the end of body: main.js (module), which imports saver.js
+   and shelf-art.js.
 
    SCREENSAVER (window.snSaver, for lib/screensaver.js)
      saver.js       the hook: a 3D desk tour of the shelf, one game at a time
@@ -42,7 +43,8 @@
    Exit removes the iframe, which ends the engine, its workers and audio.
 
    LAYOUT  (# marks an element id)
-     #shelf     the game cards (built from games.json)
+     #shelf     the bookcase: one shelf per engine, one 3D box per game
+                (built from games.json; shelf-art.js paints the boxes)
      #touchNote the keyboard note for phones and tablets
      #byo       bring your own disc: #sys, #romFile, #biosFile, #own, #byoPlay
      #credits   the credit tables (#gameRows #engineRows #coreRows)
@@ -75,10 +77,10 @@
   <p class="touch-note" id="touchNote" hidden>Most of these games need a keyboard. On a phone or tablet, the DOS game has on-screen keys, and the adventure games work with touch (tap to walk and to use).</p>
 </header>
 
-<section class="sec" aria-labelledby="shelfH">
+<section class="sec room" aria-labelledby="shelfH">
   <h2 id="shelfH">The freeware shelf</h2>
-  <p class="note">Press a card to play. <span class="kb-only">Keyboard and gamepad work.</span> The <b>✕ Exit</b> button at the top right ends the game.</p>
-  <div class="shelf" id="shelf" role="list"></div>
+  <p class="note">Press a box to take it off the shelf and read the back. <span class="kb-only">Tab moves from box to box, Enter takes one out.</span><span class="touch-only">Swipe a shelf to see every box.</span></p>
+  <div class="bookcase" id="shelf"></div>
   <p class="status" id="shelfStatus" aria-live="polite"></p>
 </section>
 
