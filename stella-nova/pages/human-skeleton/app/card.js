@@ -56,7 +56,7 @@ export function showCard() {
       <button type="button" data-act="zoom">${zoomLabel(b)}</button>
       <button type="button" data-act="next" aria-label="Next bone">›</button>
     </div>
-    <div class="c-foot"><span>${esc(reg.label)} · ${reg.count} ${reg.count === 1 ? 'piece' : 'pieces'}</span><span>${COARSE ? 'Drag it out' : 'Drag it out · ← → step'}</span></div>`;
+    <div class="c-foot"><span>${esc(reg.label)} · ${reg.count} ${reg.count === 1 ? 'piece' : 'pieces'}</span><span>${S.iso >= 0 ? (COARSE ? 'Drag to turn round it' : 'Drag to orbit it · ← → step') : COARSE ? 'Drag it out' : 'Drag it out · ← → step'}</span></div>`;
   card.hidden = false;
   document.body.classList.add('has-card');
   card.scrollTop = 0;

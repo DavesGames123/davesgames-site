@@ -101,7 +101,7 @@ export function buildUI() {
   $('dockTheme').addEventListener('click', flip);
   $('themeBtn').addEventListener('click', flip);
   $('dockFit').addEventListener('click', () => { if (S.iso >= 0) exitIsolate(false); fitView(false); });
-  $('hint').textContent = COARSE ? 'Tap a bone · drag to turn · pinch to zoom' : 'Click a bone · drag to orbit · scroll to zoom';
+  $('hint').textContent = COARSE ? 'Tap a bone to isolate it · drag to turn · pinch to zoom' : 'Click a bone to isolate it · drag to orbit · scroll to zoom';
   addEventListener('keydown', e => {
     if (S.saver || (e.target.closest && e.target.closest('input'))) return;
     if (e.key === 'Escape') { if (S.iso >= 0) exitIsolate(true); else clearSelection(); }

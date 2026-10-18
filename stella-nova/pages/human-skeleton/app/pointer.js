@@ -1,45 +1,58 @@
 // ============================================================================
-//  HUMAN SKELETON  ·  app/pointer.js — tap, double tap, hover, drag out
+//  HUMAN SKELETON  ·  app/pointer.js — click to isolate, hover, long press
 // ────────────────────────────────────────────────────────────────────────────
 //  The canvas listeners use the capture phase, so they see a press before
-//  OrbitControls. A press on the selected bone drags that bone on a plane
-//  that faces the camera, and the orbit does not start. On release the
-//  bone springs back (the loop runs the spring). A short press with no
-//  movement is a tap: it selects, and a second tap on the same bone
-//  focuses it. With a mouse, hoverPick shows the tip once a frame.
+//  OrbitControls. Each press keeps its largest travel, and focus.js
+//  pressKind sorts it on release: a tap, a drag (it moved, or two fingers)
+//  or a long press. Only a tap acts, so an orbit never selects.
+//  A tap on a bone isolates it: the camera glides to frame it and the
+//  others turn to ghosts (inspect.js isolate). A tap on the isolated bone
+//  shows all again, and the camera stays. A double click acts once. A
+//  tap on a ghost (a direct hit, app/pick.js) moves the isolation to it.
+//  A tap on empty space shows all and flies back, or closes the card.
+//  Outside isolation, a press on the selected bone drags it out on a
+//  plane that faces the camera, and it springs back (the loop runs the
+//  spring). In isolation a press always orbits.
+//  The name of a bone shows in the tip: on hover with a mouse (once a
+//  frame), and for a long press or a tap on a touch screen.
 //
 //  GREP MAP
 //    const tip / downs / let multi / lastTap / mouse   pointer state
 //    function ndc / planeHit                         drag plane
 //    canvas.addEventListener                         pointer listeners
-//    const endPointer / function onTap               tap and double tap
+//    const endPointer / function onTap               tap, double tap
 //    function dVelZero                               stop a spring
-//    function setHover / moveTip / hoverPick         the hover tip
+//    function setHover / moveTip / showTip           the tip
+//    function hoverPick                              hover and long press, once a frame
 // ============================================================================
 import * as THREE from 'three';
 import { $, COARSE, HOVER, esc, SIDE_NAME } from './env.js';
 import { canvas, camera } from './stage.js';
 import { S, dirty, hideHint } from './state.js';
-import { pickAt } from './pick.js';
-import { boneCentre, setHi, select, clearSelection } from './select.js';
-import { focusBone } from './inspect.js';
+import { pickAt, TOL_PX } from './pick.js';
+import { boneCentre, setHi, clearSelection } from './select.js';
+import { isolate, exitIsolate } from './inspect.js';
+import { pressKind, TAP_PX } from '../focus.js';
 
-// Registered before OrbitControls reads the event: a press on the picked
-// bone drags that bone and the orbit does not start.
 const tip = $('tip');
 const downs = new Map();
-let multi = false, lastTap = { t: 0, i: -1 }, mouse = null;
+let multi = false, lastTap = { t: 0, i: -1 }, mouse = null, tipT = 0;
 const ray = new THREE.Raycaster(), plane = new THREE.Plane(), hitV = new THREE.Vector3();
+const isTouch = e => e.pointerType === 'touch' || e.pointerType === 'pen' || (!e.pointerType && COARSE);
 function ndc(x, y) {
   const cr = canvas.getBoundingClientRect();
   return new THREE.Vector2(((x - cr.left) / cr.width) * 2 - 1, -((y - cr.top) / cr.height) * 2 + 1);
 }
 function planeHit(x, y, out) { ray.setFromCamera(ndc(x, y), camera); return ray.ray.intersectPlane(plane, out); }
 canvas.addEventListener('pointerdown', e => {
-  downs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
+  if (S.saver) return;
+  const touch = isTouch(e);
+  downs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0, touch, long: false });
+  if (touch) hideTip();
   if (downs.size > 1) { multi = true; return; }
-  if (S.sel < 0 || e.button > 0) return;
-  const i = pickAt(e.clientX, e.clientY, COARSE ? 12 : 3);
+  // the drag out: the selected bone, outside isolation (there a drag orbits)
+  if (S.sel < 0 || S.iso >= 0 || e.button > 0) return;
+  const i = pickAt(e.clientX, e.clientY, touch ? 12 : 3);
   if (i !== S.sel) return;
   const c = boneCentre(i);
   plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), c);
@@ -51,13 +64,14 @@ canvas.addEventListener('pointerdown', e => {
   e.stopImmediatePropagation();
 }, true);
 canvas.addEventListener('pointermove', e => {
+  const dn = downs.get(e.pointerId);
+  if (dn) dn.moved = Math.max(dn.moved, Math.hypot(e.clientX - dn.x, e.clientY - dn.y));
   if (S.drag && e.pointerId === S.drag.id) {
     if (downs.size > 1) return;
     if (!planeHit(e.clientX, e.clientY, hitV)) return;
     const d = hitV.sub(S.drag.start).add(S.drag.base);
     S.dOff[S.drag.i * 3] = d.x; S.dOff[S.drag.i * 3 + 1] = d.y; S.dOff[S.drag.i * 3 + 2] = d.z;
-    const dn = downs.get(e.pointerId);
-    if (dn && Math.hypot(e.clientX - dn.x, e.clientY - dn.y) > (COARSE ? 10 : 5)) { S.drag.moved = true; hideHint(); }
+    if (dn && dn.moved > (dn.touch ? TAP_PX.touch : TAP_PX.mouse)) { S.drag.moved = true; hideHint(); }
     dirty();
     e.stopImmediatePropagation();
     return;
@@ -78,27 +92,36 @@ const endPointer = e => {
   if (!d) return;
   const wasMulti = multi;
   if (!downs.size) multi = false;
-  if (e.type === 'pointercancel' || wasMulti) return;
-  if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > (COARSE ? 10 : 6) || performance.now() - d.t > 600) return;
-  onTap(e.clientX, e.clientY);
+  if (e.type === 'pointercancel' || S.saver) return;
+  // a long press showed the name: it does not select
+  if (d.long) { hideTip(1600); return; }
+  const kind = pressKind(d, { x: e.clientX, y: e.clientY, t: performance.now() }, d.moved, d.touch, wasMulti);
+  if (kind === 'tap') onTap(e.clientX, e.clientY, d.touch);
 };
 export function dVelZero(i) { S.dVel[i * 3] = S.dVel[i * 3 + 1] = S.dVel[i * 3 + 2] = 0; }
 canvas.addEventListener('pointerup', endPointer, true);
 canvas.addEventListener('pointercancel', endPointer, true);
 canvas.addEventListener('pointerleave', () => { mouse = null; setHover(-1); });
-function onTap(x, y) {
-  const i = pickAt(x, y);
+function onTap(x, y, touch) {
+  const i = pickAt(x, y, touch ? TOL_PX.touch : TOL_PX.mouse);
   const now = performance.now();
-  if (i >= 0) {
-    hideHint();
-    if (now - lastTap.t < 380 && lastTap.i === i) { focusBone(i); lastTap = { t: 0, i: -1 }; return; }
-    lastTap = { t: now, i };
-    if (S.iso >= 0 && i !== S.iso) return;
-    select(i, { scroll: true });
-  } else {
+  if (i < 0) {
     lastTap = { t: 0, i: -1 };
-    if (S.iso < 0) clearSelection();
+    if (S.iso >= 0) exitIsolate(true); else clearSelection();
+    return;
   }
+  hideHint();
+  // the second click of a double click: the first one did the toggle
+  const dbl = lastTap.i === i && now - lastTap.t < 380;
+  lastTap = { t: now, i };
+  if (dbl) return;
+  if (touch) showTip(i, x, y, 1400);
+  if (S.iso === i) exitIsolate(false);
+  else isolate(i);
+}
+function tipText(i) {
+  const b = S.bones[i];
+  return `${esc(b.name)}${b.side ? ' · ' + SIDE_NAME[b.side] : ''} <i>${esc(b.latin)}</i>`;
 }
 export function setHover(i, x, y) {
   if (i === S.hov) { if (i >= 0) moveTip(x, y); return; }
@@ -106,21 +129,43 @@ export function setHover(i, x, y) {
   S.hov = i;
   if (i < 0) { tip.classList.remove('show'); canvas.style.cursor = ''; dirty(); return; }
   setHi(i, 1, 1);
-  const b = S.bones[i];
-  tip.innerHTML = `${esc(b.name)}${b.side ? ' · ' + SIDE_NAME[b.side] : ''} <i>${esc(b.latin)}</i>`;
+  tip.innerHTML = tipText(i);
   moveTip(x, y);
   tip.classList.add('show');
-  canvas.style.cursor = i === S.sel ? 'grab' : 'pointer';
+  canvas.style.cursor = i === S.sel && S.iso < 0 ? 'grab' : 'pointer';
   dirty();
 }
-function moveTip(x, y) {
+function moveTip(x, y, touch = false) {
   const cr = canvas.getBoundingClientRect();
-  tip.style.transform = `translate(${x - cr.left + 14}px,${y - cr.top + 16}px)`;
+  // on a touch screen the tip goes above the finger
+  tip.style.transform = `translate(${Math.max(4, x - cr.left + (touch ? -40 : 14))}px,${Math.max(4, y - cr.top + (touch ? -48 : 16))}px)`;
 }
-// hover pick, once a frame, while the mouse is still
+// the tip for a touch: the name, for ms (0: until the next press)
+export function showTip(i, x, y, ms = 0) {
+  clearTimeout(tipT);
+  tip.innerHTML = tipText(i);
+  moveTip(x, y, true);
+  tip.classList.add('show');
+  if (ms) tipT = setTimeout(() => tip.classList.remove('show'), ms);
+}
+function hideTip(ms = 0) {
+  clearTimeout(tipT);
+  if (ms) tipT = setTimeout(() => tip.classList.remove('show'), ms);
+  else if (S.hov < 0) tip.classList.remove('show');
+}
+// once a frame: the hover pick while the mouse is still, and the long press
 export function hoverPick() {
+  if (S.saver) return;
   if (mouse && !mouse.b && !S.drag && S.groups.size) {
     const m = mouse; mouse = null;
-    setHover(pickAt(m.x, m.y, 3), m.x, m.y);
+    setHover(pickAt(m.x, m.y, TOL_PX.mouse), m.x, m.y);
+  }
+  if (downs.size === 1 && !multi && !S.drag) {
+    const d = downs.values().next().value;
+    if (d.touch && !d.long && d.moved <= TAP_PX.touch && performance.now() - d.t >= TAP_PX.longMs) {
+      d.long = true;
+      const i = pickAt(d.x, d.y, TOL_PX.touch);
+      if (i >= 0) { hideHint(); showTip(i, d.x, d.y); }
+    }
   }
 }

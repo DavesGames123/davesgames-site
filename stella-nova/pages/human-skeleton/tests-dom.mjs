@@ -197,6 +197,11 @@ async function desktop() {
   const turned = hs.camera.position.distanceTo(cam0);
   ok(S.sel === -1 && S.iso === -1 && turned > 0.05, 'drag: an orbit drag that starts on a bone does not select it', `sel ${S.sel}, camera moved ${turned.toFixed(2)} m`);
   hs.fitView(true); env.step();
+  const p1 = hs.screenOf('femur-l');
+  drag(env, p1.x, p1.y, 60, 0, true);
+  for (let k = 0; k < 30; k++) env.step();
+  ok(S.sel === -1 && S.iso === -1, 'drag: a drag that comes back to its start does not select', `sel ${S.sel}`);
+  hs.fitView(true); env.step();
 
   // frame: isolate flies the camera to frame the bone
   env.RECTS.set('panel', () => env.rect(0, env.top, 340, env.stageH));
@@ -234,6 +239,7 @@ async function desktop() {
   for (let k = 0; k < 90; k++) env.step();
   hs.fitView(true); env.step();
   await isoChecks(env, hs, S, byId);
+  await clickChecks(env, hs, S, byId);
 
   // WebXR: the controller ray pick runs the same mesh pick in scene space
   const xr = await import(pathToFileURL(join(HERE, 'app/xr.js')).href);
@@ -251,9 +257,11 @@ async function desktop() {
   const css = [...env.doc.head.querySelectorAll('style')].map(s => s.textContent).join('');
   ok(shown && S.iso === -1 && chip.hidden && env.doc.getElementById('card').hidden && /#stage>\*:not\(#view\)\{?/.test(css.replace(/\s/g, '')) && chip.matches('#stage>*:not(#view)'),
     'saver: enter() ends the isolation; the chip is hidden and its saver rule hides it', `iso ${S.iso}, chip hidden ${chip.hidden}`);
+  const pf = hs.screenOf('femur-r');
+  tap(env, pf.x, pf.y); env.tick(500); runFrames(env, 5);
   env.win.dispatchEvent(new env.win.KeyboardEvent('keydown', { key: 'i', bubbles: true }));
   hs.isolate(byId('femur-r')); runFrames(env, 5);
-  ok(S.iso === -1 && S.sel === -1 && chip.hidden, 'saver: the i key or isolate() bring no isolation in the saver', `iso ${S.iso}, sel ${S.sel}`);
+  ok(S.iso === -1 && S.sel === -1 && chip.hidden, 'saver: a tap, the i key or isolate() bring no isolation in the saver', `iso ${S.iso}, sel ${S.sel}`);
   return env;
 }
 
@@ -327,6 +335,89 @@ async function isoChecks(env, hs, S, byId) {
   hs.clearSelection(); hs.fitView(true); runFrames(env, 2);
 }
 
+// ── click: isolate, toggle, double click, ghost, empty space, hover ──────────
+// a page point on the mesh of bone i: the vertex nearest its centre,
+// moved as the shader moves it, through the camera
+async function onBone(env, hs, S, i) {
+  const THREE = await import(T160), F = await import(pathToFileURL(join(HERE, 'focus.js')).href);
+  const mi = S.pick[i], b = S.bones[i];
+  let best = 0, bd = Infinity;
+  for (let v = mi.v0; v < mi.v0 + mi.nv; v++) { const d = Math.hypot(mi.pos[v * 3] - mi.mid[0], mi.pos[v * 3 + 1] - mi.mid[1], mi.pos[v * 3 + 2] - mi.mid[2]); if (d < bd) { bd = d; best = v; } }
+  const o = S.cur.off, q = [S.cur.q[i * 4], S.cur.q[i * 4 + 1], S.cur.q[i * 4 + 2], S.cur.q[i * 4 + 3]];
+  const r = F.qrot(q, [mi.pos[best * 3] - b.c[0], mi.pos[best * 3 + 1] - b.c[1], mi.pos[best * 3 + 2] - b.c[2]]);
+  const w = new THREE.Vector3(r[0] + b.c[0] + o[i * 3], r[1] + b.c[1] + o[i * 3 + 1], r[2] + b.c[2] + o[i * 3 + 2]).project(hs.camera);
+  return { x: (w.x + 1) / 2 * env.W, y: env.top + (1 - w.y) / 2 * env.stageH };
+}
+// a page point with no bone under it (and no near miss)
+function empty(env, hs) {
+  for (let y = env.top + 30; y < env.top + env.stageH - 90; y += 37) for (let x = 400; x < 1060; x += 41) if (hs.pickAt(x, y, 12) === -1) return { x, y };
+  return { x: 1080, y: env.top + 20 };
+}
+async function clickChecks(env, hs, S, byId) {
+  const doc = env.doc, chip = doc.getElementById('isoChip'), fem = byId('femur-l');
+  hs.fitView(true); runFrames(env, 2);
+  const home = { t: hs.controls.target.clone(), p: hs.camera.position.clone() };
+  let p = hs.screenOf('femur-l');
+  tap(env, p.x, p.y); env.tick(500); runFrames(env, 80);
+  ok(S.iso === fem && S.sel === fem && !chip.hidden && hs.controls.target.distanceTo(hs.boneCentre(fem)) < 1e-6,
+    'click: a click on a bone isolates it and glides the camera to it', `iso ${S.bones[S.iso]?.id}, target off ${hs.controls.target.distanceTo(hs.boneCentre(fem)).toExponential(1)} m`);
+  // a drag in isolation orbits round the bone (no drag out, no select)
+  p = hs.screenOf('femur-l');
+  const eye0 = hs.camera.position.clone();
+  drag(env, p.x, p.y, 120, 20); runFrames(env, 240);
+  const dOff = Math.hypot(S.dOff[fem * 3], S.dOff[fem * 3 + 1], S.dOff[fem * 3 + 2]);
+  const r0 = eye0.distanceTo(hs.boneCentre(fem)), r1 = hs.camera.position.distanceTo(hs.controls.target);
+  ok(S.iso === fem && dOff === 0 && hs.camera.position.distanceTo(eye0) > 0.05 && hs.controls.target.distanceTo(hs.boneCentre(fem)) < 1e-6 && Math.abs(r1 - r0) < 1e-3,
+    'click: a drag on the isolated bone orbits round it (target stays, same distance)', `eye moved ${hs.camera.position.distanceTo(eye0).toFixed(2)} m, distance ${r0.toFixed(3)} -> ${r1.toFixed(3)} m`);
+  // a second click on the same bone shows all; the camera stays
+  p = await onBone(env, hs, S, fem);
+  const eye1 = hs.camera.position.clone();
+  tap(env, p.x, p.y); env.tick(500); runFrames(env, 60);
+  ok(S.iso === -1 && S.sel === fem && chip.hidden && hs.camera.position.distanceTo(eye1) < 1e-6, 'click: a second click on the same bone shows all, keeps it selected, the camera stays', `iso ${S.iso}, sel ${S.sel}, eye moved ${hs.camera.position.distanceTo(eye1).toExponential(1)} m`);
+  const home2 = { t: hs.controls.target.clone(), p: hs.camera.position.clone() };
+  tap(env, p.x, p.y); env.tick(500); runFrames(env, 60);
+  ok(S.iso === fem, 'click: a third click isolates it again (a toggle)');
+  // a ghost: a direct hit on a ghost moves the isolation to it
+  let ghostHit = null;
+  for (const b of S.bones) {
+    if (b.i === fem || !S.vis[b.i]) continue;
+    const q = hs.screenOf(b.i);
+    if (q.x < 360 || q.x > 1080 || q.y < env.top + 10 || q.y > env.top + env.stageH - 80) continue;
+    const h = hs.pickInfo(q.x, q.y);
+    if (h && h.ghost && h.i === b.i) { ghostHit = { i: b.i, q }; break; }
+  }
+  if (ghostHit) {
+    tap(env, ghostHit.q.x, ghostHit.q.y); env.tick(500); runFrames(env, 80);
+    ok(S.iso === ghostHit.i && hs.controls.target.distanceTo(hs.boneCentre(ghostHit.i)) < 1e-6, 'click: a click right on a ghost moves the isolation to that bone', `${S.bones[fem].id} -> ${S.bones[S.iso]?.id}`);
+  } else ok(false, 'click: a ghost under the cursor to click', 'none found on screen');
+  // empty space: show all, and the camera goes back to the first view
+  // (back to the view from before this isolation: the third click)
+  let e = empty(env, hs);
+  tap(env, e.x, e.y); env.tick(500); runFrames(env, 80);
+  ok(S.iso === -1 && chip.hidden && hs.controls.target.distanceTo(home2.t) < 1e-6 && hs.camera.position.distanceTo(home2.p) < 1e-4,
+    'click: a click on empty space shows all and flies back', `target off ${hs.controls.target.distanceTo(home2.t).toExponential(1)} m`);
+  e = empty(env, hs);
+  tap(env, e.x, e.y); env.tick(500); runFrames(env, 5);
+  ok(S.sel === -1, 'click: a second click on empty space closes the card');
+  // a double click acts once: the bone ends isolated
+  p = hs.screenOf('humerus-r');
+  const hum = byId('humerus-r');
+  tap(env, p.x, p.y); env.tick(120); tap(env, p.x, p.y); env.tick(500); runFrames(env, 80);
+  ok(S.iso === hum, 'click: a double click on a bone isolates it (not on and off)', `iso ${S.bones[S.iso]?.id}`);
+  tap(env, p.x, p.y); env.tick(500);
+  env.win.dispatchEvent(new env.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  runFrames(env, 80);
+  // hover: the name in the tip
+  hs.fitView(true); runFrames(env, 2);
+  p = hs.screenOf('femur-l');
+  move(env, p.x, p.y); runFrames(env, 2);
+  const tip = doc.getElementById('tip');
+  ok(tip.classList.contains('show') && /Femur/.test(tip.textContent) && S.hov === fem, 'hover: the mouse over a bone shows its name', tip.textContent.replace(/\s+/g, ' ').trim());
+  doc.getElementById('view').dispatchEvent(new env.win.Event('pointerleave')); runFrames(env, 2);
+  ok(!tip.classList.contains('show') && S.hov === -1, 'hover: the tip goes when the mouse leaves');
+  hs.clearSelection(); hs.fitView(true); runFrames(env, 2);
+}
+
 // ── phone ───────────────────────────────────────────────────────────────────
 async function phone() {
   const env = await boot({ W: 390, H: 844, phone: true });
@@ -336,6 +427,38 @@ async function phone() {
   const p = hs.screenOf('femur-l');
   const id = S.bones[hs.pickAt(p.x + 9, p.y)]?.id, bare = hs.pickAt(p.x + 9, p.y, 0);
   ok(id === 'femur-l' && bare === -1, 'pick: a touch 9 px off the femur shaft misses the mesh but picks it with the touch tolerance', `${id || 'none'}, no tolerance: ${bare}`);
+  const doc = env.doc, tip = doc.getElementById('tip'), chip = doc.getElementById('isoChip'), fem = S.P.byId.get('femur-l').i;
+  const T = { type: 'touch' };
+  // a long press shows the name and does not select
+  let q = hs.screenOf('femur-l');
+  const id1 = pid++;
+  press(env, q.x, q.y, { ...T, id: id1 });
+  for (let k = 0; k < 36; k++) env.step();
+  const longShown = tip.classList.contains('show') && /Femur/.test(tip.textContent);
+  release(env, q.x, q.y, { ...T, id: id1 }); runFrames(env, 4);
+  ok(longShown && S.sel === -1 && S.iso === -1, 'phone: a long press shows the bone name and does not select', tip.textContent.replace(/\s+/g, ' ').trim());
+  // a one-finger turn is not a tap
+  drag(env, q.x, q.y, 80, 0, false, T); runFrames(env, 30);
+  ok(S.iso === -1 && S.sel === -1, 'phone: a one-finger turn does not select');
+  hs.fitView(true); runFrames(env, 2);
+  // a tap isolates and shows the name; the card at the top and the chip
+  // at the base are both out of the framed part
+  env.RECTS.set('card', el => el.hidden ? env.rect(0, 0, 0, 0) : env.rect(8, env.top + 8, env.W - 16, 300));
+  env.RECTS.set('isoChip', el => el.hidden ? env.rect(0, 0, 0, 0) : env.rect(8, env.top + env.stageH - 8 - 96, env.W - 16, 96));
+  q = hs.screenOf('femur-l');
+  tap(env, q.x, q.y, T); env.tick(500);
+  const tapShown = tip.classList.contains('show') && /Femur/.test(tip.textContent);
+  runFrames(env, 90);
+  const cr = hs.clearRect(), THREE = await import(T160), c = hs.boneCentre(fem);
+  const pr = c.clone().project(hs.camera), py = (1 - pr.y) / 2 * cr.h, px = (pr.x + 1) / 2 * cr.w;
+  const fy = Math.tan(THREE.MathUtils.degToRad(hs.camera.fov) / 2), rpx = Math.tan(Math.asin(S.bones[fem].r / hs.camera.position.distanceTo(c))) / fy * cr.h / 2;
+  ok(S.iso === fem && !chip.hidden && tapShown, 'phone: a tap isolates the bone and shows its name', `iso ${S.bones[S.iso]?.id}`);
+  ok(cr.o.t >= 300 && cr.o.b >= 96 && py - rpx >= cr.y0 - 0.5 && py + rpx <= cr.y1 + 0.5 && px - rpx >= -0.5 && px + rpx <= cr.w + 0.5,
+    'phone: the framed bone sits between the card and the chip', `clear y ${cr.y0.toFixed(0)}..${cr.y1.toFixed(0)}, sphere y ${(py - rpx).toFixed(0)}..${(py + rpx).toFixed(0)}`);
+  // 44 px targets: the chip buttons on a coarse pointer
+  const css = readFileSync(join(HERE, 'style.css'), 'utf8').replace(/\s+/g, ' ');
+  const coarse = [...css.matchAll(/@media \(pointer:coarse\)\{(.*?)\}\s*\}/g)].map(m => m[1]).join(' ');
+  ok(/#isoChip button\{height:44px;min-width:44px/.test(coarse), 'phone: the chip buttons are 44 px on a coarse pointer');
   return env;
 }
 

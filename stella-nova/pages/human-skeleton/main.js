@@ -16,7 +16,8 @@
 //           (focus.js, app/pick.js); the nearest hit wins, and a bone
 //           within 4 px (mouse) or 14 px (touch) of the ray picks too.
 //  SELECT   the bone glows, the card opens, the list marks it, and the
-//           camera pans if the bone sits under the card or the panel.
+//           camera pans if the bone sits under the card or the panel
+//           (the arrow keys and the card buttons; a click isolates).
 //  ISOLATE  a click (or a list row) isolates the bone: the others become
 //           fresnel ghosts or hide, the camera glides to frame the bone
 //           (focus.js) and orbits it, and the chip names it.
@@ -37,7 +38,7 @@
 //    chip.js        syncChip: the "Isolated: <bone>" chip and its buttons
 //    inspect.js     isolate / exitIsolate / focusBone / focusRegion
 //    list.js        buildList / syncList / setRegionHidden, search
-//    pointer.js     tap, double tap, hover, drag out
+//    pointer.js     tap to isolate, double tap, hover, long press, drag out
 //    camera.js      occlusion / resize / flyTo / fitView / fitShadow
 //    panel.js       setOpen, the phone sheet, the dock list button
 //    controls.js    setTheme / setShow / syncUI / syncRead / buildUI
@@ -66,7 +67,7 @@ import { canvas, camera, controls, scene } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
 import { fitView, saverOcc, boneGoal, frameBone, clearRect } from './app/camera.js';
 import { loopHook } from './app/loop.js';
-import { pickAt } from './app/pick.js';
+import { pickAt, pickInfo } from './app/pick.js';
 import { loadAll } from './app/load.js';
 import { setMode, explode, reconstruct, setAmount, toggleRegionExplode, retarget } from './app/layouts.js';
 import { boneCentre, select, clearSelection, step, setHi } from './app/select.js';
@@ -82,7 +83,7 @@ import { buildDelays, liftDir, liftAmount, liftProfile, liftFit, neighbours } fr
 // debug and headless checks
 window.__hs = {
   S, T, select, clearSelection, isolate, exitIsolate, setIsoHide, setMode, explode, reconstruct, setAmount, toggleRegionExplode, focusRegion, focusBone,
-  setTheme, setShow, setRegionHidden, pickAt, step, camera, controls, setOpen, fitView, boneGoal, frameBone, clearRect, boneCentre,
+  setTheme, setShow, setRegionHidden, pickAt, pickInfo, step, camera, controls, setOpen, fitView, boneGoal, frameBone, clearRect, boneCentre,
   screenOf(id) {
     const b = typeof id === 'number' ? S.bones[id] : S.P.byId.get(id);
     const p = boneCentre(b.i).project(camera);
