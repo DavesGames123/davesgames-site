@@ -26,6 +26,11 @@
 //  CLOCK. dockClock(t, seasonOf) gives the text of the dock clock: the
 //  year, the month and the season, and the part of the year done.
 //
+//  ECO LIMITS. ecoLimits(coarse) gives the caps of the ground ecosystem
+//  (eco.js buildEco): grass tussocks (8 blades each), forbs, stones, leaf
+//  litter, woodland trees, seedlings, and the mesh LOD of the nature pack.
+//  A coarse pointer (a phone or a tablet) gets the phone caps.
+//
 //  PIXEL RATIO. pixelRatioStep(state, dt) lowers the pixel ratio of a
 //  phone by steps of 0.25 (to 1) when frames are slow for 2 s.
 //
@@ -37,6 +42,7 @@
 //    gestures ............. "export function createGestures"
 //    dock clock ........... "export function dockClock"
 //    species cycle ........ "export function nextId"
+//    eco limits ........... "export const ECO_LIMITS"
 //    pixel ratio .......... "export function pixelRatioStep"
 // ============================================================================
 
@@ -140,3 +146,9 @@ export function pixelRatioStep(st, dt) {
   st.ratio = Math.max(st.min, Math.round((st.ratio - 0.25) * 100) / 100);
   return st.ratio;
 }
+
+export const ECO_LIMITS = {
+  desktop: { tussocks: 26000, forbs: 700, stones: 1400, litter: 7000, woodland: 520, seedlings: 160, lod: 1, R: 24 },
+  phone: { tussocks: 9000, forbs: 260, stones: 500, litter: 2200, woodland: 220, seedlings: 60, lod: 2, R: 20 },
+};
+export function ecoLimits(coarse) { return coarse ? ECO_LIMITS.phone : ECO_LIMITS.desktop; }

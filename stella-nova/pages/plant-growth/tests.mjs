@@ -5,27 +5,34 @@
 //  Covers grow.js (growth over time, buds, Borchert-Honda, shedding in
 //  shade, pipe model, leaf counts, competition), season.js (the calendar
 //  and its GLSL copy), pose.js (packing, frames, the CPU twin), mesh.js,
-//  ground.js, roots.js (DLA roots and their GPU rows), saver.js and
-//  layout.js (phone layout, occlusion, gestures, dock clock). The DOM and
-//  CSS checks at phone viewports are in dom-check.mjs (needs jsdom).
-//  Set PG_QUICK=1 to skip the full lives of all species.
+//  ground.js (micro-relief, pads), eco.js (the ground ecosystem: Ripley's
+//  L for drifts, tussocks and outcrops, the hard core of large stones, the
+//  power law of stone sizes, the shade response, grass and flower seasons,
+//  leaf litter, gusts, seedling survival, real-world scale, phone caps),
+//  roots.js (DLA roots and their GPU rows), saver.js and layout.js (phone
+//  layout, occlusion, gestures, dock clock). The DOM and CSS checks at
+//  phone viewports are in dom-check.mjs (needs jsdom); glsl-check.mjs
+//  compiles the shaders (needs glslangValidator).
+//  Set PG_QUICK=1 to skip the full lives of all species, PG_VERBOSE=1 to
+//  print each check that passes.
 // ============================================================================
 import { SPECIES, SPECIES_IDS, TREE_IDS, createSim, growLife, standLayout, internode, LEAF_STRIDE, OPEN, KIND } from './grow.js';
 import { CAL, leafState, seasonOf, snowCover, girthPhase, deathDrop, deathFade, SEASON_GLSL } from './season.js';
 import { COLOUR_MODES, COLOUR_IDS, createHistory, addToHistory, packYear, nodeFrames, nodeShown, leafPose, quatRotate, frameQuat, CELLS, cellIndex, speciesTables, TEX_W } from './pose.js';
 import { plantMesh } from './mesh.js';
-import { groundY, FLAT_R, grassField, inCutaway, GROUND_GLSL } from './ground.js';
+import { groundY, FLAT_R, inCutaway, GROUND_GLSL, setPads, relief, RELIEF_AMP, PAD_RISE } from './ground.js';
+import * as E from './eco.js';
 import { createRoots, packRoots } from './roots.js';
 import { makeShots, shotPlan, bandFrame, fitDistance, projectedRadius, codeExtract, SHOT_KINDS } from './saver.js';
 import { ATLAS_CELLS } from './atlas.js';
 import { LOOK, BARKS } from './look.js';
 import { rng } from '../../lib/dla-engine.js';
-import { scatterProps, decodeMesh } from './props.js';
-import { PHONE_QUERY, layoutFor, occlusion, clearFractions, createGestures, dockClock, nextId, pixelRatioStep } from './layout.js';
+import { PHONE_QUERY, layoutFor, occlusion, clearFractions, createGestures, dockClock, nextId, pixelRatioStep, ecoLimits, ECO_LIMITS } from './layout.js';
 import fs from 'node:fs';
 
 let pass = 0, fail = 0;
-const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
+const VERBOSE = !!process.env.PG_VERBOSE;
+const ok = (c, msg, why) => { if (c) { pass++; if (VERBOSE) console.log('ok  ', msg); } else { fail++; console.log('FAIL', msg, why || ''); } };
 const finite = (a, n = a.length) => { for (let i = 0; i < n; i++) if (!Number.isFinite(a[i])) return false; return true; };
 const QUICK = !!process.env.PG_QUICK;
 
@@ -247,7 +254,7 @@ for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECI
   ok(tw > 0.01, `wind: twigs move (${tw.toFixed(3)} m)`);
   // leaves: in summer on the tree, in late autumn on the ground
   const summer = [], late = [];
-  for (let k = 0; k < pk.leafN; k += 17) { const a = leafPose(pk, k, 10.55); if (a) summer.push(a); const b = leafPose(pk, k, 10.97); if (b) late.push(b); }
+  for (let k = 0; k < pk.leafN; k += 17) { const a = leafPose(pk, k, 10.55); if (a) summer.push(a); const b = leafPose(pk, k, 10.97, { groundY }); if (b) late.push(b); }
   ok(summer.length > 100 && summer.every(l => l.fall < 0), 'twin: summer leaves hang on the tree');
   ok(late.length > 50 && late.filter(l => l.kind === 0).every(l => l.fall === 1 && Math.abs(l.o[1] - groundY(l.o[0], l.o[2])) < 0.03), 'twin: in late autumn the leaves lie on the ground');
   ok(summer.every(l => Math.abs(l.nL[0] * l.dL[0] + l.nL[1] * l.dL[1] + l.nL[2] * l.dL[2]) < 1e-3), 'twin: a leaf normal is at right angles to its blade');
@@ -271,30 +278,239 @@ for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECI
   ok(m.branches.idx.length > 3000 && m.leaves.idx.length > 3000 && finite(m.branches.pos) && finite(m.leaves.pos), `mesh: ${m.branches.idx.length / 3} tube and ${m.leaves.idx.length / 3} leaf triangles`);
 }
 
-// --- ground and grass ---------------------------------------------------------
+// --- ground: micro-relief and flat pads -------------------------------------
 {
-  ok(groundY(3, 4) === 0 && groundY(0, FLAT_R) === 0, 'the garden is flat');
-  ok(groundY(60, 10) !== 0 && Number.isFinite(groundY(200, -300)), 'hills beyond');
-  const f = grassField({ n: 5000, seed: 2, avoid: [{ x: 0, z: 0, r: 0.5 }], cut: 2 });
-  let bad = 0; for (let k = 0; k < f.length; k += 4) if (Math.hypot(f[k], f[k + 1]) < 0.5 || inCutaway(f[k], f[k + 1], 2)) bad++;
-  ok(f.length / 4 > 4000 && bad === 0, 'grass keeps off the trunk and the cut-away');
+  setPads([]);
+  let mx = 0, sum = 0, n = 0;
+  for (let x = -15; x <= 15; x += 0.37) for (let z = -15; z <= 15; z += 0.41) { if (Math.hypot(x, z) > FLAT_R) continue; const y = groundY(x, z); mx = Math.max(mx, Math.abs(y)); sum += y; n++; }
+  ok(mx > 0.05 && mx <= RELIEF_AMP + 1e-9 && mx < 0.16 && Math.abs(sum / n) < 0.02, `micro-relief: gentle, +-${mx.toFixed(3)} m, mean ${(sum / n).toFixed(3)} m`);
+  setPads([{ x: 0, z: 0, r: 0.5 }, { x: 6, z: -2, r: 0.5 }]);
+  ok(groundY(0.3, 0.2) === 0 && groundY(6.2, -2.1) === 0, 'a pad keeps the ground level at a trunk base');
+  ok(Math.abs(groundY(0, 0.5 + PAD_RISE + 0.5) - relief(0, 0.5 + PAD_RISE + 0.5)) < 1e-9, 'past the pad the full relief comes back');
+  ok(groundY(60, 10) > 0.5 && Number.isFinite(groundY(200, -300)), 'hills beyond');
+  ok(GROUND_GLSL.includes(`FLAT_R = ${FLAT_R.toFixed(1)}`) && GROUND_GLSL.includes(PAD_RISE.toFixed(2)) && GROUND_GLSL.includes('uPads'), 'GLSL ground: the same radius, pad rise and pads');
+  setPads([]);
 }
 
-// --- props: scanned rocks, stump, ferns, flowers, grass ----------------------
+// --- the ground ecosystem (eco.js) --------------------------------------------
+const OAK_PLANT = [{ x: 0, z: 0, species: 'oak', form: 'tree', rMature: SPECIES.oak.size.r * 0.9, disperse: 'gravity' }];
+const eco7 = E.buildEco({ seed: 7, plants: OAK_PLANT });
 {
-  const table = JSON.parse(fs.readFileSync(new URL('./assets/props.json', import.meta.url)));
-  const b = fs.readFileSync(new URL('./assets/props.bin', import.meta.url)), buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.length);
-  ok(table.bytes === buf.byteLength && table.meshes.length === 33, `props: ${table.meshes.length} meshes in ${buf.byteLength} bytes`);
-  let fin = true; for (const m of table.meshes) { const d = decodeMesh(buf, m); if (!finite(d.pos) || !finite(d.uv) || d.idx.some(i => i >= m.n)) fin = false; }
-  ok(fin, 'props: decoded meshes are finite and their indices in range');
-  const plants = [{ x: 0, z: 0, r: 6, trunk: 0.9 }];
-  const a = scatterProps({ seed: 4, meshes: table.meshes, plants, cut: 3 }), c = scatterProps({ seed: 4, meshes: table.meshes, plants, cut: 3 });
-  ok(JSON.stringify(a) === JSON.stringify(c), 'props: the same seed places the same props');
-  const sets = new Set(a.map(o => o.set));
-  ok(['rocks', 'stump', 'fern', 'celandine', 'grass'].every(k => sets.has(k)), 'props: every kind is placed');
-  ok(a.every(o => !inCutaway(o.x, o.z, 3) && Math.hypot(o.x, o.z) > 0.9), 'props: none on the trunk or in the cut-away');
-  const ph = scatterProps({ seed: 4, meshes: table.meshes, plants, coarse: true });
-  ok(ph.length < a.length * 0.7, `props: fewer on a phone (${ph.length} of ${a.length})`);
+  // the integer hash: the same bits as the GLSL (uint mod 2^32)
+  ok(E.hash3(3, -7, 11) === E.hash3(3, -7, 11) && E.hash3(3, -7, 11) !== E.hash3(4, -7, 11), 'hash3: deterministic, varies by cell');
+  let lo = 1, hi = 0; for (let i = 0; i < 4000; i++) { const v = E.vnoise(i * 0.37 - 300, i * 0.21 + 50, 5); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  ok(lo >= 0 && hi < 1 && hi - lo > 0.7, `vnoise in [0, 1): ${lo.toFixed(2)}..${hi.toFixed(2)}`);
+  ok(E.ECO_GLSL.includes('0x27d4eb2du') && E.ECO_GLSL.includes('0x85ebca6bu') && E.ECO_GLSL.includes(`grow = smoothstep(${E.GRASS_CAL.grow[0].toFixed(4)}`), 'GLSL eco: the same hash constants and grass calendar');
+  const again = E.buildEco({ seed: 7, plants: OAK_PLANT });
+  ok(again.tussocks.length === eco7.tussocks.length && again.tussocks.every((v, i) => v === eco7.tussocks[i]) && JSON.stringify(again.forbs) === JSON.stringify(eco7.forbs) && JSON.stringify(again.stones) === JSON.stringify(eco7.stones), 'buildEco: the same seed places the same community');
+  const other = E.buildEco({ seed: 8, plants: OAK_PLANT });
+  ok(other.tussocks[0] !== eco7.tussocks[0], 'buildEco: another seed, another community');
+}
+{
+  // clustering: forbs come in drifts by species, tussocks in swards
+  const LR = (pts, r, R) => E.ripleyL(pts, r, R) - r;
+  const msg = [];
+  let drifts = 0, checked = 0;
+  for (const id of ['daisy', 'buttercup', 'dandelion', 'periwinkle']) {
+    const pts = eco7.forbs.filter(f => f.id === id).map(f => [f.x, f.z]);
+    if (pts.length < 15) continue;
+    checked++; const l = LR(pts, 1.0, E.ECO_R); msg.push(`${id} ${l.toFixed(2)}`);
+    if (l > 0.6) drifts++;
+  }
+  ok(checked >= 3 && drifts === checked, `forbs in drifts: L(1 m) - 1 m > 0.6 for each species (${msg.join(', ')})`);
+  const T = eco7.tussocks, near = [];
+  for (let q = 0; q < T.length; q += 8) if (T[q + 2] === 0 && Math.hypot(T[q], T[q + 1]) < 7) near.push([T[q], T[q + 1]]);
+  const lT = LR(near, 0.5, 7);
+  ok(near.length > 300 && lT > 0.12, `tall grass in tussock clusters: L(0.5 m) - 0.5 m = ${lT.toFixed(2)} (${near.length} tussocks)`);
+  // a Poisson pattern of the same count and window gives L(r) - r near 0
+  const r = rng(5), csr = [];
+  while (csr.length < near.length) { const x = (r() * 2 - 1) * 7, z = (r() * 2 - 1) * 7; if (x * x + z * z < 49) csr.push([x, z]); }
+  const lC = LR(csr, 0.5, 7);
+  ok(Math.abs(lC) < 0.05, `control: a Poisson pattern gives L(0.5) - 0.5 = ${lC.toFixed(3)}`);
+}
+{
+  // stones: a power law of sizes, a hard core between large stones, outcrops
+  const r = rng(9), xs = [];
+  for (let i = 0; i < 40000; i++) xs.push(E.stoneSize(r()));
+  const cnt = s => xs.filter(v => v > s).length;
+  const s1 = 0.03, s2 = 0.3, slope = Math.log(cnt(s2) / cnt(s1)) / Math.log(s2 / s1);
+  ok(Math.abs(slope + E.STONE_B) < 0.12, `stone sizes: N(> s) ~ s^${slope.toFixed(2)} (power law, b = ${E.STONE_B})`);
+  ok(Math.min(...xs) >= E.STONE_MIN && Math.max(...xs) <= E.STONE_MAX, `stone sizes within ${E.STONE_MIN}..${E.STONE_MAX} m`);
+  let closePairs = 0, bigs = 0, seeds = 0, order = 0, withBoulder = 0;
+  const outPts = [];
+  for (let sd = 1; sd <= 24; sd++) {
+    const e = sd === 7 ? eco7 : E.buildEco({ seed: sd, plants: OAK_PLANT, limits: { tussocks: 10, forbs: 10, stones: 1400, litter: 10, woodland: 10 } });
+    const big = e.stones.filter(s => s.s > 0.35);
+    bigs += big.length; seeds++;
+    for (let i = 0; i < big.length; i++) for (let j = i + 1; j < big.length; j++) if (Math.hypot(big[i].x - big[j].x, big[i].z - big[j].z) < 0.55 * (big[i].s + big[j].s) + 0.35) closePairs++;
+    const c = [0, 0, 0]; for (const s of e.stones) c[s.cls]++;
+    if (c[0] > c[1] && c[1] > c[2]) order++;
+    if (c[2] >= 1) withBoulder++;
+    if (sd === 3) for (const s of e.stones) if (s.s > 0.1) outPts.push([s.x, s.z]);
+  }
+  ok(bigs > 50 && closePairs === 0, `large stones inhibit: no pair inside the hard core (${bigs} stones over ${seeds} seeds)`);
+  ok(order === seeds && withBoulder >= seeds * 0.8, `many pebbles, fewer cobbles, a few boulders (${order}/${seeds}; a boulder in ${withBoulder})`);
+  const lO = E.ripleyL(outPts, 3, E.ECO_R) - 3;
+  ok(lO > 0.8, `cobbles and boulders group in outcrops: L(3 m) - 3 m = ${lO.toFixed(2)}`);
+  const peb = eco7.stones.filter(s => s.cls === 0);
+  ok(peb.every(s => s.s >= 0.02 && s.s <= 0.1), 'pebbles are 2 to 10 cm');
+}
+{
+  // the shade response: fewer tussocks show under a mature crown than in sun
+  const crowns = [{ x: 0, z: 0, r: SPECIES.oak.size.r * 0.9, w: 1 }], F = eco7.fields, T = eco7.tussocks;
+  // density per m2, each tussock weighted by its LOD share (widthK^2 = 1 / LOD weight)
+  let inN = 0, inW = 0, outW = 0, shadeKind = 0;
+  const rc = crowns[0].r, r0 = 0.5 * rc, r1 = 1.4 * rc, r2 = 19;
+  for (let q = 0; q < T.length; q += 8) {
+    const x = T[q], z = T[q + 1], d = Math.hypot(x, z), w = T[q + 7] * T[q + 7];
+    const shown = E.grassKeep(T[q + 2] | 0, E.lightAt(x, z, crowns, F)) > T[q + 6];
+    if (!shown) continue;
+    if (d < r0) { inN++; inW += w; if (T[q + 2] === 2) shadeKind++; }
+    else if (d > r1 && d < r2 && F.woodShade(x, z) < 0.02) outW += w;
+  }
+  let openA = 0;   // the open ring area without the wood shade (Monte Carlo)
+  { const rr = rng(2); let hit = 0; const N = 20000; for (let i = 0; i < N; i++) { const a = rr() * 6.2832, d = Math.sqrt(r1 * r1 + rr() * (r2 * r2 - r1 * r1)); if (F.woodShade(Math.cos(a) * d, Math.sin(a) * d) < 0.02) hit++; } openA = Math.PI * (r2 * r2 - r1 * r1) * hit / N; }
+  const dIn = inW / (Math.PI * r0 * r0), dOut = outW / openA;
+  ok(openA > 200 && dIn < 0.45 * dOut, `grass under the crown is sparse: ${dIn.toFixed(1)} against ${dOut.toFixed(1)} tussocks per m2 in the open`);
+  ok(shadeKind > inN * 0.4, `under the crown the grass that grows is mostly shade grass (${shadeKind} of ${inN})`);
+  const Lsun = E.lightAt(15, 15, [], F), Lshade = E.lightAt(0.5, 0.5, crowns, F);
+  ok(Lsun > 0.95 && Lshade < 0.3, `light: ${Lsun.toFixed(2)} in the open, ${Lshade.toFixed(2)} under the crown`);
+  // forb niches: ferns and periwinkle in shade, daisies in sun
+  const fern = E.FORBS.find(f => f.id === 'fern'), daisy = E.FORBS.find(f => f.id === 'daisy');
+  ok(E.niche(fern, 0.2) > 0.8 && E.niche(fern, 0.95) < 0.05 && E.niche(daisy, 0.95) > 0.8 && E.niche(daisy, 0.2) < 0.05, 'niches: ferns grow in shade, daisies in sun');
+  const fernD = eco7.forbs.filter(f => f.id === 'fern').map(f => E.lightAt(f.x, f.z, crowns, F));
+  const daisyD = eco7.forbs.filter(f => f.id === 'daisy').map(f => E.lightAt(f.x, f.z, crowns, F));
+  const mean = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+  ok(fernD.length > 5 && daisyD.length > 5 && mean(fernD) < 0.5 && mean(daisyD) > 0.8, `placement: ferns at mean light ${mean(fernD).toFixed(2)}, daisies at ${mean(daisyD).toFixed(2)}`);
+  // ecotone: from the open meadow to the woodland edge, light falls and the wood begins
+  const ed = eco7.params.edge, at = d => [ed[0] * d, ed[1] * d];
+  const l1 = E.lightAt(...at(12), [], F), l2 = E.lightAt(...at(ed[2] - 2), [], F), l3 = E.lightAt(...at(ed[2] + 6), [], F);
+  ok(l1 > 0.95 && l2 < l1 && l3 < 0.3 && F.wood(...at(ed[2] + 6)) > 0.9, `ecotone to the wood: light ${l1.toFixed(2)} > ${l2.toFixed(2)} > ${l3.toFixed(2)}`);
+  ok(eco7.shrubs.length > 10 && eco7.woodland.length > 100, `a shrub mantle (${eco7.shrubs.length}) and woodland (${eco7.woodland.length} trees)`);
+}
+{
+  // seasons of the grass
+  const g = p => E.grassState(p, 0, 0);
+  const w = g(0.05), su = g(0.5), lsu = g(0.62), au = g(0.88), w2 = g(0.999);
+  ok(w[0] < 0.45 && w[1] < 0.35 && w[4] > 0.6, `winter: low brown lodged stubble (h ${w[0].toFixed(2)}, green ${w[1].toFixed(2)}, lodge ${w[4].toFixed(2)})`);
+  ok(su[0] > 0.95 && su[1] > 0.75 && su[2] > 0.9 && su[4] < 0.1, `midsummer: full height, green, seed heads up (${su.map(v => v.toFixed(2)).join(' ')})`);
+  ok(lsu[3] > 0.9 && lsu[1] < su[1], 'late summer: the heads ripen and the sward cures');
+  ok(au[1] < 0.5 && au[4] > 0.4 && au[0] < su[0], `autumn: browning and lodging (green ${au[1].toFixed(2)}, lodge ${au[4].toFixed(2)})`);
+  ok(Math.abs(w2[0] - g(0)[0]) < 0.01 && Math.abs(w2[1] - g(0)[1]) < 0.01 && Math.abs(w2[4] - g(0)[4]) < 0.01, 'the grass year joins at 31 December');
+  const sn = E.grassState(0.05, 0, 1);
+  ok(sn[0] < w[0] * 0.4 && sn[4] > 0.9, 'snow flattens the grass');
+  ok(E.grassState(0.5, 2, 0)[1] > su[1] - 1e-9 && E.grassState(0.5, 3, 0)[2] === 0, 'shade grass stays greener; trampled turf has no seed heads');
+  // flowers bloom in their real season, then the petals fall
+  const month = p => Math.floor(p * 12) + 1;
+  const cel = E.FORBS.find(f => f.id === 'celandine'), dai = E.FORBS.find(f => f.id === 'daisy'), but = E.FORBS.find(f => f.id === 'buttercup');
+  ok(E.bloomAt(cel, 0.25) > 0.99 && E.bloomAt(cel, 0.5) === 0 && month(cel.bloom[0]) >= 3 && month(cel.bloom[1]) <= 4, 'celandine flowers in March and April');
+  ok(E.bloomAt(dai, 0.5) > 0.99 && E.bloomAt(dai, 0.3) === 0 && month(dai.bloom[0]) >= 6, 'oxeye daisies flower in June and July');
+  ok(E.bloomAt(but, 0.42) > 0.99 && E.bloomAt(but, 0.7) === 0, 'buttercups in May and June');
+  ok(E.forbLife(cel, 0.5) < 0.01 && E.forbLife(cel, 0.25) > 0.99, 'celandine dies back by early summer (a spring ephemeral)');
+  ok(E.FORBS.filter(f => f.kind === 'flower').every(f => f.bloom && f.petal && f.bloom[1] > f.bloom[0]), 'every flower has a bloom window and a petal colour for the falling petals');
+  // leaf litter: falls in autumn, rots over the winter
+  const l7 = E.litterSeason(0.55), l11 = E.litterSeason(0.92), l1 = E.litterSeason(0.03), l3 = E.litterSeason(0.22), l6 = E.litterSeason(0.48);
+  ok(l7.k < 0.01 && l11.k > 0.99 && l1.k > 0.9 && l3.k < l1.k && l6.k < 0.01, `litter: none in July, full in late November, less by spring (${l3.k.toFixed(2)} in March)`);
+  ok(l11.decay < l1.decay && l1.decay < l3.decay, 'litter darkens as it rots over the winter');
+}
+{
+  // gusts travel downwind at about 5 m/s
+  const dir = [0.93, 0.37], c = 2.2 / 0.42;
+  let err = 0;
+  for (let i = 0; i < 50; i++) { const x = i * 0.7 - 10, z = i * 0.3, t = i * 0.1; err += Math.abs(E.gust(x, z, t, dir) - E.gust(x + dir[0] * c * 0.2, z + dir[1] * c * 0.2, t + 0.2, dir)); }
+  ok(err / 50 < 0.12, `a gust front moves downwind at ${c.toFixed(1)} m/s (mean error ${(err / 50).toFixed(3)})`);
+}
+{
+  // leaf litter piles up in hollows and against stones
+  const L = eco7.litter, rnd = rng(3);
+  let hl = 0, hr = 0, n = 0;
+  for (let q = 0; q < L.length; q += 8) { hl += -relief(L[q], L[q + 1]); n++; }
+  for (let i = 0; i < n; i++) { const a = rnd() * 6.283, d = 1.5 * OAK_PLANT[0].rMature * Math.sqrt(rnd()); hr += -relief(Math.cos(a) * d, Math.sin(a) * d); }
+  ok(n > 1000 && hl / n > hr / n + 0.01, `litter lies deeper in the hollows (mean depth ${(hl / n * 100).toFixed(1)} cm against ${(hr / n * 100).toFixed(1)} cm)`);
+  // against stones: the litter density in a ring round each stone in the
+  // litter area is higher than the mean density of that area
+  let ringN = 0, ringA = 0, allN = 0;
+  const RL = 1.5 * OAK_PLANT[0].rMature;
+  for (let sd = 1; sd <= 10; sd++) {
+    const e = sd === 7 ? eco7 : E.buildEco({ seed: sd, plants: OAK_PLANT });
+    const st = e.stones.filter(s => s.s >= 0.25 && Math.hypot(s.x, s.z) < RL * 0.8), Lp = e.litter;
+    for (const s of st) {
+      const r0 = s.s * 0.45, r1 = s.s * 0.55 + 0.4;
+      ringA += Math.PI * (r1 * r1 - r0 * r0);
+      for (let q = 0; q < Lp.length; q += 8) { const d = Math.hypot(Lp[q] - s.x, Lp[q + 1] - s.z); if (d >= r0 && d < r1) ringN++; }
+    }
+    allN += Lp.length / 8;
+  }
+  const dRing = ringN / Math.max(1e-6, ringA), dAll = allN / (10 * Math.PI * RL * RL);
+  ok(ringA > 1 && dRing > 1.5 * dAll, `litter drifts against stones: ${dRing.toFixed(1)} leaves per m2 at stones, ${dAll.toFixed(1)} on average`);
+  // the ground mix: litter under the crown in November, bare soil on the path, snow in winter
+  const crowns = [{ x: 0, z: 0, r: 7, w: 1 }], env = { F: eco7.fields, crowns, litter: 1, decay: 0.1, snow: 0 };
+  const under = E.groundMix(1.2, -1.5, env), open = E.groundMix(16, 14, env);
+  ok(under.litter > 0.6 && open.litter < 0.1 && under.turf < open.turf, 'ground: litter under the crown in autumn, turf in the open');
+  let best = [0, 0], bp = 0;
+  for (let x = -20; x <= 20; x += 0.25) for (let z = -20; z <= 20; z += 0.25) { const v = eco7.fields.path(x, z); if (v > bp && Math.hypot(x, z) > 9) { bp = v; best = [x, z]; } }
+  ok(bp > 0.95 && E.groundMix(best[0], best[1], env).soil > 0.7, `ground: the trampled path is bare soil (soil ${E.groundMix(best[0], best[1], env).soil.toFixed(2)})`);
+}
+{
+  // seedlings: seeds fall under and round the crown; in shade most die
+  const crowns = [];
+  for (let y = 0; y < 60; y++) crowns.push([Math.min(7, 0.3 + y * 0.25)]);
+  const list = E.seedlings({ seed: 4, plants: OAK_PLANT, crowns, years: 60, fields: eco7.fields });
+  const live = OAK_PLANT.map(() => ({ x: 0, z: 0, r: 7, w: 1 }));
+  let sh = 0, shOk = 0, sun = 0, sunOk = 0;
+  for (const s of list) {
+    if (s.born > 55) continue;
+    const L = E.lightAt(s.x, s.z, live, eco7.fields), survived = s.died > s.born + 3;
+    if (L < 0.3) { sh++; if (survived) shOk++; } else if (L > 0.6) { sun++; if (survived) sunOk++; }
+  }
+  ok(sh > 20 && sun > 5 && shOk / sh < 0.5 * (sunOk / sun), `seedlings: ${(100 * shOk / sh).toFixed(0)} % live 3 years in shade (${sh}), ${(100 * sunOk / sun).toFixed(0)} % in light (${sun})`);
+  ok(E.seedlingSurvival(0.15, 0) < E.seedlingSurvival(0.55, 0) && E.seedlingSurvival(1, 0.9) < E.seedlingSurvival(1, 0), 'seedling survival rises with light and falls on the path');
+  const part = E.seedlings({ seed: 4, plants: OAK_PLANT, crowns, years: 40, fields: eco7.fields });
+  const same = part.every(p => { const q = list.find(o => o.id === p.id); return q && q.born === p.born && (q.died === p.died || p.died === Infinity); });
+  ok(same, 'seedlings: more years do not change the past');
+  ok(list.every(s => E.seedlingHeight(s, s.born + 100) <= E.SEEDLING.hMax), `saplings stay under ${E.SEEDLING.hMax} m`);
+}
+{
+  // real-world scale
+  const man = JSON.parse(fs.readFileSync(new URL('../../assets/nature/manifest.json', import.meta.url)));
+  const H = id => (man.assets.find(a => a.id === id) || {}).height;
+  const bad = [];
+  for (const f of E.FORBS) for (const id of f.assets) {
+    if (!H(id)) { bad.push(id + ' missing'); continue; }
+    const lo = H(id) * f.scale[0], hi = H(id) * f.scale[1];
+    if (f.kind === 'flower' && (lo < 0.05 || hi > 0.5)) bad.push(`${id} ${lo.toFixed(2)}..${hi.toFixed(2)} m`);
+    if (f.kind === 'fern' && (lo < 0.2 || hi > 1.0)) bad.push(`${id} ${lo.toFixed(2)}..${hi.toFixed(2)} m`);
+  }
+  ok(!bad.length, 'flowers are 5 to 50 cm tall and ferns 20 cm to 1 m', bad.join(', '));
+  for (const c of E.STONE_CLASSES) for (const id of c.assets) if (!H(id)) bad.push(id);
+  for (const w of eco7.woodland) if (!H(w.asset) || H(w.asset) * w.scale < 7 || H(w.asset) * w.scale > 26) bad.push(w.asset);
+  ok(!bad.length, 'stone and woodland assets exist; woodland trees are 7 to 26 m', [...new Set(bad)].join(', '));
+  const env = { p: 0.5, snow: 0, time: 0, wind: 0.35, crowns: [], F: eco7.fields, R: E.ECO_R };
+  const hs = [], culms = [];
+  const T = eco7.tussocks;
+  for (let q = 0; q < T.length; q += 8 * 7) {
+    if (T[q + 2] === 3 || Math.hypot(T[q], T[q + 1]) > 0.8 * E.ECO_R) continue;
+    for (let b = 0; b < E.BLADES; b++) { const B = E.bladeAt(T, q, b, env); if (B.vis < 0.99) continue; (B.culm ? culms : hs).push(B.h); }
+  }
+  hs.sort((a, b) => a - b); culms.sort((a, b) => a - b);
+  const pc = (a, f) => a[Math.floor(a.length * f)];
+  ok(pc(hs, 0.05) >= 0.12 && pc(hs, 0.5) >= 0.2 && pc(hs, 0.5) <= 0.45 && pc(hs, 0.95) <= 0.7, `grass blades at midsummer: ${(pc(hs, 0.05) * 100).toFixed(0)} / ${(pc(hs, 0.5) * 100).toFixed(0)} / ${(pc(hs, 0.95) * 100).toFixed(0)} cm (5th / 50th / 95th percentile)`);
+  ok(culms.length > 100 && pc(culms, 0.95) <= 1.0 && pc(culms, 0.5) > pc(hs, 0.5), `flowering culms stand over the leaves (median ${(pc(culms, 0.5) * 100).toFixed(0)} cm)`);
+  ok(SPECIES.oak.size.r * 2 >= 15 && SPECIES.oak.size.r * 2 <= 25, `a mature oak crown is ${SPECIES.oak.size.r * 2} m across`);
+}
+{
+  // phones: the caps of layout.js
+  const ph = ecoLimits(true), dk = ecoLimits(false);
+  ok(ph === ECO_LIMITS.phone && dk === ECO_LIMITS.desktop && ph.tussocks < dk.tussocks / 2 && ph.forbs < dk.forbs && ph.stones < dk.stones && ph.litter < dk.litter && ph.lod >= dk.lod, 'phones get smaller ecosystem caps');
+  const e = E.buildEco({ seed: 7, plants: OAK_PLANT, limits: ph, R: ph.R });
+  ok(e.tussocks.length / 8 <= ph.tussocks && e.forbs.length <= ph.forbs + 60 && e.stones.length <= ph.stones && e.litter.length / 8 <= ph.litter && e.woodland.length <= ph.woodland, `phone community: ${e.tussocks.length / 8} tussocks, ${e.forbs.length} forbs, ${e.stones.length} stones`);
+  // nothing in the soil cut-away or on a trunk
+  const c = E.buildEco({ seed: 5, plants: OAK_PLANT, cut: 3 });
+  let badN = 0;
+  for (let q = 0; q < c.tussocks.length; q += 8) if (inCutaway(c.tussocks[q], c.tussocks[q + 1], 3) || Math.hypot(c.tussocks[q], c.tussocks[q + 1]) < 0.35) badN++;
+  for (const f of c.forbs) if (inCutaway(f.x, f.z, 3) || Math.hypot(f.x, f.z) < 0.35) badN++;
+  for (const s of c.stones) if (inCutaway(s.x, s.z, 3)) badN++;
+  ok(badN === 0, 'no grass, forb or stone in the cut-away or on the trunk');
 }
 
 // --- roots by DLA ---------------------------------------------------------------

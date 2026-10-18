@@ -368,12 +368,13 @@ export function leafPose(pk, k, t, opts = {}) {
   }
   // falling and lying
   if (ST.fall >= 0) {
-    const gy = opts.groundY ? opts.groundY(O[0], O[2]) : 0;
+    let gy = opts.groundY ? opts.groundY(O[0], O[2]) : 0;
     const h = Math.max(0, O[1] - gy);
     const ang2 = rnd * 40.0;
     const drift = h * (0.35 + 0.5 * rnd);
     const wd = opts.wind && opts.wind.dir ? opts.wind.dir : [0.93, 0.37];
     const gx = O[0] + wd[0] * drift + Math.cos(ang2) * 0.4 * h * 0.3, gz = O[2] + wd[1] * drift + Math.sin(ang2) * 0.4 * h * 0.3;
+    if (opts.groundY) gy = opts.groundY(gx, gz);   // the leaf lies on the ground where it lands
     const e = Math.pow(ST.fall, 1.15);
     const wob = (1 - ST.fall) * Math.min(1, h * 0.3) * 0.35;
     O = [O[0] + (gx - O[0]) * e + Math.sin(ST.fall * 9 + rnd * 6) * wob, O[1] + (gy + 0.006 + 0.01 * rnd - O[1]) * e, O[2] + (gz - O[2]) * e + Math.cos(ST.fall * 7 + rnd * 5) * wob];
