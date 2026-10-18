@@ -73,6 +73,7 @@ struct SkyU {
   anim3: vec4f,     // rain fall phases a b, snow fall phases a b (render/weather.js precipPhases)
   anim4: vec4f,     // x splash time s, y flutter time s, z rain count max, w snow count max
   cmap: vec4f,      // the cloud map of clouds.wgsl: xy origin (world xz) m, z side m, w texels
+  cel: vec4f,       // x 1 = render/celestial.js draws the stars, the Milky Way and the moons (fsSky leaves them out)
 }
 
 @group(1) @binding(0) var<uniform> S: SkyU;
@@ -647,7 +648,7 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
   if (d.y > -0.02) {
     let Tv = sk_transmittance(r, max(d.y, 0.0));
     let night = S.sun.w;
-    if (night > 0.001) {
+    if ((night > 0.001) && (S.cel.x < 0.5)) {
       let cd = sk_celestial(d);
       let q = G.frame.z;
       let oct = select(4, 3, q < 0.6);
@@ -670,7 +671,7 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
     // the moon is behind the air: add it (it hides only the stars, which
     // are faint next to it)
     let mo = sk_moon(d, S.moon.xyz);
-    if (mo.w > 0.0) {
+    if ((mo.w > 0.0) && (S.cel.x < 0.5)) {
       // dimmer than nature (MOON_K), so the maria read at a night exposure
       L += mo.rgb * Tv * MOON_K * sk_ss(-0.01, 0.02, S.moon.y);
     }

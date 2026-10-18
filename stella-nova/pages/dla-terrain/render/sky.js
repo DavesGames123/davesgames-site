@@ -84,6 +84,8 @@
 import { ATMO, SUN_ILLUM, SUN_RADIUS, GLOBALS, createSky as createSkyState } from '../sky-state.js';
 import { CH as WX_CH, N as WX_N } from '../weather-model.js';
 import { createWeather, precipPhases } from './weather.js';
+// CELESTIAL: the real stars, the Milky Way, the moons and the gas giant
+import { createCelestialLayer } from './celestial.js';
 
 // CHILL (the user: "it feels so computer generated with no CHILL to the
 // dynamics"): the visible motion of the sky is capped in real time.
@@ -91,7 +93,7 @@ export const CLOUD_DRIFT_RATE = 6;     // cloud shapes: at most 6 x the upper wi
 export const CLOUD_RISE = [1.2, 3.0];  // m/s: shape and detail noise rise (evolution)
 export const HAZE_DRIFT_RATE = 6;      // haze banks: at most 6 x the low wind
 export const CLOUD_MAP_M = 120000;     // side of the cloud map square (clouds.wgsl csCloudMap)
-export const SKYU_FLOATS = 27 * 4;   // struct SkyU: 27 vec4 (432 bytes)
+export const SKYU_FLOATS = 28 * 4;   // struct SkyU: 28 vec4 (448 bytes)
 const U = (typeof GPUBufferUsage !== 'undefined') ? GPUBufferUsage : { UNIFORM: 64, COPY_DST: 8, STORAGE: 128 };
 const T = (typeof GPUTextureUsage !== 'undefined') ? GPUTextureUsage : { COPY_SRC: 1, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
 const SS = (typeof GPUShaderStage !== 'undefined') ? GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
@@ -102,7 +104,7 @@ export const SKYU = Object.freeze({
   rayleigh: 0, mieS: 4, mieA: 8, ozone: 12, radii: 16, sun: 20, moon: 24,
   cloud0: 28, cloud1: 32, cloud2: 36, bolt: 40, vol0: 44, vol1: 48, vol2: 52,
   shadow: 56, misc: 60, counts: 64, precip: 68, prevCam: 72,
-  wx0: 76, wx1: 80, anim0: 84, anim1: 88, anim2: 92, anim3: 96, anim4: 100, cmap: 104,
+  wx0: 76, wx1: 80, anim0: 84, anim1: 88, anim2: 92, anim3: 96, anim4: 100, cmap: 104, cel: 108,
 });
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -375,6 +377,11 @@ export async function createSky(gpu) {
   const weather = await createWeather(gpu, {
     lib, weatherText, layouts: L, readBindGroup: BG.read, shaftBindGroup: BG.shaft, passDesc: (l) => passDesc(l), ubo, u, SKYU, sClamp,
   });
+  // CELESTIAL (render/celestial.js): drawn after fsSky; while it is not
+  // ready (or failed) fsSky keeps its own stars and moon (S.cel.x = 0)
+  let cel = null;
+  try { cel = await createCelestialLayer(gpu, { layout: L.shaft, bindGroup: BG.shaft, loadText: (f) => wgslFor(gpu, lib, f) }); }
+  catch (e) { cel = null; if (typeof console !== 'undefined') console.warn('celestial layer:', e && e.message); }
 
   // ── size dependent targets ──────────────────────────────────────────────
   let tg = null;
@@ -644,6 +651,8 @@ export async function createSky(gpu) {
     // the cloud map square round the camera, snapped to its texels
     const mt = CLOUD_MAP_M / CM;
     put(SKYU.cmap, Math.floor((cam[0] - CLOUD_MAP_M / 2) / mt) * mt, Math.floor((cam[2] - CLOUD_MAP_M / 2) / mt) * mt, CLOUD_MAP_M, CM);
+    if (cel) cel.update(frame);
+    put(SKYU.cel, cel && cel.ready ? 1 : 0, 0, 0, 0);
     // rainbow: rain in the air and a sun lower than 42 deg that the deck lets through
     const sunEl = Math.asin(clamp(sunY, -1, 1)) * 180 / Math.PI;
     const rainbow = (s.rainbow ?? 1) * smooth(0.02, 0.25, wx.rain) * smooth(-1, 4, sunEl) * smooth(42, 30, sunEl) * (1 - smooth(0.88, 1.0, wx.cover) * 0.8);
@@ -659,7 +668,7 @@ export async function createSky(gpu) {
   }
 
   const mod = {
-    name: 'sky', role: 'SKY',
+    name: 'sky', role: 'SKY', celestial: cel,
     cloudShadow: {
       view: V.shadow, sampler: sClamp,
       rect: () => [u[SKYU.shadow], u[SKYU.shadow + 1], u[SKYU.shadow + 2]],
@@ -752,6 +761,7 @@ export async function createSky(gpu) {
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(1, BG.read);
       pass.draw(3);
+      if (cel && cel.ready) { pass.setBindGroup(1, BG.shaft); cel.draw(pass); }
     },
 
     // SHAFTS: CORE calls this after its water pass, before the volumetric
@@ -783,6 +793,7 @@ export async function createSky(gpu) {
       skyDepth.destroy();
       ubo.destroy();
       weather.dispose();
+      if (cel) cel.dispose();
     },
   };
   return mod;

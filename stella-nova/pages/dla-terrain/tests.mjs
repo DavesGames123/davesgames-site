@@ -9,7 +9,8 @@
 //    3 naga (~/.cargo/bin/naga) on every WGSL file after the join that
 //      gpu.loadWGSL does: common.wgsl + lib/dla-terrain-detail.wgsl (or
 //      gpu/detail-stub.wgsl) + the file. SKY's clouds.wgsl and weather.wgsl
-//      compile after the SKY library (sky.wgsl up to "// @@SKY-ENTRY").
+//      and CELESTIAL's celestial.wgsl compile after the SKY library (sky.wgsl
+//      up to "// @@SKY-ENTRY").
 //      gpu/terrain.wgsl compiles alone. Plus a Tint rule: no mixed && and
 //      || without parentheses on one line.
 //    4 index.html: the head script order, the metas, [hidden] in style.css,
@@ -95,7 +96,7 @@ for (const f of wgsl) {
   const name = rel(f), body = readFileSync(f, 'utf8');
   if (name === 'shaders/common.wgsl' || name === 'gpu/detail-stub.wgsl') continue;
   if (name === 'gpu/terrain.wgsl') naga(name, body);
-  else if ((name === 'shaders/clouds.wgsl' || name === 'shaders/weather.wgsl') && skyLibText) naga(name + ' (after the SKY library)', skyLibText + '\n' + body);
+  else if ((name === 'shaders/clouds.wgsl' || name === 'shaders/weather.wgsl' || name === 'shaders/celestial.wgsl') && skyLibText) naga(name + ' (after the SKY library)', skyLibText + '\n' + body);
   else naga(name, prefix + body);
   // Tint: mixed && and || need parentheses (a crude per-line check)
   const bad = body.split('\n').map((l, i) => [l.replace(/\/\/.*$/, ''), i + 1]).filter(([l]) => /&&/.test(l) && /\|\|/.test(l) && !/\(/.test(l));
