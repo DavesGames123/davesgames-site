@@ -171,17 +171,55 @@ td .mono{color:var(--dim);word-break:break-all}
 .player-stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
 
 /* ---------------------------------------------------------------- DIALOG */
-.info{margin:auto;max-width:min(560px,calc(100vw - 32px));border:1px solid var(--line2);border-radius:14px;background:var(--card);color:var(--ink);padding:22px 22px 18px}
-.info::backdrop{background:rgba(0,0,0,0.6)}
-.info h2{padding-right:30px}
-.info p{margin:8px 0;font-size:0.92rem;color:var(--ink2)}
-.info .by{color:var(--dim)}
-.info .mono{word-break:break-all;color:var(--dim)}
-.info .close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--ink)}
+/* The pull-out. The box comes off the shelf, turns to the front and
+   floats under a spot light (.pull-stage). The back of the box (.pull-back)
+   has the text and the Play button. Phones: the box sits above the text in
+   one scrolling sheet. --c is the accent of the game. */
+.info{margin:auto;width:min(880px,calc(100vw - 20px));max-width:none;max-height:calc(100dvh - 20px);padding:0;border:0;border-radius:14px;
+  background:transparent;color:var(--ink);overflow:visible}
+.info[open]{display:block}
+.info::backdrop{background:radial-gradient(ellipse at 50% 30%,rgba(30,20,12,0.7),rgba(0,0,0,0.88));backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.pull{display:grid;grid-template-columns:1fr;max-height:calc(100dvh - 20px);overflow:auto;overscroll-behavior:contain;border-radius:14px;
+  background:linear-gradient(180deg,#17110c,#0e0b09);border:1px solid rgba(255,220,170,0.14);box-shadow:0 30px 80px rgba(0,0,0,0.7)}
+@media (min-width:760px){.pull{grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr);overflow:hidden}}
+.pull-stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:250px;padding:30px 20px 24px;
+  background:radial-gradient(ellipse 70% 60% at 50% 18%,rgba(255,214,150,0.28),transparent 70%),radial-gradient(ellipse 50% 14% at 50% 92%,rgba(0,0,0,0.6),transparent 70%)}
+@media (min-width:760px){.pull-stage{min-height:460px}}
+.pull-box{position:relative;--bw:150px;--bh:200px;--bd:36px;width:var(--bw);height:var(--bh);--ry:14deg}
+@media (min-width:760px){.pull-box{--bw:220px;--bh:293px;--bd:50px}}
+.pull-box .box3d{transform:perspective(1300px) rotateX(-4deg) rotateY(var(--ry));animation:pullTurn 0.7s cubic-bezier(.2,.8,.25,1) both}
+/* A box has no right face, so the turn stays positive: it shows the
+   front and a little of the spine on the left. */
+.pull-box .face.spine{filter:brightness(0.55)}
+.pull-glow{position:absolute;left:50%;bottom:16px;width:60%;height:18px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,0.7),transparent 70%)}
+@keyframes pullTurn{
+  0%{transform:perspective(1300px) translate3d(-40px,40px,-320px) rotateX(-10deg) rotateY(62deg);opacity:0}
+  35%{opacity:1}
+  100%{transform:perspective(1300px) rotateX(-4deg) rotateY(var(--ry))}
+}
+@media (hover:hover){.pull-stage:hover .box3d{transform:perspective(1300px) rotateX(-6deg) rotateY(calc(var(--ry) + 26deg));transition:transform 0.6s}}
+.pull-back{position:relative;padding:22px 20px 20px;border-top:4px solid var(--c,var(--acc));min-width:0}
+@media (min-width:760px){.pull-back{border-top:0;border-left:4px solid var(--c,var(--acc));padding:28px 28px 24px;overflow:auto;max-height:calc(100dvh - 20px)}}
+.pull-back .kicker{margin:0 40px 6px 0;color:var(--c,var(--acc));filter:brightness(1.35)}
+.pull-back h2{font:400 clamp(1.5rem,4vw,2.1rem)/1.1 var(--serif);padding-right:40px;margin-bottom:6px}
+.pull-back h3{margin:16px 0 4px;font:600 0.74rem/1.2 var(--sans);letter-spacing:0.08em;text-transform:uppercase;color:var(--dim)}
+.pull-back p{margin:4px 0;font-size:0.92rem;color:var(--ink2)}
+.pull-back .by{color:var(--dim);font-size:0.86rem}
+.pull-back .blurb{font-size:1rem;color:var(--ink);margin-top:12px}
+.pull-back .mono{word-break:break-all;color:var(--dim);font-size:0.72rem;margin-top:10px}
+.chips{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+.chips li{font:500 0.72rem/1 var(--sans);padding:6px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--ink2);background:rgba(255,255,255,0.03)}
+.pull-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:20px;position:sticky;bottom:-20px;padding:12px 0 4px;background:linear-gradient(transparent,#100c0a 30%)}
+@media (min-width:760px){.pull-actions{bottom:-24px}}
+.play-btn.big{font-size:1.05rem;padding:15px 30px;min-height:48px;border-radius:12px;box-shadow:0 6px 18px rgba(255,179,71,0.25),inset 0 1px 0 rgba(255,255,255,0.5)}
+.play-btn:focus-visible,.ghost:focus-visible,.info .close:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.ghost{font:500 0.9rem/1 var(--sans);min-height:48px;padding:12px 18px;border-radius:12px;border:1px solid var(--line2);background:transparent;color:var(--ink2)}
+.info .close{position:absolute;top:12px;right:12px;z-index:2;width:40px;height:40px;border-radius:10px;border:1px solid var(--line2);background:rgba(0,0,0,0.3);color:var(--ink);font-size:1rem}
 
 /* ---------------------------------------------------------------- MOTION */
 /* reduce: no lift, no turn, no pull-out animation; the states still show. */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition-duration:0.01ms!important;animation-duration:0.01ms!important;animation-iteration-count:1!important}
   .row{scroll-behavior:auto}
+  .pull-box .box3d{animation:none}
 }

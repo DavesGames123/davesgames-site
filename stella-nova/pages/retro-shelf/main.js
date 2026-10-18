@@ -9,6 +9,10 @@
 //  closePlayer(), which removes the iframe: that ends the engine, its
 //  workers and its audio.
 //
+//  A press on a box pulls it out: the box gets .out (it leaves the shelf)
+//  and #info shows the same box turned to the front, with the back of the
+//  box beside it. Closing #info puts the box back and focuses it.
+//
 //  Your own disc: the File objects go to play-emu.html with postMessage
 //  (a structured clone in the same origin). Nothing is uploaded.
 //
@@ -17,11 +21,13 @@
 //  grep -n targets
 //    "async function boot"   "function buildShelf"   "function box("
 //    "function boxFaces"     "function artOf"        "function applyLayout"
-//    "function openInfo"     "function play"         "function closePlayer"
+//    "function openInfo"     "function closeInfo"    "function onInfoClosed"
+//    "function play"         "function closePlayer"
 //    "function goFull"       "function buildByo"     "function buildCredits"
 //    "export function playerUrl"  "export function extOk"
 // ============================================================================
 import './saver.js';
+import { licenceKind, mediaOf } from './saver-plan.js';
 import { coverPalette, shelfGroups, shelfLayout, boxPose, spineTitle, paintCover, paintSpine, COVER_W, COVER_H, SPINE_W, SPINE_H } from './shelf-art.js';
 
 export function fmtMB(bytes) { return (bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0) + ' MB'; }
@@ -116,16 +122,45 @@ function applyLayout() {
 }
 
 function openInfo(g, from) {
+  if (S.from) S.from.classList.remove('out');
   S.from = from || null;
+  S.last = from || S.last;
+  const shelf = shelfGroups([g])[0];
+  const box = boxFaces(g);
+  $('infoBox').replaceChildren(box);
+  $('info').style.setProperty('--c', coverPalette(g).accent);
+  $('infoKick').textContent = shelf.label + ' · ' + ((g.saver && g.saver.genre) || '');
   $('infoTitle').textContent = g.title;
   $('infoBy').textContent = g.year + ' · ' + g.maker + ' · ' + g.sub;
+  $('infoChips').replaceChildren(...[
+    'Runs in ' + shelf.engine, fmtMB(g.bytes), g.keyboard ? 'Keyboard or gamepad' : 'Mouse or touch',
+    licenceKind(g), mediaOf(g) === 'cd' ? 'CD-ROM' : 'Floppy disks',
+  ].map(t => el('li', null, t)));
   $('infoBlurb').textContent = g.blurb;
   $('infoCtl').textContent = g.controls;
   $('infoLic').replaceChildren(g.licence + '. Full text: ', el('code', null, g.licenceFile), ' in the archive. Source: ', link(g.source, new URL(g.source).hostname), '.');
   $('infoFile').textContent = g.file.split('/').pop() + ' · sha256 ' + g.sha256;
-  $('infoPlay').onclick = () => { const d = $('info'); if (d.close) d.close(); else d.removeAttribute('open'); play(g); };
+  $('infoPlay').onclick = () => { closeInfo(); play(g); };
+  $('infoBack').onclick = closeInfo;
+  if (from) from.classList.add('out');
   const d = $('info');
   if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+  $('infoPlay').focus();
+}
+
+/** Close the pull-out; the 'close' event puts the box back. */
+function closeInfo() {
+  const d = $('info');
+  if (d.close) d.close();
+  else { d.removeAttribute('open'); onInfoClosed(); }
+}
+
+function onInfoClosed() {
+  const b = S.from;
+  S.from = null;
+  if (!b) return;
+  b.classList.remove('out');
+  if (!S.frame) b.focus();
 }
 
 // ----------------------------------------------------------------- player
@@ -249,7 +284,9 @@ async function boot() {
   buildShelf();
   buildByo();
   buildCredits();
-  $('exitBtn').addEventListener('click', closePlayer);
+  $('info').addEventListener('close', onInfoClosed);
+  // Exit: end the game, then focus the box that it came from.
+  $('exitBtn').addEventListener('click', () => { closePlayer(); if (S.last && S.last.isConnected) S.last.focus(); });
   $('fsBtn').addEventListener('click', goFull);
   // A player page can ask to close (its own Exit key on a phone).
   window.addEventListener('message', e => {

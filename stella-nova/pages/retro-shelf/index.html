@@ -49,7 +49,8 @@
      #byo       bring your own disc: #sys, #romFile, #biosFile, #own, #byoPlay
      #credits   the credit tables (#gameRows #engineRows #coreRows)
      #player    the full-window player: #playerFrame, #fsBtn, #exitBtn
-     #info      the licence dialog of one game
+     #info      the pull-out: the box turns to the front (#infoBox) next
+                to the back of the box (text, licence, #infoPlay)
 
    GREP MAP
      grep -n 'id="'        every element id
@@ -131,14 +132,26 @@
 </div>
 
 <dialog class="info" id="info" aria-labelledby="infoTitle">
-  <form method="dialog"><button class="close" aria-label="Close">✕</button></form>
-  <h2 id="infoTitle"></h2>
-  <p class="by" id="infoBy"></p>
-  <p id="infoBlurb"></p>
-  <p><b>Controls</b> <span id="infoCtl"></span></p>
-  <p><b>Licence</b> <span id="infoLic"></span></p>
-  <p class="mono" id="infoFile"></p>
-  <p><button type="button" class="play-btn" id="infoPlay">Play</button></p>
+  <div class="pull">
+    <div class="pull-stage" aria-hidden="true"><div class="pull-box" id="infoBox"></div><div class="pull-glow"></div></div>
+    <div class="pull-back">
+      <form method="dialog"><button class="close" aria-label="Put the box back on the shelf">✕</button></form>
+      <p class="kicker" id="infoKick"></p>
+      <h2 id="infoTitle"></h2>
+      <p class="by" id="infoBy"></p>
+      <ul class="chips" id="infoChips" aria-label="About this game"></ul>
+      <p class="blurb" id="infoBlurb"></p>
+      <h3>Controls</h3>
+      <p id="infoCtl"></p>
+      <h3>Licence</h3>
+      <p id="infoLic"></p>
+      <p class="mono" id="infoFile"></p>
+      <div class="pull-actions">
+        <button type="button" class="play-btn big" id="infoPlay">▶ Play</button>
+        <button type="button" class="ghost" id="infoBack">Put it back</button>
+      </div>
+    </div>
+  </div>
 </dialog>
 
 <script type="module" src="main.js"></script>

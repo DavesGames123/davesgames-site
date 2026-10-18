@@ -37,7 +37,8 @@
 //              375 px phone, six in one row from 1024 px), disc or cart
 //              per system; reduced motion and focus rules in style.css
 //    boot.     main.js and saver.js in a linkedom DOM: the bookcase, credits
-//              and system list fill; a card opens the player iframe; Exit
+//              and system list fill; a box opens the pull-out and puts
+//              itself back; Play in the pull-out opens the player; Exit
 //              removes it; a wrong file type keeps Play off; the saver
 //              enters with a canvas in the document, runs its plan (the
 //              2D path: node has no WebGL) and exits. Skipped
@@ -415,7 +416,14 @@ async function bootTest() {
     ok(document.querySelectorAll('#sys input[type=radio]').length === data.systems.length, 'boot: the system list fills');
     ok(document.getElementById('touchNote').hasAttribute('hidden'), 'boot: the touch note stays hidden with a fine pointer');
     document.querySelector('#shelf .box').dispatchEvent(new window.Event('click'));
-    ok(document.getElementById('info').hasAttribute('open') && document.getElementById('infoTitle').textContent === data.games[0].title, 'boot: a box opens its info');
+    const box0 = document.querySelector('#shelf .box');
+    ok(document.getElementById('info').hasAttribute('open') && document.getElementById('infoTitle').textContent === data.games[0].title, 'boot: a box opens its pull-out');
+    ok(box0.classList.contains('out') && document.querySelectorAll('#infoBox .face').length === 3, 'boot: the box leaves the shelf and its 3D copy is in the pull-out');
+    ok(document.querySelectorAll('#infoChips li').length === 5 && /Runs in DOSBox/.test(document.getElementById('infoChips').textContent), 'boot: the pull-out lists engine, size, input, licence kind and media');
+    ok(/sha256 [0-9a-f]{64}/.test(document.getElementById('infoFile').textContent) && document.querySelector('#infoLic a'), 'boot: the pull-out shows the sha256 and the source link');
+    document.getElementById('infoBack').dispatchEvent(new window.Event('click'));
+    ok(!document.getElementById('info').hasAttribute('open') && !box0.classList.contains('out'), 'boot: Put it back closes the pull-out and returns the box');
+    box0.dispatchEvent(new window.Event('click'));
     document.getElementById('infoPlay').dispatchEvent(new window.Event('click'));
     const f = document.querySelector('#playerStage iframe');
     ok(f && f.getAttribute('src') === 'play-dos.html?game=doom' && !document.getElementById('player').hasAttribute('hidden'), 'boot: a card opens the player iframe');
