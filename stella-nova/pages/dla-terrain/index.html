@@ -22,7 +22,7 @@
 
    LOAD ORDER
      head: gpu-guard, wishlist, stats-beacon (in that order), the viewport
-           and description metas, style.css, lib/sci.css.
+           and description metas, style.css, map-view.css, lib/sci.css.
      body end: main.js (an ES module). main.js imports ui.js, camera.js,
            saver.js and gpu/*, then loads lib/dla-terrain.js, sky-state.js
            and the render/ modules with import() and a try/catch each.
@@ -30,8 +30,9 @@
    LAYOUT  (# marks an element id that main.js or ui.js binds to)
      #stage     the WebGPU canvas #view fills the window
      #progress  the generation stages, top centre, while a terrain forms
-     #map       the 2D map inset (height, biomes, rivers, camera); a click
-                or tap flies the camera there
+     #map       the 2D map inset (height, biomes, rivers, camera); a click,
+                a tap, Enter or M opens the large map (#atlas, map-view.js
+                and map-view.css): pan, zoom, fly there, bookmarks, legend
      #panel     the controls: a left column on a wide screen, a bottom sheet
                 on a phone in portrait, a right drawer in landscape
      #status    fps, render size, terrain readout (a short form on a phone)
@@ -58,6 +59,7 @@
 -->
 <meta name="description" content="Vast procedural terrain grown from diffusion-limited aggregation: DLA ridges, rivers carved by branched flow, erosion, biomes, forests, grass, water, weather and a day-night cycle, in WebGPU.">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="map-view.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
@@ -77,7 +79,7 @@
     <ol id="pgStages"></ol>
   </div>
   <figure id="map" data-saver-hide>
-    <canvas id="mapCanvas" width="256" height="256" aria-label="Map of the terrain. Click to fly there."></canvas>
+    <canvas id="mapCanvas" width="256" height="256" aria-label="Map of the terrain. Click, or press Enter or M, to open the large map."></canvas>
     <figcaption id="mapCap">Map</figcaption>
     <button id="mapToggle" type="button" aria-label="Hide the map">–</button>
   </figure>

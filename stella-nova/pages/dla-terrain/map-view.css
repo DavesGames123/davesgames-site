@@ -1,0 +1,87 @@
+/* ============================================================================
+   DLA TERRAIN  ·  map-view.css — the map inset hint and the large map (MAP)
+   ----------------------------------------------------------------------------
+   map-view.js makes #atlas. Wide screen: a box over most of the window,
+   the 3D view dim behind it; the menu (Go to, Bookmarks, Layers, Legend) is
+   a column at the right. Phone (class "full", from PHONE_Q): the full
+   screen, the menu is a strip under the map that scrolls. Open and close:
+   opacity and scale on .on (0.22 s). Touch targets are 44 px.
+     grep -n 'HINT'    the "Click to expand" label on the inset
+     grep -n 'ATLAS'   the large map
+     grep -n 'FULL'    the phone layout
+   ========================================================================== */
+
+/* HINT */
+#map .map-hint{position:absolute;left:6px;top:6px;padding:3px 7px;border-radius:7px;background:rgba(6,8,10,0.72);color:var(--ink,#e4e8e3);
+  font-size:max(11px,0.68rem);pointer-events:none;opacity:0;transition:opacity .18s}
+#map:hover .map-hint,#map:focus-within .map-hint{opacity:1}
+#map.min .map-hint{display:none}
+#mapCanvas:focus-visible{outline:2px solid var(--acc,#8fd6a0);outline-offset:-2px}
+@media (pointer:coarse){#map .map-hint{opacity:0.85}}
+
+/* ATLAS */
+.atlas{position:fixed;inset:0;z-index:60}
+.atlas .at-back{position:absolute;inset:0;background:rgba(3,5,6,0.55);opacity:0;transition:opacity .22s ease}
+.atlas .at-box{position:absolute;left:max(24px,4vw);right:max(24px,4vw);top:max(20px,4vh);bottom:max(20px,4vh);display:flex;flex-direction:column;
+  border-radius:14px;overflow:hidden;background:rgba(9,12,14,0.96);border:1px solid var(--line-b,rgba(150,220,180,0.24));box-shadow:0 18px 60px rgba(0,0,0,0.6);
+  opacity:0;transform:scale(0.96);transform-origin:85% 85%;transition:opacity .22s ease,transform .22s ease}
+.atlas.on .at-back{opacity:1}
+.atlas.on .at-box{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.atlas .at-back,.atlas .at-box{transition:none}}
+.at-head{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line,rgba(170,220,190,0.10))}
+.at-head h2{font-size:1rem;font-weight:600;color:var(--ink,#e4e8e3)}
+.at-sub{font-size:0.75rem;color:var(--dim,#8f9a94);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.at-tools{margin-left:auto;display:flex;gap:6px}
+.at-tools button,.at-side button{border:1px solid var(--line-b,rgba(150,220,180,0.24));background:var(--bg2,#0f1316);color:var(--ink,#e4e8e3);border-radius:8px;font:inherit;cursor:pointer}
+.at-tools button{min-width:36px;height:34px;padding:0 10px;font-size:0.9rem}
+.at-tools button:hover,.at-side button:hover{border-color:var(--acc,#8fd6a0)}
+#atClose{font-size:1.2rem}
+.at-body{flex:1 1 auto;display:flex;min-height:0}
+.at-stage{position:relative;flex:1 1 auto;min-width:0}
+#atCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;background:#05080a}
+#atCanvas:focus-visible{outline:2px solid var(--acc,#8fd6a0);outline-offset:-2px}
+.at-read{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 180px);padding:4px 8px;border-radius:7px;background:rgba(6,8,10,0.75);
+  color:var(--ink,#e4e8e3);font:0.75rem/1.35 ui-monospace,Menlo,Consolas,monospace;pointer-events:none}
+.at-read:empty{display:none}
+.at-help{position:absolute;left:10px;top:8px;right:60px;font-size:0.72rem;color:var(--dim,#8f9a94);pointer-events:none;text-shadow:0 1px 2px #000}
+.at-side{flex:0 0 260px;overflow:auto;padding:10px 12px 16px;border-left:1px solid var(--line,rgba(170,220,190,0.10))}
+.atlas.noside .at-side{display:none}
+.at-side section{margin-bottom:14px}
+.at-side h3{font-size:0.72rem;font-weight:600;letter-spacing:0.04em;color:var(--dim,#8f9a94);margin:0 0 6px}
+.at-feat{display:grid;gap:6px}
+.at-chip{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:7px 10px;text-align:left;min-height:40px}
+.at-chip b{font-weight:600;font-size:0.82rem}
+.at-chip i{font-style:normal;font-size:0.72rem;color:var(--dim,#8f9a94)}
+.at-wide{width:100%;min-height:36px;padding:0 10px;font-size:0.82rem;color:var(--acc,#8fd6a0)!important}
+.at-marks{list-style:none;margin-top:6px;display:grid;gap:4px}
+.at-marks li{display:flex;gap:4px}
+.at-go{flex:1 1 auto;min-height:34px;padding:0 10px;text-align:left;font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.at-del{flex:0 0 34px;min-height:34px;font-size:1rem;color:var(--dim,#8f9a94)!important}
+.at-note{font-size:0.74rem;color:var(--dim,#8f9a94);line-height:1.4}
+.at-seg,.at-toggles{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.at-seg button,.at-toggles button{min-height:32px;padding:0 10px;font-size:0.78rem;color:var(--dim,#8f9a94)}
+.at-seg button.on,.at-toggles button.on{color:var(--acc,#8fd6a0);border-color:var(--acc,#8fd6a0)}
+.at-legend{display:grid;gap:4px;font-size:0.75rem;color:#cfd6cf}
+.at-lrow{display:flex;align-items:center;gap:8px}
+.at-sw{flex:0 0 14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,0.15)}
+.at-ramp{height:10px;border-radius:4px}
+.at-rampt{display:flex;justify-content:space-between;font-size:0.7rem;color:var(--dim,#8f9a94)}
+html.atlas-open #hint{display:none}
+
+/* FULL: the phone layout (map-view.js sets .full from PHONE_Q) */
+.atlas.full .at-box{left:0;right:0;top:0;bottom:0;border-radius:0;border:0;transform-origin:50% 50%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.atlas.full .at-body{flex-direction:column}
+.atlas.full .at-stage{flex:1 1 60%}
+.atlas.full .at-side{flex:0 1 40%;max-height:40%;border-left:0;border-top:1px solid var(--line,rgba(170,220,190,0.10));
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0 14px;align-content:start}
+.atlas.full .at-help{display:none}
+.atlas.full .at-tools button{min-width:44px;height:44px}
+.atlas.full .at-chip,.atlas.full .at-go,.atlas.full .at-del,.atlas.full .at-wide,.atlas.full .at-seg button,.atlas.full .at-toggles button{min-height:44px}
+.atlas.full .at-del{flex-basis:44px}
+.atlas.full .at-read{max-width:calc(100% - 20px);bottom:auto;top:8px;font-size:max(11px,0.72rem)}
+.atlas.full .at-note,.atlas.full .at-legend,.atlas.full .at-sub{font-size:max(11px,0.74rem)}
+@media (max-height:500px) and (pointer:coarse){
+  .atlas.full .at-body{flex-direction:row}
+  .atlas.full .at-side{flex:0 0 240px;max-height:none;border-top:0;border-left:1px solid var(--line,rgba(170,220,190,0.10));display:block}
+}

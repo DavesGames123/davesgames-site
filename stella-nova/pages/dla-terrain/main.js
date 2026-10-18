@@ -55,6 +55,11 @@
 //  SAVER  window.snSaver = { enter(opts), exit() } (see "── SAVER"). The
 //  shot plan is saver.js. P toggles the in-page saver.
 //
+//  MAP  map-view.js (through ui.js): a click or M opens the large map.
+//  app.flyView(x, z, { yaw, pitch, dist }) flies there and app.aim turns
+//  the view (stepAim). While the large map is open the loop draws no GPU
+//  frame (ui.mapCovers()).
+//
 //  URL: ?build=1|0 ?seed=<int> ?preset=<id> ?q=0..3 ?tod=0..1 ?wx=<weather id> ?cam=orbit|fly|drone
 //  HASH (world-state.js): #s=..&p=..&o=..&t=..&w=..&se=..&v=..&wa=..&c=.. holds
 //  the full world (options diff, time, weather, season, plants, water,
@@ -107,6 +112,7 @@ import { createPost } from './render/post.js';
 import { createCamera, dronePath, pickGround } from './camera.js';
 import { clearRect, centreShift } from './layout.js';
 import { createUI, todRate } from './ui.js';
+import { stepAim } from './map-view.js';
 import { buildShotPlan, framing, shotLabel, shotTod, extractFn, SHOT_CODE, mulberry } from './saver.js';
 import { createBuildPlayer } from './build-player.js';
 import { createBuildOverlay } from './render/build.js';
@@ -346,6 +352,13 @@ app.drone = (kind, pickIndex, high) => {
   ui.syncView();
 };
 app.flyTo = (x, z) => { cam.flyTo(x, z, world); app.camMode = cam.mode; app.lastInput = performance.now(); ui.syncView(); };
+// MAP (map-view.js): a flight from the large map; yaw and pitch turn the
+// view after it (stepAim in the loop), dist is the orbit distance
+app.flyView = (x, z, o = {}) => {
+  cam.flyTo(x, z, world, o.dist); app.camMode = cam.mode; app.lastInput = performance.now();
+  app.aim = o.yaw != null || o.pitch != null ? { yaw: o.yaw, pitch: o.pitch, t0: app.lastInput } : null;
+  ui.syncView();
+};
 app.onLayout = () => { occ.at = -1e9; setTimeout(() => { occ.at = -1e9; }, 320); };
 app.loadCredits = () => {
   fetch(new URL('../../assets/nature/CREDITS.txt', location.href)).then(r => (r.ok ? r.text() : Promise.reject(r.status)))
@@ -735,8 +748,11 @@ function loop(now) {
   if (!bst && !saving && app.camMode === 'orbit' && app.gen && app.gen.running && now - app.lastInput > 2500) cam.orbit.yaw += dt * 0.035;
   if (bst && (frameNo % 4 === 0 || bst.i !== lastBuildSeg)) ui.buildSync(player.info());
   if (bst && bst.i !== lastBuildSeg) { lastBuildSeg = bst.i; if (app.saverRun) saverLabel(); }
+  if (app.aim) app.aim = stepAim(cam, app.aim, dt, app.lastInput);
   cam.update(dt, inp, world);
   applySnapshot(now);
+  // MAP: the large map covers the view: no GPU frame (the last one stays)
+  if (ui && ui.mapCovers && ui.mapCovers()) { ui.drawMap(cam); return; }
   if (!gpu) return;
   // the eye height over the ground: the near render cap and the guard
   const agl = cam.pos[1] - Math.max(world.heightAt(cam.pos[0], cam.pos[2]), Number.isFinite(world.seaLevel) ? world.seaLevel : -1e9);

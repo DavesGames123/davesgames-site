@@ -14,7 +14,8 @@
 //    worldToMap(x, z, ws, size), mapToWorld(px, py, ws, size)
 //  DOM part:
 //    createUI(app, doc) -> ui = { buildOptions(lib), syncOptions(), setProgress(p),
-//        progressDone(), setTerrainMap(view, BIOMES), drawMap(cam), syncSky(),
+//        progressDone(), setTerrainMap(view, BIOMES), drawMap(cam), mapCovers(),
+//        mapView (map-view.js mountMapView: the inset and the large map), syncSky(),
 //        syncView(), syncMix(), syncLocks(), syncHistory(), status(a, b, short),
 //        notice(text), toast(text), isPhone(), setPanel(open), panelState(),
 //        mapRect(), hintOnce(), overlays(), syncBuild(), buildShow(on),
@@ -45,6 +46,7 @@
 // ============================================================================
 import { sheetHeights, snapSheet, DOCK_H } from './layout.js';
 import { SEGMENTS, segStart } from './build.js';
+import { mountMapView } from './map-view.js';
 
 export const PHONE_Q = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
 export const GROUP_ORDER = ['World', 'DLA ridges', 'Shape', 'Branched flow', 'Erosion', 'Climate', 'Detail'];
@@ -479,51 +481,19 @@ export function createUI(app, doc = globalThis.document) {
     setTimeout(() => { if (pg.classList.contains('done')) pg.hidden = true; }, 900);
   };
 
-  // ── MAP ──
-  const mapEl = $('map'), mc = $('mapCanvas'), mctx = mc.getContext('2d');
-  const SIZE = 256;
-  const base = doc.createElement('canvas'); base.width = base.height = SIZE;
-  const bctx = base.getContext('2d');
-  let mapWs = 1, mapPolys = null;
+  // ── MAP ── (map-view.js: the inset at the device pixel ratio, and the
+  // large map that a click, Enter or M opens)
+  const mapEl = $('map');
+  const mv = mountMapView({ doc, win, app, phoneQ: mq, toast: t => ui.toast && ui.toast(t) });
+  ui.mapView = mv;
   ui.setTerrainMap = (snap, BIOMES, terrain) => {
     if (!snap || !snap.height) return;
-    mapWs = snap.worldSize || mapWs;
-    const px = mapPixels(snap, SIZE, BIOMES);
-    bctx.putImageData(new win.ImageData(px, SIZE, SIZE), 0, 0);
-    mapPolys = terrain || null;
-    if (mapPolys && mapPolys.rivers) {
-      bctx.strokeStyle = 'rgba(120,190,240,0.85)'; bctx.lineCap = 'round';
-      for (const r of mapPolys.rivers) {
-        const p = r.pts; if (!p || p.length < 4) continue;
-        const w = r.width && r.width.length ? r.width[r.width.length - 1] : 10;
-        bctx.lineWidth = Math.max(0.6, Math.min(2.5, w / mapWs * SIZE * 3));
-        bctx.beginPath();
-        for (let i = 0; i < p.length; i += 2) { const q = worldToMap(p[i], p[i + 1], mapWs, SIZE); i ? bctx.lineTo(q[0], q[1]) : bctx.moveTo(q[0], q[1]); }
-        bctx.stroke();
-      }
-    }
-    $('mapCap').textContent = `${(mapWs / 1000).toFixed(0)} km · ${snap.n}² · ${snap.stage || ''}`.replace(/ · $/, '');
+    mv.setTerrain(snap, BIOMES, terrain);
+    const ws = snap.worldSize || 1;
+    $('mapCap').textContent = `${(ws / 1000).toFixed(0)} km · ${snap.n}² · ${snap.stage || ''}`.replace(/ · $/, '');
   };
-  ui.drawMap = cam => {
-    if (mapEl.classList.contains('min') || mapEl.offsetParent === null) return;
-    mctx.drawImage(base, 0, 0);
-    if (!cam) return;
-    const p = worldToMap(cam.pos[0], cam.pos[2], mapWs, SIZE);
-    const a = Math.atan2(cam.forward[2], cam.forward[0]);
-    const fov = 0.5;
-    mctx.fillStyle = 'rgba(255,240,200,0.22)';
-    mctx.beginPath(); mctx.moveTo(p[0], p[1]);
-    mctx.arc(p[0], p[1], 40, a - fov, a + fov); mctx.closePath(); mctx.fill();
-    mctx.fillStyle = '#ffe9b8'; mctx.strokeStyle = '#1a1208'; mctx.lineWidth = 1.5;
-    mctx.beginPath(); mctx.arc(p[0], p[1], 4.5, 0, Math.PI * 2); mctx.fill(); mctx.stroke();
-  };
-  mc.addEventListener('pointerdown', e => {
-    const r = mc.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width * SIZE, py = (e.clientY - r.top) / r.height * SIZE;
-    const w = mapToWorld(px, py, mapWs, SIZE);
-    app.flyTo(w[0], w[1]);
-    e.preventDefault();
-  });
+  ui.drawMap = cam => mv.tick(cam);
+  ui.mapCovers = () => mv.covers();
   $('mapToggle').addEventListener('click', () => {
     const min = mapEl.classList.toggle('min');
     $('mapToggle').textContent = min ? '+' : '–';
