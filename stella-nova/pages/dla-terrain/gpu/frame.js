@@ -35,8 +35,8 @@
 //  0.5 phones), then take ladder rungs (1 screen shafts, 2 no POM, 3 no
 //  AO, 4 no grass, 5 half shadow maps, 6 2 cascades, 7 1 cascade). GPU
 //  headroom (or calm frames) steps back up in the reverse order, with a
-//  probe and a backoff. Level 8 (emergency: no shadow casters, clouds,
-//  shafts or TAA) comes only from heavy frames. fg.prepare(frame) puts the
+//  probe and a backoff. Level 8 (emergency: no shadow casters, shafts or
+//  TAA, fewer cloud steps) comes only from heavy frames. fg.prepare(frame) puts the
 //  plan on the frame object before the module updates (main.js):
 //  frame.govLevel (the old level numbers the modules read: 1 = no POM,
 //  5 = emergency), frame.ao, frame.shafts.mode, frame.layers.grass and

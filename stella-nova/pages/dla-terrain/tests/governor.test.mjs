@@ -190,7 +190,8 @@ for (const [profileId, gpuMs, levelBy, scaleBy, why] of [
     for (let l = 0; l <= GOVJS.MAX_LEVEL; l++) {
       const pl = GOVJS.planOf(GOVJS.featuresOf(l), { size: 4096, count: 4, taa: true });
       if (l < GOVJS.MAX_LEVEL && !(pl.casters && pl.taa && pl.cascades >= 1)) ok(false, `plan level ${l}: casters and TAA on`);
-      if (l === GOVJS.MAX_LEVEL) ok(!pl.casters && !pl.taa && !pl.clouds, 'plan of the emergency level: no casters, no TAA, no clouds');
+      if (l === GOVJS.MAX_LEVEL) ok(!pl.casters && !pl.taa && pl.clouds && pl.cloudK > 0 && pl.cloudK < 0.6, 'plan of the emergency level: no casters, no TAA, the clouds with fewer steps');
+      if (!pl.clouds) ok(false, `plan level ${l}: the clouds are on at every level`);
     }
   }
   // the heavy path still reaches the emergency level: no casters there

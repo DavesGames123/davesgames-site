@@ -25,8 +25,11 @@
 //    5 shadowRes  shadow maps at half size (not under 1024)
 //    6 cascades2  2 shadow cascades at most
 //    7 cascade1   1 shadow cascade; trees and rocks still cast in it
-//    8 emergency  no shadow casters, no clouds, no shafts, no TAA
-//                 (frame.govLevel 5). Heavy frames only.
+//    8 emergency  no shadow casters, no shafts, no TAA, few cloud steps
+//                 (frame.gov.cloudK 0.35; frame.govLevel 5). Heavy frames
+//                 only. The clouds stay: with the clouds off, their
+//                 shadows stayed on the ground and the sky had no cloud
+//                 (the user: "that is the only thing i see of the clouds").
 //  profile.govForce: rung keys that are on at every level (safe: pom,
 //  cascade1). The rung keys are the contract with frame.js and main.js.
 //
@@ -63,7 +66,7 @@ export const RUNGS = Object.freeze([
   { key: 'shadowRes', label: 'half shadow maps' },
   { key: 'cascades2', label: '2 cascades' },
   { key: 'cascade1', label: '1 cascade' },
-  { key: 'emergency', label: 'EMERGENCY: no shadows, clouds, TAA' },
+  { key: 'emergency', label: 'EMERGENCY: no shadows, TAA, fewer cloud steps' },
 ]);
 export const MAX_LEVEL = RUNGS.length;      // 8, the emergency level
 export const STEADY_MAX = MAX_LEVEL - 1;    // 7, the end of the slow-frame path
@@ -100,8 +103,8 @@ export function planOf(f, base = {}) {
     ao: !em && !f.has('ao'),
     shafts: em ? 'off' : f.has('shafts') ? 'screen' : null,
     grass: !em && !f.has('grass'),
-    clouds: !em,
-    cloudK: em ? 0 : f.has('shafts') ? 0.6 : 1,
+    clouds: true,
+    cloudK: em ? 0.35 : f.has('shafts') ? 0.6 : 1,
     taa: !!base.taa && !em,
     casters: !em,
     shadowSize: f.has('shadowRes') ? Math.min(size0, Math.max(1024, size0 >> 1)) : size0,

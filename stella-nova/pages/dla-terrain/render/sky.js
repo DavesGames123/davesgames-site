@@ -594,7 +594,10 @@ export async function createSky(gpu) {
     const ph = precipPhases(st, wv, rdt, 32, 26);
     put(SKYU.anim2, ph.rainOff[0], ph.rainOff[1], ph.snowOff[0], ph.snowOff[1]);
     put(SKYU.anim3, ph.rainA, ph.rainB, ph.snowA, ph.snowB);
-    put(SKYU.cloud2, coverFloor(wx), 1.0, cl.anvil, cloudSteps(st.q ?? q, gpu.profile));
+    // GOVERNOR: frame.gov.cloudK (1, 0.6 at rung 1, 0.35 at the emergency)
+    // takes march steps away; the clouds are never off for the cost
+    const ck = clamp(frame.gov && Number.isFinite(frame.gov.cloudK) ? frame.gov.cloudK : 1, 0.25, 1);
+    put(SKYU.cloud2, coverFloor(wx), 1.0, cl.anvil, Math.max(16, Math.round(cloudSteps(st.q ?? q, gpu.profile) * ck)));
     // the bolt: at the stroke's cell (x, z) or a bearing and a distance
     const flash = g[GLOBALS.weather + 3];
     const b = s.bolt;
