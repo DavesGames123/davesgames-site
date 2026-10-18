@@ -16,6 +16,11 @@
 //     buildings are lower on slopes. Off, the city is as before.
 // No DOM. worker.js, main.js (fallback) and tests.mjs import it.
 //
+// opts.onTerrain(p) and opts.onStage(k) are optional progress hooks (the
+// LIB terrain progress, and a stage key of layout.js STAGES: field, water,
+// main, major, minor, blocks, lots). The city does not depend on them, and
+// city.opts does not keep them. With no hook, generate() adds no await.
+//
 // generate(opts) -> Promise<city>
 //   city = { v, seed, opts, view: {w, h}, domain: {x, y, w, h},
 //            fields: [{type, x, y, size, decay, theta}],
@@ -107,21 +112,26 @@ export async function generate(input = {}) {
   const size = SIZES[o.size] || SIZES.city;
   const W = size.w, H = size.h;
   const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
+  // the progress hooks get no city data back, so they cannot change the
+  // city; city.opts does not keep them (a worker posts the city)
+  const onStage = typeof input.onStage === 'function' ? input.onStage : null;
+  delete o.onTerrain; delete o.onStage;
   // the terrain first, outside the seeded Math.random (the LIB has its own
   // generator), so the city stream starts at the same place either way
   const T = o.terrain ? await buildTerrain(o, W, H, input.onTerrain || null) : null;
-  delete o.onTerrain;
   const realRandom = Math.random;
   const rnd = seeded(o.seed);
   Math.random = rnd;
   try {
-    return await build(o, W, H, t0, T);
+    return await build(o, W, H, t0, T, onStage);
   } finally {
     Math.random = realRandom;
   }
 }
 
-async function build(o, W, H, t0, T = null) {
+async function build(o, W, H, t0, T = null, onStage = null) {
+  const stage = async (k) => { if (onStage) { try { await onStage(k); } catch { /* the hook is optional */ } } };
+  if (onStage) await stage('field');
   const { Vector, TensorField, RK4Integrator, StreamlineGenerator, WaterGenerator, Graph, PolygonFinder } = MG;
   const INFLATE = 1.2;
   const origin = new Vector(-(INFLATE - 1) / 2 * W, -(INFLATE - 1) / 2 * H);
@@ -171,6 +181,7 @@ async function build(o, W, H, t0, T = null) {
   const integrator = new RK4Integrator(tf, minorParams);
 
   // ─── water (water_gui.ts generateRoads) ──────────────────────────────────
+  if (onStage) await stage('water');
   tf.parks = []; tf.sea = []; tf.river = [];
   const water = new WaterGenerator(integrator, origin, dims, { ...coastParams, coastNoise: { ...coastParams.coastNoise }, riverNoise: { ...coastParams.riverNoise } }, tf);
   let coastRoadIdx = -1, riverRoadIdx = -1;
@@ -200,11 +211,13 @@ async function build(o, W, H, t0, T = null) {
     return g;
   };
   tf.ignoreRiver = true;
+  if (onStage) await stage('main');
   const main = roadGen(mainParams, [water]);
   await runStreamlines(main);
   tf.ignoreRiver = false;
 
   tf.parks = []; tf.ignoreRiver = true;
+  if (onStage) await stage('major');
   const major = roadGen(majorParams, [water, main]);
   await runStreamlines(major);
   tf.ignoreRiver = false;
@@ -225,6 +238,7 @@ async function build(o, W, H, t0, T = null) {
     } else bigParks.push(...polys);
   }
   tf.parks = bigParks;    // minor road pre-generate callback
+  if (onStage) await stage('minor');
   const minor = roadGen(minorParams, [water, main, major]);
   await runStreamlines(minor);
   let smallParks = [];
@@ -241,12 +255,14 @@ async function build(o, W, H, t0, T = null) {
   if (water.riverSecondaryRoad && water.riverSecondaryRoad.length) all.push(water.riverSecondaryRoad);
   const g = new Graph(all, minorParams.dstep, true);
   const lotParams = { maxLength: 20, minArea: o.lotArea, shrinkSpacing: 4, chanceNoDivide: o.noDivide };
+  if (onStage) await stage('blocks');
   const finder = new PolygonFinder(g.nodes, lotParams, tf);
   finder.findPolygons();
   await finder.shrink(false);
   const blocksV = finder._shrunkPolygons.slice();
   // divide one block per update(), as upstream's animated mode does, and
   // note which lots each block gave. toDivide.pop() takes the last block.
+  if (onStage) await stage('lots');
   const dividing = finder.divide(true);
   const lotBlockOrder = [];
   const lotsV = [];

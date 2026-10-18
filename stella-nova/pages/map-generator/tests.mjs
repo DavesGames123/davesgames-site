@@ -11,6 +11,7 @@
 //               the 3D ground and city bases, the 2D underlay, exports
 //   layout      layout.js: phone modes and media queries, framing, sheet grip,
 //               pinch, pan clamp, double tap, scrub, pixel ratio, progress
+//   progress    the gen.js progress hooks: stage order, same city, clonable
 //   page module main.js with DOM stubs (terrain on: the page default)
 
 import { generate, fieldSampler, SIZES } from './gen.js';
@@ -632,6 +633,32 @@ section('layout (layout.js: phone modes, framing, gestures; no DOM)');
   check('progressShare with no terrain starts the bar at the tensor field', L.progressShare('field', 0, false) === 0 && L.progressShare('lots', 0, false) > 0.8 && L.progressShare('terrain', 0.5, false) === 0);
   const A = L.accordionToggle;
   check('accordionToggle: one section at a time on a phone, many on a desktop', JSON.stringify(A(['city'], 'terrain', true)) === '["terrain"]' && JSON.stringify(A(['city'], 'terrain', false)) === '["city","terrain"]' && JSON.stringify(A(['city', 'terrain'], 'city', true)) === '["terrain"]');
+}
+
+section('progress hooks (gen.js onTerrain, onStage)');
+{
+  const L = await import('./layout.js');
+  const seen = [], fr = [];
+  const base = { seed: 7, size: 'town', terrain: true };
+  const a = await generate({ ...base, onTerrain: (p) => fr.push(p.frac), onStage: (k) => seen.push(k) });
+  const b = await generate({ ...base });
+  const order = seen.map((k) => L.STAGES.findIndex((s) => s[0] === k));
+  check('onStage sends the city stages of layout.js STAGES in order', seen.join(',') === 'field,water,main,major,minor,blocks,lots' && order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1])), seen.join(','));
+  check('onTerrain sends the terrain progress up to 1', fr.length > 3 && fr[fr.length - 1] === 1);
+  const sig = (c) => JSON.stringify([c.roads, c.lots.length, c.buildings.slice(0, 50), c.sea.length]);
+  check('the hooks do not change the city', sig(a) === sig(b));
+  let cloneOk = true;
+  try { structuredClone(a); } catch { cloneOk = false; }
+  check('a city made with hooks can go through postMessage (no function in city.opts)', cloneOk && !('onStage' in a.opts) && !('onTerrain' in a.opts));
+  // worker.js with a stand-in self: progress messages, then the city
+  const posts = [];
+  const hadSelf = 'self' in globalThis, oldSelf = globalThis.self;
+  globalThis.self = { postMessage: (m) => posts.push(structuredClone(m)) };
+  await import('./worker.js');
+  await globalThis.self.onmessage({ data: { id: 3, type: 'gen', opts: { seed: 7, size: 'town', terrain: true } } });
+  const prog = posts.filter((m) => m.progress), last = posts[posts.length - 1];
+  check('worker.js posts progress for the terrain and each stage, then the city', prog.length >= 8 && prog.length < 80 && prog.every((m) => m.id === 3) && last.city && last.city.seed === 7 && sig(last.city) === sig(b), `${prog.length} progress messages`);
+  if (hadSelf) globalThis.self = oldSelf; else delete globalThis.self;
 }
 
 section('page module (DOM stubs, no browser)');
