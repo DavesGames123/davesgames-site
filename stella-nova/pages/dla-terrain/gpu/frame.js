@@ -58,8 +58,9 @@
 //  down). The GPU queue holds at most MAX_IN_FLIGHT frames: fg.render skips
 //  a frame (fg.stalls) while that many are not done, so a slow GPU never
 //  gets a backlog that stalls the window server. queue.onSubmittedWorkDone
-//  gives fg.gpuMs, the GPU time of a frame. A heavy frame (fg.gpuMs over
-//  HEAVY_MS) calls heavyStep: the scale falls to 0.7 of itself at once
+//  gives fg.gpuMs, the GPU time of a frame (see GPU TIME at HEAVY_RUN: a
+//  probe promise, the median of 5). A heavy frame (HEAVY_RUN estimates
+//  over HEAVY_MS in a row, heavyGate) calls heavyStep: the scale falls to 0.7 of itself at once
 //  (floor HEAVY_FLOOR), and at the floor the governor level goes up one
 //  step. The scale step and the governor also take fg.gpuMs, so a frame
 //  over 250 ms (which tick drops as a stall of the page) still counts
@@ -99,7 +100,8 @@
 //  "fg.ready", "fg.setNear", "function relieve", "STUCK_MS", "NEAR_IN",
 //  "export function heavyStep", "MAX_IN_FLIGHT", "fg.inFlight",
 //  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "── 7 post",
-//  "fg.tick", "fg.level"
+//  "fg.tick", "fg.level", "export function gpuTimeEstimate",
+//  "export function heavyGate", "fg.why"
 // ============================================================================
 
 import { createGovernor, governorStep, governorHeavy, featuresOf, planOf, describe, MAX_LEVEL, STEADY_MAX, RELIEF_LEVEL } from './governor.js';
@@ -130,6 +132,36 @@ export function inFlightCap(profile, gpuMs) {
 export const MAX_IN_FLIGHT = 2;      // frames on the GPU queue
 export const HEAVY_MS = 120;         // ms of GPU time: a heavy frame
 export const HEAVY_FLOOR = 0.4;      // the least scale after a heavy frame
+// GPU TIME (2026-10-18, the user's Safari status line: "60 fps ... level
+// 8: render 40%, EMERGENCY: no shadows, clouds, TAA"). The time from the
+// submit to the done promise is not the GPU time: Safari resolves
+// onSubmittedWorkDone late, so a fast GPU gave samples over heavyMs. Now
+// a probe promise taken just before the submit marks the end of the work
+// before this frame, and the estimate is done - max(submit, probe done).
+// The governor reads the median of 5 estimates. A heavy step needs
+// HEAVY_RUN heavy estimates in a row (or one huge one, or a stuck frame)
+// and drawn frames at least heavyMs / 2 apart on the wall clock.
+export const HEAVY_RUN = 3;          // heavy samples in a row before a heavy step
+export const HUGE_K = 4;             // one sample over HUGE_K x heavyMs acts at once
+// -> the GPU ms of one frame. o = { submit, done, probeDone (or < 0),
+// interval (the mean ms between drawn frames, or 0) }
+export function gpuTimeEstimate(o) {
+  const lat = Math.max(0, o.done - o.submit);
+  const from = o.probeDone >= 0 ? Math.max(o.submit, o.probeDone) : o.submit;
+  let g = Math.max(0, o.done - from);
+  if (o.interval > 0) g = Math.min(g, o.interval);
+  return Math.min(g, lat);
+}
+// state = { run }: -> true when this sample is a heavy frame that counts
+// (HEAVY_RUN heavy samples in a row, or one over HUGE_K x heavyMs, or a
+// stuck frame)
+export function heavyGate(state, ms, heavyMs = HEAVY_MS, stuck = false) {
+  if (stuck || ms > heavyMs * HUGE_K) { state.run = 0; return true; }
+  if (!(ms > heavyMs)) { state.run = 0; return false; }
+  state.run = (state.run | 0) + 1;
+  if (state.run >= HEAVY_RUN) { state.run = 0; return true; }
+  return false;
+}
 // state = { scale, level, cool } (cool: frames to wait, so the frames in
 // flight when the scale changed do not count two times). Returns
 // { scale, level, changed } for the GPU time gpuMs of one frame.
@@ -158,6 +190,8 @@ export function createFrameGraph(gpu, parts) {
     // HANG GUARD: frames on the GPU queue, the GPU time of the last done one
     inFlight: 0, maxInFlight: MAX_IN_FLIGHT, gpuMs: 0, stalls: 0, heavy: 0,
     hv: { scale: 1, level: 0, cool: 0 },
+    // GPU TIME: the heavy run, the drawn frame interval, why the level is held
+    hvGate: { run: 0 }, lastSubmit: -1, interval: 0, latMs: 0, why: '',
     // SAFARI GUARD
     near: false, nearAt: -1e9, readyAt: 0, stuck: 0, memOver: 0, relieved: 0, lastRelief: -1e9, targetBuilds: 0,
     pending: [],   // { t0, done } of the frames on the queue
@@ -263,6 +297,7 @@ export function createFrameGraph(gpu, parts) {
     fg.lastRelief = t; fg.relieved++;
     console.warn('dla-terrain: GPU relief (' + why + ')');
     fg.pressure++;
+    fg.why = why;
     fg.maxScale = Math.min(fg.maxScale, 0.75);
     gv.scale = Math.min(gv.scale, fg.maxScale);
     fg.scale = gv.scale;
@@ -279,7 +314,7 @@ export function createFrameGraph(gpu, parts) {
     for (const r of fg.pending) if (!r.done && t - r.t0 > STUCK_MS) {
       r.done = true; fg.stuck++;
       fg.inFlight = Math.max(0, fg.inFlight - 1);
-      fg.onGpuTime(t - r.t0);
+      fg.onGpuTime(t - r.t0, true);
     }
     fg.pending = fg.pending.filter(r => !r.done);
     if (fg.inFlight >= Math.min(fg.maxInFlight, inFlightCap(P(), fg.gpuMs))) return false;
@@ -296,6 +331,7 @@ export function createFrameGraph(gpu, parts) {
     if (!(ms > 0)) return;
     const r = governorStep(gv, { ms, gpuMs: g }, { budget: fg.budgetMs, maxScale: fg.maxScale, floor: floorOf(), minLevel: levelFloor(), maxLevel: STEADY_MAX });
     if (!r) return;
+    if (r.dir < 0) fg.why = `slow frames ${Math.max(ms, g).toFixed(0)} ms over ${fg.budgetMs.toFixed(0)} ms`;
     if (r.what === 'scale') { fg.scale = gv.scale; targets(); }
     else setLevel(gv.level);
   };
@@ -335,7 +371,7 @@ export function createFrameGraph(gpu, parts) {
   // main.js after a quality change: the new preset values are the base
   fg.rebase = () => { base = null; applyFeatures(); };
   // the status line: what is lower than the preset ('' when nothing)
-  fg.govText = () => describe({ scale: fg.scale, maxScale: fg.maxScale, level: fg.level, force: P().govForce, nearCap: fg.near && fg.nearCapped });
+  fg.govText = () => describe({ scale: fg.scale, maxScale: fg.maxScale, level: fg.level, force: P().govForce, nearCap: fg.near && fg.nearCapped, why: fg.why });
   // the plan on the frame object (main.js calls it before the module
   // updates; fg.render calls it again, it is idempotent)
   fg.prepare = frame => {
@@ -357,16 +393,28 @@ export function createFrameGraph(gpu, parts) {
     return frame;
   };
   // HANG GUARD: the GPU time of each done frame
-  fg.onGpuTime = ms => {
-    fg.gpuMs = ms;
+  fg.onGpuTime = (ms, stuck = false) => {
+    // the governor and the in-flight cap read the median of the last 5
+    // samples: one late or early promise does not move them
+    const h = fg.gpuHist || (fg.gpuHist = []);
+    h.push(ms); if (h.length > 5) h.shift();
+    fg.gpuMs = stuck ? ms : [...h].sort((a, b) => a - b)[h.length >> 1];
+    fg.gpuRaw = ms;
     if (!fg.dynamic) return;
     const heavyMs = P().heavyMs || HEAVY_MS;
-    // a heavy frame stops the step up at once (and pauses it)
+    // a heavy sample stops the step up at once (and pauses it)
     if (ms > heavyMs) governorHeavy(gv);
+    // only HEAVY_RUN heavy samples in a row, one huge sample or a stuck
+    // frame cut the scale or the level (heavyGate)
+    if (!heavyGate(fg.hvGate, ms, heavyMs, stuck)) return;
+    // the wall clock: drawn frames that come at under half of heavyMs
+    // apart are not heavy GPU frames (a late promise, not a slow GPU)
+    if (!stuck && fg.interval > 0 && fg.interval < heavyMs * 0.5) return;
     fg.hv.scale = gv.scale; fg.hv.level = gv.level;
-    const r = heavyStep(fg.hv, ms, HEAVY_FLOOR, heavyMs);
+    const r = heavyStep(fg.hv, Math.max(ms, heavyMs + 1e-3), HEAVY_FLOOR, heavyMs);
     if (!r.changed) return;
     fg.heavy++;
+    fg.why = stuck ? `a frame stuck ${(ms / 1000).toFixed(1)} s` : `heavy GPU frames ${ms.toFixed(0)} ms`;
     console.warn(`dla-terrain: heavy GPU frame ${ms.toFixed(0)} ms: scale ${r.scale}, level ${r.level}`);
     gv.over = 0; gv.head = 0; gv.calm = 0;
     if (r.scale !== gv.scale) { gv.scale = fg.scale = r.scale; targets(); }
@@ -483,9 +531,17 @@ export function createFrameGraph(gpu, parts) {
       parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, fg.U.view, frame.dt);
       up.draw(enc, fg.U.bg, out); passes++;
     } else parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, out, frame.dt);
+    const q = device.queue;
+    // GPU TIME: the probe marks the end of the work before this frame
+    const probe = { t: -1 };
+    if (q.onSubmittedWorkDone) q.onSubmittedWorkDone().then(() => { probe.t = now(); }, () => {});
     device.queue.submit([enc.finish()]);
     parts.post.afterSubmit();
-    const q = device.queue;
+    {
+      const t = now();
+      if (fg.lastSubmit >= 0) { const d = Math.min(t - fg.lastSubmit, 1000); fg.interval = fg.interval > 0 ? fg.interval * 0.8 + d * 0.2 : d; }
+      fg.lastSubmit = t;
+    }
     if (q.onSubmittedWorkDone) {
       fg.inFlight++;
       const rec = { t0: now(), done: false };
@@ -495,7 +551,9 @@ export function createFrameGraph(gpu, parts) {
         rec.done = true;
         fg.inFlight = Math.max(0, fg.inFlight - 1);
         if (!ok) return;
-        const ms = now() - rec.t0;
+        const t1 = now();
+        fg.latMs = t1 - rec.t0;
+        const ms = gpuTimeEstimate({ submit: rec.t0, done: t1, probeDone: probe.t, interval: 0 });
         fg.onGpuTime(ms);
         // the idle gap: the GPU rests for dutyIdle x the frame time
         const k = P().dutyIdle || 0;

@@ -23,6 +23,11 @@
 //       target is one texture, post writes at the render size; naga
 //    F  fg.prepare: the frame fields that the modules read (ao.js aoPlan,
 //       weather.js shaftPlan), frame.taa, the status text, globals frame.w
+//    G  Safari-like late done promises (2026-10-18, the user's status line
+//       "60 fps ... level 8: render 40%, EMERGENCY: no shadows, clouds,
+//       TAA"): a fast GPU at 60 fps whose done promise resolves 45 to
+//       90 ms late stays at level 0 and full scale, and from the emergency
+//       level it comes back to 0; a real slow GPU still steps down
 //  A to D use only the frame graph API (fg.render, fg.tick, fg.level,
 //  fg.scale, drawShadow calls), so they also run on the old gpu/frame.js.
 // ============================================================================
@@ -52,7 +57,7 @@ try { GOVJS = await import('../gpu/governor.js'); } catch { GOVJS = null; }
 // a fake device; cost(fg) is the GPU ms of the frame that is submitted now
 function fakeFG(profileId, cost, opt = {}) {
   const jobs = [];
-  let gpuFree = 0, pend = 0;
+  let gpuFree = 0, pend = 0, lastEnd = 0;
   const live = new Map();
   const rec = { passes: [], casts: [] };
   const pass = label => ({ label, setPipeline() {}, setBindGroup() {}, draw() {}, drawIndexed() {}, end() {}, setVertexBuffer() {}, setIndexBuffer() {} });
@@ -69,7 +74,16 @@ function fakeFG(profileId, cost, opt = {}) {
     queue: {
       writeBuffer() {},
       submit() { const c = cost(fg); const start = Math.max(clock, gpuFree); gpuFree = start + c; pend = gpuFree; },
-      onSubmittedWorkDone() { const end = pend; return new Promise(r => jobs.push({ end, r })); },
+      // opt.late: ms (or a function -> ms) that the done promise resolves
+      // after the work is done (Safari resolves it late)
+      onSubmittedWorkDone() {
+        const late = typeof opt.late === 'function' ? opt.late() : (opt.late || 0);
+        // promises resolve in the order they were made (a later one never
+        // before an earlier one), as in the browsers
+        const end = Math.max(Math.max(pend, clock) + late, lastEnd);
+        lastEnd = end;
+        return new Promise(r => jobs.push({ end, r }));
+      },
     },
   };
   if (opt.pipelines) Object.assign(device, {
@@ -215,18 +229,20 @@ for (const [profileId, gpuMs, levelBy, scaleBy, why] of [
 
 // ── D a heavy frame during the step up
 {
-  let heavyNext = false;
-  const F = fakeFG('safari', () => { if (heavyNext) { heavyNext = false; return 70; } return 9; });
+  // GPU TIME: one heavy sample pauses the step up; HEAVY_RUN (3) in a row
+  // cut the scale (one late promise must not, see G)
+  let heavyNext = 0;
+  const F = fakeFG('safari', () => { if (heavyNext > 0) { heavyNext--; return 70; } return 9; });
   F.fg.resize(1280, 800, 1);
   F.fg.setScale(0.75); F.fg.setLevel(5);
   // run until the first step up
   const tUp = await F.run(30, FPS58, () => (F.fg.level < 5 ? false : undefined));
   const l1 = F.fg.level, s1 = F.fg.scale;
   ok(l1 === 4, `headroom: the first step up (level 5 -> ${l1}) at ${tUp.toFixed(1)} s`);
-  heavyNext = true;
+  heavyNext = 3;
   let tDrop = -1;
   await F.run(1, FPS58, t => { if (tDrop < 0 && (F.fg.scale < s1 || F.fg.level > l1)) tDrop = t; });
-  ok(tDrop >= 0 && tDrop < 0.2 && F.fg.scale < s1, 'a 70 ms frame (Safari heavy limit 50 ms) drops the scale at once', `scale ${s1} -> ${F.fg.scale} at ${tDrop.toFixed(2)} s`);
+  ok(tDrop >= 0 && tDrop < 0.4 && F.fg.scale < s1, '3 frames of 70 ms (Safari heavy limit 50 ms) drop the scale at once', `scale ${s1} -> ${F.fg.scale} at ${tDrop.toFixed(2)} s`);
   const lAfter = F.fg.level;
   let upInPause = false;
   await F.run(6, FPS58, () => { if (F.fg.level < lAfter) upInPause = true; });
@@ -304,6 +320,54 @@ if (GOVJS) {
   ok(a === 2 && b === 1, 'globals frame.w: + 2 = TAA off, + 1 = coarse', `${a} ${b}`);
   const common = readFileSync(here('shaders/common.wgsl'), 'utf8');
   ok(/let taaOff = \(u32\(G\.frame\.w\) & 2u\) != 0u;[\s\S]{0,40}select\(G\.frame\.x \* 0\.6180339, 0\.0, taaOff\)/.test(common), 'common.wgsl sunShadowSoft: the PCSS noise stands still when TAA is off');
+}
+
+// ── G late done promises (Safari): the GPU time is not the promise delay
+{
+  const FPS60 = 1000 / 60;
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (const [label, late] of [['45 ms late', 45], ['90 ms late', 90], ['30 .. 70 ms late (random)', () => 30 + 40 * rnd()]]) {
+    const F = fakeFG('safari', () => 6, { late });
+    F.fg.resize(1280, 800, 1);
+    let maxLevel = 0, minScale = 1;
+    await F.run(30, FPS60, () => { maxLevel = Math.max(maxLevel, F.fg.level); minScale = Math.min(minScale, F.fg.scale); });
+    ok(maxLevel === 0 && minScale >= F.fg.maxScale - 1e-6 && F.fg.heavy === 0, `safari, 6 ms GPU at 60 fps, done promise ${label}: level 0 and full scale for 30 s`, `max level ${maxLevel} min scale ${minScale} heavy ${F.fg.heavy} gpuMs ${F.fg.gpuMs.toFixed(1)} lat ${(F.fg.latMs || 0).toFixed(1)}`);
+    console.log(`# late ${label}: max level ${maxLevel}, min scale ${minScale}, heavy steps ${F.fg.heavy}, last estimate ${F.fg.gpuMs.toFixed(1)} ms, last promise delay ${(F.fg.latMs || 0).toFixed(1)} ms`);
+  }
+  {
+    // the user's state: the emergency level at 40 %, a fast GPU, late promises
+    const F = fakeFG('safari', () => 6, { late: 60 });
+    F.fg.resize(1280, 800, 1);
+    F.fg.setScale(0.4); F.fg.setLevel(8);
+    let tBack = -1;
+    await F.run(90, FPS60, t => { if (tBack < 0 && F.fg.level === 0) tBack = t; if (tBack >= 0 && F.fg.scale >= F.fg.maxScale - 1e-6) return false; });
+    ok(tBack >= 0 && tBack <= 40, 'safari, from level 8 at 40 % with 60 ms late promises: back to level 0 in 40 s or less', `at ${tBack.toFixed(1)} s, level ${F.fg.level} scale ${F.fg.scale}`);
+    console.log(`# from the emergency level: level 0 at ${tBack.toFixed(1)} s, scale ${F.fg.scale}`);
+  }
+  {
+    // a real slow GPU with late promises still steps down (and not to the emergency)
+    const F = fakeFG('safari', () => 35, { late: 40 });
+    F.fg.resize(1280, 800, 1);
+    await F.run(30, FPS60);
+    ok(F.fg.scale < 1 || F.fg.level > 0, 'safari, a real 35 ms GPU with late promises still steps down', `scale ${F.fg.scale} level ${F.fg.level}`);
+    ok(F.fg.level < 8, 'safari, a real 35 ms GPU (under the 50 ms heavy limit): never the emergency level', `level ${F.fg.level}`);
+  }
+  if (GOVJS) {
+    const FR = await import('../gpu/frame.js');
+    if (FR.gpuTimeEstimate && FR.heavyGate) {
+      const e1 = FR.gpuTimeEstimate({ submit: 100, done: 160, probeDone: 154, interval: 16.7 });
+      const e2 = FR.gpuTimeEstimate({ submit: 100, done: 190, probeDone: 105, interval: 95 });
+      ok(Math.abs(e1 - 6) < 1e-9 && Math.abs(e2 - 85) < 1e-9, 'gpuTimeEstimate: done - max(submit, probe done), capped by the drawn interval', `${e1} ${e2}`);
+      const st = { run: 0 };
+      const seq = [60, 60, 10, 60, 60, 60].map(ms => FR.heavyGate(st, ms, 50));
+      ok(seq.join() === 'false,false,false,false,false,true' && FR.heavyGate({ run: 0 }, 250, 50) && FR.heavyGate({ run: 0 }, 1, 50, true), 'heavyGate: 3 heavy samples in a row, one huge sample or a stuck frame', seq.join());
+      const F = fakeFG('safari', () => 6);
+      F.fg.resize(1280, 800, 1);
+      F.fg.why = 'heavy GPU frames 70 ms'; F.fg.setLevel(8);
+      ok(/\(why: heavy GPU frames 70 ms\)$/.test(F.fg.govText()), 'the status text says why a level is held', F.fg.govText());
+    } else ok(false, 'gpu/frame.js exports gpuTimeEstimate and heavyGate');
+  }
 }
 
 console.log(`# governor: ${pass} passed, ${fail} failed`);

@@ -202,5 +202,8 @@ export function describe(o) {
   if (f.has('emergency')) parts.push(RUNGS[MAX_LEVEL - 1].label);
   else for (const r of RUNGS) if (f.has(r.key)) parts.push(r.label);
   if (!parts.length) return '';
-  return `${o.level ? 'level ' + o.level + ': ' : ''}${parts.join(', ')}`;
+  // why the level or the scale is held (gpu/frame.js fg.why: heavy GPU
+  // frames, slow frames, a memory relief, a stuck frame)
+  const why = o.why ? ` (why: ${o.why})` : '';
+  return `${o.level ? 'level ' + o.level + ': ' : ''}${parts.join(', ')}${why}`;
 }

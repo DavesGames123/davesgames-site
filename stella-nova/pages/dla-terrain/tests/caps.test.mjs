@@ -190,8 +190,11 @@ const F = await import('../gpu/frame.js');
   fg.resize(640, 400, 1);
   const a = fg.render({}), b = fg.render({}), c = fg.render({});
   ok(a === true && b === true && c === false && fg.stalls === 1, `fake device: frames 1, 2 drawn, frame 3 skipped (stalls ${fg.stalls})`);
-  resolvers.shift()();
+  // each frame makes two done promises: the GPU TIME probe, then the frame
+  const nProm = resolvers.length;
+  resolvers.shift()(); resolvers.shift()();
   await new Promise(r0 => setTimeout(r0, 0));
+  ok(nProm === 4, 'fake device: a probe and a done promise per drawn frame', String(nProm));
   ok(fg.inFlight === 1 && fg.render({}) === true, 'fake device: a done frame frees a slot');
   // tick: a 400 ms GPU frame counts, a 400 ms CPU gap alone does not
   const fg2 = F.createFrameGraph(gpu, parts);
