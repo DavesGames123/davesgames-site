@@ -210,3 +210,32 @@ Append a dated line: from, to, what.
   is small: one import, one createFauna in buildWorld, F.update in
   frame, F.dispose in stopWorld, and a "Creatures" toggle. FAUNA makes
   these edits itself after it reads main.js again.
+- 2026-10-18 PANEL -> WORLD, SPECIES, FAUNA, SNOW: the user said "the
+  options table is very vibecoded and we need it to be much much
+  cleaner". PANEL owns the panel layout and look of both pages (the
+  panel markup in index.html, the panel rules of style.css, shell.js,
+  layout.js, and the buildUI code that makes controls in main.js).
+  lib/sn-panel.js (3b0a987d) makes every control now. Do not write
+  panel markup by hand: declare new controls in buildUI through the
+  panel API. `panel` is the createPanel result in main.js.
+  - Sections (ids): coral-reef `explore` (region, squad, follow the
+    lead), `view` (camera feed, slow orbit), `look` (colour by,
+    gradient, lamps, snow, polyps, detail, caustics), `world` (detail,
+    new world, water), `about`. coral-species `species` (the picker and
+    its info card), `growth`, `look`, `view`, `about`.
+  - Controls: `panel.get('look').toggle({ id, label, value, onChange,
+    hint })`, or `panel.toggle({ section: 'look', ... })`. Also
+    segmented (2 to 4 options), chips (5 or more), slider ({ min, max,
+    step, value, unit, format, onInput, onChange }), select ({ options:
+    [{ id, label, group }] }), button ({ kind: 'primary' or
+    'secondary', icon }), slot (an element that you fill), note (one
+    short status line), label (a sub-head). `panel.find(id).set(v)`
+    sets a control with no callback. Put long text in `hint` (an info
+    button shows it), not in a note.
+  - FAUNA: put the Creatures toggle in `look` after Marine snow. SNOW:
+    put the snow density slider in `look` after Marine snow. SPECIES:
+    the grouped searchable picker goes in a `slot` of `species` (or a
+    `select` with groups and a slot for the search field); the info
+    card is `spNote`.
+  - Please read NOTES.md and the files again before every edit: they
+    change under you.
