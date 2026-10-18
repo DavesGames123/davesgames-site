@@ -10,6 +10,10 @@
 //  not render errors. Browser checks do not run here. The surface part
 //  checks the SDF mesher (incremental = full rebuild), the vertex colours,
 //  the arena, the frame maths, the saver shots and the GLSL (glslang).
+//  The layout part checks layout.js: the media queries agree with style.css,
+//  the framed cluster is clear of each overlay at 5 phone viewports and a
+//  desktop, the pinch maths, the sheet snap, the pixel ratio cap, the 44 px
+//  targets and the 11 px text floor. tests-dom.mjs boots the page in jsdom.
 //
 //  grep -n targets: "section(" opens each group.
 // ============================================================================
@@ -26,6 +30,8 @@ import { MATERIALS, PROGRAMS, RIGS, materialById } from './surface-shaders.js';
 import { surfaceFrame } from './surface-frame.js';
 import { checkPrograms } from './glsl-check.mjs';
 import { meshStats, pipeRadius } from '../../lib/dla-sdf.js';
+import { PHONE_QUERY, LANDSCAPE_QUERY, DOCK_ITEMS, isPhone, layoutKind, matchQuery, occlusionOf, overlayRects,
+  dprCap, pinch2D, zoomAt, screen2D, sheetSnap, MIN_TEXT_PX } from './layout.js';
 
 let pass = 0, fail = 0, cur = '';
 function section(s) { cur = s; console.log('\n# ' + s); }
@@ -470,6 +476,88 @@ section('page files');
 }
 
 // ---------------------------------------------------------------- main.js on a stub DOM
+// ---------------------------------------------------------------- phone layout
+section('layout: media queries, framing, pinch, sheet, pixel ratio');
+{
+  const css = readFileSync(new URL('style.css', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('index.html', import.meta.url), 'utf8');
+  const norm = q => q.replace(/\s+/g, '');
+  const medias = [...css.matchAll(/@media\s*([^{]+)\{/g)].map(m => norm(m[1]));
+  ok(medias.includes(norm(PHONE_QUERY)), 'style.css has the PHONE block query of layout.js');
+  ok(medias.includes(norm(LANDSCAPE_QUERY)), 'style.css has the LANDSCAPE block query of layout.js');
+  let qbad = 0, qn = 0;
+  for (let w = 300; w <= 1700; w += 37) for (let h = 300; h <= 1300; h += 41) for (const coarse of [false, true]) {
+    const v = { w, h, coarse }; qn++;
+    if (matchQuery(PHONE_QUERY, v) !== isPhone(v)) qbad++;
+    if (matchQuery(LANDSCAPE_QUERY, v) !== (layoutKind(v) === 'landscape')) qbad++;
+  }
+  ok(qbad === 0, `media queries agree with layoutKind over ${qn} viewports (${qbad} differ)`);
+  const VIEWS = [[360, 740, 'portrait'], [390, 844, 'portrait'], [430, 932, 'portrait'], [768, 1024, 'portrait'], [844, 390, 'landscape'], [1280, 800, 'desktop']];
+  for (const [w, h, kind] of VIEWS) ok(layoutKind({ w, h, coarse: kind !== 'desktop' }) === kind, `${w}x${h} is ${kind}`);
+  const hit = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+  for (const [w, h, kind] of VIEWS) for (const sheet of ['closed', 'half']) for (const walk of [false, true]) {
+    const v = { w, h, coarse: kind !== 'desktop' }, ov = overlayRects(v, { sheet, walk });
+    const occ = occlusionOf(Object.values(ov), w, h);
+    if (kind !== 'desktop') occ.t = Math.max(occ.t, ov.legend ? ov.legend.bottom + 6 : 0);
+    const rect = clearRect(w, h, occ);
+    const f = fit2D({ x0: -1, x1: 1, y0: -1, y1: 1 }, rect, w, h, 0.92);
+    const view = { cx: f.cx, cy: f.cy, scale: f.scale, ox: f.ox, oy: f.oy }, u = { zoom: 1, panX: 0, panY: 0 };
+    const p0 = screen2D(view, u, [-1, 1], w, h), p1 = screen2D(view, u, [1, -1], w, h);
+    const box = { left: p0[0], top: p0[1], right: p1[0], bottom: p1[1] };
+    const blocked = Object.entries(ov).filter(([, r]) => hit(r, box)).map(([k]) => k);
+    ok(blocked.length === 0, `${w}x${h} sheet ${sheet}${walk ? ' walk' : ''}: the framed cluster is clear of ${Object.keys(ov).join(', ')}${blocked.length ? ' (hits ' + blocked + ')' : ''}`);
+    ok(rect.h >= 150 && rect.w >= 200, `${w}x${h} sheet ${sheet}${walk ? ' walk' : ''}: clear rect ${Math.round(rect.w)}x${Math.round(rect.h)} px`);
+  }
+  // a closed sheet (off screen) cuts nothing; a right drawer cuts the right
+  const o1 = occlusionOf([{ left: 0, right: 390, top: 900, bottom: 1300 }], 390, 844);
+  ok(o1.b === 0 && o1.l === 0 && o1.r === 0 && o1.t === 0, 'an off-screen sheet cuts nothing');
+  const o2 = occlusionOf([{ left: 480, right: 844, top: 0, bottom: 390 }], 844, 390);
+  ok(o2.r === 364 && o2.b === 0, `a landscape drawer cuts the right side (${o2.r})`);
+  // pixel ratio
+  ok(dprCap({ dpr: 3, phone: true, surface: true }) === 1.5, 'a phone draws the surface at dpr 1.5');
+  ok(dprCap({ dpr: 3, phone: true }) === 2 && dprCap({ dpr: 3 }) === 2, 'lines draw at dpr 2 at most');
+  ok(dprCap({ dpr: 1, phone: true, surface: true }) === 1, 'dpr 1 stays 1');
+  // pinch keeps the world point under the fingers
+  const base = { cx: 3, cy: -2, scale: 4, ox: 10, oy: -30 }, u0 = { zoom: 1.3, panX: 2, panY: -1 };
+  const W = 390, H = 844;
+  const a0 = [150, 300], b0 = [250, 420], a1 = [120, 260], b1 = [300, 470];
+  const wpt = (() => { const s = base.scale * u0.zoom, m = [(a0[0] + b0[0]) / 2, (a0[1] + b0[1]) / 2];
+    return [base.cx + u0.panX + (m[0] - W / 2 - base.ox) / s, base.cy + u0.panY - (m[1] - H / 2 - base.oy) / s]; })();
+  const u1 = pinch2D(base, u0, a0, b0, a1, b1, W, H);
+  const sp = screen2D(base, u1, wpt, W, H), mid1 = [(a1[0] + b1[0]) / 2, (a1[1] + b1[1]) / 2];
+  ok(near(sp[0], mid1[0], 1e-6) && near(sp[1], mid1[1], 1e-6), `pinch: the world point stays under the midpoint (${sp.map(x => x.toFixed(3))})`);
+  const r = Math.hypot(a1[0] - b1[0], a1[1] - b1[1]) / Math.hypot(a0[0] - b0[0], a0[1] - b0[1]);
+  ok(near(u1.zoom, u0.zoom * r, 1e-9), `pinch: zoom scales by the spread (${u1.zoom.toFixed(3)})`);
+  // the same map as camera.js ortho2D
+  const M = ortho2D({ cx: base.cx + u1.panX, cy: base.cy + u1.panY, scale: base.scale * u1.zoom, ox: base.ox, oy: base.oy }, W, H);
+  const pj = project(M, [wpt[0], wpt[1], 0], W, H);
+  ok(near(pj[0], sp[0], 1e-3) && near(pj[1], sp[1], 1e-3), 'screen2D agrees with ortho2D + project');
+  const u2 = zoomAt(base, u0, [100, 100], [140, 80], 1, W, H);
+  ok(near(u2.zoom, u0.zoom) && near(u2.panX, u0.panX - 40 / (base.scale * u0.zoom)) && near(u2.panY, u0.panY - 20 / (base.scale * u0.zoom)), 'two-finger drag pans with no zoom');
+  ok(pinch2D(base, { zoom: 29, panX: 0, panY: 0 }, [0, 0], [10, 0], [0, 0], [100, 0], W, H).zoom === 30, 'pinch zoom stops at 30');
+  ok(pinch2D(base, { zoom: 0.4, panX: 0, panY: 0 }, [0, 0], [100, 0], [0, 0], [10, 0], W, H).zoom === 0.3, 'pinch zoom stops at 0.3');
+  // sheet snap
+  const SN = [['half', 3, 'full'], ['full', -2, 'half'], ['half', -60, 'full'], ['full', 60, 'half'], ['half', 60, 'closed'], ['half', 20, 'half'], ['full', -60, 'full']];
+  ok(SN.every(([s0, dy, s1]) => sheetSnap(s0, dy) === s1), 'sheet snap: tap toggles, drag up is full, drag down is half then closed');
+  // the dock in index.html: the ids of DOCK_ITEMS in order
+  const dock = /<nav id="dock"[\s\S]*?<\/nav>/.exec(html)[0];
+  const ids = [...dock.matchAll(/id="([^"]+)"/g)].map(m => m[1]).slice(1);
+  ok(ids.join() === DOCK_ITEMS.map(d => d.id).join(), `dock items in order (${ids.join(', ')})`);
+  ok(/<details id="csvBox"/.test(html) && /<details id="codeBox"/.test(html), 'the CSV stream and the source extracts are <details> folds');
+  ok(/class="row scrub"[^]*?id="replay"/.test(html), 'the replay scrubber row has the large thumb class');
+  // text sizes: every rem or px font size in style.css is 11 px or more
+  const small = [...css.matchAll(/font(?:-size)?:\s*([0-9.]+)(rem|px)/g)].filter(m => (m[2] === 'rem' ? +m[1] * 16 : +m[1]) < MIN_TEXT_PX).map(m => m[0]);
+  ok(small.length === 0, `no font size under ${MIN_TEXT_PX}px (${small.join(' ') || 'none'})`);
+  // touch targets in the TOUCH and PHONE blocks
+  const touch = css.slice(css.indexOf('/* TOUCH.'), css.indexOf('/* LANDSCAPE'));
+  for (const [sel, rx] of [['buttons', /\.modes button,\.presets button\{min-height:4[4-9]px/], ['sliders', /\.row\{min-height:44px/], ['slider thumb', /slider-thumb\{-webkit-appearance:none;width:26px;height:26px/],
+    ['scrub thumb', /\.row\.scrub input\[type=range\]::-webkit-slider-thumb\{width:34px;height:34px/], ['fold summary', /\.fold > summary\{min-height:44px/],
+    ['dock buttons', /#dock > button\{flex:0 0 48px;height:48px/], ['dock preset', /#dockPreset\{flex:1;min-width:0;height:48px/], ['close', /#panelClose\{width:44px;height:44px\}/]])
+    ok(rx.test(touch), `touch target: ${sel}`);
+  ok(/env\(safe-area-inset-bottom\)/.test(touch) && /env\(safe-area-inset-left\)/.test(touch) && /env\(safe-area-inset-right\)/.test(touch), 'safe-area insets in the phone block');
+  ok(/#panel\{[^}]*overflow-x:hidden/.test(css), 'the panel has no horizontal scroll');
+}
+
 section('main.js boot on a stub DOM (wiring only)');
 await (async () => {
   const els = new Map(), listeners = [];
