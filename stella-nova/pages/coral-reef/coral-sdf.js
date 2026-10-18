@@ -53,7 +53,8 @@
 //                   polyps, dirty, focus }
 //
 //  A result with no indices means "remove this brick". A brick is unique
-//  by field + key (field: 'staghorn|0', 'staghorn|1', 'fan|0|12', ...).
+//  by sp + lod + key (field: 'staghorn|0', 'staghorn|1', 'fan|0|12', ...;
+//  the keys of a per-colony field are offset by a multiple of 2^30).
 //  chunk is a CHUNK_M cube in world metres: the page draws one mesh per
 //  sp + lod + chunk.
 //
@@ -277,7 +278,7 @@ export function createCoralMesher(opts = {}) {
   let PX = new Float64Array(cap * 3), PAR = new Int32Array(cap), PCOL = new Int32Array(cap);
   let turn = 0;
   const removals = [];             // results that remove bricks (focus changes)
-  let tris = [0, 0], polypN = 0;
+  let tris = [0, 0], polypN = 0, ownN = 0;
 
   // The key of the fine field of a colony: one per species, or one per
   // colony for a species with own: true (sea fans: they do not fuse, and a
@@ -307,7 +308,10 @@ export function createCoralMesher(opts = {}) {
       sh.groove = 0;
     }
     const O = own ? c.base.slice() : [0, 0, 0];
-    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O,
+    // brick keys of own fields are offset so that they are unique over all
+    // fields (lib keys are under 2^30)
+    const keyBase = own ? (++ownN) * 1073741824 : 0;
+    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O, keyBase,
       X: new Float64Array(3 * 1024), Y: new Float64Array(1024), SM: new Float64Array(3 * 1024), DIR: new Float64Array(3 * 1024),
       depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
     F.tree = createTree({
@@ -438,10 +442,11 @@ export function createCoralMesher(opts = {}) {
       : new Float32Array(0);
     const nt = m.indices.length / 3;
     const chunk = chunkKey(m.bx, m.by, m.bz, F.cell, O);
-    const old = F.live.get(m.key);
+    const bkey = m.key + F.keyBase;
+    const old = F.live.get(bkey);
     if (old) { tris[F.lev] -= old[0]; polypN -= old[1]; }
-    if (nt) { F.live.set(m.key, [nt, polyps.length / 8, chunk]); tris[F.lev] += nt; polypN += polyps.length / 8; } else F.live.delete(m.key);
-    return { sp: F.id, lod: F.lev, k: -1, key: m.key, field: F.key, chunk, bx: m.bx, by: m.by, bz: m.bz, cell: F.cell,
+    if (nt) { F.live.set(bkey, [nt, polyps.length / 8, chunk]); tris[F.lev] += nt; polypN += polyps.length / 8; } else F.live.delete(bkey);
+    return { sp: F.id, lod: F.lev, k: -1, key: bkey, field: F.key, chunk, bx: m.bx, by: m.by, bz: m.bz, cell: F.cell,
       positions: m.positions, normals: m.normals, gids, indices: m.indices, polyps, tris: nt };
   }
 

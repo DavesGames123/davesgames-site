@@ -299,7 +299,12 @@ export function createReef(opts = {}) {
   // the engine grid: cell = 2 x attraction >= the largest species attraction
   let maxAttrU = 0;
   for (const id of SPECIES_IDS) maxAttrU = Math.max(maxAttrU, params[id].attractionDistance / U);
-  const rockD = cachedField(rock.sdf, Math.max(0.12, 0.16 * fine), 0.22);
+  // rock.sdf may be a scaled bound (ROCK: raw x sdfScale, Lipschitz
+  // rock.lipschitz). rockM: about metres, for the thresholds. rockSafe:
+  // a lower bound of the true distance (sdf / lipschitz), for the steps.
+  const rs = rock.sdfScale || 1, lip = rock.lipschitz || 1;
+  const rockM = (x, y, z) => rock.sdf(x, y, z) / rs;
+  const rockD = cachedField((x, y, z) => rock.sdf(x, y, z) / lip, Math.max(0.12, 0.16 * fine), 0.22);
   const yMin = rock.bounds ? rock.bounds.min[1] : -20;
   // the sand floor (rock.sand.heightAt): not in rock.sdf; a walker that
   // reaches it is lost, and no particle is put under it
@@ -405,7 +410,7 @@ export function createReef(opts = {}) {
     if (R.count >= R.limit) return null;
     const n = site.n || [0, 1, 0], s = params[id].particleSpacing;
     const base = [site.p[0] + n[0] * s * 0.6, site.p[1] + n[1] * s * 0.6, site.p[2] + n[2] * s * 0.6];
-    for (let q = 0; q < 8 && rock.sdf(base[0], base[1], base[2]) < s * 0.4; q++) { base[0] += n[0] * s * 0.3; base[1] += n[1] * s * 0.3; base[2] += n[2] * s * 0.3; }
+    for (let q = 0; q < 8 && rockM(base[0], base[1], base[2]) < s * 0.4; q++) { base[0] += n[0] * s * 0.3; base[1] += n[1] * s * 0.3; base[2] += n[2] * s * 0.3; }
     if (rock.sdf(base[0], base[1], base[2]) <= 0) return null;
     const size = o.size ?? (sp.size[0] + (sp.size[1] - sp.size[0]) * random());
     const k = R.colonies.length;
@@ -549,7 +554,10 @@ export function createReef(opts = {}) {
   const FALL = 0.85, LIFT = 0.08, LIFT0 = 0;
   // the snow disc of a colony: its extent plus a few attraction distances,
   // so that a young colony (one seed) still catches some snow
-  function discOf(c) { return c.ext + 3 * params[c.id].attractionDistance + 0.04 * c.size * Math.min(1, c.count / 300); }
+  // plus the lift (the height the snow falls before it reaches the colony
+  // top: about how far it moves sideways), so a colony alone gets the snow
+  // from its sides too, as in open water
+  function discOf(c) { const a0 = params[c.id].attractionDistance; return c.ext + 3 * a0 + 1.2 * (4 * a0 + LIFT * (c.top - c.base[1])) * Math.min(1, 0.3 + c.count / 300); }
   function pick() {
     const u = random() * liveSum;
     let lo = 0, hi = live.length - 1;
@@ -604,13 +612,13 @@ export function createReef(opts = {}) {
     if (e > 0.6 && random() > Math.pow((1 - e) / 0.4, 1.5)) return false;
     if (x * x + z * z > radius * radius) return false;
     const s = params[c.id].particleSpacing;
-    return rock.sdf(x, y, z) > s * 0.25 && y > sandAt(x, z) + s * 0.25;
+    return rockM(x, y, z) > s * 0.25 && y > sandAt(x, z) + s * 0.25;
   }
 
   // Push a model-unit point out of the rock along the rock normal.
   function outOfRock(out, minD) {
     for (let q = 0; q < 4; q++) {
-      const x = out[0] * U, y = out[1] * U, z = out[2] * U, d = rock.sdf(x, y, z);
+      const x = out[0] * U, y = out[1] * U, z = out[2] * U, d = rockM(x, y, z);
       if (d >= minD) return true;
       const n = rock.normal(x, y, z), s = (minD - d) * 1.05 / U;
       out[0] += n[0] * s; out[1] += n[1] * s; out[2] += n[2] * s;
@@ -673,11 +681,11 @@ export function createReef(opts = {}) {
       }
       const x = P[0] * U, y = P[1] * U, z = P[2] * U;
       const dr = rockD.dist(x, y, z);
-      if (dr < 0.004 * R.fine + 0.002) {
+      if (dr < 0.003 * R.fine + 0.001) {
         if (encrust(x, y, z)) return R.count - 1;
         R.lost++; return -1;
       }
-      const step = Math.max(minMoveU, Math.min(d - A, dr * 0.8 / U));
+      const step = Math.max(minMoveU, Math.min(d - A, dr * 0.9 / U));
       randomInUnitSphere(random, 3, V);
       if (wPlane) { const q = V[0] * wPlane[0] + V[2] * wPlane[1]; V[0] -= wPlane[0] * q; V[2] -= wPlane[1] * q; V[1] -= wFall; }
       else { V[0] += env.cur[0] * drift; V[1] -= wFall; V[2] += env.cur[1] * drift; }
