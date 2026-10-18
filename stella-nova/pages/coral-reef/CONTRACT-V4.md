@@ -200,3 +200,45 @@ the squad never enters rock or coral over a long run; the frontier
 coverage grows; the follow camera is never stuck on rock; saver framing;
 phone budgets. Old tests about the plot and growth are retired with a
 note in the commit that retires them.
+
+## Addendum 2026-10-18: depth regions
+
+The user said (verbatim): "you should be allowed to explore different
+regions with the ROV. reefs, shallows, twilight zone, absolute ocean
+depths". Binding additions (the other decisions stay: corals grown once,
+no growth animation, the ROV squad, follow by default):
+
+- Regions by depth, with no hard border (the depth field is continuous):
+  | region | depth | look and life |
+  |---|---|---|
+  | Shallows | 0 to about 30 m | sunlit, strong caustics, turquoise water, sand flats, seagrass |
+  | Reef | about 5 to 40 m | the dense reef framework, many grown colonies |
+  | Twilight | about 40 to 1000 m | fading blue; plate corals, then sparse deep corals, sponges, sea pens |
+  | Abyss / Trench | 1000 m to trenches of several km | black: only the ROV lamps and some bioluminescence, marine snow, sediment plains; sparse deep corals (Lophelia, bamboo coral) and glass sponges |
+- The large-scale field: a regional depth (a slow warped noise over
+  kilometres, mapped through a profile with shelves) under the local
+  relief of world/field.js. The shelf ends in a reef wall or drop-off to
+  the twilight slope, which runs down to abyssal plains with trenches.
+  Slopes stay within the bound of the field (no wall over about 60
+  degrees from the height term; vertical walls only from the 3D parts).
+  The local relief scales with the region (taller seamounts deep, low
+  relief on the shelf). Heights stay under the sea surface.
+- world y keeps the datum of the page: depth = 55 - y (shaders.js
+  SURF_Y). The HUD shows the depth and the region name.
+- Region picker (Shallows, Reef, Twilight, Abyss / Trench): the page
+  finds the nearest point of that region (a seeded search on the regional
+  field), fades out, moves the squad and the camera there, and fades in
+  when the chunk under the eye has rock. The squad also wanders between
+  regions on its own (a slow bias of its exploration heading to a target
+  region that changes every 20 to 40 minutes), and the saver visits all
+  regions (a region step every few minutes of saver time).
+- Light from depth: the fog colour and density, the downwelling light,
+  the caustic strength, the marine snow density and the exposure follow
+  the camera depth (per frame, uniforms only): bright turquoise in the
+  shallows, deep blue in the twilight, black in the abyss.
+- Life from depth: the colony density (W.habitat) and the species mix
+  (reef.js pickSpecies weights) follow the region: dense reef colonies at
+  5 to 40 m; tables and fans in the twilight; few, small colonies in the
+  abyss. Species colours belong to GROWTH (reef.js SPECIES): a request in
+  NOTES.md if deep-water colours are needed.
+- Phones: the same regions with the existing budgets.
