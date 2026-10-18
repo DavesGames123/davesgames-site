@@ -553,7 +553,7 @@ export function createTreeSdf(opts = {}) {
   const rootScale = opts.rootScale ?? 1;     // a seed sphere radius, times its pipe radius
   const off = opts.offset || [0, 0, 0];
   let cap = 1024, n = 0;
-  let X = new Float64Array(cap * 3), par = new Int32Array(cap), sub = new Int32Array(cap), rad = new Float32Array(cap);
+  let X = new Float64Array(cap * 3), par = new Int32Array(cap), sub = new Int32Array(cap), rad = new Float64Array(cap);
   let kids = [];
   let mark = new Int32Array(cap), stamp = 0, CH = new Int32Array(4096);
 
@@ -562,7 +562,7 @@ export function createTreeSdf(opts = {}) {
     const x = new Float64Array(cap * 3); x.set(X); X = x;
     const p = new Int32Array(cap); p.set(par); par = p;
     const s = new Int32Array(cap); s.set(sub); sub = s;
-    const r = new Float32Array(cap); r.set(rad); rad = r;
+    const r = new Float64Array(cap); r.set(rad); rad = r;
     const mk = new Int32Array(cap); mk.set(mark); mark = mk;
   }
 
