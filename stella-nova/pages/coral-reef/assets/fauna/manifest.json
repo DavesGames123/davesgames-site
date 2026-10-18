@@ -1,0 +1,534 @@
+{
+ "about": "Creature models of coral-reef/fauna. Every file in assets/fauna/ is listed here with its source and licence (tests/fauna.test.mjs checks it).",
+ "bytes": 1992223,
+ "models": [
+  {
+   "id": "acanthaster-brevispinus",
+   "sci": "Acanthaster brevispinus Fisher, 1917",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:50a5728c-75c3-4341-80b8-e08764f37ed9",
+   "record": "http://n2t.net/ark:/65665/387fbf7e1-ea40-44c8-9e13-c30338a024f5",
+   "specimen": "nmnhinvertebratezoology_353641",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "acanthaster-brevispinus.glb",
+     "bytes": 81748,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "acanthaster-brevispinus-lod1.glb",
+     "bytes": 17400,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/acanthaster-brevispinus-512.jpg",
+     "bytes": 65264,
+     "texture": true
+    },
+    {
+     "path": "tex/acanthaster-brevispinus-256.jpg",
+     "bytes": 23133,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.2064,
+    0.0515,
+    0.2147
+   ],
+   "scanUnit": 0.2147
+  },
+  {
+   "id": "astrophyton-muricatum",
+   "sci": "Astrophyton muricatum (Lamarck, 1816)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:220b1acf-257e-4362-b6e0-fd6c24d58f22",
+   "record": "http://n2t.net/ark:/65665/34e02b958-b9f4-486a-98d3-96d51b541410",
+   "specimen": "nmnhinvertebratezoology_338065",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "astrophyton-muricatum.glb",
+     "bytes": 75908,
+     "tris": 2924,
+     "lod": 0
+    },
+    {
+     "path": "astrophyton-muricatum-lod1.glb",
+     "bytes": 14912,
+     "tris": 552,
+     "lod": 1
+    },
+    {
+     "path": "tex/astrophyton-muricatum-512.jpg",
+     "bytes": 67667,
+     "texture": true
+    },
+    {
+     "path": "tex/astrophyton-muricatum-256.jpg",
+     "bytes": 24366,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.2124,
+    0.0717,
+    0.2253
+   ],
+   "scanUnit": 0.2253
+  },
+  {
+   "id": "astrothorax-waitei",
+   "sci": "Astrothorax waitei (Benham, 1909)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:42fba0a6-68c4-45a1-ad08-92b243104ea9",
+   "record": "http://n2t.net/ark:/65665/319718a88-94a2-41cd-9336-0c36b2432030",
+   "specimen": "nmnhinvertebratezoology_15226858",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "astrothorax-waitei.glb",
+     "bytes": 75600,
+     "tris": 2992,
+     "lod": 0
+    },
+    {
+     "path": "astrothorax-waitei-lod1.glb",
+     "bytes": 15492,
+     "tris": 598,
+     "lod": 1
+    },
+    {
+     "path": "tex/astrothorax-waitei-512.jpg",
+     "bytes": 44297,
+     "texture": true
+    },
+    {
+     "path": "tex/astrothorax-waitei-256.jpg",
+     "bytes": 18230,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.083,
+    0.0509,
+    0.0648
+   ],
+   "scanUnit": 0.083
+  },
+  {
+   "id": "cidaris-blakei",
+   "sci": "Cidaris blakei (Agassiz)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:5a1b80ef-55a3-4c04-9376-45b441f09c6c",
+   "record": "http://n2t.net/ark:/65665/323475fe3-b54b-4c4a-b4d2-db0f0bf6e9af",
+   "specimen": "nmnhinvertebratezoology_320487",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "cidaris-blakei.glb",
+     "bytes": 74904,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "cidaris-blakei-lod1.glb",
+     "bytes": 16316,
+     "tris": 596,
+     "lod": 1
+    },
+    {
+     "path": "tex/cidaris-blakei-512.jpg",
+     "bytes": 41574,
+     "texture": true
+    },
+    {
+     "path": "tex/cidaris-blakei-256.jpg",
+     "bytes": 17134,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1359,
+    0.0535,
+    0.1168
+   ],
+   "scanUnit": 0.1359
+  },
+  {
+   "id": "culcita-novaeguineae",
+   "sci": "Culcita novaeguineae Müller & Troschel, 1842",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:034b522e-a105-4b95-b2b5-fdb724f537f6",
+   "record": "http://n2t.net/ark:/65665/39ccf7bb3-1f1d-43f4-920b-ad697bb46b6e",
+   "specimen": "nmnhinvertebratezoology_363595",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "culcita-novaeguineae.glb",
+     "bytes": 75780,
+     "tris": 2998,
+     "lod": 0
+    },
+    {
+     "path": "culcita-novaeguineae-lod1.glb",
+     "bytes": 17780,
+     "tris": 640,
+     "lod": 1
+    },
+    {
+     "path": "tex/culcita-novaeguineae-512.jpg",
+     "bytes": 67605,
+     "texture": true
+    },
+    {
+     "path": "tex/culcita-novaeguineae-256.jpg",
+     "bytes": 25290,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.138,
+    0.1042,
+    0.1023
+   ],
+   "scanUnit": 0.138
+  },
+  {
+   "id": "goniaster-tessellatus",
+   "sci": "Goniaster tessellatus (Lamarck, 1816)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:3ee61b79-2c99-425e-9d81-1b5f8da4c71f",
+   "record": "http://n2t.net/ark:/65665/34cccbb07-afc0-4114-9439-e2375ebe6100",
+   "specimen": "nmnhinvertebratezoology_351711",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "goniaster-tessellatus.glb",
+     "bytes": 79916,
+     "tris": 2978,
+     "lod": 0
+    },
+    {
+     "path": "goniaster-tessellatus-lod1.glb",
+     "bytes": 16652,
+     "tris": 592,
+     "lod": 1
+    },
+    {
+     "path": "tex/goniaster-tessellatus-512.jpg",
+     "bytes": 44103,
+     "texture": true
+    },
+    {
+     "path": "tex/goniaster-tessellatus-256.jpg",
+     "bytes": 18133,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1577,
+    0.0337,
+    0.1514
+   ],
+   "scanUnit": 0.1577
+  },
+  {
+   "id": "myxaster-sol",
+   "sci": "Myxaster sol Perrier, 1885",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:6eab6e76-93ef-4c6f-9bbd-0ed302bea4a6",
+   "record": "http://n2t.net/ark:/65665/3f7d4edfa-2175-4dfc-b833-339f600a8bd9",
+   "specimen": "nmnhinvertebratezoology_10365064",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "myxaster-sol.glb",
+     "bytes": 77496,
+     "tris": 2988,
+     "lod": 0
+    },
+    {
+     "path": "myxaster-sol-lod1.glb",
+     "bytes": 16632,
+     "tris": 598,
+     "lod": 1
+    },
+    {
+     "path": "tex/myxaster-sol-512.jpg",
+     "bytes": 56776,
+     "texture": true
+    },
+    {
+     "path": "tex/myxaster-sol-256.jpg",
+     "bytes": 21882,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0949,
+    0.019,
+    0.0894
+   ],
+   "scanUnit": 0.0949
+  },
+  {
+   "id": "plagiobrissus-grandis",
+   "sci": "Plagiobrissus grandis (Gmelin)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:016da88d-1ec4-4df4-a72f-e3557131ec7a",
+   "record": "http://n2t.net/ark:/65665/37faab030-5600-45da-987f-e896c88dbe89",
+   "specimen": "nmnhinvertebratezoology_364554",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "plagiobrissus-grandis.glb",
+     "bytes": 62000,
+     "tris": 2995,
+     "lod": 0
+    },
+    {
+     "path": "plagiobrissus-grandis-lod1.glb",
+     "bytes": 14904,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/plagiobrissus-grandis-512.jpg",
+     "bytes": 44922,
+     "texture": true
+    },
+    {
+     "path": "tex/plagiobrissus-grandis-256.jpg",
+     "bytes": 18206,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1682,
+    0.0654,
+    0.178
+   ],
+   "scanUnit": 0.178
+  },
+  {
+   "id": "plazaster-borealis",
+   "sci": "Plazaster borealis (Uchida, 1938)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:5cdc3533-1afc-4314-9df6-e8d7d9cace0d",
+   "record": "http://n2t.net/ark:/65665/301eab0f6-877d-4d79-8e18-be8256ab2fc3",
+   "specimen": "nmnhinvertebratezoology_11185297",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "plazaster-borealis.glb",
+     "bytes": 76760,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "plazaster-borealis-lod1.glb",
+     "bytes": 15824,
+     "tris": 594,
+     "lod": 1
+    },
+    {
+     "path": "tex/plazaster-borealis-512.jpg",
+     "bytes": 61447,
+     "texture": true
+    },
+    {
+     "path": "tex/plazaster-borealis-256.jpg",
+     "bytes": 22661,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.12,
+    0.0285,
+    0.0963
+   ],
+   "scanUnit": 0.12
+  },
+  {
+   "id": "pycnopodia-helianthoides",
+   "sci": "Pycnopodia helianthoides (Brandt, 1835)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:0c69e749-b8df-4e5a-8d20-c38aebaf6279",
+   "record": "http://n2t.net/ark:/65665/397c8cc0d-359e-4f3c-99a8-eccd218b60cb",
+   "specimen": "nmnhinvertebratezoology_364399",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "pycnopodia-helianthoides.glb",
+     "bytes": 79868,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "pycnopodia-helianthoides-lod1.glb",
+     "bytes": 19124,
+     "tris": 690,
+     "lod": 1
+    },
+    {
+     "path": "tex/pycnopodia-helianthoides-512.jpg",
+     "bytes": 68838,
+     "texture": true
+    },
+    {
+     "path": "tex/pycnopodia-helianthoides-256.jpg",
+     "bytes": 24627,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.2012,
+    0.106,
+    0.178
+   ],
+   "scanUnit": 0.2012
+  },
+  {
+   "id": "rotula-deciesdigitata",
+   "sci": "Rotula deciesdigitata (Leske, 1778)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:86c2ccf4-2f29-4c1c-845d-42ee8f92eec5",
+   "record": "http://n2t.net/ark:/65665/3f6ed1338-5f39-4798-9654-6da3e5626730",
+   "specimen": "nmnhinvertebratezoology_904429",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "rotula-deciesdigitata.glb",
+     "bytes": 62992,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "rotula-deciesdigitata-lod1.glb",
+     "bytes": 15260,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/rotula-deciesdigitata-512.jpg",
+     "bytes": 37821,
+     "texture": true
+    },
+    {
+     "path": "tex/rotula-deciesdigitata-256.jpg",
+     "bytes": 16447,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0576,
+    0.0084,
+    0.0566
+   ],
+   "scanUnit": 0.0576
+  },
+  {
+   "id": "tylocidaris-ohshimai",
+   "sci": "Psychocidaris ohshimai Ikeda",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:736dc41c-bcdc-4d52-82ca-4e9de35059bd",
+   "record": "http://n2t.net/ark:/65665/34e90d56f-6052-4a44-96ac-630017bc94eb",
+   "specimen": "nmnhinvertebratezoology_330191",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "tylocidaris-ohshimai.glb",
+     "bytes": 78208,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "tylocidaris-ohshimai-lod1.glb",
+     "bytes": 16080,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/tylocidaris-ohshimai-512.jpg",
+     "bytes": 45714,
+     "texture": true
+    },
+    {
+     "path": "tex/tylocidaris-ohshimai-256.jpg",
+     "bytes": 18530,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0644,
+    0.0362,
+    0.0606
+   ],
+   "scanUnit": 0.0644
+  }
+ ]
+}
