@@ -32,6 +32,22 @@
 //          Snow cover builds up in snowfall and melts above 0 C.
 //  FLASH   lightning strokes come from a seeded hash of t, so a replay is
 //          the same. weather.w is the flash, state.bolt names the stroke.
+//  MODEL   createSky() (the page's sky) runs weather-model.js, a 2D
+//          atmosphere over the world, in weather-worker.js (inline in
+//          node). The values at the camera (state.sim.setCamera, called by
+//          render/sky.js) replace the preset values: cover, rain or snow
+//          (by the freezing level), storminess, low wind, valley fog. The
+//          air-mass values (haze, aerosol, cirrus, temperature) fold the
+//          presets across the model's fronts. Lightning comes from the
+//          model's storm cells, as the mean flash over the frame
+//          (lightningCells), so 30 and 144 fps give the same light.
+//  CLOCK   weather time = sky time x RATE; RATE follows the day clock
+//          (game s per sky s from the change of tod), RATE_MIN .. RATE_MAX.
+//          The model steps a fixed 60 s; the driver interpolates the two
+//          snapshots round the weather time, so the result does not depend
+//          on the frame times. A new world or reset() spins the model up
+//          over the 4 h before now. The stateless skyState() keeps the old
+//          preset fronts (FRONT_S) for callers without a model.
 //
 //  grep -n targets
 //    "export const WEATHER", "export const ATMO", "export const GLOBALS",
@@ -39,8 +55,14 @@
 //    "export function moonPosition",
 //    "export function sunTransmittance", "function presetVec",
 //    "export function skyState", "function lightning",
-//    "export function writeSkyGlobals", "export function createSky"
+//    "export function writeSkyGlobals", "export function airTemps",
+//    "function composeSky", "export function weatherEnv",
+//    "export function createDriver", "function airMassAt",
+//    "function upperWindAt", "export function lightningCells",
+//    "export function createSky"
 // ============================================================================
+
+import { createModel, terrainCells, sampleSnap, CH, DT, N as WN, FORCING } from './weather-model.js';
 
 export const FRONT_S = 40;          // seconds for a weather front to pass
 export const SUN_ILLUM = 20;        // solar irradiance outside the air (HDR units)
@@ -236,13 +258,17 @@ export function lightning(t, storm, seed = 0) {
   return { flash: clamp(flash, 0, 1), bolt };
 }
 
-function temperatureC(tod, season, latitude, wx, sunElev) {
+// The sea-level air temperature of the place and season with no weather
+// (baseC) and the phase of the day (diurnal -1 .. 1, highest at 15:00).
+export function airTemps(tod, season, latitude) {
   const lat = Math.abs(latitude);
   const north = latitude >= 0 ? 1 : -1;
-  const summer = Math.sin(2 * Math.PI * (season - 0.0)) * north;   // +1 June in the north
-  const base = 27 - 0.42 * lat + summer * (4 + 0.22 * lat);
-  const diurnal = (3 + 4 * (1 - wx.cover)) * Math.sin(2 * Math.PI * (tod - 0.375));
-  return base + diurnal + wx.temp + (sunElev > 0 ? 0 : -1);
+  const summer = Math.sin(2 * Math.PI * season) * north;   // +1 June in the north
+  return { baseC: 27 - 0.42 * lat + summer * (4 + 0.22 * lat), diurnal: Math.sin(2 * Math.PI * (tod - 0.375)) };
+}
+function temperatureC(tod, season, latitude, wx, sunElev) {
+  const a = airTemps(tod, season, latitude);
+  return a.baseC + (3 + 4 * (1 - wx.cover)) * a.diurnal + wx.temp + (sunElev > 0 ? 0 : -1);
 }
 
 // The whole SKY state. See the header for the arguments.
@@ -275,7 +301,16 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
     from = to;
   }
   const wx = progress >= 1 ? { ...to } : frontMix(from, to, progress);
+  const out = composeSky(tod, id, season, latitude, t, wx, prev, dt, { front: { from, to, progress } });
+  if (!over || !over.stateless) LAST = out;
+  return out;
+}
 
+// Everything that follows from the weather values wx at the camera: sun,
+// moon, ambient, fog colour, wind, ground state, valley fog, exposure.
+// extra: { front, light (a lightning result), windVec ([x, z] m/s of the
+// low wind at the camera), valleyFog }
+function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
   // ---- sun and moon ----------------------------------------------------------
   const sun = solarPosition(tod, season, latitude);
   const moon = moonPosition(tod, season, latitude);
@@ -307,16 +342,23 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
     a = mix(a, 0.22 * grey * Math.max(se, 0) + a * 0.55, smooth(0.5, 1.0, wx.cover));
     amb[c] = a + sunColor[c] * 0.06 * (1 - day * 0.5);          // ground bounce
   }
-  const flashObj = lightning(t, wx.storm);
+  const flashObj = extra.light || lightning(t, wx.storm);
   const flash = flashObj.flash;
 
   // ---- fog ---------------------------------------------------------------------
   const fogCol = amb.map((a, c) => a * 0.12 + sunColor[c] * 0.025 + flash * 0.4);
 
   // ---- wind --------------------------------------------------------------------
-  const ang = 0.6 + 0.35 * Math.sin(t * 0.011) + 0.2 * Math.sin(t * 0.027 + 1.3);
   const gust = clamp(0.5 + 0.35 * Math.sin(t * 0.43) * Math.sin(t * 0.17 + 2.0) + 0.15 * Math.sin(t * 1.3), 0, 1);
-  const speed = wx.wind * (0.75 + 0.5 * gust);
+  let ang, speed;
+  if (extra.windVec) {
+    // the low wind of the model at the camera (it turns with the terrain)
+    ang = Math.atan2(extra.windVec[1], extra.windVec[0]);
+    speed = Math.hypot(extra.windVec[0], extra.windVec[1]) * (0.75 + 0.5 * gust);
+  } else {
+    ang = 0.6 + 0.35 * Math.sin(t * 0.011) + 0.2 * Math.sin(t * 0.027 + 1.3);
+    speed = wx.wind * (0.75 + 0.5 * gust);
+  }
   const windPhase = dt !== null ? prev.windPhase + dt * speed / 5 : t * wx.wind / 5;
 
   // ---- ground state --------------------------------------------------------------
@@ -335,14 +377,18 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
 
   // ---- morning valley fog: forms on clear, calm nights, burns off as the sun climbs
   const hourDeg = (tod - 0.5) * 360;
-  const morning = smooth(-0.22, -0.02, -Math.abs(tod - 0.27) * 1.0) ; // peaks near 06:30
-  const burn = 1 - smooth(4, 22, sun.elevation);
-  const valleyFog = clamp(wx.valley * (0.25 + 0.75 * morning) * burn * (sun.elevation > -18 ? 1 : 0.6) * (1 - smooth(4, 12, speed)), 0, 1.5);
+  let valleyFog;
+  if (typeof extra.valleyFog === 'number') valleyFog = extra.valleyFog;
+  else {
+    const morning = smooth(-0.22, -0.02, -Math.abs(tod - 0.27) * 1.0); // peaks near 06:30
+    const burn = 1 - smooth(4, 22, sun.elevation);
+    valleyFog = clamp(wx.valley * (0.25 + 0.75 * morning) * burn * (sun.elevation > -18 ? 1 : 0.6) * (1 - smooth(4, 12, speed)), 0, 1.5);
+  }
 
   const out = {
     t, tod, season, latitude, weatherId: id,
     label: (BY_ID.get(id) || {}).label,
-    front: { from, to, progress },
+    front: extra.front,
     wx, windPhase,
     sunDir: sun.dir, sunElevation: sun.elevation, sunScale: SUN_ILLUM * direct,
     sunColor, sunColorClear: sunClear, sunTrans: Tsun,
@@ -365,7 +411,6 @@ export function skyState(tod, weatherId, season = 0.3, latitude = 46, t = 0, pre
     gust, cover: wx.cover, rain: wx.rain, snow: wx.snow, lightning: flash,
     storminess: wx.storm,
   });
-  if (!over || !over.stateless) LAST = out;
   return out;
 }
 
@@ -384,17 +429,297 @@ export function writeSkyGlobals(f, s) {
   return f;
 }
 
-// A stateful wrapper: sky.update(tod, weatherId, season, lat, t) keeps
-// `prev` for the fronts and the ground state.
+// ── the weather model (weather-model.js) and its clock ────────────────────
+// Weather time runs RATE x faster than sky time: RATE follows the day clock
+// (game seconds per sky second, from the change of tod), kept in
+// RATE_MIN .. RATE_MAX. A front at its real speed (m/s of weather time)
+// then crosses the world in the time the sun needs for the same hours.
+export const RATE_MIN = 30, RATE_MAX = 400;
+
+export function weatherEnv(tod, season, latitude) {
+  const s = solarPosition(((tod % 1) + 1) % 1, season, latitude).dir, a = airTemps(tod, season, latitude);
+  return { sunX: s[0], sunY: s[1], sunZ: s[2], baseC: a.baseC, diurnal: a.diurnal };
+}
+
+// The driver keeps the snapshots that bracket the weather time gT and asks
+// the model for the next ones: from a module worker in the page, inline in
+// node (or when the worker fails). The display interpolates two snapshots,
+// so the weather moves smoothly whatever the frame rate. When the worker
+// lags, gT waits for it (the weather holds, it does not jump).
+export function createDriver(o = {}) {
+  const d = {
+    snaps: [], gT: 0, pending: 0, cells: terrainCells(null, WN), epoch: 0, mode: 'inline',
+    seed: o.seed ?? 1, prevail: o.prevail ?? 0.35, last: null, error: null,
+  };
+  let W = null, model = null;
+  const push = (snap) => {
+    d.snaps.push(snap);
+    d.snaps.sort((a, b) => a.t - b.t);
+    while (d.snaps.length > 2 && d.snaps[1].t <= d.gT) d.snaps.shift();
+    while (d.snaps.length > 6) d.snaps.shift();
+  };
+  const inlineSnap = () => { const s = model.snapshot(); s.fronts = model.frontPos(); s.baseId = model.baseId; s.epoch = d.epoch; return s; };
+  function startInline() {
+    d.mode = 'inline';
+    model = createModel({ seed: d.seed, prevail: d.prevail });
+    if (d.last) {
+      model.setCells(d.cells);
+      model.setPreset(d.last.id, d.last.over, true);
+      model.init(d.last.env, d.last.spin);
+      model.t = d.gT;
+      d.snaps = []; push(inlineSnap());
+    }
+  }
+  if (o.worker && typeof Worker !== 'undefined') {
+    try {
+      W = new Worker(new URL('./weather-worker.js', import.meta.url), { type: 'module' });
+      d.mode = 'worker';
+      W.onmessage = (e) => {
+        const m = e.data;
+        if (m.type === 'snap') {
+          if (m.snap.epoch !== d.epoch) return;
+          m.snap.data = new Float32Array(m.snap.data.buffer || m.snap.data);
+          if (m.snap.kind === 'step') d.pending = Math.max(0, d.pending - 1);
+          push(m.snap);
+        } else if (m.type === 'error') { d.error = m.message; W.terminate(); W = null; startInline(); }
+      };
+      W.onerror = (e) => { d.error = (e && e.message) || 'worker error'; if (e && e.preventDefault) e.preventDefault(); if (W) W.terminate(); W = null; startInline(); };
+    } catch (e) { W = null; d.error = String(e); }
+  }
+  if (!W) startInline();
+
+  d.reset = (id, over, env, spin = 90) => {   // env: one env or one per spin-up step
+    d.epoch++; d.pending = 0; d.snaps = [];
+    d.last = { id, over: over || null, env, spin };
+    if (W) W.postMessage({ type: 'reset', epoch: d.epoch, seed: d.seed, prevail: d.prevail, id, over: over || null, env, cells: d.cells, t: d.gT, spin });
+    else {
+      model.setCells(d.cells);
+      model.setPreset(id, over, true);
+      model.init(env, spin);
+      model.t = d.gT;
+      push(inlineSnap());
+    }
+  };
+  d.setPreset = (id, over) => {
+    if (d.last) d.last = { ...d.last, id, over: over || null };
+    if (W) W.postMessage({ type: 'preset', id, over: over || null }); else model.setPreset(id, over, false);
+  };
+  d.setCells = (cells) => { d.cells = cells; if (W) W.postMessage({ type: 'cells', cells }); else model.setCells(cells); };
+  // envAt(t) -> the env of the step that ends at weather time t
+  d.advance = (gDt, envAt) => {
+    if (!d.snaps.length) return;                 // waiting for the first snapshot
+    d.gT += Math.max(gDt, 0);
+    if (W) {
+      let newest = d.snaps[d.snaps.length - 1].t + d.pending * DT;
+      while (d.pending < 3 && newest < d.gT + 2 * DT) {
+        newest += DT;
+        W.postMessage({ type: 'step', env: envAt(newest), kind: 'step' });
+        d.pending++;
+      }
+      const have = d.snaps[d.snaps.length - 1].t;
+      if (have < d.gT) d.gT = have;
+    } else {
+      let guard = 0;
+      while (model.t < d.gT && guard++ < 40) { model.step(envAt(model.t + DT)); push(inlineSnap()); }
+      if (model.t < d.gT) d.gT = model.t;
+    }
+    while (d.snaps.length > 2 && d.snaps[1].t <= d.gT) d.snaps.shift();
+  };
+  // the two snapshots round gT and the weight of the second
+  d.bracket = () => {
+    const S = d.snaps;
+    if (!S.length) return null;
+    let a = S[0], b = S[0];
+    for (let i = 0; i < S.length; i++) { if (S[i].t <= d.gT) a = S[i]; }
+    b = S.find((s) => s.t > a.t) || a;
+    const w = b === a ? 0 : clamp((d.gT - a.t) / (b.t - a.t), 0, 1);
+    return { a, b, w };
+  };
+  d.sample = (x, z, out = new Float32Array(CH)) => {
+    const br = d.bracket();
+    if (!br) return null;
+    const A = sampleSnap(br.a, x, z), B = br.b === br.a ? A : sampleSnap(br.b, x, z);
+    for (let c = 0; c < CH; c++) out[c] = A[c] + (B[c] - A[c]) * br.w;
+    return out;
+  };
+  d.dispose = () => { if (W) W.terminate(); W = null; };
+  Object.defineProperty(d, 'model', { get: () => model });
+  return d;
+}
+
+// The air-mass values (the KEYS of WEATHER: haze, mie, cirrus, temp, wind,
+// ...) at world x, z: the base preset folded with the fronts of snapshot
+// `snap`, moved on to weather time gT. The same fold as weather-model.js.
+function airMassAt(snap, gT, x, z) {
+  let v = presetVec(snap.baseId || 'clear');
+  for (const f of snap.fronts || []) {
+    const s = f.s + f.v * (gT - snap.t);
+    const d = x * f.nx + z * f.nz - s;
+    const u = 1 - smooth(-3000, 3000, d);
+    const to = presetVec(f.id);
+    const o = {};
+    for (const k of KEYS) o[k] = k === 'fog' ? Math.exp(mix(Math.log(v[k]), Math.log(to[k]), u)) : mix(v[k], to[k], u);
+    v = o;
+  }
+  return v;
+}
+
+// The upper (cloud level) wind at world x, z, m/s of weather time: the
+// FORCING wind and direction folded with the fronts as in weather-model.js.
+function upperWindAt(snap, gT, x, z, prevail) {
+  const F = (id) => FORCING[id] || FORCING.clear;
+  let w = F(snap.baseId).wind, dir = F(snap.baseId).dir;
+  for (const f of snap.fronts || []) {
+    const s = f.s + f.v * (gT - snap.t);
+    const u = 1 - smooth(-3000, 3000, x * f.nx + z * f.nz - s);
+    w = mix(w, F(f.id).wind, u); dir = mix(dir, F(f.id).dir, u);
+  }
+  const U = w * 1.3 + 2, a = prevail + dir;
+  return [Math.cos(a) * U, Math.sin(a) * U];
+}
+
+// Lightning from the storm cells of the model. Slots of 0.25 s; each slot
+// holds a stroke with a chance set by the summed storm strength, at a cell
+// picked by weight (a stroke keeps its cell: `memo`). The flash is the mean
+// of the pulses over the frame [t0, t1] (not a point sample), so the light
+// of a flash is the same at 30 and at 144 fps.
+export function lightningCells(t0, t1, cells, cam, seed = 0, memo = new Map()) {
+  const SLOT = 0.25, TAU = 0.045;
+  let rate = 0;
+  for (const c of cells) rate += 0.55 * Math.pow(c.s, 1.5);
+  rate = Math.min(rate, 2.5);
+  let flash = 0, bolt = null, best = 0;
+  const span = Math.max(t1 - t0, 0);
+  const kLo = Math.floor((t0 - 1.4) / SLOT), kHi = Math.floor(t1 / SLOT);
+  for (let k = kHi; k >= kLo; k--) {
+    let st = memo.get(k);
+    if (st === undefined) {
+      st = null;
+      if (rate > 0 && hash1(k * 7 + seed) <= rate * SLOT && cells.length) {
+        let u = hash1(k * 13 + seed + 1) * rate, c = cells[0];
+        for (const cc of cells) { u -= 0.55 * Math.pow(cc.s, 1.5); if (u <= 0) { c = cc; break; } }
+        st = {
+          t0: (k + hash1(k * 11 + seed + 9)) * SLOT,
+          x: c.x + (hash1(k * 17 + seed + 4) - 0.5) * 3000, z: c.z + (hash1(k * 19 + seed + 5) - 0.5) * 3000,
+          pulses: 2 + Math.floor(hash1(k * 17 + seed + 2) * 3), cg: hash1(k * 29 + seed + 5) < 0.6, s: c.s,
+        };
+      }
+      memo.set(k, st);
+    }
+    if (!st) continue;
+    const dist = Math.hypot(st.x - cam[0], st.z - cam[2]);
+    const gain = Math.max(0.05, 1 / (1 + (dist / 7000) * (dist / 7000)));
+    let avg = 0, now = 0;
+    for (let j = 0; j < st.pulses; j++) {
+      const tj = st.t0 + (j === 0 ? 0 : 0.05 + j * 0.06 + 0.08 * hash1(k * 31 + j));
+      const A = j === 0 ? 1 : 0.55 + 0.4 * hash1(k * 37 + j);
+      if (t1 < tj) continue;
+      now += A * Math.exp(-(t1 - tj) / TAU);
+      if (span > 1e-4) { const a0 = Math.max(t0, tj); avg += A * TAU * (Math.exp(-(a0 - tj) / TAU) - Math.exp(-(t1 - tj) / TAU)) / span; }
+    }
+    if (span <= 1e-4) avg = now;
+    flash += avg * gain;
+    const age = t1 - st.t0;
+    if (age >= 0 && age <= 1.4 && now * gain > best) {
+      best = now * gain;
+      bolt = { id: k, age, x: st.x, z: st.z, angle: Math.atan2(st.z - cam[2], st.x - cam[0]), dist, visible: age < 0.5, cloudToGround: st.cg };
+    }
+  }
+  for (const k of memo.keys()) if (k < kLo - 8) memo.delete(k);
+  return { flash: clamp(flash, 0, 1), bolt };
+}
+
+// A stateful sky with the weather model. update(tod, weatherId, season,
+// lat, t) advances the model and gives the skyState fields for the camera
+// (set by render/sky.js through state.sim.setCamera). opts.worker: run the
+// model in weather-worker.js (default: when the page has Worker and
+// document).
 export function createSky(opts = {}) {
   let prev = null;
+  const seed = opts.seed ?? 1;
+  const useWorker = opts.worker ?? (typeof Worker !== 'undefined' && typeof document !== 'undefined');
+  const drv = createDriver({ worker: useWorker, seed, prevail: opts.prevail });
+  const memo = new Map();
+  const L = new Float32Array(CH), tmp = new Float32Array(CH);
+  const sim = {
+    driver: drv, cam: [0, 300, 0], terrain: null, wantReset: true, id: null, rate: 100, follow: 1,
+    setCamera(p) { sim.cam[0] = p[0]; sim.cam[1] = p[1]; sim.cam[2] = p[2]; },
+    // a new final terrain: the model starts again for it (a new world)
+    setTerrain(ter) {
+      if (!ter || !ter.height || ter === sim.terrain) return;
+      sim.terrain = ter;
+      drv.setCells(terrainCells(ter, WN));
+      sim.wantReset = true;
+    },
+    get bracket() { return drv.bracket(); },
+  };
   return {
-    update(tod, weatherId, season, latitude, t) {
-      prev = skyState(tod, weatherId, season, latitude, t, prev || { stateless: true });
-      return prev;
+    sim,
+    update(tod, weatherId, season, latitude, t, over = null) {
+      tod = ((tod % 1) + 1) % 1;
+      season = ((season % 1) + 1) % 1;
+      const id = BY_ID.has(weatherId) ? weatherId : 'clear';
+      const dt = prev && t > prev.t && t - prev.t < 600 ? t - prev.t : (prev && t === prev.t ? 0 : null);
+      // the weather clock follows the day clock
+      if (dt > 0) {
+        let dTod = tod - prev.tod; dTod -= Math.round(dTod);
+        if (Math.abs(dTod) < 0.01) {
+          const obs = dTod * 86400 / dt;
+          sim.rate += (obs - sim.rate) * (1 - Math.exp(-dt / 1.5));
+        }
+      }
+      const R = clamp(sim.rate, RATE_MIN, RATE_MAX);
+      sim.follow = clamp(sim.rate / R, 0, 1);
+      if (dt === null || sim.wantReset || !prev) {
+        // spin up over the 4 h before now, so the state fits the hour
+        const envs = [];
+        for (let i = 79; i >= 0; i--) envs.push(weatherEnv(tod - i * 3 * DT / 86400, season, latitude));
+        drv.reset(id, over, envs);
+        sim.wantReset = false; sim.id = id;
+      } else {
+        if (id !== sim.id) { drv.setPreset(id, over); sim.id = id; }
+        const g0 = drv.gT, follow = sim.follow;
+        drv.advance(dt * R, (gt) => weatherEnv(tod + (gt - g0) * follow / 86400, season, latitude));
+      }
+      const cam = sim.cam;
+      const have = drv.sample(cam[0], cam[2], L);
+      const br = drv.bracket();
+      // the air mass at the camera (haze, aerosol, temperature) and the
+      // model values there (cloud, rain, snow, storms, fog, wind)
+      const wx = br ? airMassAt(br.a, drv.gT, cam[0], cam[2]) : presetVec(id);
+      let storm = 0, windVec = null, valleyFog = 0, light = null;
+      if (have) {
+        wx.cover = L[0];
+        wx.cumulus = L[1];
+        const fz = L[11];
+        const snowFrac = smooth(fz - 150, fz + 150, cam[1]);   // above the freezing level: snow
+        wx.rain = L[3] * (1 - snowFrac);
+        wx.snow = L[3] * snowFrac;
+        wx.cirrus = L[7];
+        // storminess: the strongest cell within 6 km
+        storm = L[4];
+        for (let a = 0; a < 6; a++) {
+          const s = drv.sample(cam[0] + Math.cos(a * 1.047) * 6000, cam[2] + Math.sin(a * 1.047) * 6000, tmp);
+          if (s) storm = Math.max(storm, s[4] * 0.8);
+        }
+        wx.storm = storm;
+        windVec = [L[9], L[10]];
+        valleyFog = L[5];
+        light = lightningCells(prev ? prev.t : t, t, br.a.cells || [], cam, seed, memo);
+      }
+      const out = composeSky(tod, id, season, latitude, t, wx, prev && dt !== null ? prev : null, dt || null,
+        { front: { from: wx, to: wx, progress: 1 }, light, windVec, valleyFog });
+      out.sim = sim;
+      out.local = have ? L.slice() : null;
+      out.gameT = drv.gT;
+      out.gameRate = R;
+      out.upperWind = br ? upperWindAt(br.a, drv.gT, cam[0], cam[2], drv.prevail) : [3, 0];
+      prev = out;
+      return out;
     },
     get state() { return prev; },
-    reset() { prev = null; },
-    seed: opts.seed || 0,
+    reset() { prev = null; sim.wantReset = true; },
+    dispose() { drv.dispose(); },
+    seed,
   };
 }
