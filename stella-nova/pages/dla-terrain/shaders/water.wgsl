@@ -128,7 +128,8 @@ fn csWaves(@builtin(global_invocation_id) id: vec3u) {
   let c = id.z;
   let L = WC.casc[c];
   let x = (vec2f(id.xy) + 0.5) / f32(N) * L;
-  let count = u32(WC.comp.x);
+  // COUNT of render/water.js (80 modes per cascade): a constant cap
+  let count = min(u32(max(WC.comp.x, 0.0)), 80u);
   let chop = WC.casc.w;
   var D = vec3f(0.0);
   var sx = 0.0;
@@ -304,10 +305,11 @@ fn wSky(dirIn: vec3f, disc: bool) -> vec3f {
 // holds only terrain, vegetation and sky.
 fn wSSR(P: vec3f, R: vec3f, dist: f32) -> vec4f {
   if (WU.flags.x < 0.5 || R.y > 0.9) { return vec4f(0.0); }
-  let steps = i32(10.0 + 18.0 * WU.misc.w);
+  let steps = clamp(i32(10.0 + 18.0 * clamp(WU.misc.w, 0.0, 1.0)), 1, 28);
   var t = 0.6 + dist * 0.015;
   var prevT = 0.0;
-  for (var i = 0; i < steps; i++) {
+  for (var i = 0; i < 28; i++) {
+    if (i >= steps) { break; }
     let Q = P + R * t;
     let clip = G.viewProj * vec4f(Q, 1.0);
     if (clip.w <= 0.01) { break; }

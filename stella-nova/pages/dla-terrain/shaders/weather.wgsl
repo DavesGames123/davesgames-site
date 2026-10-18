@@ -122,6 +122,8 @@ fn vol_medium(p: vec3f) -> VolMedium {
 
 // in-scatter and extinction are stored per km (x 1000) so fp16 keeps them
 const VOL_K: f32 = 1000.0;
+// the most depth slices of the froxel grid (render/weather.js: 64 at full quality)
+const VOL_ZMAX: u32 = 128u;
 
 @compute @workgroup_size(8, 8, 1)
 fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
@@ -190,7 +192,9 @@ fn csFroxIntegrate(@builtin(global_invocation_id) id: vec3u) {
   var Lo = vec3f(0.0);
   var T = 1.0;
   var dPrev = 0.0;
-  for (var z = 0u; z < gd.z; z++) {
+  // the slice count is a uniform: VOL_ZMAX is the constant cap
+  let nz = min(gd.z, VOL_ZMAX);
+  for (var z = 0u; z < nz; z++) {
     let v = textureLoad(inInject, vec3u(id.xy, z), 0) / VOL_K;
     let lo = textureLoad(inLoss, vec3u(id.xy, z), 0).rgb / VOL_K;
     let dEnd = vol_sliceDist(f32(z) + 1.0);

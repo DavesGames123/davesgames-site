@@ -121,7 +121,8 @@ fn cl_perlinFbm(p: vec3f, w: f32, f0: f32, octaves: i32) -> f32 {
   var sum = 0.0;
   var ws = 0.0;
   var wt = 0.5;
-  for (var o = 0; o < octaves; o++) {
+  for (var o = 0; o < 8; o++) {
+    if (o >= octaves) { break; }
     sum += cl_perlin(vec4f(p, w) * fr, vec4f(fr)) * wt;
     ws += wt;
     wt *= wt;

@@ -210,6 +210,7 @@ fn classify(i: u32) -> Cls {
   var th = array<f32, 3>(VP.lodPx.x, VP.lodPx.y, VP.lodPx.z);
   var lvl = 0u;
   var b = 0.0;
+  // bounded: lvl counts up from 0 and the loop breaks at 3
   loop {
     if (lvl >= 3u || lvl + 1u >= last) { break; }
     let t = th[lvl];
@@ -253,7 +254,8 @@ fn cs_count(@builtin(global_invocation_id) gid: vec3u) {
 
 @compute @workgroup_size(64)
 fn cs_scan(@builtin(local_invocation_id) lid: vec3u) {
-  let nl = u32(VP.counts.x);
+  // constant caps on the list and slot loops (render/vegetation.js sizes)
+  let nl = min(u32(max(VP.counts.x, 0.0)), 4096u);
   if (lid.x == 0u) {
     var acc = 0u;
     for (var k = 0u; k < nl; k++) {
@@ -263,7 +265,7 @@ fn cs_scan(@builtin(local_invocation_id) lid: vec3u) {
   }
   workgroupBarrier();
   storageBarrier();
-  let ns = u32(VP.counts.y);
+  let ns = min(u32(max(VP.counts.y, 0.0)), 16384u);
   for (var k = lid.x; k < ns; k += 64u) {
     let sl = slots[k];
     let o = k * 5u;

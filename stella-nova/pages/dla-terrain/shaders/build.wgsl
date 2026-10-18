@@ -43,7 +43,8 @@ fn bss(a: f32, b: f32, x: f32) -> f32 {
 // the walkers: soft dots on the ground, their size grows with the distance
 fn walkerGlow(wp: vec3f) -> f32 {
   var g = 0.0;
-  let n = u32(B.nWalk);
+  // MAX_WALK of render/build.js: a constant cap, whatever the uniform holds
+  let n = min(u32(max(B.nWalk, 0.0)), 96u);
   let px = max(length(wp - G.camPos.xyz) * 0.0045, G.terrain.x * 0.0012);
   for (var k = 0u; k < n; k++) {
     let w = walk[k];

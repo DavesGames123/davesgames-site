@@ -418,6 +418,7 @@ fn csMulti(@builtin(workgroup_id) wg: vec3u, @builtin(local_invocation_index) li
   shF[li] = F / 64.0;
   workgroupBarrier();
   var s = 32u;
+  // bounded: s halves from 32 to 0 (6 trips)
   loop {
     if (s == 0u) { break; }
     if (li < s) { shL[li] += shL[li + s]; shF[li] += shF[li + s]; }

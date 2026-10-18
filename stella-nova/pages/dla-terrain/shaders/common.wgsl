@@ -133,9 +133,10 @@ fn viewDistance(wp: vec3f) -> f32 { return -(G.view * vec4f(wp, 1.0)).z; }
 
 // ── sun shadow ──────────────────────────────────────────────────────────
 fn cascadeOf(viewZ: f32) -> i32 {
-  let n = i32(cascades.params.x);
+  // at most 4 cascades (gpu/shadows.js): the loop has a constant bound
+  let n = clamp(i32(cascades.params.x), 1, 4);
   var c = n - 1;
-  for (var i = n - 1; i >= 0; i--) { if (viewZ < cascades.splits[i]) { c = i; } }
+  for (var i = 3; i >= 0; i--) { if ((i < n) && (viewZ < cascades.splits[i])) { c = i; } }
   return c;
 }
 fn shadowTap(c: i32, wp: vec3f) -> vec4f {

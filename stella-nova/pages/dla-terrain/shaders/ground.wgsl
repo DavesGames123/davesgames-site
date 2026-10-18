@@ -320,7 +320,9 @@ fn vnoise2(p: vec2f) -> f32 {
 }
 fn fbm2(p0: vec2f, oct: i32) -> f32 {
   var p = p0; var a = 0.5; var s = 0.0;
-  for (var i = 0; i < oct; i++) {
+  // at most 10 octaves (a constant cap; callers pass 2 to 6)
+  for (var i = 0; i < 10; i++) {
+    if (i >= oct) { break; }
     s += a * vnoise2(p);
     p = vec2f((p.x * 1.6) - (p.y * 1.2), (p.x * 1.2) + (p.y * 1.6)) + vec2f(17.3, 9.1);
     a *= 0.5;
@@ -332,7 +334,10 @@ fn fbm2(p0: vec2f, oct: i32) -> f32 {
 // fades out between 4 and 2 pixels per wavelength. Returns (value, grad).
 fn fbmd(p: vec3f, freq: f32, oct: i32, gain: f32, fp: f32) -> vec4f {
   var f = freq; var a = 1.0; var s = vec4f(0.0); var norm = 0.0;
-  for (var i = 0; i < oct; i++) {
+  // at most 10 octaves: at distance 0 the footprint fp is 0 and the fade
+  // stops no octave, so the constant cap is the bound
+  for (var i = 0; i < 10; i++) {
+    if (i >= oct) { break; }
     let fade = 1.0 - smoothstep(0.25, 0.5, f * fp);
     if (fade <= 0.0) { break; }
     let n = vnoised((p * f) + vec3f(f32(i) * 13.7, f32(i) * 7.3, f32(i) * 3.1));
