@@ -404,7 +404,9 @@ function render(now){requestAnimationFrame(render);
   // the phone panel: ease the camera target to the clear part (not in the saver)
   if(!saverTick){const o=occlusion(),a=Math.min(1,dt*8)||0;occ.x+=(o.x-occ.x)*a;occ.y+=(o.y-occ.y)*a;
     camTa=F.panOffset(occ.x,occ.y,camT,camP,camD,camF,innerHeight);}
-  const ro=[camTa[0]+camD*Math.sin(camT)*Math.cos(camP),camTa[1]+camD*Math.sin(camP),camTa[2]+camD*Math.cos(camT)*Math.cos(camP)];
+  const ro0=[camTa[0]+camD*Math.sin(camT)*Math.cos(camP),camTa[1]+camD*Math.sin(camP),camTa[2]+camD*Math.cos(camT)*Math.cos(camP)];
+  // lib/tilt.js (module tag in index.html): the phone tilt parallax.
+  const ro=window.snTilt&&window.snTilt.eye?window.snTilt.eye(ro0,camTa,[0,1,0]):ro0;
   const W=canvas.width,H=canvas.height;
 
   // Compute VP matrix (shared by all passes)

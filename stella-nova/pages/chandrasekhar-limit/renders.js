@@ -13,6 +13,7 @@
 // ============================================================================
 import { HOLE } from './glsl.js';
 import { makeGL, runLoop, dragOrbit } from './glkit.js';
+import { tilt, tiltEye } from '../../lib/tilt.js';
 
 const orbitPos = (tgt, d, yaw, pitch) => [tgt[0] + d * Math.cos(pitch) * Math.sin(yaw), tgt[1] + d * Math.sin(pitch), tgt[2] + d * Math.cos(pitch) * Math.cos(yaw)];
 
@@ -24,10 +25,11 @@ export function holeScene() {
     t: 0, yaw: 0.3, pitch: 0.16, dist: 38, zoom: 1.3, held: false, spin: 0, off: [0, 0],
     disk: 1, shift: 1, lens: 1, rin: 6, rout: 15,
     step(dt) { this.t += dt * this.spin; if (!this.held) this.yaw += dt * this.spin * 0.6; },
-    key() { return [this.yaw, this.pitch, this.dist, this.disk, this.shift, this.lens, this.t].map(v => v.toFixed(4)).join(','); },
+    // lib/tilt.js: the phone tilt offset is in the key, so a tilt draws a frame.
+    key() { const o = tilt ? tilt.get() : { yaw: 0, pitch: 0 }; return [this.yaw, this.pitch, this.dist, this.disk, this.shift, this.lens, this.t, o.yaw, o.pitch].map(v => v.toFixed(4)).join(','); },
     uniforms() {
       return {
-        uTime: this.t, uOff: this.off, uCamPos: orbitPos([0, 0, 0], this.dist, this.yaw, this.pitch), uCamTgt: [0, 0, 0], uZoom: this.zoom,
+        uTime: this.t, uOff: this.off, uCamPos: tiltEye(orbitPos([0, 0, 0], this.dist, this.yaw, this.pitch), [0, 0, 0], [0, 1, 0]), uCamTgt: [0, 0, 0], uZoom: this.zoom,
         uDiskOn: this.disk, uShiftOn: this.shift, uLensOn: this.lens, uRin: this.rin, uRout: this.rout,
       };
     },

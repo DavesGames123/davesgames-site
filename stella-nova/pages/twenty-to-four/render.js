@@ -36,6 +36,8 @@
 //      grep -n "MAPS ="               the map names and their colours
 // ============================================================================
 
+import { tiltEye } from '../../lib/tilt.js';
+
 export const SHEET_VS = `#version 300 es
 layout(location=0) in vec2 aQ;
 uniform mat4 uM;
@@ -391,7 +393,7 @@ export function eyeOf(cam) {
 // Camera and band to one clip matrix.
 export function viewMatrix(cam, w, h, band) {
   const P = perspective(cam.fov, w / h, Math.max(0.01, cam.dist * 0.02), cam.dist * 20 + 20);
-  const V = lookAt(eyeOf(cam), cam.target, [0, 0, 1]);
+  const V = lookAt(tiltEye(eyeOf(cam), cam.target, [0, 0, 1]), cam.target, [0, 0, 1]); // lib/tilt.js
   const B = new Float32Array(16);
   const s = band ? band.s : 1;
   B[0] = s; B[5] = s; B[10] = 1; B[15] = 1;

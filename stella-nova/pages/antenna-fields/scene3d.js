@@ -29,6 +29,7 @@
 //           "function setTriads"  "function lookAt"
 // ============================================================================
 
+import { tiltEye } from '../../lib/tilt.js';
 const MESH_VS = `#version 300 es
 in vec3 aPos;
 in vec3 aNrm;
@@ -352,7 +353,8 @@ export function createScene(gl) {
     gl.viewport(vp.x, vy, vp.w, vp.h);
     viewport = [vp.w, vp.h, vp.x, vp.y];
     const cp = Math.cos(o.pitch), eye = [centre[0] + o.dist * cp * Math.cos(o.yaw), centre[1] + o.dist * cp * Math.sin(o.yaw), centre[2] + o.dist * Math.sin(o.pitch)];
-    VP = mul(persp(0.62, vp.w / Math.max(1, vp.h), 0.05, o.dist * 6), lookAt(eye, centre, [0, 0, 1]));
+    const te = tiltEye(eye, centre, [0, 0, 1]); // lib/tilt.js: phone tilt parallax
+    VP = mul(persp(0.62, vp.w / Math.max(1, vp.h), 0.05, o.dist * 6), lookAt(te, centre, [0, 0, 1]));
     build(o.morph, o.db);
     gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
     // surface
@@ -360,7 +362,7 @@ export function createScene(gl) {
       const alpha = 0.62 + 0.38 * Math.min(1, o.morph * 1.6);
       gl.useProgram(P.mesh.p);
       gl.uniformMatrix4fv(P.mesh.u.uVP, false, VP);
-      gl.uniform3fv(P.mesh.u.uEye, eye);
+      gl.uniform3fv(P.mesh.u.uEye, te);
       gl.uniform1f(P.mesh.u.uAlpha, alpha);
       gl.uniform1f(P.mesh.u.uFade, o.fade ?? 1);
       gl.uniform1f(P.mesh.u.uBands, o.bands ?? 1);

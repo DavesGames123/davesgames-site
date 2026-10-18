@@ -43,6 +43,7 @@ import { runSubmission, SUBMISSIONS, STRATEGY_LABEL } from './sandbox.js';
 import { scoreWorld } from './score.js';
 import { createRenderer } from './render.js';
 import { LEADERBOARD, FAMILIES } from './data.js';
+import { tilt } from '../../lib/tilt.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -364,6 +365,8 @@ export function initPlayground(page) {
     if (S.visible) { S.dirty = true; kick(); }
   }).observe($('s6'));
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.dirty = true; kick(); } });
+  // lib/tilt.js: a frame while the phone tilt offset moves.
+  if (tilt) tilt.subscribe(() => { if (S.visible) { S.dirty = true; kick(); } });
 
   syncPlayBtn();
   if (!glOk) {

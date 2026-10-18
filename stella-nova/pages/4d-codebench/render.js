@@ -58,6 +58,7 @@
 //    context loss ...... "webglcontextlost"
 // ============================================================================
 
+import { tiltEye } from '../../lib/tilt.js';
 const CLEAR = [0.024, 0.027, 0.043];          // #06070b
 const LIGHT = norm3([0.38, 1.0, 0.28]);        // towards the light
 const GHOST_TINT = [0.55, 0.85, 1.0];
@@ -609,7 +610,7 @@ export function createRenderer(canvas, opts = {}) {
     let half = Math.tan((cam.fovY || 45) * Math.PI / 360);
     if (aspect < fitAspect) half *= fitAspect / aspect;
     perspective(mP, 2 * Math.atan(half), aspect, near, far);
-    lookAt(mV, eye, tgt);
+    lookAt(mV, tiltEye(eye, tgt, [0, 1, 0]), tgt); // lib/tilt.js: phone tilt parallax
     mul4(mVP, mP, mV);
     // Light and up directions in view space (rotation part of mV).
     lightV[0] = mV[0] * LIGHT[0] + mV[4] * LIGHT[1] + mV[8] * LIGHT[2];
