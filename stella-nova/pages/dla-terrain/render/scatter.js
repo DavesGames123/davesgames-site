@@ -20,6 +20,10 @@
 //  a dither in the 1.1 to 1.2 km band (instance word fadeIn / fadeOut).
 //  The far layer fades out over farBand (1.8 km) at its far end, and
 //  props.wgsl widens far crowns, so the forest cover stays the same.
+//  The stream measures the band distance in 3D (camera height against
+//  the ground height range of a tile, tileDist), as props.wgsl does. With
+//  an xz distance, a camera 1.5 km up had no far canopy tiles under it
+//  while the GPU hid the near canopy there: a hole in the forest.
 //
 //  POISSON DISC  The candidate grid is global: cell (i, j) of a layer has
 //  one candidate at a hashed jitter, with a hashed priority. A candidate
@@ -55,6 +59,7 @@
 //    grep -n 'function layerDensity'       the density rules per layer
 //    grep -n 'function pickSpecies'        species choice and clustering
 //    grep -n 'export function scatterTile' Poisson disc in one tile
+//    grep -n 'export function tileDist'    3D distance of a tile (bands)
 //    grep -n 'export function tilesFor'    the tile set round the camera
 //    grep -n 'export function createScatterStream' streaming, budget
 // ============================================================================
@@ -269,9 +274,23 @@ export function makeField(t, opts = {}) {
     return (cliff[za + xa] * (1 - fx) + cliff[za + xb] * fx) * (1 - fz) + (cliff[zb + xa] * (1 - fx) + cliff[zb + xb] * fx) * fz;
   };
   const inside = (x, z) => x >= origin && z >= origin && x <= origin + ws && z <= origin + ws;
+  // the height range of a rectangle: a min / max grid of HR x HR cells over
+  // every texel (tilesFor uses it for the 3D distance of a tile)
+  const HR = Math.min(64, n), hrCell = ws / HR, hrLo = new Float32Array(HR * HR).fill(Infinity), hrHi = new Float32Array(HR * HR).fill(-Infinity);
+  for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
+    const c = Math.min(HR - 1, Math.floor(z * HR / n)) * HR + Math.min(HR - 1, Math.floor(x * HR / n)), v = H[z * n + x];
+    if (v < hrLo[c]) hrLo[c] = v;
+    if (v > hrHi[c]) hrHi[c] = v;
+  }
+  const heightRange = (x0, z0, x1, z1) => {
+    const ci = (v) => Math.max(0, Math.min(HR - 1, Math.floor((v - origin) / hrCell)));
+    let lo = Infinity, hi = -Infinity;
+    for (let j = ci(z0); j <= ci(z1); j++) for (let i = ci(x0); i <= ci(x1); i++) { const c = j * HR + i; if (hrLo[c] < lo) lo = hrLo[c]; if (hrHi[c] > hi) hi = hrHi[c]; }
+    return lo <= hi ? [lo, hi] : [hMin, hMax];
+  };
   return { n, worldSize: ws, origin, seaLevel: sea, texel, seed, hMin, hMax,
     heightAt, slopeAt, moistureAt, riverAt, waterDepthAt, waterDistAt, biomeAt,
-    coldAt, cliffAt, flowAt: (x, z) => bil(F, x, z), isWaterAt, inside, B };
+    coldAt, cliffAt, flowAt: (x, z) => bil(F, x, z), isWaterAt, inside, heightRange, B };
 }
 
 // ---------------------------------------------------------------- density
@@ -488,27 +507,45 @@ export function scatterTile(f, layerKey, tx, tz, opts = {}) {
   return { layer: L.key, tx, tz, data: new Float32Array(out), count: out.length / STRIDE };
 }
 
-// Tiles of every layer within its distance band of the camera at (cx, cz).
-// Returns an array of { key: 'layer:tx:tz', layer, tx, tz, d }.
+// The nearest and farthest distance (m) from the camera to the plants of
+// one tile. With cy (camera height) the distance is 3D, as the GPU band
+// test (props.wgsl classify) measures it: the box is the tile square times
+// the ground height range of the tile plus PLANT_TOP. Without cy it is
+// the xz distance. Returns [dmin, dmax].
+export const PLANT_TOP = 30;   // m over the ground: the tallest crown centre with margin
+export function tileDist(f, L, tx, tz, cx, cz, cy) {
+  const x0 = f.origin + tx * L.tile, z0 = f.origin + tz * L.tile;
+  const nx = Math.max(x0 - cx, 0, cx - x0 - L.tile), nz = Math.max(z0 - cz, 0, cz - z0 - L.tile);
+  const fx = Math.max(Math.abs(x0 - cx), Math.abs(x0 + L.tile - cx)), fz = Math.max(Math.abs(z0 - cz), Math.abs(z0 + L.tile - cz));
+  if (cy === undefined || cy === null || !Number.isFinite(cy)) return [Math.hypot(nx, nz), Math.hypot(fx, fz)];
+  const [lo, hi0] = f.heightRange ? f.heightRange(x0, z0, x0 + L.tile, z0 + L.tile) : [f.hMin, f.hMax];
+  const hi = hi0 + PLANT_TOP;
+  const ny = Math.max(lo - cy, 0, cy - hi), fy = Math.max(Math.abs(cy - lo), Math.abs(cy - hi));
+  return [Math.hypot(nx, nz, ny), Math.hypot(fx, fz, fy)];
+}
+
+// Tiles of every layer within its distance band of the camera at (cx, cz)
+// (opts.cy: the camera height, for a 3D band; see tileDist). Returns an
+// array of { key: 'layer:tx:tz', layer, tx, tz, d }, nearest first. d is
+// the distance at which the layer starts to show in the tile (at least
+// the near edge of the layer band), so a far canopy tile under a high
+// camera does not take stream time before the near tiles.
 export function tilesFor(f, cx, cz, opts = {}) {
   const far = opts.farScale ?? 1;
   const res = [];
   const nTiles = (L) => Math.ceil(f.worldSize / L.tile);
+  const cy = opts.cy;
   for (const L of LAYERS) {
     const near = L.near * far, fa = Math.min(L.far * far, opts.maxDist ?? 1e9);
     if (fa <= near) continue;
     const nt = nTiles(L);
     const ta = Math.max(0, Math.floor((cx - fa - f.origin) / L.tile)), tb = Math.min(nt - 1, Math.floor((cx + fa - f.origin) / L.tile));
     const ua = Math.max(0, Math.floor((cz - fa - f.origin) / L.tile)), ub = Math.min(nt - 1, Math.floor((cz + fa - f.origin) / L.tile));
+    const nearEdge = near > 0 ? Math.max(0, near - L.band) : 0;
     for (let tz = ua; tz <= ub; tz++) for (let tx = ta; tx <= tb; tx++) {
-      const x0 = f.origin + tx * L.tile, z0 = f.origin + tz * L.tile;
-      // nearest and farthest point of the tile to the camera
-      const nx = Math.max(x0 - cx, 0, cx - x0 - L.tile), nz = Math.max(z0 - cz, 0, cz - z0 - L.tile);
-      const dmin = Math.hypot(nx, nz);
-      const fx = Math.max(Math.abs(x0 - cx), Math.abs(x0 + L.tile - cx)), fz = Math.max(Math.abs(z0 - cz), Math.abs(z0 + L.tile - cz));
-      const dmax = Math.hypot(fx, fz);
-      if (dmin > fa || dmax < near - L.band) continue;
-      res.push({ key: L.key + ':' + tx + ':' + tz, layer: L.key, tx, tz, d: dmin });
+      const [dmin, dmax] = tileDist(f, L, tx, tz, cx, cz, cy);
+      if (dmin > fa || dmax < nearEdge) continue;
+      res.push({ key: L.key + ':' + tx + ':' + tz, layer: L.key, tx, tz, d: Math.max(dmin, nearEdge) });
     }
   }
   res.sort((a, b) => a.d - b.d);
@@ -522,18 +559,20 @@ export function createScatterStream(f, opts = {}) {
   const live = new Map();             // key -> tile
   let version = 0;
   let pending = [];
-  let lastCx = NaN, lastCz = NaN;
+  let lastCx = NaN, lastCz = NaN, lastCy = NaN;
   const now = opts.now || (() => (globalThis.performance ? performance.now() : Date.now()));
   return {
     field: f,
     tiles: live,
     get version() { return version; },
     get pending() { return pending.length; },
-    update(cx, cz, budgetMs = 4) {
-      const moved = !(Math.abs(cx - lastCx) < 8 && Math.abs(cz - lastCz) < 8);
+    // cy (camera height) is optional: with it the bands are 3D (tileDist)
+    update(cx, cz, budgetMs = 4, cy) {
+      const has = Number.isFinite(cy);
+      const moved = !(Math.abs(cx - lastCx) < 8 && Math.abs(cz - lastCz) < 8 && (!has || Math.abs(cy - lastCy) < 8));
       if (moved) {
-        lastCx = cx; lastCz = cz;
-        const want = tilesFor(f, cx, cz, opts);
+        lastCx = cx; lastCz = cz; lastCy = has ? cy : NaN;
+        const want = tilesFor(f, cx, cz, has ? { ...opts, cy } : opts);
         const keep = new Set(want.map((w) => w.key));
         for (const k of live.keys()) if (!keep.has(k)) { live.delete(k); version++; }
         pending = want.filter((w) => !live.has(w.key));
