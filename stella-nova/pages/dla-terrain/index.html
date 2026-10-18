@@ -34,8 +34,10 @@
                 or tap flies the camera there
      #panel     the controls: a left column on a wide screen, a bottom sheet
                 on a phone in portrait, a right drawer in landscape
-     #status    fps, render size, terrain readout
-     #dock      the phone dock: panel, generate, randomise, time, camera, saver
+     #status    fps, render size, terrain readout (a short form on a phone)
+     #hint      the key hint; on a phone "tap to explore", one time only
+     #dock      the phone dock: menu, randomise everything, new terrain,
+                time of day, weather (layout.js has the sizes)
      #histBack #histFwd #copyLink  the rolled worlds (world-state.js); the
                 URL hash holds the full world, so a link reloads it
      #notice    a module that did not load
@@ -156,7 +158,7 @@
     <div class="row"><label for="fov">Lens</label><input type="range" id="fov" min="25" max="90" step="1" value="50"><span class="val" id="fovV"></span></div>
     <div class="sec-label">About</div>
     <p class="about">Mountain ranges here grow like frost: <b>diffusion-limited aggregation</b> builds a branching tree, and each level of the tree is blurred and sharpened again, so ridges branch the way real drainage divides do. <b>Branched flow</b> (rays bent by a smooth random field) gathers into channels that cut valleys and deltas, then stream-power erosion, sediment, climate and biomes finish the land.</p>
-    <div class="btns"><button type="button" id="creditsBtn">Credits</button></div>
+    <div class="btns"><button type="button" id="viewSaver">Screensaver</button><button type="button" id="creditsBtn">Credits</button></div>
   </section>
 </aside>
 
@@ -186,12 +188,11 @@
 </footer>
 
 <nav id="dock" data-saver-hide aria-label="Quick controls">
-  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
-  <button id="dockGen" type="button" class="wide" title="Generate a new terrain"><span class="k">New</span><span class="v" id="dockGenV">terrain</span></button>
-  <button id="dockDice" type="button" aria-label="Randomise">⚄</button>
-  <button id="dockTime" type="button" title="Time of day"><span class="k">Time</span><span class="v" id="dockTimeV">–</span></button>
-  <button id="dockCam" type="button" title="Camera"><span class="k">Cam</span><span class="v" id="dockCamV">Orbit</span></button>
-  <button id="dockSaver" type="button" aria-label="Screensaver">◱</button>
+  <button id="dockPanel" type="button" aria-label="All controls" aria-controls="panel" aria-expanded="false"><span class="ico">☰</span><span class="k">Menu</span></button>
+  <button id="dockDice" type="button" aria-label="Randomise everything" title="Randomise everything (locked groups stay)"><span class="ico">⚄</span><span class="k">Roll</span></button>
+  <button id="dockGen" type="button" class="wide" aria-label="Generate the next preset" title="Generate the next preset"><span class="k">New</span><span class="v" id="dockGenV">terrain</span></button>
+  <button id="dockTime" type="button" aria-label="Next time of day" title="Next time of day"><span class="k">Time</span><span class="v" id="dockTimeV">–</span></button>
+  <button id="dockWx" type="button" aria-label="Next weather" title="Next weather"><span class="k">Sky</span><span class="v" id="dockWxV">Fair</span></button>
 </nav>
 
 <script type="module" src="main.js"></script>

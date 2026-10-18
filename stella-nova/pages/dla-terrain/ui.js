@@ -15,8 +15,16 @@
 //  DOM part:
 //    createUI(app, doc) -> ui = { buildOptions(lib), syncOptions(), setProgress(p),
 //        progressDone(), setTerrainMap(view, BIOMES), drawMap(cam), syncSky(),
-//        syncView(), syncMix(), syncLocks(), syncHistory(), status(a, b),
-//        notice(text), toast(text), isPhone(), setPanel(open), mapRect() }
+//        syncView(), syncMix(), syncLocks(), syncHistory(), status(a, b, short),
+//        notice(text), toast(text), isPhone(), setPanel(open), panelState(),
+//        mapRect(), hintOnce(), overlays() }
+//    PHONE  the dock holds five one-tap actions: controls, Randomise
+//        everything, a new terrain (the next preset), the time of day and
+//        the weather (each tap steps to the next one). The sheet has a grip:
+//        a drag follows the finger and snaps to closed, half or full height
+//        (layout.js snapSheet); a tap on the grip toggles half and full.
+//        hintOnce() shows "tap to explore" one time per browser.
+//        overlays() gives the bars that main.js measures for the clear rect.
 //    DICE AND LOCKS  every LIB group (summary row) and every extra group of
 //        world-state.js (Sky, Time, Season, Vegetation, Water, Camera: the
 //        .sec-label rows with data-group) has a dice (app.randomise(group))
@@ -28,8 +36,9 @@
 //  grep -n targets: "export function groupOptions", "export function mapPixels",
 //  "export function createUI", "function buildOptions", "function drawMap",
 //  "── SHEET", "── SKY", "── VIEW", "── MAP", "── PROGRESS", "── DICE",
-//  "── MIX", "── HISTORY"
+//  "── MIX", "── HISTORY", "── DOCK", "── HINT"
 // ============================================================================
+import { sheetHeights, snapSheet, DOCK_H } from './layout.js';
 
 export const PHONE_Q = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
 export const GROUP_ORDER = ['World', 'DLA ridges', 'Shape', 'Branched flow', 'Erosion', 'Climate', 'Detail'];
@@ -41,6 +50,11 @@ export const LAYERS = [
   { key: 'grass', label: 'Grass' }, { key: 'trees', label: 'Trees' }, { key: 'props', label: 'Rocks' },
   { key: 'water', label: 'Water' }, { key: 'clouds', label: 'Clouds' }, { key: 'rain', label: 'Rain' },
 ];
+// the dock text of a weather: one short word
+export function wxShort(w) {
+  const l = (w && (w.label || w.id)) || '';
+  return /thunder/i.test(l) ? 'Storm' : l.split(' ')[0];
+}
 export const WX_SLIDERS = [
   { key: 'cover', label: 'Cloud cover', min: 0, max: 1, step: 0.01 },
   { key: 'rain', label: 'Rain', min: 0, max: 1, step: 0.01 },
@@ -139,6 +153,7 @@ export function createUI(app, doc = globalThis.document) {
   function setPanel(open) {
     panel.classList.toggle('open', open);
     if (!open) panel.classList.remove('full');
+    panel.style.height = '';
     body.classList.toggle('panel-open', open);
     $('dockPanel').classList.toggle('on', open);
     $('dockPanel').setAttribute('aria-expanded', String(open));
@@ -151,6 +166,10 @@ export function createUI(app, doc = globalThis.document) {
   }
   ui.setPanel = setPanel;
   ui.isPhone = () => mq.matches;
+  ui.panelState = () => (!panel.classList.contains('open') ? 'closed' : panel.classList.contains('full') ? 'full' : 'half');
+  // the bars that cover the view (main.js frames the terrain beside them)
+  const bars = ['panel', 'dock', 'status'].map($).concat([doc.querySelector('.topbar')]).filter(Boolean);
+  ui.overlays = () => bars.filter(b => b !== panel || panel.classList.contains('open')).map(b => b.getBoundingClientRect());
   setTab('terrain');
   setPanel(!mq.matches);
   mq.addEventListener && mq.addEventListener('change', () => setPanel(!mq.matches));
@@ -158,17 +177,37 @@ export function createUI(app, doc = globalThis.document) {
   $('panelClose').addEventListener('click', () => setPanel(false));
   $('dockPanel').addEventListener('click', () => setPanel(!panel.classList.contains('open')));
   for (const b of doc.querySelectorAll('#sheetTabs button')) b.addEventListener('click', () => setTab(b.dataset.tab));
+  // the grip: the sheet follows the finger, then snaps to a stop
   const grip = $('sheetGrip');
-  let gripY = null;
-  grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch { /* old browser */ } });
-  grip.addEventListener('pointerup', e => {
-    if (gripY === null) return;
-    const dy = e.clientY - gripY; gripY = null;
-    if (Math.abs(dy) < 8) panel.classList.toggle('full');
-    else if (dy < -40) panel.classList.add('full');
-    else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setPanel(false); }
+  let drag = null;
+  const stops = () => {
+    const dk = $('dock'), dh = dk && dk.offsetHeight ? dk.offsetHeight : DOCK_H;
+    return sheetHeights(win.innerHeight, { b: Math.max(0, dh - DOCK_H) });
+  };
+  grip.addEventListener('pointerdown', e => {
+    drag = { y: e.clientY, h0: panel.getBoundingClientRect().height || stops().half, moved: false };
+    panel.classList.add('dragging');
+    try { grip.setPointerCapture(e.pointerId); } catch { /* old browser */ }
   });
-  grip.addEventListener('pointercancel', () => { gripY = null; });
+  grip.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dy = e.clientY - drag.y;
+    if (Math.abs(dy) > 8) drag.moved = true;
+    if (drag.moved) panel.style.height = Math.max(40, Math.min(stops().full, drag.h0 - dy)) + 'px';
+  });
+  const endDrag = (e, cancel) => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    panel.classList.remove('dragging');
+    panel.style.height = '';
+    if (cancel) return;
+    if (!d.moved) { panel.classList.toggle('full'); if (app.onLayout) app.onLayout(); return; }
+    const s = snapSheet(d.h0 - (e.clientY - d.y), stops());
+    if (s === 'closed') setPanel(false);
+    else { panel.classList.toggle('full', s === 'full'); if (app.onLayout) app.onLayout(); }
+  };
+  grip.addEventListener('pointerup', e => endDrag(e, false));
+  grip.addEventListener('pointercancel', e => endDrag(e, true));
 
   // a range row: label, value, slider
   function rangeRow(id, label, min, max, step, value, fmt, onInput) {
@@ -280,8 +319,15 @@ export function createUI(app, doc = globalThis.document) {
   $('seedDice').addEventListener('click', () => { app.setOpt('seed', 1 + Math.floor(Math.random() * 999998)); syncOptions(); app.generate(); });
   $('genBtn').addEventListener('click', () => app.generate());
   $('randBtn').addEventListener('click', () => app.randomiseAll());
+  // ── DOCK ──
   $('dockGen').addEventListener('click', () => app.nextPreset());
   $('dockDice').addEventListener('click', () => app.randomiseAll());
+  $('dockWx').addEventListener('click', () => {
+    const L = ui.wxList || [];
+    if (!L.length) return;
+    const i = L.findIndex(w => w.id === app.weatherId);
+    app.setWeather(L[(i + 1) % L.length].id);
+  });
 
   // ── HISTORY: the rolled worlds, back and forward; the link ──
   $('histBack').addEventListener('click', () => app.historyStep(-1));
@@ -327,6 +373,7 @@ export function createUI(app, doc = globalThis.document) {
   $('latitude').addEventListener('input', e => { app.latitude = +e.target.value; $('latitudeV').textContent = (+e.target.value).toFixed(0) + '°'; });
   ui.wxRows = new Map();
   function buildWeather(WEATHER) {
+    ui.wxList = WEATHER.slice();
     const wc = $('wxChips'); wc.textContent = '';
     for (const w of WEATHER) {
       const b = el('button', '', w.label); b.type = 'button'; b.dataset.id = w.id;
@@ -350,12 +397,12 @@ export function createUI(app, doc = globalThis.document) {
     $('latitude').value = app.latitude; $('latitudeV').textContent = app.latitude.toFixed(0) + '°';
     for (const b of doc.querySelectorAll('#wxChips button')) b.classList.toggle('on', b.dataset.id === app.weatherId);
     $('dockTimeV').textContent = todText(app.tod);
+    $('dockWxV').textContent = wxShort((ui.wxList || []).find(w => w.id === app.weatherId) || { id: app.weatherId });
     if (wxNow) for (const [k, row] of ui.wxRows) if (!(k in app.wxOver) && wxNow[k] !== undefined) row._set(wxNow[k]);
   };
   ui.todText = todText;
 
   // ── VIEW ──
-  const camNames = { orbit: 'Orbit', fly: 'Fly', drone: 'Drone' };
   const camHints = {
     orbit: 'Drag to turn, right drag or two fingers to pan, scroll or pinch to zoom. WASD moves the centre.',
     fly: 'WASD to fly, E or space up, Q down, shift for speed. Drag to look. Touch: one finger looks, two fingers move and pinch.',
@@ -364,10 +411,6 @@ export function createUI(app, doc = globalThis.document) {
   for (const b of doc.querySelectorAll('#camSeg button')) b.addEventListener('click', () => app.setCam(b.dataset.cam));
   $('droneRidge').addEventListener('click', () => app.drone('ridge'));
   $('droneRiver').addEventListener('click', () => app.drone('river'));
-  $('dockCam').addEventListener('click', () => {
-    const order = ['orbit', 'fly', 'drone'];
-    app.setCam(order[(order.indexOf(app.camMode) + 1) % order.length]);
-  });
   $('dockTime').addEventListener('click', () => {
     // step through dawn, morning, noon, golden hour, dusk, night
     const marks = [0.25, 0.33, 0.5, 0.7, 0.75, 0.95];
@@ -398,7 +441,6 @@ export function createUI(app, doc = globalThis.document) {
     for (const b of doc.querySelectorAll('#qualSeg button')) b.classList.toggle('on', +b.dataset.q === app.qualityIndex);
     for (const b of doc.querySelectorAll('#layerToggles button')) b.setAttribute('aria-pressed', String(!!app.layers[b.dataset.layer]));
     $('camHint').textContent = camHints[app.camMode] || '';
-    $('dockCamV').textContent = camNames[app.camMode] || app.camMode;
     evSync(); blSync(); fovSync();
   };
 
@@ -492,6 +534,20 @@ export function createUI(app, doc = globalThis.document) {
     const n = $('notice'); n.textContent = notes.join(' · '); n.hidden = false;
     setTimeout(() => { n.hidden = true; }, 12000);
   };
-  ui.status = (a, b) => { $('stMain').textContent = a; $('stRight').textContent = b || ''; };
+  ui.status = (a, b, short) => { $('stMain').textContent = short && mq.matches ? short : a; $('stRight').textContent = b || ''; };
+
+  // ── HINT: "tap to explore", one time per browser, on a phone ──
+  ui.hintOnce = () => {
+    const h = $('hint');
+    if (!mq.matches || !h) return false;
+    let seen = false;
+    try { seen = win.localStorage.getItem('dla-terrain-tap-hint') === '1'; } catch { /* private mode */ }
+    if (seen) return false;
+    try { win.localStorage.setItem('dla-terrain-tap-hint', '1'); } catch { /* private mode */ }
+    h.textContent = 'Tap to explore · drag to turn · two fingers pan and pinch · double tap flies there';
+    h.classList.add('once'); h.classList.remove('gone');
+    setTimeout(() => h.classList.add('gone'), 8000);
+    return true;
+  };
   return ui;
 }

@@ -9,9 +9,13 @@
    view). The map inset sits at the lower right, the stage bar at the top.
 
    PHONE (max-width 768px, or a short landscape touch screen). A dock at the
-   base holds the one-tap controls. In portrait #panel is a bottom sheet over
-   the dock; in landscape a drawer on the right. The map gets smaller and
-   moves to the upper right. Targets are 44 px or more.
+   base holds five one-tap controls (menu, roll, new, time, sky). In
+   portrait #panel is a bottom sheet over the dock (half or full height, a
+   grip to drag); in landscape a drawer on the right, and the dock gets
+   shorter so the two never overlap. The map gets smaller, moves to the upper
+   right and folds to a 44 px bar. Targets are 44 px or more, text 11 px or
+   more, and the safe-area insets keep each control off the notch and the
+   home indicator. layout.js holds the same sizes for the node tests.
 
      grep -n 'TOKENS'     colours and sizes
      grep -n 'PANEL'      the control column
@@ -87,6 +91,7 @@ body.panel-open #progress{left:calc(50% + var(--panel-w) / 2)}
 html:not(.in-frame) #gear{top:calc(var(--top-h) + 6px)}
 #gear:hover{border-color:var(--acc);color:var(--acc)}
 #dock,#sheetGrip{display:none}
+#panel.dragging{transition:none!important}
 
 /* PANEL */
 #panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(9,12,14,0.96);border-right:1px solid var(--line-b);padding:58px 16px 24px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);scrollbar-width:thin}
@@ -199,7 +204,12 @@ details.group > summary .dice{margin-left:auto;width:28px;height:28px;font-size:
   .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
   .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--acc);border:3px solid #10161a}
   #gear,.pill{min-width:44px;min-height:44px}
-  #mapToggle{width:44px;height:30px}
+  #mapToggle{top:0;right:0;bottom:auto;width:44px;height:44px;background:rgba(9,12,14,0.6);border-radius:0 0 0 10px}
+  #map.min figcaption{min-height:44px;display:flex;align-items:center}
+  #panel input[type=range]{touch-action:pan-y}
+  .row input[type=range]::-webkit-slider-thumb{width:28px;height:28px;margin-top:-11px}
+  /* 11 px or more for every text on a touch screen */
+  #map figcaption,#pgStages,#stMain,#stRight,.histrow #histPos,.toggles button,.row .val,.row label{font-size:max(11px,0.7rem)}
 }
 
 /* PHONE. The query matches PHONE_Q in ui.js. */
@@ -212,23 +222,33 @@ details.group > summary .dice{margin-left:auto;width:28px;height:28px;font-size:
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;
     padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
     background:rgba(7,9,11,0.96);border-top:1px solid var(--line-b)}
-  #dock > button{flex:0 0 48px;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15}
+  #dock > button{flex:0 0 52px;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;overflow:hidden}
   #dock > button.wide{flex:1 1 auto}
   #dock > button.on{border-color:var(--acc);color:var(--acc)}
-  #dock .k{font-size:0.66rem;color:var(--dim)}
+  #dock .ico{font-size:1.05rem;line-height:1}
+  #dock .k{font-size:0.7rem;color:var(--dim)}
   #dock .v{font-size:0.76rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
-  #dockTime,#dockCam{flex:0 0 64px!important}
+  #dockDice .ico{color:var(--acc2)}
+  #dockTime{flex:0 0 60px!important}
+  #dockWx{flex:0 0 68px!important}
 
   #status{bottom:var(--dock-h);height:var(--status-h);padding:0 calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));font-size:0.7rem;gap:10px}
   #stRight{display:none}
-  #hint{display:none}
+  #hint:not(.once){display:none}
+  #hint.once{bottom:calc(var(--status-h) + var(--dock-h) + 14px);width:max-content;max-width:calc(100vw - 32px);padding:10px 14px;border-radius:18px;
+    background:rgba(9,12,14,0.86);border:1px solid var(--line-b);color:var(--ink);font-size:0.82rem;line-height:1.4;white-space:normal;text-shadow:none}
   #notice{left:12px;right:12px;max-width:none;bottom:calc(var(--status-h) + var(--dock-h) + 8px)}
+  /* the sheet covers the base: messages go to the top */
+  body.panel-open #notice{top:calc(var(--top-h) + 8px);bottom:auto}
+  #toast{top:auto;bottom:calc(var(--status-h) + var(--dock-h) + 12px);max-width:calc(100vw - 32px);text-align:center}
+  body.panel-open #toast{top:calc(var(--top-h) + 64px);bottom:auto}
   #progress{top:calc(var(--top-h) + 4px);padding:8px 10px}
   body.panel-open #progress{left:50%}
   #pgStages{display:none}
   #map{width:132px;top:calc(var(--top-h) + 4px);bottom:auto;right:calc(10px + env(safe-area-inset-right))}
   body.has-progress #map{top:calc(var(--top-h) + 64px)}
-  #map figcaption{font-size:0.64rem}
+  #map figcaption{font-size:0.7rem}
+  #map.min{width:132px}
   body.panel-open #map{display:none}
 
   /* The panel is a bottom sheet above the dock. */
@@ -249,12 +269,17 @@ details.group > summary .dice{margin-left:auto;width:28px;height:28px;font-size:
 /* LANDSCAPE phone. The panel is a drawer on the right; the dock is a tab at
    the lower left; the topbar is hidden. */
 @media (max-height:500px) and (orientation:landscape) and (pointer:coarse), (max-height:500px) and (orientation:landscape) and (max-width:768px){
-  :root{--top-h:0px}
+  :root{--top-h:0px;--drawer-w:min(46vw,400px);--dock-w:min(460px,calc(100vw - 8px))}
+  body.panel-open{--dock-w:min(460px,calc(100vw - var(--drawer-w) - 8px))}
   .topbar{display:none}
-  #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
-  #status{right:auto;width:min(460px,58vw);bottom:var(--dock-h)}
-  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,400px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
-    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
+  #dock{right:auto;width:var(--dock-w);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #status{right:auto;width:var(--dock-w);bottom:var(--dock-h)}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:var(--drawer-w);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) 14px;transform:translateX(100%)}
+  #progress,body.panel-open #progress{left:calc(128px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));width:auto;max-width:560px;transform:none}
+  body.panel-open #progress{right:calc(var(--drawer-w) + 8px)}
+  body.panel-open #toast{left:calc((100vw - var(--drawer-w)) / 2)}
+  body.panel-open #hint.once{left:calc((100vw - var(--drawer-w)) / 2)}
   #panel.open{transform:translateX(0)}
   #sheetGrip{display:none}
   .tabs,html.in-frame .tabs{top:0;padding-top:8px}

@@ -46,7 +46,20 @@
 //  back and forward work); edits replace it (debounced).
 //
 //  DEFAULT OPENING  a strong preset at golden hour: the camera turns round
-//  the terrain while it forms from DLA, then a drone flies a ridge.
+//  the terrain while it forms from DLA, then a drone flies a ridge. A touch
+//  screen opens at Low quality on a 512 grid (no ?q= given), and a phone
+//  shows "tap to explore" one time (ui.hintOnce).
+//
+//  INPUT  one finger or the left button turns the orbit (looks in fly
+//  mode); two fingers pan and pinch zoom (fly: a two-finger joystick); a
+//  double tap or a double click flies the orbit to that ground point
+//  (camera.js pickGround). The canvas has touch-action: none, and the page
+//  does not scroll, so no gesture goes to the page.
+//
+//  FRAMING  viewShift() moves the image centre to the centre of the clear
+//  rect (layout.js clearRect of ui.overlays()), so the subject stays clear
+//  of the sheet, the drawer, the dock and the bars. The saver uses its own
+//  band (saver.js framing).
 //
 //  grep -n targets: "── APP", "── BOOT", "── MODULES", "── GENERATE",
 //  "── LOOP", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
@@ -60,7 +73,8 @@ import { packGlobals, GLOBALS, GLOBALS_FLOATS, globalsView, applyWxOver, wxFromG
 import * as SkyStub from './gpu/sky-stub.js';
 import * as TerrainStub from './gpu/stub-terrain.js';
 import { createPost } from './render/post.js';
-import { createCamera, dronePath } from './camera.js';
+import { createCamera, dronePath, pickGround } from './camera.js';
+import { clearRect, centreShift } from './layout.js';
 import { createUI, todRate } from './ui.js';
 import { buildShotPlan, framing, shotLabel, shotTod, extractFn, SHOT_CODE, mulberry } from './saver.js';
 import { plateBand } from '../../lib/saver-clear.js';
@@ -212,7 +226,7 @@ app.drone = (kind, pickIndex, high) => {
   ui.syncView();
 };
 app.flyTo = (x, z) => { cam.flyTo(x, z, world); app.camMode = cam.mode; app.lastInput = performance.now(); ui.syncView(); };
-app.onLayout = () => {};
+app.onLayout = () => { occ.at = -1e9; setTimeout(() => { occ.at = -1e9; }, 320); };
 app.loadCredits = () => {
   fetch(new URL('../../assets/nature/CREDITS.txt', location.href)).then(r => (r.ok ? r.text() : Promise.reject(r.status)))
     .then(t => { $('creditsAssets').textContent = t; })
@@ -262,6 +276,8 @@ function initialOptions() {
   }
   if (Q.get('seed')) app.opts.seed = Math.max(1, Math.round(+Q.get('seed')) || 1);
   if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+  // a phone opens on a 512 grid at Low quality, so the first view comes fast
+  if (coarse && !Q.has('q') && app.opts.n > 512) app.opts.n = 512;
 }
 
 async function makeWorker() {
@@ -496,8 +512,8 @@ function loop(now) {
     const day = clamp((sy + 0.05) / 0.15, 0, 1);
     post.settings.maxExp = clamp(st.exposureHint * (1.5 + 4.5 * day), 0.05, 40);
   }
-  // the lens and the saver band
-  let shift = 0;
+  // the lens and the saver band; else the clear rect beside the panels
+  let shift = 0, shiftX = 0;
   if (app.saverRun) {
     const r = app.saverRun;
     let band = null;
@@ -510,8 +526,12 @@ function loop(now) {
     }
     const fr = framing(innerWidth, innerHeight, band);
     cam.fovY = fr.fovY; shift = fr.shift;
-  } else cam.fovY = app.look.fov * Math.PI / 180;
-  const m = cam.matrices(fg.w, fg.h, { jitter: post.jitter(frameNo), shift: [0, shift] });
+  } else {
+    cam.fovY = app.look.fov * Math.PI / 180;
+    [shiftX, shift] = viewShift(dt);
+  }
+  const m = cam.matrices(fg.w, fg.h, { jitter: post.jitter(frameNo), shift: [shiftX, shift] });
+  app.lastMatrices = m;
   frameGlobals(m, st, dt);
   // cascades: the sun (no shadows at night)
   const sd = [G[GLOBALS.sunDir.offset], G[GLOBALS.sunDir.offset + 1], G[GLOBALS.sunDir.offset + 2]];
@@ -547,12 +567,31 @@ function loop(now) {
   if (frameNo % 15 === 0) statusLine(st);
 }
 
+// the image centre goes to the centre of the clear rect (the part of the
+// screen that the sheet, the drawer, the dock and the bars do not cover),
+// so the orbit target sits in view when the sheet is open. The rects are
+// read 5 times a second and after a panel change; the shift eases in.
+const occ = { sx: 0, sy: 0, gx: 0, gy: 0, at: -1e9 };
+function viewShift(dt) {
+  const now = performance.now();
+  if (now - occ.at > 200) {
+    occ.at = now;
+    const W = innerWidth, H = innerHeight;
+    const g = centreShift(clearRect(W, H, ui.overlays()), W, H);
+    occ.gx = g[0]; occ.gy = g[1];
+  }
+  const k = 1 - Math.exp(-8 * dt);
+  occ.sx += (occ.gx - occ.sx) * k; occ.sy += (occ.gy - occ.sy) * k;
+  return [occ.sx, occ.sy];
+}
+
 function statusLine(st) {
   const t = tg;
   const stage = app.gen && app.gen.running ? ' · ' + (app.gen.label || app.gen.stage || '') : '';
   ui.status(
     `${fps.toFixed(0)} fps · ${fg.w}×${fg.h} · ${(t.worldSize / 1000).toFixed(0)} km · ${t.n}² · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m${stage}`,
     `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
+    `${fps.toFixed(0)} fps · ${(t.worldSize / 1000).toFixed(0)} km · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m · ${app.camMode}`,
   );
   if (frameNo % 30 === 0) ui.syncSky(wxFromGlobals(G));
 }
@@ -580,8 +619,9 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => {
   if (app.saverRun) return;
   canvas.focus({ preventScroll: true });
+  lastPtrType = e.pointerType || 'mouse';
   try { canvas.setPointerCapture(e.pointerId); } catch { /* old browser */ }
-  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey, x0: e.clientX, y0: e.clientY });
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey, x0: e.clientX, y0: e.clientY, t0: performance.now() });
   if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()];
     pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, d0: Math.hypot(a.x - b.x, a.y - b.y), cx0: (a.x + b.x) / 2, cy0: (a.y + b.y) / 2 };
@@ -613,10 +653,32 @@ canvas.addEventListener('pointermove', e => {
     pinch.d = d; pinch.cx = cx; pinch.cy = cy;
   }
 });
+// a double tap (touch or pen) or a double click flies the orbit to the
+// ground under that point
+let lastTap = null;
+function flyToScreen(x, y) {
+  const m = app.lastMatrices;
+  if (!m || !tg || app.saverRun) return false;
+  const p = pickGround(m.invViewProj, 2 * x / innerWidth - 1, 1 - 2 * y / innerHeight, world, world.size * 3);
+  if (!p) return false;
+  app.flyTo(p[0], p[2]);
+  return true;
+}
 const endPtr = e => {
+  const p = ptrs.get(e.pointerId);
+  const was = ptrs.size;
   ptrs.delete(e.pointerId);
   if (ptrs.size < 2) { pinch = null; touchMove = [0, 0, 0]; }
+  if (e.type !== 'pointerup' || !p || was !== 1 || e.pointerType === 'mouse') return;
+  const now = performance.now();
+  if (Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 10 || now - p.t0 > 300) { lastTap = null; return; }
+  if (lastTap && now - lastTap.t < 340 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+    lastTap = null;
+    flyToScreen(e.clientX, e.clientY);
+  } else lastTap = { t: now, x: e.clientX, y: e.clientY };
 };
+let lastPtrType = 'mouse';
+canvas.addEventListener('dblclick', e => { e.preventDefault(); if (lastPtrType === 'mouse') flyToScreen(e.clientX, e.clientY); });
 canvas.addEventListener('pointerup', endPtr);
 canvas.addEventListener('pointercancel', endPtr);
 canvas.addEventListener('wheel', e => {
@@ -778,7 +840,7 @@ function saverExit() {
 }
 window.snSaver = { enter: opts => saverEnter(opts || {}), exit: () => saverExit() };
 $('saverBtn').addEventListener('click', () => saverEnter({}));
-$('dockSaver').addEventListener('click', () => saverEnter({}));
+$('viewSaver').addEventListener('click', () => { if (ui.isPhone()) ui.setPanel(false); saverEnter({}); });
 
 // the opening flight: from the first orbit view, a slow high drone pass
 // over the peaks toward the far side, so the fog seas in the valleys and
@@ -894,6 +956,7 @@ async function onLost(info) {
 // ── start ──
 async function main() {
   ui = createUI(app);
+  ui.hintOnce();
   await loadLib();
   initialOptions();
   if (!location.hash && !Q.has('tod') && app.skyLib && app.skyLib.solarPosition) {
