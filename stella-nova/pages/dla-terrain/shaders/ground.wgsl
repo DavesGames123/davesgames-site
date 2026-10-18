@@ -37,6 +37,26 @@
 //  across the prevailing wind (fn dune), rock facets, a macro scan of the
 //  cliff set at 34 m and 122 m tiles (fn macroRock), gully cavity light.
 //
+//  ROCK (2 m to 500 m)  fn rockField: a lattice of three fracture sets that
+//  follow the strata (bedding, dip joints, strike joints; U.rock from
+//  surface-sim rockFrame) at two scales (blocks of H0, buttresses of
+//  7 x H0). Bedded rock (U.rock.w high: sandstone) steps into ledges and
+//  stairs; massive rock (granite, gneiss) has long joints and broken faces
+//  (fn facet3, continuous cones of a 3D Worley F1). Open joints are cracks
+//  (filtered by the footprint, chipped edges); block edges are rounded;
+//  weathering rinds, iron stain, varnish and water streaks that run down
+//  from the ledge lips, lichen rosettes (fn lichen) and moss. Close up:
+//  vertex relief (fn groundDisp: the stairs on bare rock and the talus
+//  blocks of fn talus, within U.fx.w m, desktop quality 0.8 and up),
+//  parallax occlusion (fn pom, POM_MAX steps within U.fx.z m) and its
+//  micro shadow (fn pomShadow). The pattern position is the surface
+//  before the vertex relief (VOut.base). The rock scans: one per buttress
+//  (fn rockPick: layered beds in sandstone, else the cliff and rock faces).
+//  TILING  every texture layer is hex tiled (fn tex3Hex, Mikkelsen 2022);
+//  the macro rock reads the aerial outcrop set (50 m tile). Soil close up:
+//  small stones (fn grit) and roots (fn roots); a ragged band of stony
+//  soil where turf meets rock.
+//
 //  LIGHT  sun (GGX + Lambert) with CORE's cascaded shadow map (common.wgsl
 //  fn sunShadow, group 2) and
 //  a height-field march toward the sun for long ridge shadows past the
@@ -68,7 +88,10 @@
 //  "fn fbmd", "fn biomeMix", "fn layerRock", "fn layerGrass", "fn layerSand",
 //  "fn layerGravel", "fn marchShadow", "fn aerial", "fn fs", "fn surfAt",
 //  "fn drainLine", "fn dune", "fn snowAmount", "fn strataAt", "fn strataCol",
-//  "fn facets", "fn macroRock", "struct RockGeo"
+//  "fn facets", "fn macroRock", "struct RockGeo", "fn groundDisp",
+//  "fn rockSet", "fn rockField", "fn facet3", "fn rockFine", "fn talus",
+//  "fn hexGrid", "fn hexSharp", "fn tex3Hex", "fn pomSteps", "fn pom",
+//  "fn pomShadow", "fn rockPick", "fn grit", "fn roots", "fn lichen"
 // ============================================================================
 
 struct GroundU {
@@ -84,6 +107,9 @@ struct GroundU {
   surf: vec4f,    // surface fields: x on (0/1), y grid m (cells per side), zw prevailing wind (unit, toward)
   geo: vec4f,     // LIB strata: x hmin m, y hspan m, z layers, w strength 0..1
   geo2: vec4f,    // x glacier 0..1, y hemisphere (1 north, -1 south), z dune wavelength m, w 0
+  rock: vec4f,    // joint frame: xy set 1 normal (unit xz, the strata dip direction), z bed spacing H0 m, w stair strength
+  fx: vec4f,      // x POM on (0/1), y vertex relief on (0/1), z POM range m, w vertex relief range m
+  rsets: vec4f,   // array layers of the extra sets: x layered rock, y blocky rock, z outcrop (50 m), w stony soil (255: none)
 };
 @group(1) @binding(0) var<uniform> U: GroundU;
 @group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // ASSETS ground sets, rgba8unorm-srgb
@@ -92,7 +118,7 @@ struct GroundU {
 @group(1) @binding(4) var sRepeat: sampler;                  // linear, repeat, anisotropic
 @group(1) @binding(5) var tCloudSh: texture_2d<f32>;         // SKY module.cloudShadow.view (r: sun transmittance)
 @group(1) @binding(6) var sCloudSh: sampler;
-@group(1) @binding(7) var tSurf: texture_2d_array<f32>;      // render/surface-sim.js fields, 4 layers rgba8unorm
+@group(1) @binding(7) var tSurf: texture_2d_array<f32>;      // render/surface-sim.js fields, 4 layers rgba8unorm (vertex + fragment)
 
 const GPI: f32 = 3.14159265;
 
@@ -113,6 +139,7 @@ struct VOut {
   @location(0) world: vec3f,
   @location(1) @interpolate(flat) level: f32,
   @location(2) morph: f32,
+  @location(3) base: vec3f,   // the surface before the vertex relief (the pattern position)
 };
 
 struct Inst {
@@ -142,12 +169,48 @@ fn cdlodVertex(vid: u32, inst: Inst) -> vec3f {
   return vec3f(xz, k);
 }
 
+// The vertex relief of bare rock and talus near the camera (U.fx.y, within
+// U.fx.w m): the block stairs of fn rockField (no cracks: they are finer
+// than the 0.5 m grid) and the talus blocks of fn talus, along the base
+// normal. A function of xz and the camera alone, so the CDLOD seams stay
+// closed. The mask keeps it off soil: grass and props stay on
+// terrainHeight (NOTES.md GROUND to VEG).
+fn groundDisp(xz: vec2f, y: f32) -> vec3f {
+  if (U.fx.y < 0.5) { return vec3f(0.0); }
+  let dxz = G.camPos.xz - xz;
+  let dy = max(G.camPos.y - y, 0.0);
+  let d = sqrt(dot(dxz, dxz) + (dy * dy));
+  let fade = 1.0 - smoothstep(U.fx.w * 0.6, U.fx.w, d);
+  if (fade <= 0.0) { return vec3f(0.0); }
+  let nb = normalize(nrmAt(xz).xyz + vec3f(0.0, 1e-4, 0.0));
+  let slope = 1.0 - nb.y;
+  var reg = 0.3;
+  var scree = 0.0;
+  var warp = 0.5;
+  if (U.surf.x > 0.5) {
+    let uv = gUV(xz);
+    let a = textureSampleLevel(tSurf, sLinear, uv, 0, 0.0);
+    reg = a.x; scree = a.y;
+    warp = textureSampleLevel(tSurf, sLinear, uv, 2, 0.0).x;
+  }
+  let rock = rockMaskOf(slope, reg, scree);
+  var h = 0.0;
+  if (rock > 0.01) {
+    let p = vec3f(xz.x, y, xz.y);
+    let r = rockField(p, bedCoord(p, warp), vec3f(0.0, 1.0, 0.0), nb, 0.12, 1.0);
+    h = clamp(r.h - r.hf, -1.5, 0.8) * rock;
+  }
+  h += talus(xz, talusAmt(scree, slope), 0.0).x;
+  return nb * (h * fade);
+}
+
 @vertex
 fn vs(@builtin(vertex_index) vid: u32, inst: Inst) -> VOut {
   let m = cdlodVertex(vid, inst);
   let h = terrainHeight(m.xy);
   var o: VOut;
-  o.world = vec3f(m.x, h, m.y);
+  o.base = vec3f(m.x, h, m.y);
+  o.world = o.base + groundDisp(m.xy, h);
   o.pos = G.viewProj * vec4f(o.world, 1.0);
   o.level = inst.b.z;
   o.morph = m.z;
@@ -176,6 +239,7 @@ fn ringHeight(xz: vec2f) -> f32 {
 fn vsRing(@location(0) a: vec3f) -> VOut {
   var o: VOut;
   o.world = vec3f(a.x, ringHeight(a.xy) - a.z, a.y);
+  o.base = o.world;
   o.pos = G.viewProj * vec4f(o.world, 1.0);
   o.level = -1.0;
   o.morph = 0.0;
@@ -187,7 +251,7 @@ fn vsRing(@location(0) a: vec3f) -> VOut {
 fn vsShadow(@builtin(vertex_index) vid: u32, inst: Inst) -> @builtin(position) vec4f {
   let m = cdlodVertex(vid, inst);
   let h = terrainHeight(m.xy);
-  return SP.viewProj * vec4f(m.x, h, m.y, 1.0);
+  return SP.viewProj * vec4f(vec3f(m.x, h, m.y) + groundDisp(m.xy, h), 1.0);
 }
 
 // ----------------------------------------------------------------- noise --
@@ -669,40 +733,502 @@ fn strataCol(idx: f32, region: vec3f) -> vec3f {
   return (gc * region.x) + (sc * region.y) + (bc * region.z);
 }
 
-// --------------------------------------------------------------- layers --
+// ------------------------------------------------------- rock structure --
+// Blocky rock (2 m to 500 m). Three fracture sets follow the strata:
+//   set 0, the bedding: planes of equal bedding coordinate bc (fn bedCoord:
+//     the LIB strata height with the warp of the fields, so the beds follow
+//     the layer colours of fn strataAt),
+//   set 1, the dip joints: vertical planes with the normal U.rock.xy (the
+//     regional dip direction of the strata, surface-sim rockFrame),
+//   set 2, the strike joints: vertical planes normal to set 1.
+// The joint spacing follows the bed thickness (thick beds, big blocks).
+// Set 1 joints stop at the bedding planes and set 2 joints at set 1
+// joints (staggered T junctions), as in jointed sandstone and granite.
+// The relief is in metres along the surface normal. Each set steps the
+// face: one asymmetric triangle per cell (a steep riser, a flat tread, the
+// lip stands out), so a slope cut across the planes becomes a stair of
+// blocks. Each block has its own offset; edges are rounded; open joints
+// are cracks. Two lattices: the blocks (H0, about 1 to 4 m) and the
+// buttresses (7 x H0), so a face has structure from 2 m to 500 m.
+// JS twin of the joint frame: surface-sim.js rockFrame / jointFrame.
 
-struct Mat { alb: vec3f, h: vec4f, rough: f32, tn: vec3f, ao: f32 };
-// h: x height 0..1, yzw gradient (1/m); tn: texture normal offset (world, in
-// the tangent plane); ao: texture occlusion
+struct RockF {
+  h: f32,      // relief m: steps + block offset + bevel + crack
+  hf: f32,     // fine relief m (bevel + crack, <= 0): the POM height
+  g: vec3f,    // gradient of h (world)
+  e: f32,      // distance m to the nearest joint or bedding plane
+  crack: f32,  // 0..1 open crack (filtered by the footprint)
+  id: vec3f,   // block hashes 0..1
+  bedF: f32,   // place in the bed: 0 bottom .. 1 top
+  bedT: f32,   // bed thickness m
+  tread: f32,  // 0..1 on the flat tread of a step (a ledge top)
+  eo: f32,     // distance m to the nearest open joint
+  idB: vec3f,  // the hashes of the buttress block (the texture choice)
+};
 
-// 3D Worley: x F1, y F2 (distances in cells), and the gradient of F2 - F1
-// (in cells), for crack lines between blocks.
-struct Cell3 { f1: f32, f2: f32, g: vec3f, id: f32 };
-fn worley3(p: vec3f) -> Cell3 {
-  let fl = floor(p);
+fn rkH(a: i32, b: i32, c: u32) -> f32 { return hash21(vec2i(a, b), c); }
+
+// boundary k of the bedding (spacing H0, jittered +-0.21 H0)
+fn bedB(k: i32, H0: f32, s: u32) -> f32 { return H0 * (f32(k) + (0.42 * (rkH(k, 17, s) - 0.5))); }
+
+// the bedding coordinate m: the height with the strata warp (the same
+// phase as fn strataAt, in metres) and a slow 6 m wave
+fn bedCoord(p: vec3f, warp: f32) -> f32 {
+  let A = max((U.geo.z * 2.0) / max(U.geo.y, 1.0), 1e-4);
+  return p.y + (fbm2(p.xz * 0.01, 2) * 6.0) + (((warp - 0.5) * 6.0) / A);
+}
+
+// asymmetric triangle: value 0..1 (peak at 1 - tau) and its slope d/df
+fn rkTri(f: f32, tau: f32) -> vec2f {
+  if (f < 1.0 - tau) { return vec2f(f / (1.0 - tau), 1.0 / (1.0 - tau)); }
+  return vec2f((1.0 - f) / tau, -1.0 / tau);
+}
+
+// smoothstep(0, w, e) and its derivative d/de
+fn rkSS(w: f32, e: f32) -> vec2f {
+  let t = clamp(e / max(w, 1e-5), 0.0, 1.0);
+  return vec2f(t * t * (3.0 - (2.0 * t)), (6.0 * t * (1.0 - t)) / max(w, 1e-5));
+}
+
+// boundary j of a jittered 1D lattice (unit spacing, +-0.17): -> position
+fn jitB(j: i32, k: i32, s: u32) -> f32 { return f32(j) + (0.34 * (rkH(j, k, s) - 0.5)); }
+// the cell of u in that lattice -> (index, start, width)
+fn jitCell(u: f32, k: i32, s: u32) -> vec3f {
+  let j0 = i32(floor(u));
+  var j = j0;
+  if (u < jitB(j0, k, s)) { j = j0 - 1; }
+  else if (u >= jitB(j0 + 1, k, s)) { j = j0 + 1; }
+  let a = jitB(j, k, s);
+  return vec3f(f32(j), a, max(jitB(j + 1, k, s) - a, 0.2));
+}
+fn rkRot(d: vec2f, a: f32) -> vec2f { return vec2f((d.x * cos(a)) - (d.y * sin(a)), (d.x * sin(a)) + (d.y * cos(a))); }
+
+// One lattice. p: pattern position, bc: bedding coordinate, gb: its
+// gradient, n: surface normal, H0: bed spacing m, fp: pixel footprint m,
+// s: seed, stepK: stair strength, crackK: crack width factor. The rock
+// kind sed (U.rock.w: 0 massive granite and gneiss, 1 bedded sandstone)
+// sets the style: thick sheeting joints, few open planes and round blocks
+// (granite), or thin beds that split and stand out as ledges (sandstone).
+// The planes are not ideal: the beds wave, set 1 turns per bed (+-14 deg)
+// and set 2 per set 1 cell (+-20 deg), each plane is jittered and wavy.
+fn rockSet(p: vec3f, bc0: f32, gb: vec3f, n: vec3f, H0in: f32, fp: f32, s: u32, stepK: f32, crackK: f32, tiltK: f32) -> RockF {
+  var r: RockF;
+  let sed = clamp((U.rock.w - 0.8) / 0.5, 0.0, 1.0);
+  let H0 = H0in * mix(2.6, 1.0, sed);
+  // set 0: the bed of bc (wavy)
+  let bc = bc0 + (vnoise2((p.xz / (H0 * 6.0)) + vec2f(f32(s) * 0.37, 1.3)) * 0.2 * H0);
+  let kf = i32(floor(bc / H0));
+  var k = kf;
+  if (bc < bedB(kf, H0, s)) { k = kf - 1; }
+  else if (bc >= bedB(kf + 1, H0, s)) { k = kf + 1; }
+  let b0 = bedB(k, H0, s);
+  let tB = max(bedB(k + 1, H0, s) - b0, 0.05 * H0);
+  let fB = clamp((bc - b0) / tB, 0.0, 1.0);
+  // set 1 in bed k: turned per bed, spacing from the bed (sandstone) or
+  // from H0 (granite), jittered and wavy planes
+  // (granite has no beds: its joints run on through the sheeting zones,
+  // kj = 0; bedded rock staggers its joints per bed, kj = k)
+  let kj = select(k, 0, sed < 0.5);
+  let d1 = rkRot(U.rock.xy, (rkH(kj, 41, s) - 0.5) * mix(0.5, 0.18, sed));
+  let S1 = clamp(mix(H0 * mix(0.8, 1.9, rkH(kj, 3, s + 1u)), tB * mix(1.0, 2.4, rkH(k, 3, s + 1u)), sed), 0.4 * H0, 6.0 * H0);
+  let u1 = (dot(p.xz, d1) / S1) + rkH(kj, 5, s + 2u) + (vnoise2((p.xz / (S1 * 3.0)) + vec2f(f32(kj) * 1.7, 3.1)) * 0.2);
+  let c1 = jitCell(u1, kj, s + 14u);
+  let i1 = i32(c1.x);
+  let f1 = clamp((u1 - c1.y) / c1.z, 0.0, 1.0);
+  let W1 = c1.z * S1;
+  // set 2 in (bed, set 1 cell): in bedded rock turned and offset per
+  // cell (the joints stagger and end at set 1 joints: T junctions); in
+  // granite one long set (ki = 0)
+  let ki = select(i1, 0, sed < 0.5);
+  let d2 = rkRot(vec2f(-d1.y, d1.x), (rkH(kj, ki + 77, s) - 0.5) * mix(0.3, 0.35, sed));
+  let S2 = S1 * mix(0.9, 1.8, rkH(kj, 7, s + 3u));
+  let u2 = (dot(p.xz, d2) / S2) + rkH(kj, ki, s + 4u) + (vnoise2((p.xz / (S2 * 3.0)) + vec2f(f32(ki) * 2.3, f32(kj))) * 0.2);
+  let c2 = jitCell(u2, kj * 131 + ki, s + 15u);
+  let i2 = i32(c2.x);
+  let f2 = clamp((u2 - c2.y) / c2.z, 0.0, 1.0);
+  let W2 = c2.z * S2;
+  r.id = vec3f(rkH(k, i1 * 7 + i2, s + 5u), rkH(i1, i2, s + 6u), rkH(k + i2, i1, s + 7u));
+  r.bedF = fB; r.bedT = tB;
+  // distances to the six planes of the block (m) and their gradients
+  let eB = min(fB, 1.0 - fB) * tB;
+  let e1 = min(f1, 1.0 - f1) * W1;
+  let e2 = min(f2, 1.0 - f2) * W2;
+  let gB = gb * select(-1.0, 1.0, fB < 0.5);
+  let g1 = vec3f(d1.x, 0.0, d1.y) * select(-1.0, 1.0, f1 < 0.5);
+  let g2 = vec3f(d2.x, 0.0, d2.y) * select(-1.0, 1.0, f2 < 0.5);
+  // which planes are open joints (sandstone splits on its beds; granite
+  // on few sheeting planes)
+  let gran = 1.0 - smoothstep(0.35, 0.65, sed);
+  let oB = step(mix(0.8, 0.55, sed), rkH(select(k + 1, k, fB < 0.5), 23, s + 8u)) * (1.0 - gran);
+  let o1 = step(mix(0.7, 0.3, sed), rkH(kj, select(i1 + 1, i1, f1 < 0.5), s + 9u));
+  let o2 = step(mix(0.8, 0.5, sed), rkH(kj * 31 + ki, select(i2 + 1, i2, f2 < 0.5), s + 10u));
+  // the stairs: each set steps a face that cuts its planes at an angle
+  // (the lattice fades out where a bed is under about 12 px)
+  let fade = 1.0 - smoothstep(0.04 * H0, 0.16 * H0, fp);
+  let stK = stepK * mix(0.55, 1.0, sed);
+  var h = 0.0;
+  var g = vec3f(0.0);
+  var tread = 0.0;
+  {
+    let nb = normalize(gb);
+    let c = dot(n, nb);
+    let kk = 1.6 * abs(c) * sqrt(max(1.0 - (c * c), 0.0)) * stK * fade * mix(0.5, 1.0, oB) * (1.0 - gran);
+    let sg = select(-1.0, 1.0, c >= 0.0);
+    let t = rkTri(select(1.0 - fB, fB, c >= 0.0), 0.38);
+    h += kk * tB * (t.x - 0.5);
+    g += gb * (kk * t.y * sg);
+    tread = max(tread, select(0.0, kk, t.y < 0.0));
+  }
+  {
+    let d = vec3f(d1.x, 0.0, d1.y);
+    let c = dot(n, d);
+    let kk = 1.6 * abs(c) * sqrt(max(1.0 - (c * c), 0.0)) * stK * 0.6 * fade * sed * o1;
+    let sg = select(-1.0, 1.0, c >= 0.0);
+    let t = rkTri(select(1.0 - f1, f1, c >= 0.0), 0.3);
+    h += kk * W1 * (t.x - 0.5);
+    g += d * (kk * t.y * sg);
+  }
+  {
+    let d = vec3f(d2.x, 0.0, d2.y);
+    let c = dot(n, d);
+    let kk = 1.6 * abs(c) * sqrt(max(1.0 - (c * c), 0.0)) * stK * 0.4 * fade * o2 * sed;
+    let sg = select(-1.0, 1.0, c >= 0.0);
+    let t = rkTri(select(1.0 - f2, f2, c >= 0.0), 0.3);
+    h += kk * W2 * (t.x - 0.5);
+    g += d * (kk * t.y * sg);
+  }
+  r.tread = clamp(tread * 2.0, 0.0, 1.0);
+  // each block its own offset (hidden at the joints by the bevel and
+  // crack), and its face is not a plane: a slow wave per block
+  let bw = min(min(tB, W1), W2);
+  h += (r.id.x - 0.5) * 0.1 * min(tB, W1) * fade * sed;
+  let un = vnoised((p * (1.6 / bw)) + (r.id * 31.0));
+  h += un.x * 0.035 * bw * fade;
+  g += un.yzw * (0.056 * fade);
+  // each block face is a plane of its own tilt: broken faces (the facets
+  // of granite, the tilted blocks of sandstone)
+  let tilt = (vec3f(r.id.y, r.id.z, rkH(i2, k, s + 18u)) - 0.5) * (mix(0.5, 0.22, sed) * fade * tiltK);
+  g += tilt;
+  // rounded edges: the nearest plane of the block; closed planes round a
+  // little, open ones more (granite blocks weather round)
+  var e = select(eB, 9.0, gran > 0.5);
+  var ge = gB;
+  var oe = oB;
+  if (e1 < e) { e = e1; ge = g1; oe = o1; }
+  if (e2 < e) { e = e2; ge = g2; oe = o2; }
+  r.e = e;
+  let R = clamp(mix(0.26, 0.15, sed) * min(tB, W1), 0.03, min(0.5 * H0, 0.6)) * mix(0.35, 1.0, oe);
+  var hf = 0.0;
+  if (e < R) {
+    let q = 1.0 - (e / R);
+    hf -= R * 0.5 * q * q;
+    g += ge * (q * fade);
+  }
+  // open cracks, each its own width; the width grows to the footprint and
+  // the depth and darkness fall with it (filtered)
+  let wB = mix(0.004, 0.03, rkH(k, 29, s + 11u)) * crackK * H0;
+  let w1 = mix(0.004, 0.03, rkH(k, i1, s + 12u)) * crackK * H0;
+  let w2 = mix(0.003, 0.022, rkH(i1, i2, s + 13u)) * crackK * H0;
+  let D = clamp(0.25 * min(tB, W1), 0.04, 0.6 * H0);
+  var crack = 0.0;
+  var eo = 9.0;
+  // chipped edges: the crack widths wander along the joint (close up)
+  let chip = select(0.0, vnoised(p * (2.5 / H0)).x * (0.5 * (1.0 - smoothstep(0.01, 0.04, fp))), fade > 0.0);
+  for (var j = 0; j < 3; j++) {
+    let w = select(select(w2, w1, j == 1), wB, j == 0);
+    let o = select(select(o2, o1, j == 1), oB, j == 0);
+    let ej = select(select(e2, e1, j == 1), eB, j == 0);
+    let gj = select(select(g2, g1, j == 1), gB, j == 0);
+    if (o < 0.5) { continue; }
+    eo = min(eo, ej);
+    let wf = max(w * (1.0 + chip), fp * 1.2);
+    let ss = rkSS(wf, ej);
+    crack = max(crack, (1.0 - ss.x) * (w / wf));
+    hf -= D * (1.0 - ss.x) * (w / wf);
+    g += gj * (D * ss.y * (w / wf) * fade);
+  }
+  r.eo = eo;
+  r.crack = crack * fade;
+  r.hf = hf * fade;
+  r.h = h + r.hf;
+  r.g = g;
+  r.idB = r.id;
+  return r;
+}
+
+// Broken faces at mid range: the cones of the 3D Worley F1 distance (cell
+// m, slope A). The surface stays continuous (no steps): planar-looking
+// faces meet at sharp ridges on the cell borders, as on frost-shattered
+// granite and gneiss. -> x h m, yzw gradient
+fn facet3(p: vec3f, cell: f32, A: f32) -> vec4f {
+  let q = p / cell;
+  let fl = floor(q);
   let i = vec3i(fl);
-  let f = p - fl;
-  var d1 = 9.0; var d2 = 9.0;
-  var r1 = vec3f(0.0); var r2 = vec3f(0.0);
-  var id = 0.0;
+  let f = q - fl;
+  var d1 = 9.0;
+  var r1 = vec3f(0.0);
   for (var z = -1; z <= 1; z++) {
     for (var y = -1; y <= 1; y++) {
       for (var x = -1; x <= 1; x++) {
         let c = vec3i(x, y, z);
         let h = hash33(i + c);
-        let r = vec3f(c) + h - f;
+        let r = vec3f(c) + (h * 0.8) + 0.1 - f;
         let d = dot(r, r);
-        if (d < d1) { d2 = d1; r2 = r1; d1 = d; r1 = r; id = h.x; }
-        else if (d < d2) { d2 = d; r2 = r; }
+        if (d < d1) { d1 = d; r1 = r; }
       }
     }
   }
-  var o: Cell3;
-  o.f1 = sqrt(d1); o.f2 = sqrt(d2); o.id = id;
-  // d|p - c|/dp = (p - c) / |p - c| = -r / |r|
-  o.g = (-r2 / max(o.f2, 1e-4)) - (-r1 / max(o.f1, 1e-4));
+  let d = sqrt(d1);
+  // h = A cell F1 rises away from the site: the ridges on the cell borders
+  return vec4f(A * cell * d, (-r1 / max(d, 1e-4)) * A);
+}
+
+// Both lattices at p: the blocks and the buttresses (7 x H0, wider joints).
+// big: weight of the buttress lattice (0: blocks only, the cheap path).
+// idB: the hashes of the buttress block (the rock scan and its offset
+// change only at the big open joints, not at every block).
+fn rockField(p: vec3f, bc: f32, gb: vec3f, n: vec3f, fp: f32, big: f32) -> RockF {
+  let H0 = max(U.rock.z, 0.3);
+  var r = rockSet(p, bc, gb, n, H0, fp, 101u, 0.55, 1.0, 0.0);
+  if (big > 0.01) {
+    let b = rockSet(p, bc + 3.7, gb, n, H0 * 7.0, fp, 211u, 0.5, 0.3, 0.0);
+    // (the buttress bevels and cracks are relief, not the cavity of fs)
+    r.h += b.h * big;
+    r.g += b.g * big;
+    r.crack = max(r.crack, b.crack * big);
+    r.tread = max(r.tread, b.tread * big);
+    r.eo = min(r.eo, b.eo);
+    r.idB = b.id;
+    // granite and gneiss: broken faces at 12 and 45 m (normals only)
+    let gran = 1.0 - smoothstep(0.35, 0.65, clamp((U.rock.w - 0.8) / 0.5, 0.0, 1.0));
+    let fK = mix(0.35, 0.6, gran) * big;
+    // (the 12 m facets fade in past about 10 m: close up, their straight
+    // creases read as folded paper)
+    let fa = facet3(p + vec3f(31.0, 0.0, 17.0), 12.0, 0.45 * fK * smoothstep(0.004, 0.02, fp) * (1.0 - smoothstep(1.5, 4.0, fp)));
+    let fb = facet3(p, 45.0, 0.5 * fK * (1.0 - smoothstep(6.0, 15.0, fp)));
+    r.g += fa.yzw + fb.yzw;
+  }
+  return r;
+}
+
+// the fine relief alone (the POM height, <= 0): bevels and cracks of the
+// block lattice
+fn rockFine(p: vec3f, bc: f32, gb: vec3f, n: vec3f, fp: f32) -> f32 {
+  return rockSet(p, bc, gb, n, max(U.rock.z, 0.3), fp, 101u, 0.0, 1.0, 0.0).hf;
+}
+
+// Talus at the foot of a face: blocks 0.4 to 1.6 m lie on the scree (one
+// Voronoi cell each, a faceted dome). amt: the scree share 0..1. -> x
+// height m (>= 0), yz d/dxz, w the contact shade 0..1 (1 at a block foot)
+fn talus(xz: vec2f, amt: f32, fp: f32) -> vec4f {
+  if (amt < 0.02) { return vec4f(0.0); }
+  let cell = 1.7;
+  let v = voronoi2(xz / cell);
+  let hsh = hash33(vec3i(i32(v.w * 65535.0), 5, 77));
+  let present = step(1.0 - (amt * 0.85), hsh.x);
+  let r = cell * mix(0.18, 0.42, hsh.y);
+  let d = v.x * cell;
+  let fade = 1.0 - smoothstep(0.08 * r, 0.3 * r, fp);
+  if ((present < 0.5) || (fade <= 0.0)) { return vec4f(0.0); }
+  // a dome cut by two tilted planes (facets)
+  let q = clamp(1.0 - ((d * d) / (r * r)), 0.0, 1.0);
+  let top = r * 0.7;
+  var hh = top * sqrt(q);
+  let off = -vec2f(v.y, v.z) * cell;     // xz minus the site (m)
+  let a = (hsh.z - 0.5) * 3.0;
+  let pl = vec2f(cos(a), sin(a));
+  hh = min(hh, (top * 0.8) + (dot(off, pl) * 0.6));
+  hh = min(hh, (top * 0.9) - (dot(off, vec2f(-pl.y, pl.x)) * 0.5));
+  hh = max(hh, 0.0);
+  // gradient by the dome (facet tops are flatter)
+  let gd = select(vec2f(0.0), -(off / max(r * r, 1e-4)) * (top / max(sqrt(q), 0.05)), q > 0.0);
+  let foot = (1.0 - smoothstep(r * 0.9, r * 1.35, d)) * (1.0 - smoothstep(0.0, 0.08, hh)) * step(r * 0.7, d);
+  return vec4f(hh, gd * step(1e-4, hh), foot) * fade;
+}
+
+// ------------------------------------------------------------ hex tiling --
+// Hex tiling (Mikkelsen 2022, "Practical Real-Time Hex-Tiling", JCGT
+// 11(3)): three samples of a texture on a triangle grid, each vertex with
+// its own random offset (and turn, rot > 0), blended by barycentric
+// weights sharpened by the sample luminance. The tile grid does not
+// repeat. JS twin of the weights: ground.js hexWeights.
+// -> the three weights (sum 1) and the three vertex ids.
+struct HexW { w: vec3f, v1: vec2i, v2: vec2i, v3: vec2i };
+fn hexGrid(uv: vec2f) -> HexW {
+  let st = uv * 3.4641016;   // 2 sqrt(3)
+  let sk = vec2f(st.x - (0.57735027 * st.y), 1.15470054 * st.y);
+  let b = vec2i(floor(sk));
+  let fr = fract(sk);
+  let tz = 1.0 - fr.x - fr.y;
+  let s = step(0.0, -tz);
+  let s2 = (2.0 * s) - 1.0;
+  var o: HexW;
+  o.w = vec3f(-tz * s2, s - (fr.y * s2), s - (fr.x * s2));
+  let si = i32(s);
+  o.v1 = b + vec2i(si, si);
+  o.v2 = b + vec2i(si, 1 - si);
+  o.v3 = b + vec2i(1 - si, si);
   return o;
 }
+// the uv transform of hex vertex v: a turn (rot 0..1 of a full turn) and
+// an offset -> (cos, sin, offset)
+fn hexXf(v: vec2i, rot: f32) -> vec4f {
+  let h = hash33(vec3i(v, 613));
+  let a = (h.x - 0.5) * 6.2831853 * rot;
+  return vec4f(cos(a), sin(a), h.yz * 7.0);
+}
+fn hexUV(uv: vec2f, x: vec4f) -> vec2f { return vec2f((x.x * uv.x) - (x.y * uv.y), (x.y * uv.x) + (x.x * uv.y)) + x.zw; }
+fn hexRot(g: vec2f, x: vec4f) -> vec2f { return vec2f((x.x * g.x) - (x.y * g.y), (x.y * g.x) + (x.x * g.y)); }
+// a normal map xy turned back by the vertex turn (the map was sampled turned)
+fn hexNrm(t: vec4f, x: vec4f) -> vec4f {
+  let m = (t.xy * 2.0) - 1.0;
+  let r = vec2f((x.x * m.x) + (x.y * m.y), (-x.y * m.x) + (x.x * m.y));
+  return vec4f((r * 0.5) + 0.5, t.zw);
+}
+// weights sharpened a little by luminance (Mikkelsen: the brighter, higher
+// sample shows at the seams), then normalised to sum 1. A strong
+// sharpening picks the brightest sample everywhere: a speckled granite
+// scan then turned into salt and pepper.
+fn hexSharp(w: vec3f, lum: vec3f) -> vec3f {
+  // max(w, 0): a weight a hair under 0 (float) makes pow() NaN in WGSL
+  let ww = max(w, vec3f(0.0)) * pow(max(lum, vec3f(1e-3)), vec3f(0.6));
+  let p = ww * ww;
+  return p / max(p.x + p.y + p.z, 1e-6);
+}
+fn tex3Hex(k: u32, uv: vec2f, gu: vec2f, gv: vec2f, rot: f32) -> array<vec4f, 3> {
+  let hx = hexGrid(uv);
+  let x1 = hexXf(hx.v1, rot);
+  let x2 = hexXf(hx.v2, rot);
+  let x3 = hexXf(hx.v3, rot);
+  let a = tex3(k, hexUV(uv, x1), hexRot(gu, x1), hexRot(gv, x1));
+  let b = tex3(k, hexUV(uv, x2), hexRot(gu, x2), hexRot(gv, x2));
+  let c = tex3(k, hexUV(uv, x3), hexRot(gu, x3), hexRot(gv, x3));
+  let L = vec3f(0.3, 0.59, 0.11);
+  let w = hexSharp(hx.w, vec3f(dot(a[0].rgb, L), dot(b[0].rgb, L), dot(c[0].rgb, L)));
+  return array<vec4f, 3>(
+    (a[0] * w.x) + (b[0] * w.y) + (c[0] * w.z),
+    (hexNrm(a[1], x1) * w.x) + (hexNrm(b[1], x2) * w.y) + (hexNrm(c[1], x3) * w.z),
+    (a[2] * w.x) + (b[2] * w.y) + (c[2] * w.z));
+}
+
+// ------------------------------------------------------------------ POM --
+// Parallax occlusion on rock within U.fx.z metres (high quality, not on
+// phones): march the view ray into the fine relief (bevels, cracks) of
+// the block lattice. JS twin of the step count: ground.js pomSteps.
+const POM_MAX: i32 = 16;
+const POM_DEPTH: f32 = 0.35;
+fn pomSteps(dist: f32, ndv: f32) -> i32 {
+  if ((U.fx.x < 0.5) || (dist >= U.fx.z)) { return 0; }
+  let k = 1.0 - smoothstep(U.fx.z * 0.6, U.fx.z, dist);
+  let n = mix(6.0, f32(POM_MAX), clamp(1.0 - ndv, 0.0, 1.0)) * k;
+  if (n < 2.0) { return 0; }
+  return min(i32(ceil(n)), POM_MAX);
+}
+// -> the offset position (moved along -V into the relief)
+fn pom(pb: vec3f, V: vec3f, n: vec3f, bc0: f32, gb: vec3f, fp: f32, steps: i32) -> vec3f {
+  let ndv = max(dot(n, V), 0.2);
+  let dt = (POM_DEPTH / ndv) / f32(steps);
+  var t = 0.0;
+  var prev = 0.0;
+  for (var i = 0; i < POM_MAX; i++) {
+    if (i >= steps) { break; }
+    t += dt;
+    let q = pb - (V * t);
+    // the bedding coordinate moves with q (gb: its gradient)
+    let hf = rockFine(q, bc0 + dot(gb, q - pb), gb, n, fp);
+    let diff = (t * ndv) + hf;
+    if (diff >= 0.0) {
+      t -= dt * (diff / max(diff - prev, 1e-5));
+      break;
+    }
+    prev = diff;
+  }
+  return pb - (V * t);
+}
+// micro shadow of the fine relief toward the sun: 4 steps; 1 = lit
+fn pomShadow(pb: vec3f, L: vec3f, n: vec3f, bc0: f32, gb: vec3f, fp: f32) -> f32 {
+  let ndl = dot(n, L);
+  if (ndl <= 0.02) { return 1.0; }
+  let h0 = rockFine(pb, bc0, gb, n, fp);
+  var vis = 1.0;
+  for (var i = 1; i <= 4; i++) {
+    let t = f32(i) * 0.06;
+    let q = pb + (L * t);
+    let ray = h0 + (t * ndl);
+    let hs = rockFine(q, bc0 + dot(gb, q - pb), gb, n, fp);
+    vis = min(vis, clamp(((ray - hs) / 0.03) + 0.5, 0.0, 1.0));
+  }
+  return vis;
+}
+
+// the bare rock share of the vertex relief (fs uses its layer weights)
+fn rockMaskOf(slope: f32, reg: f32, scree: f32) -> f32 {
+  return smoothstep(0.2, 0.36, slope) * (1.0 - smoothstep(0.1, 0.4, reg)) * (1.0 - smoothstep(0.3, 0.7, scree));
+}
+// the talus share: scree on moderate slopes (the foot of a face)
+fn talusAmt(scree: f32, slope: f32) -> f32 {
+  return smoothstep(0.15, 0.6, scree) * (1.0 - smoothstep(0.45, 0.7, slope));
+}
+
+// The rock scan of a block: layered beds (U.rsets.x) in the sandstone
+// region, else the jointed blocks (U.rsets.y), the cliff face or the rock
+// face of the layer map, by the block hash. kP: the rock layer set.
+fn rockPick(id: vec3f, region: vec3f, kP: u32) -> u32 {
+  let kL = u32(U.rsets.x + 0.5);
+  let kB = u32(U.rsets.y + 0.5);
+  let kC = mapIdx(1u);
+  let h = id.z;
+  if ((kL < 64u) && (region.y > (h * 2.0))) { return kL; }
+  if ((kB < 64u) && (h < 0.25) && (region.y > 0.3)) { return kB; }
+  if ((kC < 64u) && (h < 0.6)) { return kC; }
+  return kP;
+}
+
+// Small stones on soil, 6 mm to 3 cm, seen within about 10 m: two Voronoi
+// scales of domes with a dark contact ring. dens: the share of cells with
+// a stone. -> x albedo factor, yz slope to add (d/dxz), w cover
+fn grit(xz: vec2f, fp: f32, dens: f32) -> vec4f {
+  var f = 1.0;
+  var g = vec2f(0.0);
+  var cov = 0.0;
+  for (var o = 0; o < 2; o++) {
+    let sc = select(85.0, 32.0, o == 0);
+    let fade = 1.0 - smoothstep(0.12 / sc, 0.4 / sc, fp);
+    if (fade <= 0.0) { continue; }
+    let v = voronoi2((xz * sc) + vec2f(f32(o) * 17.3));
+    let hs = hash33(vec3i(i32(v.w * 65535.0), o, 31));
+    if (hs.x > dens) { continue; }
+    let r = mix(0.22, 0.44, hs.y);
+    let q = 1.0 - ((v.x * v.x) / (r * r));
+    if (q > 0.0) {
+      f *= mix(1.0, mix(0.62, 1.4, hs.z), fade);
+      // the dome: d h / d xz = (site - x) * 2 k / r^2, k = 0.4 r (cells)
+      g += vec2f(v.y, v.z) * ((0.8 / r) * fade);
+      cov = max(cov, fade);
+    } else {
+      f *= 1.0 - (0.3 * (1.0 - smoothstep(r, r * 1.35, v.x)) * fade);
+    }
+  }
+  return vec4f(f, g, cov);
+}
+
+// Thin roots and twigs in the forest floor and turf, within about 8 m: the
+// zero lines of a warped noise. -> 0..1 cover
+fn roots(xz: vec2f, fp: f32) -> f32 {
+  let fade = 1.0 - smoothstep(0.004, 0.012, fp);
+  if (fade <= 0.0) { return 0.0; }
+  let w = vec2f(vnoise2(xz * 1.3), vnoise2((xz * 1.3) + 7.1)) * 0.6;
+  let n = vnoise2((xz * 2.2) + w);
+  let width = 0.035 + (fp * 2.0);
+  let mask = smoothstep(0.1, 0.5, vnoise2((xz * 0.6) + 3.3));
+  return (1.0 - smoothstep(0.0, width, abs(n))) * mask * fade;
+}
+
+// --------------------------------------------------------------- layers --
+
+struct Mat { alb: vec3f, h: vec4f, rough: f32, tn: vec3f, ao: f32 };
+// h: x height 0..1, yzw gradient (1/m); tn: texture normal offset (world, in
+// the tangent plane); ao: texture occlusion
 
 // What the surface fields tell the rock at a point.
 struct RockGeo {
@@ -716,12 +1242,42 @@ struct RockGeo {
   facet: f32,  // the tone of the rock facet (fn facets)
 };
 
-// Rock: the LIB strata (hard bands stand out as ledges, each layer its own
-// colour), jointed blocks (3D Worley cracks), gullies down the slope,
-// lichen and moss by moisture, aspect and age, desert varnish on old dry
-// faces, glacial polish and striations. region: x granite / gneiss, y
-// sandstone (deserts), z basalt. down: the downhill direction (xz).
-fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec2f, slope: f32, geo: RockGeo) -> Mat {
+// Lichen rosettes on old rock, seen within about 25 m: round crusts with
+// lobed edges (one Voronoi cell each, 4 to 10 cm), on the plane of the
+// face. dens: the share of cells with a crust. -> rgb colour, a cover.
+fn lichen(p: vec3f, n: vec3f, fp: f32, dens: f32) -> vec4f {
+  let sc = 5.0;
+  let fade = 1.0 - smoothstep(0.02, 0.05, fp);
+  if ((dens < 0.02) || (fade <= 0.0)) { return vec4f(0.0); }
+  let an = abs(n);
+  var uv = p.xz;
+  if ((an.x > an.y) && (an.x > an.z)) { uv = p.zy; }
+  else if (an.z > an.y) { uv = p.xy; }
+  let v = voronoi2(uv * sc);
+  let hs = hash33(vec3i(i32(v.w * 65535.0), 9, 4));
+  if (hs.x > dens) { return vec4f(0.0); }
+  let r = mix(0.22, 0.46, hs.y);
+  let ang = atan2(v.z, v.y);
+  let re = r * (1.0 + (0.16 * sin((ang * 7.0) + (hs.z * 6.28))) + (0.07 * sin((ang * 13.0) + (hs.y * 4.0))));
+  let aa = fp * sc;
+  let cov = 1.0 - smoothstep(re - 0.03 - aa, re + aa, v.x);
+  // yellow-green map lichen, grey-green crust, orange on perches, pale grey
+  var col = vec3f(0.36, 0.38, 0.11);
+  if (hs.z > 0.35) { col = vec3f(0.27, 0.29, 0.23); }
+  if (hs.z > 0.70) { col = vec3f(0.36, 0.34, 0.30); }
+  if (hs.z > 0.90) { col = vec3f(0.52, 0.24, 0.05); }
+  // the centre is older and paler, the rim fresh
+  col *= mix(1.08, 0.86, smoothstep(0.0, re, v.x));
+  return vec4f(col, cov * fade);
+}
+
+// Rock: the LIB strata (hard bands in lighter, thicker beds, a colour per
+// layer), the block lattice of fn rockField (rk: stairs, block tones,
+// weathering rinds on the edges, iron stain, cracks), varnish and water
+// streaks that run down from the ledge lips, lichen crusts, moss on wet
+// shaded rock, glacial polish and striations. region: x granite / gneiss,
+// y sandstone (deserts), z basalt. down: the downhill direction (xz).
+fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec2f, slope: f32, geo: RockGeo, rk: RockF, nG: vec3f) -> Mat {
   var m: Mat;
   let big = fbmd(p, 0.07, 3, 0.5, fp);
   let polish = 1.0 - (0.7 * geo.glac);
@@ -729,44 +1285,17 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   let fine = fbmd(p, 0.9, select(6, 4, U.mat.x > 0.5), 0.5, fp);
   // one mid-scale field for the mottle, the lichen and the weathering
   let midN = fbmd(p, 0.3, 3, 0.55, fp).x;
-  // plain fbm for the grain (a ridged |n| drew worm lines all over)
   let ridged = fine.x * 0.5 + 0.5;
-  var h = 0.42 + (0.24 * big.x) + (0.16 * fine.x * polish);
-  var g = (big.yzw * 0.24) + (fine.yzw * (0.16 * polish));
-  // the strata of the LIB: hard bands form ledges and lighter cliffs, soft
-  // bands recess (the scree field covers them)
+  // the layer height: block tops stand up, cracks and bed joints sink
+  // (rock pokes through soil and scree at its blocks)
+  // (only the bevels and cracks: a whole block lower than its neighbours
+  // let a thin soil weight win the blend there, in block-shaped patches)
+  var h = 0.5 + (0.1 * big.x) + (0.08 * fine.x * polish) + clamp(rk.hf * 1.5, -0.3, 0.0) + clamp(rk.h * 0.1, -0.06, 0.06) - (rk.crack * 0.2);
+  // the fine grain bump; the block relief is rk.g (fs adds it)
+  var g = (big.yzw * 0.10) + (fine.yzw * (0.12 * polish));
   let warpY = (big.x * 4.0) + (fbm2(p.xz * 0.01, 2) * 6.0);
   let st = strataAt(p.y + warpY, geo.warp);
   let hard = st.y;
-  // joints: big blocks, only some joints open (a noise mask), so the rock
-  // does not read as paving; hard bands have bigger blocks
-  let bs = mix(9.0, 5.0, cliff) * mix(0.8, 1.3, hard * geo.vis);
-  let wq = (p / bs) + vec3f(big.x * 0.6, big.x * 0.3, -big.x * 0.5);
-  let open = smoothstep(-0.05, 0.35, fbm2((p.xz * 0.11) + (p.y * 0.07), 3) + (cliff * 0.25)) * (1.0 - (0.6 * geo.glac));
-  let fadeJ = (1.0 - smoothstep(0.08 * bs, 0.3 * bs, fp)) * open;
-  // the 27-cell Worley only where joints show
-  var cw: Cell3;
-  cw.f1 = 0.0; cw.f2 = 1.0; cw.g = vec3f(0.0); cw.id = 0.5;
-  if (fadeJ > 0.001) { cw = worley3(wq * vec3f(1.0, mix(1.0, 1.6, cliff), 1.0)); }
-  let edge = cw.f2 - cw.f1;
-  let cwid = 0.07;
-  let crack = (1.0 - smoothstep(0.0, cwid, edge)) * fadeJ;
-  let dcrack = -select(0.0, 1.0 / cwid, edge < cwid) * fadeJ;
-  h -= crack * 0.38;
-  g -= (cw.g / bs) * (dcrack * 0.38) * vec3f(1.0, mix(1.0, 1.8, cliff), 1.0);
-  // block faces tilt a little each (the joints are not flat)
-  let tilt = (hash33(vec3i(i32(cw.id * 7919.0), 3, 5)) - 0.5) * 0.25 * fadeJ;
-  g += tilt / bs;
-  // bedding ledges on steep faces: a step every ledge metres in y, strong
-  // in the hard bands
-  let lh = 5.5;
-  let sy = (p.y + warpY) / lh;
-  let fr = fract(sy);
-  let fadeL = (1.0 - smoothstep(0.2 * lh, 0.6 * lh, fp)) * cliff * smoothstep(0.5, 0.7, slope) * mix(0.15, 1.0, geo.vis) * mix(0.5, 1.3, hard) * polish;
-  let step = smoothstep(0.62, 0.92, fr);
-  h += (step - 0.5) * 0.3 * fadeL;
-  let dstep = select(0.0, 6.0 * (fr - 0.62) * (0.92 - fr) / (0.3 * 0.3 * 0.3), (fr > 0.62) && (fr < 0.92));
-  g += vec3f(0.0, (dstep / lh) * 0.3 * fadeL, 0.0);
   // gullies: streaks down the slope, a few metres apart (seen from afar)
   let gu = streakNoise(p, down, 0.06, 0.12, 3.7).x;
   let fadeG = 1.0 - smoothstep(1.5, 5.0, fp * 0.35);
@@ -781,49 +1310,66 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   // colour: the layer of the strata, fine laminations close up
   let lam = sin(st.x * GPI * 7.0) * (1.0 - smoothstep(0.4, 1.5, fp));
   var c = strataCol(st.z, region) * (1.0 + (0.06 * lam));
-  // the layer colour shows as much as the strata are there (granite: soft
-  // tone bands), around the mottle of the region
   let mott = (big.x * 0.6) + (midN * 0.4) + 0.5;
   let regionCol = rockMean(region) * mix(0.85, 1.15, mott);
   c = mix(regionCol, c * mix(0.92, 1.08, mott), geo.vis);
   c *= mix(0.9, 1.1, hard * geo.vis);
-  let blockTint = mix(0.92, 1.08, cw.id);
-  c *= mix(1.0, blockTint, fadeJ);
-  // hue by rock body (0.5..2 km): warm iron-stained faces, cool grey-blue
-  // gneiss, so a range is not one grey
+  // hue by rock body (0.5..2 km) and tone at 50..400 m
   let body = fbm2((p.xz * 0.0011) + vec2f(p.y * 0.0004, 3.1), 3);
   c *= mix(vec3f(1.22, 1.0, 0.78), vec3f(0.86, 0.96, 1.10), smoothstep(-0.35, 0.35, body));
-  // tone at 50..400 m: weathered brown patches and fresh grey rock, so a
-  // face reads from the air
   let tone = fbm2((p.xz * 0.006) + vec2f(p.y * 0.004, 7.7), 3);
-  c *= mix(vec3f(0.78, 0.76, 0.74), vec3f(1.16, 1.08, 0.98), smoothstep(-0.45, 0.45, tone));
-  // water stains run down the cliffs; desert varnish (manganese, black-brown)
-  // coats old faces in dry climates
-  let streak = vnoised(vec3f(p.x * 0.8, p.y * 0.05, p.z * 0.8)).x;
-  c *= 1.0 - (cliff * 0.30 * smoothstep(0.1, 0.8, streak) * (1.0 - geo.arid));
-  let varnish = geo.arid * smoothstep(0.35, 0.85, geo.age) * smoothstep(0.35, 0.7, slope) * smoothstep(-0.3, 0.5, streak + (midN * 0.5));
-  c = mix(c, vec3f(0.050, 0.036, 0.026), varnish * 0.72);
+  c *= mix(vec3f(0.80, 0.78, 0.76), vec3f(1.14, 1.07, 0.98), smoothstep(-0.45, 0.45, tone));
+  // ---- the blocks: each its own tone and hue (fresh and weathered
+  // faces), a pale weathering rind along the edges, iron stain on some
+  let blockF = 1.0 - smoothstep(0.06, 0.25, fp / max(rk.bedT, 0.3));
+  c *= mix(1.0, mix(0.95, 1.04, rk.id.y), blockF * polish);
+  c *= mix(vec3f(1.0), mix(vec3f(1.05, 1.0, 0.94), vec3f(0.95, 0.99, 1.05), rk.idB.z), polish);
+  c *= mix(0.9, 1.08, rk.idB.y);
+  let rind = (1.0 - smoothstep(0.015, 0.14, rk.eo)) * (1.0 - rk.crack) * blockF;
+  c = mix(c, (c * vec3f(1.16, 1.07, 0.94)) + vec3f(0.012, 0.009, 0.005), rind * 0.55 * polish);
+  let iron = smoothstep(0.7, 0.95, rk.id.x) * smoothstep(-0.3, 0.4, midN) * (1.0 - geo.glac) * mix(0.6, 1.0, region.y);
+  c = mix(c, c * vec3f(1.38, 0.90, 0.58), iron * 0.6 * blockF);
+  // ---- streaks that run down the faces from the ledge lips and joints:
+  // desert varnish (manganese, black-brown) in dry climates, water and
+  // algae stains (dark grey-green) in wet ones; strongest just under a lip
+  let streak = vnoised(vec3f(p.x * 1.3, p.y * 0.07, p.z * 1.3)).x;
+  let streakF = vnoised(vec3f(p.x * 5.0, p.y * 0.3, p.z * 5.0)).x * (1.0 - smoothstep(0.02, 0.08, fp));
+  let below = (1.0 - rk.bedF) * rk.bedT;
+  let sedK = clamp((U.rock.w - 0.8) / 0.5, 0.0, 1.0);
+  let run = mix(0.55 * smoothstep(-0.2, 0.5, midN), exp(-below / max(rk.bedT * 0.8, 0.4)), sedK) * smoothstep(0.35, 0.65, slope) * (1.0 - rk.tread);
+  let sK = smoothstep(0.05, 0.6, streak + (streakF * 0.35));
+  let varnish = geo.arid * smoothstep(0.3, 0.8, geo.age) * smoothstep(0.35, 0.7, slope) * max(sK * run, smoothstep(0.3, 0.85, streak + (midN * 0.4)) * 0.5);
+  c = mix(c, vec3f(0.048, 0.034, 0.024), varnish * 0.78);
+  let wetStain = (1.0 - geo.arid) * sK * max(run, cliff * 0.4) * smoothstep(0.35, 0.65, slope);
+  c *= 1.0 - (wetStain * 0.42);
+  c = mix(c, c * vec3f(0.8, 0.9, 0.78), wetStain * moist * 0.5);
   c *= 1.0 - (gully * 0.35);
-  // lichen: grey-green and ochre crusts on old block tops, more on the
-  // shaded and moist faces; moss on wet shaded old rock
-  let lichN = (midN * 0.8) + (fine.x * 0.3);
-  let lichK = lichN + (moist - 0.45) + (0.2 * geo.shade) + (0.6 * (geo.age - 0.5)) - (0.5 * geo.arid);
-  let lich = smoothstep(0.1, 0.55, lichK) * (1.0 - crack);
-  c = mix(c, mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, lichN)), lich * 0.45 * (1.0 - (region.y * 0.6)));
+  // dust and grit on the ledge treads
+  c = mix(c, c * vec3f(1.1, 1.04, 0.95), rk.tread * 0.35 * blockF);
+  // ---- lichen: crusts on old, moist, shaded or upward faces; far away a
+  // mottle of the same colours; moss on wet shaded old rock
+  let lichK = (midN * 0.8) + (fine.x * 0.3) + (moist - 0.45) + (0.2 * geo.shade) + (0.6 * (geo.age - 0.5)) - (0.5 * geo.arid) + (0.25 * max(nG.y, 0.0));
+  let lichFar = smoothstep(0.1, 0.55, lichK) * (1.0 - rk.crack);
+  let lc = lichen(p, nG, fp, clamp(smoothstep(0.0, 0.8, lichK) * 0.45, 0.0, 0.45) * (1.0 - rk.crack));
+  let near = 1.0 - smoothstep(0.02, 0.05, fp);
+  let farCol = mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, midN));
+  c = mix(c, farCol, lichFar * 0.4 * (1.0 - near) * (1.0 - (region.y * 0.6)));
+  c = mix(c, lc.rgb, lc.a * 0.9 * (1.0 - (region.y * 0.4)));
   let moss = smoothstep(0.55, 0.85, moist) * smoothstep(-0.1, 0.6, geo.shade + (midN * 0.4)) * smoothstep(0.3, 0.8, geo.age) * (1.0 - smoothstep(0.75, 1.0, slope));
-  c = mix(c, vec3f(0.040, 0.068, 0.022) * (0.8 + (0.4 * fine.x)), moss * 0.85);
+  c = mix(c, vec3f(0.040, 0.068, 0.022) * (0.8 + (0.4 * fine.x)), moss * 0.85 * (0.6 + (0.4 * rk.tread)));
   // weathering: tone patches at 1..6 m, so a face is not one flat grey
-  c *= mix(0.68, 1.18, smoothstep(-0.55, 0.55, midN));
-  c *= mix(1.0, 0.5, crack) * mix(0.86, 1.06, clamp(h, 0.0, 1.0));
+  c *= mix(0.72, 1.14, smoothstep(-0.55, 0.55, midN));
+  // the cracks: dark, deeper with the open width
+  c *= mix(1.0, 0.45, rk.crack);
+  c *= mix(0.88, 1.05, clamp(h, 0.0, 1.0));
   // each rock facet its own tone (fresh breaks lighter)
   c *= 1.0 + (0.12 * geo.facet);
-  // ledge undercuts shade dark, ledge tops catch light
-  c *= mix(1.0, mix(0.7, 1.1, step), fadeL);
   // ice polish: lighter, smoother, pale striations
   c = mix(c, c * (1.12 + (0.06 * stri)), geo.glac * 0.8);
   m.alb = c;
-  m.rough = mix(mix(0.85, 0.65, ridged * (1.0 - crack)), 0.42, geo.glac * 0.8);
+  m.rough = mix(mix(0.86, 0.66, ridged * (1.0 - rk.crack)), 0.42, geo.glac * 0.8);
   m.rough = mix(m.rough, 0.55, varnish * 0.5);
+  m.rough = mix(m.rough, 0.95, lc.a * 0.8);
   return m;
 }
 
@@ -979,27 +1525,14 @@ fn tex3(k: u32, uv: vec2f, gu: vec2f, gv: vec2f) -> array<vec4f, 3> {
     textureSampleGrad(tLayerOrm, sRepeat, uv, k, gu, gv));
 }
 
-// No visible repeat (after Quilez, "texture repetition", technique 3): a
-// slow noise picks one of eight uv offsets; two samples blend across the
-// step, so the tile grid does not line up. High quality only.
-fn tex3NoTile(k: u32, uv: vec2f, gu: vec2f, gv: vec2f) -> array<vec4f, 3> {
-  if (U.mat.w < 0.5) { return tex3(k, uv, gu, gv); }
-  let v = (vnoise2(uv * 0.31) * 0.5) + 0.5;
-  let l = v * 8.0;
-  let i = floor(l);
-  let f = l - i;
-  let oa = sin(vec2f(3.0, 7.0) * i);
-  let ob = sin(vec2f(3.0, 7.0) * (i + 1.0));
-  let a = tex3(k, uv + oa, gu, gv);
-  let b = tex3(k, uv + ob, gu, gv);
-  let d = a[0].rgb - b[0].rgb;
-  let w = smoothstep(0.2, 0.8, f - (0.1 * (d.x + d.y + d.z)));
-  return array<vec4f, 3>(mix(a[0], b[0], w), mix(a[1], b[1], w), mix(a[2], b[2], w));
-}
-
-// one projection: uv from the plane coordinates, two scales mixed by far
-fn texProj(k: u32, q: vec2f, gq: vec2f, hq: vec2f, s: f32, far: f32) -> array<vec4f, 3> {
-  var a = tex3NoTile(k, q * s, gq * s, hq * s);
+// one projection: uv from the plane coordinates, two scales mixed by far.
+// rot >= 0: hex tiling (fn tex3Hex, rot = the share of a full turn per
+// tile: 1 for soil and grass, small for sand ripples); rot < 0: one plain
+// sample
+fn texProj(k: u32, q: vec2f, gq: vec2f, hq: vec2f, s: f32, far: f32, rot: f32) -> array<vec4f, 3> {
+  var a: array<vec4f, 3>;
+  if ((rot >= 0.0) && (U.mat.w >= 0.5)) { a = tex3Hex(k, q * s, gq * s, hq * s, rot); }
+  else { a = tex3(k, q * s, gq * s, hq * s); }
   if (far > 0.01) {
     let r = mat2x2f(0.8, 0.6, -0.6, 0.8);
     let s2 = s * 0.27;
@@ -1012,11 +1545,11 @@ fn texProj(k: u32, q: vec2f, gq: vec2f, hq: vec2f, s: f32, far: f32) -> array<ve
   return a;
 }
 
-fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32) -> TexS {
+fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32, rot: f32) -> TexS {
   let s = 1.0 / texTile(k);
   var o: TexS;
   if (!tri) {
-    let t = texProj(k, p.xz, gx.xz, gy.xz, s, far);
+    let t = texProj(k, p.xz, gx.xz, gy.xz, s, far, rot);
     o.alb = t[0].rgb; o.orm = t[2].rgb;
     let m = t[1].xy * 2.0 - 1.0;
     let off = vec3f(m.x, 0.0, -m.y);
@@ -1026,9 +1559,16 @@ fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32)
   var w = pow(abs(n), vec3f(4.0));
   w /= (w.x + w.y + w.z);
   // vertical planes: v = -y, so the image is upright on a cliff
-  let tx = texProj(k, vec2f(p.z, -p.y), vec2f(gx.z, -gx.y), vec2f(gy.z, -gy.y), s, far);
-  let ty = texProj(k, p.xz, gx.xz, gy.xz, s, far);
-  let tz = texProj(k, vec2f(p.x, -p.y), vec2f(gx.x, -gx.y), vec2f(gy.x, -gy.y), s, far);
+  // a projection with a small weight is skipped (explicit gradients, so
+  // the branch is safe)
+  var tx = array<vec4f, 3>(vec4f(0.0), vec4f(0.5, 0.5, 1.0, 1.0), vec4f(0.0));
+  var ty = tx;
+  var tz = tx;
+  if (w.x > 0.02) { tx = texProj(k, vec2f(p.z, -p.y), vec2f(gx.z, -gx.y), vec2f(gy.z, -gy.y), s, far, rot); }
+  if (w.y > 0.02) { ty = texProj(k, p.xz, gx.xz, gy.xz, s, far, rot); }
+  if (w.z > 0.02) { tz = texProj(k, vec2f(p.x, -p.y), vec2f(gx.x, -gx.y), vec2f(gy.x, -gy.y), s, far, rot); }
+  w = select(vec3f(0.0), w, w > vec3f(0.02));
+  w /= max(w.x + w.y + w.z, 1e-4);
   o.alb = (tx[0].rgb * w.x) + (ty[0].rgb * w.y) + (tz[0].rgb * w.z);
   o.orm = (tx[2].rgb * w.x) + (ty[2].rgb * w.y) + (tz[2].rgb * w.z);
   let mx = tx[1].xy * 2.0 - 1.0;
@@ -1044,14 +1584,14 @@ fn texSet(k: u32, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32)
 // relative to its own mean (the 1 x 1 mip), times the target colour of
 // its role. Far away (texF 0) that is the target alone, so the colour does
 // not change where the texture fades out.
-fn texSetCal(k: u32, tgt: vec3f, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32, texF: f32) -> TexS {
+fn texSetCal(k: u32, tgt: vec3f, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: vec3f, far: f32, texF: f32, rot: f32) -> TexS {
   var t: TexS;
   let mean = max(textureSampleLevel(tLayerAlb, sRepeat, vec2f(0.5), k, 16.0).rgb, vec3f(0.01));
   t.alb = tgt;
   t.orm = textureSampleLevel(tLayerOrm, sRepeat, vec2f(0.5), k, 16.0).rgb;
   t.nrm = vec3f(0.0);
   if (texF > 0.01) {
-    let tn = texSet(k, p, n, tri, gx, gy, far);
+    let tn = texSet(k, p, n, tri, gx, gy, far, rot);
     // detail: mostly luminance, a little of the hue
     let rel = tn.alb / mean;
     let lr = dot(rel, vec3f(0.3, 0.59, 0.11));
@@ -1063,41 +1603,52 @@ fn texSetCal(k: u32, tgt: vec3f, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: v
   return t;
 }
 
-// Macro rock: the cliff scan again at 34 m and 120 m tiles (triplanar),
-// as detail relative to its mean. Rock is self-similar, so the same cracks
-// and slabs read as buttresses and ledges from 50 m to 8 km.
+// Macro rock: two windows of a rock scan as detail relative to its mean
+// (triplanar). Window 0 (20 m to 1.6 km): the aerial outcrop set at its
+// true 50 m tile (U.rsets.z), else the cliff scan at 34 m. Window 1 (0.7
+// to 9 km): the cliff scan at 122 m (rock is self-similar). The outcrops,
+// slabs and ribs of the scans read as buttresses and ledges at mid range.
 // -> xyz normal offset (in the tangent plane of n), w albedo factor.
-fn macroRock(k: u32, p: vec3f, n: vec3f, gx: vec3f, gy: vec3f, dist: f32) -> vec4f {
-  let mean = max(textureSampleLevel(tLayerAlb, sRepeat, vec2f(0.5), k, 16.0).rgb, vec3f(0.01));
-  let ml = dot(mean, vec3f(0.3, 0.59, 0.11));
+fn macroRock(kC: u32, p: vec3f, n: vec3f, gx: vec3f, gy: vec3f, dist: f32) -> vec4f {
+  let kO = u32(U.rsets.z + 0.5);
+  let hasO = kO < 64u;
   var w = pow(abs(n), vec3f(4.0));
   w /= (w.x + w.y + w.z);
   var off = vec3f(0.0);
   var lum = 0.0;
   var ws = 0.0;
-  var T = 34.0;
   for (var o = 0; o < 2; o++) {
     // two windows that overlap only from 700 to 1600 m (cost)
     let fo = select(smoothstep(20.0, 80.0, dist) * (1.0 - smoothstep(900.0, 1600.0, dist)),
                     smoothstep(700.0, 1600.0, dist) * (1.0 - smoothstep(6000.0, 9000.0, dist)), o == 1);
     if (fo > 0.01) {
+      let k = select(kC, select(kC, kO, hasO), o == 0);
+      let T = select(122.0, select(34.0, texTile(kO), hasO), o == 0);
+      let mean = max(textureSampleLevel(tLayerAlb, sRepeat, vec2f(0.5), k, 16.0).rgb, vec3f(0.01));
+      let ml = dot(mean, vec3f(0.3, 0.59, 0.11));
       let s = 1.0 / T;
       let sh = vec2f(0.37, 0.71) * f32(o);
       let ux = (vec2f(p.z, -p.y) * s) + sh;
       let uy = (p.xz * s) + sh;
       let uz = (vec2f(p.x, -p.y) * s) + sh;
-      let ax = textureSampleGrad(tLayerAlb, sRepeat, ux, k, vec2f(gx.z, -gx.y) * s, vec2f(gy.z, -gy.y) * s).rgb;
-      let ay = textureSampleGrad(tLayerAlb, sRepeat, uy, k, gx.xz * s, gy.xz * s).rgb;
-      let az = textureSampleGrad(tLayerAlb, sRepeat, uz, k, vec2f(gx.x, -gx.y) * s, vec2f(gy.x, -gy.y) * s).rgb;
-      let nx = textureSampleGrad(tLayerNrm, sRepeat, ux, k, vec2f(gx.z, -gx.y) * s, vec2f(gy.z, -gy.y) * s).xy * 2.0 - 1.0;
-      let ny = textureSampleGrad(tLayerNrm, sRepeat, uy, k, gx.xz * s, gy.xz * s).xy * 2.0 - 1.0;
-      let nz = textureSampleGrad(tLayerNrm, sRepeat, uz, k, vec2f(gx.x, -gx.y) * s, vec2f(gy.x, -gy.y) * s).xy * 2.0 - 1.0;
+      // hex tiled (the 50 m outcrop tile repeated in rows at 300 m)
+      var tX = array<vec4f, 3>(vec4f(0.5), vec4f(0.5, 0.5, 1.0, 1.0), vec4f(1.0));
+      var tY = tX;
+      var tZ = tX;
+      if (w.x > 0.02) { tX = tex3Hex(k, ux, vec2f(gx.z, -gx.y) * s, vec2f(gy.z, -gy.y) * s, 1.0); }
+      if (w.y > 0.02) { tY = tex3Hex(k, uy, gx.xz * s, gy.xz * s, 1.0); }
+      if (w.z > 0.02) { tZ = tex3Hex(k, uz, vec2f(gx.x, -gx.y) * s, vec2f(gy.x, -gy.y) * s, 1.0); }
+      let ax = tX[0].rgb;
+      let ay = tY[0].rgb;
+      let az = tZ[0].rgb;
+      let nx = tX[1].xy * 2.0 - 1.0;
+      let ny = tY[1].xy * 2.0 - 1.0;
+      let nz = tZ[1].xy * 2.0 - 1.0;
       let a = (ax * w.x) + (ay * w.y) + (az * w.z);
       lum += (dot(a, vec3f(0.3, 0.59, 0.11)) / ml) * fo;
       off += ((vec3f(0.0, nx.y, nx.x * sign(n.x)) * w.x) + (vec3f(ny.x, 0.0, -ny.y) * w.y) + (vec3f(nz.x * sign(n.z), nz.y, 0.0) * w.z)) * fo;
       ws += fo;
     }
-    T *= 3.6;
   }
   if (ws < 0.01) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   off = off - (dot(off, n) * n);
@@ -1224,10 +1775,13 @@ fn ripples(xz: vec2f, t: f32) -> vec2f {
 
 @fragment
 fn fs(v: VOut) -> @location(0) vec4f {
-  let p = v.world;
+  // p: the pattern position (the surface before the vertex relief), pW:
+  // the drawn surface (the view, the shadows and the haze use it)
+  let p = v.base;
+  let pW = v.world;
   let xz = p.xz;
   let cam = G.camPos.xyz;
-  let viewV = cam - p;
+  let viewV = cam - pW;
   let dist = length(viewV);
   let V = viewV / max(dist, 1e-3);
   let q = U.mat.w;
@@ -1250,8 +1804,8 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let nb = normalize(nA.xyz + vec3f(0.0, 1e-4, 0.0));
   // the far ring (level -1) flattens the mirrored world: so does its slope
   let outside = v.level < -0.5;
-  let rk = select(0.0, ringFade(xz), outside);
-  let gB = (-nb.xz / max(nb.y, 0.08)) * (1.0 - rk);
+  let rFade = select(0.0, ringFade(xz), outside);
+  let gB = (-nb.xz / max(nb.y, 0.08)) * (1.0 - rFade);
   // (detailHeight costs ~30 texel loads: four calls only where its slope
   // shows, at quality 0.5 and up within 900 m)
   var gD = gB;
@@ -1347,7 +1901,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let desertish = clamp(bw.w1.x * (1.0 - smoothstep(0.0, 3.0, wdepth)) * 0.8, 0.0, 1.0);
   var region = vec3f(0.0);
   // a dry world with LIB strata is a sandstone plateau country
-  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25) + (U.geo.w * (1.0 - smoothstep(0.25, 0.55, moist)) * select(0.0, 0.55, U.surf.x > 0.5)), 0.0, 1.0);
+  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25) + (U.geo.w * (1.0 - smoothstep(0.3, 0.65, moist)) * select(0.0, 0.85, U.surf.x > 0.5)), 0.0, 1.0);
   region.z = clamp(smoothstep(0.3, 0.7, -rn), 0.0, 1.0) * (1.0 - region.y) * 0.8;
   region.x = max(1.0 - region.y - region.z, 0.0);
   let down = normalize(nGeo.xz + vec2f(1e-5, 0.0));
@@ -1355,6 +1909,16 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // ---- weights by rule
   var w0 = bw.w0;   // rock, cliff, grass, forest
   var w1 = bw.w1;   // sand, snow, mud, gravel
+  // the LIB river biome (12) marks its D8 channel cells, in straight runs
+  // over flat plains: its mud is dark wet ground only in a wet climate; in
+  // a dry one it is a pale sand wash (these were the dark straight lines on
+  // the canyonlands plains)
+  // (the regional moisture, 400 m round: LIB moisture is high along every
+  // channel, so the local value calls a desert wash wet)
+  let moistR = 0.25 * (auxAt(xz + vec2f(400.0, 0.0)).b + auxAt(xz - vec2f(400.0, 0.0)).b + auxAt(xz + vec2f(0.0, 400.0)).b + auxAt(xz - vec2f(0.0, 400.0)).b);
+  let wetClim = smoothstep(0.3, 0.55, min(moist, moistR));
+  w1.x += w1.z * (1.0 - wetClim) * 0.8;
+  w1.z *= mix(0.2, 1.0, wetClim);
   let jit = (fbm2(xz * 0.03, 3) * 1.4) + (fbm2((xz * 0.21) + 7.7, 2) * 0.6);
   // slope: grass and soil slide off, rock shows, cliffs above ~45 deg
   // (alpine turf holds on to ~40 deg: grass gives way from 37 to 50 deg)
@@ -1382,9 +1946,14 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let bank = smoothstep(0.05, 0.3, rj) * (1.0 - bed);
   let chan = smoothstep(0.8, 2.8, flow) * soft;
   let fan = chan * (1.0 - smoothstep(0.02, 0.10, slope)) * (1.0 - bed);
+  // a channel carries water all year only with a big flow in a wet
+  // climate; a dry wash (most channels of an arid plain) is pale sand and
+  // gravel. (The LIB river mask runs in straight D8 lines over flat
+  // plains; as dark wet mud they drew dark straight lines there.)
+  let perennial = wetClim * smoothstep(1.6, 3.2, flow);
   w1.w += (bed * 2.0) + (chan * 0.3);
-  w1.x += (bed * 0.6) + (fan * 0.9);
-  w1.z += (bank * 1.2 * moist) + (fan * 0.4);
+  w1.x += (bed * mix(1.2, 0.6, perennial)) + (fan * 0.9);
+  w1.z += (bank * 1.2 * moist * perennial) + (fan * 0.4 * perennial);
   w0.z *= 1.0 - (bed * 0.95);
   w0.w *= 1.0 - (bed * 0.95);
   // lake and sea floor: silt
@@ -1394,6 +1963,11 @@ fn fs(v: VOut) -> @location(0) vec4f {
   w0.z *= 1.0 - clamp(under, 0.0, 1.0);
   // moisture: dry ground shows gravel and sand through thin grass
   w1.x += (1.0 - smoothstep(0.08, 0.3, moist)) * w0.z * 0.5;
+
+  // crumbly soil where turf meets rock: a ragged band of bare stony soil
+  // (the mud layer: the stony soil set) between the two
+  let edgeRG = (4.0 * w0.x * w0.z) / max((w0.x + w0.z) * (w0.x + w0.z), 1e-4);
+  w1.z += edgeRG * (w0.x + w0.z) * 0.5 * smoothstep(-0.25, 0.35, fbm2(xz * 0.8, 2) + (jit * 0.3));
 
   // ---- the simulated surface (render/surface-sim.js)
   var scr = 0.0;
@@ -1509,6 +2083,26 @@ fn fs(v: VOut) -> @location(0) vec4f {
   geo.shade = shade;
   geo.arid = 1.0 - smoothstep(0.15, 0.4, moist);
   geo.facet = facetT;
+  // ---- blocky rock: the joint lattice of fn rockField at the parallax
+  // point (fn pom, close up), its micro shadow, the block textures
+  let rockW0 = (wa[0] + wa[1]) / wsum;
+  var rk: RockF;
+  rk.h = 0.0; rk.hf = 0.0; rk.g = vec3f(0.0); rk.e = 9.0; rk.crack = 0.0;
+  rk.id = vec3f(0.5); rk.bedF = 0.5; rk.bedT = 1.0; rk.tread = 0.0; rk.eo = 9.0; rk.idB = vec3f(0.5);
+  var prk = p;
+  var pomSh = 1.0;
+  let gbU = vec3f(0.0, 1.0, 0.0);
+  if ((rockW0 > 0.02) && !outside && (dist < 3000.0)) {
+    let bc0 = bedCoord(p, sf.c.x);
+    let ps = pomSteps(dist, max(dot(nGeo, V), 0.0));
+    if (ps > 0) { prk = pom(p, V, nGeo, bc0, gbU, fp, ps); }
+    let bcR = bc0 + (prk.y - p.y);
+    let bigK = smoothstep(0.12, 0.45, slope) * (1.0 - smoothstep(1800.0, 3000.0, dist));
+    rk = rockField(prk, bcR, gbU, nGeo, fp, bigK);
+    if (ps > 0) { pomSh = pomShadow(prk, normalize(G.sunDir.xyz), nGeo, bcR, gbU, fp); }
+  }
+  var rockT: TexS;
+  var rockTDone = false;
   for (var i = 0u; i < 8u; i++) {
     let wi = wa[i] / wsum;
     wa[i] = wi;
@@ -1523,9 +2117,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
       switch (i) {
         // rock and cliff share one evaluation (cliff share = the blend of
         // the two weights): it is the most costly layer
-        case 0u: { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope, geo); rockDone = true; m = rockM; }
+        case 0u: { rockM = layerRock(prk, fp, cliffShare, moist, region, down, slope, geo, rk, nGeo); rockDone = true; m = rockM; }
         case 1u: {
-          if (!rockDone) { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope, geo); rockDone = true; }
+          if (!rockDone) { rockM = layerRock(prk, fp, cliffShare, moist, region, down, slope, geo, rk, nGeo); rockDone = true; }
           m = rockM;
         }
         case 2u: { m = layerGrass(p, fp, bw.grass, moist); }
@@ -1561,20 +2155,39 @@ fn fs(v: VOut) -> @location(0) vec4f {
         }
         case 5u: { tgtP = vec3f(0.82, 0.85, 0.90); rmin = 0.35; }
         case 6u: {
-          tgtP = mix(mix(vec3f(0.085, 0.066, 0.045), vec3f(0.19, 0.145, 0.10), 1.0 - smoothstep(0.3, 0.7, moist)), vec3f(0.50, 0.46, 0.40), playa);
+          // (dry bare soil of an arid region is pale, near its parent rock)
+          let drySoil = mix(vec3f(0.19, 0.145, 0.10), parent * 0.95, (1.0 - wetClim) * 0.7);
+          tgtP = mix(mix(vec3f(0.085, 0.066, 0.045), drySoil, 1.0 - smoothstep(0.3, 0.7, moist * mix(0.5, 1.0, wetClim))), vec3f(0.50, 0.46, 0.40), playa);
           rmin = mix(0.45, 0.85, playa);
         }
         // gravel: river pebbles; scree: the broken rock of the cliff above,
         // lighter than its face (fresh fractures)
-        case 7u: { tgtP = vec3f(0.19, 0.172, 0.152); tgtA = mix(parent, vec3f(dot(parent, vec3f(0.33))), 0.25) * 1.3; }
+        // (a dry wash is pale: dark grey river gravel drew dark lines
+        // along the drainage of arid plains)
+        case 7u: { tgtP = mix(vec3f(0.19, 0.172, 0.152), parent * 1.15, max(region.y * 0.8, (1.0 - wetClim) * 0.7)); tgtA = mix(parent, vec3f(dot(parent, vec3f(0.33))), 0.25) * 1.3; }
         default: {}
       }
-      var t = texSetCal(kP, tgtP, pw, nGeo, tri, dpx, dpy, farMix, texF);
+      // hex tiling turns: free for soil, grass, snow; small for sand ripples
+      let rot = select(1.0, 0.12, i == 4u);
+      var t: TexS;
+      if (i <= 1u) {
+        // rock: each block takes one of the rock scans (layered beds in the
+        // sandstone region, jointed blocks and the two faces elsewhere) at
+        // its own offset; one evaluation for rock and cliff (unit target)
+        if (!rockTDone) {
+          let kB = rockPick(rk.idB, region, kP);
+          rockT = texSetCal(kB, vec3f(1.0), prk, nGeo, slope > 0.22, dpx, dpy, farMix, texF, 0.0);
+          rockTDone = true;
+        }
+        t = rockT;
+        // the scan contrast (calibrated detail around 1) a little up
+        t.alb = pow(max(t.alb, vec3f(0.0)), vec3f(1.3)) * tgtP;
+      } else {
+        t = texSetCal(kP, tgtP, pw, nGeo, tri, dpx, dpy, farMix, texF, rot);
+      }
       // the alternate set of this layer and how much of it
       var af = 0.0;
       switch (i) {
-        case 0u: { af = (1.0 - smoothstep(0.22, 0.42, slope)) * 0.85; }
-        case 1u: { af = smoothstep(-0.1, 0.5, fbm2(xz * 0.02, 2)) * 0.5; }
         case 2u: { af = clamp((1.0 - smoothstep(0.18, 0.42, moist)) + (smoothstep(0.1, 0.5, fbm2(xz * 0.013, 3)) * 0.5), 0.0, 1.0); }
         case 3u: { af = bw.kind.x; }
         case 4u: { af = bw.kind.y; }
@@ -1583,13 +2196,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
       }
       let kA = mapIdx(i + 8u);
       if ((af > 0.02) && (kA < 64u) && (kA != kP)) {
-        t = mixTex(t, texSetCal(kA, tgtA, pw, nGeo, tri, dpx, dpy, farMix, texF), af);
+        t = mixTex(t, texSetCal(kA, tgtA, pw, nGeo, tri, dpx, dpy, farMix, texF, rot), af);
       }
       // damp grass: the meadow set in wet ground (U.mat.y)
       if (i == 2u) {
         let kM = u32(U.mat.y + 0.5);
         let wf = smoothstep(0.6, 0.85, moist) * (1.0 - af);
-        if ((wf > 0.02) && (kM < 64u)) { t = mixTex(t, texSetCal(kM, vec3f(0.075, 0.115, 0.035), pw, nGeo, false, dpx, dpy, farMix, texF), wf); }
+        if ((wf > 0.02) && (kM < 64u)) { t = mixTex(t, texSetCal(kM, vec3f(0.075, 0.115, 0.035), pw, nGeo, false, dpx, dpy, farMix, texF, 1.0), wf); }
       }
       // the procedural modulation: rock keeps its cracks, lichen, strata
       // and weathering; the other layers get a mid-scale tone and hue
@@ -1611,28 +2224,56 @@ fn fs(v: VOut) -> @location(0) vec4f {
     mats[i] = m;
     hmax = max(hmax, m.h.x + wi);
   }
-  // height blend: depth 0.2 of the layer height (the classic splat trick)
-  let depthB = mix(0.26, 0.9, smoothstep(0.3, 8.0, fp));
+  // height blend (the classic splat trick): the higher layer shows
+  // through at the edges. Near the camera the blend depth is small, so the
+  // edges are sharp and natural: rock blocks poke through the soil, scree
+  // lies over the turf
+  let depthB = mix(0.1, 0.9, smoothstep(0.05, 8.0, fp));
   var alb = vec3f(0.0); var hg = vec4f(0.0); var rough = 0.0; var tw = 0.0;
-  var tnS = vec3f(0.0); var aoS = 0.0;
+  var tnS = vec3f(0.0); var aoS = 0.0; var rb = 0.0;
   for (var i = 0u; i < 8u; i++) {
     let wi = wa[i];
     if (wi < 0.02) { continue; }
     let b = max((mats[i].h.x + wi) - (hmax - depthB), 0.0);
     alb += mats[i].alb * b; hg += mats[i].h * b; rough += mats[i].rough * b; tw += b;
     tnS += mats[i].tn * b; aoS += mats[i].ao * b;
+    if (i <= 1u) { rb += b; }
   }
   let itw = 1.0 / max(tw, 1e-4);
   alb *= itw; hg *= itw; rough *= itw; tnS *= itw; aoS *= itw;
+  // the share of the rock layers after the blend (block relief, cavities)
+  let rockB = rb * itw;
 
   // ---- normal: geometry + material bump (surface gradient)
   let bumpFade = 1.0 - smoothstep(30.0, 250.0, dist);
-  // rock relief (joints, block tilts, ledges) is metres deep: a stronger
-  // bump that reaches out to ~900 m on bare rock
-  let rockRel = clamp(wa[0] + wa[1], 0.0, 1.0) * mix(0.12, 0.26, q) * (1.0 - smoothstep(150.0, 900.0, dist));
+  // the grain bump of the rock layer reaches out to ~900 m on bare rock
+  let rockRel = clamp(wa[0] + wa[1], 0.0, 1.0) * mix(0.06, 0.12, q) * (1.0 - smoothstep(150.0, 900.0, dist));
   let bumpK = (mix(0.035, 0.07, q) * bumpFade) + rockRel;
   let gt = hg.yzw - (dot(hg.yzw, nGeo) * nGeo);
   var n = normalize(nGeo - (gt * bumpK) + tnS);
+  // the block relief of the rock in true metres (stairs, bevels, crack
+  // walls: fn rockField), where the blend shows rock
+  let gR = rk.g - (dot(rk.g, nGeo) * nGeo);
+  n = normalize(n - (gR * rockB));
+  // talus blocks on the scree at the foot of a face, and small stones and
+  // roots on soil, close up
+  let slopeB = 1.0 - nb.y;
+  let tl = talus(xz, select(0.0, talusAmt(sf.a.y, slopeB), hasSurf && !outside), fp);
+  if (tl.x > 0.0) {
+    let tcol = mix(parent, vec3f(dot(parent, vec3f(0.33))), 0.3) * mix(0.75, 1.25, fract(tl.x * 37.0 + (tl.y * 3.1)));
+    let tk = smoothstep(0.0, 0.04, tl.x);
+    alb = mix(alb, tcol * (0.85 + (0.3 * smoothstep(0.0, 0.5, tl.x))), tk);
+    rough = mix(rough, 0.8, tk);
+    n = normalize(n - (vec3f(tl.y, 0.0, tl.z) - (dot(vec3f(tl.y, 0.0, tl.z), nGeo) * nGeo)) * tk);
+  }
+  let soilW = clamp(wa[6] + wa[7] + (wa[4] * 0.6) + (wa[3] * 0.5) + (wa[2] * 0.25), 0.0, 1.0) * (1.0 - rockB);
+  if ((soilW > 0.05) && (fp < 0.012) && !outside) {
+    let gr = grit(xz, fp, mix(0.25, 0.7, clamp(wa[7] + wa[6], 0.0, 1.0)));
+    alb *= mix(1.0, gr.x, soilW);
+    n = normalize(n - (vec3f(gr.y, 0.0, gr.z) * soilW));
+    let rt = roots(xz, fp) * clamp((wa[3] * 1.2) + (wa[2] * 0.3), 0.0, 1.0);
+    alb = mix(alb, vec3f(0.07, 0.045, 0.028), rt * 0.7);
+  }
   // the macro rock scan on bare rock (high quality, textures on)
   let rockW = clamp(wa[0] + wa[1], 0.0, 1.0);
   let kC = mapIdx(1u);
@@ -1660,7 +2301,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // ---- far forest canopy: VEG streams trees to about 7 km (the scatter
   // stream maxDist); past that the forest biomes show their crowns here,
   // a clumped green with dark gaps, tinted by the season (deciduous only)
-  let canopyF = wa[3] * smoothstep(4500.0, 7000.0, dist) * (1.0 - snowF);
+  // (in a dry climate the riparian woods are open: a far band of full
+  // canopy read as a dark straight line along a plains river)
+  let canopyF = wa[3] * smoothstep(4500.0, 7000.0, dist) * (1.0 - snowF) * mix(0.4, 1.0, wetClim);
   if (canopyF > 0.01) {
     let cl = fbm2(xz * 0.045, 3);
     let cl2 = fbm2((xz * 0.011) + 9.1, 3);
@@ -1680,7 +2323,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let rain = clamp(G.weather.y, 0.0, 1.0);
   // wet banks (the field: distance to water) and wet gully floors
   let wetF = max(sf.a.w * 0.9, lineK * smoothstep(0.35, 0.7, max(moist, rain)) * 0.7 * (1.0 - playa));
-  let nearW = max(max(max(1.0 - smoothstep(0.3, 2.5, hAbove), bank), max(smoothstep(0.0, 0.3, wdepth), bed)), wetF);
+  let nearW = max(max(max(1.0 - smoothstep(0.3, 2.5, hAbove), max(bank, bed) * mix(0.15, 1.0, perennial)), smoothstep(0.0, 0.3, wdepth)), wetF);
   var wet = clamp(max(G.weather2.x, nearW * 0.85), 0.0, 1.0) * (1.0 - snowF);
   let porous = 1.0 - clamp((w0.x + w0.y) / max(wsum * 0.5, 1e-3), 0.0, 1.0);
   alb *= mix(1.0, mix(0.65, 0.38, porous), wet);
@@ -1711,7 +2354,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   var sh = 1.0;
   var shM = 1.0;
   if (L.y > -0.05) {
-    sh = sunShadow(p, nGeo);
+    sh = sunShadow(pW, nGeo);
     // the march starts on the base surface: detail relief under the base
     // would shadow itself in the bilinear field
     // the cascades hold the terrain casters out to their far split; the
@@ -1719,12 +2362,15 @@ fn fs(v: VOut) -> @location(0) vec4f {
     let nc = i32(cascades.params.x);
     let cFar = select(0.0, cascades.splits[max(nc - 1, 0)], nc > 0);
     if ((dist > cFar * 0.75) && !outside) {
-      let ms = marchShadow(vec3f(p.x, max(p.y, baseH(xz)) + 0.5, p.z), L, fp);
+      let ms = marchShadow(vec3f(pW.x, max(pW.y, baseH(xz)) + 0.5, pW.z), L, fp);
       sh = min(sh, mix(1.0, ms, smoothstep(cFar * 0.75, cFar * 0.95 + 1.0, dist)));
     }
     // the ground's own normal turns away from the sun
     sh *= smoothstep(-0.02, 0.08, dot(nGeo, L) + 0.03);
-    sh *= cloudShadowAt(p);
+    sh *= cloudShadowAt(pW);
+    // the fine rock relief shadows itself (POM micro shadow), and the
+    // cracks and bed joints get little low sun
+    sh *= mix(1.0, pomSh * (1.0 - (rk.crack * 0.35)), rockB);
   }
   // micro-shadowing (Chan 2018): the texture and crevice occlusion also
   // shadow the sun, where the surface turns from the light
@@ -1744,7 +2390,10 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let microAO = mix(0.55, 1.0, clamp(hg.x * 1.2, 0.0, 1.0));
   // the baked terrain AO is soft-limited at 0.45: a deep valley still sees
   // a band of sky and the lit far wall (at full strength it went black)
-  let ao = mix(0.45, 1.0, aoT) * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8) * mix(1.0, 0.55, cav) * (1.0 + (0.12 * clamp(mE.z, 0.0, 1.0)));
+  // rock cavities: the cracks and the re-entrant corners of the blocks
+  // see little sky; talus blocks shade the scree at their foot
+  let aoRock = mix(1.0, clamp(1.0 + (max(rk.hf, -0.3) * 2.0) - (rk.crack * 0.3), 0.35, 1.0), rockB) * (1.0 - (0.55 * tl.w));
+  let ao = mix(0.45, 1.0, aoT) * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8) * mix(1.0, 0.55, cav) * (1.0 + (0.12 * clamp(mE.z, 0.0, 1.0))) * aoRock;
   // the sky is brighter toward the sun: a mild sun-side bias keeps the
   // form of slopes in shadow at a low sun
   let sunSide = normalize(vec3f(L.x, 0.35, L.z));
@@ -1770,7 +2419,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
     col += sunE * gp * snowF * sh * 2.0 * (1.0 - smoothstep(20.0, 80.0, dist));
   }
 
-  // ---- debug views
+  // ---- debug views (ground.js setDebug): 10 rock crack, tread, stony
+  // soil; 11 rock share, rock cavity, AO; 12 soil, forest, gravel weights;
+  // 13 moisture, regional moisture, flow
   let dbg = u32(U.mat.z + 0.5);
   if (dbg == 1u) { col = vec3f(wa[0] + wa[1], wa[2] + wa[3] * 0.5, wa[4] + wa[7]) * (G.ambient.w + 1.0); }
   else if (dbg == 2u) { col = (n * 0.5) + 0.5; }
@@ -1780,8 +2431,12 @@ fn fs(v: VOut) -> @location(0) vec4f {
   else if (dbg == 6u) { col = (nGeo * 0.5) + 0.5; }
   else if (dbg == 7u) { col = vec3f(1.0 - max(sf.a.x, 0.0), sf.a.y, max(sf.a.z, lineK)) * (G.ambient.w + 1.0); }
   else if (dbg == 9u) { col = vec3f(sf.d.y, couloir, length(gC)) * (G.ambient.w + 1.0); }
+  else if (dbg == 10u) { col = vec3f(rk.crack, rk.tread, wa[6]) * (G.ambient.w + 1.0); }
+  else if (dbg == 11u) { col = vec3f(rockB, aoRock, ao) * (G.ambient.w + 1.0); }
+  else if (dbg == 12u) { col = vec3f(wa[6], wa[3], wa[7]) * (G.ambient.w + 1.0); }
+  else if (dbg == 13u) { col = vec3f(moist, moistR, flow * 0.25) * (G.ambient.w + 1.0); }
   else if (dbg == 8u) { col = vec3f(sf.b.x, sf.b.y + sf.c.y, sf.b.z) * (G.ambient.w + 1.0); }
 
-  if (U.shadow.x > 0.5) { col = aerial(col, p); }
+  if (U.shadow.x > 0.5) { col = aerial(col, pW); }
   return vec4f(col, 1.0);
 }

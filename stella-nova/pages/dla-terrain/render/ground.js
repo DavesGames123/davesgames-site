@@ -28,7 +28,17 @@
 //  quality. groundLayerMap gives each of the eight logical layers of the
 //  shader a primary and an alternate set (grass / dry grass / meadow,
 //  forest floor / pine floor, sand / desert, rock / scree, ...). Until the
-//  sets load, the procedural layers draw alone.
+//  sets load, the procedural layers draw alone. A set in SKIP_SETS takes no
+//  array layer (MAX_SETS 16). U.rsets names the layered rock, blocky rock,
+//  outcrop and stony soil sets (the rock scans, the macro rock, bare soil).
+//
+//  ROCK  U.rock (rockUniforms) is the joint frame of surface-sim
+//  rockFrame; U.fx (effectUniforms) turns on the parallax occlusion (POM,
+//  quality 0.7 and up) and the vertex relief of bare rock and talus
+//  (quality 0.8 and up, inside the LOD 0 range), neither on a phone
+//  profile. JS twins for the tests: pomSteps (fn pomSteps), hexWeights
+//  (fn hexGrid + fn hexSharp). Group 1 binding 7 (the fields) is visible to
+//  the vertex stage too (fn groundDisp reads the regolith and scree).
 //
 //  Shadows: CORE owns the cascaded map (gpu/shadows.js) and sets group 2
 //  on the pass: gpu.shadowSampleLayout for drawOpaque (common.wgsl fn
@@ -37,7 +47,7 @@
 //  cascades.
 //
 //  FAR RING  farRingMesh: square rings round the world out to max(5 x
-//  world, 80 km) past the edge, drawn after the CDLOD mesh with the same
+//  world, 80 km) past the edge (and one flat band on to 2000 km), drawn after the CDLOD mesh with the same
 //  fs (ground.wgsl fn vsRing). Past the edge the shader mirrors the world
 //  (fn foldXZ) and flattens it over farRingParams' fade length to a low
 //  floor (no sea) or under the sea (a world with a sea), so no cut edge
@@ -65,15 +75,17 @@
 //  "export function selectNodes", "export function morphVertex",
 //  "export function gridIndices", "export function groundLayerMap",
 //  "export async function createGround", "drawOpaque", "drawShadow",
-//  "export function surfaceUniforms", "function startSurface", "function applySurface"
+//  "export function surfaceUniforms", "function startSurface", "function applySurface",
+//  "export function rockUniforms", "export function effectUniforms",
+//  "export function pomSteps", "export function hexWeights"
 // ============================================================================
 
 import { simulateSurface, surfRes, SURF_LAYERS } from './surface-sim.js';
 
 const INST_FLOATS = 8;          // a: x0, z0, size, N; b: morph start, morph end, level, 0
 const MAX_INST = 6144;
-// GroundU (ground.wgsl struct GroundU) in floats: 18 vec4
-export const U_FLOATS = 72;
+// GroundU (ground.wgsl struct GroundU) in floats: 21 vec4
+export const U_FLOATS = 84;
 export const LAYERS = ['rock', 'cliff', 'grass', 'forest floor', 'sand', 'snow', 'mud', 'gravel'];
 // texture array size per quality (three arrays of 13 sets: about 180 MB at 1024)
 export const layerRes = (q) => (q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256);
@@ -298,6 +310,7 @@ export function gridIndices(N) {
 // The ASSETS ground sets (manifest kind "ground texture") by role. The
 // test order puts the specific names first ("dry grass" before "grass").
 const SET_ROLES = [
+  ['layered', /layered/i], ['blocky', /blocky|jointed/i], ['outcrop', /outcrop/i], ['stony', /stony/i],
   ['cliff', /cliff/i], ['scree', /scree/i], ['dry', /dry/i], ['meadow', /meadow|damp/i],
   ['pine', /pine|needle/i], ['desert', /desert|cracked/i], ['forest', /forest|leaf|litter/i],
   ['gravel', /gravel|pebble/i], ['mud', /mud/i], ['snow', /snow/i], ['sand', /sand|beach/i],
@@ -305,7 +318,7 @@ const SET_ROLES = [
 ];
 // logical layer -> [primary role, fallback], and its alternate role
 const PRIMARY = [['rock', 'cliff'], ['cliff', 'rock'], ['grass', 'meadow'], ['forest', 'pine'],
-  ['sand', 'desert'], ['snow', null], ['mud', null], ['gravel', 'scree']];
+  ['sand', 'desert'], ['snow', null], ['mud', 'stony'], ['gravel', 'scree']];
 const ALTERNATE = ['scree', 'rock', 'dry', 'pine', 'desert', null, null, 'scree'];
 export const MAX_SETS = 16;
 // Sets with a known defect are not used (the layer then draws procedural):
@@ -315,7 +328,9 @@ export const SKIP_SETS = new Set(['ground_mud']);
 
 // records: the ground sets in texture array order. Returns { roles, tiles
 // (Float32Array 16, m), map (Float32Array 16: [0..7] primary array layer of
-// each logical layer, [8..15] alternate, 255 = none), meadow (layer) }.
+// each logical layer, [8..15] alternate, 255 = none), meadow (layer),
+// rsets (Float32Array 4: layered rock, blocky rock, outcrop, stony soil;
+// the rock of each block and the macro rock, ground.wgsl U.rsets) }.
 export function groundLayerMap(records) {
   const roles = {};
   const tiles = new Float32Array(MAX_SETS).fill(2);
@@ -331,7 +346,8 @@ export function groundLayerMap(records) {
   const map = new Float32Array(16);
   PRIMARY.forEach(([a, b], l) => { map[l] = idx(a) !== 255 ? idx(a) : idx(b); });
   ALTERNATE.forEach((a, l) => { map[8 + l] = idx(a); });
-  return { roles, tiles, map, meadow: idx('meadow') };
+  const rsets = new Float32Array(['layered', 'blocky', 'outcrop', 'stony'].map(idx));
+  return { roles, tiles, map, meadow: idx('meadow'), rsets };
 }
 
 // ground set records of a manifest (kind "ground texture"), in the order of
@@ -430,6 +446,53 @@ export function surfaceUniforms(r, cpu) {
   return [1, r.m, r.wind[0], r.wind[1], ...r.strata, r.glacier || 0, lat < 0 ? -1 : 1, lam, 0];
 }
 
+// U.rock: the joint frame of the rock (surface-sim rockFrame): [set 1
+// normal x, z (the dip direction), bed spacing H0 m, stair strength]
+export function rockUniforms(frame) {
+  const f = frame || { dir: [Math.cos(0.6), Math.sin(0.6)], H0: 1.4, stepK: 0.9 };
+  return [f.dir[0], f.dir[1], f.H0, f.stepK];
+}
+
+// U.fx: [POM on, vertex relief on, POM range m, vertex relief range m].
+// POM from quality 0.7, the vertex relief from 0.8 (the 0.5 m leaf grid
+// of lodConfig), neither on a phone profile (the cheap path). lod0: the
+// LOD 0 range m (the relief ends inside it).
+export function effectUniforms(quality, phone, lod0 = 64) {
+  const pomOn = !phone && quality >= 0.7 ? 1 : 0;
+  const dispOn = !phone && quality >= 0.8 ? 1 : 0;
+  return [pomOn, dispOn, 60, Math.min(55, lod0 * 0.85)];
+}
+
+// JS twin of ground.wgsl fn pomSteps: the POM step count at distance dist
+// (m) for n.v = ndv. 0 past the range or with POM off; at most POM_MAX.
+export const POM_MAX = 16;
+export function pomSteps(dist, ndv, fx) {
+  const on = fx[0], range = fx[2];
+  if (on < 0.5 || dist >= range) return 0;
+  const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const k = 1 - sst(range * 0.6, range, dist);
+  const n = (6 + (POM_MAX - 6) * Math.min(1, Math.max(0, 1 - ndv))) * k;
+  if (n < 2) return 0;
+  return Math.min(Math.ceil(n), POM_MAX);
+}
+
+// JS twin of ground.wgsl fn hexGrid + fn hexSharp (Mikkelsen 2022 hex
+// tiling): the barycentric weights of the three hex vertices at uv, and
+// the weights sharpened by the sample luminances lum (sum 1).
+export function hexWeights(u, v, lum = [1, 1, 1]) {
+  const sx = u * 3.4641016, sy = v * 3.4641016;
+  const kx = sx - 0.57735027 * sy, ky = 1.15470054 * sy;
+  const bx = Math.floor(kx), by = Math.floor(ky);
+  const fx = kx - bx, fy = ky - by;
+  const tz = 1 - fx - fy;
+  const s = tz <= 0 ? 1 : 0, s2 = 2 * s - 1;
+  const base = [-tz * s2, s - fy * s2, s - fx * s2];
+  const verts = [[bx + s, by + s], [bx + s, by + 1 - s], [bx + 1 - s, by + s]];
+  const ww = base.map((w, i) => (Math.max(w, 0) * Math.pow(Math.max(lum[i], 1e-3), 0.6)) ** 2);
+  const sum = Math.max(ww[0] + ww[1] + ww[2], 1e-6);
+  return { base, verts, w: ww.map((x) => x / sum) };
+}
+
 // ----------------------------------------------------------------- module --
 
 const MIP_WGSL = /* wgsl */`
@@ -466,7 +529,7 @@ export async function createGround(gpu) {
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
-      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+      { binding: 7, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
     ],
   });
   // the shadow pass reads U (group 1) too: the morph needs the terrain top
@@ -547,8 +610,9 @@ export async function createGround(gpu) {
   }
   const snowFit = new Float32Array(4);
   const ringU = new Float32Array(4);
-  // U.surf, U.geo, U.geo2 (see surfaceUniforms)
+  // U.surf, U.geo, U.geo2 (see surfaceUniforms), U.rock (rockUniforms)
   const surfU = new Float32Array(12);
+  const rockU = new Float32Array(rockUniforms(null));
 
   // ---- the surface simulation of each final terrain: in a module worker
   // (render/surface-worker.js), else on this thread with pauses between
@@ -568,6 +632,7 @@ export async function createGround(gpu) {
     surfTex = tex;
     groundBG = makeBG();
     surfU.set(surfaceUniforms(r, surfCpu));
+    rockU.set(rockUniforms(r.rock));
     surfReady = true;
     if (!surfAllow) surfU[0] = 0;
     surfStats = { m, ...r.stats };
@@ -583,7 +648,7 @@ export async function createGround(gpu) {
     const t = { n: cpu.n, worldSize: cpu.worldSize, seaLevel: cpu.seaLevel, opts: cpu.opts, height: cpu.height, flow: cpu.flow,
       sediment: cpu.sediment, water: cpu.water, river: cpu.river, moisture: cpu.moisture, temperature: cpu.temperature };
     const local = () => simulateSurface(cpu, { res, yieldFn: () => new Promise((ok) => setTimeout(ok, 0)) })
-      .then((s) => applySurface({ id, m: s.m, data: s.data, wind: s.wind, strata: s.strata, glacier: s.glacier, stats: s.stats }))
+      .then((s) => applySurface({ id, m: s.m, data: s.data, wind: s.wind, strata: s.strata, glacier: s.glacier, rock: s.rock, stats: s.stats }))
       .catch((e) => applySurface({ id, error: e.message }));
     if (!surfWorkerBad && !surfWorker) {
       try {
@@ -714,6 +779,9 @@ export async function createGround(gpu) {
     uData.set(snowFit, 52);
     uData.set(ringU, 56);
     uData.set(surfU, 60);
+    uData.set(rockU, 72);
+    uData.set(effectUniforms(quality, !!pf, cfg.ranges[0]), 76);
+    uData.set(layerMap.rsets, 80);
     queue.writeBuffer(uBuf, 0, uData);
   }
 
@@ -819,7 +887,7 @@ export async function createGround(gpu) {
     if (gpu.groundImageLoader) {
       // a test harness with no image decoder (Deno): loader(url, size) ->
       // { data RGBA, width, height }
-      const recs = groundRecords(a.manifest || a);
+      const recs = groundRecords(a.manifest || a).filter((r) => !SKIP_SETS.has(r.id));
       const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
       const r0 = res;
       sets = await Promise.all(recs.map(async (rec) => {
@@ -830,7 +898,7 @@ export async function createGround(gpu) {
       }));
     } else if (a.loadGround && !pf) sets = await a.loadGround();
     else {
-      let recs = groundRecords(a.manifest || a);
+      let recs = groundRecords(a.manifest || a).filter((r) => !SKIP_SETS.has(r.id));
       if (pf) recs = recs.filter((r) => PHONE_SETS.includes(r.id)).sort((x, y) => PHONE_SETS.indexOf(x.id) - PHONE_SETS.indexOf(y.id)).slice(0, pf.groundLayers || 8);
       if (!recs.length || typeof createImageBitmap === 'undefined') return 0;
       const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
@@ -841,7 +909,8 @@ export async function createGround(gpu) {
         return { record: rec, albedo, normal, orm };
       }));
     }
-    sets = (sets || []).filter((x) => x && x.albedo).slice(0, MAX_SETS);
+    // a set with a known defect takes no array layer (MAX_SETS layers)
+    sets = (sets || []).filter((x) => x && x.albedo && !(x.record && SKIP_SETS.has(x.record.id))).slice(0, MAX_SETS);
     if (!sets.length) return 0;
     const mips = Math.floor(Math.log2(res)) + 1;
     const L = sets.length;
@@ -889,7 +958,9 @@ export async function createGround(gpu) {
     surfaceReady: () => surfDone,
     // 0 lit, 1 layer weights, 2 normals, 3 LOD, 4 sun shadow, 5 albedo,
     // 6 geometric normal, 7 fields (bedrock, scree, alluvium + gullies),
-    // 8 fields (snow drift, cornice + glacial, age)
+    // 8 fields (snow drift, cornice + glacial, age), 9 log area, couloir,
+    // 10 rock crack, tread, stony soil, 11 rock share, rock cavity, AO,
+    // 12 soil, forest, gravel weights, 13 moisture, regional moisture, flow
     setDebug(mode) { debug = mode | 0; },
     // the simulated surface on or off (off: the slope and biome rules alone)
     setSurface(on) { surfAllow = !!on; surfU[0] = surfAllow && surfReady ? 1 : 0; },

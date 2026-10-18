@@ -6,8 +6,10 @@
 // selected nodes tile the world with no gap and no overlap, that every seam
 // between two nodes has the same vertices on both sides after the morph
 // (no cracks, no T-junctions) for many random cameras, frustum planes, the
-// grid winding, the manifest texture match, and static WGSL rules (Tint
-// rejects unparenthesised mixed && / || and mixed * / ^).
+// grid winding, the manifest texture match, static WGSL rules (Tint
+// rejects unparenthesised mixed && / || and mixed * / ^), the hex tiling
+// weights (sum 1), the POM step bounds, the GroundU size and the GPU
+// memory model of the ground sets and surface fields.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +17,9 @@ import {
   lodConfig, buildMinMax, nodeBounds, selectNodes, morphVertex, gridIndices,
   frustumPlanes, groundLayerMap, groundRecords, LAYERS, SKIP_SETS,
   fitLapse, farRingParams, farRingMesh,
+  hexWeights, pomSteps, POM_MAX, effectUniforms, rockUniforms, U_FLOATS, MAX_SETS,
 } from '../render/ground.js';
+import { estimate, PROFILES, GROUND_SETS, MB } from '../gpu/budget.js';
 
 let pass = 0, fail = 0;
 function ok(cond, name, extra = '') {
@@ -189,14 +193,17 @@ for (const q of [1.0, 0.3]) {
   let man = null;
   try { man = JSON.parse(readFileSync(manPath, 'utf8')); } catch { man = null; }
   if (man) {
-    const recs = groundRecords(man);
+    const all = groundRecords(man);
+    const recs = all.filter((r) => !SKIP_SETS.has(r.id));
     const m = groundLayerMap(recs);
     const name = (k) => (k === 255 ? 'none' : recs[k].id);
     const prim = LAYERS.map((l, i) => `${l}=${name(m.map[i])}`).join(' ');
     // every layer has a set, except a layer whose only set is in SKIP_SETS
-    const allSet = [...m.map.slice(0, 8)].every((k, l) => k !== 255 || (l === 6 && recs.some((r) => SKIP_SETS.has(r.id))));
+    const allSet = [...m.map.slice(0, 8)].every((k, l) => k !== 255 || (l === 6 && all.some((r) => SKIP_SETS.has(r.id))));
     ok(recs.length >= 8 && allSet && name(m.map[2]) === 'ground_grass' && name(m.map[10]) === 'ground_dry_grass' && name(m.map[1]) === 'ground_cliff' && m.meadow !== 255,
       `groundLayerMap on the ASSETS manifest (${recs.length} sets): every layer has a set (skipped: ${[...SKIP_SETS].join(', ')})`, prim);
+    ok(m.rsets.length === 4 && [...m.rsets].every((k) => k !== 255) && name(m.map[6]) === 'ground_stony_soil',
+      `groundLayerMap: the layered, blocky, outcrop and stony sets are found (${[...m.rsets].map(name).join(', ')}), stony soil is the bare-soil set`);
     ok([...m.tiles.slice(0, recs.length)].every((t, k) => t === Math.fround(recs[k].tile)), 'groundLayerMap keeps the tile size of each set');
   } else {
     ok(true, 'groundLayerMap: no ASSETS manifest yet (skipped)');
@@ -262,6 +269,85 @@ for (const q of [1.0, 0.3]) {
   for (const i of g.idx) maxIdx = Math.max(maxIdx, i);
   ok(inside === P && onEdge === P && maxIdx < R * P, 'far ring mesh: one skirt ring inside, one ring on the world edge', `${inside} ${onEdge}`);
   ok(Math.abs(g.pos[(R - 1) * P * 3 + 1]) >= 2e6, 'far ring mesh: the last ring is 2000 km out (the land reaches the horizon)');
+}
+
+// ---- hex tiling: the weights of the three hex vertices (ground.wgsl fn
+// hexGrid + fn hexSharp) sum to 1 and are not negative, everywhere
+{
+  let worstB = 0, worstW = 0, neg = 0, same = 0;
+  for (let t = 0; t < 20000; t++) {
+    const u = (rnd() - 0.5) * 400, v = (rnd() - 0.5) * 400;
+    const lum = [rnd(), rnd(), rnd()];
+    const h = hexWeights(u, v, lum);
+    worstB = Math.max(worstB, Math.abs(h.base[0] + h.base[1] + h.base[2] - 1));
+    worstW = Math.max(worstW, Math.abs(h.w[0] + h.w[1] + h.w[2] - 1));
+    if (Math.min(...h.base) < -1e-5 || Math.min(...h.w) < 0) neg++;
+    const k = h.verts.map((q) => q.join(','));
+    if (new Set(k).size !== 3) same++;
+  }
+  ok(worstB < 1e-5 && worstW < 1e-9 && neg === 0 && same === 0, `hex tiling: barycentric and sharpened weights sum to 1 (worst ${worstB.toExponential(1)}, ${worstW.toExponential(1)}), none negative, three distinct vertices (20000 points)`);
+  // at a hex vertex one weight is 1: the uv of the vertex shows alone
+  const h0 = hexWeights(0, 0);
+  ok(Math.max(...h0.w) > 0.999, 'hex tiling: a lattice vertex takes all of the weight');
+  const src = readFileSync(fileURLToPath(new URL('../shaders/ground.wgsl', import.meta.url)), 'utf8');
+  ok(/uv \* 3\.4641016/.test(src) && /0\.57735027 \* st\.y/.test(src) && /1\.15470054 \* st\.y/.test(src) && /vec3f\(0\.6\)\)/.test(src),
+    'fn hexGrid / fn hexSharp use the constants of hexWeights');
+  ok(/max\(w, vec3f\(0\.0\)\) \* pow\(/.test(src), 'fn hexSharp clamps the weights before pow() (pow of a negative is NaN in WGSL)');
+}
+
+// ---- POM: the step count is bounded, ends at the range and is off on a
+// phone profile and at low quality (ground.wgsl fn pomSteps)
+{
+  const fx = effectUniforms(1, false, 64);
+  let maxS = 0, mono = true, beyond = 0;
+  for (let ndv = 0; ndv <= 1.0001; ndv += 0.05) {
+    let prev = Infinity;
+    for (let d = 0; d < 120; d += 0.5) {
+      const n = pomSteps(d, ndv, fx);
+      maxS = Math.max(maxS, n);
+      if (n > prev) mono = false;
+      if (d >= fx[2] && n !== 0) beyond++;
+      prev = n;
+    }
+  }
+  ok(maxS <= POM_MAX && maxS >= 12 && mono && beyond === 0, `POM: at most ${POM_MAX} steps (max ${maxS}), no more steps farther away, none past ${fx[2]} m`);
+  ok(pomSteps(5, 0.2, effectUniforms(1, true, 64)) === 0 && pomSteps(5, 0.2, effectUniforms(0.5, false, 64)) === 0, 'POM: off on a phone profile and at quality 0.5 (the cheap path)');
+  const v = effectUniforms(1, false, 64);
+  ok(v[1] === 1 && v[3] <= 64 * 0.85 && effectUniforms(0.75, false, 64)[1] === 0 && effectUniforms(1, true, 64)[1] === 0, 'vertex relief: on from quality 0.8 on desktop, inside the LOD 0 range, off on a phone');
+  const src = readFileSync(fileURLToPath(new URL('../shaders/ground.wgsl', import.meta.url)), 'utf8');
+  ok(new RegExp(`const POM_MAX: i32 = ${POM_MAX};`).test(src), 'fn pomSteps and pomSteps share POM_MAX');
+}
+
+// ---- GroundU: the WGSL struct size is U_FLOATS; the uniforms fit
+{
+  const src = readFileSync(fileURLToPath(new URL('../shaders/ground.wgsl', import.meta.url)), 'utf8');
+  const body = src.slice(src.indexOf('struct GroundU {'), src.indexOf('};', src.indexOf('struct GroundU {')));
+  let floats = 0;
+  for (const m of body.matchAll(/:\s*(vec4f|array<vec4f,\s*(\d+)>)/g)) floats += m[2] ? 4 * +m[2] : 4;
+  ok(floats === U_FLOATS, `struct GroundU is ${floats} floats, ground.js U_FLOATS ${U_FLOATS}`);
+  const r = rockUniforms(null);
+  ok(r.length === 4 && Math.abs(Math.hypot(r[0], r[1]) - 1) < 1e-6 && r[2] > 0, 'rockUniforms: a unit joint direction and a bed spacing with no fields');
+}
+
+// ---- the GPU memory model (gpu/budget.js) has the ground sets the
+// module loads and the surface fields; every profile stays in its budget
+{
+  const manPath = fileURLToPath(new URL('../../../assets/nature/manifest.json', import.meta.url));
+  let man = null;
+  try { man = JSON.parse(readFileSync(manPath, 'utf8')); } catch { man = null; }
+  const used = man ? Math.min(groundRecords(man).filter((r) => !SKIP_SETS.has(r.id)).length, MAX_SETS) : GROUND_SETS;
+  ok(GROUND_SETS === used, `budget: GROUND_SETS ${GROUND_SETS} = the sets ground.js loads (${used})`);
+  const d = estimate(PROFILES.desktop, { cssW: 1280, cssH: 800, qualityIndex: 3, n: 1024 });
+  const exp = 1024 * 1024 * 16 * 4 * 3 * (4 / 3) + 2 * 6144 * 32;
+  ok(Math.abs(d.parts.ground - exp) < 1 && d.parts.groundSurface === 1024 * 1024 * 16, `budget: desktop High ground ${(d.parts.ground / MB).toFixed(0)} MB + surface fields ${(d.parts.groundSurface / MB).toFixed(0)} MB`);
+  for (const id of ['phone', 'phone-min']) {
+    const e = estimate(PROFILES[id], { cssW: 390, cssH: 844, qualityIndex: 0, n: 1024 });
+    const sm = Math.min(PROFILES[id].maxN, 512);
+    ok(e.parts.groundSurface === sm * sm * 16 && e.peak < e.budget, `budget: ${id} surface fields ${(e.parts.groundSurface / MB).toFixed(0)} MB, peak ${(e.peak / MB).toFixed(0)} MB under ${(e.budget / MB).toFixed(0)} MB`);
+  }
+  // (the desktop profile has no caps: its model total is a report, not a
+  // limit; the four rock and soil sets add 4 x 16.8 MB at 1024)
+  console.log(`# desktop 1280x800 High: ground ${(d.parts.ground / MB).toFixed(0)} MB of ${(d.total / MB).toFixed(0)} MB (peak ${(d.peak / MB).toFixed(0)} MB)`);
 }
 
 console.log(`# ground: ${pass} passed, ${fail} failed`);
