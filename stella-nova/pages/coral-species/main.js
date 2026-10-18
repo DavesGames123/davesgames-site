@@ -85,7 +85,7 @@ const MAX_P = 24576;
 const G = {
   species: SPECIES_LIST[0].id, seed: 1, rockSeed: 3, sizeU: 0.55,
   mode: 'natural', gradient: 'reef', rev: false,
-  playing: true, speed: 1, dir: 20, caust: 1, down: 2, orbit: true, polyps: true, beam: true, snow: true,
+  playing: true, speed: 1, dir: 20, caust: 1, down: 0.7, orbit: true, polyps: true, beam: true, snow: true,
 };
 let saverOn = false, sv = null;
 
@@ -102,7 +102,14 @@ const S = createScene({
 const base = createBase({ seed: G.rockSeed, quality: PROF.rock === 'high' ? 'high' : 'low' });
 let lostNow = false;
 const keyLamp = S ? new THREE.SpotLight(0xfff0dc, 760, 24, 0.5, 0.65, 2) : null;
-const fillLamp = S ? new THREE.SpotLight(0xbfdcff, 300, 24, 0.75, 0.75, 2) : null;
+const fillLamp = S ? new THREE.SpotLight(0xbfdcff, 170, 24, 0.75, 0.75, 2) : null;
+// The look of this small scene. coral-reef tunes its volume pass for ROV
+// beams far from the eye; here both lamps light the colony from 3 to 6 m
+// and every eye ray crosses their cones, so the full in-scatter gave a
+// milky veil over the coral (and the auto exposure lifted it more).
+// scatter, shaft: the volume pass (lamp in-scatter, downwell shafts);
+// expMax: the most exposure that the auto exposure may set.
+export const LOOK = { scatter: 0.16, shaft: 0.45, expMax: 3 };
 if (S) {
   canvas.addEventListener('webglcontextlost', e => {
     e.preventDefault(); lostNow = true;
@@ -114,6 +121,7 @@ if (S) {
   S.setPolypSizes(SHAPES);
   S.setLut(lut(G.gradient, 256, G.rev));
   S.U.uDown.value = G.down; S.U.uCaust.value = G.caust;
+  if (S.passes) { S.passes.volU.uScatter.value = LOOK.scatter; S.passes.volU.uShaft.value = LOOK.shaft; }
   for (const L of [keyLamp, fillLamp]) { L.target = new THREE.Object3D(); S.scene.add(L, L.target); }
   S.setLights([keyLamp, fillLamp], 1);          // one main lamp: the key lamp casts the shadow
   const C = S.controls;
@@ -479,9 +487,13 @@ function frame(t) {
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
   frameCamera(dt, now);
   placeLamps(ac.goal());
+  // cap the auto exposure (scene.js sets uExposure from post.exposure)
+  if (S.post && S.post.exposure > LOOK.expMax) { S.post.exposure = LOOK.expMax; if (S.passes) S.passes.compU.uExposure.value = LOOK.expMax; }
   S.render(dt, now);
 }
 
+// The look state for the node checks (tests.mjs)
+window.__speciesLook = () => ({ down: S ? S.U.uDown.value : null, scatter: S && S.passes ? S.passes.volU.uScatter.value : null, shaft: S && S.passes ? S.passes.volU.uShaft.value : null, exposure: S && S.post ? S.post.exposure : null, uExposure: S && S.passes ? S.passes.compU.uExposure.value : null, fill: fillLamp ? fillLamp.intensity : null, key: keyLamp ? keyLamp.intensity : null });
 buildUI();
 resize();
 addEventListener('resize', resize);

@@ -225,6 +225,13 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     ok(d.querySelectorAll('#species button').length === SPECIES_IDS.length, `species chips: ${d.querySelectorAll('#species button').length}`);
     ok(d.querySelectorAll('#modes button').length >= 5 && d.querySelectorAll('#gradPick .gg-sw').length >= 10, 'colour-by chips and the gradient picker');
     await P.run(6000);
+    // the user (2026-10-18, Safari on Mac): "the lighting on the coral
+    // species page isn't working for me" - a milky, blown out, flat frame
+    const lk = P.win.__speciesLook && P.win.__speciesLook();
+    ok(lk && lk.down <= 1 && Number(d.getElementById('sDown').value) === lk.down, `light from above ${lk && lk.down} (was 2), the slider agrees`);
+    ok(lk && lk.scatter !== null && lk.scatter <= 0.25 && lk.shaft <= 0.6, `volume in-scatter ${lk && lk.scatter}, shafts ${lk && lk.shaft} (were 1 and 1: a milky veil)`);
+    ok(lk && lk.exposure <= 3 && lk.uExposure <= 3, `auto exposure capped: ${lk && lk.exposure}`);
+    ok(lk && lk.key / lk.fill >= 4, `key to fill ${lk && (lk.key / lk.fill).toFixed(1)} (was 2.5): the lamp direction reads`);
     const n1 = Number(d.getElementById('rN').textContent.replace(/\D/g, ''));
     ok(n1 > 5, `the colony grows on the main thread runner: ${n1} particles after 6 s, state "${d.getElementById('rState').textContent}"`);
     ok(n1 < 600, `a watchable pace: ${n1} particles in 6 s (a full colony is about 90 s)`);
