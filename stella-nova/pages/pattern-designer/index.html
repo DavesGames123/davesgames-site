@@ -111,6 +111,7 @@
   </div>
 
   <div class="sec-label">Parameters</div>
+  <div id="dens" class="dens"></div>
   <div id="params"></div>
   <div class="btns"><button id="paramReset">Reset parameters</button><button id="paramShake">Shake parameters</button></div>
 
@@ -159,6 +160,7 @@
   <div class="about">
     <p>Each pattern is a small program: the sliders and the seed go in, and a list of vector shapes comes out. The same seed always gives the same shapes, so a design can be made again from its numbers. The SVG file keeps these numbers in its description.</p>
     <p>Each palette keeps its first ink at a WCAG contrast of 3 or more on the paper. Harmony makes a palette from one seed colour in the OKLCH colour space; a lock keeps a colour while the tools change the rest. Surprise me picks a pattern and a palette that keeps every ink the pattern uses at that contrast.</p>
+    <p>Density multiplies the cells, lines, rings and depth of every pattern on top of its sliders: at 2, a grid has twice the cells per side and the lines get finer. Detail draws inner lines inside the larger closed shapes. The [ and ] keys change the density. A phone has a lower density limit.</p>
     <p>Modifiers act on the shapes after the pattern makes them, from the top of the list to the bottom. A warp bends every line, a mask cuts lines at the edge of a shape, and a clip sets a hard edge in the file.</p>
     <p>The SVG has a viewBox and, for A sizes, a width and height in millimetres, so it opens at print size. The PNG export writes its DPI into the file.</p>
     <p>All patterns, modifiers and code here are original work for davesgames.io. See also <a href="https://bookofshapes.com" target="_blank" rel="noopener">bookofshapes.com</a> by Nikolaj Sokolowski, a pattern site in the same genre. Nothing on this page is taken from it.</p>

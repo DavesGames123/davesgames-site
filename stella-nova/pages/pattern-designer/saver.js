@@ -10,7 +10,8 @@
 //    draw   the elements draw on in order: lines by length, solids fade in
 //    hold   the full pattern stays, with a slow push-in when it is light
 //    fade   a short fade to the paper, then the next shot
-//  A shot takes 5 to 12 s; calm 1 gives the long end.
+//  A shot takes 5 to 12 s; calm 1 gives the long end. Each shot is dense:
+//  D from 1.5 to DENSITY.saver (lower on a phone), detail 0.25 to 0.6.
 //
 //  DRAWING. Each frame draws vectors at the screen resolution. The
 //  finished elements go to a cache canvas of the same size (never scaled
@@ -27,6 +28,7 @@
 //  grep -n targets: "function nextShot", "function frame", "function plate", "window.snSaver"
 // ============================================================================
 import { makeRng, boardSize, clampParams } from './engine.js';
+import { DENSITY, densityCap, runCap } from './density.js';
 import { PATTERNS, FAMILIES } from './patterns/index.js';
 import { PALETTES } from './palettes.js';
 import { modDefaults } from './modifiers.js';
@@ -42,6 +44,8 @@ const DARK = PALETTES.filter(p => luminance(p.bg) < 0.05);
 // The tour's palette pool (tests.mjs reads it). Mirror wedges cut solid
 // tiles into blocks, so only the line families (taste.js LINE_FAMS) get one.
 export const SAVER_PALETTES = DARK;
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer:coarse)').matches;
+const SAVER_D = Math.min(DENSITY.saver, densityCap(COARSE)), SAVER_CAP = runCap(COARSE);
 const FADE_MS = 650, PUSH = 0.05, LIGHT_ITEMS = 6000, LIGHT_POINTS = 160000;
 
 function darker(hex, k) {
@@ -72,7 +76,7 @@ export function installSaver(api) {
     else if (roll < 0.44) { const m = modDefaults('clip'); m.shape = r.pick(['rounded', 'arch', 'hex']); m.margin = 0.05; mods.push(m); }
     const rc = bandRect(), aspect = Math.max(0.7, Math.min(2.4, rc.w / rc.h));
     const { W, H } = boardSize(aspect);
-    return { pat, P: PC, pal, mods, seed: r.int(1, 999999), W, H, lw: r.range(1.6, 2.8), mode: 'auto' };
+    return { pat, P: PC, pal, mods, seed: r.int(1, 999999), W, H, lw: r.range(1.6, 2.8), mode: 'auto', D: +r.range(1.5, SAVER_D).toFixed(2), detail: +r.range(0.25, 0.6).toFixed(2) };
   }
   function nextShot() {
     const shot = S.next || makeJob(pickShot());
@@ -92,7 +96,7 @@ export function installSaver(api) {
   }
   function makeJob(s) {
     s.promise = Promise.race([
-      api.runner.run({ pat: s.pat.id, P: s.P, seed: s.seed, W: s.W, H: s.H, mods: s.mods }),
+      api.runner.run({ pat: s.pat.id, P: s.P, seed: s.seed, W: s.W, H: s.H, mods: s.mods, D: s.D, detail: s.detail, cap: SAVER_CAP }),
       new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 6000)),
     ]);
     s.promise.catch(() => {});
@@ -105,7 +109,7 @@ export function installSaver(api) {
       title: p.name,
       sub: `${famName(p.family)} pattern · ${shot.pal.name}`,
       params: keys.map(k => { const d = p.params[k], v = shot.P[k]; return { name: d[4].toLowerCase(), value: d[2] >= 1 ? String(Math.round(v)) : v.toFixed(2) }; }),
-      lines: [`Seed ${shot.seed}${mods.length ? ' · ' + mods.join(' · ') : ''}. Same seed, same pattern.`],
+      lines: [`Seed ${shot.seed} · density ${shot.D}${mods.length ? ' · ' + mods.join(' · ') : ''}. Same seed, same pattern.`],
       code: { lang: 'js', name: `patterns/${p.family}.js · ${p.id}`, text: codeExtract(p.gen) },
       anchor: () => { const b = S && S.box; return b ? { x: b.x + b.w / 2, y: b.y + b.h / 2, w: b.w, h: b.h, lead: false } : null; },
     });

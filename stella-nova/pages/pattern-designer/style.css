@@ -120,6 +120,13 @@ html.in-frame #panel{padding-top:20px}
 .seg button:hover,.btns button:hover{border-color:var(--acc);color:var(--ink)}
 .seg button.on,.btns button.on{border-color:var(--acc);color:var(--acc);background:rgba(227,196,138,0.07)}
 .btns{display:flex;gap:6px;margin:6px 0}
+/* Density and Detail sit above the pattern sliders. On a desktop the
+   pattern sliders take two columns, so a long list stays short. */
+.dens{padding:2px 0 6px;margin-bottom:6px;border-bottom:1px dashed var(--line)}
+@media(min-width:769px){
+  #params{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:14px}
+  #params .prm{margin:5px 0 7px}
+}
 .btns button{flex:1;color:var(--ink)}
 .btns select{flex:1;color:var(--ink);padding:8px 6px}
 

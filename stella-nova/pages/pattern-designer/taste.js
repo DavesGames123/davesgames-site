@@ -7,6 +7,8 @@
 //
 //  tasteParams   params near their defaults (within 35% of the range)
 //  tasteMods     at most two mild modifiers that suit the family
+//  tasteDensity  a Density and a Detail for a random pick: dense by
+//                default (D 1.6 to 3.2, under the device cap)
 //  usedInks      how many ink slots a pattern uses with its params
 //  surprise      a pattern, params, palette and modifiers. The palette
 //                must give every used ink a WCAG contrast of 3 or more
@@ -15,11 +17,13 @@
 //                uses two or more.
 //
 //  grep -n targets: "export const LINE_FAMS", "export function tasteParams",
-//                   "export function tasteMods", "export function surprise"
+//                   "export function tasteMods", "export function tasteDensity",
+//                   "export function surprise"
 // ============================================================================
 import { clampParams } from './engine.js';
 import { modDefaults } from './modifiers.js';
 import { paletteScore } from './color.js';
+import { DENSITY, DETAIL } from './density.js';
 
 // Mirror and dash read well on line patterns; on solid tiles a mirror
 // cuts blocks at the wedge edge, so those families do not get it.
@@ -57,13 +61,18 @@ export function tasteMods(rng, p) {
   }
   return out;
 }
+// A dense pick: D from 1.6 to 3.2 (at most cap), detail 0.2 to 0.8.
+export function tasteDensity(rng, cap = DENSITY.max) {
+  const hi = Math.min(cap, 3.2), lo = Math.min(1.6, hi);
+  return { D: Math.round(rng.range(lo, hi) * 20) / 20, detail: Math.round(rng.range(0.2, DETAIL.max * 0.8) * 20) / 20 };
+}
 // The ink slots a pattern draws with: its "inks" param, else three.
 export function usedInks(p, P) {
   return p.params.inks ? Math.max(1, Math.round(P.inks)) : 3;
 }
-// A full pick. pats and pals: the lists to draw from. Returns
-// { pat, P, pal, mods, mode, lw, score }.
-export function surprise(rng, pats, pals) {
+// A full pick. pats and pals: the lists to draw from; cap: the device
+// density cap. Returns { pat, P, pal, mods, mode, lw, score, D, detail }.
+export function surprise(rng, pats, pals, cap = DENSITY.max) {
   const pat = rng.pick(pats), P = tasteParams(pat, rng), n = usedInks(pat, P);
   // Palettes that keep every used ink at contrast 3 or more; a weighted
   // pick by score, so strong contrast comes up more often.
@@ -72,5 +81,6 @@ export function surprise(rng, pats, pals) {
   let pool = pals.filter(q => q.ink.length >= Math.min(n, 2)).map(q => [q, paletteScore(q, n)]).filter(([, s]) => s >= 3);
   if (!pool.length) pool = pals.map(q => [q, paletteScore(q, n)]).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const [pal, score] = pool[rng.weighted(pool.map(([, s]) => Math.min(12, s)))];
-  return { pat, P, pal, mods: tasteMods(rng, pat), mode: 'auto', lw: +(rng.range(1.3, 3)).toFixed(2), score };
+  const mods = tasteMods(rng, pat), lw = +(rng.range(1.3, 3)).toFixed(2);
+  return Object.assign({ pat, P, pal, mods, mode: 'auto', lw, score }, tasteDensity(rng, cap));
 }

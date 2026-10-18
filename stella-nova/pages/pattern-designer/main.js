@@ -6,6 +6,10 @@
 //  to the palette, the style mode or the line weight only paints again
 //  (paint), because the elements name ink slots, not colours.
 //
+//  DENSITY. st.D and st.detail (density.js) go with every job: D scales
+//  the count params of the pattern, detail adds inner echo lines. A phone
+//  (coarse pointer) gets a lower density cap and a lower element cap.
+//
 //  The worker runs one job at a time. While it is busy, new changes wait
 //  as one pending job, so a slider drag never queues a backlog.
 //
@@ -16,6 +20,7 @@
 //    jobs ................. "function regen"
 //    drawing .............. "function paint"
 //    pattern controls ..... "function buildParams"
+//    density and detail ... "function buildDensity"  "function nudgeDensity"
 //    palettes ............. "function buildPalettes"
 //    palette tools ........ "function harmonyNow"  "function shuffleNow"  "function invertNow"
 //    modifiers ............ "function buildMods"
@@ -33,19 +38,22 @@ import { PALETTES, PALETTE_GROUPS, paletteById, BOARDS, boardById, boardDims } f
 import { MOD_KINDS, modDefaults, buildTextShape } from './modifiers.js';
 import { applyMode, toSVG, drawItems } from './export.js';
 import { installSaver } from './saver.js';
-import { tasteParams, tasteMods, surprise } from './taste.js';
+import { tasteParams, tasteMods, tasteDensity, surprise } from './taste.js';
+import { DENSITY, DETAIL, densityCap, densityDefault, runCap, clampD, clampDetail } from './density.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const LAND_Q = matchMedia('(max-height:500px) and (orientation:landscape) and (pointer:coarse)');
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const STORE = 'pd-state-v1';
+const DCAP = densityCap(COARSE), RCAP = runCap(COARSE);
 const famName = id => (FAMILIES.find(f => f.id === id) || { name: id }).name;
 
 const st = {
   pat: 'arc-lattice', P: null, seed: 1, lock: false,
   pal: 'bone', custom: null, mode: 'auto', lw: 2, locks: [], harm: { seed: '#d9622b', kind: 'triadic' },
   board: 'a4', land: false, mods: [], dpi: 300,
+  D: densityDefault(COARSE), detail: DETAIL.def,
 };
 const memo = {};          // params per pattern id, so a return keeps the tweaks
 let cur = null;           // the last worker result
@@ -95,6 +103,10 @@ function load() {
     if (!Array.isArray(st.locks)) st.locks = [];
     if (!st.harm || typeof st.harm.seed !== 'string') st.harm = { seed: '#d9622b', kind: 'triadic' };
     st.mods = (st.mods || []).filter(m => m && MOD_KINDS[m.type]);
+    // A state saved before the Density control starts dense; a desktop
+    // state on a phone drops to the phone cap.
+    st.D = d.st.D == null ? densityDefault(COARSE) : clampD(d.st.D, DCAP);
+    st.detail = d.st.detail == null ? DETAIL.def : clampDetail(d.st.detail);
   } catch (e) { /* a bad entry: the defaults */ }
 }
 
@@ -139,7 +151,7 @@ function jobNow() {
     if (m.shape === 'text') o.text = textShape(m.word || 'POSTER', W, H, m.margin ?? 0.08);
     return o;
   });
-  return { pat: st.pat, P: st.P, seed: st.seed, W, H, mods };
+  return { pat: st.pat, P: st.P, seed: st.seed, W, H, mods, D: st.D, detail: st.detail, cap: RCAP };
 }
 let busy = false, pending = false;
 function regen() { pending = true; pump(); save(); }
@@ -166,7 +178,7 @@ function paint() {
 }
 function caption() {
   const d = dims(), n = cur ? cur.items.length : 0;
-  $('caption').innerHTML = `<i>${pat().name}</i> · seed <span class="n">${st.seed}</span> · ${boardById(st.board).name} <span class="n">${d.w} × ${d.h} ${d.unit}</span> · <span class="n">${n.toLocaleString('en')}</span> shapes${cur && cur.capped ? ' (capped)' : ''}`;
+  $('caption').innerHTML = `<i>${pat().name}</i> · seed <span class="n">${st.seed}</span> · ${boardById(st.board).name} <span class="n">${d.w} × ${d.h} ${d.unit}</span> · <span class="n">${n.toLocaleString('en')}</span> shapes · density <span class="n">${(+st.D).toFixed(2)}</span>${cur && cur.capped ? ' (capped)' : ''}`;
 }
 
 // ── pattern controls ───────────────────────────────────────────────────────
@@ -201,12 +213,23 @@ function sliderRow(def, value, onChange) {
   }
   row.className = 'prm';
   row.innerHTML = `<div class="nm"></div><span class="val"></span><input type="range">`;
-  row.querySelector('.nm').textContent = label;
+  row.querySelector('.nm').textContent = label; row.querySelector('.nm').title = label;
   const inp = row.querySelector('input'), val = row.querySelector('.val');
   Object.assign(inp, { min: a, max: b, step, value }); inp.setAttribute('aria-label', label);
   val.textContent = fmt(value, step);
   inp.addEventListener('input', () => { const v = +inp.value; val.textContent = fmt(v, step); onChange(v); });
   return row;
+}
+// Density and Detail: two sliders over every pattern (density.js).
+function buildDensity() {
+  const box = $('dens'); box.textContent = '';
+  box.append(sliderRow([DENSITY.min, DCAP, DENSITY.step, densityDefault(COARSE), 'Density'], st.D, v => { st.D = v; regen(); }));
+  box.append(sliderRow([DETAIL.min, DETAIL.max, DETAIL.step, DETAIL.def, 'Detail (inner lines)'], st.detail, v => { st.detail = v; regen(); }));
+}
+// The [ and ] keys: one step of 0.25 down or up.
+function nudgeDensity(d) {
+  st.D = clampD(Math.round((st.D + d) * 20) / 20, DCAP);
+  buildDensity(); regen(); toast('Density ' + st.D.toFixed(2));
 }
 function buildParams() {
   const box = $('params'), p = pat(); box.textContent = '';
@@ -404,16 +427,17 @@ function randomiseAll() {
   st.mode = rng.chance(0.82) ? 'auto' : rng.pick(['stroke', 'fill', 'knock']);
   st.lw = +(rng.range(1.2, 3.2)).toFixed(2);
   st.mods = tasteMods(rng, p);
+  Object.assign(st, tasteDensity(rng, DCAP));
   syncAll(); regen();
 }
 // Surprise me: a pattern, palette and modifiers with every used ink at a
 // WCAG contrast of 3 or more on the paper (taste.js surprise).
 function surpriseMe() {
   if (!st.lock) st.seed = newSeed();
-  const pick = surprise(makeRng(newSeed(), 'surprise'), PATTERNS, PALETTES);
+  const pick = surprise(makeRng(newSeed(), 'surprise'), PATTERNS, PALETTES, DCAP);
   if (st.P && st.pat) memo[st.pat] = st.P;
   st.pat = pick.pat.id; st.P = pick.P; st.pal = pick.pal.id; st.custom = null; st.locks = [];
-  st.mode = pick.mode; st.lw = pick.lw; st.mods = pick.mods;
+  st.mode = pick.mode; st.lw = pick.lw; st.mods = pick.mods; st.D = pick.D; st.detail = pick.detail;
   if (!$('explorer').hidden) closeExplorer();
   syncAll(); regen(); toast(`${pick.pat.name} on ${pick.pal.name}`);
 }
@@ -421,7 +445,7 @@ function shakeParams() { const p = pat(); st.P = tasteParams(p, makeRng(newSeed(
 
 // ── explorer ───────────────────────────────────────────────────────────────
 // Each card holds a live thumbnail: the pattern at its defaults, the
-// current seed and palette, at 4:5. Thumbnails render when the card
+// current seed, palette, density (at most DENSITY.thumb) and detail, at 4:5. Thumbnails render when the card
 // scrolls into view, one job at a time on the second worker.
 const thumbs = new Map();    // id -> { items, clip, frame, W, H, seed }
 let exFam = 'all', exQ = '', thumbQueue = [], thumbBusy = false, io = null;
@@ -460,19 +484,20 @@ function filterExplorer() {
 }
 function queueThumb(id) {
   const t = thumbs.get(id);
-  if (t && t.seed === st.seed) { drawThumb(id); return; }
+  if (t && t.seed === st.seed && t.D === thumbD() && t.detail === st.detail) { drawThumb(id); return; }
   if (!thumbQueue.includes(id)) thumbQueue.push(id);
   pumpThumbs();
 }
 function pumpThumbs() {
   if (thumbBusy || !thumbQueue.length || $('explorer').hidden) return;
-  const id = thumbQueue.shift(), p = byId(id), seed = st.seed;
+  const id = thumbQueue.shift(), p = byId(id), seed = st.seed, D = thumbD(), detail = st.detail;
   thumbBusy = true;
-  thumbRunner.run({ pat: id, P: defaults(p), seed, W: 1000, H: 1250, mods: [] })
-    .then(res => { thumbs.set(id, Object.assign(res, { W: 1000, H: 1250, seed })); drawThumb(id); })
+  thumbRunner.run({ pat: id, P: defaults(p), seed, W: 1000, H: 1250, mods: [], D, detail, cap: RCAP })
+    .then(res => { thumbs.set(id, Object.assign(res, { W: 1000, H: 1250, seed, D, detail })); drawThumb(id); })
     .catch(() => {})
     .finally(() => { thumbBusy = false; pumpThumbs(); });
 }
+const thumbD = () => Math.min(st.D, DENSITY.thumb);
 function drawThumb(id) {
   const t = thumbs.get(id), card = document.querySelector(`.ex-card[data-id="${id}"]`); if (!t || !card) return;
   const c = card.querySelector('canvas'), r = c.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
@@ -506,10 +531,15 @@ function fileBase() { return `${st.pat}-${st.seed}`; }
 function svgText() {
   if (!cur) return '';
   const d = dims(), p = pat();
-  const desc = `Pattern Designer (davesgames.io). Pattern: ${p.name} (${famName(p.family)}). Seed ${st.seed}. Params ${JSON.stringify(st.P)}. Palette: ${pal().name}. Mode: ${st.mode}. Line weight ${st.lw}. Modifiers: ${st.mods.filter(m => !m.off).map(m => m.type + (m.kind ? ':' + m.kind : m.shape ? ':' + m.shape : '')).join(', ') || 'none'}. Board ${boardById(st.board).name} ${d.w} x ${d.h} ${d.unit}.`;
+  const desc = `Pattern Designer (davesgames.io). Pattern: ${p.name} (${famName(p.family)}). Seed ${st.seed}. Params ${JSON.stringify(st.P)}. Palette: ${pal().name}. Mode: ${st.mode}. Line weight ${st.lw}. Density ${st.D}. Detail ${st.detail}. Modifiers: ${st.mods.filter(m => !m.off).map(m => m.type + (m.kind ? ':' + m.kind : m.shape ? ':' + m.shape : '')).join(', ') || 'none'}. Board ${boardById(st.board).name} ${d.w} x ${d.h} ${d.unit}.`;
   return toSVG(applyMode(cur.items, st.mode), { W: cur.W, H: cur.H, palette: pal(), lw: st.lw, title: `${p.name} · Pattern Designer`, desc, size: { w: d.w, h: d.h, unit: d.unit }, clip: cur.clip, frame: cur.frame });
 }
-function exportSVG() { if (!cur) return; download(new Blob([svgText()], { type: 'image/svg+xml' }), fileBase() + '.svg'); toast('SVG saved'); }
+function exportSVG() {
+  if (!cur) return;
+  const txt = svgText(), mb = txt.length / 1048576;
+  download(new Blob([txt], { type: 'image/svg+xml' }), fileBase() + '.svg');
+  toast(`SVG saved (${mb < 1 ? Math.max(1, Math.round(mb * 1024)) + ' KB' : mb.toFixed(1) + ' MB'})${mb > 40 ? '. A large file: a lower density gives a smaller one' : ''}`);
+}
 function copySVG() {
   if (!cur) return;
   const txt = svgText();
@@ -587,7 +617,7 @@ function syncAll() {
   $('seedLock').classList.toggle('on', st.lock); $('seedLock').setAttribute('aria-pressed', String(st.lock));
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === st.mode));
   $('lw').value = st.lw; $('lwV').textContent = (+st.lw).toFixed(2);
-  buildParams(); patternLabels(); palLabels(); boardLabels(); buildMods(); layout();
+  buildDensity(); buildParams(); patternLabels(); palLabels(); boardLabels(); buildMods(); layout();
   thumbsRepaint();
 }
 function bindUI() {
@@ -629,6 +659,8 @@ function bindUI() {
     else if (e.key === 'ArrowLeft') stepPattern(-1);
     else if (e.key === 'p' || e.key === 'P') stepPalette(1);
     else if (e.key === 'u' || e.key === 'U') surpriseMe();
+    else if (e.key === '[') nudgeDensity(-0.25);
+    else if (e.key === ']') nudgeDensity(0.25);
   });
 }
 
