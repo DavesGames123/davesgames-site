@@ -10,7 +10,8 @@
 //                    (lod 0, k >= 0), one mesh per chunk of bricks. A
 //                    chunk rebuild swaps the geometry of its mesh in place.
 //    polyps ........ one instanced mesh per chunk (shaders.js POLYP_*)
-//    snow .......... marine snow round the eye, lit only in the beams
+//    snow .......... marine snow round the eye (lib/marine-snow.js): flocs,
+//                    strings, pellets, bokeh near the eye, forward scatter
 //  The ROV package adds its vehicles to the scene. setLights() takes
 //  their SpotLights: the main lamp of each ROV comes first and has a
 //  shadow map (lead: profile.shadow, others: profile.shadowExtra). The
@@ -64,7 +65,7 @@
 //    fine groups (gate) ..... "const fineGroups"
 //    polyp template ......... "function polypTemplate"
 //    particle textures ...... "function setParticles"
-//    snow ................... "function makeSnow"
+//    snow ................... "const snowFx"
 //    passes ................. "function makePasses"
 //    the frame .............. "function render"
 //    the scene object ....... "export function createScene"
@@ -74,6 +75,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SH from './shaders.js';
 import { waveSpectrum, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
+import { createMarineSnow } from '../../lib/marine-snow.js';
 import { blueNoise, VOL_K } from './volume.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
@@ -218,7 +220,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     shadowExtra: profile ? profile.shadowExtra ?? 0 : coarse ? 0 : 1024,
     polypShadow: profile ? !!profile.polypShadow : !coarse,
     volScale: profile ? profile.vol.scale : coarse ? 0.4 : 0.5, volSteps: profile ? profile.vol.steps : coarse ? 14 : 30,
-    snow: profile ? profile.snow : coarse ? 1200 : 3000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
+    snow: profile ? profile.snow : coarse ? 2600 : 9000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
   };
   renderer.debug.checkShaderErrors = true;
   if (onShaderError) renderer.debug.onShaderError = (gl, program, vs, fs) => { try { onShaderError(shaderErrorText(gl, program, vs, fs)); } catch (e) { onShaderError(String(e)); } };
@@ -525,23 +527,17 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   }
 
   // ── marine snow ───────────────────────────────────────────────────────────
-  const snowU = { uOff: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(26, 26, 26) }, uPx: { value: 300 } };
-  function makeSnow(n) {
-    const g = new THREE.BufferGeometry(), p = new Float32Array(n * 3), s = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      p[i * 3] = Math.random() * 26; p[i * 3 + 1] = Math.random() * 26; p[i * 3 + 2] = Math.random() * 26;
-      s[i] = 0.004 + Math.random() * Math.random() * 0.016;
-    }
-    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-    g.setAttribute('aSize', new THREE.BufferAttribute(s, 1));
-    const mat = new THREE.ShaderMaterial({
-      glslVersion: THREE.GLSL3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-      uniforms: Object.assign(waterU(), snowU), vertexShader: SH.SNOW_VS, fragmentShader: SH.SNOW_FS,
-    });
-    const pts = new THREE.Points(g, mat); pts.frustumCulled = false;
-    return pts;
-  }
-  const snow = makeSnow(LD.snow); scene.add(snow);
+  // lib/marine-snow.js with the light of this page (shaders.js SNOW_LIGHT).
+  // snow: in the scene (the ROV feeds, and the frame when there is no post
+  // chain). snowPost (after the passes): the main frame draws it after the
+  // tone map, with the soft fade against the scene depth.
+  const snowFx = createMarineSnow(THREE, {
+    count: LD.snow, atlasSize: coarse ? 256 : 512, maxPx: coarse ? 14 : 24, maxStreak: coarse ? 20 : 36,
+    box: coarse ? 20 : 24, nearBox: coarse ? 7 : 8,
+    vertexShader: SH.SNOW_VS, fragmentShader: SH.SNOW_FS, uniforms: waterU(), ext: U.uFogK,
+  });
+  const snow = snowFx.mesh; scene.add(snow);
+  let snowDepth = null;
 
   // ── lamps ─────────────────────────────────────────────────────────────────
   let lamps = [], mainN = 0;
@@ -600,6 +596,8 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
 
   // ── passes ────────────────────────────────────────────────────────────────
   const passes = makePasses();
+  const snowScene = new THREE.Scene();
+  if (passes) snowScene.add(snowFx.makeMesh({ soft: true, softLen: 0.3, post: true, depth: passes.rtScene.depthTexture, exposure: passes.compU.uExposure }));
   function makePasses() {
     const fl = caus.half;
     if (!fl) return null;
@@ -692,7 +690,6 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     const pr = renderer.getPixelRatio();
-    snowU.uPx.value = h * pr * 0.5 / Math.tan(camera.fov * Math.PI / 360);
     if (passes) passes.size(Math.round(w * pr), Math.round(h * pr));
   }
 
@@ -751,7 +748,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     U.uR.value = on ? 1e7 : R;               // no plot fade: the fog takes the far world
     if (!on) caus.setPlot(R);
   }
-  function setOrigin(ox, oz) { W3.origin = [ox, oz]; worldRoot.position.set(-ox, 0, -oz); worldRoot.updateMatrixWorld(true); }
+  function setOrigin(ox, oz) { W3.origin = [ox, oz]; worldRoot.position.set(-ox, 0, -oz); worldRoot.updateMatrixWorld(true); snowFx.setOrigin(ox, 0, oz); }
   function worldGeo(m, extra) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', attr(m.positions, 3));
@@ -880,13 +877,21 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     if (opts.caustics && (!coarse || (frameN & 1) === 0)) caus.render(U.uTime.value);
     snow.visible = opts.snow;
     scene.updateMatrixWorld();
+    // the snow: the current (a slow share of the page current), the depth
+    // (setSnowDepth, else from the eye height: depth = SURFACE_Y - y)
+    camera.updateMatrixWorld();
+    snowFx.setCurrent(U.uCur.value.x * 0.1, 0, U.uCur.value.y * 0.1);
+    snowFx.setDepth(snowDepth ?? (SURFACE_Y - camera.matrixWorld.elements[13]));
+    snowFx.update(camera, U.uTime.value);
     // the shadow matrices of this frame (the shadow pass of render() computes the same)
     for (const l of lamps) if (l.castShadow) l.shadow.updateMatrices(l);
     const wait = updateLamps();
     frameN++;
     if (!passes || !post.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     renderer.setRenderTarget(passes.rtScene);
+    snow.visible = false;                                  // snowPost draws it, after the tone map
     renderer.render(scene, camera);
+    snow.visible = opts.snow;
     if (wait) updateLamps();                               // the first shadow maps are there now
     const vu = passes.volU;
     if (opts.volume) {
@@ -920,10 +925,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     if (check) renderer.setClearColor(new THREE.Color(SENTINEL[0], SENTINEL[1], SENTINEL[2]), 1);
     renderer.render(passes.compScene, passes.ortho);
     if (check) { checkFrame(); if (post.on) renderer.setClearColor(0x000000, 1); }
+    if (opts.snow) { const ac = renderer.autoClear; renderer.autoClear = false; renderer.render(snowScene, camera); renderer.autoClear = ac; }
   }
 
   return {
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
+    // marine snow (lib/marine-snow.js): depth in metres (null: from the eye height), density 0..1 (user)
+    marineSnow: snowFx, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },
     get sand() { return sandMesh; }, post,
     setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,

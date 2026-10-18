@@ -67,7 +67,9 @@ function runFrames(f, n = 6) {
     const fb0 = f.log.filter(e => e.op === 'draw' && e.fb === 0);
     const tail = f.log.slice(-12).map(e => `${e.op}@${e.fb}${e.n ? ':' + e.n : ''}`).join(' ');
     ok(fb0.length >= 4, 'the composite draws into the canvas each frame', `${fb0.length} draws on fb 0; tail ${tail}`);
-    ok(fb0.every(e => e.n === 3), 'the canvas draws are the full-frame triangle (3 vertices)', fb0.map(e => e.n).join(','));
+    // after the composite, the marine snow (lib/marine-snow.js) draws its
+    // instanced quads (6 indices) on the canvas: the soft pass, after the tone map
+    ok(fb0.every((e, i) => e.n === 3 || (e.n === 6 && i > 0 && fb0[i - 1].n === 3)) && fb0.filter(e => e.n === 3).length >= 4, 'the canvas draws are the full-frame triangle (3 vertices), each maybe followed by the snow quads (6 indices)', fb0.map(e => e.n).join(','));
     // the order of the last frame: a draw into a target, then the canvas last
     const lastClear0 = f.log.map(e => e.op === 'clear' && e.fb === 0).lastIndexOf(true);
     const before = f.log.slice(0, lastClear0).filter(e => e.op === 'draw' && e.fb !== 0);

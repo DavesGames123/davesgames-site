@@ -22,7 +22,9 @@
 //                  polypShadow: the polyps cast into the maps (desktop).
 //                  vol: { scale, steps } the volume pass. dprCap and maxPx:
 //                  the pixel ratio cap and the drawing buffer pixel cap.
-//                  caustic: { res, grid }. snow: flakes. polypDraw: the
+//                  caustic: { res, grid }. snow: flakes (lib/marine-snow.js
+//                  SNOW_PROFILES: many faint motes, the depth mix draws
+//                  0.3 to 0.9 of them). polypDraw: the
 //                  polyps drawn at most (scene.js uKeep). rovs: vehicles.
 //                  feed: { w, h, fps } the ROV camera feed (rov/ reads it).
 //                  stagger: { reefMs, rovMs } the delays of the start.
@@ -74,25 +76,25 @@ export const PROFILES = {
   desktop: {
     id: 'desktop', label: 'Desktop', budgetMB: 700, reef: 'mid', reefMax: 'desktop',
     cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, shadowExtra: 1024, polypShadow: true, vol: { scale: 0.42, steps: 30 },
-    dprCap: 2, maxPx: 6.0e6, caustic: { res: 1024, grid: 360 }, snow: 3000, polypDraw: 160000,
+    dprCap: 2, maxPx: 6.0e6, caustic: { res: 1024, grid: 360 }, snow: 9000, polypDraw: 160000,
     rovs: 3, feed: { w: 320, h: 256, fps: 30 }, stagger: { rovMs: 300, reefMs: 900 }, frameMs: 1000 / 50,
   },
   'laptop-low': {
     id: 'laptop-low', label: 'Laptop', budgetMB: 450, reef: 'phone', reefMax: 'mid',
     cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.36, steps: 20 },
-    dprCap: 1.5, maxPx: 3.0e6, caustic: { res: 512, grid: 240 }, snow: 1800, polypDraw: 80000,
+    dprCap: 1.5, maxPx: 3.0e6, caustic: { res: 512, grid: 240 }, snow: 5000, polypDraw: 80000,
     rovs: 3, feed: { w: 256, h: 204, fps: 20 }, stagger: { rovMs: 500, reefMs: 1500 }, frameMs: 1000 / 40,
   },
   phone: {
     id: 'phone', label: 'Phone', budgetMB: 250, reef: 'phone', reefMax: 'phone',
     cap: { particles: 25000, tris: 500000, polyps: 0.45 }, rock: 'low', rockWorkers: 2, shadow: 1024, shadowExtra: 0, polypShadow: false, vol: { scale: 0.35, steps: 14 },
-    dprCap: 1.5, maxPx: 1.3e6, caustic: { res: 512, grid: 200 }, snow: 1200, polypDraw: 30000,
+    dprCap: 1.5, maxPx: 1.3e6, caustic: { res: 512, grid: 200 }, snow: 2600, polypDraw: 30000,
     rovs: 2, feed: { w: 224, h: 180, fps: 15 }, stagger: { rovMs: 800, reefMs: 2500 }, frameMs: 1000 / 30,
   },
   'phone-min': {
     id: 'phone-min', label: 'Phone (low memory)', budgetMB: 160, reef: 'phone', reefMax: 'phone',
     cap: { particles: 14000, colonies: 20, tris: 280000, polyps: 0.3 }, rock: 'low', rockWorkers: 1, shadow: 512, shadowExtra: 0, polypShadow: false, vol: { scale: 0.3, steps: 10 },
-    dprCap: 1, maxPx: 0.8e6, caustic: { res: 256, grid: 128 }, snow: 700, polypDraw: 15000,
+    dprCap: 1, maxPx: 0.8e6, caustic: { res: 256, grid: 128 }, snow: 1400, polypDraw: 15000,
     rovs: 2, feed: { w: 160, h: 128, fps: 10 }, stagger: { rovMs: 1200, reefMs: 4000 }, frameMs: 1000 / 30,
   },
 };
@@ -192,7 +194,9 @@ export function estimate(profile, view = {}) {
     coral: coralTris * B_CORAL_TRI,
     // instanced polyps: 8 floats each (scene.js rebuildChunk)
     polyps: polyps * 32,
-    snow: p.snow * 16,
+    // lib/marine-snow.js: 32 bytes an instance, the RGBA8 atlas with mips
+    // (512 px, phones 256 px)
+    snow: p.snow * 32 + (p.snow > 3000 ? 512 * 512 : 256 * 256) * 4 * 4 / 3,
     // rov/feed.js: the camera target (RGBA16F + depth), the RGBA8 copy
     feed: p.feed.w * p.feed.h * (8 + 4 + 4),
     // the vehicles, tethers and wash (an estimate: about 2 MB a vehicle)

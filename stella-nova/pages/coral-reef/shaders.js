@@ -52,7 +52,7 @@
 //    polyp shadow depth .... "export const POLYP_DEPTH_VS"
 //    rock .................. "export const ROCK_FS"
 //    sand .................. "export const SAND_FS"
-//    marine snow ........... "export const SNOW_VS"
+//    marine snow ........... "export const SNOW_VS" (lib/marine-snow.js + SNOW_LIGHT)
 //    volume pass ........... "export const VOL_FS"
 //    volume history ........ "export const VOL_TAA_FS"
 //    composite ............. "export const COMP_FS"
@@ -60,6 +60,7 @@
 // ============================================================================
 import { SURFACE_Y, FADE_K, N_WAVES } from './water.js';
 import { ROCK_GLSL } from './rock/material.js';
+import { marineSnowVS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
 
 export { SURFACE_Y };
 export const MAX_SPOTS = 4;
@@ -703,49 +704,30 @@ void main() {
 }`;
 
 // ── marine snow ─────────────────────────────────────────────────────────────
-// Flakes in a box that wraps round the eye. A flake shows only in a lamp
-// beam (and a very little in the downwell): backscatter. Near flakes are
-// large and soft (out of focus).
-export const SNOW_VS = /* glsl */`
-${NOISE2}
-${WATER}
-in float aSize;
-uniform vec3 uOff, uBox;
-uniform float uPx;
-out vec3 vC;
-out float vSoft;
-void main() {
-  vec3 q = cameraPosition - uBox * 0.5 + mod(position + uOff - (cameraPosition - uBox * 0.5), uBox);
-  q.x += sin(uTime * 0.7 + position.y * 3.0) * 0.05; q.z += cos(uTime * 0.6 + position.x * 3.0) * 0.05;
+// lib/marine-snow.js: aggregates (motes, flocs, mucus strings and diatom
+// chains, pellets) from a procedural atlas, world-locked in a box round the
+// eye, a thin-lens bokeh disc near the eye, a motion streak. The light of
+// this page: each ROV spot (spotRad, one shadow tap) and the light from
+// above, through the two-lobe phase msPhase (forward bright: a flake shows
+// most when you look toward the lamp).
+export const SNOW_LIGHT = /* glsl */`
+vec3 msLight(vec3 p, vec3 V) {
   vec3 c = vec3(0.0);
   for (int i = 0; i < ${MAX_SPOTS}; i++) {
     if (float(i) >= uSpotN) break;
     vec3 L;
-    vec3 R = spotRad(i, q, L);
-    vec3 V = normalize(cameraPosition - q);
-    float ph = 0.35 + 1.6 * pow(clamp(dot(-L, -V) * 0.5 + 0.5, 0.0, 1.0), 4.0);
-    c += R * ph;
+    vec3 R = spotRad(i, p, L);
+    if (max(R.r, max(R.g, R.b)) < 1e-6) continue;
+    c += R * (shadowTap(i, p) * msPhase(dot(-L, V)));
   }
-  c += vec3(0.10, 0.30, 0.52) * uDown * 0.03;
-  vec4 mv = viewMatrix * vec4(q, 1.0);
-  float z = max(0.2, -mv.z);
-  float px = aSize * uPx / z;
-  vSoft = clamp((1.2 - z) / 1.0, 0.0, 1.0);
-  gl_PointSize = clamp(px * (1.0 + vSoft * 1.5), 1.0, 20.0);
-  float far = smoothstep(uBox.x * 0.5, uBox.x * 0.3, length(q - cameraPosition));
-  vC = c * far * exp(-z * uFogK) * 0.28 / (1.0 + vSoft * 10.0);
-  gl_Position = projectionMatrix * mv;
-}`;
-export const SNOW_FS = /* glsl */`
-in vec3 vC;
-in float vSoft;
-out vec4 oCol;
-void main() {
-  vec2 c = gl_PointCoord - 0.5; float r = dot(c, c) * 4.0;
-  if (r > 1.0) discard;
-  float a = mix(1.0 - r, exp(-r * 2.5), vSoft);
-  oCol = vec4(vC * a, 1.0);
-}`;
+  // the light from above goes down: forward scatter when the eye looks up
+  vec3 sky = vec3(0.10, 0.30, 0.52) * uDown * exp(-(SURF_Y - p.y) * 0.03);
+  c += sky * (msPhase(-V.y) * 0.6);
+  return c;
+}
+`;
+export const SNOW_VS = marineSnowVS(SNOW_LIGHT, NOISE2 + WATER);
+export const SNOW_FS = MARINE_SNOW_FS;
 
 // ── full-frame passes (RawShaderMaterial, GLSL3) ────────────────────────────
 export const FULL_VS = /* glsl */`
