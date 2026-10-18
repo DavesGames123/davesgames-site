@@ -183,6 +183,9 @@ export const GRASS = [
 ];
 // keep: [a, b, floor]. floor >= 0: floor + (1 - floor) smoothstep(a, b, L);
 // floor < 0: 1 - smoothstep(a, b, L) (a shade plant that sun grass beats).
+// Wetness 0..1 from moisture: tall meadow grass likes wet ground, the
+// fine sward (fescues) dry ground (the tussock density, both layers).
+export function wetness(mo) { return clamp01((mo - 0.2) / 0.6); }
 export function grassKeep(kind, L) {
   const k = GRASS[kind].keep;
   return k[2] < 0 ? 1 - ss(k[0], k[1], L) : k[2] + (1 - k[2]) * ss(k[0], k[1], L);
@@ -337,9 +340,9 @@ export function buildEco(opts) {
 
   // --- grass tussocks (Thomas clusters by kind, a radial LOD) ---------------
   const intensity = [
-    (x, z) => Math.pow(F.sward(x, z), 1.4) * (1 - 0.92 * F.path(x, z)) * (0.35 + 0.65 * F.meadow(x, z)) * (1 - 0.9 * F.wood(x, z)),
-    (x, z) => (0.3 + 0.7 * F.sward(x, z)) * (1 - 0.75 * F.path(x, z)) * (1 - 0.6 * F.meadow(x, z)) * (1 - 0.8 * F.wood(x, z)),
-    (x, z) => 0.7 * (1 - ss(0.4, 0.85, Lpot(x, z))) * (0.4 + 0.6 * F.sward(x, z)),
+    (x, z) => Math.pow(F.sward(x, z), 1.4) * (1 - 0.92 * F.path(x, z)) * (0.35 + 0.65 * F.meadow(x, z)) * (1 - 0.9 * F.wood(x, z)) * (0.35 + 0.65 * wetness(F.moist(x, z))),
+    (x, z) => (0.3 + 0.7 * F.sward(x, z)) * (1 - 0.75 * F.path(x, z)) * (1 - 0.6 * F.meadow(x, z)) * (1 - 0.8 * F.wood(x, z)) * (1 - 0.6 * wetness(F.moist(x, z))),
+    (x, z) => 0.45 * (1 - ss(0.4, 0.85, Lpot(x, z))) * (0.4 + 0.6 * F.sward(x, z)),
     (x, z) => { const p = F.path(x, z); return p > 0.08 && p < 0.75 ? 1 : 0; },
   ];
   const lodW = d => Math.min(1, Math.pow(7 / Math.max(7, d), 1.1));
@@ -357,7 +360,7 @@ export function buildEco(opts) {
       const x = px + gauss(r) * G.sigma, z = pz + gauss(r) * G.sigma;
       const dd = Math.hypot(x, z);
       if (dd > R || onPad(x, z, 0.05)) continue;
-      if (r() > Math.min(1, intensity[kind](x, z) * 1.3)) continue;
+      if (r() > Math.min(1, intensity[kind](x, z) * 1.15)) continue;
       let blocked = false;
       for (const s of bigStones) if (s.s > 0.08 && Math.abs(s.x - x) < s.s * 0.5 && Math.abs(s.z - z) < s.s * 0.5) { blocked = true; break; }
       if (blocked) continue;
@@ -690,7 +693,8 @@ export function procTussock(ix, iz, x, z, lvl, cx, cz, F, R, n) {
   const sw = F.sward(x, z), mead = F.meadow(x, z), pth = F.path(x, z), wd = F.wood(x, z);
   let kind = pth > 0.08 && pth < 0.75 ? 3 : hash3(ix, iz, salt + 23) < mead ? 0 : 1;
   if (wd > 0.5) kind = 2;
-  let dens = kind === 0 ? Math.pow(sw, 1.4) * (1 - 0.92 * pth) : kind === 1 ? (0.3 + 0.7 * sw) * (1 - 0.75 * pth) : kind === 2 ? 0.45 : 1;
+  const mo = F.moist(x, z);
+  let dens = kind === 0 ? Math.pow(sw, 1.4) * (1 - 0.92 * pth) * (0.35 + 0.65 * wetness(mo)) : kind === 1 ? (0.3 + 0.7 * sw) * (1 - 0.75 * pth) * (1 - 0.6 * wetness(mo)) : kind === 2 ? 0.45 : 1;
   dens *= 1 - 0.9 * ss(0.85, 1, pth);
   const keep = (hash3(ix, iz, salt + 29) < dens * 1.8 ? 1 : 0) * disc * edge;
   if (keep <= 0) return null;
@@ -786,6 +790,7 @@ float gust(vec2 p, float t, vec2 dir) {
   return smoothstep(0.3, 1.0, 0.5 + 0.5 * (0.65 * g1 + 0.35 * g2));
 }
 const vec3 GKEEP[4] = vec3[4](${kp.join(', ')});
+float wetness(float mo) { return clamp((mo - 0.2) / 0.6, 0.0, 1.0); }
 float grassKeep(int kind, float L) {
   vec3 k = GKEEP[kind];
   return k.z < 0.0 ? 1.0 - smoothstep(k.x, k.y, L) : k.z + (1.0 - k.z) * smoothstep(k.x, k.y, L);

@@ -330,6 +330,15 @@ const eco7 = E.buildEco({ seed: 7, plants: OAK_PLANT });
   while (csr.length < near.length) { const x = (r() * 2 - 1) * 7, z = (r() * 2 - 1) * 7; if (x * x + z * z < 49) csr.push([x, z]); }
   const lC = LR(csr, 0.5, 7);
   ok(Math.abs(lC) < 0.05, `control: a Poisson pattern gives L(0.5) - 0.5 = ${lC.toFixed(3)}`);
+  // moisture: tall meadow grass is denser on wet ground, fine sward on dry
+  let wetT = 0, dryT = 0, wetF = 0, dryF = 0;
+  for (let q = 0; q < T.length; q += 8) {
+    if (Math.hypot(T[q], T[q + 1]) > 20) continue;
+    const mo = eco7.fields.moist(T[q], T[q + 1]);
+    if (mo > 0.5) { if (T[q + 2] === 0) wetT++; if (T[q + 2] === 1) wetF++; }
+    else if (mo < 0.38) { if (T[q + 2] === 0) dryT++; if (T[q + 2] === 1) dryF++; }
+  }
+  ok(wetT / Math.max(1, wetF) > 1.5 * dryT / Math.max(1, dryF), `moisture: tall grass to fine sward ${(wetT / Math.max(1, wetF)).toFixed(2)} on wet ground, ${(dryT / Math.max(1, dryF)).toFixed(2)} on dry`);
 }
 {
   // stones: a power law of sizes, a hard core between large stones, outcrops

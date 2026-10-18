@@ -103,13 +103,14 @@ export function grassMaterial(THREE, U, COMMON, proc = false) {
         float psw = fSward(pp2), pmead = fMeadow(pp2), ppth = fPath(pp2), pwd = fWood(pp2);
         int pkind = ppth > 0.08 && ppth < 0.75 ? 3 : (ehash(ic, salt + 23u) < pmead ? 0 : 1);
         if (pwd > 0.5) pkind = 2;
-        float pdens = pkind == 0 ? pow(psw, 1.4) * (1.0 - 0.92 * ppth) : pkind == 1 ? (0.3 + 0.7 * psw) * (1.0 - 0.75 * ppth) : pkind == 2 ? 0.45 : 1.0;
+        float pmo = fMoist(pp2);
+        float pdens = pkind == 0 ? pow(psw, 1.4) * (1.0 - 0.92 * ppth) * (0.35 + 0.65 * wetness(pmo)) : pkind == 1 ? (0.3 + 0.7 * psw) * (1.0 - 0.75 * ppth) * (1.0 - 0.6 * wetness(pmo)) : pkind == 2 ? 0.45 : 1.0;
         pdens *= 1.0 - 0.9 * smoothstep(0.85, 1.0, ppth);
         if (ehash(ic, salt + 29u) >= pdens * 1.8) procKeep = 0.0;
         vec2 GH = pkind == 0 ? vec2(${G[0].h[0]}, ${G[0].h[1]}) : pkind == 1 ? vec2(${G[1].h[0]}, ${G[1].h[1]}) : pkind == 2 ? vec2(${G[2].h[0]}, ${G[2].h[1]}) : vec2(${G[3].h[0]}, ${G[3].h[1]});
         vec2 GS = pkind == 0 ? vec2(${G[0].spread[0]}, ${G[0].spread[1]}) : pkind == 1 ? vec2(${G[1].spread[0]}, ${G[1].spread[1]}) : pkind == 2 ? vec2(${G[2].spread[0]}, ${G[2].spread[1]}) : vec2(${G[3].spread[0]}, ${G[3].spread[1]});
         float pwk = sqrt(cs / ${PROC.cell[0].toFixed(3)});
-        float pH = GH.x + (GH.y - GH.x) * (0.35 * ehash(ic, salt + 31u) + 0.65 * pmead * (pkind == 0 ? 1.0 : 0.5)) * (0.8 + 0.4 * fMoist(pp2));
+        float pH = GH.x + (GH.y - GH.x) * (0.35 * ehash(ic, salt + 31u) + 0.65 * pmead * (pkind == 0 ? 1.0 : 0.5)) * (0.8 + 0.4 * pmo);
         vec4 T0 = vec4(pp2, float(pkind), pH);
         vec4 T1 = vec4((GS.x + (GS.y - GS.x) * ehash(ic, salt + 37u)) * min(1.8, pwk), ehash(ic, salt + 19u), ehash(ic, salt + 13u) * 0.92, pwk);`;
   m.onBeforeCompile = sh => {
