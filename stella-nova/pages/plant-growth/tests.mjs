@@ -5,7 +5,9 @@
 //  Covers grow.js (growth over time, buds, Borchert-Honda, shedding in
 //  shade, pipe model, leaf counts, competition), season.js (the calendar
 //  and its GLSL copy), pose.js (packing, frames, the CPU twin), mesh.js,
-//  ground.js, roots.js (DLA roots and their GPU rows) and saver.js.
+//  ground.js, roots.js (DLA roots and their GPU rows), saver.js and
+//  layout.js (phone layout, occlusion, gestures, dock clock). The DOM and
+//  CSS checks at phone viewports are in dom-check.mjs (needs jsdom).
 //  Set PG_QUICK=1 to skip the full lives of all species.
 // ============================================================================
 import { SPECIES, SPECIES_IDS, TREE_IDS, createSim, growLife, standLayout, internode, LEAF_STRIDE, OPEN, KIND } from './grow.js';
@@ -19,6 +21,7 @@ import { ATLAS_CELLS } from './atlas.js';
 import { LOOK, BARKS } from './look.js';
 import { rng } from '../../lib/dla-engine.js';
 import { scatterProps, decodeMesh } from './props.js';
+import { PHONE_QUERY, layoutFor, occlusion, clearFractions, createGestures, dockClock, nextId, pixelRatioStep } from './layout.js';
 import fs from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -346,6 +349,83 @@ for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECI
   ok(bandFrame(null, 100, 100).hFrac === 1, 'no band: the full frame');
   const code = codeExtract(createSim.toString(), '// apical dominance eases', 13);
   ok(code.startsWith('// apical dominance eases') && code.includes('lam * Qm[i]') && code.split('\n').length === 13, 'code extract is the real allocation');
+}
+
+// --- layout.js: phones --------------------------------------------------------
+{
+  const css = fs.readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+  ok(css.includes('@media ' + PHONE_QUERY.replace(/, /g, ', ') + '{'), 'PHONE_QUERY is the query of the PHONE block in style.css');
+  const VP = [[360, 740, 'sheet'], [390, 844, 'sheet'], [430, 932, 'sheet'], [768, 1024, 'sheet'], [844, 390, 'drawer'], [1440, 900, 'desktop']];
+  for (const [w, h, want] of VP) ok(layoutFor(w, h, w < 1000) === want, `${w}x${h}: layout ${want}`);
+  ok(layoutFor(900, 450, false) === 'desktop', 'a short desktop window keeps the desktop layout');
+  // the sheet, dock and status bar at each phone viewport (style.css numbers)
+  const fov = 40;
+  for (const [w, h, kind] of VP.slice(0, 5)) {
+    const dock = 64, status = 56, sheetH = Math.min(h * 0.5, 540);
+    const rects = kind === 'sheet'
+      ? [{ left: 0, right: w, top: h - dock - sheetH, bottom: h - dock }, { left: 0, right: w, top: h - dock, bottom: h }, { left: 0, right: w, top: h - dock - status, bottom: h - dock }, { left: 0, right: w, top: 0, bottom: 48 }]
+      : [{ left: w - Math.min(w * 0.46, 380), right: w, top: 0, bottom: h }, { left: 0, right: Math.min(460, w * 0.58), top: h - dock, bottom: h }];
+    const o = occlusion(rects, w, h);
+    if (kind === 'sheet') ok(o.b === dock + sheetH && o.t === 48 && o.l === 0 && o.r === 0, `${w}x${h}: the open sheet covers the base (${o.b} px)`);
+    else ok(o.r === Math.min(w * 0.46, 380) && o.b === dock, `${w}x${h}: the drawer covers the right side and the dock the base`);
+    const { hF, wF } = clearFractions(o, w, h);
+    const clearH = h - o.t - o.b, clearW = w - o.l - o.r;
+    // the crown grows: a seedling, a young tree, a tall tree
+    let prevD = 0;
+    for (const r of [0.15, 2, 9]) {
+      const d = fitDistance(r, fov, w / h, hF, wF, 0.86);
+      const pr = projectedRadius(r, d, fov, h);
+      ok(2 * pr <= Math.max(clearH, h * 0.3) * 0.87 && 2 * pr <= clearW * 0.87 + 1, `${w}x${h} r ${r}: plant fits the clear area (${(2 * pr).toFixed(0)} of ${clearH.toFixed(0)} x ${clearW.toFixed(0)} px)`);
+      ok(d > prevD, `${w}x${h} r ${r}: the camera backs off as the crown grows`);
+      prevD = d;
+    }
+  }
+  ok(occlusion([{ left: 0, right: 100, top: 900, bottom: 1300 }], 400, 800).b === 0, 'an overlay off the screen (a closed sheet) does not count');
+  ok(clearFractions({ l: 0, r: 0, t: 40, b: 780 }, 400, 800).hF === 0.3, 'a full-height sheet keeps a floor of 0.3');
+
+  // gestures: one finger orbits and keeps follow, a pinch or wheel stops it, a double tap restores it
+  const G = createGestures();
+  const T = (id, x, y, t, type = 'touch', button = 0, mod = false) => ({ id, type, x, y, t, button, mod });
+  ok(G.down(T(1, 100, 100, 0)) === null, 'one finger down keeps follow');
+  G.move(T(1, 160, 120, 60));
+  ok(G.up(T(1, 160, 120, 400)) === null, 'a one-finger orbit keeps follow');
+  G.down(T(2, 100, 100, 1000)); ok(G.up(T(2, 101, 100, 1080)) === null, 'one tap is not a double tap');
+  G.down(T(3, 104, 98, 1250)); ok(JSON.stringify(G.up(T(3, 104, 98, 1320))) === '{"follow":true}', 'a double tap turns follow on');
+  G.down(T(4, 100, 100, 2000)); ok(JSON.stringify(G.down(T(5, 200, 220, 2040))) === '{"follow":false}', 'a second finger (pinch) turns follow off');
+  ok(G.up(T(4, 100, 100, 2100)) === null && G.up(T(5, 200, 220, 2110)) === null, 'the end of a pinch is not a tap');
+  G.down(T(6, 100, 100, 2200)); ok(G.up(T(6, 100, 100, 2260)) === null, 'a tap just after a pinch is not a double tap');
+  G.down(T(7, 100, 100, 3000)); G.up(T(7, 100, 100, 3050)); G.down(T(8, 100, 100, 3600)); ok(G.up(T(8, 100, 100, 3650)) === null, 'taps far apart in time are not a double tap');
+  G.down(T(9, 100, 100, 4000)); G.up(T(9, 100, 100, 4050)); G.down(T(10, 220, 100, 4200)); ok(G.up(T(10, 220, 100, 4250)) === null, 'taps far apart in space are not a double tap');
+  G.down(T(11, 100, 100, 5000)); G.up(T(11, 100, 100, 5500)); G.down(T(12, 100, 100, 5600)); ok(G.up(T(12, 100, 100, 5650)) === null, 'a long press is not a tap');
+  ok(JSON.stringify(G.down(T(13, 0, 0, 6000, 'mouse', 2))) === '{"follow":false}', 'a right drag (pan) turns follow off');
+  G.up(T(13, 0, 0, 6100, 'mouse', 2));
+  ok(JSON.stringify(G.down(T(14, 0, 0, 6200, 'mouse', 0, true))) === '{"follow":false}', 'a modifier drag (pan) turns follow off');
+  G.up(T(14, 0, 0, 6300, 'mouse'));
+  ok(G.down(T(15, 0, 0, 6400, 'mouse', 0)) === null && G.up(T(15, 0, 0, 6450, 'mouse')) === null, 'a left mouse drag orbits and keeps follow');
+  ok(G.wheel().follow === false && G.pointers === 0, 'a wheel turns follow off; no pointer stays live');
+  G.down(T(16, 0, 0, 7000)); G.cancel(T(16, 0, 0, 7010)); ok(G.pointers === 0, 'pointercancel drops the pointer');
+
+  // the dock clock
+  const c0 = dockClock(0, seasonOf), c1 = dockClock(11.8, seasonOf);
+  ok(c0.year === 'Year 1' && c0.sub === 'Jan · winter' && c0.frac === 0, `clock at the sowing: ${c0.year} ${c0.sub}`);
+  ok(c1.year === 'Year 12' && c1.sub === 'Oct · autumn' && Math.abs(c1.frac - 0.8) < 1e-9, `clock in year 12: ${c1.year} ${c1.sub}`);
+  let longest = 0; for (let t = 0; t < 45; t += 0.01) longest = Math.max(longest, dockClock(t, seasonOf).sub.length, dockClock(t, seasonOf).year.length);
+  ok(longest <= 12, `the dock clock text stays short (${longest} chars), so it fits 84 px at 11 to 15 px`);
+  ok(nextId(SPECIES_IDS, 'oak') === SPECIES_IDS[1] && nextId(SPECIES_IDS, SPECIES_IDS[7]) === SPECIES_IDS[0] && nextId(SPECIES_IDS, 'x') === SPECIES_IDS[0], 'the dock species button cycles all species');
+  ok(SPECIES_IDS.every(id => SPECIES[id].label.split(' ').pop().length <= 6), 'dock species names have six letters or fewer');
+
+  // pixel ratio on a slow phone
+  const st = { ratio: 1.6, min: 1, slow: 0 };
+  let changes = 0; for (let i = 0; i < 30; i++) if (pixelRatioStep(st, 1 / 60)) changes++;
+  ok(changes === 0 && st.ratio === 1.6, 'fast frames keep the pixel ratio');
+  for (let i = 0; i < 50; i++) if (pixelRatioStep(st, 0.05)) changes++;
+  ok(changes === 1 && Math.abs(st.ratio - 1.35) < 1e-9, `2.5 s of slow frames lowers the ratio one step (${st.ratio})`);
+  for (let i = 0; i < 400; i++) pixelRatioStep(st, 0.05);
+  ok(st.ratio === 1 && pixelRatioStep(st, 0.05) === 0, 'the ratio stops at 1');
+  // the phone caps in main.js and render.js
+  const mainSrc = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8'), renSrc = fs.readFileSync(new URL('./render.js', import.meta.url), 'utf8');
+  ok(/MAX_NODES = COARSE \? 24000/.test(mainSrc) && /LEAF_BUDGET = COARSE \? 40000/.test(mainSrc), 'phones cap 24k metamers and 40k leaves');
+  ok(/coarse \? 1\.6 : 2/.test(renSrc) && /SM = coarse \? 2048 : 4096/.test(renSrc), 'phones cap the pixel ratio at 1.6 and the shadow map at 2048');
 }
 
 // --- misc ---------------------------------------------------------------------
