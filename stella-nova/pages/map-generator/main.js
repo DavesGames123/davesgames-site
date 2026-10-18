@@ -28,6 +28,7 @@ import { SIZES, defaults, generate, fieldSampler } from './gen.js';
 import { timeline, frameAt } from './playback.js';
 import { CITY_PRESETS, SITES, presetValues, rollTerrain, TERRAIN_NUM, TERRAIN_STR, snapshotRaster, groundAt } from './terrain.js';
 import { drawMap, fullFrame, fitView, toSVG, toJSON, CREDIT } from './draw2d.js';
+import { STAGES, progressShare } from './layout.js';
 
 const $ = (id) => document.getElementById(id);
 const c2 = $('map2d');
@@ -118,18 +119,29 @@ function startWorker() {
     worker.onmessage = (e) => {
       const p = pending.get(e.data.id);
       if (!p) return;
+      // a progress message comes before the answer: it does not end the request
+      if (e.data.progress) { p.onProgress?.(e.data.progress); return; }
       pending.delete(e.data.id);
       if (e.data.error) p.reject(new Error(e.data.error)); else p.resolve(e.data);
     };
     worker.onerror = () => { workerOk = false; for (const p of pending.values()) p.reject(new Error('worker')); pending.clear(); };
   } catch { workerOk = false; }
 }
-function ask(msg) {
+function ask(msg, onProgress = null) {
   return new Promise((resolve, reject) => {
     const id = ++reqId;
-    pending.set(id, { resolve, reject });
+    pending.set(id, { resolve, reject, onProgress });
     worker.postMessage({ id, ...msg });
   });
+}
+// #loading: the stage name and the bar (layout.js progressShare)
+function showProgress(p, token) {
+  if (token !== genToken || !p) return;
+  const st = STAGES.find((s) => s[0] === p.k);
+  const f = progressShare(p.k, p.sub, !!opts.terrain);
+  const txt = $('loadText'), bar = $('loadBar');
+  if (txt && st) txt.textContent = st[2];
+  if (bar) bar.style.width = (f * 100).toFixed(1) + '%';
 }
 
 async function regenerate(patch = {}, { play = !reduced } = {}) {
@@ -139,9 +151,10 @@ async function regenerate(patch = {}, { play = !reduced } = {}) {
   syncSeed();
   const token = ++genToken;
   loadingEl.hidden = false;
+  showProgress({ k: opts.terrain ? 'terrain' : 'field', sub: 0 }, token);
   let c = null;
   try {
-    if (workerOk && worker) c = (await ask({ type: 'gen', opts: { ...opts } })).city;
+    if (workerOk && worker) c = (await ask({ type: 'gen', opts: { ...opts } }, (p) => showProgress(p, token))).city;
   } catch { workerOk = false; }
   if (!c) c = await generate({ ...opts });     // main-thread fallback
   if (token !== genToken) return;
@@ -386,7 +399,7 @@ async function push3D() {
   const token = genToken;
   let mesh = null;
   try {
-    if (workerOk && worker) mesh = (await ask({ type: 'mesh' })).mesh;
+    if (workerOk && worker) mesh = (await ask({ type: 'mesh' }, (p) => showProgress(p, token))).mesh;
   } catch { /* fall back */ }
   const m3 = await import('./mesh3d.js');
   if (!mesh) mesh = m3.buildMesh(city, tl);

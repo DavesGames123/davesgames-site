@@ -13,6 +13,7 @@
 //               pinch, pan clamp, double tap, scrub, pixel ratio, progress
 //   progress    the gen.js progress hooks: stage order, same city, clonable
 //   page module main.js with DOM stubs (terrain on: the page default)
+//   worker path main.js with a stand-in Worker: progress, then the city
 
 import { generate, fieldSampler, SIZES } from './gen.js';
 import { timeline, frameAt, cut } from './playback.js';
@@ -719,6 +720,36 @@ section('page module (DOM stubs, no browser)');
   let err3 = null;
   try { globalThis.snSaver.exit(); } catch (e) { err3 = e; }
   check('snSaver.exit runs', !err3);
+}
+
+section('worker path (a stand-in Worker that sends progress first)');
+{
+  // worker.js posts { id, progress } before the city. main.js must wait for
+  // the city and show the progress, not take the first message as the answer.
+  const types = [];
+  globalThis.Worker = class {
+    constructor() { this.onmessage = null; }
+    postMessage(m) {
+      types.push(m.type);
+      const reply = (d) => this.onmessage && this.onmessage({ data: d });
+      setTimeout(async () => {
+        reply({ id: m.id, progress: { k: 'terrain', sub: 0.5 } });
+        if (m.type !== 'gen') { reply({ id: m.id, error: 'no mesh here' }); return; }
+        reply({ id: m.id, progress: { k: 'lots', sub: 0 } });
+        const c = await generate({ ...m.opts });
+        c.viaWorker = true;
+        reply({ id: m.id, city: c });
+      }, 0);
+    }
+  };
+  globalThis.location = { hash: '#seed=11&size=town' };
+  let err = null;
+  try { await import('./main.js?worker'); await globalThis.__mapGen.started; } catch (e) { err = e; }
+  const g = globalThis.__mapGen;
+  check('main.js takes the city from the worker after its progress messages', !err && g.city && g.city.seed === 11 && g.city.viaWorker === true && types[0] === 'gen', err ? err.message : `viaWorker ${g.city && g.city.viaWorker}`);
+  const bar = document.getElementById('loadBar').style.width, txt = document.getElementById('loadText').textContent;
+  check('the progress goes to #loadText and #loadBar (layout.js progressShare)', txt === 'Lots' && bar === '93.0%', `${txt} ${bar}`);
+  delete globalThis.Worker;
 }
 
 // ─── end ────────────────────────────────────────────────────────────────────
