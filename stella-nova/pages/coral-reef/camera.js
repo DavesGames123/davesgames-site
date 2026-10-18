@@ -33,6 +33,11 @@
 //  springs (spring(), the exact step) take the camera to it. A mode
 //  change glides with a slow spring for about 1.2 s.
 //
+//  WORLD (CONTRACT-V4.md). On the infinite world R is Infinity: no plot
+//  bound, the orbit distance stops at o.maxDist, the tours come from the
+//  features near the eye (refreshTours) and rock.tourGrid gives the route
+//  maker (no plot grid).
+//
 //  ROCK. rock.sdfAll is a 1.5-Lipschitz bound: true metres are about
 //  sdf / rock.sdfScale (measured: 0.7x to 1.8x of that). Every frame the
 //  eye moves by moveSafe(): a sphere trace (steps of (sdf - hard) / 1.5,
@@ -302,6 +307,8 @@ export function tourControls(f) {
 }
 // The free-water grid of the tours (rov/pilot.js createGrid on sdfAll).
 export function tourGrid(rock, o = {}) {
+  // an infinite world gives its own route maker (no plot grid)
+  if (typeof rock.tourGrid === 'function') return rock.tourGrid(o);
   const R = rock.radius || 30, b = rock.bounds;
   return createGrid(rock.sdfAll || rock.sdf, { radius: R * 1.25, ymin: b ? b.min[1] : -3, ymax: (b ? b.max[1] : 10) + 9, cell: o.cell || 0.6 });
 }
@@ -328,6 +335,9 @@ export function buildTours(rock, o = {}) {
 // o: rock, R (plot radius), fov, eye, look (start pose), field (optional)
 export function createExploreCamera(o = {}) {
   let rock = o.rock || null, F = rock ? (o.field || createField(rock)) : null, R = o.R || 30;
+  // the orbit distance limit: 3.5 R on a plot; o.maxDist on the infinite
+  // world (R = Infinity, no plot bound)
+  const maxD = () => Math.min(R * 3.5, o.maxDist ?? Infinity);
   let topY = rock && rock.bounds ? rock.bounds.max[1] : 8;
   const proj = { fov: o.fov || 50, aspect: 1, shift: [0, 0] };
   const eye0 = o.eye || [18, 12, 22], look0 = o.look || [0, 2, 0];
@@ -353,6 +363,9 @@ export function createExploreCamera(o = {}) {
       return T.ok ? T : null;
     },
     get field() { return F; },
+    // the infinite world: its features move with the eye, so the page
+    // asks for a new tour list from time to time
+    refreshTours() { tours = null; grid = null; },
   };
 
   cam.setRock = (rk, r) => {
@@ -382,7 +395,7 @@ export function createExploreCamera(o = {}) {
       if (!t) t = add(E.x, mul(f, 8));
       orbit.target = opt.target || t;
       const a = anglesOf(sub(E.x, orbit.target));
-      orbit.yaw = a.yaw; orbit.pitch = clamp(a.pitch, -0.6, 1.45); orbit.dist = clamp(len(sub(E.x, orbit.target)), 0.8, R * 3.5);
+      orbit.yaw = a.yaw; orbit.pitch = clamp(a.pitch, -0.6, 1.45); orbit.dist = clamp(len(sub(E.x, orbit.target)), 0.8, maxD());
       orbit.wYaw = orbit.wPitch = 0;
     } else if (m === 'swim') {
       swim.pos = E.x.slice();
@@ -448,7 +461,7 @@ export function createExploreCamera(o = {}) {
     let P = nx != null ? cam.pick(nx, ny, true) : null;
     if (!P) { const r = cam.ray(nx ?? 0, ny ?? 0, true); P = add(r.o, mul(r.d, orbit.dist)); }
     const ge = orbitEye(), dP = len(sub(ge, P));
-    k = clamp(k, 0.6 / Math.max(dP, 1e-3), R * 3.5 / Math.max(orbit.dist, 1e-3));
+    k = clamp(k, 0.6 / Math.max(dP, 1e-3), maxD() / Math.max(orbit.dist, 1e-3));
     if (orbit.dist * k < 0.8) k = 0.8 / orbit.dist;
     orbit.target = add(P, mul(sub(orbit.target, P), k));
     orbit.dist *= k;
@@ -504,7 +517,7 @@ export function createExploreCamera(o = {}) {
       orbit.target = add(orbit.target, add(mul(f, mz * sp), mul(r, mx * sp)));
       idle = 0;
     }
-    if (zoom) { orbit.dist = clamp(orbit.dist * Math.exp(zoom * dt * 1.4), 0.8, R * 3.5); idle = 0; }
+    if (zoom) { orbit.dist = clamp(orbit.dist * Math.exp(zoom * dt * 1.4), 0.8, maxD()); idle = 0; }
   };
   cam.setAutoRotate = (v) => { orbit.auto = !!v; };
   // the orbit pose with no boom and no push (for the zoom and pan tests)
