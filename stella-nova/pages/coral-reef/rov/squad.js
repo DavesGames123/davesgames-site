@@ -41,19 +41,22 @@
 //  TETHERS. None: the vehicles are hybrid ROVs (as WHOI Nereus) with a
 //  fibre-optic micro-tether that a camera does not see (CONTRACT-V4.md).
 //
-//    const S = createSquad({ field, seed, count, clear, start });
+//    const S = createSquad({ field, seed, count, clear, start, target });
+//      target: () => [x, y, z] | null, a far point the squad drifts to
+//      (the page: the next depth region)
 //      field: { sdf(x, y, z) (field units: rock, sand, coral), ground(x, z),
 //               featuresAt(x, z, r) (or features(x, z, r)), colonies() -> [{ key, center, radius,
 //               size, id }], habitat?(x, z), sdfScale }
 //    S.vehicles[i] = { id, state }; S.step(dt); S.leader
 //    S.task = { kind, label, target?, t }; S.stats = { distance, cells,
 //      chunks, colonies, depth, legs, t }
-//    S.setCount(n), S.reset(start)
+//    S.setCount(n), S.reset(start), S.goTo(id, [x, z]) (one ROV to a point)
 //
 //  grep -n targets: "export function createSquad", "function nextTask", "export function frontierScore",
 //  "function frontier", "function followerGoal", "function move("
 // ============================================================================
 import { marchPath, pathAt, pushOut, trace, orbitPose, rng, hash } from './pilot.js';
+import { SPECIES } from '../reef.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -63,7 +66,7 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 const CELL = 12, CHUNK = 32;
 export const TASK_LABEL = {
   frontier: 'surveying unexplored ground', ridge: 'following a ridge', dropoff: 'dropping down a cliff', climb: 'climbing a seamount flank',
-  canyon: 'following a canyon', arch: 'passing under an arch', inspect: 'inspecting a colony', regroup: 'regrouping',
+  canyon: 'following a canyon', arch: 'passing under an arch', inspect: 'inspecting a colony', regroup: 'regrouping', goto: 'going to the marked point',
 };
 
 function gradient(sdf, p) {
@@ -92,6 +95,7 @@ export function createSquad(o = {}) {
   const S = { vehicles: [], task: { kind: 'frontier', label: TASK_LABEL.frontier, t: 0 }, stats: { distance: 0, cells: 0, chunks: 0, colonies: 0, depth: 0, legs: 0, t: 0 } };
   const visited = new Map(), chunksSeen = new Set(), inspected = new Set(), passed = new Set(), seenCols = new Set();
   const trail = [];                        // leader positions every 0.5 m (newest last)
+  const visitedReset = () => { orbit = null; };
   let exploreYaw = rand() * TAU, leg = null, s = 0, lastS = 0, stuckT = 0, markT = 0, orbit = null;
 
   function makeState(p, yaw) {
@@ -105,15 +109,21 @@ export function createSquad(o = {}) {
     for (let k = 1; k <= n; k++) { const u = k / n; if (sdf(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u) < lim) return false; }
     return true;
   }
+  // The vehicles of a new start. Existing state objects are filled in
+  // place (rov/index.js holds them), so a move to a region keeps the models.
   function place(start, n) {
     const p0 = pushOut(sdf, start.slice(), clear * 1.1);
+    const old = S.vehicles.slice();
     S.vehicles.length = 0;
     const yaw = rand() * TAU;
     for (let i = 0; i < n; i++) {
       const off = i === 0 ? [0, 0, 0] : [-Math.cos(yaw) * 4 * i, 0.5 * i, -Math.sin(yaw) * 4 * i];
       const p = pushOut(sdf, [p0[0] + off[0], p0[1] + off[1], p0[2] + off[2]], clear * 1.1);
-      S.vehicles.push({ id: i + 1, state: makeState(p, yaw) });
+      const st = makeState(p, yaw);
+      if (old[i]) { for (const k of Object.keys(old[i].state)) delete old[i].state[k]; Object.assign(old[i].state, st); old[i].goal = null; S.vehicles.push(old[i]); }
+      else S.vehicles.push({ id: i + 1, state: st });
     }
+    visitedReset();
     trail.length = 0; trail.push(p0.slice());
     leg = null;
   }
@@ -153,6 +163,7 @@ export function createSquad(o = {}) {
     const L = S.vehicles[0].state, p = L.p;
     const g0 = ground(p[0], p[2]);
     let best = null;
+    const tgt = typeof o.target === 'function' ? o.target() : null;
     exploreYaw += (rand() - 0.5) * 0.35;
     for (let i = 0; i < 16; i++) {
       const a = L.yaw + (i / 16) * TAU;
@@ -163,7 +174,10 @@ export function createSquad(o = {}) {
         // interest: a ridge (higher than the ring round it), a drop-off
         const ring = (ground(x + 8, z) + ground(x - 8, z) + ground(x, z + 8) + ground(x, z - 8)) / 4;
         const ridge = clamp((g - ring) / 3, 0, 1), drop = clamp((g0 - g) / 12, 0, 1), climb = clamp((g - g0) / 12, 0, 1);
-        const sc = frontierScore({ novelty: nov, turn, toward, habitat: hab, ridge, drop, climb, deep: g < -58, jitter });
+        let sc = frontierScore({ novelty: nov, turn, toward, habitat: hab, ridge, drop, climb, deep: false, jitter });
+        // a target region far away (the page changes it every 20 to 40 min):
+        // the squad drifts there while it explores
+        if (tgt) sc += 1.6 * Math.cos(angDiff(Math.atan2(tgt[2] - p[2], tgt[0] - p[0]), a));
         if (!best || sc > best.sc) best = { sc, x, z, g, kind: ridge > 0.5 ? 'ridge' : drop > 0.6 ? 'dropoff' : climb > 0.6 ? 'climb' : 'frontier', a };
       }
     }
@@ -190,7 +204,8 @@ export function createSquad(o = {}) {
     const ph = rand() * TAU, pose = orbitPose(c.center, c.radius, 0, ph, {});
     if (!planLeg([pushOut(sdf, pose.p, clear)], 'inspect', { target: c, ph })) return false;
     orbit = { c, ph, t: 0, dur: 20 + rand() * 15, climb: 0 };
-    S.task.label = `inspecting a ${c.id === 'boulder' ? 'brain coral' : c.id === 'fan' ? 'sea fan' : c.id === 'table' ? 'table coral' : c.id === 'finger' ? 'finger coral' : 'staghorn'} colony`;
+    const lab = SPECIES[c.id] && SPECIES[c.id].label ? SPECIES[c.id].label.toLowerCase() : 'coral';
+    S.task.label = `inspecting a ${lab} colony`;
     return true;
   }
   function tryArch() {
@@ -362,7 +377,8 @@ export function createSquad(o = {}) {
         // the goal of a follower changes slowly: 5 times a second
         const v = S.vehicles[i];
         v.goalT = (v.goalT || 0) - h;
-        if (!v.goal || v.goalT <= 0) { v.goal = followerGoal(v, i, h); v.goalT = 0.2; }
+        if (v.leg) { v.goal = ownLegGoal(v, h); v.goalT = 0; }
+        else if (!v.goal || v.goalT <= 0) { v.goal = followerGoal(v, i, h); v.goalT = 0.2; }
         const G = v.goal;
         v.state.mode = G.mode; v.state.phase = G.mode === 'inspect' ? 'orbit' : 'path';
         move(v.state, G, h, pos.filter((_, j) => j !== i));
@@ -381,6 +397,31 @@ export function createSquad(o = {}) {
       S.vehicles.push({ id: i + 1, state: makeState(q, L.yaw) });
     }
   }
+  // goTo(id, [x, z]): send one ROV to a point (the HUD minimap). The lead
+  // (id 1) flies a leg there and the squad follows; another ROV leaves the
+  // formation, flies there on its own path, looks round for 20 s and comes
+  // back. false when no path plans.
+  function goTo(id, xz) {
+    const v = S.vehicles.find(q => q.id === id); if (!v) return false;
+    const y = ground(xz[0], xz[1]) + 3;
+    const goal = pushOut(sdf, [xz[0], y, xz[1]], clear);
+    if (v === S.vehicles[0]) { orbit = null; return planLeg([goal], 'goto', { label: 'going to the marked point' }) && (S.task.label = 'going to the marked point', true); }
+    const path = marchPath(sdf, [v.state.p.slice(), goal], clear, { budget: 30000, step: 0.3 });
+    if (!path || path.length < 0.5) return false;
+    v.leg = { path, s: 0, hold: 20 };
+    return true;
+  }
+  function ownLegGoal(v, dt) {
+    const L = v.leg, st = v.state;
+    const lag = len(sub(pathAt(L.path, L.s).p, st.p));
+    L.s = Math.min(L.path.length, L.s + cruise * dt * clamp(1.6 - lag / 1.5, 0.1, 1));
+    const g = pathAt(L.path, L.s);
+    if (L.s >= L.path.length - 0.05) { L.hold -= dt; if (L.hold <= 0) v.leg = null; }
+    const fw = [Math.cos(st.yaw), -0.45, Math.sin(st.yaw)], fl = len(fw), dir = [fw[0] / fl, fw[1] / fl, fw[2] / fl];
+    const hit = trace(sdf, st.p, dir, 12);
+    return { g: g.p, look: [st.p[0] + dir[0] * hit, st.p[1] + dir[1] * hit, st.p[2] + dir[2] * hit], lookR: 1.6, face: g.t, mode: 'survey' };
+  }
+  S.goTo = goTo;
   S.step = step; S.setCount = setCount;
   S.reset = (start, n = S.vehicles.length) => { place(start, n); setTask('frontier'); orbit = null; };
   S.trail = trail; S.visited = visited; S.chunksSeen = chunksSeen;

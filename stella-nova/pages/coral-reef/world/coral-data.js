@@ -47,10 +47,49 @@ export function chunkColours(co, M, mode, F) {
   let t = new Float32Array(Math.max(1, n));
   if (!n) return { nat, t, rad, F };
   radiiOf(M, rad, F); naturalRGB(M, nat, F);
+  deepColours(co, M, nat);
   if (mode === 'height') {
     for (let g = 0; g < n; g++) t[g] = Math.min(1, Math.max(0, (M.py[g] - M.gy[g]) / HEIGHT_SCALE));
   } else t = colourT(M, mode, t, F);
   return { nat, t, rad, F };
+}
+
+// Deep-sea colours (the depth regions, CONTRACT-V4.md): below about 40 m
+// the light has no red and the corals have no algae, so the natural
+// colours give way to the pigments of deep corals, one per colony from
+// the seed: bubblegum pink and red, orange, gold (Primnoa) and white for
+// the fans; white Lophelia and black coral for the thickets; white
+// bamboo and glass sponge. The tips stay lighter (the shading of
+// colour.js naturalRGB is kept as a brightness).
+const DEEP = {
+  fan: [[0.86, 0.26, 0.36], [0.95, 0.46, 0.16], [0.86, 0.66, 0.3], [0.92, 0.9, 0.84], [0.98, 0.6, 0.62]],
+  staghorn: [[0.93, 0.91, 0.86], [0.95, 0.82, 0.78], [0.16, 0.12, 0.1], [0.9, 0.55, 0.3]],
+  finger: [[0.88, 0.85, 0.76], [0.94, 0.52, 0.2], [0.8, 0.78, 0.9]],
+  boulder: [[0.9, 0.88, 0.8], [0.84, 0.74, 0.44], [0.86, 0.8, 0.86]],
+  table: [[0.62, 0.5, 0.34], [0.86, 0.72, 0.5]],
+};
+export function deepColours(co, M, nat) {
+  const d = co.depth ?? 0;
+  const t = Math.min(1, Math.max(0, (d - 40) / 160));
+  if (t <= 0) return nat;
+  const pick = new Map();
+  for (const c of co.colonies) {
+    // the species of the SPECIES table carry their own deep colours: only
+    // the five old ids (or a species that asks for it) get a palette here
+    const sp = SPECIES[c.id];
+    if ((sp && sp.deepColour === false) || !DEEP[c.id]) continue;
+    const P = DEEP[c.id];
+    let h = Math.imul((c.k + 1) * 2654435761, 0x9e3779b1) ^ Math.imul(co.ci | 0, 0x85ebca6b) ^ Math.imul(co.cj | 0, 0xc2b2ae35);
+    h = (h ^ (h >>> 15)) >>> 0;
+    pick.set(c.k, P[h % P.length]);
+  }
+  for (let g = 0; g < M.count; g++) {
+    const pal = pick.get(M.col[g]); if (!pal) continue;
+    const o = g * 3, lum = (nat[o] + nat[o + 1] + nat[o + 2]) / 3;
+    const shade = 0.7 + 0.6 * Math.min(1, lum * 1.6);
+    for (let q = 0; q < 3; q++) nat[o + q] += (Math.min(1, pal[q] * shade) - nat[o + q]) * t;
+  }
+  return nat;
 }
 
 // The texels of the chunk. setParticles(from, to, f(slot, A, B, o, C)) is

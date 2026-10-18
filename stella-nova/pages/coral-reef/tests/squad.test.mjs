@@ -33,14 +33,27 @@ async function drain(pool) { for (let i = 0; i < 1e6; i++) { const s = pool.stat
 
 const W = createWorld({ seed: 1, fine: fineFor(WORLD_BUDGET['phone-min'].c0) });
 const SC = W.sdfScale;
+// a reef spot of seed 1 (the depth regions put corals mostly on the reef)
+function reefSpot(Wr) {
+  let best = null;
+  for (let j = -30; j <= 30; j++) for (let i = -30; i <= 30; i++) {
+    const x = i * 500, z = j * 500, g = Wr.regionAt(x, z);
+    if (g.id !== 'reef') continue;
+    const s = Wr.habitat(x, z) - Math.hypot(i, j) * 0.002;
+    if (!best || s > best.s) best = { s, x, z };
+  }
+  return best;
+}
+const R0 = reefSpot(W);
+
 
 // ── a run with the real corals ──────────────────────────────────────────────
 async function run({ minutes, corals, camera, seed = 1, count = 3 }) {
   const pool = createPool({ makeWorker: null, delay: () => new Promise(r => setImmediate(r)) });
-  let clock = 0, eye = [400, 0, 140];
+  let clock = 0, eye = [R0.x, 0, R0.z];
   const st = corals ? createStreamer({ seed: 1, budget: WORLD_BUDGET['phone-min'], pool, view: {}, now: () => clock }) : null;
   const P = worldPhysics(W, st, { clear: 0.62, eye: () => eye });
-  const start = [400, W.ground(400, 140) + 3, 140];
+  const start = [R0.x, W.ground(R0.x, R0.z) + 3, R0.z];
   const S = createSquad({ field: P, seed, count, clear: 0.62, start });
   let cam = null;
   if (camera) {
@@ -110,6 +123,25 @@ ok(new Set([...A.tasks, ...B.tasks]).size >= 3, 'tasks: the leader does several 
   const a = await run({ minutes: 1, corals: false }), b = await run({ minutes: 1, corals: false }), c = await run({ minutes: 1, corals: false, seed: 2 });
   ok(JSON.stringify(a.path) === JSON.stringify(b.path), 'determinism: one seed gives the same squad path');
   ok(JSON.stringify(a.path) !== JSON.stringify(c.path), 'determinism: a new seed gives a new path');
+}
+
+// ── goTo: one ROV to a point (the HUD minimap) ──────────────────────────────
+{
+  const P = worldPhysics(W, null, { clear: 0.62 });
+  const start = [R0.x, W.ground(R0.x, R0.z) + 3, R0.z];
+  const S = createSquad({ field: P, seed: 4, count: 3, clear: 0.62, start });
+  for (let i = 0; i < 300; i++) S.step(1 / 30);
+  const v = S.vehicles[2], to = [v.state.p[0] + 25, v.state.p[2] - 10];
+  const sent = S.goTo(3, to);
+  let near = Infinity, minRock = Infinity;
+  for (let i = 0; i < 30 * 90; i++) {
+    S.step(1 / 30);
+    near = Math.min(near, Math.hypot(v.state.p[0] - to[0], v.state.p[2] - to[1]));
+    for (const q of S.vehicles) minRock = Math.min(minRock, W.sdfAll(...q.state.p) / SC);
+  }
+  ok(sent && near < 4 && minRock > 0.3, 'goTo: a follower flies to a point on its own path, in open water', `nearest ${near.toFixed(1)} m, rock ${minRock.toFixed(2)} m`);
+  const lead = S.goTo(1, [start[0] - 30, start[2] + 20]);
+  ok(lead && S.task.kind === 'goto', 'goTo: the lead takes a leg to the point', S.task.label);
 }
 
 console.log(`squad: ${pass} passed, ${fail} failed`);

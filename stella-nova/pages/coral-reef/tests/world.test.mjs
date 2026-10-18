@@ -23,6 +23,8 @@
 //    mesh .......... the mesh vertices are on the surface (|sdf| small);
 //                    the sand grids of two chunks meet exactly
 //    speed ......... chunk mesh times per LOD (printed; L0 under 4 s)
+//    regions ....... shallows, reef, twilight, abyss and trenches exist at
+//                    their depths, with no hard border, under the surface
 // ============================================================================
 import { createWorld, SDF_SCALE } from '../world/field.js';
 import { meshRock, meshSand, meshChunk, chunkYRange, CH } from '../world/mesh.js';
@@ -107,6 +109,27 @@ for (const seed of QUICK ? [1] : [1, 2, 3]) {
     if (side === 2 && W.sdfExact(x, y, z) > 0) walls++;
   }
   ok(can >= 10 && walls >= can * 0.6, 'structure: canyons with open floors and rock walls on both sides', `${walls} of ${can}`);
+}
+
+// ── depth regions (CONTRACT-V4.md addendum) ─────────────────────────────────
+{
+  // the user: "reefs, shallows, twilight zone, absolute ocean depths"
+  const W = createWorld({ seed: 1 }), r = rng(21), by = {};
+  let jump = 0;
+  for (let i = 0; i < (QUICK ? 1500 : 4000); i++) {
+    const x = (r() - 0.5) * 120000, z = (r() - 0.5) * 120000, g = W.regionAt(x, z);
+    (by[g.id] || (by[g.id] = [])).push(g.depth);
+    jump = Math.max(jump, Math.abs(W.height(x + 0.5, z) - W.height(x - 0.5, z)));
+  }
+  const med = id => { const a = (by[id] || []).slice().sort((p, q) => p - q); return a.length ? a[a.length >> 1] : NaN; };
+  const info = Object.keys(by).map(k => `${k} ${by[k].length} (median ${med(k).toFixed(0)} m)`).join(', ');
+  ok(['shallows', 'reef', 'twilight', 'abyss', 'trench'].every(k => by[k] && by[k].length > 5), 'regions: shallows, reef, twilight, abyss and trenches all exist', info);
+  ok(med('shallows') < 30 && med('reef') > 5 && med('reef') < 45 && med('twilight') > 40 && med('twilight') < 1100 && med('abyss') > 1000 && med('trench') > 3500, 'regions: their depths are the depths of the contract', info);
+  ok(jump < 4, 'regions: no hard border (the ground changes by under 4 m over 1 m)', `${jump.toFixed(2)} m`);
+  const top = Math.max(...Object.values(by).flat().map(d => -d));
+  ok(top <= -1.4, 'regions: the ground stays under the sea surface', `shallowest ${(-top).toFixed(1)} m`);
+  const a1 = W.regionAt(1234, -5678), a2 = createWorld({ seed: 1 }).regionAt(1234, -5678);
+  ok(a1.id === a2.id && a1.depth === a2.depth, 'regions: one seed gives the same regions');
 }
 
 // ── seams ────────────────────────────────────────────────────────────────────

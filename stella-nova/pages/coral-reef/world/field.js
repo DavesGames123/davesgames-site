@@ -64,6 +64,7 @@
 //    rock adapter ..... "function localRock"
 // ============================================================================
 import { makeNoise, mulberry32 } from '../rock/noise.js';
+import { SURFACE_Y } from '../water.js';
 
 export const SDF_SCALE = 0.4;
 export const LIPSCHITZ = 1.5;
@@ -71,7 +72,7 @@ export const D_OUT = 4 * SDF_SCALE, D_IN = 2 * SDF_SCALE;
 export const FEATURE_CELL = 48;          // m, arches and pinnacles
 export const BOULDER_CELL = 16;          // m, boulders and scree
 export const MOUNT_CELL = 520;           // m, seamounts
-export const Y_MIN = -80, Y_MAX = 40;    // the world y range (m)
+export const Y_MIN = SURFACE_Y - 6200, Y_MAX = SURFACE_Y;    // the world y range (m): the trenches to the sea surface
 // The rock top term is (y - height) / SLOPE_K: a bound on slopes up to
 // about 1.9 (62 degrees), so the field is never more than the distance.
 // REACH: a feature is dropped only past this distance (m): there its raw
@@ -100,7 +101,7 @@ function strataProfile(u, soft) {
 export function createWorld(opts = {}) {
   const seed = (opts.seed ?? 1) >>> 0;
   const fine = clamp(opts.fine ?? 1, 0.2, 1);
-  const N = makeNoise(seed), N2 = makeNoise(seed * 7 + 3);
+  const N = makeNoise(seed), N2 = makeNoise(seed * 7 + 3), N3 = makeNoise(seed * 13 + 5);
   const rs = mulberry32(seed * 2654435761 + 11);
   // seed-level numbers
   const P = 1.6 + rs() * 0.8;                       // strata period (m)
@@ -147,12 +148,58 @@ export function createWorld(opts = {}) {
     return h;
   }
 
+  // ── the depth regions (CONTRACT-V4.md addendum) ─────────────────────────
+  // The user said (2026-10-18): "you should be allowed to explore different
+  // regions with the ROV. reefs, shallows, twilight zone, absolute ocean
+  // depths". A slow warped noise n (features of about 30 km) is mapped to
+  // a depth by a profile with shelves: the shallows and the reef flat on
+  // the shelf, the reef wall, the twilight slope, the continental rise and
+  // the abyssal plain, with trenches cut into the abyss. Each segment
+  // blends linear and smooth steps, so the joins are shelves and the
+  // slopes stay in the bound of the field. The local relief (seamounts,
+  // ridges, drop-offs, terraces) scales with the region.
+  const RS = 32000;
+  const PROFILE = [[-1.4, 3], [-0.45, 8], [-0.25, 16], [-0.12, 38], [-0.06, 240], [0.12, 1000], [0.45, 3000], [1.4, 3500]];
+  const AMP = [[-1.4, 0.22], [-0.25, 0.45], [-0.12, 0.8], [0.1, 0.9], [0.45, 1.0], [1.4, 1.0]];
+  function lerpTable(T, n, smooth) {
+    if (n <= T[0][0]) return T[0][1];
+    for (let i = 1; i < T.length; i++) if (n <= T[i][0]) {
+      const u = (n - T[i - 1][0]) / (T[i][0] - T[i - 1][0]), w = smooth ? 0.5 * u + 0.5 * u * u * (3 - 2 * u) : u;
+      return T[i - 1][1] + (T[i][1] - T[i - 1][1]) * w;
+    }
+    return T[T.length - 1][1];
+  }
+  function regionN(x, z) {
+    const wx = 1500 * N3.fbm2(x / 5000 + 3.3, z / 5000 - 1.1, 2), wz = 1500 * N3.fbm2(x / 5000 - 6.1, z / 5000 + 2.4, 2);
+    return N3.fbm2((x + wx) / RS + 7.7, (z + wz) / RS - 2.2, 3);
+  }
+  // the trench depth (m) at (x, z) for the region value n
+  function trenchAt(x, z, n) {
+    if (n < 0.3) return 0;
+    const tr = 1 - Math.abs(N3.g2(x / 14000 + 1.9, z / 14000 - 4.4));
+    return 1900 * sstep(0.45, 0.98, tr) * sstep(0.3, 0.6, n);
+  }
+  const REGIONS = { shallows: 'Shallows', reef: 'Reef', twilight: 'Twilight zone', abyss: 'Abyss', trench: 'Trench' };
+  function regionAt(x, z) {
+    const n = regionN(x, z), tr = trenchAt(x, z, n), depth = SURFACE_Y - groundAt(x, z);
+    const id = tr > 400 ? 'trench' : n < -0.3 ? 'shallows' : n < -0.1 ? 'reef' : n < 0.12 ? 'twilight' : 'abyss';
+    return { id, name: REGIONS[id], n, depth, base: lerpTable(PROFILE, n, true) + tr };
+  }
+
   // ── the bathymetry (no canyons) ──────────────────────────────────────────
   // q is a warped copy of (x, z), so no line of the noise lattice shows.
   function heightRaw(x, z) {
+    const n = regionN(x, z);
+    const base = SURFACE_Y - lerpTable(PROFILE, n, true) - trenchAt(x, z, n);
+    const h = base + lerpTable(AMP, n, false) * localRelief(x, z);
+    // under the sea surface: the shallowest rock is 2.5 m deep (reef flats;
+    // the sand and its ripples sit up to about 1 m over the rock)
+    return smin(h, SURFACE_Y - 2.5, 3);
+  }
+  function localRelief(x, z) {
     const wx = 60 * N.fbm2(x / 400 + off[0], z / 400 + off[1], 3), wz = 60 * N.fbm2(x / 400 + off[2], z / 400 + off[3], 3);
     const qx = x + wx, qz = z + wz;
-    let h = -38 + 9 * N.fbm2(qx / 900 + off[4], qz / 900 + off[5], 3);
+    let h = -12 + 9 * N.fbm2(qx / 900 + off[4], qz / 900 + off[5], 3);
     h += seamounts(qx, qz);
     // ridges where a slow mask is on
     const rm = sstep(-0.1, 0.25, N2.fbm2(qx / 700 + off[6], qz / 700 + off[7], 2));
@@ -176,7 +223,12 @@ export function createWorld(opts = {}) {
     const k = N.fbm2(x / 38 + 5.1, z / 38 - 2.7, 3);
     return 0.9 * N.fbm2(x / 14 + off[14], z / 14 + off[15], 3) + rocky * (1.2 + 4.2 * Math.max(0, k) * Math.max(0, k) * 2.5);
   };
-  function height(x, z) { return heightRaw(x, z) + rubble(x, z); }
+  // the rubble and knolls fade out near the surface (no rock out of the sea)
+  const rubbleAt = (x, z, TL) => rubble(x, z) * sstep(1.4, 7, SURFACE_Y - TL);
+  function height(x, z) { const TL = heightRaw(x, z); return TL + rubbleAt(x, z, TL); }
+  // sediment by depth: the lagoon sand of the shallows and the ooze of the
+  // deep plains; the reef and the upper slope are rocky
+  function sedDepth(x, z, TL) { const d = SURFACE_Y - TL; return Math.max(sstep(60, 400, d), 1 - sstep(-0.5, -0.32, regionN(x, z))); }
 
   // ── canyons: channels of a warped noise ───────────────────────────────────
   // ch = |n| / |grad n| is about the distance (m) from the channel line.
@@ -195,7 +247,9 @@ export function createWorld(opts = {}) {
     // over the plain (canyons cut into the slopes)
     out.w = 2.5 + 3.5 * (0.5 + 0.5 * N.g2(x / 90 + 5.5, z / 90 - 3.3));
     const depth = 9 + 7 * (0.5 + 0.5 * N.g2(x / 140 - 9.1, z / 140 + 1.7));
-    out.mask = sstep(-36, -26, hTop) * sstep(0.05, 0.35, N.fbm2(x / 800 + 3.7, z / 800 + 8.1, 2));
+    // canyons cut the reef wall, the twilight slope and the rise
+    const rn = regionN(x, z);
+    out.mask = sstep(-0.2, -0.12, rn) * (1 - sstep(0.35, 0.5, rn)) * sstep(0.05, 0.35, N.fbm2(x / 800 + 3.7, z / 800 + 8.1, 2));
     out.floor = hTop - depth * out.mask;
     out.gx = gx / g; out.gz = gz / g;
     return out;
@@ -206,13 +260,13 @@ export function createWorld(opts = {}) {
   // strata phase, feats the 3D features whose bounds hold the column.
   function column(x, z, out = {}) {
     const e = 0.6;
-    const TL = heightRaw(x, z), rb = rubble(x, z), T = TL + rb;
+    const TL = heightRaw(x, z), rb = rubbleAt(x, z, TL), T = TL + rb;
     const tx = (heightRaw(x + e, z) - heightRaw(x - e, z)) / (2 * e), tz = (heightRaw(x, z + e) - heightRaw(x, z - e)) / (2 * e);
     const slope = Math.hypot(tx, tz);
     const C = channelAt(x, z, TL, out.C || (out.C = { d: 0, w: 0, floor: 0, mask: 0 }));
     // sediment: low slope, low ground, a noise; and the canyon floors
     const sedN = N2.fbm2(x / 120 + 2.2, z / 120 - 6.6, 3);
-    let sed = sstep(0.75, 0.25, slope) * (0.35 + 0.65 * sstep(-14, -32, TL)) * sstep(-0.35, 0.15, sedN);
+    let sed = sstep(0.75, 0.25, slope) * (0.35 + 0.65 * sedDepth(x, z, TL)) * sstep(-0.35, 0.15, sedN);
     // the floor sand reaches past the widest part of the void (the flare
     // at the rim), then climbs inside the rock to the rim sand
     const hwRim = C.w + 1 + 0.22 * Math.max(0, T - C.floor - 4);
@@ -248,12 +302,12 @@ export function createWorld(opts = {}) {
   // A light column (no features): for the feature placement.
   const C2 = { C: { d: 0, w: 0, floor: 0, mask: 0 } };
   function column2(x, z) {
-    const TL = heightRaw(x, z), rb = rubble(x, z), T = TL + rb;
+    const TL = heightRaw(x, z), rb = rubbleAt(x, z, TL), T = TL + rb;
     const e = 0.8, tx = (heightRaw(x + e, z) - heightRaw(x - e, z)) / (2 * e), tz = (heightRaw(x, z + e) - heightRaw(x, z - e)) / (2 * e);
     const slope = Math.hypot(tx, tz);
     const C = channelAt(x, z, TL, C2.C);
     const sedN = N2.fbm2(x / 120 + 2.2, z / 120 - 6.6, 3);
-    const sed = sstep(0.75, 0.25, slope) * (0.35 + 0.65 * sstep(-14, -32, TL)) * sstep(-0.35, 0.15, sedN);
+    const sed = sstep(0.75, 0.25, slope) * (0.35 + 0.65 * sedDepth(x, z, TL)) * sstep(-0.35, 0.15, sedN);
     C2.T = T; C2.S = TL + 0.3 * rb + (sed - 0.42) * 1.3; C2.slope = slope; C2.ch = C;
     return C2;
   }
@@ -432,7 +486,7 @@ export function createWorld(opts = {}) {
   // smooth at that scale: the error is a few mm), and the superset list
   // of the 3D features of the tile (each feature is exact). The mesher
   // (world/mesh.js) reads exact columns at its lattice points instead.
-  const TILE = 16, TS = 0.5, TN = TILE / TS + 1, NF = 9;
+  const TILE = 16, TS = 1 / 3, TN = Math.round(TILE / TS) + 1, NF = 9;
   const tiles = new Map();
   let tileN = 0;
   function tileAt(ti, tj) {
@@ -503,13 +557,17 @@ export function createWorld(opts = {}) {
 
   // ── queries for the planner, the camera and the corals ───────────────────
   function channel(x, z) { const T = heightRaw(x, z); const o = channelAt(x, z, T, {}); return o; }
+  // coral habitat 0..1 by depth: the reef band (5 to 40 m) is rich, the
+  // mesophotic and twilight slope has fewer, the abyss few but large ones
+  // (world/corals.js), the sand plains little
   function habitat(x, z) {
-    const c = column2(x, z);
-    const depth = sstep(-48, -8, Math.max(c.T, c.S));
+    const c = column2(x, z), d = SURFACE_Y - Math.max(c.T, c.S);
+    const band = Math.exp(-(((d - 20) / 16) ** 2)) + 0.45 * Math.exp(-(((d - 220) / 200) ** 2)) + 0.18 * sstep(600, 1200, d);
     const rocky = 1 - 0.75 * sstep(0.1, 0.6, c.S - c.T + 0.42 * 1.3 - 0.42);
-    const n = 0.55 + 0.45 * N2.fbm2(x / 160 - 3.3, z / 160 + 7.7, 2);
-    return clamp(depth * (0.35 + 0.65 * rocky) * n + 0.08, 0, 1);
+    const nn = 0.55 + 0.45 * N2.fbm2(x / 160 - 3.3, z / 160 + 7.7, 2);
+    return clamp(Math.min(1, band) * (0.35 + 0.65 * rocky) * nn + 0.06, 0, 1);
   }
+
   // The y range of the surface (rock and sand) in a square: samples of
   // the columns, the 3D features and a margin for the crag.
   function columnRange(x0, z0, size, step = 4) {
@@ -604,7 +662,7 @@ export function createWorld(opts = {}) {
   }
 
   return {
-    seed, fine, period: P, lipschitz: LIPSCHITZ, sdfScale: SDF_SCALE, sdfClamp: [-D_IN, D_OUT], band: BAND,
+    seed, fine, period: P, regionAt, regionN, REGIONS, surfaceY: SURFACE_Y, lipschitz: LIPSCHITZ, sdfScale: SDF_SCALE, sdfClamp: [-D_IN, D_OUT], band: BAND,
     height, heightLarge: heightRaw, sandAt, sdf, sdfAll, sdfExact, sand: { heightAt: sandAt, sdf: sandSdf }, normal, base,
     column, baseCol, sdfCol, rawCol, crag, channel, habitat, columnRange, features, canyonPath, localRock, ground: groundAt,
     bedAt: (x, y, z) => bedCoord(y, colAt(x, z).U), bedCoord,

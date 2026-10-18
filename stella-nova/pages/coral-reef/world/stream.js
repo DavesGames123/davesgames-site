@@ -38,6 +38,8 @@
 //    st.coralDist(x, y, z)   metres to the nearest shown coral particle (max REACH)
 //    st.chunk(key), st.chunks (Map), st.stats, st.dispose()
 //    st.ready(eye)           true when the chunk under the eye has rock
+//    st.on(event, fn)        'rock' (key, i, j, lod), 'unload' (key, i, j),
+//                            'coral' (key, colonies), 'uncoral' (key)
 //
 //    worldEstimate(budget) the GPU bytes of the world at most (budget.js tests)
 //
@@ -103,6 +105,12 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
   let eye = [0, 0, 0], token = 1;
   const held = new Map(), fine = new Map();       // focus: k -> hold; fine: fkey -> rec
   const call = (f, ...a) => (typeof view[f] === 'function' ? view[f](...a) : 0);
+  // events for other packages (FAUNA, SNOW): 'rock' (key, i, j, lod),
+  // 'unload' (key, i, j), 'coral' (key, colonies in the world frame),
+  // 'uncoral' (key). A listener error does not stop the streamer.
+  const ears = {};
+  function on(ev, fn) { (ears[ev] || (ears[ev] = [])).push(fn); return () => { ears[ev] = ears[ev].filter(f => f !== fn); }; }
+  function emit(ev, ...a) { for (const f of ears[ev] || []) { try { f(...a); } catch (e) { stats.listenerErrors = (stats.listenerErrors || 0) + 1; } } }
 
   function chunkOf(i, j) {
     const key = chunkKey(i, j);
@@ -168,6 +176,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     bytes.rock += c.rockBytes;
     c.lod = r.lod;
     stats.rockShown++;
+    emit('rock', c.key, c.i, c.j, r.lod);
     stats.rockMs.push(ms); if (stats.rockMs.length > 64) stats.rockMs.shift();
     if (c.coralWait) onCoral(c, c.coralWait.token, c.coralWait.r);
   }
@@ -218,19 +227,20 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     c.coralBytes = call('addCoral', c.key, c.coral) || 0;
     bytes.coral += c.coralBytes;
     stats.coralShown++;
+    emit('coral', c.key, coloniesOf(c));
   }
   function unloadCoral(c) {
     if (c.coralJob) { c.coralJob.h.cancel(); c.coralJob = null; }
     c.coralWait = null;
     for (const [fk, f] of [...fine]) if (f.chunk === c.key) dropFine(fk);
-    if (c.coral) { call('removeCoral', c.key); c.coral = null; }
+    if (c.coral) { call('removeCoral', c.key); c.coral = null; emit('uncoral', c.key); }
     bytes.coral -= c.coralBytes; bytes.data -= c.dataBytes; c.coralBytes = 0; c.dataBytes = 0;
     freeSlab(c);
   }
   function unload(c) {
     if (c.rockJob) { c.rockJob.h.cancel(); c.rockJob = null; }
     unloadCoral(c);
-    if (c.lod >= 0) call('removeRock', c.key);
+    if (c.lod >= 0) { call('removeRock', c.key); emit('unload', c.key, c.i, c.j); }
     bytes.rock -= c.rockBytes; c.rockBytes = 0;
     chunks.delete(c.key);
     stats.unloads++;
@@ -275,8 +285,13 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
   // ── focus: the fine colonies ───────────────────────────────────────────────
   function colonies() {
     const out = [];
-    for (const c of chunks.values()) {
-      if (!c.coral) continue;
+    for (const c of chunks.values()) if (c.coral) out.push(...coloniesOf(c));
+    return out;
+  }
+  // the colonies of one coral chunk in the world frame
+  function coloniesOf(c) {
+    const out = [];
+    {
       const co = c.coral;
       for (const k of co.colonies) {
         const base = [k.base[0] + co.cx, k.base[1] + co.oy, k.base[2] + co.cz];
@@ -343,7 +358,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
   function ready(e = eye) { const c = chunks.get(chunkKey(Math.floor(e[0] / CH), Math.floor(e[2] / CH))); return !!(c && c.lod >= 0); }
 
   return {
-    update, colonies, coralDist, dispose, ready, chunks, fine, held, slabs, slabSize,
+    update, colonies, coralDist, dispose, ready, chunks, fine, held, slabs, slabSize, on,
     chunk: key => chunks.get(key),
     get stats() {
       let rock = 0, coral = 0, pend = 0;

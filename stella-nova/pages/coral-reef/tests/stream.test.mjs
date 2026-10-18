@@ -34,6 +34,18 @@ import { growChunkSync, BIRTH_PAST } from '../world/corals.js';
 import { worldFor } from '../world/worker.js';
 import { chunkMirror, chunkColours, writeChunk } from '../world/coral-data.js';
 import { PARTICLE_FLOATS } from '../reef.js';
+// a reef spot of seed 1 (the depth regions put corals mostly on the reef)
+function reefSpot(Wr) {
+  let best = null;
+  for (let j = -30; j <= 30; j++) for (let i = -30; i <= 30; i++) {
+    const x = i * 500, z = j * 500, g = Wr.regionAt(x, z);
+    if (g.id !== 'reef') continue;
+    const s = Wr.habitat(x, z) - Math.hypot(i, j) * 0.002;
+    if (!best || s > best.s) best = { s, x, z };
+  }
+  return best;
+}
+
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const QUICK = process.argv.includes('--quick');
@@ -118,13 +130,14 @@ const pool = createPool({ makeWorker: null, delay: () => new Promise(r => setImm
 let clock = 0;
 const st = createStreamer({ seed: 1, budget: B, pool, view, now: () => clock });
 const startBytes = st.stats.total;
+const R0 = reefSpot(worldFor(1, fineFor(B.c0)));
 const L = QUICK ? 600 : 2000;
 let peak = 0, peakView = 0, maxChunks = 0, maxCoral = 0;
 const t0 = Date.now();
 const shownSample = [];
 for (let x = 0; x <= L; x += 6) {
   clock += 6000;
-  const eye = [x, -10, 300 + 25 * Math.sin(x / 90)];
+  const eye = [R0.x + x, worldFor(1, fineFor(B.c0)).ground(R0.x + x, R0.z) + 3, R0.z + 25 * Math.sin(x / 90)];
   st.update(eye, [eye]);
   await drain(pool);
   st.update(eye, [eye]);
@@ -182,7 +195,7 @@ ok(after === startBytes && Math.abs(after) < 1, 'flight: the streamer bytes go b
   let clk = 0;
   const st2 = createStreamer({ seed: 1, budget: B, pool: pool2, view: V2, now: () => clk });
   // a rich chunk: find one with colonies near (400, 140)
-  let eye = [400, -10, 140];
+  let eye = [R0.x + 40, worldFor(1, fineFor(B.c0)).ground(R0.x + 40, R0.z) + 3, R0.z];
   for (let k = 0; k < 4; k++) { clk += 1000; st2.update(eye, null); await drain(pool2); }
   const cols = st2.colonies();
   ok(cols.length > 0, 'focus: the shown chunks list their colonies (world frame)', `${cols.length} colonies`);
@@ -198,8 +211,8 @@ ok(after === startBytes && Math.abs(after) < 1, 'flight: the streamer bytes go b
     const d0 = st2.coralDist(q[0], q[1], q[2]), d1 = st2.coralDist(q[0], q[1] + 5, q[2] + 30);
     ok(d0 < 0.01 && d1 >= 2.4, 'coral dist: 0 at a particle, the reach far from coral', `${d0.toFixed(3)}, ${d1.toFixed(2)} m`);
     // far away: the fine mesh goes
-    for (let k = 0; k < 30; k++) { clk += 1000; st2.update([eye[0] + 300, -10, eye[2]], [[eye[0] + 300, -10, eye[2]]]); await drain(pool2); }
-    ok(V2.fine.size === 0 && V2.events.some(e => e[0] === 'unfine'), 'focus: far view points drop the fine mesh', `${V2.fine.size} left`);
+    for (let k = 0; k < 30; k++) { clk += 1000; st2.update([eye[0] + 300, eye[1], eye[2]], [[eye[0] + 300, eye[1], eye[2]]]); await drain(pool2); }
+    ok(!V2.fine.has(c.key) && V2.events.some(e => e[0] === 'unfine' && e[1] === c.key), 'focus: far view points drop the fine mesh of that colony', `${V2.fine.size} fine meshes near the new eye`);
   }
   st2.dispose(); await drain(pool2);
 }

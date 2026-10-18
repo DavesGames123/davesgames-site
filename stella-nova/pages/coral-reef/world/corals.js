@@ -47,6 +47,36 @@ import { createCoralMesher } from '../coral-sdf.js';
 import { mulberry32 } from '../rock/noise.js';
 import { hash3 } from './field.js';
 import { CH } from './mesh.js';
+import { SURFACE_Y } from '../water.js';
+
+// The species mix by depth (the depth regions of CONTRACT-V4.md): weights
+// for reef.js pickSpecies and a size factor. The deep forms are the same
+// DLA species with deep-sea roles (world/coral-data.js gives the colours):
+//   fan ...... gorgonians: bubblegum coral (Paragorgia), Primnoa, several
+//              metres tall across the current
+//   staghorn . Lophelia / Desmophyllum thickets, bamboo and black corals
+//   table .... plate corals of the mesophotic reef
+//   boulder .. sponge mounds and glass sponges in the deep
+//   finger ... soft and bamboo corals
+export function depthMix(d) {
+  // the species table may carry its own depth range (the SPECIES package:
+  // SPECIES[id].depth = [min, max] m): then the weights come from it
+  const meta = Object.keys(SPECIES).filter(id => Array.isArray(SPECIES[id].depth));
+  if (meta.length) {
+    const weights = {}, size = {};
+    for (const id of Object.keys(SPECIES)) {
+      const r = SPECIES[id].depth;
+      if (!r) { weights[id] = d < 40 ? 1 : 0.02; continue; }
+      const m = Math.max(4, (r[1] - r[0]) * 0.15);
+      weights[id] = Math.min(1, Math.max(0, (d - r[0] + m) / m), Math.max(0, (r[1] + m - d) / m)) + 1e-3;
+    }
+    return { weights, size };
+  }
+  if (d < 40) return { weights: {}, size: {} };
+  if (d < 150) return { weights: { table: 3, fan: 2, staghorn: 0.6, finger: 0.6, boulder: 0.4 }, size: { table: 1.1, fan: 1.15 } };
+  if (d < 1000) return { weights: { fan: 4, staghorn: 2.2, finger: 1, boulder: 1, table: 0.15 }, size: { fan: 1.45, staghorn: 1.1 } };
+  return { weights: { fan: 3, boulder: 1.6, staghorn: 1, finger: 1, table: 0.05 }, size: { fan: 1.6, boulder: 1.2 } };
+}
 
 export const BIRTH_PAST = -1e5;     // s: the birth the page writes (uTime - birth >> grow-in)
 export const EDGE = 1.5;            // m: a colony may reach this far past its chunk square
@@ -134,10 +164,11 @@ export function planColonies(W, ci, cj, budget, seed) {
   const chosen = [];
   const tryAdd = (s, gap) => {
     const y01 = (s.p[1] - y0) / Math.max(1e-6, y1 - y0);
-    const id = pickSpecies(s, y01, rand(), {});
+    const mix = depthMix(SURFACE_Y - s.p[1]);
+    const id = pickSpecies(s, y01, rand(), mix.weights);
     if (!id) return false;
     const sp = SPECIES[id], ex = s.exposure ?? 0.5;
-    let size = sp.size[0] + (sp.size[1] - sp.size[0]) * clamp(0.2 + 0.7 * ex + 0.35 * (rand() - 0.5), 0, 1);
+    let size = (sp.size[0] + (sp.size[1] - sp.size[0]) * clamp(0.2 + 0.7 * ex + 0.35 * (rand() - 0.5), 0, 1)) * (mix.size[id] || 1);
     // stay in the chunk square (+ EDGE): a site near the edge gets a smaller colony
     const edge = Math.min(s.p[0] - ci * CH, (ci + 1) * CH - s.p[0], s.p[2] - cj * CH, (cj + 1) * CH - s.p[2]);
     size = Math.min(size, 2 * (edge + EDGE));
@@ -252,6 +283,10 @@ function* growSteps(W, ci, cj, budget, o) {
   // the current of the chunk: a slow field over the world (the fans face it)
   const cur = Math.atan2(W.height(plan.cx + 200, plan.cz) - W.height(plan.cx - 200, plan.cz), 1) * 57.3 * 4 + 20 + 160 * Math.sin(plan.cx / 3000 + plan.cz / 4100);
   R.setCurrent(cur, 0.5);
+  // the form varies per chunk from the seed: stickiness and reach of each
+  // species (less reach and stickiness: thinner, more open branches)
+  const vr = mulberry32(hash3(ci, cj, seed ^ 0xf0f0) || 1);
+  for (const id of Object.keys(R.params)) { const p = R.params[id]; R.setParams(id, { stickiness: Math.min(1, p.stickiness * (0.8 + 0.3 * vr())), attractionDistance: p.attractionDistance * (0.85 + 0.15 * vr()) }); }
   for (const s of plan.sites) R.addColony(s.id, s.site, { size: s.size });
   // caps in the particle budget (each colony keeps at least 25 % of its wish)
   let sum = 0;
@@ -271,7 +306,7 @@ function* growSteps(W, ci, cj, budget, o) {
   const coarse = meshCoarse(colonies, particles, bridges, Q);
   let tris = 0;
   for (const sp of Object.keys(coarse)) tris += coarse[sp].tris;
-  return { key, ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, colonies, count: R.count, particles, bridges, coarse, quality,
+  return { key, ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, depth: SURFACE_Y - plan.oy, colonies, count: R.count, particles, bridges, coarse, quality,
     stats: { growMs, meshMs: now() - t1, tris, hab: plan.hab, want: plan.want } };
 }
 export const growChunk = growChunkSync;
