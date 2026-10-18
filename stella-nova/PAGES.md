@@ -383,7 +383,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `printcraft` | PrintCraft | Crafting Apps > Documents | RUST | The PrintCraft PDF workbench. |  | shown | no | no |
 | `manim-live` | Manim live | Studio Tools > Animation & Video | NEW | Write real ManimCE code and watch it render beside the editor. |  | shown | no | yes |
 | `pattern-designer` | Pattern Designer | Studio Tools > Pattern & Print | SVG | Generative vector patterns for posters. |  | shown | hook, tier 3, default | yes |
-| `pattern-animator` | Animated Pattern Designer | Studio Tools > Pattern & Print | NEW | The pattern book in motion: seamless loops to video and GIF. |  | shown | hook, tier 3, default | no |
+| `pattern-animator` | Animated Pattern Designer | Studio Tools > Pattern & Print | NEW | The pattern book in motion: seamless loops to video and GIF. |  | shown | hook, tier 3, default | yes |
 | `thread-art` | Thread Art | Studio Tools > Pattern & Print | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 4, default | yes |
 | `halftone` | Halftone | Studio Tools > Pattern & Print | WGSL | Photos as halftone dots and rosettes, in WGSL. | glsl-halftone (MIT) | search only | hook, tier 3, default | yes |
 | `matlab` (pages/material-studio) | PBR Material Studio | Studio Tools > 3D & Materials | TOOL | Author PBR materials with a live sphere. |  | shown | hook, tier 3, default | yes |
