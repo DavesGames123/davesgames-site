@@ -19,6 +19,10 @@
 //                         stroke is fixed and on the device pixel grid at
 //                         any zoom, L corners, states, pulse and snap-in,
 //                         the drag box
+//    scene and boot ..... six viewports (desktop and phone): boot without
+//                         errors, light sources and planet textures, one
+//                         sun on screen per lesson, every lit entity lit
+//                         from that sun, click, box drag, zoom, legend
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -94,7 +98,7 @@ async function bootPage(w, h, touch = false, settleMs = 120) {
   // Images load at once with a fixed size, so every draw path runs.
   win.Image = class {
     constructor() { this.complete = false; this.naturalWidth = 0; this.naturalHeight = 0; this.onload = null; this.onerror = null; }
-    set src(v) { this._src = v; setTimeout(() => { this.complete = true; this.naturalWidth = this.width = 64; this.naturalHeight = this.height = 64; this.onload && this.onload(); }, 1); }
+    set src(v) { this._src = v; setTimeout(() => { if (!win.document) return; this.complete = true; this.naturalWidth = this.width = 64; this.naturalHeight = this.height = 64; this.onload && this.onload(); }, 1); }
     get src() { return this._src; }
   };
   win.onerror = (m, s, l, c, e) => { errors.push(String(e && e.stack || m)); };
@@ -379,6 +383,79 @@ async function bootPage(w, h, touch = false, settleMs = 120) {
   ok(box.w > 0 && box.h > 0 && onGrid(box.x, 2, Math.round(box.lw * 2) % 2 === 1), 'drag box is normalised and on the grid');
   ok(/rgba\(.*0\.0\d\)$/.test(box.fill), 'drag box fill is faint', box.fill);
   ok(Object.keys(R.COLORS).length === 7, 'one bracket colour per entity type');
+}
+
+// ── scene and boot ────────────────────────────────────────────────────────
+// The page boots at desktop and phone sizes, runs frames with lit sprites,
+// planets, reticles and a drag box, and every lesson has exactly one sun.
+// Every lit entity takes its light from that sun.
+{
+  section('scene and boot');
+  const VIEWS = [[1440, 900, false], [1024, 768, false], [390, 844, true], [360, 740, true], [844, 390, true], [768, 1024, true]];
+  for (const [w, h, touch] of VIEWS) {
+    const tag = w + 'x' + h + (touch ? ' touch' : '');
+    const { win, api, errors, log } = await bootPage(w, h, touch, 250);
+    ok(!!api, tag + ': boots');
+    if (!api) { win.close(); continue; }
+    for (let k = 0; k < 40 && api.drawn().planets < 4; k++) await new Promise(r => setTimeout(r, 50));
+    const d = api.drawn();
+    ok(d.litOk && d.sources >= 2 + 9 + 10, tag + ': light sources built (ships, modules, rocks)', JSON.stringify(d));
+    ok(d.planets === 4, tag + ': four planet textures read', d.planets);
+    let sunBad = 0, dirBad = 0, lit = 0;
+    for (let i = 0; i < api.LESSONS.length; i++) {
+      api.loadLesson(i);
+      const suns = api.ents().filter(e => e.type === 'star');
+      if (suns.length !== 1 || api.S.sun !== suns[0]) sunBad++;
+      const sun = api.S.sun;
+      for (const e of api.ents()) {
+        if (e.type === 'star' || e.type === 'station') continue;
+        const L = api.sunLight(e);
+        lit++;
+        const ang = Math.abs(Math.atan2((sun.y - e.y) * L.x - (sun.x - e.x) * L.y, (sun.x - e.x) * L.x + (sun.y - e.y) * L.y));
+        if (ang > 1e-6) dirBad++;
+      }
+      const sv = api.toScreen(sun.x, sun.y), v = api.view();
+      if (sv.x < 0 || sv.x > v.W || sv.y < 0 || sv.y > v.H) sunBad++;
+    }
+    ok(sunBad === 0, tag + ': each lesson has one sun, on screen');
+    ok(dirBad === 0 && lit > 50, tag + ': every lit entity takes its light from the sun', dirBad + '/' + lit);
+    // Select, hover, box-drag with pointer events, zoom past the split.
+    api.loadLesson(0);
+    const cv = win.document.getElementById('cv');
+    const fire = (type, x, y, extra = {}) => {
+      const ev = new win.MouseEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, ...extra });
+      Object.defineProperty(ev, 'pointerId', { value: 1 }); Object.defineProperty(ev, 'pointerType', { value: touch ? 'touch' : 'mouse' });
+      cv.dispatchEvent(ev);
+    };
+    const ship = api.ents().find(e => e.type === 'ship'), sp = api.toScreen(ship.x, ship.y);
+    fire('pointermove', sp.x, sp.y);
+    fire('pointerdown', sp.x, sp.y); fire('pointerup', sp.x, sp.y);
+    ok(ship.sel, tag + ': a tap or click on a ship selects it');
+    api.S.boxMode = true;
+    const v = api.view();
+    fire('pointerdown', 5, v.Y0 + 5); fire('pointermove', v.W * 0.6, v.Y1 - 5);
+    ok(api.S.g && api.S.g.mode === 'box', tag + ': a drag draws a box');
+    await new Promise(r => setTimeout(r, 60));
+    fire('pointerup', v.W * 0.6, v.Y1 - 5);
+    ok(api.ents().some(e => e.sel), tag + ': the box selects');
+    api.S.boxMode = false;
+    api.loadLesson(5);
+    const sc = api.toScreen(api.S.station.x, api.S.station.y);
+    api.zoomAt(sc.x, sc.y, 3.2);
+    await new Promise(r => setTimeout(r, 120));
+    const before = log.stroke || 0;
+    await new Promise(r => setTimeout(r, 120));
+    ok((log.stroke || 0) > before, tag + ': frames keep drawing');
+    ok(api.drawn().lru > 0, tag + ': lit sprites are cached', api.drawn().lru);
+    ok(errors.length === 0, tag + ': no page errors', errors.slice(0, 3).join(' | '));
+    // The legend uses the lit draw path: 7 types in each ladder.
+    ok(win.document.querySelectorAll('#ladClick li canvas').length === 7, tag + ': legend icons drawn');
+    win.close();
+  }
+  // No red rings round enemies: the arc calls of one frame of enemies only.
+  const src = fs.readFileSync(path.join(HERE, 'main.js'), 'utf8');
+  ok(!/e\.type === 'enemy'\) \{ c\.strokeStyle/.test(src), 'no ring is drawn round enemies');
+  ok(!/setLineDash\(\[6, 4\]\)/.test(src), 'the drag box is solid, not dashed');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

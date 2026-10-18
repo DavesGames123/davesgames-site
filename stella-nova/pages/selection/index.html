@@ -13,6 +13,7 @@
   ───────────────────────────────────────────────────────────────────────────
    Static frame for the selection tutorial. The #cv canvas is the sandbox.
    main.js draws the game sprites into it and reads pointer input from it.
+   light.js (one-sun shading) and reticle.js (bracket geometry) load first.
    The rest of the markup is chrome that main.js fills by id.
 
    LAYOUT  (desktop; # marks an element id)
@@ -114,12 +115,14 @@
         <p class="lad-sub">The best type in the box takes the whole selection.</p>
         <ol class="ladder" id="ladBox"></ol>
       </section>
-      <p class="credit">Sprites from the Stella Nova game build.</p>
+      <p class="credit">Ship and module sprites from the Stella Nova game build. Planets made with the site's Planet Forge. Asteroids are procedural.</p>
     </div>
   </aside>
 </div>
 
 <script src="../../lib/game-data/catalog.js"></script>
+<script src="light.js"></script>
+<script src="reticle.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

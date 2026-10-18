@@ -2,13 +2,27 @@
 //  SELECTION  ·  interactive tutorial for click, box and modifier selection
 // ----------------------------------------------------------------------------
 //  A 2D canvas sandbox. Six lessons put real game sprites on the canvas:
-//  ships (the livery layers, tinted), planets (texture maps on a sphere),
-//  asteroids (ore sprites) and a station made of module sprites. The input
-//  layer then shows how a click and a box resolve when things overlap.
+//  ships (the livery layers, tinted) and a station made of module sprites,
+//  plus planets (Planet Forge textures on a sphere) and procedural rocky
+//  asteroids. The input layer then shows how a click and a box resolve
+//  when things overlap.
 //
 //  The sprites come from window.SN_DATA (lib/game-data/catalog.js). This file
 //  has no game code. The two priority ladders below are the teaching content
 //  of this page, not values from the game source.
+//
+//  LIGHT  Each lesson has one sun (the one 'star' entity, S.sun). Every
+//  ship, module, asteroid and planet is shaded by the direction from it to
+//  that sun (light.js). A sprite gets a normal map once (from its alpha and
+//  luminance); its shaded copies are cached per light-angle bin and level
+//  of detail in an LRU of canvases (litCanvas), and two bins blend while a
+//  sprite turns. A planet is shaded per pixel into its own canvas when its
+//  spin moves a texel (planetCanvas). If the browser blocks getImageData
+//  (file://), the page draws the sprites unlit.
+//
+//  RETICLE  reticle.js gives the bracket geometry in screen space, so the
+//  marks stay sharp at any zoom: selected, hover and box-preview states,
+//  a colour per entity type, and the drag box.
 //
 //  TWO PRIORITY LADDERS (lower rank wins)
 //      click:  ship < enemy < planet < station < module < asteroid < star
@@ -28,6 +42,12 @@
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //      sprite sources ....... "const SPRITES"       catalog lookups
+//      planet list .......... "const PLANETS"       baked forge textures
+//      lit sprite cache ..... "function litCanvas"  bins, LOD, LRU
+//      sprite sources ....... "function buildSources"
+//      planet render ........ "function planetCanvas"
+//      sun .................. "function placeSun", "function drawSun"
+//      reticles ............. "function drawReticle", "function drawDragBox"
 //      type table ........... "const TYPES"         labels and ladders
 //      lessons .............. "const LESSONS"       six lessons and copy
 //      state ................ "const S ="           camera, gesture, flags
@@ -60,8 +80,6 @@
   // an empty list, and the draw code falls back to a plain shape.
   function spritesOf(id) { var e = BYID[id]; return e && e.sprites ? e.sprites : []; }
   var SPRITES = {
-    planets: ['planets/terran', 'planets/lush', 'planets/desert', 'planets/volcanic', 'planets/toxic', 'planets/exotic', 'planets/barren'],
-    ores: DATA.entries.filter(function (e) { return e.category === 'resources' && e.tier === 'Ores' && e.sprites.length; }).map(function (e) { return e.id; }),
     livery: ['ship-livery/hull', 'ship-livery/cockpit', 'ship-livery/accents'],
     // Station layout, row by row. Each cell is one module sprite. Use only
     // ids that the catalog keeps. A missing id draws a plain square.
@@ -71,6 +89,17 @@
       ['modules/hydroponics-bed', 'modules/research-bench', 'modules/thruster']
     ]
   };
+
+  // Planets: textures baked by bake-planets.mjs from the site's Planet Forge
+  // (pages/forge). atm is the atmosphere colour (linear RGB) and k its
+  // strength; tilt turns the spin axis; gain brightens a dark albedo.
+  var PLANETS = [
+    { id: 'earth', tex: 'planets/earth.webp', nrm: 'planets/earth-n.webp', atm: [0.25, 0.5, 1.0], k: 0.9, tilt: 0.38 },
+    { id: 'rust', tex: 'planets/rust.webp', nrm: 'planets/rust-n.webp', atm: [0.9, 0.55, 0.35], k: 0.35, tilt: -0.3 },
+    { id: 'ice', tex: 'planets/ice.webp', nrm: 'planets/ice-n.webp', atm: [0.6, 0.8, 1.0], k: 0.45, tilt: 0.2 },
+    { id: 'moon', tex: 'planets/moon.webp', nrm: 'planets/moon-n.webp', atm: null, k: 0, tilt: 0.1, gain: 1.7 }
+  ];
+  var ROCKS = 10;          // asteroid shapes (light.js asteroid seeds)
 
   // One record per entity type. click and box are the ladder ranks.
   var TYPES = {
@@ -109,8 +138,8 @@
       hint: 'Click any ship, then <strong>drag a box</strong> around several asteroids.',
       hintTouch: 'Tap a ship. Then <strong>hold and drag</strong> a box around some asteroids.',
       setup: function () {
-        spawn('ship', 8, 'wide'); spawn('enemy', 3, 'wide');
-        spawn('asteroid', 60, 'wide'); spawn('planet', 2, 'wide'); spawn('star', 3, 'corners');
+        placeSun(0); spawn('ship', 8, 'wide'); spawn('enemy', 3, 'wide');
+        spawn('asteroid', 60, 'wide'); spawn('planet', 2, 'wide');
       }
     },
     {
@@ -130,7 +159,7 @@
         });
         buildStation(W * (narrow() ? 0.7 : 0.8), Y0 + (Y1 - Y0) * (narrow() ? 0.2 : 0.3));
         var s2 = make('ship', S.station.x + 6, S.station.y - 4); s2.vx = s2.vy = 0; ents.push(s2);
-        spawn('asteroid', 50, 'wide'); spawn('star', 2, 'corners');
+        placeSun(1); spawn('asteroid', 50, 'wide');
       }
     },
     {
@@ -145,6 +174,7 @@
       hintTouch: '<strong>Tap a ship</strong> in the ring, then <strong>hold and drag</strong> over the planet. The result differs.',
       setup: function () {
         var px = W * (narrow() ? 0.5 : 0.4), py = Y0 + (Y1 - Y0) * 0.55;
+        placeSun(2);
         var p = make('planet', px, py); ents.push(p);
         var ring = Math.min(W, Y1 - Y0) * 0.22 + 30;
         for (var i = 0; i < 12; i++) {
@@ -168,7 +198,7 @@
       notes: ['Hold <code>Cmd</code> or <code>Ctrl</code> and click: adds to the selection.', 'Click a selected entity with the modifier: removes it.', 'Touch: turn on <strong>Add</strong> in the dock. It acts as a held modifier.'],
       hint: 'Click a ship, then <code>Ctrl</code>/<code>Cmd</code>-click more. Then modifier-click a selected one to remove it.',
       hintTouch: 'Tap a ship. Turn on <strong>Add</strong> and tap more. Tap a selected one to remove it.',
-      setup: function () { spawn('ship', 12, 'wide'); spawn('enemy', 4, 'wide'); spawn('asteroid', 30, 'wide'); }
+      setup: function () { placeSun(3); spawn('ship', 12, 'wide'); spawn('enemy', 4, 'wide'); spawn('asteroid', 30, 'wide'); }
     },
     {
       id: 'lock', name: 'Category Lock', accent: '#c8a0ff',
@@ -179,7 +209,7 @@
       notes: ['A selection is always one category.', 'Click a different type: the previous selection drops out.', 'Modifier-click on empty space: nothing changes (safe).'],
       hint: 'Select some ships, then click an asteroid. <strong>The ships are released.</strong>',
       hintTouch: 'Select some ships, then tap an asteroid. <strong>The ships are released.</strong>',
-      setup: function () { spawn('ship', 9, 'left'); spawn('asteroid', 40, 'right'); spawn('enemy', 3, 'wide'); spawn('planet', 2, 'wide'); }
+      setup: function () { placeSun(4); spawn('ship', 9, 'left'); spawn('asteroid', 40, 'right'); spawn('enemy', 3, 'wide'); spawn('planet', 2, 'wide'); }
     },
     {
       id: 'modules', name: 'Zoom & Modules', accent: '#6fe0e8',
@@ -190,6 +220,7 @@
       hint: 'Zoom in with the wheel or <code>+</code>. The station splits into modules. Click a module.',
       hintTouch: 'Pinch or tap <strong>+</strong> to zoom in. The station splits into modules. Tap a module.',
       setup: function () {
+        placeSun(5);
         buildStation(W * 0.5, Y0 + (Y1 - Y0) * 0.52);
         spawn('ship', 5, 'edges'); spawn('enemy', 2, 'edges'); spawn('asteroid', 50, 'wide');
       }
@@ -211,7 +242,11 @@
   var ctx = cv.getContext('2d');
   var IMG = {};       // path -> HTMLImageElement
   var SHIP = {};      // 'ship' | 'enemy' -> tinted canvas
+  var SRC = {};       // sprite sources for the light cache (buildSources)
+  var PTEX = {};      // planet id -> { tex: mip levels, nrm: mip levels }
   var stars = [];     // background dots in screen space
+  var LT = window.SNLight, RT = window.SNReticle;
+  var LIT_OK = !!LT;  // false when getImageData is blocked (file://)
   var TOUCH = window.matchMedia && window.matchMedia('(hover: none)').matches;
 
   function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -224,8 +259,6 @@
   // so one bad file does not stop the page.
   function loadSprites(done) {
     var paths = [];
-    SPRITES.planets.forEach(function (id) { var s = spritesOf(id); if (s[0]) paths.push(s[0]); });
-    SPRITES.ores.forEach(function (id) { spritesOf(id).forEach(function (p) { paths.push(p); }); });
     SPRITES.livery.forEach(function (id) { spritesOf(id).forEach(function (p) { paths.push(p); }); });
     SPRITES.station.forEach(function (row) { row.forEach(function (id) { var s = spritesOf(id); if (s[0]) paths.push(s[0]); }); });
     var left = paths.length;
@@ -237,13 +270,44 @@
       IMG[p] = im;
     });
   }
+  // Planet textures live in this page folder (planets/). Each one is read
+  // back to pixels once and halved into mip levels.
+  function loadPlanets(done) {
+    var left = 0;
+    PLANETS.forEach(function (P) {
+      [['tex', P.tex], ['nrm', P.nrm]].forEach(function (pair) {
+        if (!pair[1]) return;
+        left++;
+        var im = new Image();
+        im.onload = function () {
+          var px = pixels(im, im.naturalWidth, im.naturalHeight);
+          if (px && pair[0] === 'tex' && P.gain) for (var i = 0; i < px.data.length; i++) if ((i & 3) !== 3) px.data[i] = Math.min(255, px.data[i] * P.gain);
+          if (px) (PTEX[P.id] = PTEX[P.id] || {})[pair[0]] = LT.mipChain({ w: px.width, h: px.height, data: px.data }, 32);
+          if (--left === 0) done();
+        };
+        im.onerror = function () { if (--left === 0) done(); };
+        im.src = pair[1];
+      });
+    });
+    if (!left) done();
+  }
+  // RGBA pixels of an image or canvas at w x h, or null when the browser
+  // blocks the read (a tainted canvas on file://).
+  function pixels(src, w, h) {
+    if (!LIT_OK || !w || !h) return null;
+    try {
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      var x = c.getContext('2d'); x.drawImage(src, 0, 0, w, h);
+      return x.getImageData(0, 0, w, h);
+    } catch (err) { LIT_OK = false; return null; }
+  }
   function ok(im) { return im && im.complete && im.naturalWidth > 0; }
 
   // Compose the three livery layers into one ship canvas. Each layer is
   // multiplied by its tint where its mask is white. The colour layer alpha
   // then trims the result. Compositing only, so it also works from file://.
-  function tintShip(tints) {
-    var N = 160, c = document.createElement('canvas');
+  function tintShip(tints, size) {
+    var N = size || 160, c = document.createElement('canvas');
     c.width = c.height = N;
     var x = c.getContext('2d');
     SPRITES.livery.forEach(function (id, i) {
@@ -273,13 +337,38 @@
     var e = { type: type, x: x, y: y, r: TYPES[type].r, sel: false, vx: 0, vy: 0, rot: rnd(0, 6.283), spin: 0 };
     if (type === 'ship' || type === 'enemy') { var a = rnd(0, 6.283), v = rnd(0.05, 0.16); e.vx = Math.cos(a) * v; e.vy = Math.sin(a) * v; e.rot = a; }
     if (type === 'asteroid') {
-      var ore = pick(SPRITES.ores.length ? SPRITES.ores : ['']);
-      e.img = pick(spritesOf(ore).length ? spritesOf(ore) : ['']);
+      e.rock = (Math.random() * ROCKS) | 0;
       e.r = rnd(9, 16); e.spin = rnd(-0.006, 0.006); e.vx = rnd(-0.05, 0.05); e.vy = rnd(-0.05, 0.05);
     }
-    if (type === 'planet') { var pid = pick(SPRITES.planets); e.img = spritesOf(pid)[0]; e.r = rnd(30, 40); e.phase = rnd(0, 1); e.spinRate = rnd(0.00003, 0.00006); }
-    if (type === 'star') { e.tw = rnd(0, 6.283); e.r = rnd(18, 26); }
+    if (type === 'planet') {
+      e.planet = nextPlanet(); e.r = rnd(30, 40); e.phase = rnd(0, 1);
+      e.spinRate = rnd(0.000008, 0.000016) * (Math.random() < 0.5 ? -1 : 1);
+      e.tilt = e.planet.tilt + rnd(-0.15, 0.15);
+    }
+    if (type === 'star') { e.tw = rnd(0, 6.283); e.r = 24; }
+    e.ph = rnd(0, 6.283);   // reticle pulse phase
     return e;
+  }
+
+  // Planets come from a shuffled bag, so one lesson shows different worlds.
+  var planetBag = [];
+  function nextPlanet() {
+    if (!planetBag.length) planetBag = PLANETS.slice().sort(function () { return Math.random() - 0.5; });
+    return planetBag.pop();
+  }
+
+  // The one sun of a lesson, near a corner of the free area. Each lesson
+  // takes another corner, so the light comes from another side. Call it
+  // first in setup(), so the other entities keep clear of it.
+  var SUN_SPOTS = [[0.1, 0.14], [0.08, 0.88], [0.9, 0.16], [0.1, 0.86], [0.92, 0.84], [0.88, 0.14]];
+  function placeSun(i) {
+    var q = SUN_SPOTS[i % SUN_SPOTS.length];
+    var x = W * q[0], y = Y0 + (Y1 - Y0) * q[1];
+    if (narrow()) x = W * (q[0] < 0.5 ? 0.12 : 0.88);
+    var st = make('star', x, y);
+    ents.push(st);
+    S.sun = st;
+    return st;
   }
 
   // Scatter n entities of a type into a region of the visible area. The count
@@ -303,7 +392,7 @@
   }
   function crowded(x, y, r, type) {
     for (var i = 0; i < ents.length; i++) {
-      var e = ents[i], gap = (type === 'asteroid' && e.type === 'asteroid') ? -4 : 6;
+      var e = ents[i], gap = (type === 'asteroid' && e.type === 'asteroid') ? -4 : e.type === 'star' ? 30 : 6;
       if (Math.hypot(e.x - x, e.y - y) < r + e.r + gap) return true;
     }
     return false;
@@ -340,7 +429,8 @@
   // Reset to lesson i: measure the free area under the chips and over the
   // dock, rebuild the entities, then push the copy into the panel.
   function loadLesson(i) {
-    S.lesson = i; S.g = null; S.split = false; S.station = null; S.hover = null; S.preview = null;
+    S.lesson = i; S.g = null; S.split = false; S.station = null; S.hover = null; S.preview = null; S.sun = null;
+    planetBag = [];
     resize();
     var stage = $('stage').getBoundingClientRect();
     var hint = $('hint');
@@ -653,6 +743,8 @@
       var t = TYPES[sel[0].type];
       var name = sel.length === 1 && sel[0].type === 'module' ? sel[0].name : (sel.length > 1 ? t.plural : t.label);
       ro.className = 'glass has';
+      // the readout takes the bracket colour of the selected type
+      if (RT && RT.COLORS[sel[0].type]) ro.style.setProperty('--ac', RT.COLORS[sel[0].type]);
       ro.innerHTML = '';
       ro.appendChild(thumb(sel[0].type, sel[0]));
       var s = document.createElement('span');
@@ -684,51 +776,183 @@
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     stars = [];
     var n = Math.round(W * H / 5000);
-    for (var i = 0; i < n; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, a: rnd(0.08, 0.5), s: Math.random() < 0.1 ? 1.4 : 0.8 });
+    // dim points only: they light nothing
+    for (var i = 0; i < n; i++) stars.push({ x: Math.random() * W, y: Math.random() * H, a: rnd(0.05, 0.32), s: Math.random() < 0.08 ? 1.2 : 0.7 });
   }
 
-  function drawPlanet(c, e, x, y, R) {
-    var im = IMG[e.img];
-    c.save();
-    c.beginPath(); c.arc(x, y, R, 0, 6.283); c.clip();
-    c.fillStyle = '#0d1424'; c.fillRect(x - R, y - R, 2 * R, 2 * R);
-    if ('filter' in c) c.filter = 'brightness(1.7) saturate(1.15)';
+  // ── lit sprite cache ───────────────────────────────────────────────────
+  // A source is { key, sizes, lods, mat, gen }. gen(n) gives the level of
+  // detail for side n: { w, h, rgba, nrm } (light.js arrays). litCanvas
+  // gives that level shaded for one light bin, from an LRU of canvases.
+  // New shades per frame are capped by pixel count (SHADE_BUDGET); over the
+  // cap it gives null and the caller uses a ready bin or the unlit sprite.
+  // New levels of detail per frame are capped too (GEN_BUDGET); lodOf then
+  // gives a level that is ready.
+  var BINS = 32, LRU = new Map(), LRU_PX = 0, LRU_MAX = 7e6;
+  var SHADE_BUDGET = 90000, shadesLeft = SHADE_BUDGET, GEN_BUDGET = 1, gensLeft = GEN_BUDGET;
+  var planetsLeft = 1;   // planet re-shades per frame
+  function litCanvas(src, li, bin, force) {
+    var key = src.key + '|' + li + '|' + bin, c = LRU.get(key);
+    if (c) { LRU.delete(key); LRU.set(key, c); return c; }
+    var d = src.lods[li];
+    if (!d) return null;
+    if (shadesLeft <= 0 && !force) return null;
+    shadesLeft -= d.w * d.h;
+    c = document.createElement('canvas'); c.width = d.w; c.height = d.h;
+    var x = c.getContext('2d'), im = x.createImageData(d.w, d.h);
+    LT.shade(d.rgba, d.nrm, d.w, d.h, LT.binLight(bin, BINS), LT.MATERIALS[src.mat], im.data);
+    x.putImageData(im, 0, 0);
+    LRU.set(key, c); LRU_PX += d.w * d.h;
+    while (LRU_PX > LRU_MAX && LRU.size > 1) {
+      var k0 = LRU.keys().next().value, c0 = LRU.get(k0);
+      LRU.delete(k0); LRU_PX -= c0.width * c0.height;
+    }
+    return c;
+  }
+  // The level of detail for a draw of devPx device pixels (built on first
+  // use). Returns -1 when the source has no pixels.
+  function lodOf(src, devPx, force) {
+    var i = 0;
+    while (i < src.sizes.length - 1 && src.sizes[i] < devPx * 0.85) i++;
+    if (src.lods[i] === undefined && (gensLeft > 0 || force)) { gensLeft--; src.lods[i] = src.gen(src.sizes[i]) || null; }
+    if (src.lods[i]) return i;
+    for (var j = 0; j < src.lods.length; j++) if (src.lods[j]) return j;
+    return -1;
+  }
+
+  // ── sprite sources ─────────────────────────────────────────────────────
+  // Ships and modules: normal maps from the sprite alpha and luminance.
+  // Asteroids: light.js rocks, one per seed. Run after loadSprites.
+  var TINTS = { ship: ['#b8d8ff', '#7fe8ff', '#ffc832'], enemy: ['#ff9a90', '#ffb070', '#ff5050'] };
+  function spriteSource(key, sizes, draw, mat, bevel, detail) {
+    return { key: key, sizes: sizes, lods: [], mat: mat, gen: function (n) {
+      var c = draw(n), px = pixels(c, c.width, c.height);
+      if (!px) return null;
+      var hs = LT.spriteHeight(px.data, c.width, c.height, { bevel: n * bevel, detail: detail });
+      return { w: c.width, h: c.height, rgba: px.data, nrm: LT.normalsFromHeight(hs.height, c.width, c.height, 1) };
+    } };
+  }
+  // An image fitted into an n x n canvas, centred.
+  function fitCanvas(im, n) {
+    var c = document.createElement('canvas'); c.width = c.height = n;
     if (ok(im)) {
-      // The front half of the texture map, in vertical strips. Each strip
-      // takes the longitude at its screen x, so the surface curves at the rim.
-      var tw = im.naturalWidth, th = im.naturalHeight, N = 28;
-      var ph = (e.phase + S.t * e.spinRate) % 1;
-      for (var i = 0; i < N; i++) {
-        var x0 = -1 + 2 * i / N, x1 = -1 + 2 * (i + 1) / N;
-        var u0 = (Math.asin(x0) / 6.283 + ph + 1) % 1 * tw;
-        var uw = (Math.asin(x1) - Math.asin(x0)) / 6.283 * tw;
-        var dx = x + x0 * R, dw = (x1 - x0) * R + 0.6;
-        if (u0 + uw <= tw) c.drawImage(im, u0, 0, uw, th, dx, y - R, dw, 2 * R);
-        else {
-          var a = tw - u0, f = a / uw;
-          c.drawImage(im, u0, 0, a, th, dx, y - R, dw * f, 2 * R);
-          c.drawImage(im, 0, 0, uw - a, th, dx + dw * f, y - R, dw * (1 - f), 2 * R);
-        }
-      }
-    } else { c.fillStyle = '#2d4a3a'; c.fillRect(x - R, y - R, 2 * R, 2 * R); }
-    if ('filter' in c) c.filter = 'none';
-    var g = c.createRadialGradient(x - R * 0.4, y - R * 0.45, R * 0.1, x, y, R * 1.05);
-    g.addColorStop(0, 'rgba(255,255,255,0.14)'); g.addColorStop(0.6, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.6)');
-    c.fillStyle = g; c.fillRect(x - R, y - R, 2 * R, 2 * R);
-    c.restore();
-    var at = c.createRadialGradient(x, y, R * 0.92, x, y, R * 1.18);
-    at.addColorStop(0, 'rgba(150,200,255,0.35)'); at.addColorStop(1, 'rgba(150,200,255,0)');
-    c.fillStyle = at; c.beginPath(); c.arc(x, y, R * 1.18, 0, 6.283); c.arc(x, y, R * 0.92, 0, 6.283, true); c.fill();
+      var w = im.naturalWidth, h = im.naturalHeight, k = n / Math.max(w, h);
+      c.getContext('2d').drawImage(im, (n - w * k) / 2, (n - h * k) / 2, w * k, h * k);
+    }
+    return c;
+  }
+  function buildSources() {
+    SHIP.ship = tintShip(TINTS.ship);
+    SHIP.enemy = tintShip(TINTS.enemy);
+    if (!LT) return;
+    ['ship', 'enemy'].forEach(function (t) {
+      SRC[t] = spriteSource(t, [96, 192], function (n) { return tintShip(TINTS[t], n); }, 'hull', 0.09, 0.35);
+    });
+    SPRITES.station.forEach(function (row) {
+      row.forEach(function (id) {
+        var p = spritesOf(id)[0];
+        if (p && ok(IMG[p])) SRC[p] = spriteSource(p, [48, 128], function (n) { return fitCanvas(IMG[p], n); }, 'module', 0.1, 0.2);
+      });
+    });
+    for (var r = 0; r < ROCKS; r++) {
+      (function (seed) {
+        SRC['rock' + seed] = { key: 'rock' + seed, sizes: [48, 96, 128], lods: [], mat: 'rock', gen: function (n) { return LT.asteroid(seed + 1, n); } };
+      })(r);
+    }
+    // the smallest level of each source now, so a first frame has one
+    for (var k in SRC) lodOf(SRC[k], 0, true);
   }
 
-  function drawStar(c, e, x, y, R) {
-    var tw = 0.85 + 0.15 * Math.sin(S.t * 0.002 + e.tw);
-    var g = c.createRadialGradient(x, y, 0, x, y, R * 1.6);
-    g.addColorStop(0, 'rgba(255,250,230,' + tw + ')'); g.addColorStop(0.18, 'rgba(255,224,140,0.85)');
-    g.addColorStop(0.5, 'rgba(255,180,80,0.18)'); g.addColorStop(1, 'rgba(255,160,60,0)');
-    c.fillStyle = g; c.beginPath(); c.arc(x, y, R * 1.6, 0, 6.283); c.fill();
-    c.strokeStyle = 'rgba(255,236,180,' + (0.35 * tw) + ')'; c.lineWidth = 1;
-    c.beginPath(); c.moveTo(x - R * 1.5, y); c.lineTo(x + R * 1.5, y); c.moveTo(x, y - R * 1.5); c.lineTo(x, y + R * 1.5); c.stroke();
+  // The light on an entity: from it to the sun of the lesson.
+  function sunLight(e, elev) {
+    return S.sun ? LT.sunDir(e.x, e.y, S.sun.x, S.sun.y, elev) : LT.sunDir(1, 1, 0, 0, elev);
+  }
+
+  // Draw a source shaded for world light Lw at (x,y), size CSS px, turned
+  // by rot. k is the device pixel ratio of the target. Two light bins blend
+  // by the angle between them. False when nothing could be drawn.
+  function drawLit(c, src, x, y, size, rot, Lw, k, force) {
+    if (!LIT_OK || !src || !Lw) return false;
+    var li = lodOf(src, size * k, force);
+    if (li < 0) return false;
+    var Ll = LT.localLight(Lw, rot), b = LT.lightBin(Ll.az, BINS);
+    var c0 = litCanvas(src, li, b.i0, force), c1 = b.f > 0.03 ? litCanvas(src, li, b.i1, force) : null;
+    // over budget: borrow a near bin that is ready
+    for (var dk = 1; !c0 && !c1 && dk <= 4; dk++) c0 = LRU.get(src.key + '|' + li + '|' + ((b.i0 + dk) % BINS)) || LRU.get(src.key + '|' + li + '|' + ((b.i0 - dk + BINS) % BINS)) || null;
+    if (!c0 && !c1) return false;
+    c.save(); c.translate(x, y); if (rot) c.rotate(rot);
+    var h = size / 2;
+    if (c0) c.drawImage(c0, -h, -h, size, size);
+    if (c1) { c.globalAlpha = c0 ? b.f : 1; c.drawImage(c1, -h, -h, size, size); }
+    c.restore();
+    return true;
+  }
+
+  // ── planet render ──────────────────────────────────────────────────────
+  // A planet is shaded per pixel (light.js shadePlanet) into its own
+  // canvas. The diameter in device pixels is quantised in steps of 12 %, so
+  // a wheel zoom does not rebuild the table each frame. The canvas is shaded
+  // again when the spin moves 1.5 texels or the light turns. One planet
+  // shades per frame.
+  function planetCanvas(e, devD, L, slot, force) {
+    var tx = PTEX[e.planet && e.planet.id];
+    if (!LIT_OK || !tx || !tx.tex) return null;
+    var D = Math.max(12, Math.min(360, Math.round(Math.pow(1.12, Math.round(Math.log(Math.max(4, devD)) / Math.log(1.12))))));
+    var pc = e[slot] || (e[slot] = {});
+    if (pc.D !== D) {
+      pc.D = D; pc.T = LT.planetTable(D, e.tilt || 0);
+      pc.c = document.createElement('canvas'); pc.c.width = pc.c.height = pc.T.B;
+      pc.x = pc.c.getContext('2d'); pc.img = pc.x.createImageData(pc.T.B, pc.T.B); pc.spin = null;
+    }
+    var tex = LT.mipTexture(tx.tex, D), nrm = tx.nrm ? LT.mipTexture(tx.nrm, D) : null;
+    var spin = (e.phase || 0) + S.t * (e.spinRate || 0);
+    var dirty = pc.spin == null || Math.abs(spin - pc.spin) * tex.w >= 1.5 || Math.abs(L.az - pc.az) > 0.004;
+    if (dirty && (force || pc.spin == null || planetsLeft > 0)) {
+      planetsLeft--;
+      LT.shadePlanet(pc.T, tex, nrm, spin, L, e.planet.atm, e.planet.k, pc.img.data);
+      pc.x.putImageData(pc.img, 0, 0);
+      pc.spin = spin; pc.az = L.az;
+    }
+    return pc;
+  }
+  function drawPlanet(c, e, x, y, R, k, L, slot, force) {
+    var pc = LIT_OK ? planetCanvas(e, 2 * R * k, L || sunLight(e, LT.ELEV_PLANET), slot || 'pc', force) : null;
+    if (pc) {
+      var s = 2 * R / pc.D * pc.T.B;
+      c.drawImage(pc.c, x - s / 2, y - s / 2, s, s);
+      return;
+    }
+    // unlit fallback: a shaded disc
+    var g = c.createRadialGradient(x - R * 0.4, y - R * 0.4, R * 0.1, x, y, R);
+    g.addColorStop(0, '#6f8fb0'); g.addColorStop(1, '#1a2533');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, 6.283); c.fill();
+  }
+
+  // ── sun ────────────────────────────────────────────────────────────────
+  // The one light source: a white-hot core with limb darkening, a warm
+  // inner corona and a wide soft glow, drawn additive. R is the pick
+  // radius; the core is about half of it.
+  function drawSun(c, e, x, y, R) {
+    var t = S.t * 0.001, fl = 1 + 0.025 * Math.sin(t * 1.3 + e.tw) + 0.015 * Math.sin(t * 2.9 + 1.7 * e.tw);
+    var core = R * 0.5;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    var g = c.createRadialGradient(x, y, core * 0.5, x, y, R * 6 * fl);
+    g.addColorStop(0, 'rgba(255,214,150,0.30)'); g.addColorStop(0.12, 'rgba(255,180,100,0.13)');
+    g.addColorStop(0.35, 'rgba(255,140,70,0.04)'); g.addColorStop(1, 'rgba(255,120,60,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, R * 6 * fl, 0, 6.283); c.fill();
+    var g2 = c.createRadialGradient(x, y, core * 0.8, x, y, core * 2.6 * fl);
+    g2.addColorStop(0, 'rgba(255,236,200,0.85)'); g2.addColorStop(0.4, 'rgba(255,196,120,0.28)'); g2.addColorStop(1, 'rgba(255,170,90,0)');
+    c.fillStyle = g2; c.beginPath(); c.arc(x, y, core * 2.6 * fl, 0, 6.283); c.fill();
+    // a faint horizontal flare, as a lens would make
+    var g3 = c.createLinearGradient(x - R * 4, y, x + R * 4, y);
+    g3.addColorStop(0, 'rgba(255,220,170,0)'); g3.addColorStop(0.5, 'rgba(255,230,190,0.16)'); g3.addColorStop(1, 'rgba(255,220,170,0)');
+    c.fillStyle = g3; c.fillRect(x - R * 4, y - 0.6, R * 8, 1.2);
+    c.globalCompositeOperation = 'source-over';
+    var g4 = c.createRadialGradient(x - core * 0.15, y - core * 0.15, 0, x, y, core);
+    g4.addColorStop(0, '#fffdf6'); g4.addColorStop(0.7, '#fff1cf'); g4.addColorStop(1, '#ffd690');
+    c.fillStyle = g4; c.beginPath(); c.arc(x, y, core, 0, 6.283); c.fill();
+    c.restore();
   }
 
   function drawSprite(c, im, x, y, size, rot) {
@@ -739,54 +963,69 @@
     c.restore();
     return true;
   }
-
-  function drawStation(c, st, z) {
-    var p = toScreen(st.x, st.y), h = CELL * 1.5 * z;
-    c.fillStyle = 'rgba(150,200,255,0.05)';
-    c.strokeStyle = S.split ? 'rgba(150,200,255,0.10)' : 'rgba(255,200,50,0.28)';
-    c.lineWidth = 1;
-    roundRect(c, p.x - h - 4, p.y - h - 4, 2 * h + 8, 2 * h + 8, 8 * Math.min(z, 1.5));
-    c.fill(); c.stroke();
+  // Unlit rock for file:// (getImageData blocked).
+  function plainRock(c, x, y, R) {
+    var g = c.createRadialGradient(x - R * 0.35, y - R * 0.35, R * 0.1, x, y, R);
+    g.addColorStop(0, '#8a8078'); g.addColorStop(1, '#2e2a27');
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, R, 0, 6.283); c.fill();
   }
 
+  // One entity in screen space. The station itself draws nothing: its
+  // modules draw it.
   function drawEntity(c, e) {
-    var p = toScreen(e.x, e.y), z = S.cam.z, R = e.r * z;
-    if (p.x < -R * 3 || p.y < -R * 3 || p.x > W + R * 3 || p.y > H + R * 3) return;
-    if (e.type === 'planet') drawPlanet(c, e, p.x, p.y, R);
-    else if (e.type === 'star') drawStar(c, e, p.x, p.y, R);
-    else if (e.type === 'station') drawStation(c, e, z);
-    else if (e.type === 'module') {
-      if (!drawSprite(c, IMG[e.img], p.x, p.y, CELL * z * 0.94, 0)) { c.fillStyle = '#3a4866'; c.fillRect(p.x - R, p.y - R, 2 * R, 2 * R); }
+    var p = toScreen(e.x, e.y), z = S.cam.z, R = e.r * z, m = e.type === 'star' ? R * 6 : R * 3;
+    if (p.x < -m || p.y < -m || p.x > W + m || p.y > H + m) return;
+    if (e.type === 'station') return;
+    if (e.type === 'planet') { drawPlanet(c, e, p.x, p.y, R, dpr); return; }
+    if (e.type === 'star') { drawSun(c, e, p.x, p.y, R); return; }
+    var L = LT ? sunLight(e) : null;
+    if (e.type === 'module') {
+      if (!drawLit(c, SRC[e.img], p.x, p.y, CELL * z * 0.94, 0, L, dpr) && !drawSprite(c, IMG[e.img], p.x, p.y, CELL * z * 0.94, 0)) { c.fillStyle = '#3a4866'; c.fillRect(p.x - R, p.y - R, 2 * R, 2 * R); }
     } else if (e.type === 'asteroid') {
-      if (!drawSprite(c, IMG[e.img], p.x, p.y, R * 2.3, e.rot)) { c.fillStyle = '#7a6a58'; c.beginPath(); c.arc(p.x, p.y, R, 0, 6.283); c.fill(); }
-    } else {
-      var shipC = SHIP[e.type];
-      if (!drawSprite(c, shipC, p.x, p.y, R * 3, e.rot + Math.PI / 2)) {
-        c.fillStyle = TYPES[e.type].color; c.beginPath(); c.arc(p.x, p.y, R * 0.6, 0, 6.283); c.fill();
-      }
-      if (e.type === 'enemy') { c.strokeStyle = 'rgba(255,120,110,0.55)'; c.lineWidth = 1; c.beginPath(); c.arc(p.x, p.y, R * 1.15, 0, 6.283); c.stroke(); }
+      if (!drawLit(c, SRC['rock' + e.rock], p.x, p.y, R * 2.5, e.rot, L, dpr)) plainRock(c, p.x, p.y, R);
+    } else if (!drawLit(c, SRC[e.type], p.x, p.y, R * 3, e.rot + Math.PI / 2, L, dpr) && !drawSprite(c, SHIP[e.type], p.x, p.y, R * 3, e.rot + Math.PI / 2)) {
+      c.fillStyle = TYPES[e.type].color; c.beginPath(); c.arc(p.x, p.y, R * 0.6, 0, 6.283); c.fill();
     }
   }
 
-  // Corner brackets round an entity. solid for the selection, dashed for a
-  // hover or box preview.
-  function reticle(c, e, color, solid) {
-    var p = toScreen(e.x, e.y), z = S.cam.z;
-    var h = (e.type === 'module' ? CELL / 2 : e.type === 'station' ? CELL * 1.5 + 4 : e.r * 1.12) * z + 4;
-    var age = e.pulse != null ? S.t - e.pulse : 1e9;
-    if (age < 260) h += (1 - age / 260) * 10;
-    var k = Math.max(5, h * 0.42);
+  // ── reticles ───────────────────────────────────────────────────────────
+  // Half size of the bracket box, in CSS px, for an entity at zoom z.
+  function extentOf(e, z) {
+    if (e.type === 'module') return CELL / 2 * z;
+    if (e.type === 'station') return CELL * 1.5 * z;
+    if (e.type === 'ship' || e.type === 'enemy') return e.r * 1.1 * z;
+    if (e.type === 'star') return e.r * 0.7 * z;
+    return e.r * z;
+  }
+  // Brackets round an entity in the state sel, hover or preview, in the
+  // colour of its type, with an additive glow under a crisp core stroke.
+  function drawReticle(c, e, state) {
+    var p = toScreen(e.x, e.y);
+    var g = RT.reticle(p.x, p.y, extentOf(e, S.cam.z), state, dpr, S.t, state === 'sel' ? e.pulse : null, e.ph || 0);
+    var col = RT.COLORS[e.type] || '#ffffff', q = g.pts;
     c.save();
-    c.strokeStyle = color; c.lineWidth = solid ? 2 : 1.4;
-    if (solid) { c.shadowColor = color; c.shadowBlur = 10; } else c.setLineDash([3, 3]);
     c.beginPath();
-    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (s) {
-      var cx = p.x + s[0] * h, cy = p.y + s[1] * h;
-      c.moveTo(cx, cy - s[1] * k); c.lineTo(cx, cy); c.lineTo(cx - s[0] * k, cy);
-    });
-    c.stroke();
+    for (var i = 0; i < 24; i += 6) { c.moveTo(q[i], q[i + 1]); c.lineTo(q[i + 2], q[i + 3]); c.lineTo(q[i + 4], q[i + 5]); }
+    if (g.glow > 0) {
+      // soft bloom: two wide round strokes, added to what is under them
+      c.globalCompositeOperation = 'lighter'; c.lineCap = 'round'; c.lineJoin = 'round';
+      c.strokeStyle = RT.rgba(col, g.glow * 0.22); c.lineWidth = g.lw * 5; c.stroke();
+      c.strokeStyle = RT.rgba(col, g.glow * 0.5); c.lineWidth = g.lw * 2.4; c.stroke();
+      c.globalCompositeOperation = 'source-over';
+    }
+    c.lineCap = 'butt'; c.lineJoin = 'miter';
+    c.strokeStyle = RT.rgba(col, g.alpha); c.lineWidth = g.lw; c.stroke();
     c.restore();
-    if (solid && e.type === 'module' && S.split) label(c, e.name, p.x, p.y + h + 13, color);
+    if (state === 'sel' && e.type === 'module' && S.split) label(c, e.name, p.x, p.y + g.half + 13, col);
+  }
+  // The drag box: a crisp thin rect with a faint fill, and a label with
+  // what the box takes.
+  function drawDragBox(c, g) {
+    var b = RT.dragBox(g.sx, g.sy, g.cx, g.cy, dpr);
+    c.fillStyle = b.fill; c.fillRect(b.x, b.y, b.w, b.h);
+    c.strokeStyle = b.stroke; c.lineWidth = b.lw; c.strokeRect(b.x, b.y, b.w, b.h);
+    var pv = S.preview;
+    if (pv && pv.length) label(c, pv.length + ' ' + (pv.length > 1 ? TYPES[pv[0].type].plural : TYPES[pv[0].type].label), b.x + b.w / 2, b.y + b.h + 14, RT.COLORS[pv[0].type] || b.stroke);
   }
   function label(c, text, x, y, color) {
     c.save();
@@ -825,6 +1064,7 @@
     resize();
     if (SV) { dt *= SV.slow; saverTick(now); }
     step(dt);
+    shadesLeft = SHADE_BUDGET; gensLeft = GEN_BUDGET; planetsLeft = 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (SV) { var bg = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, Math.max(W, H) * 0.75); bg.addColorStop(0, '#0f1422'); bg.addColorStop(1, '#07090f'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); }
@@ -838,17 +1078,11 @@
 
     DRAW_ORDER.forEach(function (t) { ents.forEach(function (e) { if (e.type === t) drawEntity(ctx, e); }); });
 
-    var ac = LESSONS[S.lesson].accent;
-    if (S.hover && !S.hover.sel && live(S.hover)) reticle(ctx, S.hover, 'rgba(238,243,251,0.6)', false);
-    if (S.preview) S.preview.forEach(function (e) { reticle(ctx, e, ac, false); });
-    ents.forEach(function (e) { if (e.sel && live(e)) reticle(ctx, e, ac, true); });
-
-    var g = S.g;
-    if (g && g.mode === 'box') {
-      var x = Math.min(g.sx, g.cx), y = Math.min(g.sy, g.cy), w = Math.abs(g.cx - g.sx), h = Math.abs(g.cy - g.sy);
-      ctx.fillStyle = 'rgba(150,200,255,0.07)'; ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = ac; ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]); ctx.strokeRect(x + 0.5, y + 0.5, w, h); ctx.setLineDash([]);
-      if (S.preview && S.preview.length) label(ctx, S.preview.length + ' ' + (S.preview.length > 1 ? TYPES[S.preview[0].type].plural : TYPES[S.preview[0].type].label), x + w / 2, y + h + 14, ac);
+    if (RT) {
+      if (S.hover && !S.hover.sel && live(S.hover)) drawReticle(ctx, S.hover, 'hover');
+      if (S.preview) S.preview.forEach(function (e) { if (!e.sel) drawReticle(ctx, e, 'preview'); });
+      ents.forEach(function (e) { if (e.sel && live(e)) drawReticle(ctx, e, 'sel'); });
+      if (S.g && S.g.mode === 'box') drawDragBox(ctx, S.g);
     }
     if (SV && SV.fade > 0) { ctx.fillStyle = 'rgba(7,9,15,' + SV.fade + ')'; ctx.fillRect(0, 0, W, H); }
     requestAnimationFrame(frame);
@@ -856,28 +1090,30 @@
 
   // ── ladders ────────────────────────────────────────────────────────────
   // A small canvas with one sample of a type, drawn by the canvas code.
+  // The legend light comes from the upper left, as from a sun there.
   function thumb(type, sample) {
     var c = document.createElement('canvas'), N = 30, k = Math.min(window.devicePixelRatio || 1, 2);
     c.width = c.height = N * k;
     var x = c.getContext('2d'); x.scale(k, k);
     var e = sample || SAMPLES[type];
     if (!e) return c;
-    if (type === 'planet') drawPlanet(x, e, N / 2, N / 2, 12);
-    else if (type === 'star') drawStar(x, e, N / 2, N / 2, 8);
+    var L = LT ? LT.sunDir(1, 1, 0, 0) : null, h = N / 2;
+    if (type === 'planet') drawPlanet(x, e, h, h, 12, k, LT && LT.sunDir(1, 1, 0, 0, LT.ELEV_PLANET), 'pcThumb', true);
+    else if (type === 'star') drawSun(x, e, h, h, 11);
     else if (type === 'station') {
-      SPRITES.station.forEach(function (row, ri) { row.forEach(function (id, ci) { var sp = spritesOf(id); if (sp[0]) drawSprite(x, IMG[sp[0]], N / 2 + (ci - 1) * 9, N / 2 + (ri - 1) * 9, 8.6, 0); }); });
-    } else if (type === 'module') drawSprite(x, IMG[e.img], N / 2, N / 2, 24, 0);
-    else if (type === 'asteroid') drawSprite(x, IMG[e.img], N / 2, N / 2, 24, 0.4);
-    else drawSprite(x, SHIP[type], N / 2, N / 2, 30, 0);
+      SPRITES.station.forEach(function (row, ri) { row.forEach(function (id, ci) { var sp = spritesOf(id); if (sp[0] && !drawLit(x, SRC[sp[0]], h + (ci - 1) * 9, h + (ri - 1) * 9, 8.6, 0, L, k, true)) drawSprite(x, IMG[sp[0]], h + (ci - 1) * 9, h + (ri - 1) * 9, 8.6, 0); }); });
+    } else if (type === 'module') { if (!drawLit(x, SRC[e.img], h, h, 24, 0, L, k, true)) drawSprite(x, IMG[e.img], h, h, 24, 0); }
+    else if (type === 'asteroid') { if (!drawLit(x, SRC['rock' + e.rock], h, h, 30, 0.4, L, k, true)) plainRock(x, h, h, 10); }
+    else if (!drawLit(x, SRC[type], h, h, 30, 0, L, k, true)) drawSprite(x, SHIP[type], h, h, 30, 0);
     return c;
   }
   var SAMPLES = {};
   function buildLadders() {
     SAMPLES = {
-      planet: { img: spritesOf('planets/terran')[0], phase: 0.2, spinRate: 0 },
+      planet: { planet: PLANETS[0], phase: 0.15, spinRate: 0, tilt: PLANETS[0].tilt },
       star: { tw: 0 },
       module: { img: spritesOf('modules/foundry')[0] },
-      asteroid: { img: spritesOf(SPRITES.ores[0] || '')[0] },
+      asteroid: { rock: 2 },
       ship: {}, enemy: {}, station: {}
     };
     [['ladClick', 'click'], ['ladBox', 'box']].forEach(function (pair) {
@@ -923,10 +1159,10 @@
     loadLesson(start);
     requestAnimationFrame(frame);
     loadSprites(function () {
-      SHIP.ship = tintShip(['#b8d8ff', '#7fe8ff', '#ffc832']);
-      SHIP.enemy = tintShip(['#ff9a90', '#ffb070', '#ff5050']);
+      buildSources();
       buildLadders();
       updateReadout();
+      if (LT) loadPlanets(function () { buildLadders(); updateReadout(); });
     });
     window.addEventListener('resize', function () { var oW = W, oH = H; resize(); if (Math.abs(W - oW) > 80 || Math.abs(H - oH) > 160) loadLesson(S.lesson); });
   }
@@ -996,7 +1232,7 @@
   // scene. No page code reads this object.
   window.__snSelection = {
     S: S, ents: function () { return ents; }, setEnts: function (a) { ents = a; },
-    make: make, loadLesson: loadLesson, toScreen: toScreen, toWorld: toWorld, zoomAt: zoomAt,
+    make: make, loadLesson: loadLesson, sunLight: sunLight, drawn: function () { return { lru: LRU.size, litOk: LIT_OK, planets: Object.keys(PTEX).length, sources: Object.keys(SRC).length }; }, toScreen: toScreen, toWorld: toWorld, zoomAt: zoomAt,
     doClick: doClick, doBox: doBox, clickWinner: clickWinner, boxWinners: boxWinners, live: live,
     TYPES: TYPES, LESSONS: LESSONS, CELL: CELL, SPLIT_IN: SPLIT_IN, SPLIT_OUT: SPLIT_OUT,
     view: function () { return { W: W, H: H, Y0: Y0, Y1: Y1 }; }
