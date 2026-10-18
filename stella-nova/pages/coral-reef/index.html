@@ -24,7 +24,8 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
-     2. style.css, lib/sci.css, lib/growth-gradients.css, lib/sn-panel.css
+     2. style.css, lib/sci.css, lib/growth-gradients.css, lib/sn-panel.css,
+        hud.css (the camera bar ROV group, the feed cards, tags, minimap)
      3. importmap for three r160, then main.js as a module
 
    LAYOUT  (# marks an element id that main.js binds)
@@ -38,10 +39,15 @@
                  menu. Menu opens #panel as a bottom sheet (portrait) or a
                  drawer (landscape). #feed is a small card above the dock
                  at the right: a tap makes it large.
-     camera .... #camBar: Follow ROV, Orbit, Swim and Tours (camera.js,
+     camera .... #camBar: Orbit, Swim, #rovPick (one button per ROV: select
+                 it and follow it, keys 1 to 4) and Tours (camera.js,
                  input.js); #tourList the tour menu (the canyons and arches
-                 near the eye). On #feed, #feedCycle (a tap) shows the next
-                 ROV, a long press or #feedSize makes the card large.
+                 near the eye).
+     HUD ....... squad-hud.js: #feed holds one card per ROV in #feedSlot
+                 (the selected one large; a tap on a small card selects its
+                 ROV; #feedSize or a tap on the main card makes it large;
+                 phones: one card and #feedTabs). #minimap at the lower
+                 left: the explored seafloor. #rovTags: the 3D tags.
 
    GREP MAP  (main.js)
      grep -n 'function buildWorld'   the streamer, the squad and the ROVs
@@ -54,6 +60,7 @@
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../lib/growth-gradients.css">
 <link rel="stylesheet" href="../../lib/sn-panel.css">
+<link rel="stylesheet" href="hud.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -76,19 +83,32 @@
 </div>
 <div id="hint">The ROV squad explores on its own · Orbit, Swim or Tours to look round yourself · Follow ROV to go back to them</div>
 <div id="camBar" role="toolbar" aria-label="Camera">
-  <button type="button" data-cam="follow" class="on" aria-pressed="true" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i data-icon="target"></i><span id="camFollowLbl">Follow ROV</span></button>
   <button type="button" data-cam="orbit" aria-pressed="false" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i data-icon="orbit"></i><span>Orbit</span></button>
   <button type="button" data-cam="swim" aria-pressed="false" title="Swim (F): WASD to move, E and Q up and down, Shift fast, click to look with the mouse"><i data-icon="swim"></i><span>Swim</span></button>
+  <div id="rovPick" role="group" aria-label="ROVs: select one to follow it and make its camera the main card (keys 1 to 4)">
+    <button type="button" data-cam="follow" data-rov="1" class="on sel" aria-pressed="true" style="--c:#f2b705" title="ROV 1 (key 1): select it, follow it with the camera and make its feed the main card"><i class="rdot" aria-hidden="true"></i><span><em>ROV </em>1</span></button>
+  </div>
   <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches near you"><i data-icon="route"></i><span>Tours</span></button>
+  <span id="camFollowLbl" class="sr" aria-live="polite">Following ROV 1</span>
 </div>
 <div id="tourList" hidden role="menu" aria-label="Tours"></div>
-<div id="feed" hidden>
-  <button id="feedCycle" type="button" aria-label="Show the next ROV camera (hold to make the card larger)"></button>
+<div id="feed" hidden aria-label="ROV cameras">
+  <div id="feedTabs" role="tablist" aria-label="ROV cameras"></div>
   <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false"><i data-icon="expand"></i></button>
   <div id="feedSlot"></div>
 </div>
+<div id="rovTags" aria-hidden="true"></div>
 <div id="tapMark" aria-hidden="true"></div>
 <div id="legend" class="snp-card"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
+<div id="minimap" role="region" aria-label="Map of the explored seafloor">
+  <canvas id="mmCanvas" role="img" aria-label="Map of the explored seafloor"></canvas>
+  <div class="mm-tools">
+    <button id="mmFold" type="button" aria-expanded="true" aria-controls="mmCanvas" title="Show or hide the map"><span class="when-open" aria-hidden="true">▾</span><span class="when-fold">Map</span><span class="sr">Map</span></button>
+    <button id="mmIn" type="button" aria-label="Zoom the map in">+</button>
+    <button id="mmOut" type="button" aria-label="Zoom the map out">−</button>
+  </div>
+  <div class="mm-legend" aria-label="Depth colours: 0 m to 6 km"><span class="mm-bar"></span><span class="mm-ticks"><i style="left:0">0</i><i style="left:43%">40</i><i style="left:61%">200</i><i style="left:79%">1 km</i><i style="left:100%">6 km</i></span><span id="mmZoom">240 m</span></div>
+</div>
 
 <aside id="panel" class="snp" aria-label="Controls">
   <button id="sheetGrip" class="snp-grip" type="button" aria-label="Resize controls" aria-controls="panel"><span></span></button>

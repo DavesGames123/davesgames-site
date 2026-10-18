@@ -37,8 +37,12 @@
 //    grep -n 'function buildWorld'    the streamer, the squad and the ROVs
 //    grep -n 'const view = {'         the streamer view
 //    grep -n 'function buildROVs'     the vehicles, lamps and the feed card
-//    grep -n 'function presentFeed'   the live feed into the canvas at the card
-//    grep -n 'function camUI'         the camera bar, the tours, the feed card taps
+//    grep -n 'function presentFeed'   the live feeds into the canvas at the cards
+//    grep -n 'function camUI'         the camera bar and the tours
+//    grep -n 'mountSquadHud'          squad-hud.js: the ROV selection (bar,
+//                                     keys 1 to 4), one feed card per ROV
+//                                     (rov/feeds.js), the 3D tags, the minimap
+//    grep -n 'function onSelectRov'   a selected ROV: the camera follows it
 //    grep -n 'function followDefault' the default camera: follow the lead ROV
 //    grep -n 'function setMode'       colour by
 //    grep -n 'function applyCamera'   the render eye (origin, tilt)
@@ -50,6 +54,8 @@ import { SPECIES, bleachLevel } from './reef.js';
 import { MODES } from './colour.js';
 import { SHAPES } from './coral-sdf.js';
 import { createROVs } from './rov/index.js';
+import { createFeedSet } from './rov/feeds.js';
+import { mountSquadHud } from './squad-hud.js';
 import { createSquad, frontierScore } from './rov/squad.js';
 import { squadPlan, squadShotPose, safeCamera, cardRect, frameFit } from './saver.js';
 import { lut, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
@@ -68,6 +74,7 @@ import { worldPhysics } from './world/physics.js';
 import { chunkMirror, chunkColours, writeChunk, writeHidden } from './world/coral-data.js';
 import { tiltEye } from '../../lib/tilt.js';
 import { mountFauna } from './fauna/hook.js';
+import { SURFACE_Y } from './water.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia(PHONE_QUERY);
@@ -98,6 +105,7 @@ const G = {
   feedMode: 'live',
 };
 let shell = null, saverOn = false, saver = null;
+let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
 
 // ── scene ───────────────────────────────────────────────────────────────────
 const canvas = $('view');
@@ -270,6 +278,8 @@ function buildROVs() {
       pilots: squad.vehicles.map(v => v.state), seed: G.seed, quality: PROFILE_ID === 'desktop' ? 'high' : 'low', profile: PROF,
       origin: () => origin, depthBase: DEPTH_BASE,
       feed: { mode: G.sstv, document, dpr: Math.min(2, devicePixelRatio || 1), size: PROF.feed },
+      // one feed per ROV (rov/feeds.js): the cards of squad-hud.js
+      makeFeed: (base, ids) => createFeedSet(S.THREE, Object.assign({}, base, { ids, main: hud ? hud.selected : ids[0] })),
     });
   } catch (e) { console.error('coral-reef: no ROVs', e); rovs = null; }
   if (!rovs) { S.setLights([]); return; }
@@ -277,19 +287,30 @@ function buildROVs() {
   const first = V.map(v => v.lights && v.lights[0]).filter(Boolean);
   const rest = V.flatMap(v => (v.lights || []).slice(1));
   S.setLights([...first, ...rest], first.length);
-  const slot = $('feedSlot');
-  if (slot && rovs.feed && rovs.feed.canvas) { slot.innerHTML = ''; slot.appendChild(rovs.feed.canvas); }
+  if (hud) hud.setRovs(rovs);          // the camera bar ROV group, the feed cards, the tags
   applyFeedMode();
   showFeed();
   followDefault();
 }
-// The default view: the chase camera behind the lead ROV.
+// The default view: the chase camera behind the selected ROV (the lead
+// ROV until the user selects another: squad-hud.js).
+const selectedId = () => { const V = rovs ? rovs.vehicles : []; const id = hud ? hud.selected : 1; return V.some(v => v.id === id) ? id : (V[0] ? V[0].id : 1); };
 function followDefault() {
   if (!cam || saverOn || camChoice || !rovs || !rovs.vehicles || !rovs.vehicles.length) return false;
-  const id = rovs.vehicles[0].id;
+  const id = selectedId();
   if (cam.mode !== 'follow' || cam.followId !== id) cam.follow(id, { snap: true });
   camUI();
   return true;
+}
+// squad-hud.js select(id): the camera follows that ROV (the default view
+// again, so a new ROV count or the saver exit keeps it)
+function onSelectRov(id, how) {
+  if (shell) shell.setDock({ feed: `ROV ${id}` });
+  if (!how.follow || saverOn || !cam) return;
+  camChoice = null; $('tourList').hidden = true;
+  cam.follow(id, { snap: false });
+  camUI();
+  if (how.source !== 'api') flash(`ROV ${id} selected: the camera follows it.`);
 }
 function showFeed() {
   const f = $('feed'); if (!f) return;
@@ -302,32 +323,12 @@ function applyFeedMode() {
   if (rovs && rovs.feed && rovs.feed.setMode) rovs.feed.setMode(feedModeId());
   feedT = 0;
 }
-let feedRect = null, feedOp = 0, feedT = 0;
-function presentFeed() {
-  const fd = rovs && rovs.feed;
-  if (!fd || !fd.present) return;
-  if ((feedT++ % 10) === 0) {
-    const f = $('feed'), c = fd.canvas;
-    const vis = !!(G.feed && f && !f.hidden && c && c.isConnected);
-    feedRect = null; feedOp = 0;
-    if (vis) {
-      feedOp = parseFloat(getComputedStyle(f).opacity);
-      if (!(feedOp >= 0)) feedOp = 1;
-      const r = c.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
-      feedRect = fd.pictureRect({ x: r.left - cr.left, y: r.top - cr.top, w: r.width, h: r.height });
-    }
-    fd.setActive(vis && feedOp > 0.01);
-    if (f) f.classList.toggle('live', !!fd.live);
-  }
-  if (fd.live && feedRect) fd.present(feedRect, feedOp);
-}
-function nextFeed() {
-  if (!rovs || !rovs.feed || !rovs.vehicles.length) return;
-  const V = rovs.vehicles, v = V[(V.findIndex(x => x.id === rovs.feed.vehicle) + 1) % V.length];
-  rovs.feed.setVehicle(v.id);
-  flash(`Camera feed: ROV ${v.id}`);
-  if (shell) shell.setDock({ feed: `ROV ${v.id}` });
-}
+let feedT = 0;
+// The live pictures of the feed cards, after the main render (squad-hud.js
+// present: one blit per shown card; the feed set renders the frames).
+function presentFeed() { if (hud) hud.present(); }
+// The dock feed button: the next ROV (its card, the camera, the tag).
+function nextFeed() { if (hud) hud.selectNext(1); }
 
 // ── colour ──────────────────────────────────────────────────────────────────
 const LEG = {
@@ -514,6 +515,11 @@ function buildUI() {
   });
   if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: () => {}, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => true });
   bindCamBar();
+  hud = mountSquadHud({
+    doc: document, win: window, THREE: S ? S.THREE : null, canvas, camera: () => (S ? S.camera : null),
+    getSquad: () => squad, getRovs: () => rovs, getField: () => W, getCam: () => cam, surfaceY: SURFACE_Y,
+    phoneQ: PHONE_Q, isSaver: () => saverOn, feedOn: () => G.feed, onSelect: onSelectRov, flash,
+  });
   setTimeout(hideHint, 9000);
 }
 
@@ -521,11 +527,12 @@ function buildUI() {
 function camUI() {
   const m = cam ? cam.mode : 'orbit', open = !$('tourList').hidden;
   document.querySelectorAll('#camBar button').forEach(b => {
-    const on = b.dataset.cam === 'tour' ? open || m === 'tour' : b.dataset.cam === m;
+    // an ROV button (squad-hud.js) is on when the camera follows that ROV
+    const on = b.dataset.cam === 'tour' ? open || m === 'tour' : b.dataset.rov ? m === 'follow' && !!cam && +b.dataset.rov === cam.followId : b.dataset.cam === m;
     b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
     if (b.dataset.cam === 'tour') b.setAttribute('aria-expanded', String(open));
   });
-  const fl = $('camFollowLbl'); if (fl) fl.textContent = m === 'follow' && cam ? `ROV ${cam.followId}` : 'Follow ROV';
+  const fl = $('camFollowLbl'); if (fl) fl.textContent = m === 'follow' && cam ? `Following ROV ${cam.followId}` : `ROV ${hud ? hud.selected : 1} selected`;
   const cur = cam && m === 'tour' && cam.tour.T ? cam.tour.T.id : null;
   document.querySelectorAll('#tourList button').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
   if (shell) shell.setDock({ cam: m === 'follow' ? 'Follow' : m === 'orbit' ? 'Orbit' : m === 'swim' ? 'Swim' : m === 'tour' ? 'Tour' : 'Saver' });
@@ -554,26 +561,19 @@ function pickCam(want) {
     cam.setMode('swim');
     flash(COARSE ? 'Swim: the left side moves, a drag on the right looks.' : 'Swim: WASD to move, E and Q up and down, Shift fast. Click to look with the mouse, Esc frees it.');
   } else if (want === 'follow') {
+    // follow the selected ROV (the dock camera button, the G key)
     const V = rovs ? rovs.vehicles : [];
     if (!V.length) { flash('The ROVs are not in the water yet.'); return; }
-    const i = cam.mode === 'follow' ? (V.findIndex(v => v.id === cam.followId) + 1) % V.length : 0;
-    cam.follow(V[i].id);
-    if (i === 0) camChoice = null;           // following the lead is the default again
-    flash(`Following ROV ${V[i].id}: drag to look round it.`);
+    const id = selectedId();
+    cam.follow(id);
+    camChoice = null;                        // following is the default view again
+    flash(`Following ROV ${id}: drag to look round it.`);
   } else if (want === 'tour') { const t = $('tourList'); t.hidden = !t.hidden; if (!t.hidden) buildTourUI(); }
   camUI();
 }
 function bindCamBar() {
-  document.querySelectorAll('#camBar button').forEach(b => b.addEventListener('click', () => pickCam(b.dataset.cam)));
-  const fc = $('feedCycle');
-  if (fc) {
-    let hold = 0, long = false;
-    fc.addEventListener('pointerdown', () => { long = false; clearTimeout(hold); hold = setTimeout(() => { long = true; const s = $('feedSize'); if (s) s.click(); }, 550); });
-    const end = () => clearTimeout(hold);
-    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fc.addEventListener(ev, end);
-    fc.addEventListener('contextmenu', e => e.preventDefault());
-    fc.addEventListener('click', () => { if (long) { long = false; return; } nextFeed(); });
-  }
+  // the ROV buttons (#rovPick, data-rov) belong to squad-hud.js
+  document.querySelectorAll('#camBar button:not([data-rov])').forEach(b => b.addEventListener('click', () => pickCam(b.dataset.cam)));
   camUI();
 }
 // The chase camera reads the vehicle pose (squad state, world metres).
@@ -658,6 +658,7 @@ function frame(t) {
   if (fauna && cam) fauna.frame(dt, S.camera, cam.eye);
   S.render(dt, now);
   presentFeed();
+  if (hud) { try { hud.tick(dt); } catch (e) { console.error('coral-reef: HUD', e); } }
 }
 
 function onResize() {
@@ -685,7 +686,7 @@ window.__coralDebug = () => ({
   origin: origin.slice(), seed: G.seed,
   world: S ? S.world : null, stream: streamer ? streamer.stats : null, pool: pool ? pool.stats : null, fallback: fallbackWhy,
   squad: squad ? { task: squad.task.kind, label: squad.task.label, stats: Object.assign({}, squad.stats), p: squad.vehicles.map(v => v.state.p.slice()) } : null,
-  coralChunks: coral.size, fine: fineK.size, ageMin: youngestAge(),
+  coralChunks: coral.size, fine: fineK.size, ageMin: youngestAge(), hud: hud ? hud.debug() : null,
   fauna: fauna && fauna.F ? fauna.F.stats() : null,
   solid: P ? (x, y, z) => P.sdf(x, y, z) / P.sdfScale : null,
   post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
@@ -720,10 +721,12 @@ window.snSaver = {
     const plan = squadPlan(seed, 60);
     if (cam) { cam.setMode('saver'); $('tourList').hidden = true; }
     const st = { i: -1, shot: null, t: 0, cut: true, labT: 0, bandFn: null, bandT: 0, pose: null };
-    saver = { band: null, card: null, tick, st, saved: { feed: G.feed, mode: G.mode, gradient: G.gradient, rev: G.rev }, next: () => next() };
+    saver = { band: null, card: null, tick, st, saved: { feed: G.feed, mode: G.mode, gradient: G.gradient, rev: G.rev, sel: hud ? hud.selected : 1 }, next: () => next() };
     import('../../lib/saver-clear.js').then(m => { st.bandFn = m.plateBand; }).catch(() => { /* no plate */ });
     G.feed = true; showFeed();
-    if (rovs && rovs.feed && rovs.vehicles[0]) rovs.feed.setVehicle(rovs.vehicles[0].id);
+    // the saver films the lead: its feed is the one card (cardRect)
+    if (hud && rovs && rovs.vehicles[0]) hud.select(rovs.vehicles[0].id, { follow: false });
+    else if (rovs && rovs.feed && rovs.vehicles[0]) rovs.feed.setVehicle(rovs.vehicles[0].id);
     function makeLabel() {
       if (!squad) return null;
       const s = squad.stats, L = squad.vehicles[0].state;
@@ -806,7 +809,7 @@ window.snSaver = {
     canvas.style.opacity = '';
     const f = $('feed'); if (f) f.removeAttribute('style');
     const sv = saver && saver.saved; saver = null;
-    if (sv) { G.feed = sv.feed; showFeed(); }
+    if (sv) { G.feed = sv.feed; showFeed(); if (hud) { hud.select(sv.sel, { follow: false }); hud.layout(); } }
     if (cam) {
       cam.setAutoRotate(G.orbit);
       if (!followDefault()) cam.setMode(camChoice === 'swim' ? 'swim' : 'orbit');

@@ -31,6 +31,13 @@
 //    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
 //                             extents, budgets) and the ROVs keep clear
 //                             of the coral (rov/coral-field.js)
+//    tests/feeds.test.mjs ... HUD: one feed per ROV in the old render
+//                             budget (rov/feeds.js), the small card HUD
+//    tests/minimap.test.mjs . HUD: the minimap projection, the fog of the
+//                             visited cells, the arrows, the card layout
+//    tests/hud.test.mjs ..... HUD: the page in jsdom: one card per ROV, the
+//                             ROV selection (bar, cards, keys 1 to 4, tags,
+//                             minimap, camera), phones, the saver card
 //    tests/fauna.test.mjs ... FAUNA: the licence manifest of every creature
 //                             file, sizes per profile, GLB parse, depth
 //                             ranges, determinism, no swimmer in rock,
