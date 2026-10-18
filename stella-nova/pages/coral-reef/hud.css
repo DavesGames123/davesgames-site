@@ -45,6 +45,7 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
 #feed:not(.one):not(.big) .fcard:not(.main){grid-column:1}
 #feedTools{display:flex;gap:4px;justify-content:flex-end}
 #feedTools button{min-width:32px;height:28px;padding:0 8px;border:1px solid var(--snp-line,var(--line));border-radius:var(--snp-r,8px);background:var(--snp-bg,rgba(3,18,27,0.85));color:var(--snp-ink,var(--ink));font:600 0.75rem var(--sci-mono,ui-monospace,monospace);cursor:pointer}
+#feedTools button.on{border-color:var(--snp-accent,var(--accent));color:var(--snp-accent,var(--accent))}
 #feedTools button:hover{background:var(--snp-raise-h,rgba(255,255,255,0.08))}
 #feedTools button:focus-visible{outline:2px solid var(--snp-accent,var(--accent));outline-offset:1px}
 #feedTabs button{min-width:40px;min-height:32px;padding:2px 8px;border:1px solid var(--snp-line,var(--line));border-bottom:2px solid var(--c);border-radius:var(--snp-r,8px) var(--snp-r,8px) 0 0;background:var(--snp-bg,rgba(3,18,27,0.85));color:var(--snp-dim,var(--dim));font:600 0.75rem var(--sci-mono,ui-monospace,monospace);cursor:pointer}

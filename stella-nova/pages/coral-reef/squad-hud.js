@@ -25,6 +25,13 @@
 //  style of #feed). present() draws the live pictures after the main
 //  render; only the feeds whose cards show are active (no renders else).
 //
+//  CYCLE (#feedCycle, key C; off by default, localStorage). Every 25 s
+//  the selection goes to the next ROV through select(), so the bar, the
+//  cards, the tags, the minimap and the follow camera (a glide, no snap)
+//  agree. A hand selection starts the dwell again; a hand camera input
+//  (drag, wheel, move keys, Orbit, Swim, Tours) stops it for a minute of
+//  no input. The saver hides the button and does not cycle.
+//
 //  MINIMAP (#minimap, minimap.js). 4 redraws a second, centred on the
 //  selected ROV; the fog buffer paints each new visited cell once. A click
 //  or a tap (or Enter, or the key M) opens the large map (map-view.js
@@ -49,6 +56,7 @@
 //    "export function feedLayout"    the card widths (pure)
 //    "export function feedRects"     the card rects of a layout (pure)
 //    "  function buildTools"  "  function setFeedSize"
+//    "export function createCycle"   the Cycle mode (pure)  "  function setCycle"
 //    "export function vehicleTask"   the task text of each ROV (pure)
 //    "export function mountSquadHud"
 //    "  function select("  "  function buildBar"  "  function buildCards"
@@ -111,12 +119,35 @@ export function vehicleTask(squad, i) {
   return st.mode === 'inspect' ? 'lighting the colony' : `following ROV ${squad.vehicles[0].id}`;
 }
 
+// CYCLE. The user said (2026-10-18): "we should have a mode where we can
+// just slowly swap back and forth between rovers (cycle button above the
+// camers)". When on, step(dt) returns true each dwell (s): the HUD then
+// selects the next ROV. picked() (a hand selection) starts the dwell again.
+// input() (a camera input by hand) stops the cycle until idle s pass with
+// no input, or until the cycle is set again.
+export const CYCLE_DWELL = 25, CYCLE_IDLE = 60;
+export function createCycle({ dwell = CYCLE_DWELL, idle = CYCLE_IDLE } = {}) {
+  const c = { on: false, t: 0, pause: 0, dwell, idle };
+  c.set = (on) => { c.on = !!on; c.t = 0; c.pause = 0; };
+  c.picked = () => { c.t = 0; };
+  c.input = () => { if (c.on) c.pause = c.idle; };
+  c.step = (dt) => {
+    if (!c.on) return false;
+    if (c.pause > 0) { c.pause = Math.max(0, c.pause - dt); if (c.pause === 0) c.t = 0; return false; }
+    if ((c.t += dt) >= c.dwell) { c.t = 0; return true; }
+    return false;
+  };
+  return c;
+}
+
 export function mountSquadHud(o) {
   const doc = o.doc, win = o.win || doc.defaultView;
   const $ = (id) => doc.getElementById(id);
   const phone = () => !!(o.phoneQ && o.phoneQ.matches);
   let sel = 1, rovs = null, frameN = 0, mapT = 0, trailT = 0, labT = 0, zoom = 1, fold = phone();
   let rects = new Map(), op = 1;
+  const cyc = createCycle(o.cycle || {});
+  let cycling = false;
   const trails = new Map();          // id -> [[x, z], ...]
   const mm = { fog: null, squad: null, W: null, known: -1, target: null, arrows: [], last: null };
   let big = null;                    // map-view.js: the large map (a click on the minimap or M)
@@ -131,6 +162,7 @@ export function mountSquadHud(o) {
     if (!all.length) { sel = id; return false; }
     if (!all.includes(id)) return false;
     sel = id;
+    if (!cycling) cyc.picked();      // a hand selection: the dwell starts again
     if (rovs && rovs.feed && rovs.feed.setVehicle) rovs.feed.setVehicle(id);
     if (rovs && typeof rovs.setHighlight === 'function') rovs.setHighlight(id, rovColour(id));   // ROV-LOOK: a rim glow (NOTES.md)
     syncSelection();
@@ -260,10 +292,39 @@ export function mountSquadHud(o) {
     const row = doc.createElement('div'); row.id = 'feedTools'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'Camera cards');
     const b = doc.createElement('button'); b.type = 'button'; b.id = 'feedScale';
     b.addEventListener('click', () => setFeedSize(FS[(FS.indexOf(feedSize) + 1) % FS.length], true));
-    row.appendChild(b);
+    const cb = doc.createElement('button'); cb.type = 'button'; cb.id = 'feedCycle'; cb.textContent = 'Cycle';
+    cb.title = `Cycle (C): select the next ROV every ${cyc.dwell} s, the camera glides to it`;
+    cb.addEventListener('click', () => setCycle(!cyc.on, true));
+    row.append(cb, b);
     f.insertBefore(row, f.firstChild);
     setFeedSize(feedSize, false);
+    setCycle(cycOn, false);
   }
+  // the cycle: off by default, kept in localStorage 'coral-reef-feed-cycle'
+  let cycOn = false;
+  try { cycOn = win.localStorage.getItem('coral-reef-feed-cycle') === '1'; } catch { /* private mode: off */ }
+  function setCycle(on, keep) {
+    cycOn = !!on; cyc.set(cycOn);
+    const cb = $('feedCycle');
+    if (cb) { cb.setAttribute('aria-pressed', String(cycOn)); cb.classList.toggle('on', cycOn); }
+    if (keep) {
+      try { win.localStorage.setItem('coral-reef-feed-cycle', cycOn ? '1' : '0'); } catch { /* not kept */ }
+      if (o.flash) o.flash(cycOn ? `Cycle on: the next ROV every ${cyc.dwell} s.` : 'Cycle off.');
+    }
+  }
+  function cycleStep(dt) {
+    if (o.isSaver() || (big && big.covers()) || ids().length < 2) return;
+    if (!cyc.step(dt)) return;
+    const all = ids(), i = all.indexOf(sel);
+    cycling = true;
+    try { select(all[((i < 0 ? 0 : i) + 1) % all.length], { source: 'api' }); } finally { cycling = false; }
+  }
+  // a camera input by hand stops the cycle for a minute of no input
+  const camInput = () => cyc.input();
+  if (o.canvas && o.canvas.addEventListener) for (const ev of ['pointerdown', 'wheel', 'touchstart']) o.canvas.addEventListener(ev, camInput, { passive: true });
+  const cbar = $('camBar');
+  if (cbar) cbar.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('button[data-cam]'); if (t && t.dataset.cam !== 'follow') camInput(); }, true);
+  const MOVE = /^(Key[WASDQE]|Arrow(Up|Down|Left|Right)|Space)$/;
   function setFeedSize(v, keep) {
     feedSize = FS.includes(v) ? v : 'M';
     const b = $('feedScale');
@@ -431,6 +492,8 @@ export function mountSquadHud(o) {
     if (!ctx) return st;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const r = drawMinimap(ctx, st);
+    // the discoveries (discoveries.js marks): icons, hover, click to orbit
+    if (o.marks) { try { o.marks.draw(ctx, view, 'mini'); } catch (e) { console.error('coral-reef: minimap marks', e); } }
     mm.arrows = r.arrows;
     cv.setAttribute('aria-label', `Map of the explored seafloor, north up, ${span} m across: ${F.painted.size} cells of 12 m explored here. ROV ${sel} is selected, ${st.sub}${rg ? ' in the ' + rg.name : ''}. Click, or press Enter or M, to open the large map.`);
     return st;
@@ -447,6 +510,7 @@ export function mountSquadHud(o) {
 
   function tick(dt) {
     placeTags(dt);
+    cycleStep(dt);
     if ((trailT += dt) > 1.5) { trailT = 0; stepTrails(); }
     if ((mapT += dt) > 0.25) { mapT = 0; if (!fold && !o.isSaver()) drawMap(); }
     if (big) big.tick(dt);
@@ -458,6 +522,9 @@ export function mountSquadHud(o) {
   const typing = (e) => { const t = e.target; return t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')); };
   function onKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || typing(e) || o.isSaver()) return;
+    if (MOVE.test(e.code || '')) camInput();
+    // C: the cycle (in Swim, C is the swim down key of input.js)
+    if (e.code === 'KeyC') { const cm = o.getCam ? o.getCam() : null; if (!cm || cm.mode !== 'swim') { setCycle(!cyc.on, true); e.preventDefault(); } return; }
     const m = /^(?:Digit|Numpad)([1-4])$/.exec(e.code || '') || (/^[1-4]$/.test(e.key || '') ? [0, e.key] : null);
     if (!m) return;
     if (select(+m[1], { source: 'key' })) e.preventDefault();
@@ -470,7 +537,7 @@ export function mountSquadHud(o) {
     doc, win, getSquad: o.getSquad, getField: o.getField, getCam: o.getCam, camera: o.camera, canvas: o.canvas,
     surfaceY: o.surfaceY, phoneQ: o.phoneQ, isSaver: o.isSaver, flash: o.flash,
     hud: { selected: () => sel, select: (id, opt) => select(id, opt), sendTo: (xz) => sendTo(xz), colourOf: rovColour },
-    goRegion: o.goRegion, moveCam: o.moveCam, colonies: o.colonies, speciesLabel: o.speciesLabel,
+    goRegion: o.goRegion, moveCam: o.moveCam, colonies: o.colonies, speciesLabel: o.speciesLabel, marks: o.marks,
     onOpen: () => { if (rovs && rovs.feed && rovs.feed.setActive) rovs.feed.setActive(false); frameN = 0; },
   });
 
@@ -485,7 +552,7 @@ export function mountSquadHud(o) {
 
   return {
     get selected() { return sel; },
-    select, selectNext, setRovs, tick, present, layout, sendTo, drawMap, setFeedSize,
+    select, selectNext, setRovs, tick, present, layout, sendTo, drawMap, setFeedSize, setCycle, cycle: cyc,
     map: big, mapCovers: () => !!big && big.covers(),
     colourOf: rovColour,
     debug() {
@@ -497,7 +564,7 @@ export function mountSquadHud(o) {
         tagSel: [...doc.querySelectorAll('#rovTags .rtag.sel')].map(b => +b.dataset.rov),
         feedMain: set ? set.vehicle : null, feedStats: set && set.stats ? JSON.parse(JSON.stringify(set.stats)) : null,
         map: mm.last ? { arrows: mm.arrows.slice(), painted: mm.fog ? mm.fog.painted.size : 0, view: Object.assign({}, mm.view), selArrow: (mm.last.rovs.find(r => r.sel) || {}).id } : null,
-        layout: mm.layout || null, feedSize, fold, zoom: SPANS[zoom], size: mm.size ? mm.size() : null, big: big ? big.debug() : null,
+        layout: mm.layout || null, feedSize, cycle: { on: cyc.on, t: cyc.t, pause: cyc.pause }, fold, zoom: SPANS[zoom], size: mm.size ? mm.size() : null, big: big ? big.debug() : null,
       };
     },
   };
