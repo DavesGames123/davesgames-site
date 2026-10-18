@@ -15,6 +15,10 @@
 //                         a planet are brightest toward the sun (also when
 //                         rotated), shadows are not black, bevel normals,
 //                         seeded rock-coloured asteroids
+//    reticle ............ reticle.js: size scales with the entity, the
+//                         stroke is fixed and on the device pixel grid at
+//                         any zoom, L corners, states, pulse and snap-in,
+//                         the drag box
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -318,6 +322,63 @@ async function bootPage(w, h, touch = false, settleMs = 120) {
   }
   ok(maxSat < 0.42, 'asteroid: natural rock tones, no candy colours (max saturation)', maxSat.toFixed(2));
   ok(opaque > 0.25 && opaque < 0.75, 'asteroid: a body with a clear outline (fill ratio)', opaque.toFixed(2));
+}
+
+// ── reticle ───────────────────────────────────────────────────────────────
+// reticle.js: the brackets scale with the entity, keep a fixed whole-pixel
+// stroke at any zoom and sit on the device pixel grid.
+{
+  section('reticle');
+  const R = require('./reticle.js');
+  const onGrid = (v, dpr, odd) => { const d = v * dpr - (odd ? 0.5 : 0); return Math.abs(d - Math.round(d)) < 1e-9; };
+  let gridBad = 0, widthBad = 0, n = 0;
+  const widths = {};
+  for (const dpr of [1, 1.5, 2, 3]) for (const state of ['sel', 'hover', 'preview']) for (const zoom of [0.6, 1, 1.9, 3.4]) {
+    const extent = 17 * zoom, g = R.reticle(123.37, 456.81, extent, state, dpr, 5000, null, 0.4);
+    const dev = Math.round(g.lw * dpr);
+    if (Math.abs(g.lw * dpr - dev) > 1e-9 || dev < 1) widthBad++;
+    (widths[state + dpr] = widths[state + dpr] || new Set()).add(g.lw);
+    for (const v of g.pts) { n++; if (!onGrid(v, dpr, dev % 2 === 1)) gridBad++; }
+  }
+  ok(widthBad === 0, 'stroke is a whole number of device pixels');
+  ok(Object.values(widths).every(s => s.size === 1), 'stroke width does not change with zoom');
+  ok(gridBad === 0, 'every bracket point is on the device pixel grid', gridBad + '/' + n);
+
+  // Size scales with the entity: half and arm grow in step with the extent.
+  const a = R.reticle(0, 0, 20, 'sel', 1, 5000, null, 0), b = R.reticle(0, 0, 80, 'sel', 1, 5000, null, 0);
+  ok(Math.abs((b.half - R.PAD) / (a.half - R.PAD) - 4) < 0.1, 'half side scales with the entity', (a.half + ' ' + b.half));
+  ok(Math.abs(b.arm / b.half - a.arm / a.half) < 0.05, 'arm length keeps its ratio to the side');
+  ok(a.pts.length === 24, 'four corners of three points');
+  // Four L corners: each corner point is shared by one horizontal and one vertical arm.
+  let lShape = true;
+  for (let c = 0; c < 4; c++) {
+    const p = a.pts.slice(c * 6, c * 6 + 6);
+    const h1 = p[0] === p[2] || p[1] === p[3], h2 = p[2] === p[4] || p[3] === p[5];
+    const perpendicular = (p[0] === p[2]) !== (p[2] === p[4]);
+    if (!(h1 && h2 && perpendicular)) lShape = false;
+  }
+  ok(lShape, 'each corner is an L of two perpendicular arms');
+  const tiny = R.reticle(0, 0, 1, 'sel', 1, 5000, null, 0);
+  ok(tiny.half >= R.MIN_HALF && tiny.arm >= 4, 'a tiny entity still gets a visible reticle');
+
+  // States: hover is thinner and dimmer than a selection; preview is between.
+  const sel = R.reticle(0, 0, 30, 'sel', 2, 5000, null, 0), hov = R.reticle(0, 0, 30, 'hover', 2, 5000, null, 0), pre = R.reticle(0, 0, 30, 'preview', 2, 5000, null, 0);
+  ok(hov.lw < sel.lw && hov.alpha < sel.alpha && hov.glow === 0, 'hover is thin, dim and has no glow');
+  ok(pre.lw <= sel.lw && pre.lw >= hov.lw, 'preview sits between hover and selection');
+
+  // Animation: a slow pulse that stays in bounds; a new pick closes in.
+  let lo = 9, hi = -9;
+  for (let t = 0; t < 6000; t += 50) { const g = R.reticle(0, 0, 30, 'sel', 1, t, null, 0); lo = Math.min(lo, g.alpha); hi = Math.max(hi, g.alpha); }
+  ok(hi - lo > 0.08 && hi - lo < 0.4 && hi <= 1, 'selected reticle pulses gently', lo.toFixed(2) + '..' + hi.toFixed(2));
+  const born = 1000, at0 = R.reticle(0, 0, 30, 'sel', 1, born, born, 0), atEnd = R.reticle(0, 0, 30, 'sel', 1, born + R.SNAP_MS + 1, born, 0);
+  ok(at0.half > atEnd.half * 1.3, 'a new pick starts wider', at0.half + ' > ' + atEnd.half);
+  ok(atEnd.half === R.reticle(0, 0, 30, 'sel', 1, 99999, null, 0).half, 'and settles on the entity size');
+
+  // Drag box: crisp rect, solid stroke and faint fill.
+  const box = R.dragBox(10.3, 50.7, 200.2, 20.1, 2);
+  ok(box.w > 0 && box.h > 0 && onGrid(box.x, 2, Math.round(box.lw * 2) % 2 === 1), 'drag box is normalised and on the grid');
+  ok(/rgba\(.*0\.0\d\)$/.test(box.fill), 'drag box fill is faint', box.fill);
+  ok(Object.keys(R.COLORS).length === 7, 'one bracket colour per entity type');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
