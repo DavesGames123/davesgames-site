@@ -12,6 +12,10 @@
 //    sentinel .... the first-frame check falls back to the direct path
 //                  when the composite does not draw
 //    exposure .... exposureFrom maps the 95th percentile to the key
+//    safari ...... static WebGL2 rules: 16 samplers, uniform vectors,
+//                  constant loop bounds, highp int in raw shaders with
+//                  int maths, texelFetch only on the NEAREST float
+//                  textures, float targets gated by the extensions
 //  Set CORAL_OLD_SCENE to a folder with an older scene.js to see the old
 //  path fail (the repro).
 // ============================================================================
@@ -114,6 +118,50 @@ function runFrames(f, n = 6) {
   ok(e2 >= 1 && e2 < 1.05, 'exposure: a bright frame clamps to 1', e2.toFixed(3));
   ok(exposureFrom(new Uint8Array(0), 3) === 3, 'exposure: no data keeps the last value');
   console.log(`exposure: dark frame ${e.toFixed(2)}, bright frame ${e2.toFixed(2)}`);
+}
+
+// ── Safari WebGL2 rules (static checks of shaders.js, rock/material.js) ─────
+{
+  const SH = await import('../shaders.js');
+  const progs = [
+    ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
+    ['sand', SH.SURF_VS, SH.SAND_FS, false], ['snow', SH.SNOW_VS, SH.SNOW_FS, false], ['caustic', SH.CAUSTIC_VS, SH.CAUSTIC_FS, true],
+    ['volume', SH.FULL_VS, SH.VOL_FS, true], ['composite', SH.FULL_VS, SH.COMP_FS, true], ['luminance', SH.FULL_VS, SH.LUM_FS, true],
+  ];
+  const samplers = src => new Set([...src.matchAll(/uniform\s+(?:(?:highp|mediump|lowp)\s+)?sampler2D\s+([^;]+);/g)].flatMap(m => m[1].split(',').map(x => x.trim())));
+  // uniform vectors: float/vec = 1 slot, mat4 = 4, arrays x n (a high estimate: no packing)
+  const slots = src => {
+    let n = 0;
+    for (const m of src.matchAll(/uniform\s+(?:(?:highp|mediump|lowp)\s+)?(float|int|vec[234]|ivec[234]|mat[34])\s+([^;]+);/g)) {
+      const per = m[1].startsWith('mat') ? +m[1][3] : 1;
+      for (const v of m[2].split(',')) { const a = v.match(/\[(\d+)\]/); n += per * (a ? +a[1] : 1); }
+    }
+    return n;
+  };
+  const rows = [];
+  for (const [name, vs, fs, raw] of progs) {
+    const sv = samplers(vs), sf = samplers(fs), all = new Set([...sv, ...sf]);
+    ok(sf.size <= 16 && sv.size <= 16 && all.size <= 16, `safari: ${name} uses at most 16 samplers (MAX_TEXTURE_IMAGE_UNITS)`, `${sv.size} vs, ${sf.size} fs`);
+    ok(slots(fs) <= 221 && slots(vs) <= 221, `safari: ${name} has under 224 uniform vectors per stage`, `${slots(vs)} vs, ${slots(fs)} fs`);
+    // loops: constant bounds only (a uniform bound needs a break inside)
+    const loops = [...(vs + fs).matchAll(/for \(int \w+ = (-?\d+); \w+ (<=?) ([^;]+);/g)];
+    ok(loops.every(m => /^(-?\d+|\$\{\w+\})$/.test(m[3].trim()) || /^\d+$/.test(m[3].trim())), `safari: ${name} loops have constant bounds`, loops.map(m => m[3]).join(','));
+    // int and uint maths in a raw fragment shader needs precision highp int
+    const fsInt = /\buint\b|\bivec[234]\b|>>|<</.test(fs);
+    if (raw && fsInt) ok(/precision highp int;/.test(fs), `safari: raw ${name} fragment shader with int maths declares highp int`);
+    if (raw) ok(/precision highp float;/.test(vs) && /precision highp float;/.test(fs), `safari: raw ${name} declares highp float in both stages`);
+    // texelFetch only on the particle textures (RGBA32F, NEAREST: no filtering needed)
+    const tf = [...(vs + fs).matchAll(/texelFetch\((\w+)/g)].map(m => m[1]);
+    ok(tf.every(t => t === 'uPartA' || t === 'uPartB'), `safari: ${name} texelFetch only on uPartA / uPartB`, tf.join());
+    rows.push(`${name} ${all.size} samplers, ${slots(fs)} fs vectors, ${loops.length} loops`);
+  }
+  const sc = fs.readFileSync(new URL('../scene.js', import.meta.url), 'utf8');
+  ok(/mkPart = \(data\) => \{ const t = new THREE\.DataTexture\(data, PART_W, PH, THREE\.RGBAFormat, THREE\.FloatType\); t\.magFilter = THREE\.NearestFilter; t\.minFilter = THREE\.NearestFilter;/.test(sc), 'safari: the float particle textures use NEAREST filters (float32 is not filterable without OES_texture_float_linear)');
+  ok(/const half = renderer\.extensions\.has\('EXT_color_buffer_float'\) \|\| renderer\.extensions\.has\('EXT_color_buffer_half_float'\);/.test(sc) && /HalfFloatType : THREE\.UnsignedByteType/.test(sc) && /if \(!fl\) return null;/.test(sc), 'safari: the float targets need EXT_color_buffer_float or _half_float, else RGBA8 caustics and no post chain');
+  const rts = [sc, fs.readFileSync(new URL('../rov/feed.js', import.meta.url), 'utf8')].flatMap(t => t.split('\n').filter(l => /WebGLRenderTarget\(/.test(l)));
+  ok(rts.length >= 4 && rts.every(l => !/\b(THREE|T)\.FloatType\b/.test(l)), 'safari: no RGBA32F render target in scene.js and rov/feed.js (blending on it needs EXT_float_blend)', rts.filter(l => /\.FloatType\b/.test(l)).join(' | '));
+  ok(rts.filter(l => /HalfFloatType/.test(l)).every(l => /half \?|HalfFloatType, depth/.test(l)), 'safari: each half float target is gated (half ? ... : RGBA8, or inside the post chain)');
+  console.log('safari: ' + rows.join('; '));
 }
 
 console.log(`gpu: ${pass} passed, ${fail} failed`);
