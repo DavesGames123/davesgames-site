@@ -333,9 +333,12 @@ export function createFauna(o) {
       M[o16 + 12] = x; M[o16 + 13] = y; M[o16 + 14] = z; M[o16 + 15] = 1;
       const IA = mesh.geometry.attributes.iAnim.array, IT = mesh.geometry.attributes.iTint.array, q = k * 4;
       const [rate, amp] = RATE[sp.anim] || RATE[0];
-      const v = Math.hypot(sim.vx[i], sim.vy[i], sim.vz[i]);
-      const moving = sp.anim === ANIM.FISH || sp.anim === ANIM.EEL ? Math.min(2.5, 0.6 + v / Math.max(0.05, s) * 0.5) : 1;
-      IA[q] = sim.phase[i] * 7.0; IA[q + 1] = rate * moving * (0.9 + 0.2 * sim.phase[i]); IA[q + 2] = amp; IA[q + 3] = sp.anim;
+      // the phase is the sim gait clock (fauna/sim.js THE GAIT), so uTime * rate
+      // is 0: a change of speed no longer makes the beat phase jump. The wrap
+      // is 100 cycles: the shader multipliers (2.3, 0.43, 0.17 ...) times 100
+      // are whole numbers, so the wrap is seamless
+      const cy0 = sim.cyc[i] * rate * (0.9 + 0.2 * sim.phase[i]);
+      IA[q] = sim.phase[i] * 7.0 + (cy0 - Math.floor(cy0 / 100) * 100); IA[q + 1] = 0; IA[q + 2] = amp; IA[q + 3] = sp.anim;
       const tint = 0.92 + 0.16 * sim.phase[i];
       IT[q] = tint; IT[q + 1] = tint; IT[q + 2] = tint; IT[q + 3] = 1 + sim.glow[i] * 3;
       statsN.drawn++;
