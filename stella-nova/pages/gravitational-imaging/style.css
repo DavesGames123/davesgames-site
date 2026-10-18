@@ -96,6 +96,13 @@ html.in-frame .topbar{display:none}
 .panel .lab{position:absolute;left:8px;top:6px;font-size:0.72rem;color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
 .panel .scale{position:absolute;left:8px;bottom:6px;font:0.68rem var(--mono);color:#ddd;text-shadow:0 1px 3px #000;pointer-events:none}
 .cap{font-size:0.84rem;color:var(--ink2);margin-top:10px;line-height:1.55}
+/* The Hubble photo card (artwork/, CREDITS.md): photo left, text right; one column on a phone. */
+.photo{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:center}
+.photo img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line)}
+.photo .cap{margin-top:0}
+.photo .credit{display:inline-block;margin-top:6px;font-size:0.74rem;color:var(--dim)}
+.photo .credit a{color:inherit}
+@media (max-width:640px){.photo{grid-template-columns:minmax(0,1fr)}}
 .cap b{color:var(--ink)}
 .readout{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:0.8rem;color:var(--dim)}
 .readout span b{font:500 0.86rem var(--mono);color:var(--ink);margin-left:4px}
