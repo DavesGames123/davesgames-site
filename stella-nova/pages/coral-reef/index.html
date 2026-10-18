@@ -24,17 +24,20 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
-     2. style.css, lib/sci.css, lib/growth-gradients.css
+     2. style.css, lib/sci.css, lib/growth-gradients.css, lib/sn-panel.css
      3. importmap for three r160, then main.js as a module
 
    LAYOUT  (# marks an element id that main.js binds)
      desktop ... #panel at the left, #view fills the frame, #read (the
                  squad stats) at the upper right, #legend under it, #feed
                  (the SSTV card) at the lower right, #about a drawer
-     phone ..... #dock at the base: camera, next ROV feed, colour mode, new
-                 world and menu. Menu opens #panel as a bottom sheet
-                 (portrait) or a drawer (landscape). #feed is a small card
-                 above the dock at the right: a tap makes it large.
+     panel ..... #panelBody is empty here: main.js buildUI declares the
+                 sections and controls through lib/sn-panel.js (Explore,
+                 View, Look, World, About). #aboutBlurb goes into About.
+     phone ..... #dock at the base: camera, next ROV feed, colour mode and
+                 menu. Menu opens #panel as a bottom sheet (portrait) or a
+                 drawer (landscape). #feed is a small card above the dock
+                 at the right: a tap makes it large.
      camera .... #camBar: Follow ROV, Orbit, Swim and Tours (camera.js,
                  input.js); #tourList the tour menu (the canyons and arches
                  near the eye). On #feed, #feedCycle (a tap) shows the next
@@ -50,6 +53,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../lib/growth-gradients.css">
+<link rel="stylesheet" href="../../lib/sn-panel.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -61,87 +65,47 @@
 
 <canvas id="view" aria-label="A squad of ROVs explores an endless dark seafloor with coral colonies"></canvas>
 <div id="nogl" hidden>WebGL is not available in this browser, so the seafloor cannot render.</div>
-<button id="gear" type="button" aria-label="Open controls">☰</button>
+<button id="gear" class="snp-gear" type="button" aria-label="Open controls" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i></button>
 
-<div id="read" aria-live="off">
-  <div><span>Explored</span><b id="rDist">0 m</b></div>
-  <div><span>Depth</span><b id="rDepth">0 m</b></div>
-  <div><span>Colonies seen</span><b id="rCol">0</b></div>
-  <div><span>Chunks</span><b id="rChunks">0</b></div>
-  <div><span>Task</span><b id="rTask">—</b></div>
-  <div id="rState" class="state"></div>
+<div id="read" class="snp-card snp-read" aria-live="off">
+  <div class="rd"><span>Depth</span><b id="rDepth">0 m</b></div>
+  <div class="rd"><span>Explored</span><b id="rDist">0 m</b></div>
+  <div class="rd rd-more"><span>Colonies seen</span><b id="rCol">0</b></div>
+  <div class="rd rd-more"><span>Task</span><b id="rTask">—</b></div>
+  <div id="rState" class="rd-state"></div>
 </div>
 <div id="hint">The ROV squad explores on its own · Orbit, Swim or Tours to look round yourself · Follow ROV to go back to them</div>
 <div id="camBar" role="toolbar" aria-label="Camera">
-  <button type="button" data-cam="follow" class="on" aria-pressed="true" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i>◎</i><span id="camFollowLbl">Follow ROV</span></button>
-  <button type="button" data-cam="orbit" aria-pressed="false" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i>⟲</i><span>Orbit</span></button>
-  <button type="button" data-cam="swim" aria-pressed="false" title="Swim (F): WASD to move, E and Q up and down, Shift fast, click to look with the mouse"><i>≈</i><span>Swim</span></button>
-  <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches near you"><i>➶</i><span>Tours</span></button>
+  <button type="button" data-cam="follow" class="on" aria-pressed="true" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i data-icon="target"></i><span id="camFollowLbl">Follow ROV</span></button>
+  <button type="button" data-cam="orbit" aria-pressed="false" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i data-icon="orbit"></i><span>Orbit</span></button>
+  <button type="button" data-cam="swim" aria-pressed="false" title="Swim (F): WASD to move, E and Q up and down, Shift fast, click to look with the mouse"><i data-icon="swim"></i><span>Swim</span></button>
+  <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches near you"><i data-icon="route"></i><span>Tours</span></button>
 </div>
 <div id="tourList" hidden role="menu" aria-label="Tours"></div>
 <div id="feed" hidden>
   <button id="feedCycle" type="button" aria-label="Show the next ROV camera (hold to make the card larger)"></button>
-  <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false">⤢</button>
+  <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false"><i data-icon="expand"></i></button>
   <div id="feedSlot"></div>
 </div>
 <div id="tapMark" aria-hidden="true"></div>
-<div id="legend"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
+<div id="legend" class="snp-card"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
 
-<aside id="panel" class="open" aria-label="Controls">
-  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
-  <h1 class="ptitle">Deep Ocean Explorer</h1>
-  <p class="lede">A squad of ROVs explores an endless seafloor in the dark: seamounts, canyons, arches and sand plains. The corals grew once, long ago, by diffusion-limited aggregation; they are just there. The ROVs pick unexplored ground, follow canyons, pass under arches and stop to light up big colonies. Look round yourself any time.</p>
-
-  <section class="grp" data-grp="squad">
-    <div class="sec-label">Squad</div>
-    <div class="chips" id="rovCount"></div>
-    <div class="grid2 runrow">
-      <button id="bSeed" type="button">⚄ New world</button>
-      <button id="bLead" type="button">◎ Follow the lead</button>
-    </div>
-    <div class="sec-label sub">World detail</div>
-    <div class="chips" id="quality"></div>
-    <p class="note" id="worldNote">The world streams in round the camera in 32 m chunks. The rock near you is finest; the corals of a chunk show when they are all there.</p>
-  </section>
-
-  <section class="grp" data-grp="feed">
-    <div class="sec-label">Camera feed</div>
-    <div class="chips" id="feedMode"></div>
-    <div class="sec-label sub">Slow-scan mode</div>
-    <div class="chips" id="sstvMode"></div>
-    <p class="note">The lead ROV camera comes up over a simulated slow-scan TV link (the low data rate of an acoustic link), so the picture comes in line by line, with noise and a little slant.</p>
-  </section>
-
-  <section class="grp" data-grp="colour">
-    <div class="sec-label">Colour by</div>
-    <div class="chips" id="modes"></div>
-    <div id="gradPick"></div>
-    <p class="note" id="modeNote"></p>
-  </section>
-
-  <section class="grp" data-grp="water">
-    <div class="sec-label">Water</div>
-    <div class="row"><label for="sDir">Current direction</label><input type="range" id="sDir" min="0" max="359" step="1" value="20"><span class="val" id="vDir"></span></div>
-    <div class="row"><label for="sCur">Current strength</label><input type="range" id="sCur" min="0" max="1.5" step="0.01" value="0.5"><span class="val" id="vCur"></span></div>
-    <div class="row"><label for="sTemp">Water temperature</label><input type="range" id="sTemp" min="24" max="33" step="0.1" value="27"><span class="val" id="vTemp"></span></div>
-    <p class="note" id="bleachNote">Above about 30 °C the corals bleach: they lose their colour.</p>
-    <div class="row"><label for="sCaust">Caustics</label><input type="range" id="sCaust" min="0" max="1.5" step="0.05" value="0.5"><span class="val" id="vCaust"></span></div>
-    <div class="grid2">
-      <button class="tog on" id="tBeam" type="button">Lamp beams</button>
-      <button class="tog on" id="tSnow" type="button">Marine snow</button>
-      <button class="tog on" id="tFeed" type="button">Camera feed</button>
-      <button class="tog" id="tOrbit" type="button">Slow orbit</button>
-      <button class="tog on" id="tPolyps" type="button">Polyps</button>
-      <button class="tog on" id="tDetail" type="button">Surface detail</button>
-    </div>
-  </section>
-
-  <div class="credit">Coral growth: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). <button id="aboutOpen" type="button" class="linkbtn">How it works and credits</button></div>
+<aside id="panel" class="snp" aria-label="Controls">
+  <button id="sheetGrip" class="snp-grip" type="button" aria-label="Resize controls" aria-controls="panel"><span></span></button>
+  <header class="snp-top">
+    <h1 class="snp-ptitle">Deep Ocean Explorer</h1>
+    <button id="panelClose" class="snp-iconbtn" type="button" aria-label="Close controls"><i data-icon="close"></i></button>
+  </header>
+  <div id="panelBody"></div>
+  <div id="aboutBlurb" class="snp-row">
+    <p class="snp-text">A squad of ROVs explores an endless seafloor in the dark. The corals grew once, long ago, by diffusion-limited aggregation.</p>
+    <button id="aboutOpen" type="button" class="snp-btn snp-secondary">How it works</button>
+    <p class="snp-fine">Coral growth: a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a> by Michael Fogleman (MIT). Full credits in How it works.</p>
+  </div>
 </aside>
 
 <aside id="about" aria-label="How it works" hidden>
-  <div class="ab-head"><span>How it works</span><button id="aboutClose" type="button" aria-label="Close">✕</button></div>
+  <div class="ab-head"><span>How it works</span><button id="aboutClose" class="snp-iconbtn" type="button" aria-label="Close"><i data-icon="close"></i></button></div>
   <h2>An endless seafloor</h2>
   <p>The seafloor has no edge. One seeded field makes it everywhere: an abyssal plain about 40 m down with sand in the low ground, seamounts and flat-topped guyots that rise 35 to 60 m, ridges, terraced plateaus and drop-off cliffs. Canyons cut into the slopes with vertical, undercut walls and a sand floor. Natural arches, pinnacles with hoodoo caps, boulders and scree sit on it, and the rock has strata ledges and craggy joints. The same seed always gives the same world.</p>
   <p>The page keeps only the part near the camera, in chunks of 32 m. Workers mesh each chunk with surface nets on one global lattice, so two chunks meet with the same vertices and no seam. The rock near you is finest; far chunks are coarser and go into the black water.</p>
@@ -159,12 +123,11 @@
   <p class="cr">Growth engine: a JavaScript port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a>, Copyright (C) 2019 Michael Fogleman, MIT licence. The world, the coral hooks, the squad, the shaders and the page are our own code. Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r160, MIT. Stone and sand textures: CC0 scans (see CREDITS.txt). Ideas: Kaandorp et al. 1996; Kaandorp and Kübler 2001; Quilez (round cone and ellipsoid distance, smooth minimum); the mesh-area caustics of our photon caustics page. Full text in CREDITS.txt next to this page.</p>
 </aside>
 
-<nav id="dock" aria-label="Controls">
-  <button id="dockCam" type="button" aria-label="Camera: follow, orbit or swim"><i>◎</i><span id="dockCamName">Follow</span></button>
-  <button id="dockFeed" type="button" aria-label="Show the next ROV camera"><i>▣</i><span id="dockFeedName">ROV 1</span></button>
-  <button id="dockMode" type="button" aria-label="Next colour mode"><i>◐</i><span id="dockModeName">Natural</span></button>
-  <button id="dockSeed" type="button" aria-label="A new world"><i>⚄</i><span>New world</span></button>
-  <button id="dockMenu" type="button" aria-label="Menu" aria-expanded="false"><i>☰</i><span>Menu</span></button>
+<nav id="dock" class="snp-dock" aria-label="Quick controls">
+  <button id="dockCam" type="button" aria-label="Camera: follow, orbit or swim"><i data-icon="camera"></i><span id="dockCamName">Follow</span></button>
+  <button id="dockFeed" type="button" aria-label="Show the next ROV camera"><i data-icon="feed"></i><span id="dockFeedName">ROV 1</span></button>
+  <button id="dockMode" type="button" aria-label="Next colour mode"><i data-icon="palette"></i><span id="dockModeName">Natural</span></button>
+  <button id="dockMenu" type="button" aria-label="Menu" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i><span>Menu</span></button>
 </nav>
 
 <script type="importmap">

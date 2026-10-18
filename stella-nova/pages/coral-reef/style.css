@@ -1,289 +1,152 @@
 /* ============================================================================
-   CORAL REEF GROWTH  ·  stylesheet
+   DEEP OCEAN EXPLORER (pages/coral-reef)  ·  stylesheet
    ----------------------------------------------------------------------------
-   Deep-water shell. Type comes from lib/sci.css (loaded after this file).
-   The WebGL canvas fills the frame. The control panel is at the left on a
-   desktop. The readout is at the upper right, the legend at the lower
-   right under the readout, the SSTV feed card (#feed) at the lower right,
-   and the explainer is a drawer at the right.
+   Deep-water shell. Type comes from lib/sci.css. The control panel, its
+   sections and controls, the phone dock and sheet and the glass cards come
+   from lib/sn-panel.css (loaded last): this file only sets the page tokens
+   and the parts that are not the panel. The WebGL canvas fills the frame.
+   The readout (#read) is at the upper right, the legend under it, the
+   SSTV feed card (#feed) at the lower right, the camera bar at the top
+   centre, and the explainer (#about) a drawer at the right.
      grep -n 'FEED'       the camera feed card (phone: small, a tap makes it large)
      grep -n 'CAMERA'     the camera bar and the tour menu (camera.js, input.js)
-
-   PHONE (max-width 768px, or a short landscape touch screen): the pattern
-   of pages/wave-membrane. A dock at the base holds preset, grow or pause,
-   regrow, plant mode and menu. Menu opens the panel with all its groups:
-   a bottom sheet in portrait (half or full height, a drag grip), a drawer
-   on the right in landscape. #plantBar shows in plant mode. The explainer
-   is a full-height sheet. Every target is 44px or more and all text is
-   11px or more on a coarse pointer. layout.js has the same breakpoints.
-     grep -n 'TOUCH'      target sizes for any touch screen
-     grep -n 'PHONE'      the phone block
+     grep -n 'READOUT'    the squad stats card and the legend
+     grep -n 'ABOUT'      the explainer drawer
+     grep -n 'PHONE'      the phone places of the cards (sn-panel.css has the dock)
      grep -n 'LANDSCAPE'  the landscape overrides
-     grep -n 'PLANT'      plant mode: the plant bar and the tap mark
      grep -n 'sn-saver'   the screensaver mode
+   Text is 12 px or more everywhere (tests/panel.test.mjs reads this file).
    ========================================================================== */
 [hidden]{display:none!important}
 :root{
-  --bg:#02101a; --bg2:#06202c; --ink:#d4ecef; --dim:#7fa1a8; --faint:#24414b;
-  --line:rgba(120,210,220,0.12); --line-b:rgba(120,220,210,0.26);
-  --warm:#ffb38a; --accent:#7fe0cf; --panel-w:300px;
-  --gg-accent:#ffb38a; --gg-dim:#7fa1a8}
+  --bg:#02101a; --bg2:#06202c; --ink:#d4ecef; --dim:#93b1b7; --faint:#24414b;
+  --line:rgba(160,215,225,0.13); --line-b:rgba(160,215,225,0.26);
+  --warm:#ffc4a3; --accent:#7fe0cf; --panel-w:300px;
+  --gg-accent:#7fe0cf; --gg-dim:#93b1b7}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
 body{font-family:var(--sci-sans);color:var(--ink);-webkit-font-smoothing:antialiased}
 button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:inherit}
 a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;pointer-events:none}
-.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#e8f6f8;display:flex;align-items:center;gap:9px}
-.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto}
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:16px;padding:0 20px;pointer-events:none}
+.brand{font-family:var(--sci-serif);font-size:1.125rem;color:#e8f6f8;display:flex;align-items:center;gap:8px}
+.pagetitle{font-size:0.8125rem;color:var(--dim);margin-left:auto}
 html.in-frame .topbar{display:none}
 
 #view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
-#nogl{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:50;padding:16px 20px;border:1px solid var(--line-b);border-radius:10px;background:rgba(2,16,26,0.95);max-width:min(420px,90vw)}
+#nogl{position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:50;padding:16px 20px;border:1px solid var(--line-b);border-radius:12px;background:rgba(2,16,26,0.95);max-width:min(420px,90vw);font-size:0.875rem}
 
-#gear{position:fixed;top:14px;left:14px;z-index:40;width:40px;height:40px;border:1px solid var(--line-b);background:rgba(6,32,44,0.75);color:var(--ink);border-radius:9px;font-size:1.05rem;cursor:pointer;display:none}
-html.in-frame #gear{top:12px}
-
-#panel{
-  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
-  background:rgba(3,18,27,0.94);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  border-right:1px solid var(--line-b);padding:62px 18px 22px;overflow-y:auto;overflow-x:hidden;
-  transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
-#panel.open{transform:translateX(0)}
-html.in-frame #panel{padding-top:20px}
-#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
-html.in-frame #panelClose{top:12px}
-.ptitle{font-family:var(--sci-serif);font-weight:500;font-size:1.25rem;color:#eef8f8;margin:0 34px 6px 0}
-.lede{font-size:0.78rem;line-height:1.55;color:var(--dim);margin-bottom:6px}
-.sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:18px 0 9px}
-.sec-label.sub{font-weight:500;color:var(--dim);margin:12px 0 7px}
-.note{font-size:0.74rem;line-height:1.5;color:var(--dim);margin:8px 0 2px}
-.note.warn{color:var(--warm)}
-
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button,.grid2 button,.grid3 button,.wide{padding:7px 10px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:7px;cursor:pointer;font-size:0.76rem}
-.chips button:hover,.grid2 button:hover,.grid3 button:hover,.wide:hover{border-color:var(--line-b);color:var(--ink)}
-.chips button.on,.tog.on,.grid3 button.on{border-color:var(--accent);background:rgba(127,224,207,0.08);color:var(--accent)}
-.chips.sp button{display:flex;align-items:center;gap:6px}
-.chips.sp .sw{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.runrow{margin-top:10px}
-.wide{width:100%;margin-top:10px}
-#gradPick{margin-top:14px}
-#adv summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
-#adv summary::-webkit-details-marker{display:none}
-#adv summary::after{content:'▸';color:var(--dim);transition:transform 0.2s}
-#adv[open] summary::after{transform:rotate(90deg)}
-
-.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px 8px;margin:10px 0}
-.row label{grid-row:1;grid-column:1;font-size:0.78rem;color:var(--ink)}
-.row label code{font:0.72rem var(--sci-mono);color:var(--dim);margin-left:4px}
-.row input[type=range]{grid-row:2;grid-column:1/3;width:100%;accent-color:var(--accent);height:3px;margin:4px 0}
-.row .val{grid-row:1;grid-column:2;text-align:right;font:0.76rem var(--sci-mono);color:var(--ink);font-variant-numeric:tabular-nums}
-
-.credit{margin-top:22px;padding-top:12px;border-top:1px solid var(--line);font-size:0.74rem;line-height:1.55;color:var(--dim)}
-.linkbtn{display:inline;border:0;background:none;color:var(--accent);text-decoration:underline;cursor:pointer;font-size:inherit;padding:0}
-
-#read{position:fixed;top:14px;right:14px;z-index:22;min-width:178px;padding:10px 12px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:9px;font-size:0.74rem;pointer-events:none}
-html:not(.in-frame) #read{top:58px}
-#read div{display:flex;justify-content:space-between;gap:14px;line-height:1.6}
-#read span{color:var(--dim)}
-#read b{font:500 0.76rem var(--sci-mono);color:var(--ink);font-variant-numeric:tabular-nums}
-#read .state{color:var(--warm);justify-content:flex-start}
-#read .state:empty{display:none}
-
-#hint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;text-align:center}
+/* READOUT: the squad stats (sn-panel.css .snp-read) and the legend */
+#read{position:fixed;top:12px;right:12px;z-index:22;min-width:184px}
+html:not(.in-frame) #read{top:56px}
+#hint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:20;font-size:0.75rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,0.8)}
 #hint.gone{opacity:0}
-
-#legend{position:fixed;right:14px;top:200px;z-index:20;padding:9px 11px 7px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:8px;pointer-events:none}
+#legend{position:fixed;right:12px;top:200px;z-index:20;padding:8px 12px;pointer-events:none}
 #legend.off{display:none}
-.lg-title{font-size:0.74rem;color:var(--dim);margin-bottom:6px}
-#lgBar{width:180px;height:10px;border-radius:2px}
-.lg-ticks{display:flex;justify-content:space-between;font-size:0.72rem;color:var(--ink);margin-top:4px}
+.lg-title{font-size:0.75rem;color:var(--dim);margin-bottom:4px}
+#lgBar{width:180px;height:8px;border-radius:4px}
+.lg-ticks{display:flex;justify-content:space-between;font-size:0.75rem;color:var(--ink);margin-top:4px}
 
-#about{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);z-index:60;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:0 22px 30px;background:rgba(3,16,24,0.97);border-left:1px solid var(--line-b);font-size:0.82rem;line-height:1.6;color:var(--ink)}
-#about h2{font-family:var(--sci-serif);font-weight:500;font-size:1.08rem;margin:18px 0 8px;color:#eef8f8}
-#about h2:first-of-type{margin-top:4px}
-.ab-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 -22px 4px;padding:12px 22px 10px;background:rgba(3,16,24,0.98);border-bottom:1px solid var(--line);font-size:0.78rem;color:var(--dim)}
-#about p{color:#b6cfd3;margin-bottom:8px}
-#about .cap{font-size:0.74rem;color:var(--dim)}
-#about .cr{font-size:0.76rem}
-#aboutClose{flex:0 0 auto;width:34px;height:34px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
-#diag{display:block;width:100%;height:220px;border-radius:8px;border:1px solid var(--line);margin:10px 0 4px}
-.hooks{border-collapse:collapse;font-size:0.76rem;width:100%}
-.hooks th{text-align:left;vertical-align:top;color:var(--accent);font-weight:500;padding:6px 10px 6px 0;white-space:nowrap}
-.hooks td{color:#b6cfd3;padding:6px 0;border-bottom:1px solid var(--line)}
-.hooks code{font:0.72rem var(--sci-mono);color:var(--warm)}
-
-#dock,#sheetGrip,#plantBar{display:none}
+/* ABOUT: the explainer drawer */
+#about{position:fixed;top:0;right:0;bottom:0;width:min(440px,92vw);z-index:60;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:0 24px 32px;background:rgba(4,17,25,0.97);border-left:1px solid var(--line);font-size:0.875rem;line-height:1.6;color:var(--ink);box-shadow:-12px 0 40px rgba(0,0,0,0.45)}
+#about h2{font-weight:600;font-size:0.9375rem;margin:24px 0 8px;color:#eef8f8}
+#about h2:first-of-type{margin-top:8px}
+.ab-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -24px 4px;padding:8px 12px 8px 24px;background:rgba(4,17,25,0.98);border-bottom:1px solid var(--line);font-size:0.875rem;font-weight:600;color:var(--ink)}
+#about p{color:#b9d0d4;margin-bottom:8px}
+#about .cap{font-size:0.75rem;color:var(--dim)}
+#about .cr{font-size:0.8125rem}
+#diag{display:block;width:100%;height:220px;border-radius:8px;border:1px solid var(--line);margin:12px 0 4px}
 
 /* FEED: the SSTV camera card of the lead ROV (rov/ draws the canvas). */
-#feed{position:fixed;right:14px;bottom:14px;z-index:24;width:352px;max-width:calc(100vw - 28px);border:1px solid var(--line-b);border-radius:8px;overflow:hidden;background:#000;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+#feed{position:fixed;right:12px;bottom:12px;z-index:24;width:352px;max-width:calc(100vw - 24px);border:1px solid var(--line-b);border-radius:12px;overflow:hidden;background:#000;box-shadow:0 8px 32px rgba(0,0,0,0.6)}
 #feedSlot canvas{display:block;width:100%;height:auto;image-rendering:auto}
 #feedCycle{position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;background:transparent;cursor:pointer;padding:0}
-#feedSize{position:absolute;top:0;right:0;z-index:2;width:28px;height:28px;border:0;border-radius:0 0 0 6px;background:rgba(5,9,11,0.55);color:var(--ink);font-size:0.9rem;line-height:1;cursor:zoom-in;padding:0}
+#feedSize{position:absolute;top:4px;right:4px;z-index:2;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:8px;background:rgba(4,12,16,0.6);color:var(--ink);cursor:zoom-in;padding:0}
+#feedSize svg{width:16px;height:16px}
 #feed.big #feedSize{cursor:zoom-out}
-#feed.big{width:min(704px,calc(100vw - 28px))}
+#feed.big{width:min(704px,calc(100vw - 24px))}
 #feed.live{background:transparent}
 #feed.live #feedSlot canvas{background:transparent}
 
-/* CAMERA: the camera bar (camera.js, input.js) and the tour menu. */
-#camBar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:26;display:flex;gap:4px;padding:4px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:10px}
-html:not(.in-frame) #camBar{top:58px}
-#camBar button{display:flex;align-items:center;gap:6px;min-height:32px;padding:4px 10px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--dim);font-size:0.76rem;cursor:pointer}
-#camBar button i{font-style:normal;font-size:0.95rem;color:var(--ink)}
-#camBar button.on{background:rgba(127,224,207,0.14);border-color:var(--line-b);color:var(--ink)}
-#tourList{position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:27;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(340px,calc(100vw - 24px));padding:8px;background:rgba(3,18,27,0.94);border:1px solid var(--line-b);border-radius:10px}
+/* CAMERA: the camera bar (camera.js, input.js) and the tour menu. The
+   camera modes live only here (not in the panel). */
+#camBar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:26;display:flex;gap:2px;padding:4px;
+  background:var(--snp-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,0.35)}
+html:not(.in-frame) #camBar{top:56px}
+#camBar button{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 12px;border:0;border-radius:8px;background:transparent;color:var(--dim);font-size:0.8125rem;cursor:pointer}
+#camBar button svg{width:16px;height:16px}
+#camBar button:hover{color:var(--ink)}
+#camBar button.on{background:rgba(127,224,207,0.15);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(127,224,207,0.45)}
+#tourList{position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:27;display:flex;flex-wrap:wrap;gap:4px;justify-content:center;width:min(340px,calc(100vw - 24px));padding:8px;
+  background:var(--snp-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--line);border-radius:12px}
 html.in-frame #tourList{top:56px}
-#tourList button{min-height:32px;padding:4px 10px;border:1px solid var(--line-b);border-radius:7px;background:rgba(6,32,44,0.8);color:var(--ink);font-size:0.76rem;cursor:pointer}
-#tourList button.on{border-color:var(--accent);color:var(--accent)}
-#tourList p{width:100%;margin:2px 0 0;color:var(--dim);font-size:0.72rem;text-align:center}
-@media (pointer:coarse){#camBar button,#tourList button{min-height:44px;min-width:44px}#feedSize{width:44px;height:44px;font-size:1.1rem}}
+#tourList button{min-height:32px;padding:4px 12px;border:0;border-radius:8px;background:rgba(255,255,255,0.045);color:var(--ink);font-size:0.8125rem;cursor:pointer}
+#tourList button.on{background:rgba(127,224,207,0.15);box-shadow:inset 0 0 0 1px rgba(127,224,207,0.45)}
+#tourList p{width:100%;margin:4px 0 0;color:var(--dim);font-size:0.75rem;text-align:center}
+@media (pointer:coarse){#camBar button,#tourList button{min-height:44px;min-width:44px}#feedSize{width:44px;height:44px}}
 html.sn-saver #camBar,html.sn-saver #tourList,html.sn-saver #feedCycle{display:none!important}
 
-/* PLANT mode: a crosshair, and a ring where a tap lands (ok or not). */
-body.planting #view{cursor:crosshair}
+/* the tap mark: a ring where a tap lands */
 #tapMark{position:fixed;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:25;border:2px solid var(--accent);border-radius:50%;pointer-events:none;opacity:0}
 #tapMark.go{animation:tapgo 0.7s ease-out}
 #tapMark.bad{border-color:var(--warm)}
 @keyframes tapgo{0%{opacity:1;transform:scale(0.4)}100%{opacity:0;transform:scale(1.6)}}
-@media (prefers-reduced-motion:reduce){#tapMark.go{animation-duration:1.2s}}
+@media (prefers-reduced-motion:reduce){#tapMark.go{animation:none}#hint{transition:none}}
 
 @media(min-width:769px){
   .topbar{padding-left:calc(var(--panel-w) + 20px)}
-  body.panel-closed #gear{display:block}
   body.panel-closed .topbar{padding-left:68px}
 }
 
 /* TOUCH. Any coarse pointer or narrow window: targets 44px or more. */
 @media (pointer:coarse), (max-width:768px){
-  :root{--panel-w:320px}
-  #panelClose{width:44px;height:44px;top:8px;right:8px}
-  #aboutClose{width:44px;height:44px;top:8px;right:8px}
-  .chips button,.grid2 button,.grid3 button,.wide{min-height:44px;font-size:0.78rem;border-radius:10px}
-  .linkbtn{min-height:44px}
-  #adv summary{min-height:44px}
-  .hooks th{white-space:normal}
-  .row{min-height:44px;margin:4px 0}
-  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
-  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
-  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--accent);border:3px solid #04202a;box-shadow:0 0 0 1px var(--accent)}
-  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
-  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid #04202a}
+  #aboutClose{width:44px;height:44px}
 }
 
 /* PHONE. The query matches PHONE_Q in main.js. */
 @media (max-width:768px), (max-height:500px) and (pointer:coarse){
-  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  :root{--dock-h:var(--snp-dock-h)}
   .topbar{height:calc(46px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
   .pagetitle{display:none}
-  #gear,body.panel-closed #gear{display:none}
-  .ptitle,.lede{display:none}
-  /* all groups in the sheet: colour and water first (the dock has the reef actions) */
-  #panel{display:flex;flex-direction:column}
-  #panel > *{flex:0 0 auto}
-  #sheetGrip{order:0}
-  #panel .grp[data-grp=dive]{order:1}
-  #panel .grp[data-grp=colour]{order:2}
-  #panel .grp[data-grp=water]{order:3}
-  #panel .grp[data-grp=reef]{order:4}
-  #panel .grp[data-grp=species]{order:5;margin-top:8px;border-top:1px solid var(--line)}
-  #panel .credit{order:6}
-  .grp > .sec-label:first-child{margin-top:4px}
-
-  #dock{
-    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:stretch;
-    padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
-    background:rgba(3,16,24,0.95);border-top:1px solid var(--line-b)}
-  #dock > button{flex:1 1 0;min-width:0;height:48px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:0.7rem}
-  #dock > button i{font-style:normal;font-size:1.05rem;line-height:1}
-  #dock > button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
-  #dock > button.on{border-color:var(--accent);color:var(--accent)}
-
-  #read{top:calc(50px + env(safe-area-inset-top));right:8px;min-width:0;padding:6px 9px;font-size:0.7rem}
-  html.in-frame #read,html:not(.in-frame) #read{top:calc(50px + env(safe-area-inset-top))}
+  #read,html:not(.in-frame) #read{top:calc(52px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));min-width:0}
   html.in-frame #read{top:8px}
-  #read div{gap:10px;line-height:1.45}
-  #read div:nth-child(4),#read div:nth-child(5){display:none}
-  #legend{right:auto;left:8px;top:auto;bottom:calc(var(--dock-h) + 8px);padding:6px 9px}
-  #feed{right:8px;bottom:calc(var(--dock-h) + 8px);width:150px;border-radius:10px}
-  #camBar,html:not(.in-frame) #camBar{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(8px + env(safe-area-inset-left));transform:none;flex-direction:column;padding:3px}
-  #camBar button{flex-direction:column;gap:0;padding:2px 4px;font-size:0.6875rem;min-width:52px}
-  #tourList,html.in-frame #tourList{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(70px + env(safe-area-inset-left));right:8px;transform:none;width:auto;max-height:50vh;overflow:auto}
+  #read .rd-more{display:none}
+  #legend{right:auto;left:calc(8px + env(safe-area-inset-left));top:calc(52px + env(safe-area-inset-top));padding:8px}
+  html.in-frame #legend{top:8px}
+  #feed{right:calc(8px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 8px);width:150px;border-radius:12px}
+  #camBar,html:not(.in-frame) #camBar{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(8px + env(safe-area-inset-left));transform:none;flex-direction:column;padding:4px}
+  #camBar button{flex-direction:column;gap:2px;padding:4px;font-size:0.75rem;min-width:56px}
+  #tourList,html.in-frame #tourList{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(76px + env(safe-area-inset-left));right:8px;transform:none;width:auto;max-height:50vh;overflow:auto}
   body:not(.panel-closed) #camBar,body:not(.panel-closed) #tourList{opacity:0;pointer-events:none}
   #feed.big{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}
   body:not(.panel-closed) #feed{opacity:0;pointer-events:none}
-  #lgBar{width:110px;height:8px}
-  #hint{bottom:auto;top:calc(52px + env(safe-area-inset-top));left:16px;right:16px;transform:none;line-height:1.5}
-  html.in-frame #hint{top:10px}
+  #lgBar{width:110px}
+  #hint{bottom:auto;top:calc(52px + env(safe-area-inset-top));left:16px;right:150px;transform:none;line-height:1.5;text-align:left}
+  html.in-frame #hint{top:8px}
   body:not(.panel-closed) #hint,body:not(.panel-closed) #legend,body:not(.panel-closed) #read{opacity:0}
-  body.planting #hint{opacity:0}
-
-  /* PLANT bar: the species chips and the last result, under the topbar */
-  #plantBar{
-    display:block;position:fixed;z-index:41;left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));
-    top:calc(50px + env(safe-area-inset-top));padding:8px 10px 10px;border:1px solid var(--line-b);border-radius:14px;
-    background:rgba(3,18,27,0.92);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-  html.in-frame #plantBar{top:8px}
-  body:not(.panel-closed) #plantBar{display:none}
-  .pb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:0.76rem;color:var(--ink);margin-bottom:6px}
-  .pb-head span{min-width:0}
-  #plantMsg.warn{color:var(--warm)}
-  #plantDone{flex:0 0 auto;min-height:44px;min-width:64px;border:1px solid var(--accent);border-radius:10px;background:transparent;color:var(--accent);font-size:0.78rem;cursor:pointer}
-  #plantBar .chips{gap:5px}
-  #plantBar .chips button{min-height:44px;padding:6px 9px;font-size:0.74rem}
-
-  /* The panel is a bottom sheet above the dock. */
-  #panel{
-    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
-    height:min(46vh,500px);height:min(46dvh,500px);
-    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
-    padding:0 calc(18px + env(safe-area-inset-right)) 22px calc(18px + env(safe-area-inset-left));
-    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
-    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
-  #panel.open{transform:translateY(0)}
-  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
-  html.in-frame #panel{padding-top:0}
-  #panelClose{display:none}
-  #sheetGrip{
-    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px;
-    background:linear-gradient(180deg,rgba(3,18,27,1) 65%,rgba(3,18,27,0));touch-action:none;cursor:grab}
-  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
   /* the explainer: a full-height sheet over the dock */
-  #about{left:0;width:100%;border-left:0;padding:0 calc(18px + env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left))}
-  .ab-head{margin:0 calc(-18px - env(safe-area-inset-right)) 4px calc(-18px - env(safe-area-inset-left));padding:calc(8px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) 8px calc(18px + env(safe-area-inset-left))}
-  #aboutClose{width:44px;height:44px}
+  #about{left:0;width:100%;border-left:0;padding:0 calc(16px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
+  .ab-head{margin:0 calc(-16px - env(safe-area-inset-right)) 4px calc(-16px - env(safe-area-inset-left));padding:calc(4px + env(safe-area-inset-top)) calc(8px + env(safe-area-inset-right)) 4px calc(16px + env(safe-area-inset-left))}
   #diag{height:190px}
 }
 
-/* LANDSCAPE phone: the panel is a drawer on the right edge, the dock a tab
-   strip at the lower left. */
+/* LANDSCAPE phone: the panel is a drawer at the right (sn-panel.css). */
 @media (max-height:500px) and (orientation:landscape){
   .topbar{display:none}
-  #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
-  #read{bottom:auto;top:8px}
-  html:not(.in-frame) #read{top:8px}
+  #read,html:not(.in-frame) #read{top:8px}
   #legend{bottom:auto;top:8px}
   #feed{width:132px}
-  #hint,html.in-frame #hint{top:auto;bottom:calc(var(--dock-h) + 6px);left:60vw;right:8px}
-  #panel,#panel.full{
-    top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;
-    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
-    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;
-    transform:translateX(100%)}
-  #panel.open{transform:translateX(0)}
-  #sheetGrip{display:none}
-  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
-  #about{left:auto;width:min(64vw,520px);border-left:1px solid var(--line-b)}
-  #plantBar{top:8px;right:auto;width:min(58vw,460px)}
-  body.planting #legend{opacity:0}
+  #camBar,html:not(.in-frame) #camBar{bottom:calc(var(--dock-h) + 8px);flex-direction:row}
+  #camBar button{min-width:52px}
+  #hint,html.in-frame #hint{top:auto;bottom:calc(var(--dock-h) + 64px);left:60vw;right:8px}
+  #about{left:auto;width:min(64vw,520px);border-left:1px solid var(--line)}
 }
 
-/* screensaver (lib/screensaver.js): the reef alone fills the frame */
+/* screensaver (lib/screensaver.js): the world alone fills the frame */
 html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #read,html.sn-saver #legend,html.sn-saver #hint,
-html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #about,html.sn-saver #plantBar,html.sn-saver #tapMark{display:none!important}
+html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #about,html.sn-saver #tapMark{display:none!important}
 html.sn-saver #view{cursor:none;transition:opacity 0.8s ease}
 html.sn-saver #feed{opacity:1;pointer-events:none;max-width:none;transition:opacity 0.8s ease}
 html.sn-saver #feedSize{display:none}

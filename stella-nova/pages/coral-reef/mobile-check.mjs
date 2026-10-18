@@ -11,16 +11,18 @@
 //  real main.js. jsdom has no WebGL, so scene.js gives no scene and the
 //  page runs without the reef render. The shell, the dock, the sheet, the
 //  chips, the gradient picker and the reef model run as on a phone.
-//    dock ......... five buttons with labels: camera, feed, colour mode, new
-//                   world, menu; no growth control is left (v4)
+//    dock ......... four buttons with labels: camera, feed, colour mode,
+//                   menu; no growth control is left (v4)
 //    sheet ........ menu opens the half sheet; the grip drags it to full,
 //                   back to half and closed; Escape closes it
 //    explainer .... opens over the sheet, closes with Escape
 //    feed ......... the SSTV camera card: a tap makes it large, a second
 //                   tap or Escape small again; the squad controls (world
 //                   detail, ROVs, feed and SSTV mode) are in the sheet
-//    css .......... 44 px targets and 11 px text in the touch block,
-//                   safe-area insets, no fixed widths over the viewport
+//    css .......... 44 px targets in the touch blocks (style.css and the
+//                   panel rules of lib/sn-panel.css), 12 px text or more,
+//                   safe-area insets, no fixed widths over the viewport.
+//                   tests/panel.test.mjs has the other panel checks.
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -108,7 +110,7 @@ for (const [w, h, coarse] of VIEWS) {
 
   // dock (v4: no growth controls, CONTRACT-V4.md)
   const dock = [...doc.querySelectorAll('#dock > button')];
-  ok(dock.map(b => b.id).join() === 'dockCam,dockFeed,dockMode,dockSeed,dockMenu', `${tag}: the dock has camera, feed, colour mode, new world, menu`, dock.map(b => b.id).join());
+  ok(dock.map(b => b.id).join() === 'dockCam,dockFeed,dockMode,dockMenu', `${tag}: the dock has camera, feed, colour mode, menu`, dock.map(b => b.id).join());
   ok(dock.every(b => b.getAttribute('aria-label') && b.querySelector('span').textContent.trim()), `${tag}: each dock button has a label`);
   const panel = $('panel');
   ok(panel.classList.contains('open') === !phone, `${tag}: the panel is ${phone ? 'closed' : 'open'} at load`);
@@ -137,7 +139,7 @@ for (const [w, h, coarse] of VIEWS) {
     click('dockMenu');
     win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
     ok(!panel.classList.contains('open'), `${tag}: Escape closes the sheet`);
-    for (const g of ['squad', 'feed', 'colour', 'water']) ok(panel.querySelector(`.grp[data-grp=${g}]`), `${tag}: the sheet holds the ${g} group`);
+    for (const g of ['explore', 'view', 'look', 'world', 'about']) ok(panel.querySelector(`.snp-sec[data-sec=${g}]`), `${tag}: the sheet holds the ${g} section`);
     ok(['gradPick', 'modes', 'sDir', 'sCur', 'sTemp', 'sCaust', 'quality', 'rovCount', 'feedMode', 'sstvMode', 'tBeam', 'tFeed', 'bSeed', 'bLead'].every(id => panel.contains($(id))), `${tag}: gradient, colour by, current, temperature, caustics, world detail, ROVs, feed and SSTV modes, beams, feed, new world and follow the lead are in the sheet`);
     ok($('quality').querySelectorAll('button').length === 4 && $('rovCount').querySelectorAll('button').length === 3 && $('sstvMode').querySelectorAll('button').length === 2, `${tag}: detail, ROV and SSTV mode chips`);
   }
@@ -164,26 +166,29 @@ for (const [w, h, coarse] of VIEWS) {
 
 // ── css ─────────────────────────────────────────────────────────────────────
 {
-  const css = fs.readFileSync(path.join(HERE, 'style.css'), 'utf8');
-  const block = (start) => {
+  const page = fs.readFileSync(path.join(HERE, 'style.css'), 'utf8');
+  const lib = fs.readFileSync(path.join(HERE, '../../lib/sn-panel.css'), 'utf8');
+  const blockOf = css => (start) => {
     const i = css.indexOf(start); if (i < 0) return '';
     let d = 0, j = css.indexOf('{', i);
     for (let k = j; k < css.length; k++) { if (css[k] === '{') d++; else if (css[k] === '}' && --d === 0) return css.slice(j, k + 1); }
     return '';
   };
-  const touch = block('@media (pointer:coarse), (max-width:768px)');
-  const phoneB = block('@media (max-width:768px), (max-height:500px) and (pointer:coarse)');
-  ok(touch && phoneB, 'css: the touch block and the phone block are there');
-  for (const sel of ['.chips button', '.linkbtn', '.row{min-height:44px', '#aboutClose{width:44px;height:44px', '#panelClose{width:44px;height:44px']) ok(touch.includes(sel), `css: the touch block sizes ${sel.split('{')[0]} to 44 px`);
-  ok(/::-webkit-slider-thumb\{[^}]*width:26px;height:26px/.test(touch) && /input\[type=range\][^{]*\{[^}]*height:44px/.test(touch), 'css: thumb sliders, 26 px thumbs on a 44 px track');
+  const TQ = '@media (pointer:coarse), (max-width:768px)', PQ = '@media (max-width:768px), (max-height:500px) and (pointer:coarse)';
+  const touch = blockOf(page)(TQ), phoneB = blockOf(page)(PQ), lTouch = blockOf(lib)(TQ), lPhone = blockOf(lib)(PQ);
+  const css = page + lib;
+  ok(touch && phoneB && lTouch && lPhone, 'css: the touch and phone blocks are there (style.css and sn-panel.css)');
+  for (const sel of ['.snp-head{min-height:44px', '.snp-chips .snp-opt{min-height:44px', '.snp-btn{min-height:44px', '.snp-tlabel{min-height:44px', '.snp-sel{min-height:44px', '.snp-iconbtn{width:44px;height:44px', '.snp-link{min-height:44px', '.snp-info{width:44px;height:44px']) ok(lTouch.includes(sel), `css: the panel touch block sizes ${sel.split('{')[0]} to 44 px`);
+  ok(touch.includes('#aboutClose{width:44px;height:44px'), 'css: the touch block sizes #aboutClose to 44 px');
+  ok(/\.snp-range::-webkit-slider-thumb\{[^}]*width:24px;height:24px/.test(lTouch) && /\.snp-range\{height:44px/.test(lTouch), 'css: thumb sliders, 24 px thumbs on a 44 px track');
   ok(/#feed\{[^}]*width:150px/.test(phoneB) && /#feed\.big\{[^}]*width:calc\(100vw - 16px\)/.test(phoneB), 'css: the phone feed card is small (150 px) and full width when large');
-  ok(/#dock > button\{[^}]*height:48px/.test(phoneB) && /#sheetGrip\{[^}]*height:44px/.test(phoneB), 'css: dock buttons 48 px, grip 44 px');
+  ok(/\.snp-dock > button\{[^}]*height:48px/.test(lPhone) && /\.snp-grip\{[^}]*height:44px/.test(lPhone), 'css: dock buttons 48 px, grip 44 px');
   ok(['safe-area-inset-bottom', 'safe-area-inset-left', 'safe-area-inset-right', 'safe-area-inset-top'].every(s => phoneB.includes(s)), 'css: the phone block uses all four safe-area insets');
-  const small = [...css.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?([\d.]+)rem/g)].map(m => +m[1]).filter(v => v < 0.6875);
-  ok(small.length === 0, 'css: no text under 11 px (0.6875rem)', small.join());
+  const small = [...css.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?([\d.]+)rem/g)].map(m => +m[1]).filter(v => v < 0.75);
+  ok(small.length === 0, 'css: no text under 12 px (0.75rem)', small.join());
   const wide = [...css.matchAll(/(?:^|[;{])\s*(?:min-)?width:\s*(\d+)px/g)].map(m => +m[1]).filter(v => v > 360);
   ok(wide.length === 0, 'css: no fixed width over 360 px', wide.join());
-  ok(/html,body\{[^}]*overflow:hidden/.test(css) && /#panel\{[^}]*overflow-x:hidden/.test(css) && /#about\{[^}]*overflow-x:hidden/.test(css), 'css: no horizontal scroll on the page, the panel or the explainer');
+  ok(/html,body\{[^}]*overflow:hidden/.test(css) && /\.snp\{[^}]*overflow-x:hidden/.test(lib) && /#about\{[^}]*overflow-x:hidden/.test(css), 'css: no horizontal scroll on the page, the panel or the explainer');
 }
 
 console.log(`mobile-check: ${pass} passed, ${fail} failed`);

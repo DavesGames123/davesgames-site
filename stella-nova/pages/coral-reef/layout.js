@@ -96,13 +96,9 @@ export function clearFromRects(rects, w, h) {
 }
 
 // The sheet state after a drag of the grip by dy px (down is positive).
-// A short drag (a tap) toggles half and full.
-export function sheetSnap(state, dy) {
-  if (Math.abs(dy) < 8) return state === 'full' ? 'half' : 'full';
-  if (dy < -40) return 'full';
-  if (dy > 40) return state === 'full' ? 'half' : 'closed';
-  return state;
-}
+// A short drag (a tap) toggles half and full. lib/sn-panel.js has the rule
+// (its mountSheet drives the grip); this module gives it to the tests.
+export { sheetSnap } from '../../lib/sn-panel.js';
 
 // The gesture of a pointer that went up: 'drag' (an orbit or a pinch),
 // 'tap', or 'double' (a second tap near the first, soon after it).

@@ -55,6 +55,7 @@ import { squadPlan, squadShotPose, safeCamera, cardRect, frameFit } from './save
 import { lut, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
 import { mountDiagram } from './diagram.js';
 import { PHONE_QUERY, clearFromRects, pixelRatio } from './layout.js';
+import { createPanel } from '../../lib/sn-panel.js';
 import { mountShell } from './shell.js';
 import { createExploreCamera } from './camera.js';
 import { createInput } from './input.js';
@@ -291,7 +292,7 @@ function showFeed() {
 }
 const feedModeId = () => (G.feedMode === 'sstv' ? G.sstv : G.feedMode);
 function applyFeedMode() {
-  document.querySelectorAll('#feedMode button').forEach(b => b.classList.toggle('on', b.dataset.id === G.feedMode));
+  syncFeedUI();
   if (rovs && rovs.feed && rovs.feed.setMode) rovs.feed.setMode(feedModeId());
   feedT = 0;
 }
@@ -328,7 +329,7 @@ const LEG = {
   flow: ['Flow (subtree size)', 'tips', 'trunk'], light: ['Light and nutrient exposure', 'shaded', 'open'],
 };
 const MODE_NOTE = {
-  natural: 'The colours of the species.',
+  natural: '',
   age: 'The order in which the particles joined, in each chunk: the old core at the cold end, the last tips at the hot end.',
   depth: 'Hops from the seed, per colony.',
   height: 'Height over the colony base (the same scale everywhere).',
@@ -351,7 +352,7 @@ function setMode(m) {
   // every mode but natural reads t from the texels (age too: the order in the chunk)
   if (S) S.U.uMode.value = m === 'natural' ? 0 : 2;
   recolour();
-  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.id === m));
+  syncLookUI();
   $('modeNote').textContent = MODE_NOTE[m] || '';
   if (shell) shell.setDock({ mode: (MODES.find(q => q.id === m) || MODES[0]).label });
   drawLegend();
@@ -387,26 +388,41 @@ function fitNow(radius = 1) {
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
+// lib/sn-panel.js makes every control (one look, labels tied to inputs,
+// collapsible sections that remember their state). The other packages add
+// their controls here through the panel API, not by hand (NOTES.md).
+//   Explore ... region, squad size, follow the lead
+//   View ...... the camera feed (show, signal, slow-scan mode), slow orbit
+//   Look ...... colour by, gradient, lamps, snow, polyps, detail, caustics
+//   World ..... detail level, new world, the water (current, temperature)
+//   About ..... a short text, How it works, the credit
+// The camera modes are the #camBar toolbar over the view (not in the panel).
 function hideHint() { $('hint').classList.add('gone'); }
 const fmt = (v, d = 2) => (+v).toFixed(d);
-function bindRange(id, vid, key, show, on, ev = 'input') {
-  const el = $(id), vl = $(vid);
-  const shown = () => { vl.textContent = show(+el.value); };
-  el.value = G[key];
-  el.addEventListener('input', shown);
-  el.addEventListener(ev, () => { G[key] = +el.value; shown(); on && on(G[key]); });
-  shown();
+let panel = null;
+const FEED_MODES = [
+  { id: 'live', label: 'Live', title: 'Live video' },
+  { id: 'r8', label: 'Fast scan', title: 'Slow-scan TV, Robot 8, black and white' },
+  { id: 'sstv', label: 'Slow scan', title: 'Slow-scan TV in colour' },
+];
+// The feed rows follow the feed state; the slow-scan mode shows only for slow scan.
+function syncFeedUI() {
+  if (!panel) return;
+  const fm = panel.find('feedMode'), ss = panel.find('sstvMode'), tf = panel.find('tFeed');
+  if (tf) tf.set(G.feed);
+  if (fm) { fm.set(G.feedMode); fm.el.hidden = !G.feed; }
+  if (ss) { ss.set(G.sstv); ss.el.hidden = !G.feed || G.feedMode !== 'sstv'; }
 }
-function chips(el, items, cur, on) {
-  el.innerHTML = '';
-  for (const it of items) {
-    const b = document.createElement('button'); b.type = 'button'; b.dataset.id = it.id;
-    b.appendChild(document.createTextNode(it.label));
-    b.classList.toggle('on', String(it.id) === String(cur));
-    if (it.disabled) { b.disabled = true; b.title = it.title || ''; }
-    b.addEventListener('click', () => { el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); on(it.id); });
-    el.appendChild(b);
-  }
+// The gradient applies to every mode but Natural, so it hides for Natural.
+function syncLookUI() {
+  if (!panel) return;
+  const m = panel.find('modes'), g = panel.find('gradPick');
+  if (m) m.set(G.mode);
+  if (g) g.el.hidden = G.mode === 'natural';
+}
+function bleachMsg(t) {
+  const b = bleachLevel(t);
+  return b > 0.98 ? 'Bleached: the corals lost their colour. Cool the water to see it again.' : b > 0.02 ? `Bleaching: the colour fades (${Math.round(b * 100)} %).` : '';
 }
 function newWorld() { buildWorld({ seed: 1 + Math.floor(Math.random() * 1e6) }).catch(worldError); flash('A new world: the squad starts a new dive.'); }
 function cycleCam() {
@@ -415,31 +431,64 @@ function cycleCam() {
   pickCam(next);
 }
 function buildUI() {
-  chips($('modes'), MODES, G.mode, id => setMode(id));
-  const det = PROFILE_ORDER.slice(PROFILE_ORDER.indexOf(PROFILE_ID));
-  chips($('quality'), PROFILE_ORDER.map(id => ({ id, label: DETAIL_LABEL[id], disabled: !det.includes(id) || (!HAS_WORKER && id !== 'phone-min'), title: 'Too large for this device' })), G.detail, id => { G.detail = id; buildWorld({ keepSquad: true }).catch(worldError); });
-  chips($('rovCount'), [2, 3, 4].map(n => ({ id: n, label: `${n} ROVs` })), G.rovs, n => { G.rovs = +n; if (squad) { squad.setCount(G.rovs); buildROVs(); } });
-  chips($('feedMode'), [{ id: 'live', label: 'Live video' }, { id: 'r8', label: 'SSTV fast (Robot 8 B&W)' }, { id: 'sstv', label: 'SSTV slow-scan' }], G.feedMode, id => { G.feedMode = id; applyFeedMode(); });
-  chips($('sstvMode'), [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }], G.sstv, id => { G.sstv = id; G.feedMode = 'sstv'; applyFeedMode(); });
-  mountGradientPicker($('gradPick'), { value: G.gradient, reversed: G.rev, onChange: (id, rev) => setGradient(id, rev) });
-  bindRange('sDir', 'vDir', 'dir', v => `${v.toFixed(0)}°`, setCurrent);
-  bindRange('sCur', 'vCur', 'cur', v => fmt(v), setCurrent);
-  bindRange('sCaust', 'vCaust', 'caust', v => (v ? fmt(v) : 'off'), v => { if (S) S.U.uCaust.value = v; });
-  bindRange('sTemp', 'vTemp', 'temp', v => `${v.toFixed(1)} °C`, v => {
-    setTemp(v);
-    const b = bleachLevel(v);
-    $('bleachNote').classList.toggle('warn', b > 0.02);
-    $('bleachNote').textContent = b > 0.98 ? 'Bleached: the corals have lost their algae and their colour. Cool the water to see them again.' : b > 0.02 ? `Bleaching: the colour fades (${Math.round(b * 100)}%).` : 'Above about 30 °C the corals bleach: they lose their colour.';
+  panel = createPanel($('panelBody'), { store: 'coral-reef' });
+
+  const ex = panel.section({ id: 'explore', title: 'Explore', open: true });
+  ex.segmented({
+    id: 'rovCount', label: 'ROVs in the squad', value: G.rovs,
+    items: [2, 3, 4].map(n => ({ id: n, label: String(n) })),
+    onChange: n => { G.rovs = +n; if (squad) { squad.setCount(G.rovs); buildROVs(); } },
   });
-  const tog = (id, key, on) => { const b = $(id); b.classList.toggle('on', G[key]); b.addEventListener('click', () => { G[key] = !G[key]; b.classList.toggle('on', G[key]); on(G[key]); }); };
-  tog('tBeam', 'beam', v => { if (S) S.opts.volume = v; });
-  tog('tSnow', 'snow', v => { if (S) S.opts.snow = v; });
-  tog('tFeed', 'feed', showFeed);
-  tog('tOrbit', 'orbit', v => { if (cam) cam.setAutoRotate(v); });
-  tog('tPolyps', 'polyps', v => { if (S) { S.setPolypsVisible(v); S.setWorldPolyps(v); } });
-  tog('tDetail', 'surface', v => { if (S) S.U.uDetail.value = v ? 1 : 0; });
-  $('bSeed').addEventListener('click', newWorld);
-  $('bLead').addEventListener('click', () => { camChoice = null; $('tourList').hidden = true; followDefault(); flash('Following the lead ROV.'); });
+  ex.button({ id: 'bLead', label: 'Follow the lead ROV', kind: 'primary', icon: 'target', onClick: () => { camChoice = null; $('tourList').hidden = true; if (hud && rovs && rovs.vehicles[0]) hud.select(rovs.vehicles[0].id, { source: 'api' }); followDefault(); flash('Following the lead ROV.'); } });
+
+  const vw = panel.section({ id: 'view', title: 'View', open: true });
+  vw.toggle({ id: 'tFeed', label: 'Camera feed', value: G.feed, onChange: v => { G.feed = v; showFeed(); syncFeedUI(); } });
+  vw.segmented({
+    id: 'feedMode', label: 'Feed signal', items: FEED_MODES, value: G.feedMode,
+    onChange: id => { G.feedMode = id; applyFeedMode(); },
+    hint: 'The ROVs send their pictures over a slow acoustic link. Slow scan builds each picture line by line, with noise and a little slant.',
+  });
+  vw.segmented({
+    id: 'sstvMode', label: 'Slow-scan mode', value: G.sstv,
+    items: [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }],
+    onChange: id => { G.sstv = id; G.feedMode = 'sstv'; applyFeedMode(); },
+  });
+  vw.toggle({ id: 'tOrbit', label: 'Slow orbit', value: G.orbit, onChange: v => { G.orbit = v; if (cam) cam.setAutoRotate(v); }, hint: 'The camera turns slowly round what it looks at.' });
+
+  const lk = panel.section({ id: 'look', title: 'Look', open: true });
+  lk.chips({ id: 'modes', label: 'Colour by', columns: 3, items: MODES, value: G.mode, onChange: id => setMode(id) });
+  lk.note({ id: 'modeNote' });
+  const gp = lk.slot({ id: 'gradPick' });
+  mountGradientPicker(gp.input, { value: G.gradient, reversed: G.rev, label: 'Gradient', onChange: (id, rev) => setGradient(id, rev) });
+  lk.label('Light and water');
+  lk.toggle({ id: 'tBeam', label: 'Lamp beams', value: G.beam, onChange: v => { G.beam = v; if (S) S.opts.volume = v; } });
+  lk.toggle({ id: 'tSnow', label: 'Marine snow', value: G.snow, onChange: v => { G.snow = v; if (S) S.opts.snow = v; } });
+  lk.toggle({ id: 'tPolyps', label: 'Polyps', value: G.polyps, onChange: v => { G.polyps = v; if (S) { S.setPolypsVisible(v); S.setWorldPolyps(v); } } });
+  lk.toggle({ id: 'tDetail', label: 'Surface detail', value: G.surface, onChange: v => { G.surface = v; if (S) S.U.uDetail.value = v ? 1 : 0; }, hint: 'Fine bumps on the rock and the coral skin. Off is faster on a small device.' });
+  lk.slider({ id: 'sCaust', valueId: 'vCaust', label: 'Caustics', min: 0, max: 1.5, step: 0.05, value: G.caust, format: v => (v ? fmt(v) : 'Off'), onInput: v => { G.caust = v; if (S) S.U.uCaust.value = v; } });
+
+  const wd = panel.section({ id: 'world', title: 'World', open: false });
+  const det = PROFILE_ORDER.slice(PROFILE_ORDER.indexOf(PROFILE_ID));
+  wd.segmented({
+    id: 'quality', label: 'Detail', value: G.detail,
+    items: PROFILE_ORDER.map(id => ({ id, label: DETAIL_LABEL[id], disabled: !det.includes(id) || (!HAS_WORKER && id !== 'phone-min'), title: !det.includes(id) ? 'Too large for this device' : null })),
+    onChange: id => { G.detail = id; buildWorld({ keepSquad: true }).catch(worldError); },
+    hint: 'The world streams in round the camera in 32 m chunks. Lower detail is faster. The larger levels are off on a small device.',
+  });
+  wd.button({ id: 'bSeed', label: 'New world', icon: 'dice', onClick: newWorld });
+  wd.label('Water');
+  wd.slider({ id: 'sDir', valueId: 'vDir', label: 'Current direction', min: 0, max: 359, step: 1, value: G.dir, format: v => `${v.toFixed(0)}°`, onInput: v => { G.dir = v; setCurrent(); } });
+  wd.slider({ id: 'sCur', valueId: 'vCur', label: 'Current strength', min: 0, max: 1.5, step: 0.01, value: G.cur, format: v => fmt(v), onInput: v => { G.cur = v; setCurrent(); } });
+  const bn = { set() {} };
+  wd.slider({
+    id: 'sTemp', valueId: 'vTemp', label: 'Temperature', unit: '°C', min: 24, max: 33, step: 0.1, value: G.temp, format: v => v.toFixed(1),
+    onInput: v => { setTemp(v); const t = bleachMsg(v); bn.set(t); bn.el.classList.toggle('snp-warn', !!t); },
+    hint: 'Above about 30 °C the corals bleach: they lose their colour.',
+  });
+  Object.assign(bn, wd.note({ id: 'bleachNote', live: true }));
+
+  panel.section({ id: 'about', title: 'About', open: false }).slot({ el: $('aboutBlurb') });
+  syncFeedUI(); syncLookUI();
 
   let diag = null;
   shell = mountShell({
@@ -534,7 +583,6 @@ function readout(dt) {
   $('rDist').textContent = metres(st.distance);
   $('rDepth').textContent = `${(DEPTH_BASE - squad.vehicles[0].state.p[1]).toFixed(0)} m`;
   $('rCol').textContent = String(st.colonies);
-  $('rChunks').textContent = String(st.chunks);
   $('rTask').textContent = squad.task.label;
   if (performance.now() > flashT && streamer) {
     const s = streamer.stats;
