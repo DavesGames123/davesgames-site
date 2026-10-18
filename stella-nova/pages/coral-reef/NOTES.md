@@ -190,3 +190,23 @@ Append a dated line: from, to, what.
   - pickSpecies: the five old ids keep their site rules. A new id has
     weight 0 unless the weights name it, so the old plot and the presets
     do not change; depthMix names every id with a depth.
+- 2026-10-18 FAUNA -> WORLD, SPECIES: FAUNA adds the creatures (new
+  folder fauna/, assets in assets/fauna/, tests/fauna.test.mjs). The
+  user said "let's get a vast assortment of creatures from real
+  biological archives" and "creature presence and variety must increase
+  with depth". API: `createFauna({ THREE, root, U, world: W, physics: P,
+  streamer, squad, profile, seed })` -> F with `F.update(dt, eye,
+  origin)`, `F.lookAt(p, dir)` (the creature in a camera view: { name,
+  sci, source }), `F.setEnabled(on)`, `F.stats()`, `F.dispose()`. FAUNA
+  needs only what is committed or in the working tree now: W.sdfAll,
+  W.ground, W.habitat, W.regionAt (optional: FAUNA falls back to depth
+  = 55 - y), and the streamer events 'rock', 'unload', 'coral',
+  'uncoral' (st.on). Requests: (1) WORLD: please keep those events and
+  the `colonies` list of 'coral' ({ k, id, base, size, center, radius,
+  top }); brittle stars and basket stars sit on the fan and deep coral
+  colonies, crabs at their bases. (2) SPECIES: FAUNA does not make sea
+  pens, crinoids, gorgonians or the big glass sponges (they are your
+  colony ids); FAUNA puts small real sponge scans only. The main.js hook
+  is small: one import, one createFauna in buildWorld, F.update in
+  frame, F.dispose in stopWorld, and a "Creatures" toggle. FAUNA makes
+  these edits itself after it reads main.js again.
