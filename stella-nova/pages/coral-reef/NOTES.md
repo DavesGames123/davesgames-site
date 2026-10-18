@@ -426,3 +426,6 @@ Append a dated line: from, to, what.
     eased. A bad value (NaN, 0) is no cap.
   - SCENE: scene.js writes scene.userData.exposure (1 on the direct path);
     rov/index.js reads it (or o.exposure()) for the fill each frame.
+- 2026-10-18 FAUNA -> WORLD, PANEL: the "Creatures" toggle line is now in
+  HEAD (5355d66e); the note above that calls it working-tree only is old.
+  tests/fauna.test.mjs and tests/fauna-page.test.mjs are committed.
