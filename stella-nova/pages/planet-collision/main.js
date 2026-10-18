@@ -26,7 +26,8 @@
 //  CAMERA (fn frameOf). view.js frames the contact (Follow on): the eye
 //  looks at the contact point from the side, perpendicular to the
 //  approach axis, and pulls out to hold both bodies and the ejecta
-//  (analysis.js R90). The user orbits and zooms (an offset from the
+//  (view.js actionExt, held under analysis.js R90; critically damped
+//  springs and a capped zoom rate). The user orbits and zooms (an offset from the
 //  auto yaw). fn clearBand gives the screen band that no GUI covers
 //  (the saver plate, or on a phone the caption and the dock or the open
 //  sheet; view.js fn bandFrom); view.js fn cameraOf moves the eye back
@@ -61,7 +62,7 @@ import { makeParams } from './sph.js';
 import { PRESETS, presetByKey, randomScenario, composition, VARIANTS, titleOf } from './scenarios.js';
 import { pickProfile, renderBudget, lowerGrid, lowerSmoke } from './budget.js';
 import { Renderer, loadRenderCode, loadMaps, defaultFrame, norm, cross, sub } from './render.js';
-import { makeView, frameTarget, stepView, cameraOf, impactYaw, sideFor, bandFrom } from './view.js';
+import { makeView, frameTarget, stepView, settleView, actionExt, cameraOf, impactYaw, sideFor, bandFrom } from './view.js';
 import { UNIT, SOURCES, BODIES } from './data.js';
 import { outcome, M_MOON } from './analysis.js';
 import { previewArc } from './arc.js';
@@ -148,7 +149,7 @@ export function startRun(sc, seed = 1, o = {}) {
   S.sim.upload(S.setup, S.prm);
   S.ren.attach(S.sim, S.setup);
   S.phase = 'relax'; S.relaxDone = 0; S.acc = 0;
-  S.stats = null; S.contact = null; S.simT = 0; S.peak = { P: 0, melt: 0, vap: 0, esc: 0, T99: 0 };
+  S.stats = null; S.contact = null; S.simT = 0; S.ext = 0; settleView(S.view); S.peak = { P: 0, melt: 0, vap: 0, esc: 0, T99: 0 };
   S.out = null; S.outAt = 0;
   S.arc = previewArc(S.setup);
   S.f.flashes = [];
@@ -224,7 +225,7 @@ export function clearBand() {
 export function frameOf(now, dt, steps) {
   const f = S.f, aspect = innerWidth / innerHeight;
   const sinceH = S.contact && S.stats ? (S.stats.t - S.contact.simT) * UNIT.T / 3600 : null;
-  const goal = frameTarget(bodiesNow(), sinceH, f.fov, aspect, { axis: S.view.axis, ext: S.out ? S.out.R90 : 0 });
+  const goal = frameTarget(bodiesNow(), sinceH, f.fov, aspect, { axis: S.view.axis, ext: S.ext || 0 });
   if (S.dir && S.dir.goal) S.dir.goal(goal);
   if (S.follow || S.dir) {
     S.cam = goal; S.view.axis = goal.axis;
@@ -284,6 +285,10 @@ async function analyse(now) {
     const rb = await sim.readback(['pos', 'vel', 'grav', 'aux']);
     if (!rb || S.sim !== sim || !S.sc || S.sc.key !== key || S.seed !== seed || !S.contact) return;
     S.out = outcome(rb, sim.n, S.setup.bodies);
+    // the ejecta radius of the frame: the trimmed action radius (view.js
+    // actionExt), never more than the mass R90 (escaping bits do not count)
+    const A = bodiesNow()[0], ae = actionExt(rb.pos, rb.vel, sim.n, A.c);
+    S.ext = Math.min(ae.ext, S.out.R90 || ae.ext);
     S.peak.T99 = Math.max(S.peak.T99, S.out.T99);
     numbers();
   } catch (e) { console.warn('outcome:', e.message); }

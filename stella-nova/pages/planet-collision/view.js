@@ -27,7 +27,11 @@
 //  (a runner that leaves to 5 (R0 + R1) drops out) and an ejecta sphere.
 //  The ejecta radius is ext (analysis.js outcome R90, when known) or
 //  R0 (1.15 + 0.9 h), up to 3.5 R0: the view pulls out as the debris
-//  spreads. Target and distance ease to the goal (fn stepView).
+//  spreads. main.js passes ext from lib/action-camera.js: the trimmed
+//  radius that holds 85 % of the mass-and-action weight round its robust
+//  centre, so a few escaping fragments do not pull the view out until the
+//  subject is a dot. Target and distance follow the goal on critically
+//  damped springs, the distance with a capped zoom rate (fn stepView).
 //
 //  CAMERA (fn cameraOf). eye, target and up for render.js. On a tall frame
 //  (aspect < 0.85) the up vector turns to the axis, so the two bodies
@@ -42,7 +46,9 @@
 //  grep -n targets: "export function makeView", "export function pairAxis",
 //  "export function contactPoint", "export function impactYaw",
 //  "export function sideFor", "export function frameTarget",
-//  "export function stepView", "export function eyeOf",
+//  "export function stepView", "export const ZOOM_RATE", "export function settleView",
+//  "export function actionExt", "export function actionInView",
+//  "export function eyeOf",
 //  "export function cameraOf", "export function bandView",
 //  "export function bandFrom", "export function halfAngle"
 // ============================================================================
@@ -51,6 +57,8 @@
 export function makeView() {
   return { base: -1.25, yaw: 0, pitch: 0.42, zoom: 1, side: 1, axis: null, target: [0, 0, 0], dist: 8, goal: null, user: false };
 }
+
+import { spring, createActionCamera, actionWeights } from '../../lib/action-camera.js';
 
 const len3 = a => Math.hypot(a[0], a[1], a[2]);
 const nrm = a => { const l = len3(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -128,13 +136,61 @@ export function frameTarget(bodies, contactT, fov, aspect, o = {}) {
   return { target, dist: 1.1 * rad / Math.sin(half), axis: ax.d, p, rad };
 }
 
-// Move the view toward goal { target, dist } over dt seconds (tau: the time
-// constant, s).
+// Move the view toward goal { target, dist } over dt seconds (tau: about
+// the time constant, s). Critically damped springs (lib/action-camera.js
+// fn spring: no overshoot, no shake when the goal steps at each stats
+// read), the distance in log space with its rate held to ZOOM_RATE per
+// second, so the camera pulls back calmly as the disk forms and never
+// lunges in; a dead band on the goal distance (out past 6 %, in past
+// 15 %). The spring state is v.tv (target), v.dv and v.goalL (distance).
+export const ZOOM_RATE = 0.45;
 export function stepView(v, goal, dt, tau = 0.8) {
-  const k = 1 - Math.exp(-dt / tau);
-  for (let i = 0; i < 3; i++) v.target[i] += (goal.target[i] - v.target[i]) * k;
-  v.dist += (goal.dist - v.dist) * k;
+  dt = Math.min(0.25, Math.max(0, dt));
+  const hl = tau * Math.LN2;
+  if (!v.tv) v.tv = [0, 0, 0];
+  for (let i = 0; i < 3; i++) { const s = spring(v.target[i], v.tv[i], goal.target[i], hl, dt); v.target[i] = s[0]; v.tv[i] = s[1]; }
+  // a dead band on the distance: the goal moves out at once past 6 %,
+  // in only past 15 %, so small swings of the framing do not pump the zoom
+  const gl = Math.log(Math.max(goal.dist, 1e-6));
+  if (v.goalL == null || gl - v.goalL > 0.06 || v.goalL - gl > 0.15) v.goalL = gl;
+  const l0 = Math.log(Math.max(v.dist, 1e-6)), [l1, dv] = spring(l0, v.dv || 0, v.goalL, 1.3 * hl, dt);
+  const cap = ZOOM_RATE * dt;
+  v.dist = Math.exp(l0 + Math.max(-cap, Math.min(cap, l1 - l0)));
+  v.dv = Math.abs(l1 - l0) > cap ? Math.sign(l1 - l0) * ZOOM_RATE : dv;
 }
+// The ejecta radius for frameTarget (o.ext) from a readback: pos and vel
+// with 4 floats a particle (vel.w the mass), n particles, about the
+// target centre c0. lib/action-camera.js measure on a subsample of up to
+// 4096 particles: weight = mass x (1 + 0.6 activity), the trimmed centre,
+// the radius that holds 85 % of the weight. Returns { ext, c, r }.
+const ACT = { percentile: 0.85, actionK: 0.6 };
+export function actionExt(pos, vel, n, c0) {
+  const k = Math.max(1, Math.ceil(n / 4096)), m = Math.floor(n / k);
+  const mass = new Float32Array(m);
+  for (let i = 0; i < m; i++) mass[i] = vel[4 * i * k + 3];
+  const ac = createActionCamera(ACT);
+  const g = ac.measure({ pos, vel, mass, stride: 4 * k, count: m });
+  if (!g) return { ext: 0, c: c0.slice(), r: 0 };
+  return { ext: len3([g.c[0] - c0[0], g.c[1] - c0[1], g.c[2] - c0[2]]) + g.r, c: g.c, r: g.r };
+}
+// The share of the action weight (as actionExt weighs it) that a camera
+// sees: pos, vel as in actionExt; vp a column-major view-projection.
+export function actionInView(pos, vel, n, vp) {
+  const k = Math.max(1, Math.ceil(n / 4096)), m = Math.floor(n / k);
+  const mass = new Float32Array(m);
+  for (let i = 0; i < m; i++) mass[i] = vel[4 * i * k + 3];
+  const w = actionWeights({ pos, vel, mass, stride: 4 * k, count: m }, ACT.actionK);
+  let tot = 0, inv = 0;
+  for (let i = 0; i < m; i++) {
+    const o = 4 * i * k, x = pos[o], y = pos[o + 1], z = pos[o + 2];
+    const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12], cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13], cw = vp[3] * x + vp[7] * y + vp[11] * z + vp[15];
+    tot += w[i];
+    if (cw > 0 && Math.abs(cx / cw) <= 1 && Math.abs(cy / cw) <= 1) inv += w[i];
+  }
+  return tot > 0 ? inv / tot : 1;
+}
+// Reset the springs (a new run, a cut).
+export function settleView(v) { v.tv = [0, 0, 0]; v.dv = 0; v.goalL = null; }
 
 // The eye position for the view (z up): yaw base + yaw, pitch, dist x zoom.
 export function eyeOf(v) {

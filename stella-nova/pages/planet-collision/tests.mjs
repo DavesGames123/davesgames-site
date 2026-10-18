@@ -84,7 +84,11 @@ import { PRESETS, randomScenario } from './scenarios.js';
 import * as BG from './budget.js';
 import { outcome, percentile, M_MOON as M_MOON_T } from './analysis.js';
 import { previewArc } from './arc.js';
-import { bandFrom, makeView, frameTarget, eyeOf, stepView, cameraOf, impactYaw, sideFor, contactPoint } from './view.js';
+import { bandFrom, makeView, frameTarget, eyeOf, stepView, cameraOf, impactYaw, sideFor, contactPoint, ZOOM_RATE, actionExt, actionInView } from './view.js';
+// camera step bounds (test 11): pan in view distances per s; zoom turns
+// within 2 s of the last. The point-mass model bounces merged bodies (drag
+// only while they overlap), which turns the zoom once in one saver run.
+const PAN_MAX = 0.5, FLIPS_MAX = 1;
 import { M4, VOL_K, VOL_ISO, SPHERE_K, DROP_K, DROPS_MAX } from './render.js';
 import * as SP from './saver-plan.js';
 
@@ -305,7 +309,8 @@ function cameraTests() {
     const H = o.H, aspect = o.aspect, band = o.band;
     const view = makeView(), rnd = SP.rng(seed * 7 + 1);
     let shots = o.saver ? SP.shotPlan(rnd) : null, si = 0, shotAt = 0, contactAt = null, contactWall = null, speed = 2;
-    const st = { n: 0, occl: 0, out: 0, behind: 0, minClr: 9, maxX: 0, cutEarly: 0, wrongShot: 0, cutStart: null };
+    const st = { n: 0, occl: 0, out: 0, behind: 0, minClr: 9, maxX: 0, cutEarly: 0, wrongShot: 0, cutStart: null, zoom: 0, pan: 0, flips: 0 };
+    let prevL = null, prevT = null, prevDL = 0, lastFlip = -99;
     const bodies = () => [{ c: r.map(x => -M2 / Mt * x), R: B[0].R }, { c: r.map(x => M1 / Mt * x), R: B[1].R }];
     let g = frameTarget(bodies(), null, fov, aspect);
     view.target = g.target.slice(); view.dist = g.dist; view.axis = g.axis; view.side = sideFor(g.axis, SUN);
@@ -329,6 +334,12 @@ function cameraTests() {
       g = frameTarget(bs, sinceH, fov, aspect, { axis: view.axis });
       view.axis = g.axis; view.base = impactYaw(g.axis, view.side);
       stepView(view, g, dtw, tc != null ? 1.2 : 0.6);
+      // the camera steps: zoom rate (log distance per s), pan (distances
+      // per s), and a shake: the zoom turns back within 2 s of a turn
+      { const L = Math.log(view.dist);
+        if (prevL != null) { const dl = (L - prevL) / dtw; st.zoom = Math.max(st.zoom, Math.abs(dl)); st.pan = Math.max(st.pan, Math.hypot(...sub3(view.target, prevT)) / view.dist / dtw);
+          if (Math.abs(dl) > 0.02 && Math.abs(prevDL) > 0.02 && Math.sign(dl) !== Math.sign(prevDL)) { if (wall - lastFlip < 2) st.flips++; lastFlip = wall; } if (Math.abs(dl) > 0.02) prevDL = dl; }
+        prevL = L; prevT = view.target.slice(); }
       let v2 = view, sh = null;
       if (shots) {
         sh = shots[si];
@@ -373,18 +384,22 @@ function cameraTests() {
   ];
   const lines = [];
   let bad = 0, cutBad = 0, cutMin = Infinity, total = 0;
+  const steps = { zoom: 0, pan: 0, flips: 0 };
   for (const fr of frames) for (const warp of [1.0, 0.15]) {
     const agg = { n: 0, occl: 0, out: 0, behind: 0, minClr: 9, maxX: 0 };
     for (const { sc, seed } of scs) {
       const s = run(sc, seed, Object.assign({ warp, calm: 0.7 }, fr));
       for (const k of ['n', 'occl', 'out', 'behind']) agg[k] += s[k];
       agg.minClr = Math.min(agg.minClr, s.minClr); agg.maxX = Math.max(agg.maxX, s.maxX);
+      steps.zoom = Math.max(steps.zoom, s.zoom); steps.pan = Math.max(steps.pan, s.pan); steps.flips = Math.max(steps.flips, s.flips);
       if (fr.saver) { cutBad += s.cutEarly + s.wrongShot; if (s.cutStart != null) { cutMin = Math.min(cutMin, s.cutStart); if (s.cutStart < SP.CUTAWAY_AFTER) cutBad++; } }
     }
     total += agg.n; bad += agg.occl + agg.out + agg.behind;
     lines.push(`${fr.name} warp ${warp}: ${agg.n} samples, occluded ${agg.occl}, out of frame ${agg.out}, behind ${agg.behind}, min clearance ${agg.minClr.toFixed(3)} R, max |x| ${agg.maxX.toFixed(2)}`);
   }
   ok('11 camera: the contact is in front, not behind a body, in the frame or the clear band', bad === 0 && total > 5000, `${scs.length} runs x 4 frames x 2 speeds, ${total} samples, ${bad} bad | ` + lines.join(' | '));
+  ok('11 camera steps are calm: zoom under ZOOM_RATE, a bounded pan, no shaking (no zoom turn within 2 s of the last)', steps.zoom <= ZOOM_RATE + 1e-6 && steps.pan < PAN_MAX && steps.flips <= FLIPS_MAX,
+    `max zoom ${steps.zoom.toFixed(3)} (log dist per s; cap ${ZOOM_RATE}), max pan ${steps.pan.toFixed(3)} distances per s (bound ${PAN_MAX}), zoom turns within 2 s of the last: ${steps.flips} (bound ${FLIPS_MAX})`);
   ok('11 saver: no cutaway or other shot in the impact window; the cutaway comes late', cutBad === 0, `${cutBad} bad frames; first cutaway ${cutMin === Infinity ? 'none' : cutMin.toFixed(1) + ' s'} after contact (rule ${SP.CUTAWAY_AFTER} s), impact window ${SP.IMPACT_HOLD} s`);
 }
 
@@ -833,6 +848,17 @@ async function renderTests() {
   for (let k = 0; k < 12; k++) { for (let j = 0; j < 10; j++) sim.step(20); st = await sim.stats(); if (st.tSec > 1.4 * 3600) break; }
   const rb = await sim.readback(['pos', 'vel', 'aux', 'tag', 'th']);
   cls = classify(rb, sim.n, sim.prm.hmax, f);
+  // the frame holds the action (view.js actionExt, as main.js frames it):
+  // most of the mass-and-action weight is in view, and escaping bits do
+  // not pull the camera out until the remnant is a dot
+  { const rbA = await sim.readback(['pos', 'vel', 'grav', 'aux']), out = outcome(rbA, sim.n, setup.bodies);
+    const Bc = setup.bodies.map((b, i) => ({ c: st.com[i] || b.X, R: b.R })), ae = actionExt(rbA.pos, rbA.vel, sim.n, Bc[0].c);
+    const ext = Math.min(ae.ext, out.R90 || ae.ext), hrs = st.tSec / 3600 - setup.impact.tContact * UNIT.T / 3600, aspect = 16 / 9;
+    const g = frameTarget(Bc, Math.max(0, hrs), 0.7, aspect, { ext }), v = makeView(); v.target = g.target; v.dist = g.dist; v.base = impactYaw(g.axis, 1);
+    const cam = cameraOf(v, { t: 0, b: 0 }, 0.7, 900, aspect), vp = M4.mul(M4.persp(0.7, aspect, 0.01), M4.lookAt(cam.eye, cam.target, cam.up).m);
+    const share = actionInView(rbA.pos, rbA.vel, sim.n, vp), Rpx = 0.5 * 900 / Math.tan(0.35) * Bc[0].R / g.dist;
+    ok('R the frame holds the action: most of the action weight in view, the remnant not a dot', share > 0.85 && Rpx > 40,
+      `${(100 * share).toFixed(1)} % of the action weight in a 16:9 view at +${hrs.toFixed(2)} h; ejecta radius ${ext.toFixed(2)} R_E (action ${ae.ext.toFixed(2)}, mass R90 ${(out.R90 || 0).toFixed(2)}); target radius ${Rpx.toFixed(0)} px of 900`); }
   ok('R a grazing hit makes debris fragments (fn classify)', cls.debris > 0.01 * sim.n && cls.fluid > 0.8 * sim.n,
     `t ${(st.tSec / 3600).toFixed(2)} h: fluid ${cls.fluid}, debris ${cls.debris}, vapour ${cls.vapour}`);
   ren.render(f); at = await rgb();
