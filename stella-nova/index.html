@@ -76,6 +76,10 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 .nav-badge{margin-left:auto;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a98;padding:2px 6px;border:1px solid rgba(150,200,255,0.12);border-radius:2px}
 #sb-footer{padding:14px 20px 18px;border-top:1px solid var(--border);flex-shrink:0}
 #sb-clock{font-size:0.72rem;letter-spacing:0.22em;color:var(--text-faint);text-align:center}
+/* Tilt: the on/off for lib/tilt.js (camera parallax from the phone tilt).
+   Shown only on a touch screen with no hover. localStorage 'sn-tilt'. */
+#sb-tilt{display:none}
+@media (pointer:coarse) and (hover:none){#sb-tilt{order:4;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 14px;border:1px solid var(--border-b,var(--border));border-radius:999px;background:rgba(14,18,28,.82);color:var(--text-faint);font:500 0.82rem/1 var(--f-sans,inherit);cursor:pointer}#sb-tilt[aria-pressed=true]{color:var(--text)}#sb-tilt::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.35}#sb-tilt[aria-pressed=true]::before{opacity:1;background:#7fd3a0}}
 #sb-linkedin{display:block;margin-top:10px;padding:8px 14px;border:1px solid rgba(0,119,181,0.5);background:rgba(0,119,181,0.08);color:#5ba4cf;font-size:0.7rem;font-family:inherit;letter-spacing:0.12em;text-transform:uppercase;text-align:center;text-decoration:none;cursor:pointer;transition:background 0.18s,border-color 0.18s,color 0.18s}
 #sb-linkedin:hover{background:rgba(0,119,181,0.2);border-color:rgba(0,119,181,0.9);color:#90c8f0}
 #sb-linkedin::before{content:'in ';font-weight:700;font-size:0.85rem}
@@ -223,6 +227,7 @@ body.sb-collapsed #tb-wishlist{display:inline-flex}
     <div id="sb-footer">
       <a id="sb-wishlist" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><span class="wl-ico">&#9733;</span>Wishlist on Steam</a>
       <div id="sb-clock">00:00:00</div>
+      <button id="sb-tilt" type="button" aria-pressed="true" onclick="toggleTilt()" title="Turn the 3D camera a little when you tilt the phone">Tilt on</button>
       <a id="sb-linkedin" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener">Follow on LinkedIn</a>
     </div>
   </nav>
@@ -346,6 +351,15 @@ var x0=null,y0=0;sb.addEventListener('touchstart',function(e){var t=e.touches[0]
 var n=document.querySelectorAll('#sb-nav .nav-item, #sb-nav .cluster-head.solo').length;if(q)q.placeholder='Search '+n+' pages';markRegion()})();
 function toggleSidebar(){var c=document.body.classList.toggle('sb-collapsed');try{localStorage.setItem('sn-sb-collapsed',c?'1':'0')}catch(e){}}
 window.toggleSidebar=toggleSidebar;
+/* ── tilt ─────────────────────────────────────────────────────────────
+   The on/off for lib/tilt.js. The setting is localStorage 'sn-tilt'
+   ('0' is off). The page in the frame gets a storage event, and also a
+   direct snTilt.set call. A tap that turns it on also asks iOS for the
+   motion permission. grep -n target: "function toggleTilt" */
+function tiltOn(){try{return localStorage.getItem('sn-tilt')!=='0'}catch(e){return true}}
+function tiltPaint(on){var b=document.getElementById('sb-tilt');if(!b)return;b.setAttribute('aria-pressed',on?'true':'false');b.textContent='Tilt '+(on?'on':'off')}
+function toggleTilt(){var on=!(document.getElementById('sb-tilt').getAttribute('aria-pressed')==='true');try{localStorage.setItem('sn-tilt',on?'1':'0')}catch(e){}tiltPaint(on);if(on){var D=window.DeviceOrientationEvent;if(D&&typeof D.requestPermission==='function'){try{D.requestPermission().catch(function(){})}catch(e){}}}try{var f=currentFrame(),w=f&&f.contentWindow;if(w&&w.snTilt)w.snTilt.set(on)}catch(e){}}
+window.toggleTilt=toggleTilt;tiltPaint(tiltOn());
 setInterval(function(){var el=document.getElementById('sb-clock');if(el)el.textContent=new Date().toTimeString().slice(0,8)},1000);
 
 ;(function(){var phrases=['Help Translate','Hilf beim \u00dcbersetzen','Aidez \u00e0 traduire','Ayuda a traducir','Aiuta a tradurre','Ajude a traduzir','\u7ffb\u8a33\u3092\u624b\u4f1d\u3046','\ubc88\uc5ed\uc744 \ub3c4\uc640\uc8fc\uc138\uc694','\u5e2e\u52a9\u7ffb\u8bd1','\u041f\u043e\u043c\u043e\u0433\u0438\u0442\u0435 \u043f\u0435\u0440\u0435\u0432\u0435\u0441\u0442\u0438','Pom\u00f3\u017c t\u0142umaczy\u0107','Help vertalen','Cabhraigh le haistri\u00fach\u00e1n','\u0905\u0928\u0941\u0935\u093e\u0926 \u092e\u0947\u0902 \u092e\u0926\u0926 \u0915\u0930\u0947\u0902','G\u0127in fit-traduzzjoni','QIn mugh'];var idx=0;var el=document.getElementById('translate-cycle');if(el){setInterval(function(){el.style.opacity='0';setTimeout(function(){idx=(idx+1)%phrases.length;el.textContent=phrases[idx];el.style.opacity='1'},400)},3000)}})();

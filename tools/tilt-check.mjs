@@ -418,5 +418,46 @@ for (const ver of ['0.139.2', '0.128.0']) {
   console.log('pages with tilt.js:', n);
 }
 
+// ------------------------------------------------ shell toggle ----
+// The "Tilt" button in the shell sidebar footer, in jsdom (optional: set
+// NODE_PATH to a jsdom install, else this part prints SKIP).
+{
+  const { createRequire } = await import('node:module');
+  let JSDOM = null;
+  try { ({ JSDOM } = createRequire(import.meta.url)('jsdom')); } catch (e) {}
+  if (!JSDOM) console.log('SKIP: shell toggle (jsdom not found, set NODE_PATH)');
+  else {
+    const { parseCss, styleOf, makeMatchMedia } = await import('./css-viewport.mjs');
+    const html = fs.readFileSync(path.join(SN, 'index.html'), 'utf8');
+    const scripts = [];
+    const bare = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/g, (m, a, b) => { const sm = a.match(/src="([^"]+)"/); scripts.push(sm ? { src: sm[1] } : { body: b }); return ''; });
+    const css = parseCss([...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n'));
+    for (const vp of [{ w: 390, h: 844, coarse: true }, { w: 1440, h: 900, coarse: false }]) {
+      const dom = new JSDOM(bare, { url: 'http://localhost/stella-nova/index.html#orbital', runScripts: 'dangerously', pretendToBeVisual: true });
+      const w = dom.window; w.matchMedia = makeMatchMedia(vp); w.Element.prototype.scrollIntoView = () => {};
+      const errs = [];
+      for (const sc of scripts) {
+        if (sc.src && !['lib/nav-data.js', 'lib/wishlist.js'].includes(sc.src)) continue;
+        try { w.eval(sc.src ? fs.readFileSync(path.join(SN, sc.src), 'utf8') : sc.body); } catch (e) { errs.push(e.message); }
+      }
+      const b = w.document.getElementById('sb-tilt');
+      const disp = b && styleOf(b, css, vp).display;
+      if (vp.coarse) {
+        ok(errs.length === 0, 'shell boots with the toggle', errs);
+        ok(b && disp === 'flex', 'shell: Tilt button shows on a phone', disp);
+        ok(b.textContent === 'Tilt on' && b.getAttribute('aria-pressed') === 'true', 'shell: default on');
+        let set = null; let f = w.document.querySelector('#frame-wrap iframe'); if (!f) { f = w.document.createElement('iframe'); w.document.getElementById('frame-wrap').appendChild(f); }
+        f.contentWindow.snTilt = { set: (v) => { set = v; } };
+        b.click();
+        ok(w.localStorage.getItem('sn-tilt') === '0' && b.textContent === 'Tilt off' && set === false, 'shell: tap turns it off, stores it, tells the page');
+        let asked = 0; w.DeviceOrientationEvent = { requestPermission: () => { asked++; return Promise.resolve('granted'); } };
+        b.click();
+        ok(w.localStorage.getItem('sn-tilt') === '1' && set === true && asked === 1, 'shell: tap on asks the iOS permission');
+      } else ok(b && disp === 'none', 'shell: no Tilt button on a desktop', disp);
+      w.close();
+    }
+  }
+}
+
 console.log(`tilt-check: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
