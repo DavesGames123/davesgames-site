@@ -38,17 +38,25 @@
      │  #tabPlay..  │                 #paneDiagram                       │
      │  #tabLearn   │                                                    │
      ├──────────────┴───────────────────────────────────────────────────┤
-     │ #player  prev play next · #pScrub · step label · speed · #lens    │
+     │ #player  prev play next · step label over #pScrub · speed ·       │
+     │          Pause each step · #lens  (a grid; ui/fit-layout.js)      │
      └──────────────────────────────────────────────────────────────────┘
      #credits      a drawer at the right (Penrose 1971, birdtracks, refs)
      #stepList     a pop-up list of the steps of the trace
 
    PHONE  (max-width 768px, or a short landscape touch screen)
-     #dock    at the base: #dockPanel (opens the sheet), #dockPlay, the
-              view switch #dockViews, #dockLens
+     #player  big Prev, Play, Next, the step label, the scrub bar and
+              "Pause each step" (portrait: two rows over the dock;
+              landscape: one row at the left of the dock)
+     #dock    #dockPanel (opens the sheet), the view switch #dockViews
+              (Equation / 3D / Penrose), #dockLens
      #panel   portrait: a bottom sheet with #sheetGrip; landscape: a drawer
-     #stage   the views on screen sit in a row; a swipe moves to the next
-              view (scroll snap); #swipeDots shows where you are
+     #stage   one view at a time: the three views sit in a row, a swipe
+              moves to the next one (scroll snap); #swipeDots shows where
+
+   SIZES  ui/fit-layout.js planLayout() gives body[data-device],
+     #stage[data-shape], .pane[data-head] and #player[data-fit]; main.js
+     writes them (grep -n 'function applyFit' main.js).
 
    GREP MAP  (main.js and ui/)
      grep -n 'function boot'          main.js: the boot order
@@ -59,7 +67,7 @@
      ui/layout.js  ui/player.js  ui/tex-view.js  ui/library-browser.js
      ui/playground.js  ui/lens.js  ui/learn-menu.js  ui/phone.js
      ui/credits.js  ui/packages.js  ui/page-api.js  ui/tex-color.js
-     ui/scene-controls.js  ui/ops.js
+     ui/scene-controls.js  ui/ops.js  ui/fit-layout.js
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="stylesheet" href="style.css">
@@ -141,7 +149,7 @@
       <span class="pane-title">Equation</span>
       <span id="texCaption" class="pane-sub"></span>
       <span class="spacer"></span>
-      <button id="texSumsBtn" class="mini" aria-pressed="false" title="Write out each Einstein sum">Write out sums</button>
+      <button id="texSumsBtn" class="mini" aria-pressed="false" title="Write out each Einstein sum" aria-label="Write out sums"><span class="lbl-l">Write out sums</span><span class="lbl-s" aria-hidden="true">Sums</span></button>
       <button class="mini pane-focus" data-focus="tex" title="Focus this view" aria-label="Focus the equation view">⤢</button>
       <button class="mini pane-close" data-close="tex" title="Hide this view" aria-label="Hide the equation view">✕</button>
     </header>
@@ -163,7 +171,7 @@
       <span class="pane-title">3D</span>
       <span id="vizCaption" class="pane-sub"></span>
       <span class="spacer"></span>
-      <button id="followBtn" class="mini" hidden title="Let the 3D view follow the steps again">Follow the steps</button>
+      <button id="followBtn" class="mini" hidden title="Let the 3D view follow the steps again" aria-label="Follow the steps"><span class="lbl-l">Follow the steps</span><span class="lbl-s" aria-hidden="true">Follow</span></button>
       <button id="sceneBtn" class="mini" aria-controls="sceneBox" aria-expanded="false" title="Pick a scene and move its sliders">Scene</button>
       <button class="mini pane-focus" data-focus="viz" title="Focus this view" aria-label="Focus the 3D view">⤢</button>
       <button class="mini pane-close" data-close="viz" title="Hide this view" aria-label="Hide the 3D view">✕</button>
@@ -171,18 +179,18 @@
     <div class="pane-body viz-body">
       <canvas id="vizCanvas" aria-label="3D picture of the tensor"></canvas>
       <div id="vizFallback" class="fallback" hidden></div>
-      <div id="vizHint" class="view-hint">drag to orbit · pinch or scroll to zoom</div>
+      <div id="vizHint" class="view-hint">drag to orbit · scroll to zoom · click an index to pick it</div>
       <div id="sceneBox" class="note-pop scene-pop" hidden></div>
     </div>
   </section>
 
   <section class="pane" id="paneDiagram" data-view="diagram" aria-label="Penrose diagram view">
     <header class="pane-head">
-      <span class="pane-title">Penrose diagram</span>
+      <span class="pane-title">Penrose diagram</span><span class="pane-title short" aria-hidden="true">Penrose</span>
       <div id="diagStyle" class="seg small" role="group" aria-label="Penrose diagram style">
-        <button data-style="penrose" class="on">Penrose</button>
-        <button data-style="birdtrack">Birdtrack</button>
-        <button data-style="network">Network</button>
+        <button data-style="penrose" class="on" aria-label="Penrose"><span class="lbl-l">Penrose</span><span class="lbl-s" aria-hidden="true">Pen</span></button>
+        <button data-style="birdtrack" aria-label="Birdtrack"><span class="lbl-l">Birdtrack</span><span class="lbl-s" aria-hidden="true">Bird</span></button>
+        <button data-style="network" aria-label="Network"><span class="lbl-l">Network</span><span class="lbl-s" aria-hidden="true">Net</span></button>
       </div>
       <span class="spacer"></span>
       <button id="legendBtn" class="mini" aria-controls="diagLegend" aria-expanded="false" title="What each mark means">Legend</button>
@@ -198,22 +206,16 @@
   <div id="swipeDots" class="swipe-dots" aria-hidden="true"></div>
 </main>
 
-<footer id="player" aria-label="Step player">
-  <div class="pl-buttons">
-    <button id="pPrev" class="pl-btn" aria-label="Last step" title="Last step (←)">⏮</button>
-    <button id="pPlay" class="pl-btn play" aria-label="Play" title="Play or pause (space)">▶</button>
-    <button id="pNext" class="pl-btn" aria-label="Next step" title="Next step (→)">⏭</button>
+<footer id="player" aria-label="Step player" data-fit="l">
+  <button id="pPrev" class="pl-btn prev" aria-label="Last step" title="Last step (←)">⏮</button>
+  <button id="pPlay" class="pl-btn play" aria-label="Play" title="Play or pause (space)">▶</button>
+  <button id="pNext" class="pl-btn next" aria-label="Next step" title="Next step (→)">⏭</button>
+  <button id="pStepsBtn" class="pl-label" aria-controls="stepList" aria-expanded="false"><span id="pCount">0 / 0</span><span id="pLabel">Open an equation from the library</span></button>
+  <div class="pl-scrub">
+    <div id="pTicks" class="pl-ticks"></div>
+    <input id="pScrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Scrub the steps">
   </div>
-  <div class="pl-track">
-    <div class="pl-top">
-      <button id="pStepsBtn" class="pl-label" aria-controls="stepList" aria-expanded="false"><span id="pCount">0 / 0</span><span id="pLabel">Open an equation from the library</span></button>
-    </div>
-    <div class="pl-scrub">
-      <div id="pTicks" class="pl-ticks"></div>
-      <input id="pScrub" type="range" min="0" max="1000" value="0" step="1" aria-label="Scrub the steps">
-    </div>
-  </div>
-  <label class="pl-speed"><span>Speed</span>
+  <label class="pl-speed"><span class="pl-speed-word">Speed</span>
     <select id="pSpeed" aria-label="Speed"></select>
   </label>
   <label class="pl-step" title="Stop on the result of each step. Play or Next runs the next step."><input type="checkbox" id="pStepPause" checked><span>Pause each step</span></label>
@@ -231,13 +233,11 @@
 </aside>
 
 <nav id="dock" aria-label="Phone controls">
-  <button id="dockPanel" aria-label="Library and playground" aria-expanded="false">☰</button>
-  <button id="dockPlay" aria-label="Play">▶</button>
+  <button id="dockPanel" aria-label="Library, story and controls" aria-expanded="false">☰</button>
   <div id="dockViews" class="seg" role="group" aria-label="Views">
-    <button data-layout="tex">Eq</button>
+    <button data-layout="tex" class="on">Equation</button>
     <button data-layout="viz">3D</button>
     <button data-layout="diagram">Penrose</button>
-    <button data-layout="all" class="on">All</button>
   </div>
   <button id="dockLens" aria-label="Indices lens" aria-expanded="false">μ</button>
 </nav>

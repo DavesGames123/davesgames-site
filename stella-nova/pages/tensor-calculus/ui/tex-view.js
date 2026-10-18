@@ -24,7 +24,9 @@
 //  colorMap from palette.js, so the TeX colours match the diagram and 3D.
 //  A string, or an object with no MATH, goes through colorIndexTex().
 //
-//  DEPENDENCIES are passed in (typeset, math), so tests run in node.
+//  DEPENDENCIES are passed in (typeset, math, onTypeset), so tests run in
+//  node. onTypeset runs after each box is typeset; main.js then fits the
+//  equation scale to the pane (fitTex).
 //
 //  EXPORTS   (grep -n "export" ui/tex-view.js)
 //      exprSyms(expr, math)        index syms of an expression, in order
@@ -88,7 +90,8 @@ const OP_NAMES = {
 };
 
 // els: { label, before, op, opName, after, sum, numeric, info, host }
-// deps: { typeset(el, tex, opts) -> Promise, math, dim() -> number }
+// deps: { typeset(el, tex, opts) -> Promise, math, dim() -> number,
+//         onTypeset(el): after each box is typeset (main.js fits the scale) }
 export function createTexView(els, deps) {
   const { typeset, math } = deps;
   let sumsOn = false, curStep = null, curExpr = null, picked = null;
@@ -98,7 +101,8 @@ export function createTexView(els, deps) {
     if (!el) return Promise.resolve(false);
     el.hidden = !tex;
     if (!tex) { el.replaceChildren(); return Promise.resolve(false); }
-    return Promise.resolve(typeset(el, tex, { display: true })).catch(() => false);
+    return Promise.resolve(typeset(el, tex, { display: true })).catch(() => false)
+      .then(r => { if (deps.onTypeset) { try { deps.onTypeset(el); } catch (e) { /* a fit error must not stop the view */ } } return r; });
   }
 
   function info(expr) {

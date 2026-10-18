@@ -41,6 +41,9 @@
 //    grep -n 'function resolveScene' LIBRARY scene ids -> VIZ scene ids
 //    grep -n 'SAVER SEAM'           where saver/index.js plugs in
 //    grep -n 'function bindKeys'    keyboard: space, arrows, 1-4, Escape
+//    grep -n 'function applyFit'    sizes: data-device, data-shape,
+//                                   data-head, data-fit (ui/fit-layout.js)
+//    grep -n 'function fitTex'      the equation scale (--tex-k)
 // ============================================================================
 import { installStub, attach } from './ui/page-api.js';
 import { loadPackages } from './ui/packages.js';
@@ -52,6 +55,7 @@ import { createPlayground } from './ui/playground.js';
 import { createLearnMenu } from './ui/learn-menu.js';
 import { renderLens, symsFromSlot, symLabel } from './ui/lens.js';
 import { createPhone } from './ui/phone.js';
+import { planLayout, stageShape, headLevel, playerLevel, texScale } from './ui/fit-layout.js';
 import { renderCredits } from './ui/credits.js';
 import { createSceneControls } from './ui/scene-controls.js';
 import { scriptIndices, plainLabel } from './ui/tex-color.js';
@@ -131,7 +135,7 @@ export async function boot(opts = {}) {
   const tex = createTexView({
     host: $('texBody'), label: $('texStepLabel'), before: $('texBefore'), op: $('texOp'), opName: $('texOpName'),
     after: $('texAfter'), sum: $('texSum'), numeric: $('texNumeric'), info: $('texIndexInfo'),
-  }, { typeset, math: M, dim: () => S.dim });
+  }, { typeset, math: M, dim: () => S.dim, onTypeset: () => fitSoon() });
 
   const pickFromView = sym => pickIndex(sym && S.pickedIndex === palette.norm(sym) ? null : sym);
   // DIAGRAM calls onPickIndex(sym | null) itself after its own toggle.
@@ -169,7 +173,7 @@ export async function boot(opts = {}) {
   const el = {
     play: $('pPlay'), prev: $('pPrev'), next: $('pNext'), scrub: $('pScrub'), ticks: $('pTicks'),
     count: $('pCount'), label: $('pLabel'), speed: $('pSpeed'), stepsBtn: $('pStepsBtn'), stepList: $('stepList'),
-    dockPlay: $('dockPlay'), lensChips: $('lensChips'),
+    lensChips: $('lensChips'),
   };
   let lastStep = null;
   const player = createPlayer({
@@ -209,11 +213,10 @@ export async function boot(opts = {}) {
   el.speed.addEventListener('change', () => { S.speed = +el.speed.value; player.setSpeed(S.speed); });
   function syncPlay() {
     const p = player.position().playing;
-    for (const b of [el.play, el.dockPlay]) { if (!b) continue; b.textContent = p ? '❚❚' : '▶'; b.setAttribute('aria-label', p ? 'Pause' : 'Play'); b.classList.toggle('on', p); }
+    for (const b of [el.play]) { b.textContent = p ? '❚❚' : '▶'; b.setAttribute('aria-label', p ? 'Pause' : 'Play'); b.classList.toggle('on', p); }
   }
   const togglePlay = () => { player.toggle(); syncPlay(); };
   el.play.addEventListener('click', togglePlay);
-  if (el.dockPlay) el.dockPlay.addEventListener('click', togglePlay);
   el.prev.addEventListener('click', () => { player.pause(); player.prev(); syncPlay(); });
   el.next.addEventListener('click', () => { player.pause(); player.next(); syncPlay(); });
   el.scrub.addEventListener('input', () => { player.pause(); player.seekFrac(+el.scrub.value / 1000); syncPlay(); });
@@ -275,6 +278,64 @@ export async function boot(opts = {}) {
     return S.pickedIndex;
   }
 
+  // ---------------------------------------------------------------- fit
+  // planLayout() (ui/fit-layout.js) gives the device, the grid shape, the
+  // header level of each pane and the player level. A real browser has the
+  // pane sizes, so the header and player levels come from them; with no
+  // layout (a test DOM), they come from the plan.
+  let lastPlan = null;
+  function applyFit() {
+    const coarse = !!(win.matchMedia && win.matchMedia('(pointer: coarse)').matches);
+    const vp = { w: win.innerWidth || 1280, h: win.innerHeight || 800, coarse };
+    const plan = planLayout(vp, {
+      panelOpen: $('panel').classList.contains('open'), inFrame: doc.documentElement.classList.contains('in-frame'),
+      mode: S.layout.mode, views: S.layout.views,
+    });
+    // The CSS phone query decides the phone rules; the plan follows it.
+    const isPhone = !!(phone && phone.isPhone());
+    const device = isPhone ? (plan.device === 'desktop' ? 'portrait' : plan.device) : 'desktop';
+    doc.body.dataset.device = device;
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    stage.dataset.shape = device !== 'desktop' ? 'one' : sw > 0 && sh > 0 ? stageShape(S.layout.mode, sw, sh) : plan.shape;
+    for (const v of VIEWS) {
+      const w = panes[v].clientWidth || (plan.panes[v] && plan.panes[v].w) || 0;
+      panes[v].dataset.head = w ? headLevel(v, w, { phone: device !== 'desktop' }) : 'l';
+    }
+    const pw = $('player').clientWidth || plan.playerW;
+    $('player').dataset.fit = playerLevel(pw, device);
+    lastPlan = { ...plan, device };
+    fitSoon();
+    return lastPlan;
+  }
+
+  // The equation fills its pane: measure the stack at the current scale,
+  // then set --tex-k (ui/fit-layout.js texScale). Two passes, because the
+  // operation line and the paddings do not scale.
+  const texBody = $('texBody'), texStack = texBody.querySelector('.tex-stack');
+  let fitRaf = 0;
+  const rafFit = win.requestAnimationFrame ? fn => win.requestAnimationFrame(fn) : fn => setTimeout(fn, 16);
+  function fitSoon() { if (!fitRaf) fitRaf = rafFit(() => { fitRaf = 0; fitTex(); fitTex(); }); }
+  function fitTex() {
+    if (!texStack || panes.tex.hidden) return null;
+    const boxW = texStack.clientWidth, boxH = texStack.clientHeight;
+    if (!boxW || !boxH) return null;
+    const k = parseFloat(texBody.style.getPropertyValue('--tex-k')) || 1;
+    let cw = 0, ch = 0, n = 0;
+    for (const line of texStack.children) {
+      if (line.hidden) continue;
+      const svg = line.querySelector('svg');
+      const w = svg ? svg.getBoundingClientRect().width : line.scrollWidth;
+      cw = Math.max(cw, w); ch += line.offsetHeight; n++;
+    }
+    if (!n) return null;
+    ch += Math.max(0, n - 1) * 6 * k;
+    const phoneNow = doc.body.dataset.device && doc.body.dataset.device !== 'desktop';
+    const r = texScale({ contentW: cw, contentH: ch, boxW, boxH: boxH * 0.92, k, min: phoneNow ? 0.7 : 0.75, max: phoneNow ? 1.6 : 2.2 });
+    if (Math.abs(r.k - k) > 0.02) texBody.style.setProperty('--tex-k', String(r.k));
+    texBody.classList.toggle('tex-scroll', r.scroll);
+    return r;
+  }
+
   // ---------------------------------------------------------------- layout
   const layoutBtns = [...doc.querySelectorAll('[data-layout]')];
   const styleBtns = [...doc.querySelectorAll('#diagStyle [data-style]')];
@@ -283,6 +344,10 @@ export async function boot(opts = {}) {
     let next;
     if (spec && typeof spec === 'object' && !Array.isArray(spec) && spec.view) spec = { ...spec, ...(VIEWS.includes(spec.view) ? { focus: spec.view } : spec.view === 'all' ? { views: VIEWS.slice() } : {}) };
     next = reduce(S.layout, spec);
+    // A phone shows one view at a time, with all three in a row: a focus
+    // spec scrolls to that view and keeps the other two next to it.
+    let phoneView = null;
+    if (phone && phone.isPhone() && next.views.length < VIEWS.length) { phoneView = next.views[0]; next = reduce(next, 'all'); }
     const styleChanged = next.style !== S.layout.style;
     S.layout = next;
     for (const b of layoutBtns) {
@@ -292,9 +357,10 @@ export async function boot(opts = {}) {
     }
     for (const b of styleBtns) b.classList.toggle('on', b.dataset.style === next.style);
     if (styleChanged) safe('diagram.setStyle', () => diagram.setStyle(next.style));
-    const done = applyLayout(stage, panes, next, { animate: !opts.noAnimate, onSettled: () => { safe('viz.resize', () => viz.resize()); safe('diagram.resize', () => diagram.resize && diagram.resize()); } });
+    applyFit();
+    const done = applyLayout(stage, panes, next, { animate: !opts.noAnimate, onSettled: () => { applyFit(); safe('viz.resize', () => viz.resize()); safe('diagram.resize', () => diagram.resize && diagram.resize()); } });
     safe('viz.resize', () => viz.resize());
-    if (phone) { phone.syncDots(); if (!next.views.includes(phone.currentView())) phone.scrollToView(next.views[0], false); }
+    if (phone) { phone.syncDots(); if (phoneView) phone.scrollToView(phoneView, false); else if (!next.views.includes(phone.currentView())) phone.scrollToView(next.views[0], false); }
     emit('view', { views: next.views.slice(), mode: next.mode, style: next.style });
     return done.then(() => ({ ...S.layout }));
   }
@@ -433,6 +499,7 @@ export async function boot(opts = {}) {
   function setPanel(open) {
     if (phone) phone.setOpen(open);
     else { $('panel').classList.toggle('open', open); doc.body.classList.toggle('panel-closed', !open); }
+    applyFit();
     safe('viz.resize', () => viz.resize());
   }
   for (const b of doc.querySelectorAll('[role=tab][data-tab]')) b.addEventListener('click', () => setTab(b.dataset.tab, { toggle: b.closest('.topbar') != null }));
@@ -480,7 +547,7 @@ export async function boot(opts = {}) {
     },
     on,
     follow: () => { setFree(false); return true; },
-    internals: () => ({ store: S, player, setFree, layout: { get: () => ({ ...S.layout }), set: setView }, views: { tex, viz, diagram }, packages: pk, palette, emit }),
+    internals: () => ({ store: S, player, setFree, fit: { apply: () => applyFit(), tex: () => fitTex(), last: () => lastPlan }, layout: { get: () => ({ ...S.layout }), set: setView }, views: { tex, viz, diagram }, packages: pk, palette, emit }),
   };
 
   learnMenu = createLearnMenu({ menu: $('learnMenu'), host: $('learnHost') }, {
@@ -513,8 +580,8 @@ export async function boot(opts = {}) {
   phone = createPhone({ panel: $('panel'), dockPanel: $('dockPanel'), grip: $('sheetGrip'), stage, dots: $('swipeDots'), panes }, {
     views: () => S.layout.views,
     onView: v => { for (const b of doc.querySelectorAll('#dockViews [data-layout]')) b.classList.toggle('on', b.dataset.layout === v); safe('viz.resize', () => viz.resize()); },
-    onOpen: () => safe('viz.resize', () => viz.resize()),
-    onPhone: () => setView(S.layout.views),
+    onOpen: () => { applyFit(); safe('viz.resize', () => viz.resize()); },
+    onPhone: on => setView(on ? 'all' : S.layout.views),
   });
 
   // ---------------------------------------------------------------- keys
@@ -532,17 +599,18 @@ export async function boot(opts = {}) {
     });
   }
   bindKeys();
-  if (win.addEventListener) win.addEventListener('resize', () => safe('viz.resize', () => viz.resize()));
+  if (win.addEventListener) win.addEventListener('resize', () => { applyFit(); safe('viz.resize', () => viz.resize()); });
   // A pane can change size with no window resize: the panel opens or
   // closes, a layout moves, the phone sheet moves. One observer per pane.
   if (typeof win.ResizeObserver === 'function') {
     const ro = new win.ResizeObserver(entries => {
+      fitSoon();
       for (const en of entries) {
         if (en.target === panes.viz) safe('viz.resize', () => viz.resize());
         if (en.target === panes.diagram) safe('diagram.resize', () => diagram.resize && diagram.resize());
       }
     });
-    ro.observe(panes.viz); ro.observe(panes.diagram);
+    ro.observe(panes.viz); ro.observe(panes.diagram); ro.observe(panes.tex);
   }
 
   // ---------------------------------------------------------------- frame
