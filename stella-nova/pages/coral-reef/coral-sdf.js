@@ -1,37 +1,58 @@
 // ============================================================================
-//  CORAL REEF  ·  coral surfaces from the DLA trees (DOM-free)
+//  CORAL REEF  ·  coral surfaces from the shared DLA tree (DOM-free)
 // ----------------------------------------------------------------------------
-//  Each colony is one createTreeSdf of lib/dla-sdf.js: round cones along
-//  the parent links, radius from the subtree size (pipe rule), joined with
-//  a smooth minimum, meshed brick by brick with surface nets. The species
-//  set the look with the cone radii, the blend and a post term (a pure
-//  per-point shape term that lib/dla-sdf.js applies at mesh time):
-//    staghorn ... thin tapered branches, round tips, thick trunks
-//    fan ........ thin branch ribs, and a web: a slab in the fan plane
-//                 where two ribs are near, so the fan is a webbed net
-//    table ...... a stalk, then a flat plate: wide cones cut to a slab at
-//                 the height of each plate particle
-//    boulder .... fat cones and a wide blend give a smooth dome; a groove
-//                 term cuts meandering valleys (contour lines of a slow
-//                 noise field, so the valleys run side by side like the
-//                 valleys of a brain coral)
-//    finger ..... fat soft lobes with a wide blend
+//  One createTreeSdf of lib/dla-sdf.js per SPECIES, in the world frame
+//  (metres). All colonies of a species write into the same field, so two
+//  colonies of one species that touch fuse into one smooth surface (the
+//  smooth minimum joins them). Colonies of two species have two fields:
+//  where they meet, one surface grows over the other. Each field: round
+//  cones along the parent links, radius from the subtree size (pipe rule),
+//  joined with a smooth minimum, meshed brick by brick with surface nets,
+//  only the bricks that changed. The species set the look with the cone
+//  radii, the blend and a post term (a pure per-point shape term that
+//  lib/dla-sdf.js applies at mesh time):
+//    staghorn ... thin tapered branches (1.2 cm tips), round tips
+//    fan ........ thin ribs, and a web: a slab in the fan plane where two
+//                 ribs are near, so the fan is a fine webbed net
+//    table ...... a stalk, then a flat plate: cones cut to a slab at the
+//                 height of each plate particle
+//    boulder .... (brain coral) fat cones and a wide blend give a smooth
+//                 dome; a groove term cuts meandering valleys
+//    finger ..... soft lobes with a wide blend
 //
-//  The mesher works in the local frame of the colony (seed at the
-//  origin). The page puts each colony in a group at its base. Each vertex
-//  carries the global particle index (gid), so the page colours the
-//  surface from per-particle data textures (no re-mesh on a colour change).
+//  Each vertex carries the global particle id (gid), so the page colours
+//  the surface from per-particle data (no re-mesh on a colour change).
 //
-//  Polyps: scatterPolyps() puts polyp cups on the triangles of a brick by
-//  area (density per species), more at the tips (small subtrees). Each
-//  polyp is 8 floats: x y z, nx ny nz (surface normal), gid, rand.
+//  POLYPS. scatterPolyps() puts polyp cups on the triangles of a brick by
+//  area: SHAPES[id].polyp.density per m^2 (x the quality scale), more at
+//  the tips. Each polyp is 8 floats: x y z, nx ny nz (surface normal),
+//  gid, rand. rand is uniform in 0..1 and independent of the place, so the
+//  page can cull polyps by distance (LOD): draw a polyp when rand < keep(d).
+//  SHAPES[id].polyp.size is the polyp radius (m) for the page template.
 //
-//  USE (page worker, page main thread fallback, node tests)
-//    const M = createCoralMesher();
-//    M.addColony({ k, id: 'staghorn', normal: [nx, nz] });
-//    M.add(k, local, parent, x, y, z, gid);     // local frame, ids in order
-//    const out = M.update(ms);                  // [{ k, key, chunk, positions, normals, gids, indices, polyps }]
-//    M.meshColony(k) -> all brick results now (tests, thumbnails)
+//  LOD. Each species has two fields: a fine one (the SHAPES cell) that
+//  holds only the FOCUS colonies (the nearest to the cameras, set by
+//  setFocus) and a coarse one (LOD_K x the cell, thin parts made half a
+//  coarse cell thick) that holds every colony. So the fine triangles stay
+//  in the budget, and far colonies cost little. Polyps are only on the
+//  fine bricks. A focus change refills the fine field of that species.
+//
+//  USE (the reef worker, node tests, thumbnails)
+//    const M = createCoralMesher({ polyps, fine, radius, lod = true });
+//                                  // lod false: one fine field, all colonies
+//    M.addColony({ k, id, base, plane, stalk });   // colonyInfo() of reef.js
+//    M.add(g, parent, x, y, z, k);                 // world metres, ids in order
+//    M.setFocus([k, ...])                          // the fine-mesh colonies
+//    const out = M.update(ms);   // [{ sp, lod, k: -1, key, chunk, bx, by, bz,
+//                                //    cell, positions, normals, gids, indices,
+//                                //    polyps, tris }]
+//    M.meshAll(lev?) -> all brick results now (tests, thumbnails)
+//    M.stats() -> { colonies, particles, bricks, tris, trisFine, trisCoarse,
+//                   polyps, dirty, focus }
+//
+//  A result with no indices means "remove this brick". The key of a brick
+//  is unique per species and lod: the page keys its chunks by
+//  sp + lod + chunk.
 //
 //  grep -n targets
 //    species shapes ......... "export const SHAPES"
@@ -40,73 +61,93 @@
 //    polyp scatter .......... "export function scatterPolyps"
 //    the mesher ............. "export function createCoralMesher"
 //    chunk of a brick ....... "export function chunkKey"
+//    smooth branch points ... "function smoothPoint"
+//    the coarse field ....... "function makeField"
+//    focus change ........... "function setFocus"
 // ============================================================================
 import { createTreeSdf, smin } from '../../lib/dla-sdf.js';
-import { noise3 } from './terrain.js';
 
-// cell: lattice spacing. k: blend. bend, hold: branch smoothing (the cone
-// ends follow part of the parent direction, then move back toward the
-// particle). rTip, pipe, rMax, sub0, quant: the pipe
-// rule (lib/dla-sdf.js pipeRadius). rootScale: a root sphere is this much
-// larger. band: stored field band (past the largest outward post term).
-// polyp: density (per unit area), tip (extra density at the tips), size.
+// Metres. cell: lattice spacing. k: blend. bend, hold: branch smoothing
+// (the cone ends keep part of the parent direction, then move back toward
+// the particle). rTip, pipe, rMax, sub0, quant: the pipe rule (lib/dla-sdf.js
+// pipeRadius). rootScale: a root sphere is this much larger. band: stored
+// field band (past the largest outward post term). polyp: density per m^2,
+// tip (extra density at the tips), size (polyp radius, m), max per brick.
 export const SHAPES = {
-  staghorn: { cell: 0.27, k: 0.8, bend: 0.5, hold: 0.25, rTip: 0.42, pipe: 3.2, rMax: 1.35, sub0: 2, quant: 0.16, rootScale: 1.7, band: 0.55,
-    polyp: { density: 0.9, tip: 2.5, size: 0.2, max: 120 } },
-  fan: { cell: 0.16, k: 0.25, rTip: 0.2, pipe: 3, rMax: 0.55, sub0: 3, quant: 0.2, rootScale: 2, band: 0.85,
-    web: 0.62, half: 0.11, polyp: { density: 3.2, tip: 1, size: 0.1, max: 260 } },
-  table: { cell: 0.3, k: 0.5, bend: 0.3, hold: 0.4, rTip: 0.6, pipe: 3, rMax: 1.5, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.72,
-    inflate: 0.35, half: 0.38, polyp: { density: 1.8, tip: 1.5, size: 0.17, max: 260 } },
-  boulder: { cell: 0.34, k: 1.0, rTip: 1.0, pipe: 4, rMax: 1.4, sub0: 3, quant: 0.25, rootScale: 1.4, band: 0.5,
-    groove: 0.22, polyp: { density: 0.25, tip: 0, size: 0.16, max: 80 } },
-  finger: { cell: 0.32, k: 0.75, bend: 0.4, hold: 0.3, rTip: 0.6, pipe: 3, rMax: 1.5, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.45,
-    polyp: { density: 2.0, tip: 1, size: 0.24, max: 200 } },
+  staghorn: { cell: 0.0115, k: 0.018, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 4, rMax: 0.019, sub0: 3, quant: 0.16, rootScale: 1.4, band: 0.022,
+    polyp: { density: 3000, tip: 2.5, size: 0.0035, max: 420 } },
+  fan: { cell: 0.0085, k: 0.008, bend: 0.25, hold: 0.4, rTip: 0.0045, pipe: 3.5, rMax: 0.012, sub0: 3, quant: 0.2, rootScale: 2, band: 0.03,
+    web: 0.022, half: 0.0042, polyp: { density: 6000, tip: 1, size: 0.0022, max: 420 } },
+  table: { cell: 0.016, k: 0.02, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034,
+    inflate: 0.012, half: 0.011, polyp: { density: 3200, tip: 1.5, size: 0.0035, max: 420 } },
+  boulder: { cell: 0.022, k: 0.12, rTip: 0.06, pipe: 4, rMax: 0.08, sub0: 3, quant: 0.25, rootScale: 1.4, band: 0.06,
+    groove: 0.03, polyp: { density: 240, tip: 0, size: 0.006, max: 160 } },
+  finger: { cell: 0.02, k: 0.04, bend: 0.4, hold: 0.3, rTip: 0.03, pipe: 3.4, rMax: 0.045, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03,
+    polyp: { density: 3400, tip: 1, size: 0.0055, max: 420 } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
 export const BRICK = 8;
-export const CHUNK = 6;        // bricks per chunk edge (the page draws one mesh per chunk)
+export const CHUNK_M = 2;      // chunk edge (m): the page draws one mesh per chunk and species
 
-export function chunkKey(bx, by, bz) {
-  const c = v => Math.floor(v / CHUNK);
+// The chunk of a brick: bricks whose lower corner is in one CHUNK_M cube.
+export function chunkKey(bx, by, bz, cell) {
+  const s = BRICK * cell / CHUNK_M, c = v => Math.floor(v * s);
   return `${c(bx)},${c(by)},${c(bz)}`;
 }
 
 function smax(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.max(a, b) + h * h * k * 0.25; }
 
-// Brain coral valleys: the contour lines of a slow noise field f, at
-// spacing 1 / 3.4 of its range, so the valleys run side by side and
-// meander. 0 on a ridge, 1 in the middle of a valley.
+// value noise (own code), -1..1
+function vh(i, j, k) { let h = Math.imul(i, 374761393) + Math.imul(j, 668265263) + Math.imul(k, 1440662683); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 2147483648 - 1; }
+export function noise3(x, y, z) {
+  const i = Math.floor(x), j = Math.floor(y), k = Math.floor(z);
+  const fx = x - i, fy = y - j, fz = z - k;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
+  const a = vh(i, j, k) + (vh(i + 1, j, k) - vh(i, j, k)) * u, b = vh(i, j + 1, k) + (vh(i + 1, j + 1, k) - vh(i, j + 1, k)) * u;
+  const c = vh(i, j, k + 1) + (vh(i + 1, j, k + 1) - vh(i, j, k + 1)) * u, d = vh(i, j + 1, k + 1) + (vh(i + 1, j + 1, k + 1) - vh(i, j + 1, k + 1)) * u;
+  const e = a + (b - a) * v, f = c + (d - c) * v;
+  return e + (f - e) * w;
+}
+
+// Brain coral valleys: the contour lines of a slow noise field f (metres),
+// so the valleys run side by side and meander, about 9 cm apart. 0 on a
+// ridge, 1 in the middle of a valley.
 export function groove(x, y, z) {
-  const f = noise3(x * 0.16 + 3.1, y * 0.16, z * 0.16) * 3.4 + noise3(x * 0.55, y * 0.55 + 5, z * 0.55) * 0.35;
+  const f = noise3(x * 1.6 + 3.1, y * 1.6, z * 1.6) * 3.4 + noise3(x * 5.5, y * 5.5 + 5, z * 5.5) * 0.35;
   const s = Math.abs(Math.sin(f * Math.PI * 2));
   const t = Math.min(1, s / 0.42);
   return 1 - t * t * (3 - 2 * t);
 }
 
-// The post term of a colony: (x, y, z, d, id) -> d', local frame.
-function postFor(sh, col) {
-  if (col.id === 'fan') {
-    // ribs: the tree field d; web: a slab in the fan plane where the field
-    // inflated by sh.web is inside
-    const nx = col.normal[0], nz = col.normal[1], W = sh.web, T = sh.half;
-    return (x, y, z, d) => {
-      const pd = Math.abs(x * nx + z * nz);
-      const web = smax(d - W, pd - T, 0.18);
-      return smin(d, web, 0.12);
+// The post term of a species field: (x, y, z, d, id) -> d', id = the
+// local prim id (the nearest cone). C: the colony of each prim.
+function postFor(id, sh, S) {
+  if (id === 'fan') {
+    // ribs: the tree field d; web: a slab in the plane of the colony where
+    // the field inflated by sh.web is inside
+    const W = sh.web, T = sh.half;
+    return (x, y, z, d, pid) => {
+      if (pid < 0 || d > W + 0.01) return d;
+      const c = S.cols.get(S.colOf[pid]);
+      const pd = Math.abs((x - c.base[0]) * c.plane[0] + (z - c.base[2]) * c.plane[1]);
+      const web = smax(d - W, pd - T, 0.006);
+      return smin(d, web, 0.005);
     };
   }
-  if (col.id === 'table') {
+  if (id === 'table') {
     // plate particles (depth >= stalk) are cut to a slab at their height
-    const stalk = col.stalk || 7, I = sh.inflate, T = sh.half;
-    return (x, y, z, d, id) => {
-      if (id < 0 || col.depth[id] < stalk) return d;
-      const slab = Math.abs(y - col.local[id * 3 + 1]) - T;
-      return smax(d - I, slab, 0.3);
+    const I = sh.inflate, T = sh.half;
+    return (x, y, z, d, pid) => {
+      if (pid < 0) return d;
+      const c = S.cols.get(S.colOf[pid]);
+      if (S.depth[pid] < (c.stalk || 7)) return d;
+      const slab = Math.abs(y - S.Y[pid]) - T;
+      return smax(d - I, slab, 0.012);
     };
   }
-  if (col.id === 'boulder') {
+  if (id === 'boulder') {
     const A = sh.groove;
-    return (x, y, z, d) => d > 0.6 ? d : d + A * groove(x, y, z) * Math.min(1, Math.max(0, 1 - d / 0.6));
+    return (x, y, z, d) => d > 0.03 ? d : d + A * groove(x, y, z) * Math.min(1, Math.max(0, 1 - d / 0.03));
   }
   return null;
 }
@@ -132,128 +173,232 @@ export function scatterPolyps(mesh, pol, tipOf, gidOf, seed) {
     const id = ID[a] >= 0 ? ID[a] : ID[b] >= 0 ? ID[b] : ID[c];
     if (id < 0) continue;
     const tip = tipOf(id);
-    let want = area * pol.density * (1 + pol.tip * tip);
+    const want = area * pol.density * (1 + pol.tip * tip);
     const r0 = h01(seed, t);
-    let k = Math.floor(want) + (r0 < want - Math.floor(want) ? 1 : 0);
+    const k = Math.floor(want) + (r0 < want - Math.floor(want) ? 1 : 0);
     for (let q = 0; q < k && n < pol.max; q++) {
       let s1 = h01(seed + q * 7919, t + 1), s2 = h01(seed + q * 104729, t + 2);
       if (s1 + s2 > 1) { s1 = 1 - s1; s2 = 1 - s2; }
       const w0 = 1 - s1 - s2;
-      let nx = N[a * 3] * w0 + N[b * 3] * s1 + N[c * 3] * s2;
-      let ny = N[a * 3 + 1] * w0 + N[b * 3 + 1] * s1 + N[c * 3 + 1] * s2;
-      let nz = N[a * 3 + 2] * w0 + N[b * 3 + 2] * s1 + N[c * 3 + 2] * s2;
+      const nx = N[a * 3] * w0 + N[b * 3] * s1 + N[c * 3] * s2;
+      const ny = N[a * 3 + 1] * w0 + N[b * 3 + 1] * s1 + N[c * 3 + 1] * s2;
+      const nz = N[a * 3 + 2] * w0 + N[b * 3 + 2] * s1 + N[c * 3 + 2] * s2;
       const l = Math.hypot(nx, ny, nz) || 1;
       out.push(
         P[a * 3] * w0 + P[b * 3] * s1 + P[c * 3] * s2,
         P[a * 3 + 1] * w0 + P[b * 3 + 1] * s1 + P[c * 3 + 1] * s2,
         P[a * 3 + 2] * w0 + P[b * 3 + 2] * s1 + P[c * 3 + 2] * s2,
-        nx / l, ny / l, nz / l, gidOf(id), h01(seed ^ 0x5bd1e995, t + q));
+        nx / l, ny / l, nz / l, gidOf(id), h01(seed ^ 0x5bd1e995, t * 31 + q));
       n++;
     }
   }
   return new Float32Array(out);
 }
 
+export const LOD_K = 3;         // coarse cell = LOD_K x fine cell
+
 export function createCoralMesher(opts = {}) {
-  const cols = new Map();
   const polypScale = opts.polyps ?? 1;
-  let turn = 0;
+  const fine = opts.fine ?? 1;
+  const radius = opts.radius ?? 30;
+  const useLod = opts.lod !== false;
   const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+  // the brick keys of lib/dla-sdf.js hold -512..511 bricks per axis: the
+  // cell is at least (radius x 1.1) / (511 x BRICK), so the plot fits
+  const minCell = radius * 1.1 / (511 * BRICK);
+  const cols = new Map();          // k -> { k, id, base, plane, stalk, focus }
+  const fields = new Map();        // id|lev -> F
+  // every particle, in global order (to refill a fine field on a focus change)
+  let cap = 4096, n = 0;
+  let PX = new Float64Array(cap * 3), PAR = new Int32Array(cap), PCOL = new Int32Array(cap);
+  let turn = 0;
+  const removals = [];             // results that remove bricks (focus changes)
+  let tris = [0, 0], polypN = 0;
 
-  // desc: { k, id, normal: [nx, nz], stalk }
-  function addColony(desc) {
-    const sh = SHAPES[desc.id] || SHAPES.staghorn;
-    const col = { k: desc.k, id: desc.id, sh, normal: desc.normal || [1, 0], stalk: desc.stalk,
-      local: new Float64Array(3 * 1024), sm: new Float64Array(3 * 1024), dir: new Float64Array(3 * 1024),
-      depth: new Int32Array(1024), gid: new Int32Array(1024), n: 0 };
-    col.tree = createTreeSdf({
-      cell: sh.cell, brick: BRICK, k: sh.k, band: sh.band, rTip: sh.rTip, pipe: sh.pipe, rMax: sh.rMax,
-      sub0: sh.sub0, quant: sh.quant, rootScale: sh.rootScale, post: postFor(sh, col),
-    });
-    cols.set(desc.k, col);
-    return col;
-  }
-
-  function add(k, i, parent, x, y, z, gid) {
-    const col = cols.get(k); if (!col) return;
-    if (i !== col.n) return;                     // ids in order (a gap means a lost message)
-    if (i * 3 + 3 > col.local.length) {
-      const L = new Float64Array(col.local.length * 2); L.set(col.local); col.local = L;
-      const SM = new Float64Array(col.sm.length * 2); SM.set(col.sm); col.sm = SM;
-      const DI = new Float64Array(col.dir.length * 2); DI.set(col.dir); col.dir = DI;
-      const D = new Int32Array(col.depth.length * 2); D.set(col.depth); col.depth = D;
-      const G = new Int32Array(col.gid.length * 2); G.set(col.gid); col.gid = G;
+  function makeField(id, lev) {
+    const key = id + '|' + lev;
+    let F = fields.get(key);
+    if (F) return F;
+    const sh0 = SHAPES[id] || SHAPES.staghorn;
+    const cell0 = Math.max(minCell, sh0.cell * fine);
+    const r = cell0 / sh0.cell;                 // everything scales with the cell
+    const sh = scaled(sh0, r);
+    let cell = cell0;
+    if (lev === 1) {
+      // the coarse field: LOD_K x the cell; thin parts are made just thick
+      // enough for the coarse lattice (half a cell), slabs too
+      cell = cell0 * LOD_K;
+      sh.rTip = Math.max(sh.rTip, 0.5 * cell); sh.rMax = Math.max(sh.rMax, sh.rTip * 1.25);
+      sh.k = Math.max(sh.k, cell); sh.band = Math.max(sh.band, 2.2 * cell);
+      if (sh.half !== undefined) sh.half = Math.max(sh.half, 0.55 * cell);
+      if (sh.web !== undefined) sh.web = Math.max(sh.web, 1.5 * cell);
+      if (sh.inflate !== undefined) sh.inflate = Math.max(sh.inflate, 0.5 * cell);
+      sh.groove = 0;
     }
-    col.local[i * 3] = x; col.local[i * 3 + 1] = y; col.local[i * 3 + 2] = z;
-    col.depth[i] = parent < 0 ? 0 : col.depth[parent] + 1;
-    col.gid[i] = gid;
-    col.n++;
-    // the cone end: a smoothed copy of the particle, so a DLA chain that
-    // zig-zags becomes a smooth branch. The direction keeps part of the
-    // parent's direction (sh.bend), then the point is pulled back toward
-    // the particle (sh.hold), so the drift stays small.
-    let sx = x, sy = y, sz = z;
-    const S = col.sm, sh = col.sh;
-    if (parent >= 0 && sh.bend > 0) {
-      const px = S[parent * 3], py = S[parent * 3 + 1], pz = S[parent * 3 + 2];
-      let dx = x - col.local[parent * 3], dy = y - col.local[parent * 3 + 1], dz = z - col.local[parent * 3 + 2];
-      const l = Math.hypot(dx, dy, dz) || 1;
-      const qx = col.dir[parent * 3], qy = col.dir[parent * 3 + 1], qz = col.dir[parent * 3 + 2];
-      dx = dx / l * (1 - sh.bend) + qx * sh.bend; dy = dy / l * (1 - sh.bend) + qy * sh.bend; dz = dz / l * (1 - sh.bend) + qz * sh.bend;
-      const m = Math.hypot(dx, dy, dz) || 1;
-      dx /= m; dy /= m; dz /= m;
-      col.dir[i * 3] = dx; col.dir[i * 3 + 1] = dy; col.dir[i * 3 + 2] = dz;
-      sx = px + dx * l; sy = py + dy * l; sz = pz + dz * l;
-      sx += (x - sx) * sh.hold; sy += (y - sy) * sh.hold; sz += (z - sz) * sh.hold;
-    } else if (parent >= 0) {
-      const dx = x - col.local[parent * 3], dy = y - col.local[parent * 3 + 1], dz = z - col.local[parent * 3 + 2], l = Math.hypot(dx, dy, dz) || 1;
-      col.dir[i * 3] = dx / l; col.dir[i * 3 + 1] = dy / l; col.dir[i * 3 + 2] = dz / l;
-    } else { col.dir[i * 3 + 1] = 1; }
-    S[i * 3] = sx; S[i * 3 + 1] = sy; S[i * 3 + 2] = sz;
-    col.tree.add(i, sx, sy, sz, parent);
+    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(),
+      X: new Float64Array(3 * 1024), Y: new Float64Array(1024), SM: new Float64Array(3 * 1024), DIR: new Float64Array(3 * 1024),
+      depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
+    F.tree = createTreeSdf({
+      cell, brick: BRICK, k: sh.k, band: sh.band, rTip: sh.rTip, pipe: sh.pipe, rMax: sh.rMax,
+      sub0: sh.sub0, quant: sh.quant, rootScale: sh.rootScale, maxPrims: 1 << 22,
+      post: postFor(id, sh, F),
+    });
+    fields.set(key, F);
+    return F;
+  }
+  function scaled(sh, r) {
+    const o = Object.assign({}, sh);
+    for (const k of ['cell', 'k', 'band', 'rTip', 'rMax', 'web', 'half', 'inflate', 'groove']) if (o[k] !== undefined) o[k] *= r;
+    return o;
   }
 
-  function result(col, m) {
-    const sh = col.sh, pol = sh.polyp;
-    const tipOf = id => { const s = col.tree.sub(id); return s <= 1 ? 1 : Math.max(0, 1 - Math.log2(s) / 5); };
-    const gidOf = id => col.gid[id];
+  // desc: colonyInfo() of reef.js { k, id, base, plane, stalk }
+  function addColony(desc) {
+    cols.set(desc.k, { k: desc.k, id: desc.id, base: desc.base.slice(), plane: (desc.plane || [1, 0]).slice(), stalk: desc.stalk, focus: !useLod || !!desc.focus });
+    makeField(desc.id, 0);
+    if (useLod) makeField(desc.id, 1);
+  }
+
+  function growF(F) {
+    F.cap *= 2;
+    for (const [k, T, w] of [['X', Float64Array, 3], ['Y', Float64Array, 1], ['SM', Float64Array, 3], ['DIR', Float64Array, 3], ['depth', Int32Array, 1], ['gid', Int32Array, 1], ['colOf', Int32Array, 1]]) {
+      const a = new T(F.cap * w); a.set(F[k]); F[k] = a;
+    }
+  }
+
+  // The cone end of particle i: a smoothed copy of the particle, so a DLA
+  // chain that zig-zags becomes a smooth branch. The direction keeps part
+  // of the parent's direction (sh.bend), then the point moves back toward
+  // the particle (sh.hold), so the drift stays small.
+  function smoothPoint(F, i, p, x, y, z) {
+    const sh = F.sh, SM = F.SM, D = F.DIR, X = F.X;
+    if (p < 0) { D[i * 3] = 0; D[i * 3 + 1] = 1; D[i * 3 + 2] = 0; SM[i * 3] = x; SM[i * 3 + 1] = y; SM[i * 3 + 2] = z; return; }
+    let dx = x - X[p * 3], dy = y - X[p * 3 + 1], dz = z - X[p * 3 + 2];
+    const l = Math.hypot(dx, dy, dz) || 1;
+    dx /= l; dy /= l; dz /= l;
+    if (sh.bend > 0) {
+      dx = dx * (1 - sh.bend) + D[p * 3] * sh.bend; dy = dy * (1 - sh.bend) + D[p * 3 + 1] * sh.bend; dz = dz * (1 - sh.bend) + D[p * 3 + 2] * sh.bend;
+      const m = Math.hypot(dx, dy, dz) || 1; dx /= m; dy /= m; dz /= m;
+    }
+    D[i * 3] = dx; D[i * 3 + 1] = dy; D[i * 3 + 2] = dz;
+    let sx = SM[p * 3] + dx * l, sy = SM[p * 3 + 1] + dy * l, sz = SM[p * 3 + 2] + dz * l;
+    const hold = sh.bend > 0 ? sh.hold : 1;
+    sx += (x - sx) * hold; sy += (y - sy) * hold; sz += (z - sz) * hold;
+    SM[i * 3] = sx; SM[i * 3 + 1] = sy; SM[i * 3 + 2] = sz;
+  }
+
+  function addTo(F, g, parent, x, y, z, k) {
+    let p = -1;
+    if (parent >= 0) { p = F.localOf.get(parent); if (p === undefined) return false; }
+    if (F.n === F.cap) growF(F);
+    const i = F.n++;
+    F.X[i * 3] = x; F.X[i * 3 + 1] = y; F.X[i * 3 + 2] = z; F.Y[i] = y;
+    F.depth[i] = p < 0 ? 0 : F.depth[p] + 1; F.gid[i] = g; F.colOf[i] = k;
+    F.localOf.set(g, i);
+    smoothPoint(F, i, p, x, y, z);
+    F.tree.add(i, F.SM[i * 3], F.SM[i * 3 + 1], F.SM[i * 3 + 2], p);
+    return true;
+  }
+
+  // Particle g (global id, in order) at world (x, y, z), parent (global id
+  // or -1), colony k. Returns false for a particle out of order.
+  function add(g, parent, x, y, z, k) {
+    const c = cols.get(k); if (!c || g !== n) return false;
+    if (n === cap) {
+      cap *= 2;
+      const a = new Float64Array(cap * 3); a.set(PX); PX = a;
+      const b = new Int32Array(cap); b.set(PAR); PAR = b;
+      const d = new Int32Array(cap); d.set(PCOL); PCOL = d;
+    }
+    PX[g * 3] = x; PX[g * 3 + 1] = y; PX[g * 3 + 2] = z; PAR[g] = parent; PCOL[g] = k; n++;
+    if (useLod) addTo(fields.get(c.id + '|1'), g, parent, x, y, z, k);
+    if (c.focus) addTo(fields.get(c.id + '|0'), g, parent, x, y, z, k);
+    return true;
+  }
+
+  // The fine field of each species holds only the focus colonies. A
+  // change of focus refills the fine field of each species that changed:
+  // its old bricks are removed (empty results), then the particles of the
+  // focus colonies are added again in global order.
+  function setFocus(ks) {
+    if (!useLod) return false;
+    const want = new Set(ks);
+    const changed = new Set();
+    for (const c of cols.values()) { const f = want.has(c.k); if (f !== c.focus) { c.focus = f; changed.add(c.id); } }
+    for (const id of changed) {
+      const old = fields.get(id + '|0');
+      if (old) {
+        for (const [key, b] of old.live) {
+          tris[0] -= b[0]; polypN -= b[1];
+          removals.push({ sp: id, lod: 0, k: -1, key, chunk: b[2], cell: old.cell, positions: new Float32Array(0), normals: new Float32Array(0), gids: new Float32Array(0), indices: new Uint16Array(0), polyps: new Float32Array(0), tris: 0 });
+        }
+        fields.delete(id + '|0');
+      }
+      const F = makeField(id, 0);
+      for (let g = 0; g < n; g++) { const c = cols.get(PCOL[g]); if (c.id === id && c.focus) addTo(F, g, PAR[g], PX[g * 3], PX[g * 3 + 1], PX[g * 3 + 2], PCOL[g]); }
+    }
+    return changed.size > 0;
+  }
+  function focus() { const out = []; for (const c of cols.values()) if (c.focus) out.push(c.k); return out; }
+
+  function result(F, m) {
+    const pol = F.sh.polyp;
+    const tipOf = id => { const s = F.tree.sub(id); return s <= 1 ? 1 : Math.max(0, 1 - Math.log2(s) / 5); };
+    const gidOf = id => F.gid[id];
     const gids = new Float32Array(m.ids.length);
-    for (let v = 0; v < m.ids.length; v++) gids[v] = m.ids[v] >= 0 ? col.gid[m.ids[v]] : -1;
-    const polyps = m.indices.length && polypScale > 0
-      ? scatterPolyps(m, { density: pol.density * polypScale, tip: pol.tip, max: Math.ceil(pol.max * polypScale) }, tipOf, gidOf, (m.key % 2147483647) ^ (col.k * 7919))
+    for (let v = 0; v < m.ids.length; v++) gids[v] = m.ids[v] >= 0 ? F.gid[m.ids[v]] : -1;
+    const polyps = F.lev === 0 && m.indices.length && polypScale > 0
+      ? scatterPolyps(m, { density: pol.density * polypScale, tip: pol.tip, max: Math.ceil(pol.max * Math.max(1, polypScale)) }, tipOf, gidOf, (m.key % 2147483647) ^ (F.id.length * 7919))
       : new Float32Array(0);
-    return { k: col.k, key: m.key, chunk: chunkKey(m.bx, m.by, m.bz), bx: m.bx, by: m.by, bz: m.bz,
-      positions: m.positions, normals: m.normals, gids, indices: m.indices, polyps };
+    const nt = m.indices.length / 3, chunk = chunkKey(m.bx, m.by, m.bz, F.cell);
+    const old = F.live.get(m.key);
+    if (old) { tris[F.lev] -= old[0]; polypN -= old[1]; }
+    if (nt) { F.live.set(m.key, [nt, polyps.length / 8, chunk]); tris[F.lev] += nt; polypN += polyps.length / 8; } else F.live.delete(m.key);
+    return { sp: F.id, lod: F.lev, k: -1, key: m.key, chunk, bx: m.bx, by: m.by, bz: m.bz, cell: F.cell,
+      positions: m.positions, normals: m.normals, gids, indices: m.indices, polyps, tris: nt };
   }
 
-  // Mesh dirty bricks of all colonies for about ms, colonies in turn.
+  // Removals first, then mesh dirty bricks of all fields for about ms, in
+  // turn (the coarse fields first in each round, so the whole reef shows).
   function update(ms = 8, out = []) {
     const t0 = now();
-    const list = [...cols.values()];
+    while (removals.length) out.push(removals.shift());
+    const list = [...fields.values()].sort((a, b) => b.lev - a.lev);
     if (!list.length) return out;
     for (let q = 0; q < list.length; q++) {
-      const col = list[(turn + q) % list.length];
-      if (!col.tree.sdf.dirtyCount) continue;
+      const F = list[(turn + q) % list.length];
+      if (!F.tree.sdf.dirtyCount) continue;
       const left = ms - (now() - t0);
       if (left <= 0) break;
       const share = Math.max(1, left / Math.max(1, list.length - q));
-      const res = col.tree.update(share);
-      for (const m of res) out.push(result(col, m));
+      for (const m of F.tree.update(share)) out.push(result(F, m));
     }
     turn++;
     return out;
   }
 
-  function meshColony(k) {
-    const col = cols.get(k); if (!col) return [];
-    return col.tree.sdf.meshAll().map(m => result(col, m));
+  // Every brick now. lev: 0 fine, 1 coarse, undefined both.
+  function meshAll(lev) {
+    const out = [];
+    while (removals.length) removals.shift();
+    for (const F of fields.values()) if (lev === undefined || F.lev === lev) for (const m of F.tree.sdf.meshAll()) out.push(result(F, m));
+    return out;
   }
 
-  function dirty() { let n = 0; for (const c of cols.values()) n += c.tree.sdf.dirtyCount; return n; }
+  function dirty() { let d = removals.length; for (const F of fields.values()) d += F.tree.sdf.dirtyCount; return d; }
 
   return {
-    addColony, add, update, meshColony, dirty, cols,
-    reset() { cols.clear(); turn = 0; },
-    stats() { let b = 0, p = 0; for (const c of cols.values()) { b += c.tree.sdf.stats.bricks; p += c.n; } return { colonies: cols.size, bricks: b, particles: p }; },
+    addColony, add, update, meshAll, dirty, setFocus, focus, cols, fields, lod: useLod,
+    // the cone radius of global particle g in the fine (or coarse) field
+    radius(g) {
+      const c = cols.get(PCOL[g]); if (!c) return 0;
+      for (const lev of [0, 1]) { const F = fields.get(c.id + '|' + lev); const i = F && F.localOf.get(g); if (i !== undefined && F) return F.tree.radius(i); }
+      return 0;
+    },
+    stats() {
+      let b = 0;
+      for (const F of fields.values()) b += F.tree.sdf.stats.bricks;
+      return { colonies: cols.size, particles: n, bricks: b, tris: tris[0] + tris[1], trisFine: tris[0], trisCoarse: tris[1], polyps: polypN, dirty: dirty(), focus: focus().length };
+    },
   };
 }

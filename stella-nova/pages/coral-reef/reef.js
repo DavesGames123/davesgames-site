@@ -1,227 +1,152 @@
 // ============================================================================
-//  CORAL REEF  ·  growth model (DOM-free: the page, a worker and node tests)
+//  CORAL REEF  ·  growth model v3 (DOM-free: the page, a worker, node tests)
 // ----------------------------------------------------------------------------
-//  Each coral colony is one 3D DLA model of lib/dla-engine.js (a port of
-//  fogleman/dlaf, MIT). The five dlaf hooks define the species. Nutrient
-//  particles ("marine snow") start on a disc above the colony and fall
-//  with a current. A walker that comes near the colony can join it. A
-//  walker that reaches the seabed or leaves the reef box starts again.
-//  So the growth is nutrient-limited, as in the coral models of Kaandorp
-//  (Kaandorp, Lowe, Frenkel and Sloot 1996, Phys. Rev. Lett. 77, 2328):
-//  the tips are the first parts that the falling particles touch, so the
-//  tips catch more and grow more. This file has our own code, not theirs.
+//  All colonies of the reef grow in ONE 3D DLA model of lib/dla-engine.js
+//  (a port of fogleman/dlaf, MIT). So they share one spatial index and one
+//  nutrient field. Nutrient particles ("marine snow") start above the live
+//  colonies and fall with the current. A walker joins the nearest coral
+//  particle, of any colony, so neighbours compete: a tall colony upstream
+//  shades the one behind it, branches grow round each other, and colonies
+//  fuse (same species) or overgrow (other species) where they touch. The
+//  growth is nutrient-limited, as in the coral models of Kaandorp (Kaandorp,
+//  Lowe, Frenkel and Sloot 1996, Phys. Rev. Lett. 77, 2328). This file has
+//  our own code, not theirs.
 //
-//  FRAMES. A colony model has its seed at its local origin, on the top of
-//  its rock. World = local + (bx, by, bz). y is up. The seabed is
-//  terrain.js: real lidar relief (groundY, also exported as sandY) and a
-//  rock SDF under each colony. Walkers that enter the solid start again,
-//  or stick to the rock as a new root (encrust). No particle is placed
-//  inside the solid (outOfSolid).
+//  UNITS. World: metres, y up, the plot centred at the origin. The DLA model
+//  works in lattice units of U metres (U = 0.01 m x fine), because the
+//  engine grid cell is at least 0.5 units. R.px/py/pz are metres.
+//
+//  ROCK. The colonies grow on rock/index.js createRock (ROCK package):
+//  rock.sdf (negative inside), rock.normal, rock.sampleSurface. Walkers
+//  that touch the rock are lost, except near the base of a colony whose
+//  species encrusts: there a walker can stick as a new root. No particle
+//  centre is ever inside the rock (the tests check rock.sdf > 0).
+//
+//  API (SCENE and the worker build against this header)
+//    const R = createReef({ rock, seed, quality: 'desktop'|'mid'|'phone',
+//                           radius, env, budget });
+//    R.populate({ preset, colonies, sites, seed })  colony seeds on exposed
+//                rock (o.sites, or rock.sampleSurface), species by exposure
+//                and depth, in patches over the whole plot
+//    R.loadPreset(pid)                 the same, by preset id (PRESET_IDS)
+//    R.addColony(id, site, o)          site { p, n } on the rock; o.size, o.cap
+//    R.growColony(site, id, o)         single-colony mode (the saver): a reset,
+//                                      then ONE colony that grows at R.rate
+//    R.setRate(polypsPerSecond)        the rate of step()
+//    R.step(dtMs, budgetMs, nowMs)     grow in a time budget -> particles added
+//    R.growAll(n), R.done(), R.progress(), R.reset(seed)
+//    R.setCurrent(deg, strength), R.setParams(id, p)
+//    Particle data (global id g, in join order):
+//      R.count, R.px/py/pz (m), R.col (colony k), R.loc (index in colony),
+//      R.parent (global id or -1), R.birth (ms), R.gy (base height of colony)
+//    R.colonies[k] = { k, id, sp, base, normal, plane, size, cap, count,
+//                      ids, top, ext, roots, user: { bx, by, bz, normal } }
+//    R.contacts: Map 'a,b' -> { a, b, kind: 'fuse'|'overgrow', n, at }
+//    createReefMirror()  the same particle arrays on the main thread, fed by
+//                        the worker messages (colour.js reads either one)
 //
 //  SPECIES (grep -n 'export const SPECIES')
-//    staghorn ... low attraction, high stickiness, joins on busy or lower
-//                 particles refused: tips grow up into branches
-//    fan ........ the walk stays in a vertical plane across the current
+//    staghorn ... tips favoured: joins on busy or lower particles refused
+//    fan ........ every new particle is put in the plane across the current
 //    table ...... a short stalk, then only horizontal joins: a flat plate
-//    boulder .... high stubbornness: walkers fill the gaps, a compact dome
-//    finger ..... low stickiness and short fall: thick soft lobes
-//
-//  USE
-//    const reef = createReef({ seed: 3, capTotal: 16000 });
-//    reef.loadPreset('mixed');            // rocks and colony seeds
-//    reef.step(dtMs, budgetMs, nowMs);    // grow in a time budget
-//    reef.count, reef.px/py/pz, reef.col, reef.loc, reef.birth
-//    growPreset('table', 7) -> a reef grown to its caps (thumbnails, tests)
+//    boulder .... (brain coral) high stubbornness and a dome clamp: compact
+//    finger ..... low stickiness: thick soft lobes
 //
 //  grep -n targets
-//    seabed height .............. "export const sandY"
-//    the solid near a colony ..... "function solidLocal"
-//    roots on the rock ........... "function encrust"
-//    shared hooks ............... "function snowStart"
-//    species table .............. "export const SPECIES"
-//    presets .................... "export const PRESETS"
-//    the reef object ............ "export function createReef"
-//    time-budget growth ......... "function step"
-//    bleaching .................. "export function bleachLevel"
-//    shape measures (tests) ..... "export function shapeOf"
-//    polyp radius ............... "export function polypRadius"
-//    grow to the end ............ "export function growPreset"
-//    hook source (saver code) ... "export function speciesHook"
+//    quality budgets ........... "export const QUALITY"
+//    species table ............. "export const SPECIES"
+//    species by site ........... "export function pickSpecies"
+//    cached rock distance ...... "export function cachedField"
+//    the reef object ........... "export function createReef"
+//    one walker ................ "function walkOne"
+//    spawn above the colonies .. "function spawn"
+//    contacts (fuse, overgrow) . "function contact"
+//    colony seeds .............. "function populate"
+//    single colony mode ........ "function growColony"
+//    time-budget growth ........ "function step"
+//    main-thread mirror ........ "export function createReefMirror"
+//    shape measures (tests) .... "export function shapeOf"
+//    hook source (saver code) .. "export function speciesHook"
 // ============================================================================
 import { createModel, rng, randomInUnitSphere } from '../../lib/dla-engine.js';
-import { groundY, makeRock, rockSdf, rockTopY, solidAt, pushOut, knollSites } from './terrain.js';
 
 const TAU = Math.PI * 2;
 
-// ── seabed ──────────────────────────────────────────────────────────────────
-// The floor is terrain.js: the real lidar relief of the Buck Island lagoon
-// (scaled) and a rock SDF under each colony. The page mesh, the hooks and
-// the tests use the same functions, so a walker meets the floor that the
-// eye sees. sandY is the old name of the ground height.
-export const sandY = groundY;
-
-// The solid around a colony in its local frame: the ground or its rock.
-// Cheap above u.solidTop (the highest solid point near the colony).
-function solidLocal(u, p) {
-  if (p[1] > u.solidTop) return false;
-  return solidAt(u.bx + p[0], u.by + p[1], u.bz + p[2], u.solids);
-}
-
-// Move a local point out of the solid (pushOut in world space).
-const WP = [0, 0, 0];
-function outOfSolid(u, out) {
-  if (out[1] > u.solidTop) return out;
-  WP[0] = u.bx + out[0]; WP[1] = u.by + out[1]; WP[2] = u.bz + out[2];
-  pushOut(WP, u.solids, 0.06);
-  out[0] = WP[0] - u.bx; out[1] = WP[1] - u.by; out[2] = WP[2] - u.bz;
-  return out;
-}
-
-// ── shared hooks ────────────────────────────────────────────────────────────
-// m.user: { sp (species), env (current, temperature), bx by bz, rock,
-// top, ext, kids, normal (fan) }.
-
-// Marine snow starts on a disc above the colony. The disc moves upstream
-// by the distance that the current carries a particle while it falls, so
-// the snow passes over the colony.
-function snowStart(m, out) {
-  const u = m.user, s = u.sp, e = u.env;
-  const y = u.top + s.lift + m.params.attractionDistance;
-  const R = u.ext + s.spread;
-  const a = m.random() * TAU, r = R * Math.sqrt(m.random());
-  const k = e.strength * s.drift / s.fall;          // sideways run per unit of fall
-  out[0] = Math.cos(a) * r - e.cur[0] * k * y * 0.75;
-  out[1] = y;
-  out[2] = Math.sin(a) * r - e.cur[1] * k * y * 0.75;
-  return out;
-}
-
-// Start again under the floor, over the snow disc, or out of the reef box.
-function snowReset(m, p) {
-  const u = m.user, s = u.sp, e = u.env;
-  if (solidLocal(u, p)) { encrust(m, p); return true; }
-  const lid = u.top + s.lift + m.params.attractionDistance + 6;
-  if (p[1] > lid) return true;
-  const R = u.ext + s.spread + 8 + e.strength * s.drift / s.fall * lid;
-  return p[0] * p[0] + p[2] * p[2] > R * R;
-}
-
-// A walker that hits the rock or the ground near the base of the colony
-// can stick there: a new root (parent -1) of the same colony. So the
-// colony spreads over its rock (sp.encrust is the chance per hit, up to
-// sp.roots roots, inside sp.reach x the rock radius).
-const EQ = [0, 0, 0];
-function encrust(m, p) {
-  const u = m.user, s = u.sp;
-  if (!s.encrust || u.roots >= s.roots || !u.room()) return;
-  const rr = Math.max(u.rock.rx, u.rock.rz) * s.reach;
-  if (p[0] * p[0] + p[2] * p[2] > rr * rr) return;
-  if (m.random() > s.encrust) return;
-  EQ[0] = p[0]; EQ[1] = p[1]; EQ[2] = p[2];
-  outOfSolid(u, EQ);
-  if (EQ[1] > u.solidTop + 1) return;
-  u.roots++;
-  m.add(EQ, -1);
-}
-
-// A random step plus the fall and the current. The engine normalises it.
-function snowMotion(m, p, out) {
-  const u = m.user, s = u.sp, e = u.env, k = e.strength * s.drift;
-  randomInUnitSphere(m.random, 3, out);
-  out[0] += e.cur[0] * k; out[1] -= s.fall; out[2] += e.cur[1] * k;
-  return out;
-}
-
-// dlaf ShouldJoin: stubbornness first, then stickiness.
-function dlafJoin(m, parent) {
-  m.joinAttempts[parent]++;
-  if (m.joinAttempts[parent] < m.params.stubbornness) return false;
-  return m.random() <= m.params.stickiness;
-}
-
-// dlaf PlaceParticle, then out of the rock and the ground.
-function placeAbove(m, p, parent, out) {
-  m.lerpFrom(parent, p, m.params.particleSpacing, out);
-  return outOfSolid(m.user, out);
-}
-
-const BASE = { randomStartingPosition: snowStart, shouldReset: snowReset, shouldJoin: (m, p, parent) => dlafJoin(m, parent), placeParticle: placeAbove, motionVector: snowMotion };
+// ── quality ─────────────────────────────────────────────────────────────────
+// particles: the particle budget of the reef. colonies: how many seeds.
+// fine: a scale of the particle spacing and the SDF cell (1 = finest).
+// polyps: a scale of the polyp density. tris: the coral triangle budget
+// (coral-sdf.js reports the count; the page can stop the mesh past it).
+export const QUALITY = {
+  desktop: { particles: 120000, colonies: 64, fine: 1, polyps: 1, tris: 2500000 },
+  mid: { particles: 60000, colonies: 44, fine: 1.2, polyps: 0.7, tris: 1300000 },
+  phone: { particles: 25000, colonies: 30, fine: 1.45, polyps: 0.45, tris: 600000 },
+};
 
 // ── species ─────────────────────────────────────────────────────────────────
-// params: the five dlaf parameters. fall: the downward bias of the walk.
-// drift: how much the current moves the walk. lift: the height of the snow
-// disc over the top of the colony. spread: the disc radius past the colony.
-// cap: the most polyps in one colony. r0, thick: polyp radius (polypRadius).
-// sway: soft corals and fans move with the water. encrust, roots, reach:
-// a walker that hits the rock near the base sticks as a new root with
-// chance encrust, up to roots roots, inside reach x the rock radius.
-// base, tip: natural colours (linear 0..1), tip at the growing ends.
+// params: the five dlaf parameters in metres (scaled by fine). size: the
+// range of colony sizes (m). dim: the mass dimension, for the cap of a
+// colony of a size (cap = fill x (size / spacing)^dim). r0, thick: the
+// particle radius for the page data (polypRadius). tpp: coral triangles
+// per particle (measured), for the triangle budget. encrust, roots, reach:
+// a walker that hits the rock within reach x size of the base sticks as a
+// new root with chance encrust, up to roots roots. base, tip: natural
+// colours (linear 0..1). sway: soft corals move with the water.
 export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
-    params: { particleSpacing: 1, attractionDistance: 1.5, minMoveDistance: 0.8, stubbornness: 0, stickiness: 0.9 },
-    fall: 1.1, drift: 0.9, lift: 5, spread: 3, cap: 2200, r0: 0.5, thick: 0.17, sway: 0, encrust: 0.03, roots: 6, reach: 0.9,
+    params: { particleSpacing: 0.032, attractionDistance: 0.045, minMoveDistance: 0.02, stubbornness: 0, stickiness: 0.9 },
+    size: [2.0, 4.0], tall: 0.7, tpp: 66, dim: 1.62, fill: 1.3, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.06, roots: 22, reach: 0.5,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
     hooks: {
       // Tips favoured: a busy particle, or a walker from the side or below,
       // rarely sticks.
-      shouldJoin(m, p, parent) {
-        if (!dlafJoin(m, parent)) return false;
-        const up = p[1] - m.pos[parent * 3 + 1];
-        if (m.user.kids[parent] >= 2 && m.random() > 0.12) return false;
-        if (up < 0.3 && m.random() > 0.2) return false;
+      shouldJoin(R, p, parent) {
+        if (!R.dlafJoin(parent)) return false;
+        const up = p[1] - R.m.pos[parent * 3 + 1];
+        if (R.kids[parent] >= 1 && R.random() > (R.kids[parent] >= 2 ? 0.04 : 0.22)) return false;
+        if (up < 0.3 * R.spU(parent) && R.random() > 0.2) return false;
         return true;
       },
     },
   },
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
-    params: { particleSpacing: 0.5, attractionDistance: 0.9, minMoveDistance: 0.45, stubbornness: 0, stickiness: 0.7 },
-    fall: 0.12, drift: 0, lift: 5, spread: 4, cap: 850, r0: 0.2, thick: 0.1, sway: 1, encrust: 0,
+    params: { particleSpacing: 0.02, attractionDistance: 0.03, minMoveDistance: 0.015, stubbornness: 0, stickiness: 0.75 },
+    size: [1.2, 2.6], tall: 1, tpp: 17, dim: 1.55, fill: 1.6, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
     hooks: {
-      // The walk stays in the vertical plane across the current. The snow
-      // comes in on a half circle in that plane, so the fan grows wide.
-      randomStartingPosition(m, out) {
-        const u = m.user, n = u.normal, R = Math.max(u.top, u.ext) + u.sp.spread;
-        const a = (m.random() - 0.5) * 0.9 * Math.PI;
-        out[0] = -n[1] * Math.sin(a) * R; out[1] = Math.cos(a) * R; out[2] = n[0] * Math.sin(a) * R;
-        return out;
-      },
-      shouldReset(m, p) {
-        const u = m.user, R = Math.max(u.top, u.ext) + u.sp.spread + 6;
-        return solidLocal(u, p) || p[0] * p[0] + p[1] * p[1] + p[2] * p[2] > R * R;
-      },
-      motionVector(m, p, out) {
-        const n = m.user.normal;
-        randomInUnitSphere(m.random, 3, out);
-        const d = out[0] * n[0] + out[2] * n[1];
-        out[0] -= n[0] * d; out[2] -= n[1] * d;
-        out[1] -= m.user.sp.fall;
+      // The new particle goes into the vertical plane of the fan, across the
+      // current, so the fan grows flat and wide; a join from below is rare.
+      placeParticle(R, p, parent, out) {
+        R.m.lerpFrom(parent, p, R.spU(parent), out);
+        const c = R.colonies[R.col[parent]], f = c.plane, U = R.U;
+        const d = (out[0] - c.base[0] / U) * f[0] + (out[2] - c.base[2] / U) * f[1];
+        out[0] -= f[0] * d; out[2] -= f[1] * d;
+        if (out[1] < R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent)) out[1] = R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent);
         return out;
       },
     },
   },
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
-    params: { particleSpacing: 1, attractionDistance: 2, minMoveDistance: 0.8, stubbornness: 1, stickiness: 0.9 },
-    fall: 1.2, drift: 0.6, lift: 4, spread: 6, cap: 2400, r0: 0.5, thick: 0.12, sway: 0, stalk: 7, encrust: 0,
+    params: { particleSpacing: 0.035, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 1, stickiness: 0.9 },
+    size: [1.6, 3.8], tall: 0.4, tpp: 18, dim: 1.6, fill: 1.4, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
-      shouldJoin(m, p, parent) {
-        if (!dlafJoin(m, parent)) return false;
-        const i = parent * 3, dy = p[1] - m.pos[i + 1];
-        const dh = Math.hypot(p[0] - m.pos[i], p[2] - m.pos[i + 2]);
-        if (m.depth[parent] < m.user.sp.stalk) return m.user.kids[parent] === 0 && dy > 0;
-        return dh > 2.5 * Math.abs(dy) || m.random() < 0.03;
+      shouldJoin(R, p, parent) {
+        if (!R.dlafJoin(parent)) return false;
+        const P = R.m.pos, i = parent * 3, dy = p[1] - P[i + 1];
+        const dh = Math.hypot(p[0] - P[i], p[2] - P[i + 2]);
+        if (R.m.depth[parent] < R.stalkOf(parent)) return R.kids[parent] === 0 && dy > 0;
+        return dh > 2.5 * Math.abs(dy) || R.random() < 0.03;
       },
-      placeParticle(m, p, parent, out) {
-        placeAbove(m, p, parent, out);
-        if (m.depth[parent] >= m.user.sp.stalk) {
-          const y0 = m.pos[parent * 3 + 1];
+      placeParticle(R, p, parent, out) {
+        R.m.lerpFrom(parent, p, R.spU(parent), out);
+        if (R.m.depth[parent] >= R.stalkOf(parent)) {
+          const y0 = R.m.pos[parent * 3 + 1];
           out[1] = y0 + (out[1] - y0) * 0.12;
-          outOfSolid(m.user, out);
         }
         return out;
       },
@@ -229,249 +154,665 @@ export const SPECIES = {
   },
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
-    params: { particleSpacing: 0.9, attractionDistance: 2.4, minMoveDistance: 0.7, stubbornness: 14, stickiness: 0.5 },
-    fall: 0.6, drift: 0.5, lift: 4, spread: 4, cap: 2600, r0: 0.62, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
+    params: { particleSpacing: 0.07, attractionDistance: 0.1, minMoveDistance: 0.04, stubbornness: 14, stickiness: 0.5 },
+    size: [1.2, 2.6], tall: 0.6, tpp: 19, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
-      // Accretive growth: the tissue lays each new polyp on the surface of
-      // a compact dome of this many polyps, so the colony stays a dome.
-      placeParticle(m, p, parent, out) {
-        placeAbove(m, p, parent, out);
-        const dome = Math.cbrt(3 * m.count / (TAU * m.user.sp.density)) + 0.3;
-        const r = Math.hypot(out[0], out[1], out[2]);
-        if (r > dome) { const k = dome / r; out[0] *= k; out[1] *= k; out[2] *= k; }
-        return outOfSolid(m.user, out);
+      // Accretive growth: the tissue lays each new particle on the surface
+      // of a compact dome of this many particles, so the colony stays a dome.
+      placeParticle(R, p, parent, out) {
+        R.m.lerpFrom(parent, p, R.spU(parent), out);
+        const c = R.colonies[R.col[parent]], U = R.U, s = R.spU(parent);
+        const dome = s / 0.9 * (Math.cbrt(3 * c.count / (TAU * c.sp.density)) + 0.3);
+        const bx = c.base[0] / U, by = c.base[1] / U, bz = c.base[2] / U;
+        const dx = out[0] - bx, dy = out[1] - by, dz = out[2] - bz, r = Math.hypot(dx, dy, dz);
+        if (r > dome) { const k = dome / r; out[0] = bx + dx * k; out[1] = by + dy * k; out[2] = bz + dz * k; }
+        return out;
       },
     },
   },
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
-    params: { particleSpacing: 1, attractionDistance: 2.6, minMoveDistance: 0.8, stubbornness: 3, stickiness: 0.2 },
-    fall: 0.5, drift: 0.7, lift: 4, spread: 3, cap: 1100, r0: 0.75, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 5, reach: 0.8,
+    params: { particleSpacing: 0.045, attractionDistance: 0.075, minMoveDistance: 0.03, stubbornness: 3, stickiness: 0.2 },
+    size: [1.0, 2.2], tall: 0.7, tpp: 40, dim: 2.1, fill: 0.9, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
-    hooks: {},
+    hooks: {
+      // dlaf ShouldJoin with a low stickiness: the walkers creep into the
+      // gaps before they stick, so the lobes stay thick and soft.
+      shouldJoin(R, p, parent) { return R.dlafJoin(parent); },
+    },
   },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
 
 // ── presets ─────────────────────────────────────────────────────────────────
-// mix: the species of the colonies, in order. R: the radius of the reef
-// disc. gap: the least distance between two colony rocks.
+// weights: a multiplier on the site rule of each species (pickSpecies).
 export const PRESETS = {
-  mixed: { label: 'Mixed reef', R: 52, gap: 24, mix: ['staghorn', 'table', 'fan', 'boulder', 'finger', 'staghorn', 'fan', 'boulder', 'finger'] },
-  staghorn: { label: 'Staghorn thicket', R: 44, gap: 20, mix: ['staghorn', 'staghorn', 'staghorn', 'staghorn', 'staghorn', 'staghorn', 'finger'] },
-  fans: { label: 'Fan garden', R: 46, gap: 21, mix: ['fan', 'fan', 'fan', 'fan', 'fan', 'fan', 'finger', 'finger'] },
-  table: { label: 'Table reef', R: 50, gap: 30, mix: ['table', 'table', 'table', 'table', 'boulder', 'boulder', 'finger'] },
-  boulder: { label: 'Boulder field', R: 44, gap: 22, mix: ['boulder', 'boulder', 'boulder', 'boulder', 'boulder', 'boulder', 'finger', 'finger'] },
+  mixed: { label: 'Mixed reef', weights: {} },
+  staghorn: { label: 'Staghorn thicket', weights: { staghorn: 6, finger: 0.4, fan: 0.3, table: 0.3, boulder: 0.3 } },
+  fans: { label: 'Fan garden', weights: { fan: 8, finger: 0.6, staghorn: 0.2, table: 0.2, boulder: 0.2 } },
+  table: { label: 'Table reef', weights: { table: 6, boulder: 0.8, staghorn: 0.3, fan: 0.3, finger: 0.3 } },
+  boulder: { label: 'Boulder field', weights: { boulder: 6, finger: 1.2, staghorn: 0.2, fan: 0.2, table: 0.2 } },
 };
 export const PRESET_IDS = Object.keys(PRESETS);
 
 // ── bleaching ───────────────────────────────────────────────────────────────
 // 0 below 29.5 C, 1 above 31.5 C. The page desaturates the colours by it
-// and multiplies the growth rate by 1 - b.
+// and the growth rate is multiplied by 1 - b.
 export function bleachLevel(tempC) {
   const t = Math.min(1, Math.max(0, (tempC - 29.5) / 2));
   return t * t * (3 - 2 * t);
 }
 
-// The radius of a polyp from the size of its subtree: thick bases, thin tips.
+// The radius of a particle from the size of its subtree: thick bases, thin tips.
 export function polypRadius(sp, sub) {
   return sp.r0 * (1 + sp.thick * Math.log2(1 + sub));
 }
 
+// The species for a rock site { p, n, exposure, overhang }, from the
+// exposure and the depth (y01: 0 deep .. 1 high in the plot). Open tops
+// get staghorn and tables, walls get fans (across the current), and the
+// sheltered spots get brain corals and soft fingers. Returns an id or null
+// (a site under an overhang carries no colony).
+export function pickSpecies(site, y01, u, weights = {}) {
+  const ny = site.n[1], ex = site.exposure ?? 0.5, ov = Number(site.overhang ?? 0);
+  if (ov > 0.6 || ny < -0.2) return null;
+  const top = Math.max(0, (ny - 0.55) / 0.45), wall = Math.max(0, 1 - Math.abs(ny - 0.15) / 0.5), shel = 1 - ex;
+  const w = {
+    staghorn: top * (0.4 + ex) * (0.5 + y01),
+    table: top * ex * ex * (0.4 + y01) * 0.9,
+    fan: wall * (0.3 + ex) * 1.3,
+    boulder: (0.25 + top * 0.5) * shel * (1.3 - y01) * 1.1,
+    finger: (0.2 + wall * 0.4) * shel * 0.7,
+  };
+  let sum = 0;
+  for (const id of SPECIES_IDS) { w[id] *= weights[id] ?? 1; sum += w[id]; }
+  if (sum <= 1e-9) return null;
+  let r = u * sum;
+  for (const id of SPECIES_IDS) { r -= w[id]; if (r <= 0) return id; }
+  return SPECIES_IDS[SPECIES_IDS.length - 1];
+}
+
+// ── cached rock distance ────────────────────────────────────────────────────
+// fn sampled on a lattice of spacing h, filled on demand in bricks of 8^3
+// cells (9^3 points), read with trilinear weights. A walker far from the
+// rock reads the cache; near the rock (cached value < near) the walk reads
+// fn itself. lip: the Lipschitz safety factor of the rock field.
+export function cachedField(fn, h = 0.2, near = 0.35) {
+  const bricks = new Map(), B = 8, P = B + 1;
+  let evals = 0;
+  function brick(bx, by, bz) {
+    const key = ((bx + 2048) * 4096 + (by + 2048)) * 4096 + (bz + 2048);
+    let b = bricks.get(key);
+    if (!b) {
+      b = new Float32Array(P * P * P);
+      const x0 = bx * B * h, y0 = by * B * h, z0 = bz * B * h;
+      for (let k = 0; k < P; k++) for (let j = 0; j < P; j++) for (let i = 0; i < P; i++) b[(k * P + j) * P + i] = fn(x0 + i * h, y0 + j * h, z0 + k * h);
+      evals += P * P * P;
+      bricks.set(key, b);
+    }
+    return b;
+  }
+  function coarse(x, y, z) {
+    const gx = x / h, gy = y / h, gz = z / h;
+    const ix = Math.floor(gx), iy = Math.floor(gy), iz = Math.floor(gz);
+    const bx = Math.floor(ix / B), by = Math.floor(iy / B), bz = Math.floor(iz / B);
+    const b = brick(bx, by, bz);
+    const lx = ix - bx * B, ly = iy - by * B, lz = iz - bz * B;
+    const fx = gx - ix, fy = gy - iy, fz = gz - iz;
+    const o = (lz * P + ly) * P + lx;
+    const c00 = b[o] + (b[o + 1] - b[o]) * fx, c10 = b[o + P] + (b[o + P + 1] - b[o + P]) * fx;
+    const c01 = b[o + P * P] + (b[o + P * P + 1] - b[o + P * P]) * fx, c11 = b[o + P * P + P] + (b[o + P * P + P + 1] - b[o + P * P + P]) * fx;
+    const c0 = c00 + (c10 - c00) * fy, c1 = c01 + (c11 - c01) * fy;
+    return c0 + (c1 - c0) * fz;
+  }
+  return {
+    coarse,
+    // a distance that is exact near the rock and a safe bound far from it
+    dist(x, y, z) { const c = coarse(x, y, z); if (c > near) return c - h * 0.9; evals++; return fn(x, y, z); },
+    get evals() { return evals; }, get bricks() { return bricks.size; },
+  };
+}
+
+// h01: a hash of two ints to 0..1.
+function h01(a, b) {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
 // ── the reef ────────────────────────────────────────────────────────────────
 export function createReef(opts = {}) {
-  const capTotal = opts.capTotal ?? 16000;
+  const rock = opts.rock;
+  if (!rock || typeof rock.sdf !== 'function') throw new Error('coral-reef: createReef needs a rock with sdf()');
+  const qid = QUALITY[opts.quality] ? opts.quality : 'desktop';
+  const Q = Object.assign({}, QUALITY[qid], opts.budget || {});
+  const fine = Q.fine, U = 0.01 * fine;
+  const radius = opts.radius ?? 30;
+  const capTotal = opts.capTotal ?? Q.particles;
   const env = Object.assign({ cur: [1, 0], strength: 0.5, temp: 27, nutrient: 1, speed: 1 }, opts.env || {});
-  const params = {};   // per species: the live dlaf parameters (advanced panel)
-  for (const id of SPECIES_IDS) params[id] = Object.assign({}, SPECIES[id].params);
+  const params = {};   // per species: the live dlaf parameters in metres (advanced panel)
+  for (const id of SPECIES_IDS) {
+    const p = SPECIES[id].params;
+    params[id] = { particleSpacing: p.particleSpacing * fine, attractionDistance: p.attractionDistance * fine, minMoveDistance: p.minMoveDistance * fine, stubbornness: p.stubbornness, stickiness: p.stickiness };
+  }
+  // the engine grid: cell = 2 x attraction >= the largest species attraction
+  let maxAttrU = 0;
+  for (const id of SPECIES_IDS) maxAttrU = Math.max(maxAttrU, params[id].attractionDistance / U);
+  const rockD = cachedField(rock.sdf, Math.max(0.12, 0.16 * fine), 0.22);
+  const yMin = rock.bounds ? rock.bounds.min[1] : -20;
+  // the sand floor (rock.sand.heightAt): not in rock.sdf; a walker that
+  // reaches it is lost, and no particle is put under it
+  const sandAt = rock.sand && rock.sand.heightAt ? rock.sand.heightAt : () => -1e9;
+
   const R = {
-    env, params, capTotal, limit: capTotal, rocks: [], colonies: [], seed: opts.seed ?? 1,
-    count: 0, now: 0, joined: 0, walks: 0,
+    rock, env, params, quality: qid, Q, U, fine, radius, capTotal, limit: capTotal, seed: opts.seed ?? 1,
+    colonies: [], contacts: new Map(), count: 0, now: 0, joined: 0, walks: 0, walkers: 0, lost: 0,
+    rate: opts.rate ?? 900, allowance: 0, single: false, preset: null,
     px: new Float32Array(capTotal), py: new Float32Array(capTotal), pz: new Float32Array(capTotal),
-    col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), birth: new Float32Array(capTotal),
-    gy: new Float32Array(capTotal),      // the ground height under each particle (colour by height)
-    addColony, loadPreset, step, growAll, reset, setCurrent, setParams, colonyCap, done,
+    col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), parent: new Int32Array(capTotal),
+    birth: new Float32Array(capTotal), gy: new Float32Array(capTotal), kids: new Uint8Array(capTotal),
+    m: null, random: null,
+    addColony, populate, loadPreset, growColony, setRate, step, growAll, reset, setCurrent, setParams, done, progress,
+    dlafJoin, spU, stalkOf, walkOne, rockDist: rockD,
     get bleach() { return bleachLevel(env.temp); },
-    allowance: 0,
   };
   let random = rng(R.seed);
+  R.random = () => random();
+
+  // ── the shared model ──
+  let rootColony = -1;
+  function makeModel() {
+    R.m = createModel({
+      dim: 3, random: R.random, maxSteps: 4000,
+      params: { particleSpacing: 1, attractionDistance: maxAttrU / 2, minMoveDistance: 1, stubbornness: 0, stickiness: 1 },
+      onAdd(i, par, m) {
+        const k = par >= 0 ? R.col[par] : rootColony, c = R.colonies[k];
+        const x = m.pos[i * 3] * U, y = m.pos[i * 3 + 1] * U, z = m.pos[i * 3 + 2] * U;
+        R.px[i] = x; R.py[i] = y; R.pz[i] = z;
+        R.col[i] = k; R.loc[i] = c.count; R.parent[i] = par; R.birth[i] = R.now; R.gy[i] = c.base[1]; R.kids[i] = 0;
+        if (par >= 0 && R.kids[par] < 255) R.kids[par]++;
+        c.ids.push(i); c.count++; c.lastTry = c.tries;
+        if (y > c.top) c.top = y;
+        const e = Math.hypot(x - c.base[0], z - c.base[2]); if (e > c.ext) c.ext = e;
+        R.count = m.count;
+        indexContact(i);
+      },
+    });
+  }
+  makeModel();
+
+  function spU(i) { return params[R.colonies[R.col[i]].id].particleSpacing / U; }
+  function stalkOf(i) { const c = R.colonies[R.col[i]]; return c.stalk; }
+  function dlafJoin(parent) {
+    const p = params[R.colonies[R.col[parent]].id], ja = R.m.joinAttempts;
+    ja[parent]++;
+    if (ja[parent] < p.stubbornness) return false;
+    return random() <= p.stickiness;
+  }
+
+  // ── contacts: a coarse grid of particle ids (cell 0.12 m) ──
+  const CC = 0.12;
+  let cgrid = new Map();
+  const ckey = (x, y, z) => ((x + 2048) * 4096 + (y + 2048)) * 4096 + (z + 2048);
+  function indexContact(i) {
+    const k = ckey(Math.floor(R.px[i] / CC), Math.floor(R.py[i] / CC), Math.floor(R.pz[i] / CC));
+    const a = cgrid.get(k); if (a) a.push(i); else cgrid.set(k, [i]);
+    contact(i);
+  }
+  // A new particle i near a particle of another colony: the two touch.
+  // Same species: they fuse (one surface in the shared species SDF).
+  // Other species: the colony of i overgrows the other one.
+  function contact(i) {
+    const k = R.col[i], c = R.colonies[k];
+    const lim = 1.6 * params[c.id].particleSpacing + 0.01, l2 = lim * lim;
+    const cx = Math.floor(R.px[i] / CC), cy = Math.floor(R.py[i] / CC), cz = Math.floor(R.pz[i] / CC);
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const a = cgrid.get(ckey(cx + dx, cy + dy, cz + dz)); if (!a) continue;
+      for (const j of a) {
+        const kj = R.col[j]; if (kj === k) continue;
+        const ex = R.px[j] - R.px[i], ey = R.py[j] - R.py[i], ez = R.pz[j] - R.pz[i];
+        if (ex * ex + ey * ey + ez * ez > l2) continue;
+        const a0 = Math.min(k, kj), b0 = Math.max(k, kj), key = a0 + ',' + b0;
+        let t = R.contacts.get(key);
+        if (!t) {
+          t = { a: a0, b: b0, kind: R.colonies[kj].id === c.id ? 'fuse' : 'overgrow', by: k, n: 0, at: [R.px[i], R.py[i], R.pz[i]], t: R.now };
+          R.contacts.set(key, t);
+        }
+        t.n++;
+        return;
+      }
+    }
+  }
 
   function setCurrent(deg, strength) {
     const a = deg * Math.PI / 180;
     env.cur[0] = Math.cos(a); env.cur[1] = Math.sin(a);
     if (strength !== undefined) env.strength = strength;
   }
+  function setRate(v) { R.rate = Math.max(0, v); }
 
-  // The cap of one colony: its species cap, and a fair share of the total.
-  // R.limit (<= capTotal) is the live cap: the saver grows smaller reefs.
-  function colonyCap(sp, n) { return Math.max(60, Math.min(sp.cap, Math.floor(R.limit / Math.max(1, n)))); }
+  // The particle cap of a colony of a size: fill x (size / spacing)^dim.
+  function capFor(id, size) {
+    const sp = SPECIES[id];
+    return Math.max(80, Math.round(sp.fill * Math.pow(size / params[id].particleSpacing, sp.dim)));
+  }
 
-  // A colony of species id at world (x, z), on a new rock (or o.rock).
-  // o.at = [x, y, z] puts the seed at that surface point (tap to plant on
-  // a rock). The seed sits on the top of the rock.
-  function addColony(id, x, z, o = {}) {
+  // A colony of species id on a rock site { p, n }. o.size (m), o.cap.
+  // The seed sits one spacing out of the rock along the normal.
+  function addColony(id, site, o = {}) {
     const sp = SPECIES[id]; if (!sp) return null;
     if (R.count >= R.limit) return null;
-    const rock = o.rock || makeRock(random, x, z, { r: o.rockR ?? 5 + random() * 2 });
-    if (!o.rock) R.rocks.push(rock);
-    // the seed: on the top of the rock (or at o.at), out of every solid near
-    const solids = [rock].concat(R.rocks.filter(q => q !== rock && Math.hypot(q.x - x, q.z - z) < q.R + 45));
-    const seed = pushOut([x, o.at ? o.at[1] : rockTopY(rock, x, z), z], solids, 0.06);
-    const by = seed[1];
+    const n = site.n || [0, 1, 0], s = params[id].particleSpacing;
+    const base = [site.p[0] + n[0] * s * 0.6, site.p[1] + n[1] * s * 0.6, site.p[2] + n[2] * s * 0.6];
+    for (let q = 0; q < 8 && rock.sdf(base[0], base[1], base[2]) < s * 0.4; q++) { base[0] += n[0] * s * 0.3; base[1] += n[1] * s * 0.3; base[2] += n[2] * s * 0.3; }
+    if (rock.sdf(base[0], base[1], base[2]) <= 0) return null;
+    const size = o.size ?? (sp.size[0] + (sp.size[1] - sp.size[0]) * random());
     const k = R.colonies.length;
-    // the highest solid point near the colony: the walkers test the solid only below it
-    let solidTop = 1;
-    for (let a = 0; a < 96; a++) {
-      const r = Math.sqrt((a + 0.5) / 96) * 42, t = a * 2.39996;
-      solidTop = Math.max(solidTop, groundY(x + Math.cos(t) * r, z + Math.sin(t) * r) + 0.5 - by);
-    }
-    for (const q of solids) solidTop = Math.max(solidTop, q.y + q.ry * (1 + q.ov) + q.amp * 1.2 + 1 - by);
-    const user = {
-      sp, env, bx: x, by, bz: z, rock, solids, top: 0, ext: 0, kids: [], roots: 1, solidTop,
-      // a fan grows across the current: its plane normal is the current
-      normal: [env.cur[0], env.cur[1]],
-      room: () => R.count < R.limit - 1 && colony.count < colony.cap - 1,
+    const cl = Math.hypot(env.cur[0], env.cur[1]) || 1;
+    const colony = {
+      k, id, sp, base, normal: n.slice(), plane: [env.cur[0] / cl, env.cur[1] / cl], size,
+      cap: Math.max(20, Math.min(o.cap ?? capFor(id, size), R.limit - R.count)),
+      count: 0, ids: [], top: base[1], ext: 0, roots: 1, born: R.now, full: false, tries: 0, lastTry: 0,
+      stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / 3) / params[id].particleSpacing)),
+      user: { bx: base[0], by: base[1], bz: base[2], normal: [env.cur[0] / cl, env.cur[1] / cl] },
     };
-    const colony = { k, id, sp, user, model: null, cap: o.cap ?? colonyCap(sp, o.share ?? Math.max(1, R.colonies.length + 1)), born: R.now, count: 0, ids: [] };
-    colony.model = createModel({
-      dim: 3, random, params: params[id], hooks: Object.assign({}, BASE, sp.hooks), maxSteps: 6000, user,
-      onAdd(i, par, m) {
-        const u = m.user, x0 = m.pos[i * 3], y0 = m.pos[i * 3 + 1], z0 = m.pos[i * 3 + 2];
-        u.kids.push(0); if (par >= 0) u.kids[par]++;
-        if (y0 > u.top) u.top = y0;
-        const e = Math.hypot(x0, z0); if (e > u.ext) u.ext = e;
-        const g = R.count++;
-        R.px[g] = x0 + u.bx; R.py[g] = y0 + u.by; R.pz[g] = z0 + u.bz;
-        R.col[g] = k; R.loc[g] = i; R.birth[g] = R.now; R.gy[g] = groundY(R.px[g], R.pz[g]);
-        colony.ids.push(g); colony.count++;
-      },
-    });
     R.colonies.push(colony);
-    colony.model.add([0, 0, 0]);
+    rootColony = k;
+    R.m.add([base[0] / U, base[1] / U, base[2] / U], -1);
     return colony;
   }
 
-  // Rocks and colony seeds of a preset, placed by the seed of the reef.
-  // The colonies take the knolls of the real seabed first (their rock is
-  // large and sits on the knoll top), then open sand.
-  function loadPreset(pid, o = {}) {
-    reset();
-    const P = PRESETS[pid] || PRESETS.mixed;
-    const n = P.mix.length, pts = [];
-    const sites = knollSites(P.R);
-    const off = Math.floor(random() * 3);
-    for (let i = 0; i < sites.length && pts.length < Math.ceil(n * 0.7); i++) {
-      const s = sites[(i + off) % sites.length];
-      if (pts.every(q => Math.hypot(q[0] - s.x, q[1] - s.z) >= P.gap)) pts.push([s.x, s.z, 7 + random() * 2.5]);
+  // ── colony seeds ──
+  // Sites from rock.sampleSurface inside 0.92 R. Reefs grow in patches:
+  // first patch centres, spread over the whole plot (a least distance of
+  // about 0.8 x the plot radius / sqrt(patches)), then the seeds of each
+  // patch within PATCH m of its centre, with a gap of 0.35 x the mean size
+  // of two neighbours (+ 0.25 m). So neighbours meet, compete and fuse, but
+  // no two seeds clump. Species by pickSpecies, sizes by exposure. Then
+  // the caps are scaled to fit the particle and triangle budgets.
+  const PATCH = 4.2;
+  function populate(o = {}) {
+    reset(o.seed);
+    const P = PRESETS[o.preset] || PRESETS.mixed;
+    const want = o.colonies ?? Q.colonies;
+    const R0 = radius * 0.92;
+    const filter = s => Math.hypot(s.p[0], s.p[2]) < R0 && s.n[1] > -0.2 && Number(s.overhang ?? 0) < 0.6;
+    let sites = o.sites || rock.sampleSurface(want * 24, R.random, filter) || [];
+    sites = sites.filter(filter);
+    let y0 = Infinity, y1 = -Infinity;
+    for (const s of sites) { y0 = Math.min(y0, s.p[1]); y1 = Math.max(y1, s.p[1]); }
+    const nPatch = o.patches ?? Math.max(4, Math.round(want / 5));
+    const dC = 0.8 * R0 / Math.sqrt(nPatch);
+    const centres = [];
+    for (const s of sites) {
+      if (centres.length >= nPatch) break;
+      if (centres.every(c => Math.hypot(c[0] - s.p[0], c[1] - s.p[2]) >= dC)) centres.push([s.p[0], s.p[2]]);
     }
-    for (let tries = 0; pts.length < n && tries < 4000; tries++) {
-      const a = random() * TAU, r = P.R * Math.sqrt(random()) * (pts.length === 0 ? 0.3 : 1);
-      const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (pts.every(q => Math.hypot(q[0] - x, q[1] - z) >= P.gap)) pts.push([x, z, 5 + random() * 2]);
+    const chosen = [];
+    const gapK = o.gap ?? 0.35;
+    function tryAdd(s, g) {
+      const y01 = (s.p[1] - y0) / Math.max(1e-6, y1 - y0);
+      const id = o.species || pickSpecies(s, y01, random(), P.weights);
+      if (!id) return false;
+      const sp = SPECIES[id], ex = s.exposure ?? 0.5;
+      const size = sp.size[0] + (sp.size[1] - sp.size[0]) * Math.min(1, Math.max(0, 0.2 + 0.7 * ex + 0.35 * (random() - 0.5)));
+      for (const q of chosen) {
+        const d = Math.hypot(q.s.p[0] - s.p[0], q.s.p[1] - s.p[1], q.s.p[2] - s.p[2]);
+        if (d < g * (q.size + size) * 0.5 + 0.25) return false;
+      }
+      chosen.push({ s, id, size });
+      return true;
     }
-    // the colony rocks, then loose rocks with no coral, then the colonies
-    // (each colony knows every rock near it)
-    const own = pts.map(q => { const rk = makeRock(random, q[0], q[1], { r: q[2] }); R.rocks.push(rk); return rk; });
-    for (let i = 0; i < (o.loose ?? 10); i++) {
-      const a = random() * TAU, r = (0.4 + 0.9 * random()) * P.R * 1.25;
-      const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (R.rocks.some(q => Math.hypot(q.x - x, q.z - z) < Math.max(q.rx, q.rz) + 4)) continue;
-      R.rocks.push(makeRock(random, x, z, { r: 2 + random() * 3.5, loose: true, holes: 0 }));
+    // patch seeds, round robin over the centres, then any site
+    for (let pass = 0; pass < 3 && chosen.length < want; pass++) {
+      const g = gapK * (1 - pass * 0.2);
+      const used = new Set();
+      for (let round = 0; round < 40 && chosen.length < want; round++) {
+        let added = 0;
+        for (const c of centres) {
+          if (chosen.length >= want) break;
+          for (let t = 0; t < sites.length; t++) {
+            if (used.has(t)) continue;
+            const s = sites[t];
+            if (Math.hypot(s.p[0] - c[0], s.p[2] - c[1]) > PATCH) continue;
+            used.add(t);
+            if (tryAdd(s, g)) { added++; break; }
+          }
+        }
+        if (!added) break;
+      }
     }
-    pts.forEach((q, i) => addColony(P.mix[i], q[0], q[1], { share: n, rock: own[i] }));
-    R.preset = pid;
+    for (let t = 0; t < sites.length && chosen.length < want; t++) tryAdd(sites[t], gapK * 0.6);
+    // caps in the particle budget (each colony keeps at least 25% of its wish)
+    let sum = 0;
+    for (const q of chosen) { q.cap = capFor(q.id, q.size); sum += q.cap; }
+    const k = Math.min(1, (R.limit - chosen.length) / Math.max(1, sum));
+    for (const q of chosen) addColony(q.id, q.s, { size: q.size, cap: Math.max(Math.round(q.cap * 0.25), Math.floor(q.cap * k)) });
+    R.preset = o.preset || 'mixed';
+    R.patches = centres;
     return R;
   }
+  function loadPreset(pid, o = {}) { return populate(Object.assign({}, o, { preset: pid })); }
 
-  function done() { return R.colonies.every(c => c.count >= c.cap) || R.count >= R.limit; }
+  // ── single colony mode (the saver) ──
+  // A reset, then ONE colony at site (from rock.sampleSurface, or { p, n }).
+  // It grows at R.rate polyps per second in step(): setRate() changes it.
+  function growColony(site, id, o = {}) {
+    reset(o.seed);
+    R.single = true;
+    if (o.rate !== undefined) R.rate = o.rate;
+    const sp = SPECIES[id] || SPECIES.staghorn;
+    const size = o.size ?? sp.size[1];
+    return addColony(SPECIES[id] ? id : 'staghorn', site, { size, cap: o.cap ?? Math.min(R.limit, capFor(id, size)) });
+  }
 
-  // Grow for at most budgetMs, at the rate of env (polyps per second:
-  // 900 x speed x nutrient x (1 - bleach)). dtMs is the frame time. The
-  // colonies take turns, so each gets the same share of the snow.
-  function step(dtMs, budgetMs = 8, now = 0, base = 900) {
+  // ── the walk ──
+  const P = [0, 0, 0], V = [0, 0, 0], QP = [0, 0, 0];
+  let live = [], liveW = [], liveSum = 0, liveAt = -1;
+  function refreshLive() {
+    live = []; liveW = []; liveSum = 0;
+    for (const c of R.colonies) {
+      if (c.full) continue;
+      if (c.count >= c.cap) { c.full = true; continue; }
+      const r = discOf(c);
+      live.push(c); liveSum += r * r; liveW.push(liveSum);
+    }
+    liveAt = R.count;
+  }
+
+  // Marine snow starts on a disc above a live colony (chosen by the area
+  // of its disc). The disc moves upstream by the distance that the current
+  // carries a walker while it falls, so the snow passes over the colony.
+  // The walker is free: it can land on any colony on its way down.
+  let spawnTop = 0, spawnX = 0, spawnZ = 0, spawnR = 0, spawnC = null;
+  const FALL = 0.85;
+  // the snow disc of a colony: its extent plus a few attraction distances,
+  // so that a young colony (one seed) still catches some snow
+  function discOf(c) { return c.ext + 3 * params[c.id].attractionDistance + 0.04 * c.size * Math.min(1, c.count / 300); }
+  function spawn(out) {
+    const u = random() * liveSum;
+    let lo = 0, hi = live.length - 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (liveW[mid] < u) lo = mid + 1; else hi = mid; }
+    const c = live[lo];
+    spawnC = c;
+    c.tries++;
+    const a0 = params[c.id].attractionDistance;
+    const y = c.top + 4 * a0 + 0.08 * (c.top - c.base[1]);
+    const r = discOf(c);
+    const kx = env.strength * 0.8 / FALL;
+    const a = random() * TAU, rr = r * Math.sqrt(random());
+    const fall = y - c.base[1] + 0.3;
+    spawnX = c.base[0] + Math.cos(a) * rr - env.cur[0] * kx * fall * 0.6;
+    spawnZ = c.base[2] + Math.sin(a) * rr - env.cur[1] * kx * fall * 0.6;
+    spawnTop = y; spawnR = r + 0.3 + 0.2 * c.size + env.strength * kx * fall;
+    out[0] = spawnX / U; out[1] = y / U; out[2] = spawnZ / U;
+    return out;
+  }
+
+  // Can a particle of colony c be at (x, y, z) (metres)? Out of the rock,
+  // in the plot, and in the size box of the colony: a horizontal radius of
+  // size / 2 and a height of size x sp.tall over the base.
+  function fits(c, x, y, z) {
+    const dx = x - c.base[0], dy = y - c.base[1], dz = z - c.base[2], h = 0.5 * c.size;
+    if (dx * dx + dz * dz > h * h || dy > c.size * c.sp.tall || dy < -0.3 * c.size) return false;
+    if (x * x + z * z > radius * radius) return false;
+    const s = params[c.id].particleSpacing;
+    return rock.sdf(x, y, z) > s * 0.25 && y > sandAt(x, z) + s * 0.25;
+  }
+
+  // Push a model-unit point out of the rock along the rock normal.
+  function outOfRock(out, minD) {
+    for (let q = 0; q < 4; q++) {
+      const x = out[0] * U, y = out[1] * U, z = out[2] * U, d = rock.sdf(x, y, z);
+      if (d >= minD) return true;
+      const n = rock.normal(x, y, z), s = (minD - d) * 1.05 / U;
+      out[0] += n[0] * s; out[1] += n[1] * s; out[2] += n[2] * s;
+    }
+    return rock.sdf(out[0] * U, out[1] * U, out[2] * U) > 0;
+  }
+
+  // A walker that hits the rock near the base of a colony that encrusts
+  // can stick there: a new root of that colony.
+  function encrust(x, y, z) {
+    const c = spawnC; if (!c || c.full) return false;
+    const s = c.sp; if (!s.encrust || c.roots >= s.roots) return false;
+    const reach = c.size * s.reach;
+    const dx = x - c.base[0], dz = z - c.base[2];
+    if (dx * dx + dz * dz > reach * reach || Math.abs(y - c.base[1]) > reach) return false;
+    if (random() > s.encrust) return false;
+    const n = rock.normal(x, y, z), sp = params[c.id].particleSpacing;
+    QP[0] = (x + n[0] * sp * 0.6) / U; QP[1] = (y + n[1] * sp * 0.6) / U; QP[2] = (z + n[2] * sp * 0.6) / U;
+    if (!outOfRock(QP, sp * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) return false;
+    c.roots++;
+    rootColony = c.k;
+    R.m.add(QP, -1);
+    return true;
+  }
+
+  // One walker from its start to a join, a loss (rock, plot, lid) or the
+  // step limit. Returns the new particle id, or -1.
+  function walkOne() {
+    if (liveAt !== R.count || !live.length) refreshLive();
+    if (!live.length) return -1;
+    const m = R.m;
+    spawn(P);
+    R.walkers++;
+    const minMoveU = 0.6 * Math.min(params[spawnC.id].minMoveDistance, 0.03) / U;
+    const AgU = maxAttrU;
+    const drift = env.strength * 0.8;
+    for (let steps = 0; steps < 3000; steps++) {
+      const n = m.nearest(P);
+      const par = n.id;
+      let d = n.d, A = AgU;
+      if (par >= 0) {
+        const c = R.colonies[R.col[par]], pr = params[c.id];
+        A = pr.attractionDistance / U;
+        if (d < A) {
+          if (c.full || c.count >= c.cap) { R.lost++; return -1; }      // a full colony is a sink
+          const sp = c.sp, h = sp.hooks;
+          if (!(h.shouldJoin ? h.shouldJoin(R, P, par) : dlafJoin(par))) {
+            m.lerpFrom(par, P, A + pr.minMoveDistance / U, P);
+            continue;
+          }
+          if (h.placeParticle) h.placeParticle(R, P, par, QP); else m.lerpFrom(par, P, pr.particleSpacing / U, QP);
+          if (!outOfRock(QP, pr.particleSpacing * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) { R.lost++; return -1; }
+          return m.add(QP, par);
+        }
+      }
+      const x = P[0] * U, y = P[1] * U, z = P[2] * U;
+      const dr = rockD.dist(x, y, z);
+      if (dr < 0.004 * R.fine + 0.002) {
+        if (encrust(x, y, z)) return R.count - 1;
+        R.lost++; return -1;
+      }
+      const step = Math.max(minMoveU, Math.min(d - A, dr * 0.8 / U));
+      randomInUnitSphere(random, 3, V);
+      V[0] += env.cur[0] * drift; V[1] -= FALL; V[2] += env.cur[1] * drift;
+      const l = Math.hypot(V[0], V[1], V[2]) || 1;
+      P[0] += V[0] / l * step; P[1] += V[1] / l * step; P[2] += V[2] / l * step;
+      R.walks++;
+      const nx = P[0] * U, ny = P[1] * U, nz = P[2] * U;
+      const ex = nx - spawnX, ez = nz - spawnZ;
+      if (ny > spawnTop + 0.5 || ny < yMin - 1 || ex * ex + ez * ez > spawnR * spawnR || ny < sandAt(nx, nz)) { R.lost++; return -1; }
+    }
+    R.lost++;
+    return -1;
+  }
+
+  function done() { return R.count >= R.limit || R.colonies.every(c => c.full || c.count >= c.cap); }
+
+  // Grow for at most budgetMs, at the rate R.rate (polyps per second) x
+  // speed x nutrient x (1 - bleach). dtMs is the frame time. Returns the
+  // number of particles that joined.
+  function step(dtMs, budgetMs = 8, now = 0, base) {
     R.now = now;
-    const rate = base * env.speed * env.nutrient * (1 - R.bleach);
-    if (R.bleach > 0.98) { R.allowance = 0; return 0; }
+    if (base !== undefined) R.rate = base;
+    const rate = R.rate * env.speed * env.nutrient * (1 - R.bleach);
+    if (R.bleach > 0.98 || done()) { R.allowance = 0; return 0; }
     R.allowance = Math.min(R.allowance + rate * dtMs / 1000, rate * 0.25 + 2);
     const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
-    const t0 = clock(); let n = 0, turn = R.turn || 0;
-    const live = R.colonies.filter(c => c.count < c.cap);
-    while (R.allowance >= 1 && live.length && R.count < R.limit) {
-      const c = live[turn++ % live.length];
-      const w0 = c.model.walks;
-      c.model.addParticle();
-      R.walks += c.model.walks - w0;
-      R.allowance--; n++;
-      if (c.count >= c.cap) live.splice(live.indexOf(c), 1);
-      if (clock() - t0 > budgetMs) break;
+    const t0 = clock(); let n = 0, tries = 0;
+    while (R.allowance >= 1 && R.count < R.limit) {
+      const g = walkOne(); tries++;
+      if (g >= 0) { R.allowance--; n++; }
+      if ((tries & 7) === 0) { if ((tries & 1023) === 0) starve(); if (clock() - t0 > budgetMs) break; }
+      if (!live.length) break;
     }
-    R.turn = turn; R.joined += n;
+    R.joined += n;
     return n;
   }
 
-  // Grow all colonies to their caps (or n polyps). Node tests, thumbnails.
-  function growAll(n = Infinity) {
-    let k = 0;
-    const live = R.colonies.filter(c => c.count < c.cap);
-    while (live.length && k < n && R.count < R.limit) {
-      for (let j = live.length - 1; j >= 0; j--) {
-        const c = live[j];
-        c.model.addParticle(); k++;
-        if (c.count >= c.cap) live.splice(j, 1);
-      }
+  // Grow until every colony is at its cap, or n particles joined. Tests,
+  // thumbnails. maxWalkers bounds the work when the colonies starve.
+  function growAll(n = Infinity, maxWalkers = Infinity) {
+    let k = 0, w = 0;
+    while (k < n && R.count < R.limit && w < maxWalkers) {
+      if (liveAt !== R.count || !live.length) refreshLive();
+      if (!live.length) break;
+      const g = walkOne(); w++;
+      if (g >= 0) k++;
+      if ((w & 1023) === 0) starve();
     }
+    R.joined += k;
     return k;
+  }
+  // A colony that gets no join in STARVE walkers of its own disc stops: it
+  // is shaded out, or overgrown by its neighbours.
+  const STARVE = 6000;
+  function starve() {
+    for (const c of R.colonies) if (!c.full && c.tries - c.lastTry > STARVE) { c.full = true; c.starved = true; liveAt = -1; }
+  }
+
+  // Progress for SCENE: particles, target, colonies live, fraction, contacts.
+  function progress() {
+    let target = 0, liveN = 0;
+    for (const c of R.colonies) { target += c.cap; if (!c.full && c.count < c.cap) liveN++; }
+    let fuse = 0, over = 0;
+    for (const t of R.contacts.values()) { if (t.kind === 'fuse') fuse++; else over++; }
+    return {
+      count: R.count, target, limit: R.limit, colonies: R.colonies.length, live: liveN,
+      fraction: target ? Math.min(1, R.count / target) : 1, done: done(),
+      walkers: R.walkers, walks: R.walks, lost: R.lost, fusions: fuse, overgrowths: over,
+    };
   }
 
   function setParams(id, p) {
     Object.assign(params[id], p);
-    for (const c of R.colonies) if (c.id === id) c.model.setParams(params[id]);
+    let a = 0;
+    for (const q of SPECIES_IDS) a = Math.max(a, params[q].attractionDistance / U);
+    if (a > maxAttrU) params[id].attractionDistance = maxAttrU * U;   // the grid sets the upper limit
   }
 
   function reset(seed) {
     if (seed !== undefined) R.seed = seed;
     random = rng(R.seed);
-    R.rocks = []; R.colonies = []; R.count = 0; R.joined = 0; R.walks = 0; R.allowance = 0; R.turn = 0;
+    R.colonies = []; R.contacts = new Map(); R.count = 0; R.joined = 0; R.walks = 0; R.walkers = 0; R.lost = 0;
+    R.allowance = 0; R.single = false; R.preset = null;
+    cgrid = new Map(); live = []; liveAt = -1;
+    makeModel();
   }
 
   return R;
 }
 
-// Grow a preset to its caps. Returns the reef. Thumbnails and tests use it.
-export function growPreset(pid, seed = 1, o = {}) {
-  const reef = createReef({ seed, capTotal: o.capTotal ?? 16000, env: o.env });
-  reef.loadPreset(pid);
-  reef.growAll(o.n);
-  return reef;
+// ── fine mesh focus ─────────────────────────────────────────────────────────
+// The colonies that get the fine mesh (coral-sdf.js setFocus): nearest to
+// the view points first, while the estimated fine triangles (count x tpp,
+// with the full cap for a colony that still grows) stay in the budget.
+// colonies: R.colonies or the colonyInfo list with counts.
+export function chooseFocus(colonies, points, budgetTris, maxN = Infinity) {
+  if (!points || !points.length) return [];
+  const list = colonies.map(c => {
+    let d = Infinity;
+    for (const p of points) d = Math.min(d, Math.hypot(c.base[0] - p[0], c.base[1] - p[1], c.base[2] - p[2]) - c.size * 0.5);
+    return { c, d };
+  }).sort((a, b) => a.d - b.d);
+  const out = []; let t = 0;
+  for (const { c } of list) {
+    const est = Math.max(c.count || 0, (c.cap || 0) * 0.6) * SPECIES[c.id].tpp;
+    if (out.length && t + est > budgetTris) break;
+    if (out.length >= maxN) break;
+    out.push(c.k); t += est;
+  }
+  return out;
 }
 
-// Size measures of one colony in its local frame: width (the largest
-// horizontal span), height, thickness (the span along a direction, for
-// the fan plane), the mean offset, and the fill (polyps per unit volume
-// of the bounding hemisphere).
-export function shapeOf(colony, dir) {
-  const m = colony.model, n = m.count, P = m.pos;
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y1 = 0, sx = 0, sy = 0, sz = 0, rmax = 0, t0 = Infinity, t1 = -Infinity;
-  for (let i = 0; i < n; i++) {
-    const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+// ── main-thread mirror ──────────────────────────────────────────────────────
+// The worker owns the reef. The page keeps this mirror of the particle
+// arrays, fed by the worker messages, so colour.js and the data textures
+// read the same fields as on a reef: count, px py pz, col, loc, parent,
+// birth, gy, colonies[k].sp.
+export function createReefMirror(cap = 1024) {
+  const M = { count: 0, colonies: [], contacts: [], progress: null, env: { temp: 27 } };
+  const names = ['px', 'py', 'pz', 'birth', 'gy'];
+  function alloc(n) {
+    for (const k of names) { const a = new Float32Array(n); if (M[k]) a.set(M[k].subarray(0, M.count)); M[k] = a; }
+    for (const [k, T] of [['col', Uint16Array], ['loc', Int32Array], ['parent', Int32Array]]) { const a = new T(n); if (M[k]) a.set(M[k].subarray(0, M.count)); M[k] = a; }
+    M.cap = n;
+  }
+  alloc(cap);
+  M.reset = () => { M.count = 0; M.colonies = []; M.contacts = []; };
+  M.setColonies = (list) => {
+    for (const c of list) M.colonies[c.k] = Object.assign({}, c, { sp: SPECIES[c.id], user: { bx: c.base[0], by: c.base[1], bz: c.base[2], normal: c.plane } });
+  };
+  // data: Float32Array, PARTICLE_FLOATS per particle (see packParticles)
+  M.addParticles = (from, data) => {
+    const n = data.length / PARTICLE_FLOATS;
+    if (from !== M.count) return false;
+    if (from + n > M.cap) { let c = M.cap; while (c < from + n) c *= 2; alloc(c); }
+    for (let q = 0; q < n; q++) {
+      const o = q * PARTICLE_FLOATS, g = from + q;
+      M.px[g] = data[o]; M.py[g] = data[o + 1]; M.pz[g] = data[o + 2];
+      M.col[g] = data[o + 3]; M.parent[g] = data[o + 4]; M.birth[g] = data[o + 5]; M.gy[g] = data[o + 6]; M.loc[g] = data[o + 7];
+    }
+    M.count = from + n;
+    return true;
+  };
+  return M;
+}
+
+// 8 floats per particle in the worker messages:
+// x, y, z, colony, parent (global id or -1), birth (ms), gy, loc.
+export const PARTICLE_FLOATS = 8;
+export function packParticles(R, from, to) {
+  const out = new Float32Array((to - from) * PARTICLE_FLOATS);
+  for (let g = from, o = 0; g < to; g++, o += PARTICLE_FLOATS) {
+    out[o] = R.px[g]; out[o + 1] = R.py[g]; out[o + 2] = R.pz[g]; out[o + 3] = R.col[g];
+    out[o + 4] = R.parent[g]; out[o + 5] = R.birth[g]; out[o + 6] = R.gy[g]; out[o + 7] = R.loc[g];
+  }
+  return out;
+}
+// The colony list in the worker messages (plain data).
+export function colonyInfo(c) {
+  return { k: c.k, id: c.id, base: c.base.slice(), normal: c.normal.slice(), plane: c.plane.slice(), size: c.size, cap: c.cap, stalk: c.stalk };
+}
+
+// Size measures of one colony (metres, from its base): width (the largest
+// horizontal span), height (over the base), thickness (the span along a
+// horizontal direction dir, for the fan plane), size (the larger of width
+// and height), the mean offset, and the fill (particles per m^3 of the
+// bounding hemisphere).
+export function shapeOf(R, colony, dir) {
+  const n = colony.ids.length, b = colony.base;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity, sx = 0, sy = 0, sz = 0, rmax = 0, t0 = Infinity, t1 = -Infinity;
+  for (const g of colony.ids) {
+    const x = R.px[g] - b[0], y = R.py[g] - b[1], z = R.pz[g] - b[2];
     x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
-    y1 = Math.max(y1, y); sx += x; sy += y; sz += z;
+    y0 = Math.min(y0, y); y1 = Math.max(y1, y); sx += x; sy += y; sz += z;
     rmax = Math.max(rmax, Math.hypot(x, y, z));
     if (dir) { const t = x * dir[0] + z * dir[1]; t0 = Math.min(t0, t); t1 = Math.max(t1, t); }
   }
-  const width = Math.max(x1 - x0, z1 - z0);
+  const width = Math.max(x1 - x0, z1 - z0), height = y1 - Math.min(0, y0);
   const vol = (2 / 3) * Math.PI * rmax * rmax * rmax;
-  return { n, width, height: y1, thickness: dir ? t1 - t0 : 0, mean: [sx / n, sy / n, sz / n], fill: n / Math.max(1, vol), rmax };
+  return { n, width, height, size: Math.max(width, height, Math.hypot(x1 - x0, z1 - z0) * 0.85), thickness: dir ? t1 - t0 : 0, mean: [sx / n, sy / n, sz / n], fill: n / Math.max(1e-6, vol), rmax };
 }
 
 // The hook that makes a species, for the explainer and the saver code
-// extract: its own hook if it has one, else the shared snow motion.
-// Returns { name, fn }. fn.toString() is the real source text.
+// extract. Returns { name, fn }. fn.toString() is the real source text.
 export function speciesHook(id, which) {
   const h = (SPECIES[id] || SPECIES.staghorn).hooks;
   const names = Object.keys(h);
   const name = which && h[which] ? which : names.includes('shouldJoin') ? 'shouldJoin' : names.includes('placeParticle') ? 'placeParticle' : names[0];
-  if (name) return { name, fn: h[name] };
-  return { name: 'motionVector', fn: snowMotion };
+  return { name, fn: h[name] };
 }

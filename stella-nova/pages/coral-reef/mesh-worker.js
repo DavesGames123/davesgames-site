@@ -1,59 +1,197 @@
 // ============================================================================
-//  CORAL REEF  ·  mesh worker (module worker)
+//  CORAL REEF  ·  the reef worker (module worker): growth AND meshing
 // ----------------------------------------------------------------------------
-//  Runs coral-sdf.js (lib/dla-sdf.js under it) off the main thread, so the
-//  growth and the render stay smooth while the coral surfaces are meshed.
+//  Runs reef.js (the shared DLA growth) and coral-sdf.js (the coral SDF
+//  meshes, fine and coarse LOD) off the main thread. Each tick grows for
+//  growMs, gives the new particles to the mesher, meshes for meshMs, and
+//  posts the new particles, the changed bricks and the progress. The page
+//  keeps a mirror of the particles (reef.js createReefMirror) for the
+//  colour modes and the data textures.
 //
-//  Messages in (from main.js):
-//    { type: 'reset', polyps }                 all colonies gone
-//    { type: 'colony', k, id, normal, stalk }  a new colony
-//    { type: 'add', data: Float32Array }       particles, 7 floats each:
-//                                              k, local id, parent, x, y, z (local frame), gid
-//    { type: 'budget', ms }                    mesh time per tick (default 10)
-//    { type: 'rock', id, rock, cell }          mesh one rock SDF (terrain.js meshRock)
+//  Messages in (from the page):
+//    { type: 'init', seed, quality, radius, detail, rockSeed, rockQuality,
+//      sites?, preset?, colonies?, env?, rate?, play? }
+//        build the rock SDF (rock/index.js createRock, no rock mesh when
+//        sites are given: the page samples them from its own rock), then
+//        the reef and its colony seeds. rockSeed, radius, detail and
+//        rockQuality must be those of the page's rock (the SDF detail
+//        depends on the quality; default 'high'). rate: polyps per second (default
+//        Infinity: as fast as the budget allows).
+//    { type: 'single', site, species, size?, cap?, rate?, seed? }
+//        single-colony mode (the saver): one colony from a seed
+//    { type: 'reset', seed?, preset?, colonies?, sites? }   new colonies, same rock
+//    { type: 'play', on }            grow or pause (meshing goes on)
+//    { type: 'rate', value }         polyps per second (Infinity = max)
+//    { type: 'env', env }            speed, nutrient, temp, strength
+//    { type: 'current', deg, strength }
+//    { type: 'params', id, p }       dlaf parameters of a species (metres)
+//    { type: 'plant', id, site }     one more colony at a rock site
+//    { type: 'view', points, budget? }   view points (camera, ROVs): the
+//        nearest colonies get the fine mesh, in the fine triangle budget
+//    { type: 'focus', ks }           the fine-mesh colonies, by hand
+//    { type: 'budget', growMs, meshMs, maxPost }
 //  Messages out:
-//    { type: 'bricks', gen, list: [{ k, key, chunk, positions, normals, gids, indices, polyps }] }
-//      (the typed arrays are transferred)
-//    { type: 'idle', gen }                     no dirty bricks left
-//    { type: 'rock', id, positions, normals, indices }
+//    { type: 'ready', gen, rockMs, quality, budget }
+//    { type: 'colonies', gen, list: [colonyInfo + count] }
+//    { type: 'particles', gen, from, data }   PARTICLE_FLOATS per particle
+//    { type: 'bricks', gen, list: [{ sp, lod, key, chunk, cell, positions,
+//        normals, gids, indices, polyps, tris }] }   (typed arrays transferred)
+//    { type: 'progress', gen, count, target, fraction, done, live, fusions,
+//        overgrowths, tris, trisFine, trisCoarse, polyps, focus, dirty,
+//        growMs, meshMs, rate }
+//    { type: 'idle', gen }            grown and meshed: nothing to do
+//    { type: 'error', message }
 //  gen counts the resets, so the page drops results of an old reef.
 //
 //  grep -n targets
-//    the tick ............ "function tick"
+//    the runner ........... "export function createReefRunner"
+//    one tick ............. "function tick"
+//    focus from view ...... "function viewFocus"
 // ============================================================================
+import { createReef, packParticles, colonyInfo, chooseFocus, QUALITY } from './reef.js';
 import { createCoralMesher } from './coral-sdf.js';
-import { meshRock } from './terrain.js';
 
-let M = createCoralMesher();
-let gen = 0, budget = 10, timer = 0, idleSent = false;
+// post(msg, transfer) sends a message. makeRock(opts) -> rock (tests give
+// a stub; the worker imports rock/index.js on demand).
+export function createReefRunner({ post, makeRock, timers } = {}) {
+  const T = timers || { set: (f, ms) => setTimeout(f, ms), clear: id => clearTimeout(id) };
+  const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+  let rock = null, R = null, M = null, gen = 0, timer = 0, playing = true;
+  let growMs = 9, meshMs = 9, maxPost = 4000, sent = 0, fed = 0, idleSent = false;
+  let lastT = 0, progAt = 0, viewPts = null, viewBudget = 0, viewAt = 0, cfg = {};
+  const T0 = clock();
 
-function tick() {
-  timer = 0;
-  const out = M.update(budget);
-  if (out.length) {
-    const tr = [];
-    for (const r of out) tr.push(r.positions.buffer, r.normals.buffer, r.gids.buffer, r.indices.buffer, r.polyps.buffer);
-    postMessage({ type: 'bricks', gen, list: out }, tr);
-    idleSent = false;
+  function newMesher() {
+    M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false });
+    sent = 0; fed = 0;
   }
-  if (M.dirty()) schedule();
-  else if (!idleSent) { idleSent = true; postMessage({ type: 'idle', gen }); }
-}
-function schedule() { if (!timer) timer = setTimeout(tick, 4); }
-
-self.onmessage = (e) => {
-  const m = e.data;
-  if (m.type === 'reset') { M = createCoralMesher({ polyps: m.polyps ?? 1 }); gen++; idleSent = false; return; }
-  if (m.type === 'colony') { M.addColony(m); return; }
-  if (m.type === 'budget') { budget = m.ms; return; }
-  if (m.type === 'rock') {
-    const r = meshRock(m.rock, m.cell || 0.4);
-    postMessage({ type: 'rock', id: m.id, positions: r.positions, normals: r.normals, indices: r.indices }, [r.positions.buffer, r.normals.buffer, r.indices.buffer]);
-    return;
+  function sendColonies() {
+    post({ type: 'colonies', gen, list: R.colonies.map(c => Object.assign(colonyInfo(c), { count: c.count })) });
+    for (const c of R.colonies) if (!M.cols.has(c.k)) M.addColony(colonyInfo(c));
   }
-  if (m.type === 'add') {
-    const d = m.data;
-    for (let i = 0; i < d.length; i += 7) M.add(d[i], d[i + 1], d[i + 2], d[i + 3], d[i + 4], d[i + 5], d[i + 6]);
+
+  async function init(m) {
+    cfg = m;
+    const t0 = clock();
+    const ro = { seed: m.rockSeed ?? m.seed ?? 1, radius: m.radius ?? 30, detail: m.detail ?? 1, quality: m.rockQuality || 'high', mesh: !m.sites };
+    rock = makeRock ? await makeRock(ro) : (await import('./rock/index.js')).createRock(ro);
+    const rockMs = clock() - t0;
+    R = createReef({ rock, seed: m.seed ?? 1, quality: m.quality, radius: ro.radius, env: m.env, rate: m.rate ?? Infinity, budget: m.budget });
+    gen++;
+    newMesher();
+    R.populate({ preset: m.preset, colonies: m.colonies, sites: m.sites });
+    post({ type: 'ready', gen, rockMs, quality: R.quality, budget: R.Q });
+    sendColonies();
+    viewFocus(true);
     schedule();
   }
-};
+
+  function single(m) {
+    if (!R) return;
+    gen++;
+    if (m.rate !== undefined) R.setRate(m.rate);
+    R.growColony(m.site, m.species, { size: m.size, cap: m.cap, seed: m.seed });
+    newMesher();
+    sendColonies();
+    M.setFocus(R.colonies.map(c => c.k));          // the saver colony is always fine
+    schedule();
+  }
+
+  function reset(m) {
+    if (!R) return;
+    gen++;
+    R.populate({ preset: m.preset ?? cfg.preset, colonies: m.colonies ?? cfg.colonies, sites: m.sites ?? cfg.sites, seed: m.seed });
+    newMesher();
+    sendColonies();
+    viewFocus(true);
+    schedule();
+  }
+
+  // The nearest colonies to the view points get the fine mesh, while the
+  // estimated fine triangles stay in the budget (default 0.7 x Q.tris; the
+  // coarse mesh of all colonies takes the rest).
+  function viewFocus(force) {
+    if (!R || !M || !M.lod || !viewPts || R.single) return;
+    const t = clock();
+    if (!force && t - viewAt < 500) return;
+    viewAt = t;
+    const ks = chooseFocus(R.colonies, viewPts, viewBudget || R.Q.tris * 0.7);
+    M.setFocus(ks);
+  }
+
+  function tick() {
+    timer = 0;
+    if (!R) return;
+    const t = clock(), dt = lastT ? Math.min(250, t - lastT) : 16;
+    lastT = t;
+    let grew = 0;
+    const g0 = clock();
+    if (playing && !R.done()) grew = R.step(dt, growMs, t - T0);
+    const gms = clock() - g0;
+    // new particles: to the page, then to the mesher (in the mesh budget)
+    if (R.count > sent) {
+      const to = Math.min(R.count, sent + maxPost);
+      const data = packParticles(R, sent, to);
+      post({ type: 'particles', gen, from: sent, data }, [data.buffer]);
+      if (to > sent && R.colonies.length > M.cols.size) sendColonies();
+      sent = to;
+    }
+    const m0 = clock();
+    while (fed < sent && clock() - m0 < meshMs * 0.5) {
+      const end = Math.min(sent, fed + 64);
+      for (let g = fed; g < end; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+      fed = end;
+    }
+    viewFocus(false);
+    const left = Math.max(1, meshMs - (clock() - m0));
+    const out = M.update(left);
+    if (out.length) {
+      const tr = [];
+      for (const r of out) tr.push(r.positions.buffer, r.normals.buffer, r.gids.buffer, r.indices.buffer, r.polyps.buffer);
+      post({ type: 'bricks', gen, list: out }, tr);
+    }
+    const mms = clock() - m0;
+    const busy = (playing && !R.done()) || fed < R.count || sent < R.count || M.dirty() > 0;
+    if (t - progAt > 250 || !busy) {
+      progAt = t;
+      const st = M.stats();
+      post(Object.assign({ type: 'progress', gen }, R.progress(), {
+        tris: st.tris, trisFine: st.trisFine, trisCoarse: st.trisCoarse, polyps: st.polyps, focus: st.focus, dirty: st.dirty,
+        growMs: gms, meshMs: mms, grew, rate: R.rate,
+      }));
+    }
+    if (busy) { idleSent = false; schedule(); }
+    else if (!idleSent) { idleSent = true; post({ type: 'idle', gen }); }
+  }
+  function schedule() { if (!timer) timer = T.set(tick, 0) || 1; }
+
+  async function onMessage(m) {
+    try {
+      switch (m.type) {
+        case 'init': await init(m); break;
+        case 'single': single(m); break;
+        case 'reset': reset(m); break;
+        case 'play': playing = !!m.on; schedule(); break;
+        case 'rate': if (R) R.setRate(m.value); schedule(); break;
+        case 'env': if (R) Object.assign(R.env, m.env || {}); schedule(); break;
+        case 'current': if (R) R.setCurrent(m.deg, m.strength); break;
+        case 'params': if (R) R.setParams(m.id, m.p); break;
+        case 'plant': if (R && R.addColony(m.id, m.site, { size: m.size, cap: m.cap })) { sendColonies(); schedule(); } break;
+        case 'view': viewPts = m.points; viewBudget = m.budget || 0; viewFocus(true); schedule(); break;
+        case 'focus': if (M) { M.setFocus(m.ks || []); schedule(); } break;
+        case 'budget': growMs = m.growMs ?? growMs; meshMs = m.meshMs ?? meshMs; maxPost = m.maxPost ?? maxPost; break;
+        default: break;
+      }
+    } catch (e) {
+      post({ type: 'error', message: String(e && e.stack || e) });
+    }
+  }
+  return { onMessage, get reef() { return R; }, get mesher() { return M; }, get gen() { return gen; }, QUALITY };
+}
+
+// In a worker: wire the runner to self. (Node tests set self.__reefTest
+// and drive createReefRunner themselves.)
+if (typeof self !== 'undefined' && typeof window === 'undefined' && typeof self.postMessage === 'function' && !self.__reefTest) {
+  const run = createReefRunner({ post: (m, tr) => self.postMessage(m, tr || []) });
+  self.onmessage = e => run.onMessage(e.data);
+}

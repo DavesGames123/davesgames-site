@@ -1,7 +1,7 @@
 // ============================================================================
 //  CORAL REEF  ·  colour by (DOM-free)
 // ----------------------------------------------------------------------------
-//  Each "Colour by" mode maps one value of each polyp to t in 0..1. The
+//  Each "Colour by" mode maps one value of each particle to t in 0..1. The
 //  page writes t into an instance attribute and reads the colour from a
 //  gradient row texture (lib/growth-gradients.js lut). So a gradient change
 //  only writes the texture row, and a mode change only writes t. No regrow.
@@ -9,12 +9,17 @@
 //    natural ... the colours of the species (naturalRGB), lighter at tips
 //    age ....... the order of joining: the newest polyps at the hot end
 //    depth ..... hops from the seed, per colony
-//    height .... height above the sand, over the whole reef
+//    height .... height above the base of its colony, over the whole reef
 //    flow ...... log of the subtree size, per colony (the nutrient flow
 //                that passes through a polyp to the polyps it feeds)
 //    light ..... an estimate of light and nutrient exposure: high polyps
-//                with few neighbours get more
+//                with few neighbours (in 12 cm) get more
 //    colony .... one colour per colony
+//
+//  The functions read a reef of reef.js or the page mirror of it
+//  (createReefMirror): count, px py pz (m), col, parent (global ids), gy
+//  (base height of the colony), colonies[k].sp. Subtree sizes and depths
+//  come from the parent links (a parent always has a lower id).
 //
 //  grep -n targets
 //    the mode table ......... "export const MODES"
@@ -25,7 +30,7 @@
 //    radius of each polyp ... "export function radiiOf"
 //    thumbnail data ......... "export function polypData"
 // ============================================================================
-import { SPECIES, sandY, polypRadius } from './reef.js';
+import { SPECIES, polypRadius } from './reef.js';
 import { sample } from '../../lib/growth-gradients.js';
 
 export const MODES = [
@@ -39,25 +44,23 @@ export const MODES = [
 ];
 export const MODE_IDS = MODES.map(m => m.id);
 
-// Subtree size and depth of each polyp, in global order.
+// Subtree size and depth of each particle, in global order, and the
+// largest of each per colony.
 export function fieldsOf(reef) {
-  const n = reef.count, sub = new Float32Array(n), dep = new Float32Array(n);
-  const maxSub = new Float32Array(reef.colonies.length), maxDep = new Float32Array(reef.colonies.length);
-  for (const c of reef.colonies) {
-    const s = c.model.subtreeSizes(), d = c.model.depth;
-    for (let i = 0; i < c.count; i++) {
-      const g = c.ids[i]; sub[g] = s[i]; dep[g] = d[i];
-      if (s[i] > maxSub[c.k]) maxSub[c.k] = s[i];
-      if (d[i] > maxDep[c.k]) maxDep[c.k] = d[i];
-    }
-  }
+  const n = reef.count, P = reef.parent, C = reef.col;
+  const sub = new Float32Array(n), dep = new Float32Array(n);
+  const nc = reef.colonies.length;
+  const maxSub = new Float32Array(nc), maxDep = new Float32Array(nc);
+  for (let g = 0; g < n; g++) { sub[g] = 1; const p = P[g]; dep[g] = p >= 0 ? dep[p] + 1 : 0; if (dep[g] > maxDep[C[g]]) maxDep[C[g]] = dep[g]; }
+  for (let g = n - 1; g >= 0; g--) { const p = P[g]; if (p >= 0) sub[p] += sub[g]; }
+  for (let g = 0; g < n; g++) if (sub[g] > maxSub[C[g]]) maxSub[C[g]] = sub[g];
   return { sub, dep, maxSub, maxDep };
 }
 
-// Neighbours of each polyp in a radius of 1.8, from a hash grid.
+// Neighbours of each particle in a radius of 0.12 m, from a hash grid.
 function crowding(reef) {
-  const n = reef.count, C = 1.8, cnt = new Uint16Array(n), grid = new Map();
-  const key = (x, y, z) => (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+  const n = reef.count, C = 0.12, cnt = new Uint16Array(n), grid = new Map();
+  const key = (x, y, z) => ((x + 4096) * 8192 + (y + 4096)) * 8192 + (z + 4096);
   for (let i = 0; i < n; i++) {
     const k = key(Math.floor(reef.px[i] / C), Math.floor(reef.py[i] / C), Math.floor(reef.pz[i] / C));
     const a = grid.get(k); if (a) a.push(i); else grid.set(k, [i]);
@@ -95,11 +98,11 @@ export function colourT(reef, mode, out, F) {
     for (let i = 0; i < n; i++) out[i] = Math.log(F.sub[i]) / Math.log(Math.max(2, F.maxSub[reef.col[i]]));
   } else if (mode === 'height' || mode === 'light') {
     let hm = 1e-6;
-    for (let i = 0; i < n; i++) { const h = reef.py[i] - (reef.gy ? reef.gy[i] : sandY(reef.px[i], reef.pz[i])); out[i] = h; if (h > hm) hm = h; }
+    for (let i = 0; i < n; i++) { const h = reef.py[i] - reef.gy[i]; out[i] = h; if (h > hm) hm = h; }
     for (let i = 0; i < n; i++) out[i] = Math.max(0, out[i] / hm);
     if (mode === 'light') {
       const cnt = crowding(reef);
-      for (let i = 0; i < n; i++) out[i] = 0.55 * out[i] + 0.45 * (1 - Math.min(1, cnt[i] / 10));
+      for (let i = 0; i < n; i++) out[i] = 0.55 * out[i] + 0.45 * (1 - Math.min(1, cnt[i] / 30));
     }
   }
   return out;
