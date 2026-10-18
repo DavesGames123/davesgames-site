@@ -16,13 +16,18 @@
 //
 //  A scene with positions (count > 0) is driven by a float t: position
 //  floor(t), and the window glides to the next one in the fraction. The
-//  dense scene has count 0 and loops t over 0..1 phases.
+//  dense scene has count 0 and plays t from 0 to 0.999 once: flatten, the
+//  weights, the scores, the probabilities. The caller holds it at 0.999 so
+//  the class bars stay full (they were empty half the time in a loop).
 //
 //  scene.draw(g, w, h, t) draws in CSS px and returns hit boxes:
 //  [{ kind: 'out' | 'chan' | 'class', x, y, w, h, ... }].
 //  scene.say(p) is one plain line for the aria-live readout.
 //
 //  grep -n 'export function makeScene'
+//  grep -n 'export function denseBars'    the class bars of the dense scene
+//  grep -n 'export function densePhases'  its four phases at t
+//  grep -n 'export function isLand'       three columns or rows
 //  grep -n 'function convScene'   grep -n 'function reluScene'
 //  grep -n 'function poolScene'   grep -n 'function inputScene'
 //  grep -n 'function denseScene'  grep -n 'function grid3'
@@ -78,10 +83,13 @@ function grid3(g, vals, n, x, y, cs, { fill = null, hi = -1, title = '', fs = nu
 
 function op(g, s, x, y, size = 16) { label(g, s, x, y, { size, color: T.dim, align: 'center' }); }
 
-// zones: landscape = three columns, portrait = rows
+// zones: landscape = three columns, portrait = rows. A box under 700 px
+// wide takes rows unless it is very flat: three columns there make the
+// 3 x 3 grids too small to hold their numbers (the inline zoom column).
+export function isLand(w, h) { return w >= h * 1.15 && (w >= 700 || w >= h * 2); }
 function zones(w, h) {
   const pad = 14;
-  if (w >= h * 1.15) {
+  if (isLand(w, h)) {
     const aw = w * 0.31, bw = w * 0.4, cw = w - aw - bw;
     return { land: true, pad, A: { x: pad, y: pad, w: aw - pad, h: h - 2 * pad }, B: { x: aw + 6, y: pad, w: bw - 12, h: h - 2 * pad }, C: { x: aw + bw, y: pad, w: cw - pad, h: h - 2 * pad } };
   }
@@ -291,12 +299,29 @@ function inputScene(ctx) {
 }
 
 // ── dense + softmax ─────────────────────────────────────────────────────────
+// The bar of each class in a track of width bw, as { x, w } from the left
+// of the track. a3 0..1: the score bars grow from the centre, one class
+// after the other (score / largest |score| of half the track); a4 0..1:
+// they morph into probability bars from the left (probability x bw).
+export function denseBars(z, probs, bw, a3, a4) {
+  const m = z.length, zmax = Math.max(...z.map(Math.abs), 1e-6);
+  return z.map((zi, i) => {
+    const show = clamp(a3 * m - i, 0, 1), zc = bw / 2, zl = zi / zmax * bw / 2 * show, pw = probs[i] * bw;
+    const x0 = zc + (0 - zc) * a4, x1 = (zc + zl) + (pw - (zc + zl)) * a4;
+    return { x: Math.min(x0, x1), w: Math.abs(x1 - x0) };
+  });
+}
+// the phases of the dense scene at t (0..1): flatten, weights, scores, softmax
+export function densePhases(t) {
+  const ph = t % 1;
+  return { a1: ease(clamp(ph / 0.22, 0, 1)), a2: ease(clamp((ph - 0.22) / 0.26, 0, 1)), a3: ease(clamp((ph - 0.5) / 0.2, 0, 1)), a4: ease(clamp((ph - 0.72) / 0.2, 0, 1)) };
+}
+
 function denseScene(ctx) {
   const { result, W, maps } = ctx;
   const P = result.layers[10], flat = P.data, z = result.logits, probs = result.probs;
   const st = { k: ctx.c == null ? result.top : ctx.c };
   const wk = W.output.kernel, m = z.length;
-  const zmax = Math.max(...z.map(Math.abs), 1e-6);
   const ez = z.map(v => Math.exp(v - Math.max(...z)));
   const esum = ez.reduce((a, b) => a + b, 0);
   return {
@@ -306,7 +331,7 @@ function denseScene(ctx) {
     say() { const k = st.k; return `${CLASSES[k]}: score ${fmt(z[k], 3)}, probability ${(probs[k] * 100).toFixed(1)} percent.`; },
     draw(g, w, h, tt) {
       const hits = [], k = st.k, ph = tt % 1, pad = 14, land = w >= h * 1.15;
-      const a1 = ease(clamp(ph / 0.22, 0, 1)), a2 = ease(clamp((ph - 0.22) / 0.26, 0, 1)), a3 = ease(clamp((ph - 0.5) / 0.2, 0, 1)), a4 = ease(clamp((ph - 0.72) / 0.2, 0, 1));
+      const { a1, a2, a3, a4 } = densePhases(ph);
       // left: the ten pooled maps, the flat strip, the class weights
       const L = land ? { x: pad, y: pad, w: w * 0.52 - pad, h: h - 2 * pad } : { x: pad, y: pad, w: w - 2 * pad, h: h * 0.46 };
       const per = 5, ms = Math.floor(Math.min((L.w - 4 * 8) / per, (L.h * 0.42 - 26) / 2));
@@ -329,6 +354,7 @@ function denseScene(ctx) {
       const R = land ? { x: w * 0.55, y: pad, w: w * 0.45 - pad, h: h - 2 * pad } : { x: pad, y: h * 0.5, w: w - 2 * pad, h: h * 0.5 - pad };
       const rowH = Math.min(30, (R.h - 26) / m), nameW = Math.min(92, R.w * 0.3), bw = R.w - nameW - 60;
       label(g, a4 > 0.5 ? 'Probability (softmax)' : 'Score of each class', R.x + R.w / 2, R.y + 10, { align: 'center' });
+      const spans = denseBars(z, probs, bw, a3, a4);
       for (let i = 0; i < m; i++) {
         const y = R.y + 22 + i * rowH, on = i === k;
         const show = clamp(a3 * m - i, 0, 1);
@@ -337,11 +363,8 @@ function denseScene(ctx) {
         const bx = R.x + nameW, by = y + rowH * 0.22, bh = rowH * 0.56;
         g.fillStyle = T.track; g.fillRect(bx, by, bw, bh);
         // score bar from the centre, morphing to a probability bar from the left
-        const zc = bx + bw / 2, zl = z[i] / zmax * bw / 2 * show;
-        const pw = probs[i] * bw;
-        const x0 = zc + (bx - zc) * a4, x1 = (zc + zl) + ((bx + pw) - (zc + zl)) * a4;
         g.fillStyle = on ? T.accent : a4 > 0.5 ? T.bar : (z[i] >= 0 ? 'rgba(98,196,255,0.55)' : 'rgba(255,154,98,0.55)');
-        g.fillRect(Math.min(x0, x1), by, Math.abs(x1 - x0), bh);
+        g.fillRect(bx + spans[i].x, by, spans[i].w, bh);
         const txt = a4 > 0.5 ? (probs[i] * 100).toFixed(probs[i] >= 0.1 ? 1 : 2) + '%' : fmt(z[i]);
         if (show > 0) label(g, txt, bx + bw + 54, y + rowH * 0.62, { size: 11.5, align: 'right', color: on ? T.accent : T.faint, font: T.mono });
       }
