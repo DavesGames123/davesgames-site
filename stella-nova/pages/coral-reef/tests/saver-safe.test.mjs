@@ -107,5 +107,22 @@ for (const seed of [1, 4]) {
   console.log('card: ' + cases.map(([w, h, b]) => { const R = cardRect(w, h, b); return `${w}x${h} ${R.w.toFixed(0)}x${R.h.toFixed(0)} at ${R.left.toFixed(0)},${R.top.toFixed(0)}`; }).join('; '));
 }
 
+// ── a seed on a ledge ───────────────────────────────────────────────────────
+// The user said (2026-10-18): "the camera for the ROV animation always
+// starts stuck up against a rock". A seed sits on a flat floor under a
+// rock slab. The wanted camera is 4 m out and 1 m up. safeCamera must
+// find water at 2 m or more from the seed, not the 'near' fall back at
+// r + 0.8 m (the line from the seed skims the floor that it grows on).
+{
+  const box = (x, y, z, c, h) => { const qx = Math.abs(x - c[0]) - h[0], qy = Math.abs(y - c[1]) - h[1], qz = Math.abs(z - c[2]) - h[2]; return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0); };
+  const sdf = (x, y, z) => Math.min(y, box(x, y, z, [-2, 2.3, 0], [3, 0.3, 5]));
+  const tgt = [0, 0.02, 0];
+  for (const want of [[4, 1, 0], [3, 0.6, 2], [0.5, 1.4, 3.5]]) {
+    const S = safeCamera(sdf, 1, tgt, want, 0.25);
+    const d = Math.hypot(S.pos[0] - tgt[0], S.pos[1] - tgt[1], S.pos[2] - tgt[2]);
+    ok(S.how !== 'near' && d >= 2 && sdf(S.pos[0], S.pos[1], S.pos[2]) > 0.45, 'a seed on a ledge: the camera finds water 2 m or more out', `${S.how} at ${d.toFixed(2)} m, want ${want}`);
+  }
+}
+
 console.log(`saver-safe: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -286,8 +286,8 @@ export function clearPath(sdf, tgt, pos, margin = 0.6) {
 // so the margins below are true metres. tgt: the aim point; pos: the
 // wanted camera; r: the subject radius (the trace starts at its edge,
 // so the rock under the colony does not count). Tries the wanted pose,
-// then more elevation (up to 1.2 rad), then turns round the subject; if
-// no line is clear, the nearest clear point on the wanted line, never
+// then more elevation (up to 1.2 rad), then turns round the subject at
+// the wanted distance and nearer (down to r + 1.6 m); if no line is clear, the nearest clear point on the wanted line, never
 // nearer than r + 0.8 m, lifted until the camera is in water.
 // Returns { pos, how: 'clear' | 'lift' | 'turn' | 'near' }.
 export function safeCamera(sdf, scale, tgt, pos, r = 0.3, o = {}) {
@@ -298,21 +298,29 @@ export function safeCamera(sdf, scale, tgt, pos, r = 0.3, o = {}) {
     const d = sub3(p, tgt), L = len3(d);
     if (L <= start) return free(p) > margin;
     const u = [d[0] / L, d[1] / L, d[2] / L];
+    // the margin grows from 0.25 x to 1 x over the first metre: the
+    // colony sits on rock, so a line from it skims that rock at first
+    // (a full margin there failed every direction at a seed on a ledge)
     let t = start;
     for (let i = 0; i < 160 && t < L; i++) {
       const q = [tgt[0] + u[0] * t, tgt[1] + u[1] * t, tgt[2] + u[2] * t];
-      const s = free(q);
-      if (s < margin) return false;
-      t += Math.max(0.04, (s - margin * 0.5) / 1.5);
+      const s = free(q), mt = margin * Math.min(1, 0.25 + 0.75 * (t - start));
+      if (s < mt) return false;
+      t += Math.max(0.04, (s - mt * 0.5) / 1.5);
     }
     return free(p) > margin;
   };
   if (clearTo(pos)) return { pos: pos.slice(), how: 'clear' };
   const d = sub3(pos, tgt), L = Math.max(len3(d), r + 0.8);
   const az0 = Math.atan2(d[0], d[2]), el0 = Math.asin(Math.max(-1, Math.min(1, d[1] / (len3(d) || 1))));
-  const at = (az, el) => [tgt[0] + Math.sin(az) * Math.cos(el) * L, tgt[1] + Math.sin(el) * L, tgt[2] + Math.cos(az) * Math.cos(el) * L];
+  const at = (az, el, l = L) => [tgt[0] + Math.sin(az) * Math.cos(el) * l, tgt[1] + Math.sin(el) * l, tgt[2] + Math.cos(az) * Math.cos(el) * l];
   for (let e = el0 + 0.15; e <= 1.25; e += 0.15) { const p = at(az0, e); if (clearTo(p)) return { pos: p, how: 'lift' }; }
-  for (const da of [0.5, -0.5, 1, -1, 1.6, -1.6, 2.3, -2.3, Math.PI]) for (const e of [Math.max(el0, 0.35), 0.8]) { const p = at(az0 + da, e); if (clearTo(p)) return { pos: p, how: 'turn' }; }
+  // turn round the subject: at the wanted distance, then nearer (but not
+  // under r + 1.6 m). A camera 1 m from the seed with rock filling the
+  // frame was the old result when no turn at the wanted distance was clear.
+  const tiers = [L];
+  for (const f of [0.7, 0.5]) { const l = Math.max(r + 1.6, L * f); if (l < tiers[tiers.length - 1] - 0.3) tiers.push(l); }
+  for (const l of tiers) for (const da of [0.5, -0.5, 1, -1, 1.6, -1.6, 2.3, -2.3, Math.PI]) for (const e of [Math.max(el0, 0.35), 0.8, 1.2]) { const p = at(az0 + da, e, l); if (clearTo(p)) return { pos: p, how: 'turn' }; }
   // nearer on the wanted line, then up until in water
   const u = [d[0] / (len3(d) || 1), d[1] / (len3(d) || 1), d[2] / (len3(d) || 1)];
   let best = null;
