@@ -1,0 +1,84 @@
+/* ============================================================================
+   ANIMATED PATTERN DESIGNER  ·  stylesheet (after ../pattern-designer/style.css)
+   ----------------------------------------------------------------------------
+   The shared file gives the desk, the panel, the sheet, the dock, the
+   sliders, chips, segments and palette swatches. This file adds only the
+   parts of this page.
+
+     grep -n 'TRANSPORT'  the play bar under the board
+     grep -n 'MOTION'     the loop row, the timeline strip, the channel rows
+     grep -n 'PATTERN'    the pattern select and the slider fold
+     grep -n 'EXPORT'     the export button and the progress bar
+     grep -n 'TOUCH'      44 px targets on a touch screen
+     grep -n 'PHONE'      the transport over the dock
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* TRANSPORT */
+#transport{position:absolute;left:28px;right:28px;top:0;height:46px;display:flex;align-items:center;gap:10px;z-index:6;
+  padding:0 12px;border:1px solid var(--line-b);border-radius:12px;background:rgba(14,16,20,0.9)}
+#transport button{flex:0 0 34px;height:34px;border:1px solid var(--line-b);border-radius:9px;background:var(--bg2);color:var(--ink);display:flex;align-items:center;justify-content:center}
+#transport button.on,#transport button:hover{border-color:var(--acc);color:var(--acc)}
+#transport svg,#dockPlay svg{width:16px;height:16px;fill:currentColor}
+#scrub{flex:1;min-width:60px;accent-color:var(--acc)}
+#clock{font:0.76rem var(--sci-mono);color:var(--dim);white-space:nowrap;min-width:78px;text-align:right}
+#speed{padding:6px 6px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);font-size:0.76rem}
+#tools{top:16px}
+
+/* MOTION */
+.looprow{display:grid;grid-template-columns:1fr auto auto;gap:6px;margin:0 0 8px}
+.looprow select,.looprow button{padding:8px 8px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;font-size:0.76rem}
+.looprow button:hover{border-color:var(--acc);color:var(--acc)}
+#timeline{display:block;width:100%;height:34px;margin:4px 0 10px;border-radius:8px;background:#101217;box-shadow:inset 0 0 0 1px var(--line);touch-action:none;cursor:ew-resize}
+.chan{border:1px solid var(--line);border-radius:9px;margin:0 0 6px;background:#111318}
+.chan.on{border-color:var(--line-b)}
+.chan-h{display:flex;align-items:center;gap:8px;padding:5px 8px}
+.chan-h b{flex:1;font-size:0.82rem;font-weight:500;color:var(--dim);cursor:pointer}
+.chan.on .chan-h b{color:#ecebe6}
+.chan-h .per{font:0.7rem var(--sci-mono);color:var(--dim)}
+.chan-h .tog{min-width:40px;padding:4px 8px;border:1px solid var(--line-b);background:var(--bg2);color:var(--dim);border-radius:6px;font-size:0.72rem}
+.chan-h .tog.on{border-color:var(--acc);color:var(--acc);background:rgba(227,196,138,0.07)}
+.chan-b{padding:0 10px 6px}
+.seg.five{grid-template-columns:repeat(5,1fr);gap:4px}
+.seg.five button{padding:6px 2px;font-size:0.7rem}
+.seg.three{grid-template-columns:repeat(3,1fr)}
+.cyc{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:0.8rem;color:var(--ink)}
+.cyc span{flex:1}
+.cyc button{width:28px;height:28px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:6px}
+.cyc button:hover{border-color:var(--acc);color:var(--acc)}
+.cyc b{min-width:18px;text-align:center;font:0.8rem var(--sci-mono)}
+.sub-label{font-size:0.76rem;font-weight:600;color:#ecebe6;margin:12px 0 6px}
+
+/* PATTERN */
+.patrow select{min-height:44px;padding:6px 10px;border:1px solid var(--line-b);background:var(--bg2);color:#f1eee6;border-radius:8px;font:1rem var(--sci-serif);min-width:0}
+.seedrow{grid-template-columns:auto 1fr auto}
+details.more{margin:6px 0}
+details.more summary{cursor:pointer;font-size:0.8rem;color:var(--dim);padding:6px 0}
+details.more summary:hover{color:var(--acc)}
+.btns select{color:var(--ink)}
+
+/* EXPORT */
+.btns button.go{border-color:var(--acc);color:#15130e;background:var(--acc);font-weight:600}
+.btns button.go.on{background:transparent;color:var(--acc)}
+#expBar{width:100%;height:6px;accent-color:var(--acc);margin:4px 0}
+#expState:empty{display:none}
+
+/* TOUCH */
+@media (pointer:coarse), (max-width:768px){
+  #transport button{flex-basis:44px;height:44px}
+  #speed{min-height:44px}
+  .looprow select,.looprow button{min-height:44px}
+  .chan-h{padding:4px 8px;min-height:48px}
+  .chan-h .tog{min-height:40px;min-width:52px}
+  .seg.five button{min-height:44px;font-size:0.74rem}
+  .cyc button{width:44px;height:44px}
+  details.more summary{padding:12px 0;font-size:0.86rem}
+}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #transport{height:52px;padding:0 8px;gap:8px}
+  #clock{min-width:64px;font-size:0.72rem}
+  #dock #dockPlay svg{width:18px;height:18px;fill:currentColor;stroke:none}
+}
+@media(prefers-reduced-motion:reduce){#transport,.chan{transition:none}}
