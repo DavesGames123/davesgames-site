@@ -839,7 +839,7 @@ fn rockSet(p: vec3f, bc0: f32, gb: vec3f, n: vec3f, H0in: f32, fp: f32, s: u32, 
   // set 2 in (bed, set 1 cell): in bedded rock turned and offset per
   // cell (the joints stagger and end at set 1 joints: T junctions); in
   // granite one long set (ki = 0)
-  let ki = select(i1, 0, sed < 0.5);
+  let ki = select(i1, i32(floor(f32(i1) / 3.0)), sed < 0.5);
   let d2 = rkRot(vec2f(-d1.y, d1.x), (rkH(kj, ki + 77, s) - 0.5) * mix(0.3, 0.35, sed));
   let S2 = S1 * mix(0.9, 1.8, rkH(kj, 7, s + 3u));
   let u2 = (dot(p.xz, d2) / S2) + rkH(kj, ki, s + 4u) + (vnoise2((p.xz / (S2 * 3.0)) + vec2f(f32(ki) * 2.3, f32(kj))) * 0.2);
@@ -902,9 +902,12 @@ fn rockSet(p: vec3f, bc0: f32, gb: vec3f, n: vec3f, H0in: f32, fp: f32, s: u32, 
   // crack), and its face is not a plane: a slow wave per block
   let bw = min(min(tB, W1), W2);
   h += (r.id.x - 0.5) * 0.1 * min(tB, W1) * fade * sed;
-  let un = vnoised((p * (1.6 / bw)) + (r.id * 31.0));
-  h += un.x * 0.035 * bw * fade;
-  g += un.yzw * (0.056 * fade);
+  // (stepK 0: the POM height alone, fn rockFine: no face waves)
+  if (stepK > 0.0) {
+    let un = vnoised((p * (1.6 / bw)) + (r.id * 31.0));
+    h += un.x * 0.035 * bw * fade;
+    g += un.yzw * (0.056 * fade);
+  }
   // each block face is a plane of its own tilt: broken faces (the facets
   // of granite, the tilted blocks of sandstone)
   let tilt = (vec3f(r.id.y, r.id.z, rkH(i2, k, s + 18u)) - 0.5) * (mix(0.5, 0.22, sed) * fade * tiltK);
@@ -917,7 +920,9 @@ fn rockSet(p: vec3f, bc0: f32, gb: vec3f, n: vec3f, H0in: f32, fp: f32, s: u32, 
   if (e1 < e) { e = e1; ge = g1; oe = o1; }
   if (e2 < e) { e = e2; ge = g2; oe = o2; }
   r.e = e;
-  let R = clamp(mix(0.26, 0.15, sed) * min(tB, W1), 0.03, min(0.5 * H0, 0.6)) * mix(0.35, 1.0, oe);
+  // (a closed joint of granite does not show; bedded rock rounds its
+  // closed bed joints a little)
+  let R = clamp(mix(0.26, 0.15, sed) * min(tB, W1), 0.03, min(0.5 * H0, 0.6)) * mix(0.35 * sed, 1.0, oe);
   var hf = 0.0;
   if (e < R) {
     let q = 1.0 - (e / R);
@@ -933,7 +938,7 @@ fn rockSet(p: vec3f, bc0: f32, gb: vec3f, n: vec3f, H0in: f32, fp: f32, s: u32, 
   var crack = 0.0;
   var eo = 9.0;
   // chipped edges: the crack widths wander along the joint (close up)
-  let chip = select(0.0, vnoised(p * (2.5 / H0)).x * (0.5 * (1.0 - smoothstep(0.01, 0.04, fp))), fade > 0.0);
+  let chip = select(0.0, vnoised(p * (2.5 / H0)).x * (0.5 * (1.0 - smoothstep(0.01, 0.04, fp))), (fade > 0.0) && (stepK > 0.0));
   for (var j = 0; j < 3; j++) {
     let w = select(select(w2, w1, j == 1), wB, j == 0);
     let o = select(select(o2, o1, j == 1), oB, j == 0);
@@ -1001,7 +1006,7 @@ fn rockField(p: vec3f, bc: f32, gb: vec3f, n: vec3f, fp: f32, big: f32) -> RockF
     r.idB = b.id;
     // granite and gneiss: broken faces at 12 and 45 m (normals only)
     let gran = 1.0 - smoothstep(0.35, 0.65, clamp((U.rock.w - 0.8) / 0.5, 0.0, 1.0));
-    let fK = mix(0.35, 0.6, gran) * big;
+    let fK = mix(0.12, 0.6, gran) * big;
     // (the 12 m facets fade in past about 10 m: close up, their straight
     // creases read as folded paper)
     let fa = facet3(p + vec3f(31.0, 0.0, 17.0), 12.0, 0.45 * fK * smoothstep(0.004, 0.02, fp) * (1.0 - smoothstep(1.5, 4.0, fp)));
@@ -1115,12 +1120,12 @@ fn tex3Hex(k: u32, uv: vec2f, gu: vec2f, gv: vec2f, rot: f32) -> array<vec4f, 3>
 // Parallax occlusion on rock within U.fx.z metres (high quality, not on
 // phones): march the view ray into the fine relief (bevels, cracks) of
 // the block lattice. JS twin of the step count: ground.js pomSteps.
-const POM_MAX: i32 = 16;
+const POM_MAX: i32 = 12;
 const POM_DEPTH: f32 = 0.35;
 fn pomSteps(dist: f32, ndv: f32) -> i32 {
   if ((U.fx.x < 0.5) || (dist >= U.fx.z)) { return 0; }
   let k = 1.0 - smoothstep(U.fx.z * 0.6, U.fx.z, dist);
-  let n = mix(6.0, f32(POM_MAX), clamp(1.0 - ndv, 0.0, 1.0)) * k;
+  let n = mix(4.0, f32(POM_MAX), clamp(1.0 - ndv, 0.0, 1.0)) * k;
   if (n < 2.0) { return 0; }
   return min(i32(ceil(n)), POM_MAX);
 }
@@ -1178,6 +1183,9 @@ fn rockPick(id: vec3f, region: vec3f, kP: u32) -> u32 {
   let kB = u32(U.rsets.y + 0.5);
   let kC = mapIdx(1u);
   let h = id.z;
+  // massive rock: one scan (a change of scan at every buttress drew seams
+  // in a grid on granite slabs)
+  if ((U.rock.w < 1.05) && (kC < 64u)) { return kC; }
   if ((kL < 64u) && (region.y > (h * 2.0))) { return kL; }
   if ((kB < 64u) && (h < 0.25) && (region.y > 0.3)) { return kB; }
   if ((kC < 64u) && (h < 0.6)) { return kC; }
@@ -1324,7 +1332,7 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   let blockF = 1.0 - smoothstep(0.06, 0.25, fp / max(rk.bedT, 0.3));
   c *= mix(1.0, mix(0.95, 1.04, rk.id.y), blockF * polish);
   c *= mix(vec3f(1.0), mix(vec3f(1.05, 1.0, 0.94), vec3f(0.95, 0.99, 1.05), rk.idB.z), polish);
-  c *= mix(0.9, 1.08, rk.idB.y);
+  c *= mix(0.95, 1.04, rk.idB.y);
   let rind = (1.0 - smoothstep(0.015, 0.14, rk.eo)) * (1.0 - rk.crack) * blockF;
   c = mix(c, (c * vec3f(1.16, 1.07, 0.94)) + vec3f(0.012, 0.009, 0.005), rind * 0.55 * polish);
   let iron = smoothstep(0.7, 0.95, rk.id.x) * smoothstep(-0.3, 0.4, midN) * (1.0 - geo.glac) * mix(0.6, 1.0, region.y);

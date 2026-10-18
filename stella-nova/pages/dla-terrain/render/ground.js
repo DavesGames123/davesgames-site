@@ -465,13 +465,13 @@ export function effectUniforms(quality, phone, lod0 = 64) {
 
 // JS twin of ground.wgsl fn pomSteps: the POM step count at distance dist
 // (m) for n.v = ndv. 0 past the range or with POM off; at most POM_MAX.
-export const POM_MAX = 16;
+export const POM_MAX = 12;
 export function pomSteps(dist, ndv, fx) {
   const on = fx[0], range = fx[2];
   if (on < 0.5 || dist >= range) return 0;
   const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const k = 1 - sst(range * 0.6, range, dist);
-  const n = (6 + (POM_MAX - 6) * Math.min(1, Math.max(0, 1 - ndv))) * k;
+  const n = (4 + (POM_MAX - 4) * Math.min(1, Math.max(0, 1 - ndv))) * k;
   if (n < 2) return 0;
   return Math.min(Math.ceil(n), POM_MAX);
 }

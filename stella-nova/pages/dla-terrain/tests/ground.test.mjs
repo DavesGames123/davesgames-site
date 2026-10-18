@@ -310,7 +310,7 @@ for (const q of [1.0, 0.3]) {
       prev = n;
     }
   }
-  ok(maxS <= POM_MAX && maxS >= 12 && mono && beyond === 0, `POM: at most ${POM_MAX} steps (max ${maxS}), no more steps farther away, none past ${fx[2]} m`);
+  ok(maxS <= POM_MAX && maxS >= 8 && mono && beyond === 0, `POM: at most ${POM_MAX} steps (max ${maxS}), no more steps farther away, none past ${fx[2]} m`);
   ok(pomSteps(5, 0.2, effectUniforms(1, true, 64)) === 0 && pomSteps(5, 0.2, effectUniforms(0.5, false, 64)) === 0, 'POM: off on a phone profile and at quality 0.5 (the cheap path)');
   const v = effectUniforms(1, false, 64);
   ok(v[1] === 1 && v[3] <= 64 * 0.85 && effectUniforms(0.75, false, 64)[1] === 0 && effectUniforms(1, true, 64)[1] === 0, 'vertex relief: on from quality 0.8 on desktop, inside the LOD 0 range, off on a phone');
