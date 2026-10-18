@@ -246,19 +246,26 @@
       for (var j = 0; j < K; j++) r += amp[j] * Math.sin((j + 1) * th + ph[j]);
       return R0 * r;
     }
+    // edge radius by angle, in a table (the outline only depends on angle)
+    var NA = 720, EDGE = new Float32Array(NA + 1);
+    for (var ai = 0; ai <= NA; ai++) {
+      var th0 = ai / NA * 2 * Math.PI - Math.PI;
+      EDGE[ai] = edgeR(th0) * (1 + 0.06 * (fbm(Math.cos(th0) * 2 + 9, Math.sin(th0) * 2 + 9, sd, 3) - 0.5));
+    }
     for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
       var dx = x + 0.5 - S / 2, dy = y + 0.5 - S / 2;
       // squash along the tilt axis for an oblong body
       var u = (dx * ct + dy * st) / stretch, v = -dx * st + dy * ct;
       var dist = Math.sqrt(u * u + v * v), th = Math.atan2(dy, dx);
-      var er = edgeR(th) * (1 + 0.06 * (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, sd, 3) - 0.5));
+      if (dist > R0 * 1.6) continue;
+      var er = EDGE[Math.round((th + Math.PI) / (2 * Math.PI) * NA)];
       var p = y * w + x, al = Math.max(0, Math.min(1, er - dist + 0.5));
       if (al <= 0) continue;
       var t = Math.min(1, dist / er), dome = Math.sqrt(Math.max(0, 1 - t * t * t));
       var bump = fbm(x * fq, y * fq, sd + 3, 4) - 0.5, fine = fbm(x * fq * 4, y * fq * 4, sd + 11, 2) - 0.5;
       var hh = dome * 0.62 * er + bump * 0.24 * er + fine * 0.05 * er, cr = 0;
       for (k = 0; k < craters.length; k++) {
-        var C = craters[k], q = Math.hypot(x - C.x, y - C.y) / C.r;
+        var C = craters[k], qx = x - C.x, qy = y - C.y, q = Math.sqrt(qx * qx + qy * qy) / C.r;
         if (q < 1) { hh -= C.d * C.r * 0.55 * (1 - q * q); cr = Math.max(cr, 1 - q); }
         else if (q < 1.35) { var rimq = 1 - Math.abs(q - 1.12) / 0.23; if (rimq > 0) hh += C.d * C.r * 0.12 * rimq; }
       }
@@ -296,12 +303,14 @@
   // ceil(D * HALO). tilt turns the spin axis in the screen plane.
   function planetTable(D, tilt) {
     var B = Math.ceil(D * HALO), n = B * B, R = D / 2, o = B / 2;
-    var T = { D: D, B: B, inside: new Uint8Array(n), rr: new Float32Array(n),
-      p: new Float32Array(n * 3), e: new Float32Array(n * 3), q: new Float32Array(n * 3), lon: new Float32Array(n), lat: new Float32Array(n) };
+    var T = { D: D, B: B, inside: new Uint8Array(n), rr: new Float32Array(n), rx: new Float32Array(n), ry: new Float32Array(n),
+      p: new Float32Array(n * 3), e: new Float32Array(n * 3), q: new Float32Array(n * 3), lon: new Float32Array(n), lat: new Float32Array(n),
+      u0: new Float32Array(n), v01: new Float32Array(n) };
     var t = tilt || 0, Nx = Math.sin(t), Ny = -Math.cos(t), Ex = Math.cos(t), Ey = Math.sin(t);
     for (var y = 0; y < B; y++) for (var x = 0; x < B; x++) {
       var k = y * B + x, px = (x + 0.5 - o) / R, py = (y + 0.5 - o) / R, r2 = px * px + py * py;
       T.rr[k] = Math.sqrt(r2);
+      T.rx[k] = px / (T.rr[k] || 1); T.ry[k] = py / (T.rr[k] || 1);
       if (r2 >= 1.0 + 2 / R) continue;
       T.inside[k] = 1;
       var pz = Math.sqrt(Math.max(0, 1 - r2)), l = Math.sqrt(px * px + py * py + pz * pz);
@@ -310,6 +319,7 @@
       var sn = sx * Nx + sy * Ny;
       T.lat[k] = Math.asin(Math.max(-1, Math.min(1, sn)));
       T.lon[k] = Math.atan2(sx * Ex + sy * Ey, sz);
+      T.u0[k] = T.lon[k] / (2 * Math.PI) + 0.5; T.v01[k] = 0.5 - T.lat[k] / Math.PI;
       // east = p x N, north = east x p
       var ex = sy * 0 - sz * Ny, ey = sz * Nx - sx * 0, ez = sx * Ny - sy * Nx, el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
       ex /= el; ey /= el; ez /= el;
@@ -336,16 +346,18 @@
       if (!T.inside[k]) {
         // atmosphere halo outside the disc, bright on the day side
         if (ak && r < HALO) {
-          var s = (r - 1) / (HALO - 1), px = ((k % B) + 0.5 - B / 2), py = (((k / B) | 0) + 0.5 - B / 2), pl = Math.sqrt(px * px + py * py) || 1;
-          var side = Math.max(0, (px * lx + py * ly) / pl * 0.75 + 0.35);
+          var s = (r - 1) / (HALO - 1);
+          var side = Math.max(0, (T.rx[k] * lx + T.ry[k] * ly) * 0.75 + 0.35);
           var a = Math.pow(Math.max(0, 1 - s), 3) * side * ak * 0.85;
           out[j] = enc(atm[0] * 1.6); out[j + 1] = enc(atm[1] * 1.6); out[j + 2] = enc(atm[2] * 1.6); out[j + 3] = Math.min(255, a * 255);
         } else out[j + 3] = 0;
         continue;
       }
       var sx = T.p[k * 3], sy = T.p[k * 3 + 1], sz = T.p[k * 3 + 2];
-      var u = ((T.lon[k] / 6.283185 + 0.5 + sh) % 1) * tw, v = (0.5 - T.lat[k] / Math.PI) * th;
-      var ui = u | 0, vi = Math.min(th - 1, Math.max(0, v | 0)), ti = (vi * tw + (ui >= tw ? ui - tw : ui)) * 4;
+      var u = T.u0[k] + sh; if (u >= 1) u -= 1;
+      var ui = (u * tw) | 0, vi = (T.v01[k] * th) | 0;
+      if (vi >= th) vi = th - 1;
+      var ti = (vi * tw + (ui >= tw ? ui - tw : ui)) * 4;
       var nx = sx, ny = sy, nz = sz, spm = 0;
       if (nd) {
         var tx = (nd[ti] / 127.5 - 1) * bump, ty = (nd[ti + 1] / 127.5 - 1) * bump;
@@ -370,15 +382,13 @@
       out[j + 3] = 255 * edge;
       // blend the halo under the antialiased rim
       if (edge < 1 && ak) {
-        var hs = Math.max(0, (px2(k, B) * lx + py2(k, B) * ly) * 0.75 + 0.35) * ak * 0.85;
+        var hs = Math.max(0, (T.rx[k] * lx + T.ry[k] * ly) * 0.75 + 0.35) * ak * 0.85;
         var ha = 255 * hs, a2 = out[j + 3];
         if (ha > a2) { out[j + 3] = a2 + (ha - a2) * (1 - edge); }
       }
     }
     return out;
   }
-  function px2(k, B) { var x = (k % B) + 0.5 - B / 2, y = ((k / B) | 0) + 0.5 - B / 2; return x / (Math.sqrt(x * x + y * y) || 1); }
-  function py2(k, B) { var x = (k % B) + 0.5 - B / 2, y = ((k / B) | 0) + 0.5 - B / 2; return y / (Math.sqrt(x * x + y * y) || 1); }
 
   var API = {
     ELEV: ELEV, ELEV_PLANET: ELEV_PLANET, AMBIENT: AMBIENT, SUN: SUN, HALO: HALO, MATERIALS: MATERIALS, ROCK: ROCK,
