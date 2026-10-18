@@ -8,6 +8,17 @@ meshes, turned them to +y up, scaled them to 1 m and re-encoded the
 textures; it did not change what they show. The animals that are not in
 this list are our own procedural models (fauna/gen/), not scans.
 
+acanthascus-koltuni
+  species ..... Acanthascus koltuni Reiswig & Stone, 2013
+  specimen .... nmnhinvertebratezoology_10575193
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:9d1b798a-5733-4786-80b2-0cd3daa2755e
+  record ...... http://n2t.net/ark:/65665/37f8a2d38-87f5-4dcb-99f6-7d1bce9e0ba9
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... acanthascus-koltuni.glb, acanthascus-koltuni-lod1.glb, tex/acanthascus-koltuni-512.jpg, tex/acanthascus-koltuni-256.jpg
+
 acanthaster-brevispinus
   species ..... Acanthaster brevispinus Fisher, 1917
   specimen .... nmnhinvertebratezoology_353641
@@ -51,6 +62,39 @@ astrothorax-waitei
   record ...... http://n2t.net/ark:/65665/319718a88-94a2-41cd-9336-0c36b2432030
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... astrothorax-waitei.glb, astrothorax-waitei-lod1.glb, tex/astrothorax-waitei-512.jpg, tex/astrothorax-waitei-256.jpg
+
+bathyfauvelia-affinis
+  species ..... Macellicephala affinis Fauvel, 1914
+  specimen .... nmnhinvertebratezoology_734838
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:352a469a-9d49-40b3-8a99-7312a0adb6a2
+  record ...... http://n2t.net/ark:/65665/3e816cc64-dda4-44ac-84b8-e0ffe820bf7c
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... bathyfauvelia-affinis.glb, bathyfauvelia-affinis-lod1.glb
+
+branchinotogluma-hessleri
+  species ..... Branchinotogluma hessleri Pettibone, 1985
+  specimen .... nmnhinvertebratezoology_760008
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:7172ca87-4479-4ce6-bffc-7a081942f511
+  record ...... http://n2t.net/ark:/65665/3d59c4095-8c87-492f-bb30-8f58d06dd0f6
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... branchinotogluma-hessleri.glb, branchinotogluma-hessleri-lod1.glb
+
+branchipolynoe-seepensis
+  species ..... Branchipolynoe seepensis Pettibone, 1986
+  specimen .... nmnhinvertebratezoology_778198
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:27e24f86-d089-4c85-b41b-6c856a1ea21d
+  record ...... http://n2t.net/ark:/65665/394071975-d30d-4139-a82a-951cf114ef97
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... branchipolynoe-seepensis.glb, branchipolynoe-seepensis-lod1.glb
 
 charybdis-lucifera
   species ..... Charybdis lucifera (Fabricius, 1798)
@@ -118,6 +162,17 @@ goniaster-tessellatus
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... goniaster-tessellatus.glb, goniaster-tessellatus-lod1.glb, tex/goniaster-tessellatus-512.jpg, tex/goniaster-tessellatus-256.jpg
 
+gorgoniapolynoe-guadalupensis
+  species ..... Gorgoniapolynoe guadalupensis Pettibone, 1991
+  specimen .... nmnhinvertebratezoology_759461
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:29bf9fbd-83ec-4e8f-94e4-eafaac274117
+  record ...... http://n2t.net/ark:/65665/3fb555eff-3478-4b8f-9703-8ef91a01e6b2
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... gorgoniapolynoe-guadalupensis.glb, gorgoniapolynoe-guadalupensis-lod1.glb
+
 harpa-costata
   species ..... Harpa costata (Linnaeus, 1758)
   specimen .... nmnhinvertebratezoology_11294249
@@ -140,6 +195,15 @@ ibacus-ciliatus
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... ibacus-ciliatus.glb, ibacus-ciliatus-lod1.glb, tex/ibacus-ciliatus-512.jpg, tex/ibacus-ciliatus-256.jpg
 
+lates-calcarifer
+  species ..... Lates calcarifer (Bloch, 1790) (barramundi)
+  archive ..... Khronos Group glTF-Sample-Assets
+  author ...... Microsoft
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BarramundiFish
+  checked ..... 2026-10-18 LICENSE.md of the model folder: CC0-1.0 (model files)
+  files ....... lates-calcarifer.glb, lates-calcarifer-lod1.glb, tex/lates-calcarifer-512.jpg, tex/lates-calcarifer-256.jpg
+
 lauridromia-dehaani
   species ..... Lauridromia dehaani (Rathbun, 1923)
   specimen .... nmnhinvertebratezoology_78565
@@ -150,6 +214,17 @@ lauridromia-dehaani
   record ...... http://n2t.net/ark:/65665/34f524c82-10e1-4f53-aa1a-36b72b7a8f88
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... lauridromia-dehaani.glb, lauridromia-dehaani-lod1.glb, tex/lauridromia-dehaani-512.jpg, tex/lauridromia-dehaani-256.jpg
+
+levensteiniella-kincaidi
+  species ..... Levensteiniella kincaidi Pettibone, 1985
+  specimen .... nmnhinvertebratezoology_777044
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:16e13369-736b-4c27-8863-2726a46974dc
+  record ...... http://n2t.net/ark:/65665/37decb48c-003f-4776-8847-d513934a4772
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... levensteiniella-kincaidi.glb, levensteiniella-kincaidi-lod1.glb
 
 limulus-polyphemus
   species ..... Limulus polyphemus (Linnaeus, 1758)
@@ -206,6 +281,28 @@ ovalipes-ocellatus
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... ovalipes-ocellatus.glb, ovalipes-ocellatus-lod1.glb, tex/ovalipes-ocellatus-512.jpg, tex/ovalipes-ocellatus-256.jpg
 
+photinopolynoe-burkensis
+  species ..... Branchinotogluma burkensis Pettibone, 1989
+  specimen .... nmnhinvertebratezoology_644175
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:772858ea-7021-4dfe-a657-f368f25d0543
+  record ...... http://n2t.net/ark:/65665/3c1db58a7-3a00-4675-9a1c-fc0e944b7fc4
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... photinopolynoe-burkensis.glb, photinopolynoe-burkensis-lod1.glb
+
+phyllopteryx-taeniolatus
+  species ..... Phyllopteryx taeniolatus
+  specimen .... nmnhvz_5144419
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:4d6a5e3c-65a0-41e9-81d5-9f4116139471
+  record ...... http://n2t.net/ark:/65665/32f842a51-61e4-4555-bec0-393ef2b87e2b
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... phyllopteryx-taeniolatus.glb, phyllopteryx-taeniolatus-lod1.glb, tex/phyllopteryx-taeniolatus-512.jpg, tex/phyllopteryx-taeniolatus-256.jpg
+
 plagiobrissus-grandis
   species ..... Plagiobrissus grandis (Gmelin)
   specimen .... nmnhinvertebratezoology_364554
@@ -260,6 +357,39 @@ scyllarides-astori
   record ...... http://n2t.net/ark:/65665/345e0e3ef-c5cf-4d0f-aac7-e7662e7b0c39
   checked ..... 2026-10-18 Open Access API: access CC0
   files ....... scyllarides-astori.glb, scyllarides-astori-lod1.glb, tex/scyllarides-astori-512.jpg, tex/scyllarides-astori-256.jpg
+
+staurocalyptus-tylotus
+  species ..... Staurocalyptus tylotus Reiswig & Stone, 2013
+  specimen .... nmnhinvertebratezoology_10575195
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:6c458d79-b78e-4a94-b342-e75dc85fc9ca
+  record ...... http://n2t.net/ark:/65665/3d6471320-b6c4-4103-9a2c-f45b95f95d7b
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... staurocalyptus-tylotus.glb, staurocalyptus-tylotus-lod1.glb, tex/staurocalyptus-tylotus-512.jpg, tex/staurocalyptus-tylotus-256.jpg
+
+teichaxinella-morchella
+  species ..... Teichaxinella morchella Wiedenmayer, 1977
+  specimen .... nmnhinvertebratezoology_583598
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:865998bb-fc37-41e7-a74f-b32fb0007c4f
+  record ...... http://n2t.net/ark:/65665/33702d297-520c-4028-a0ae-62df591a71a7
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... teichaxinella-morchella.glb, teichaxinella-morchella-lod1.glb, tex/teichaxinella-morchella-512.jpg, tex/teichaxinella-morchella-256.jpg
+
+tretodictyum-amchitkensis
+  species ..... Tretodictyum amchitkensis Reiswig & Stone, 2013
+  specimen .... nmnhinvertebratezoology_10575186
+  archive ..... Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)
+  author ...... Smithsonian Institution
+  licence ..... CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/
+  source ...... https://3d-api.si.edu/voyager/3d_package:058af3cf-e829-4107-b1e6-6760938bc854
+  record ...... http://n2t.net/ark:/65665/3400a9709-606c-4492-92f5-39342a7fcbc6
+  checked ..... 2026-10-18 Open Access API: access CC0
+  files ....... tretodictyum-amchitkensis.glb, tretodictyum-amchitkensis-lod1.glb, tex/tretodictyum-amchitkensis-512.jpg, tex/tretodictyum-amchitkensis-256.jpg
 
 tridacna-squamosa
   species ..... Tridacna (Flodacna) squamosa Lamarck, 1819

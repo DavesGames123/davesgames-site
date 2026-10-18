@@ -1,7 +1,51 @@
 {
  "about": "Creature models of coral-reef/fauna. Every file in assets/fauna/ is listed here with its source and licence (tests/fauna.test.mjs checks it).",
- "bytes": 4096009,
+ "bytes": 5399096,
  "models": [
+  {
+   "id": "acanthascus-koltuni",
+   "sci": "Acanthascus koltuni Reiswig & Stone, 2013",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:9d1b798a-5733-4786-80b2-0cd3daa2755e",
+   "record": "http://n2t.net/ark:/65665/37f8a2d38-87f5-4dcb-99f6-7d1bce9e0ba9",
+   "specimen": "nmnhinvertebratezoology_10575193",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "acanthascus-koltuni.glb",
+     "bytes": 75232,
+     "tris": 2986,
+     "lod": 0
+    },
+    {
+     "path": "acanthascus-koltuni-lod1.glb",
+     "bytes": 17796,
+     "tris": 638,
+     "lod": 1
+    },
+    {
+     "path": "tex/acanthascus-koltuni-512.jpg",
+     "bytes": 33935,
+     "texture": true
+    },
+    {
+     "path": "tex/acanthascus-koltuni-256.jpg",
+     "bytes": 14479,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1077,
+    0.1063,
+    0.0425
+   ],
+   "scanUnit": 0.1077
+  },
   {
    "id": "acanthaster-brevispinus",
    "sci": "Acanthaster brevispinus Fisher, 1917",
@@ -177,6 +221,108 @@
     0.0648
    ],
    "scanUnit": 0.083
+  },
+  {
+   "id": "bathyfauvelia-affinis",
+   "sci": "Macellicephala affinis Fauvel, 1914",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:352a469a-9d49-40b3-8a99-7312a0adb6a2",
+   "record": "http://n2t.net/ark:/65665/3e816cc64-dda4-44ac-84b8-e0ffe820bf7c",
+   "specimen": "nmnhinvertebratezoology_734838",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "bathyfauvelia-affinis.glb",
+     "bytes": 65660,
+     "tris": 2940,
+     "lod": 0
+    },
+    {
+     "path": "bathyfauvelia-affinis-lod1.glb",
+     "bytes": 14708,
+     "tris": 588,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    0.9517,
+    1.3775,
+    4.3771
+   ],
+   "scanUnit": 4.3771
+  },
+  {
+   "id": "branchinotogluma-hessleri",
+   "sci": "Branchinotogluma hessleri Pettibone, 1985",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:7172ca87-4479-4ce6-bffc-7a081942f511",
+   "record": "http://n2t.net/ark:/65665/3d59c4095-8c87-492f-bb30-8f58d06dd0f6",
+   "specimen": "nmnhinvertebratezoology_760008",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "branchinotogluma-hessleri.glb",
+     "bytes": 53580,
+     "tris": 2996,
+     "lod": 0
+    },
+    {
+     "path": "branchinotogluma-hessleri-lod1.glb",
+     "bytes": 11728,
+     "tris": 590,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    3.6603,
+    2.3696,
+    10.2298
+   ],
+   "scanUnit": 10.2298
+  },
+  {
+   "id": "branchipolynoe-seepensis",
+   "sci": "Branchipolynoe seepensis Pettibone, 1986",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:27e24f86-d089-4c85-b41b-6c856a1ea21d",
+   "record": "http://n2t.net/ark:/65665/394071975-d30d-4139-a82a-951cf114ef97",
+   "specimen": "nmnhinvertebratezoology_778198",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "branchipolynoe-seepensis.glb",
+     "bytes": 58948,
+     "tris": 2808,
+     "lod": 0
+    },
+    {
+     "path": "branchipolynoe-seepensis-lod1.glb",
+     "bytes": 12820,
+     "tris": 528,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    12.4113,
+    9.2175,
+    30.4028
+   ],
+   "scanUnit": 30.4028
   },
   {
    "id": "charybdis-lucifera",
@@ -443,6 +589,40 @@
    "scanUnit": 0.1577
   },
   {
+   "id": "gorgoniapolynoe-guadalupensis",
+   "sci": "Gorgoniapolynoe guadalupensis Pettibone, 1991",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:29bf9fbd-83ec-4e8f-94e4-eafaac274117",
+   "record": "http://n2t.net/ark:/65665/3fb555eff-3478-4b8f-9703-8ef91a01e6b2",
+   "specimen": "nmnhinvertebratezoology_759461",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "gorgoniapolynoe-guadalupensis.glb",
+     "bytes": 64680,
+     "tris": 2862,
+     "lod": 0
+    },
+    {
+     "path": "gorgoniapolynoe-guadalupensis-lod1.glb",
+     "bytes": 14980,
+     "tris": 622,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    2.3196,
+    1.6625,
+    14.3729
+   ],
+   "scanUnit": 14.3729
+  },
+  {
    "id": "harpa-costata",
    "sci": "Harpa costata (Linnaeus, 1758)",
    "source": "si",
@@ -531,6 +711,51 @@
    "scanUnit": 0.1072
   },
   {
+   "id": "lates-calcarifer",
+   "sci": "Lates calcarifer (Bloch, 1790)",
+   "common": "barramundi",
+   "source": "khronos",
+   "archive": "Khronos Group glTF-Sample-Assets",
+   "author": "Microsoft",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BarramundiFish",
+   "record": null,
+   "specimen": null,
+   "checked": "2026-10-18 LICENSE.md of the model folder: CC0-1.0 (model files)",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "lates-calcarifer.glb",
+     "bytes": 53184,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "lates-calcarifer-lod1.glb",
+     "bytes": 12200,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/lates-calcarifer-512.jpg",
+     "bytes": 33949,
+     "texture": true
+    },
+    {
+     "path": "tex/lates-calcarifer-256.jpg",
+     "bytes": 10172,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1429,
+    0.2875,
+    0.6431
+   ],
+   "scanUnit": 0.6431
+  },
+  {
    "id": "lauridromia-dehaani",
    "sci": "Lauridromia dehaani (Rathbun, 1923)",
    "source": "si",
@@ -573,6 +798,40 @@
     0.0533
    ],
    "scanUnit": 0.1138
+  },
+  {
+   "id": "levensteiniella-kincaidi",
+   "sci": "Levensteiniella kincaidi Pettibone, 1985",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:16e13369-736b-4c27-8863-2726a46974dc",
+   "record": "http://n2t.net/ark:/65665/37decb48c-003f-4776-8847-d513934a4772",
+   "specimen": "nmnhinvertebratezoology_777044",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "levensteiniella-kincaidi.glb",
+     "bytes": 55376,
+     "tris": 2698,
+     "lod": 0
+    },
+    {
+     "path": "levensteiniella-kincaidi-lod1.glb",
+     "bytes": 12408,
+     "tris": 562,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    4.3511,
+    3.0188,
+    12.7565
+   ],
+   "scanUnit": 12.7565
   },
   {
    "id": "limulus-polyphemus",
@@ -795,6 +1054,84 @@
    "scanUnit": 0.1023
   },
   {
+   "id": "photinopolynoe-burkensis",
+   "sci": "Branchinotogluma burkensis Pettibone, 1989",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:772858ea-7021-4dfe-a657-f368f25d0543",
+   "record": "http://n2t.net/ark:/65665/3c1db58a7-3a00-4675-9a1c-fc0e944b7fc4",
+   "specimen": "nmnhinvertebratezoology_644175",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "photinopolynoe-burkensis.glb",
+     "bytes": 53524,
+     "tris": 2898,
+     "lod": 0
+    },
+    {
+     "path": "photinopolynoe-burkensis-lod1.glb",
+     "bytes": 13172,
+     "tris": 584,
+     "lod": 1
+    }
+   ],
+   "scanExtent": [
+    10.1211,
+    9.0216,
+    28.958
+   ],
+   "scanUnit": 28.958
+  },
+  {
+   "id": "phyllopteryx-taeniolatus",
+   "sci": "Phyllopteryx taeniolatus",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:4d6a5e3c-65a0-41e9-81d5-9f4116139471",
+   "record": "http://n2t.net/ark:/65665/32f842a51-61e4-4555-bec0-393ef2b87e2b",
+   "specimen": "nmnhvz_5144419",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "phyllopteryx-taeniolatus.glb",
+     "bytes": 68656,
+     "tris": 2996,
+     "lod": 0
+    },
+    {
+     "path": "phyllopteryx-taeniolatus-lod1.glb",
+     "bytes": 15964,
+     "tris": 598,
+     "lod": 1
+    },
+    {
+     "path": "tex/phyllopteryx-taeniolatus-512.jpg",
+     "bytes": 31965,
+     "texture": true
+    },
+    {
+     "path": "tex/phyllopteryx-taeniolatus-256.jpg",
+     "bytes": 13552,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.018,
+    0.0757,
+    0.2609
+   ],
+   "scanUnit": 0.2609
+  },
+  {
    "id": "plagiobrissus-grandis",
    "sci": "Plagiobrissus grandis (Gmelin)",
    "source": "si",
@@ -1013,6 +1350,138 @@
     0.1497
    ],
    "scanUnit": 0.1497
+  },
+  {
+   "id": "staurocalyptus-tylotus",
+   "sci": "Staurocalyptus tylotus Reiswig & Stone, 2013",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:6c458d79-b78e-4a94-b342-e75dc85fc9ca",
+   "record": "http://n2t.net/ark:/65665/3d6471320-b6c4-4103-9a2c-f45b95f95d7b",
+   "specimen": "nmnhinvertebratezoology_10575195",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "staurocalyptus-tylotus.glb",
+     "bytes": 78780,
+     "tris": 2988,
+     "lod": 0
+    },
+    {
+     "path": "staurocalyptus-tylotus-lod1.glb",
+     "bytes": 18260,
+     "tris": 655,
+     "lod": 1
+    },
+    {
+     "path": "tex/staurocalyptus-tylotus-512.jpg",
+     "bytes": 46349,
+     "texture": true
+    },
+    {
+     "path": "tex/staurocalyptus-tylotus-256.jpg",
+     "bytes": 18753,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1479,
+    0.0979,
+    0.0734
+   ],
+   "scanUnit": 0.1479
+  },
+  {
+   "id": "teichaxinella-morchella",
+   "sci": "Teichaxinella morchella Wiedenmayer, 1977",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:865998bb-fc37-41e7-a74f-b32fb0007c4f",
+   "record": "http://n2t.net/ark:/65665/33702d297-520c-4028-a0ae-62df591a71a7",
+   "specimen": "nmnhinvertebratezoology_583598",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "teichaxinella-morchella.glb",
+     "bytes": 90080,
+     "tris": 3328,
+     "lod": 0
+    },
+    {
+     "path": "teichaxinella-morchella-lod1.glb",
+     "bytes": 17104,
+     "tris": 599,
+     "lod": 1
+    },
+    {
+     "path": "tex/teichaxinella-morchella-512.jpg",
+     "bytes": 45583,
+     "texture": true
+    },
+    {
+     "path": "tex/teichaxinella-morchella-256.jpg",
+     "bytes": 18216,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1017,
+    0.0928,
+    0.0449
+   ],
+   "scanUnit": 0.1017
+  },
+  {
+   "id": "tretodictyum-amchitkensis",
+   "sci": "Tretodictyum amchitkensis Reiswig & Stone, 2013",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:058af3cf-e829-4107-b1e6-6760938bc854",
+   "record": "http://n2t.net/ark:/65665/3400a9709-606c-4492-92f5-39342a7fcbc6",
+   "specimen": "nmnhinvertebratezoology_10575186",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "tretodictyum-amchitkensis.glb",
+     "bytes": 65904,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "tretodictyum-amchitkensis-lod1.glb",
+     "bytes": 17352,
+     "tris": 674,
+     "lod": 1
+    },
+    {
+     "path": "tex/tretodictyum-amchitkensis-512.jpg",
+     "bytes": 53698,
+     "texture": true
+    },
+    {
+     "path": "tex/tretodictyum-amchitkensis-256.jpg",
+     "bytes": 20340,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1492,
+    0.1514,
+    0.0902
+   ],
+   "scanUnit": 0.1514
   },
   {
    "id": "tridacna-squamosa",
