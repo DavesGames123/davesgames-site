@@ -91,6 +91,8 @@ export function btn(label, { cls = '', title, onClick, ico, pressed } = {}) {
   const b = h(`button.sq.btn${cls ? '.' + cls : ''}`, { type: 'button', title: title || (typeof label === 'string' ? label : undefined) });
   if (ico) b.appendChild(icon(ico, 16));
   if (label) b.appendChild(h('span', {}, label));
+  // an icon-only button is named by its title (screen readers, the bar tooltip)
+  if (!label && b.getAttribute('title')) b.setAttribute('aria-label', b.getAttribute('title'));
   if (pressed !== undefined) b.setAttribute('aria-pressed', String(!!pressed));
   if (onClick) b.addEventListener('click', onClick);
   return b;

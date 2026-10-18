@@ -19,7 +19,8 @@
 //    scenarios ...... boot-scenarios.mjs, one boot per process: the saver
 //                     gives the bench back, pagehide flushes the autosave,
 //                     a link or ?example= opens once, the #nogl text, a
-//                     custom part from the autosave
+//                     custom part from the autosave, and a jsdom boot at a
+//                     desktop and a phone size (needs JSDOM_DIR)
 //    boot ........... main.js runs in node on ui/fakedom.mjs: 'three'
 //                     resolves to the vendored copy, fetch reads files, the
 //                     first example loads, the inline sim sends frames, the
@@ -367,6 +368,8 @@ for (const [name, what] of [
   ['example-once', '?example= loads once: the query is cleared after the load'],
   ['nogl-text', 'no WebGL: #nogl keeps the index.html text (the panels still work)'],
   ['custom-autosave', 'a custom part on a board from the autosave has its pins on the strips'],
+  ['jsdom-desktop', 'main.js boots on jsdom at 1440 x 900: the bar, every button named, no errors'],
+  ['jsdom-phone', 'main.js boots on jsdom at 390 x 844 (coarse): body.phone, the dock, every button named'],
 ]) {
   const r = spawnSync(process.execPath, [path.join(DIR, 'boot-scenarios.mjs'), name], { encoding: 'utf8', timeout: 60000 });
   let out = null;

@@ -18,10 +18,14 @@
 //    nogl-text .......... without WebGL the #nogl text of index.html stays
 //    custom-autosave .... a custom part on a board, from the autosave, has
 //                         its pins on the board strips
+//    jsdom-desktop ...... main.js on a real jsdom (JSDOM_DIR) at 1440 x 900
+//    jsdom-phone ........ the same at 390 x 844 with a coarse pointer: the
+//                         dock, the sheet tabs, every button has a name
 //
 //  GREP MAP
 //    boot ............... fake DOM, ids from index.html, fetch, location,
 //                         history, storage preset, then import main.js
+//    bootJsdom .......... index.html in jsdom, a matchMedia for the size
 //    THREE_HOOK ......... the loader hook for the 'three' importmap names
 //    SCENARIOS .......... the table of scenario functions
 // ============================================================================
@@ -83,6 +87,87 @@ async function boot({ hash = '', search = '', autosave = null } = {}) {
   await import('./main.js');
   return { B: globalThis.bblab, listeners, byId, replaced, loc };
 }
+// main.js on jsdom (no WebGL there: the stub view). The jsdom package comes
+// from JSDOM_DIR (it is not vendored); without it the scenario fails.
+function mediaMatches(q, { width, height, coarse }) {
+  const one = part => part.split(/\s+and\s+/).every(c => {
+    const m = /\(\s*([\w-]+)\s*(?::\s*([^)]+))?\)/.exec(c);
+    if (!m) return /^\s*(all|screen)\s*$/.test(c);
+    const [, f, v0] = m, v = (v0 || '').trim();
+    if (f === 'max-width') return width <= parseFloat(v);
+    if (f === 'min-width') return width >= parseFloat(v);
+    if (f === 'max-height') return height <= parseFloat(v);
+    if (f === 'min-height') return height >= parseFloat(v);
+    if (f === 'orientation') return v === (width > height ? 'landscape' : 'portrait');
+    if (f === 'pointer' || f === 'any-pointer') return v === (coarse ? 'coarse' : 'fine');
+    if (f === 'hover' || f === 'any-hover') return v === (coarse ? 'none' : 'hover');
+    if (f === 'prefers-reduced-motion') return v === 'no-preference';
+    if (f === 'prefers-color-scheme') return v === 'dark';
+    return false;
+  });
+  return q.split(',').some(one);
+}
+async function bootJsdom(size) {
+  const dir = process.env.JSDOM_DIR;
+  if (!dir) throw new Error('JSDOM_DIR is not set (export JSDOM_DIR=<node_modules>/jsdom)');
+  const { createRequire } = await import('node:module');
+  const { JSDOM, VirtualConsole } = createRequire(import.meta.url)(dir);
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  const errors = [];
+  const vc = new VirtualConsole();
+  vc.on('jsdomError', e => { if (!/Not implemented/.test(String(e && e.message))) errors.push(String(e && e.message)); });
+  const dom = new JSDOM(html, { url: 'http://localhost/stella-nova/pages/breadboard-lab/index.html', pretendToBeVisual: true, virtualConsole: vc });
+  const w = dom.window;
+  Object.defineProperty(w, 'innerWidth', { value: size.width, configurable: true });
+  Object.defineProperty(w, 'innerHeight', { value: size.height, configurable: true });
+  // jsdom has no canvas: a 2D context that takes every call (as ui/fakedom.mjs
+  // does), and no WebGL, so main.js makes the stub view
+  w.HTMLCanvasElement.prototype.getContext = function (type) {
+    if (type !== '2d') return null;
+    const canvas = this;
+    const t = { canvas, measureText: x => ({ width: String(x).length * 6 }), createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }), getImageData: () => ({ data: new Uint8ClampedArray(4) }), createImageData: () => ({ data: new Uint8ClampedArray(4) }) };
+    return new Proxy(t, { get(o, k) { if (k in o) return o[k]; return typeof k === 'string' && /^[a-z]/.test(k) ? () => {} : undefined; }, set(o, k, v) { o[k] = v; return true; } });
+  };
+  w.matchMedia = q => ({ matches: mediaMatches(q, size), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  const put = (k, v) => Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  put('window', w); put('document', w.document); put('navigator', w.navigator);
+  for (const k of ['HTMLElement', 'Element', 'Node', 'KeyboardEvent', 'MouseEvent', 'CustomEvent', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame', 'localStorage', 'sessionStorage', 'location', 'history', 'matchMedia', 'innerWidth', 'innerHeight', 'DOMParser', 'HTMLCanvasElement']) put(k, typeof w[k] === 'function' && /^[a-z]/.test(k) ? w[k].bind(w) : w[k]);
+  put('addEventListener', w.addEventListener.bind(w)); put('removeEventListener', w.removeEventListener.bind(w));
+  put('devicePixelRatio', 2);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, o) => {
+    let u = String(url);
+    if (u.startsWith('http://localhost/')) u = pathToFileURL(path.join(SN, '..', u.slice('http://localhost/'.length).split(/[?#]/)[0])).href;
+    if (!u.startsWith('file:')) return realFetch(url, o);
+    try { const text = fs.readFileSync(fileURLToPath(u), 'utf8'); return { ok: true, status: 200, json: async () => JSON.parse(text), text: async () => text }; }
+    catch (e) { return { ok: false, status: 404, json: async () => null, text: async () => '' }; }
+  };
+  const logged = [];
+  console.error = (...a) => logged.push(a.map(String).join(' '));
+  console.warn = () => {}; console.info = () => {};
+  await import('./main.js');
+  await sleep(900);
+  const d = w.document;
+  const buttons = [...d.querySelectorAll('button')];
+  const nameOf = b => (b.getAttribute('aria-label') || b.getAttribute('title') || b.textContent || '').trim();
+  const nameless = buttons.filter(b => !nameOf(b));
+  const out = {
+    B: w.bblab || globalThis.bblab, d, errors,
+    // three logs this when jsdom gives no WebGL context (the stub view follows)
+    logged: logged.filter(m => !/Error creating WebGL context/.test(m)),
+    phone: d.body.classList.contains('phone'),
+    bar: d.querySelectorAll('#bar button').length,
+    barIconNoName: [...d.querySelectorAll('#bar .btn')].filter(b => !b.querySelector('span') && !b.getAttribute('aria-label')).length,
+    dock: d.querySelectorAll('#dock button').length,
+    buttons: buttons.length, nameless: nameless.map(b => b.className || b.outerHTML.slice(0, 40)),
+    nogl: d.getElementById('nogl') && !d.getElementById('nogl').hidden,
+    css: [...d.querySelectorAll('link[rel="stylesheet"]')].map(l => l.getAttribute('href')),
+  };
+  for (const fn of [...(w._pagehide || [])]) fn();
+  w.dispatchEvent(new w.Event('pagehide'));
+  return out;
+}
+
 const autosaved = () => { try { const a = JSON.parse(localStorage.getItem('bblab:autosave')); return a && a.doc; } catch (e) { return null; } };
 
 // ── SCENARIO: the table ────────────────────────────────────────────────────
@@ -155,6 +240,19 @@ const SCENARIOS = {
     const pins = nl ? Object.fromEntries(Object.entries(nl.pinNode).filter(([k]) => k.startsWith('p1.'))) : {};
     const ok = B.store.doc.title === 'CUSTOM' && Object.keys(pins).length === 2 && Object.values(pins).every(n => n != null && n > 0);
     return { ok, measured: `loaded "${B.store.doc.title}", pins ${JSON.stringify(pins)}, issues ${nl ? nl.issues.map(i => i.code).join(',') || 'none' : '-'}` };
+  },
+  // SCENARIO: jsdom-desktop
+  async 'jsdom-desktop'() {
+    const r = await bootJsdom({ width: 1440, height: 900, coarse: false });
+    const ok = !!r.B && !r.phone && r.bar >= 20 && r.barIconNoName === 0 && r.nameless.length === 0 && r.errors.length === 0 && r.logged.length === 0 && r.nogl && r.css.includes('style.css');
+    return { ok, measured: `booted ${!!r.B}, body.phone ${r.phone}, ${r.bar} bar buttons (${r.barIconNoName} icon-only without a name), ${r.buttons} buttons, ${r.nameless.length} without a name${r.nameless.length ? ' ' + r.nameless.slice(0, 3).join(' ') : ''}, #nogl shown ${r.nogl}, errors ${r.errors.length + r.logged.length}${r.errors.concat(r.logged).slice(0, 1).map(e => ': ' + e.slice(0, 80)).join('')}` };
+  },
+  // SCENARIO: jsdom-phone
+  async 'jsdom-phone'() {
+    const r = await bootJsdom({ width: 390, height: 844, coarse: true });
+    const tabs = r.d.querySelectorAll('#sheet .sheet-tabs button').length;
+    const ok = !!r.B && r.phone && r.dock === 5 && r.nameless.length === 0 && r.errors.length === 0 && r.logged.length === 0;
+    return { ok, measured: `booted ${!!r.B}, body.phone ${r.phone}, ${r.dock} dock buttons, ${tabs} sheet tabs, ${r.buttons} buttons, ${r.nameless.length} without a name${r.nameless.length ? ' ' + r.nameless.slice(0, 3).join(' ') : ''}, errors ${r.errors.length + r.logged.length}${r.errors.concat(r.logged).slice(0, 1).map(e => ': ' + e.slice(0, 80)).join('')}` };
   },
 };
 

@@ -14,6 +14,8 @@
 //    files ......... a localStorage that throws does not break save
 //    legacy ........ the old bench seed (5 boards, 18 parts) imports
 //    dom ........... createUI on a small fake DOM: panels, keys, frames
+//    style ......... style.css: WCAG AA pairs, 44 px targets, focus rings,
+//                    no glow (ui/style-tests.mjs)
 // ============================================================================
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -245,6 +247,10 @@ if (existsSync(join(HERE, 'dom-tests.mjs'))) {
   const { domTests } = await import('./dom-tests.mjs');
   await domTests({ ok, mods, ROOT });
 }
+
+// ── style ───────────────────────────────────────────────────────────────────
+section('style (contrast, touch targets, focus, glow)');
+{ const { styleTests } = await import('./style-tests.mjs'); await styleTests({ ok }); }
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -11,6 +11,15 @@
    Header 32 px with a 10 px letter-spaced title, body padding 12 px, gaps
    8 px. Buttons press to 0.96. Reduced motion sets every duration to 0.
 
+   READABLE CONTROLS (the visual pass of 2026-10-18; the owner: "i don't
+   really have any way to see the buttons i want to interact with"):
+   every text colour meets WCAG AA (4.5:1) on its fill, a pressed or "on"
+   control is a dark blue fill (--on) with white text and an accent ring
+   (not light text on the light accent), buttons have a visible fill and a
+   hairline edge, :focus-visible draws a 2 px ring (--focus), icon-only bar
+   buttons show their name on hover and focus, and nothing glows. The
+   checks are in ui/style-tests.mjs.
+
    PHONE (body.phone, set by ui/dock.js from the media query): the bar and
    the columns hide; #dock sits at the base, one #sheet holds the panels as
    tabs, 16 px side gutters, 44 px targets, no horizontal scroll. In short
@@ -31,7 +40,8 @@
      code .............. .editor .gutter .errs .serial .plot
      #instrDock ........ the instrument squircles, faces, knobs, leads
      #status / #toasts / #tip / .menu
-     motion ............ press, hover radius, breathing faces, unfold
+     focus ............. :focus-visible rings, bar tooltips (::after)
+     motion ............ press, hover radius, the running face edge
      PHONE / LANDSCAPE . dock, sheet, drawer
    ========================================================================== */
 @import url('../../lib/forge-ui.css');
@@ -47,6 +57,8 @@
   --shadow:drop-shadow(0 8px 24px rgba(0,0,0,.45));
   --bar-h:56px; --lw:272px; --rw:336px; --gap:8px; --gutter:14px; --row:28px;
   --instr-h:0px; --status-h:34px; --dock-h:0px; --sheet-h:0px;
+  /* readable controls: these override lib/forge-ui.css for this page */
+  --faint:#8b8e99; --btn:#2a2b31; --btn-h:#363840; --on:#2c5d9e; --on-h:#336ab3; --focus:#9cc4ff;
 }
 
 /* ── base ─────────────────────────────────────────────────────────────────── */
@@ -71,7 +83,7 @@ button{cursor:pointer}
 #bar .btn{height:34px;min-width:34px}
 #bar .btn.tab{padding:0 11px;font-size:10.5px;letter-spacing:.16em}
 .swatches{display:flex;gap:3px;padding:0 4px}
-.swatches button{width:20px;height:20px;border:0;padding:0;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.swatches button{position:relative;width:20px;height:20px;border:0;padding:0;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
 .swatches button.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3.5px var(--acc)}
 .speed{height:34px;--sq-r:9px}
 .runbtn.on{--sq-fill:#1f3b25;color:#c9f5d2}
@@ -112,15 +124,18 @@ button{cursor:pointer}
 .empty{color:var(--faint);font-size:12px;padding:8px 2px;line-height:1.5}
 
 /* ── controls ─────────────────────────────────────────────────────────────── */
-.btn{position:relative;height:30px;padding:0 10px;border:0;background:transparent;--sq-r:9px;--sq-fill:var(--btn);color:#c4c6cf;font-size:11px;font-weight:500;letter-spacing:.12em;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;transition:transform var(--t-hover) var(--ease-out),--sq-r var(--t-hover) var(--ease-out),color var(--t-hover)}
+.btn{position:relative;height:30px;padding:0 10px;border:0;background:transparent;--sq-r:9px;--sq-fill:var(--btn);color:#d6d8df;font-size:11px;font-weight:500;letter-spacing:.12em;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;transition:transform var(--t-hover) var(--ease-out),--sq-r var(--t-hover) var(--ease-out),color var(--t-hover)}
 .btn:hover{--sq-fill:var(--btn-h);color:var(--txt)}
 .btn:active{transform:scale(.96)}
-.btn.on,.btn[aria-pressed="true"]{--sq-fill:var(--acc);color:var(--accTxt)}
+.btn::before{box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)}
+.btn.on,.btn[aria-pressed="true"]{--sq-fill:var(--on);color:#fff}
+.btn.on::before,.btn[aria-pressed="true"]::before,.btn.primary::before,.seg button.on::before,.sheet-tabs button.on::before,body.phone #dock button.on::before{box-shadow:inset 0 0 0 1.5px var(--acc)}
 .btn:disabled{opacity:.35;cursor:default}
 .btn.small{height:26px;padding:0 8px;font-size:10px}
 .btn.tiny{height:22px;min-width:22px;padding:0 5px;font-size:12px;letter-spacing:0}
 .btn.wide{width:100%}
-.btn.primary{--sq-fill:var(--acc);color:var(--accTxt)}
+.btn.primary{--sq-fill:var(--on);color:#fff}
+.btn.primary:hover,.btn.on:hover{--sq-fill:var(--on-h)}
 .btn.warn{--sq-fill:#3a1d20;color:#ffd5d5}
 .btn.warn:hover{--sq-fill:#5a2328}
 .btn.chip{height:26px;padding:0 9px;font-size:10.5px;letter-spacing:.08em}
@@ -131,7 +146,7 @@ button{cursor:pointer}
 .seg::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--sq-fill);border-radius:var(--sq-r)}
 @supports (corner-shape:squircle){.seg::before{corner-shape:squircle}}
 .seg button{height:26px;min-width:28px;padding:0 8px;border:0;background:transparent;--sq-r:7px;--sq-fill:transparent;color:#a9abb5;font-size:11px;font-weight:500}
-.seg button.on{--sq-fill:var(--acc);color:var(--accTxt)}
+.seg button.on{--sq-fill:var(--on);color:#fff}
 .seg button:hover:not(.on){color:var(--txt)}
 .rowv{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:var(--row);margin:4px 0}
 .rowv>label{font-size:10.5px;letter-spacing:.14em;color:#b3b5bf;font-weight:500;text-transform:uppercase;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -214,7 +229,7 @@ textarea.txt{height:auto;min-height:60px;padding:8px 10px;resize:vertical;font-f
 .code-top{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
 .code-top .sel{flex:1;min-width:120px}
 .editor{position:relative;display:grid;grid-template-columns:auto 1fr;height:min(46vh,420px);--sq-r:10px;--sq-fill:#0a0b0d;font:12.5px/1.5 var(--mono);overflow:hidden}
-.gutter{padding:8px 8px 8px 10px;color:#4a4d57;text-align:right;user-select:none;overflow:hidden;white-space:pre}
+.gutter{padding:8px 8px 8px 10px;color:#80838e;text-align:right;user-select:none;overflow:hidden;white-space:pre}
 .gutter .e{color:var(--bad)}
 .gutter .w{color:var(--warn)}
 .editor-wrap{position:relative;overflow:hidden}
@@ -223,7 +238,7 @@ textarea.txt{height:auto;min-height:60px;padding:8px 10px;resize:vertical;font-f
 .editor textarea::selection{background:rgba(107,159,226,.35);color:transparent}
 .editor pre{color:#cfd2db;pointer-events:none;z-index:1}
 .editor pre .k{color:#7caaea} .editor pre .t{color:#57c7b8} .editor pre .s{color:#e2b56a} .editor pre .n{color:#ff9a5a}
-.editor pre .c{color:#5f6470;font-style:italic} .editor pre .p{color:#c792ea} .editor pre .f{color:#e6e6a0}
+.editor pre .c{color:#868b98;font-style:italic} .editor pre .p{color:#c792ea} .editor pre .f{color:#e6e6a0}
 .editor pre .el{background:rgba(226,71,78,.16);box-shadow:inset 2px 0 0 var(--bad)}
 .serial{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .serial-out{height:130px;overflow:auto;padding:8px 10px;--sq-r:10px;--sq-fill:#0a0b0d;font:12px/1.45 var(--mono);white-space:pre-wrap;word-break:break-all;color:#cfe9cc}
@@ -250,7 +265,7 @@ textarea.txt{height:auto;min-height:60px;padding:8px 10px;resize:vertical;font-f
 .knob{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;letter-spacing:.14em;color:var(--dim)}
 .knob b{min-width:64px;text-align:center;font:500 11.5px var(--mono);color:var(--txt)}
 .chrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.chbtn{height:24px;padding:0 8px;border:0;--sq-r:8px;--sq-fill:color-mix(in srgb,var(--c) 22%,#111);color:var(--c);font:600 10.5px var(--mono)}
+.chbtn{height:24px;padding:0 8px;border:0;--sq-r:8px;--sq-fill:color-mix(in srgb,var(--c) 22%,#111);color:color-mix(in srgb,var(--c) 55%,#fff);font:600 10.5px var(--mono)}
 .chbtn.off{--sq-fill:#18181c;color:var(--faint)}
 .meas{font:11.5px/1.5 var(--mono);color:var(--dim);min-height:1em}
 .meas b{color:var(--txt);font-weight:400}
@@ -291,28 +306,45 @@ textarea.txt{height:auto;min-height:60px;padding:8px 10px;resize:vertical;font-f
 @supports (corner-shape:squircle){
   .btn:hover:not(.tiny),.chip:hover,.card:hover{--sq-r:11px}
 }
-@keyframes breathe{0%,100%{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 0 0 0 rgba(107,159,226,0)}50%{box-shadow:inset 0 0 0 1px rgba(107,159,226,.28),0 0 6px 1px rgba(107,159,226,.18)}}
-body.running .face{animation:breathe 2.6s ease-in-out infinite}
+/* a running sim marks the instrument faces with a steady accent edge (no glow) */
+body.running .face{box-shadow:inset 0 0 0 1px rgba(107,159,226,.4)}
 @media (prefers-reduced-motion:reduce){
   .btn,.card,.tog::after{transition:none}
-  body.running .face{animation:none}
+  #bar .btn[aria-label]::after{transition:none}
 }
+
+/* ── focus ────────────────────────────────────────────────────────────────── */
+:where(button,select,input,textarea,a,summary,[tabindex]):focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.num:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.txt:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+.editor:focus-within{box-shadow:0 0 0 2px var(--focus);border-radius:10px}
+/* the name of an icon-only bar button, on hover (after a short delay) and on focus */
+#bar .btn[aria-label]::after{content:attr(aria-label);position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);padding:5px 9px;border-radius:7px;background:#0b0b0e;color:var(--txt);box-shadow:0 0 0 1px var(--line2);font:500 11.5px/1.2 var(--sans);letter-spacing:.02em;text-transform:none;white-space:nowrap;pointer-events:none;z-index:40;opacity:0;visibility:hidden;transition:opacity 120ms ease,visibility 0s linear 120ms}
+#bar .btn[aria-label]:hover::after,#bar .btn[aria-label]:focus-visible::after{opacity:1;visibility:visible;transition:opacity 120ms ease 400ms,visibility 0s linear 400ms}
+#bar .btn[aria-label]:focus-visible::after{transition-delay:0s,0s}
 
 /* ── coarse pointers: 44 px targets ───────────────────────────────────────── */
 @media (pointer:coarse){
   :root{--row:44px}
   .btn{height:44px;min-width:44px}
   .btn.small,.btn.chip,.btn.tiny{height:44px;min-width:44px}
-  .seg button{height:40px;min-width:44px}
+  .seg button{height:44px;min-width:44px}
   .num{height:44px;font-size:15px}
   .num input{font-size:15px}
   .sel,.txt{height:44px}
   .tog{height:44px}
   .ph{height:44px} .ph-x{width:44px;height:44px}
-  .lead,.chbtn{height:40px}
+  .lead,.chbtn{height:44px}
   .issue{min-height:44px}
   .menu button{height:44px}
+  .colorin{height:44px}
+  .pinrow input{height:44px}
+  .sheet-grip{height:44px}
   .swatches button{width:30px;height:30px}
+  /* a 44 px hit area round the 30 px swatch and the 26..28 px status button */
+  .swatches button::after{content:"";position:absolute;inset:-7px}
+  .stat.issues-n{position:relative}
+  .stat.issues-n::after{content:"";position:absolute;inset:-9px -4px}
 }
 
 /* ── PHONE: dock at the base, one sheet with tabs ─────────────────────────── */
@@ -321,7 +353,7 @@ body.phone{--dock-h:calc(64px + env(safe-area-inset-bottom));--gutter:16px;--sta
 body.phone #bar,body.phone .col,body.phone #instrDock{display:none}
 body.phone #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;justify-content:space-between;padding:8px calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));background:rgba(12,12,15,.97);border-top:1px solid var(--line)}
 body.phone #dock button{flex:1;min-width:44px;max-width:88px;height:48px;border:0;--sq-r:12px;--sq-fill:var(--btn);color:var(--txt);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:9px;letter-spacing:.14em}
-body.phone #dock button.on{--sq-fill:var(--acc);color:var(--accTxt)}
+body.phone #dock button.on{--sq-fill:var(--on);color:#fff}
 body.phone #dock button.run.on{--sq-fill:#1f3b25;color:#c9f5d2}
 body.phone #stage{bottom:calc(var(--dock-h) + var(--sheet-h))}
 body.phone #status{left:16px;right:16px;bottom:calc(var(--dock-h) + var(--sheet-h) + 8px);gap:4px}
@@ -335,7 +367,7 @@ body.phone #sheet.full{height:calc(100vh - var(--dock-h) - 56px);height:calc(100
 .sheet-tabs{display:flex;gap:4px;overflow-x:auto;flex:none;padding:0 4px 8px;scrollbar-width:none}
 .sheet-tabs::-webkit-scrollbar{display:none}
 .sheet-tabs button{flex:none;height:44px;padding:0 13px;border:0;--sq-r:11px;--sq-fill:var(--btn);color:#b4b6bf;font-size:10.5px;font-weight:500;letter-spacing:.14em}
-.sheet-tabs button.on{--sq-fill:var(--acc);color:var(--accTxt)}
+.sheet-tabs button.on{--sq-fill:var(--on);color:#fff}
 .sheet-close{display:none}
 .sheet-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding-bottom:16px}
 .sheet-body .panel,.sheet-body .instr-card{width:auto!important;max-height:none;filter:none;--sq-fill:transparent}
