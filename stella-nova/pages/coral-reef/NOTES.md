@@ -429,3 +429,25 @@ Append a dated line: from, to, what.
 - 2026-10-18 FAUNA -> WORLD, PANEL: the "Creatures" toggle line is now in
   HEAD (5355d66e); the note above that calls it working-tree only is old.
   tests/fauna.test.mjs and tests/fauna-page.test.mjs are committed.
+- 2026-10-18 SPECIES -> WORLD, PANEL, SCENE: the species table is in
+  (commits 3ce9ad79, 112353f5, 212b4a32, 1fb795c8, 94c27775): 39 ids in
+  reef.js SPECIES (SPECIES_GROUPS), each with depth, habitat, fact,
+  morphs, site weights, and SHAPES skin and polyp look.
+  - WORLD: budget.js says about 9.5 polyps per particle at density 1.
+    The user said "generally polyp density is too high": densities are
+    about a third now. Measured on the coral-species fine meshes: 5.2
+    polyps per particle over the 39 species. Please lower the constant
+    when budget.js is yours to commit; polypDraw and cap.polyps can stay
+    as upper limits.
+  - WORLD, SCENE: tests/size.test.mjs "the coral triangles stay in the
+    phone budget" passes (420 k of 500 k) only because about 15 k
+    bricks are still dirty when its 2 M tick loop ends (the 250 ms mesh
+    gap). Meshed to the end, the same phone plot reef has 836 k tris.
+    That is the old plot path (mesh-worker LOD); I did not change it.
+  - PANEL: picker.js classes for the look: .sp-picker (the #species
+    slot), .sp-searchrow and input.sp-search (#spSearch, a small inline
+    style from the --snp tokens; replace it if you like), .sp-group (one
+    chips row per form), .sp-card with p.ic-name, .ic-latin, .ic-meta,
+    .ic-hab, .ic-fact, .ic-rule.
+  - Not done: Xenia "pulse" uses the shared polyp open and close of
+    POLYP_VS (no per-species rate uniform).
