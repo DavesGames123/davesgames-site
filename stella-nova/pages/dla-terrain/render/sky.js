@@ -152,6 +152,11 @@ function makeLayouts(device, gpu) {
     multi: sub([0, 1, 4]),
     skyView: sub([0, 1, 2, 4]),
     shadow: sub([0, 4, 6, 7, 8, 9, 16]),
+    // the shaft passes read the uniform, the LUTs and the cloud shadow
+    // only. With all of READ, their compute stage had 17 sampled textures
+    // (group 0: 4, READ: 8, shadow: 1, shaft: 4): over the limit of 16, so
+    // the whole SKY module failed and the page showed the fallback sky.
+    shaft: sub([0, 1, 2, 3, 4, 5]),
     empty: gpu.emptyLayout || device.createBindGroupLayout({ entries: [] }),
   };
 }
@@ -246,6 +251,7 @@ export async function createSky(gpu) {
     skyView: bg(L.skyView, [[0, ub], [1, V.trans], [2, V.multi], [4, sClamp]], 'sky view'),
     shadowRead: bg(L.shadow, [[0, ub], [4, sClamp], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]], 'cloud shadow in'),
     read: bg(L.read, [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]], 'sky read'),
+    shaft: bg(L.shaft, [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow]], 'sky shaft read'),
     empty: bg(L.empty, [], 'empty'),
     outTrans: bg(G3.lut, [[0, V.trans]]), outMulti: bg(G3.lut, [[0, V.multi]]), outView: bg(G3.lut, [[0, V.view]]),
     outBase: bg(G3.vol, [[0, V.base]]), outDetail: bg(G3.vol, [[0, V.detail]]), outN2d: bg(G3.n2d, [[1, V.n2d]]),
@@ -254,7 +260,7 @@ export async function createSky(gpu) {
   const readEntries = [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]];
 
   const weather = await createWeather(gpu, {
-    lib, weatherText, layouts: L, readBindGroup: BG.read, ubo, u, SKYU, sClamp,
+    lib, weatherText, layouts: L, readBindGroup: BG.read, shaftBindGroup: BG.shaft, ubo, u, SKYU, sClamp,
   });
 
   // ── size dependent targets ──────────────────────────────────────────────

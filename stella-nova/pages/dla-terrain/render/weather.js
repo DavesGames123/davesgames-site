@@ -299,7 +299,7 @@ export async function createWeather(gpu, shared) {
     fragment: { module, entryPoint: fs, targets: [{ format: gpu.hdrFormat, blend }] },
     primitive: { topology: 'triangle-list' },
   });
-  const shaftLayout = device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, shadowLayout, G3.shaft] });
+  const shaftLayout = device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.shaft, shadowLayout, G3.shaft] });
   const [pInject, pInteg, pHaze, pPrecip, pBolt, pShaft, pRadial, pShaftRes] = await Promise.all([
     device.createComputePipelineAsync({ label: 'csFroxInject', compute: { module, entryPoint: 'csFroxInject' },
       layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, shadowLayout, G3.inject] }) }),
@@ -311,7 +311,7 @@ export async function createWeather(gpu, shared) {
     device.createComputePipelineAsync({ label: 'csShaftMarch', compute: { module, entryPoint: 'csShaftMarch' }, layout: shaftLayout }),
     device.createComputePipelineAsync({ label: 'csShaftRadial', compute: { module, entryPoint: 'csShaftRadial' }, layout: shaftLayout }),
     device.createComputePipelineAsync({ label: 'csShaftResolve', compute: { module, entryPoint: 'csShaftResolve' },
-      layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.read, L.empty, G3.shaftRes] }) }),
+      layout: device.createPipelineLayout({ bindGroupLayouts: [gpu.globalsLayout, L.shaft, L.empty, G3.shaftRes] }) }),
   ]);
   const emptyBG = device.createBindGroup({ layout: L.empty, entries: [] });
   const boltBuffer = device.createBuffer({ label: 'bolt segs', size: MAX_BOLT_SEGS * 32, usage: BU.STORAGE | BU.COPY_DST });
@@ -509,7 +509,7 @@ export async function createWeather(gpu, shared) {
       const G2 = shaftGroups(ctx.depthView, cloudAccView);
       const pass = enc.beginComputePass({ label: 'shafts' });
       pass.setBindGroup(0, gpu.globalsBindGroup);
-      pass.setBindGroup(1, shared.readBindGroup);
+      pass.setBindGroup(1, shared.shaftBindGroup);
       pass.setPipeline(plan.mode === 1 ? pShaft : pRadial);
       pass.setBindGroup(2, sbg);
       pass.setBindGroup(3, G2.march);
