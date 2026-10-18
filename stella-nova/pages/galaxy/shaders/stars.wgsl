@@ -9,7 +9,7 @@
 //     pop 2  born in an arm at t_b, then free at Omega(R): young stars and
 //            HII regions drift downstream of the arm and fade with age
 //     pop 3  bar stars, rigid with the pattern
-//     pop 4  fixed positions (tidal tails, the jet)
+//     pop 4  fixed positions (the jet)
 //     pop 5  the sky: foreground stars and background galaxies
 //     pop 6  an interacting pair's test stars: a Catmull-Rom curve through
 //            the recorded keyframes TR (half floats, encounter.js is the

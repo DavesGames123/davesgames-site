@@ -11,6 +11,12 @@
 //  Framing: plateBand() (lib/saver-clear.js) gives the clear band between
 //  the plate's top and bottom text. The camera backs off so the galaxy
 //  fits the band, and the view offset moves it to the band centre.
+//  Pair shots: each one plays one phase of the recorded encounter
+//  (approach, peri, tails, merger; saverplan.js). The encounter starts a
+//  little before that phase and runs at a rate that fits the phase into
+//  the shot. director.js frames it (the same director as the page, with
+//  the band and the real aspect, 16:9 or 9:16); the cut snaps it to the
+//  seeded yaw. See "function pairShot".
 //  The plate: the galaxy name and type, its parameters, and the TeX of the
 //  model that the shot shows. No code on the plate.
 //
@@ -21,6 +27,7 @@ import * as M from './model.js';
 import { makePlan, shotCamera } from './saverplan.js';
 import { fitDistance } from './camera.js';
 import { plateBand } from '../../lib/saver-clear.js';
+import { phaseStart } from './encounter.js';
 
 const TEX = {
   spiral: 'r = a\\,e^{b\\theta},\\quad b = \\tan\\psi',
@@ -29,15 +36,17 @@ const TEX = {
   disk: '\\rho(R,z) = \\rho_0\\, e^{-R/R_d}\\, e^{-|z|/h_z}',
   dust: 'I = I_0\\, e^{-\\tau_\\lambda},\\quad \\tau_\\lambda \\propto \\lambda^{-1}',
   tidal: '\\ddot{\\mathbf r} = -\\sum_{i=1,2} \\frac{G M_i\\,(\\mathbf r - \\mathbf r_i)}{\\left(|\\mathbf r - \\mathbf r_i|^2 + \\epsilon^2\\right)^{3/2}}',
+  drag: '\\dot{\\mathbf v}_i = \\ldots - \\gamma_0\\, e^{-d^2/d_0^2}\\,\\mathbf v_i',
 };
 const EQ = {
   spiral: 'r = a e^(bθ), b = tan ψ', rot: 'v(R) = v_f R / √(R² + R_t²)', sersic: 'I(R) = I_e exp[−b_n((R/r_e)^(1/n) − 1)]',
   disk: 'ρ(R, z) = ρ₀ e^(−R/R_d) e^(−|z|/h_z)', dust: 'I = I₀ e^(−τ_λ), τ_λ ∝ 1/λ', tidal: 'r̈ = −Σ G M_i (r − r_i) / (|r − r_i|² + ε²)^(3/2)',
+  drag: 'v̇_i = … − γ₀ e^(−d²/d₀²) v_i',
 };
 const RULES = [['\\psi', 'm1'], ['b', 'm1'], ['R_d', 'm3'], ['h_z', 'm3'], ['r_e', 'm4'], ['n', 'm4'], ['v_f', 'm6'], ['\\Omega_p', 'm2'], ['\\tau_\\lambda', 'm5']];
 
-function texFor(kind, P) {
-  if (kind === 'pair') return ['tidal'];
+function texFor(kind, P, phase) {
+  if (kind === 'pair') return phase === 'merger' || phase === 'peri' ? ['tidal', 'drag'] : ['tidal'];
   if (P.type === 'elliptical') return ['sersic'];
   if (kind === 'bulge') return ['sersic'];
   if (kind === 'dive') return ['disk', 'rot'];
@@ -54,6 +63,16 @@ function paramsFor(kind, P) {
   return out.slice(0, 5);
 }
 const KIND = { orbit: 'a slow orbit', face: 'face-on, the arms', dive: 'a dive into the disk', bulge: 'a fly-by of the bulge', edge: 'edge-on, the dust lane', pair: 'tidal tails' };
+const PHASE = { approach: 'the approach', peri: 'pericentre: the cores and the bridge', tails: 'tidal tails', merger: 'the merger remnant' };
+const NEXT = { approach: 'peri', peri: 'tails', tails: 'merger', merger: null };
+
+// The encounter window of a pair shot: start a fifth of the phase early,
+// and fit the phase into the shot (6 .. 30 Myr per s).
+export function pairShot(enc, phase, dur) {
+  const t0 = phaseStart(enc, phase), t1 = NEXT[phase] ? Math.max(t0 + 20, phaseStart(enc, NEXT[phase])) : enc.tEnd;
+  const span = t1 - t0, start = Math.max(0, t0 - 0.2 * span);
+  return { start, rate: Math.max(6, Math.min(30, (t1 - start) / dur)) };
+}
 
 export function installSaver(api) {
   let run = null;
@@ -66,7 +85,7 @@ export function installSaver(api) {
       document.documentElement.classList.add('saving');
       document.getElementById('panel').classList.remove('open');
       api.saving = true; api.fade = 0; api.st.playing = true; api.st.speed = 7 - 3 * calm;
-      let shot = null, t0 = 0, ready = false, band = null, bandAt = -1e9, fr = null, alive = true, cx = null;
+      let shot = null, t0 = 0, ready = false, band = null, bandAt = -1e9, fr = null, alive = true, cx = null, pair = null;
       function frameBand() {
         const H = innerHeight, now = performance.now();
         if (now - bandAt > 250) { bandAt = now; const b = plateBand(H); if (b || !label) band = b; }
@@ -84,6 +103,11 @@ export function installSaver(api) {
         await api.setParams(P);
         if (!alive) return;
         const c = api.ctx(); cx = c;
+        pair = shot.kind === 'pair' && api.built && api.built.enc && shot.phase ? pairShot(api.built.enc, shot.phase, shot.dur) : null;
+        if (pair) {
+          api.st.encT = pair.start; api.st.encHold = 0; api.st.speed = pair.rate;
+          api.dir.snap({ side: shot.spin < 0 ? -1 : 1, jitter: (shot.yaw0 / Math.PI - 1) * 0.4 });
+        } else api.st.speed = 7 - 3 * calm;
         api.snap = true;
         t0 = performance.now(); ready = true;
         send();
@@ -91,9 +115,9 @@ export function installSaver(api) {
       function send() {
         if (!label || !shot) return;
         const P = api.P, t = M.TYPES.find(x => x.key === P.type);
-        const keys = texFor(shot.kind, P);
+        const keys = texFor(shot.kind, P, pair ? shot.phase : null);
         label({
-          title: P.name || (t && t.name), sub: `${t ? t.name + ' · ' + t.hubble : ''} · ${KIND[shot.kind]}`,
+          title: P.name || (t && t.name), sub: `${t ? t.name + ' · ' + t.hubble : ''} · ${pair ? PHASE[shot.phase] : KIND[shot.kind]}`,
           params: paramsFor(shot.kind, P), tex: keys.map(k => TEX[k]), rules: RULES, eq: keys.map(k => EQ[k]),
           anchor: fr ? { x: innerWidth / 2, y: fr.cy, r: fr.h * 0.4 } : undefined,
         });
@@ -106,6 +130,12 @@ export function installSaver(api) {
         const el = (performance.now() - t0) / 1000, p = Math.min(1, el / shot.dur);
         api.fade = Math.min(1, el / 0.9, Math.max(0, (shot.dur - el) / 0.7));
         if (el >= shot.dur) { ready = false; next(); return api.cam; }
+        if (pair) {
+          // the director, in the clear band, for the real aspect
+          const d = api.dir.update({ enc: api.built.enc, t: api.st.encT, dt, aspect: innerWidth / innerHeight, band: fr.h / innerHeight, viewPx: api.canvas.width * api.canvas.height, nStars: api.built.count, yawRate: shot.spin * 0.12 });
+          Object.assign(api.cam, { target: d.target.slice(), yaw: d.yaw, pitch: d.pitch, dist: d.dist, fov: d.fov });
+          return api.cam;
+        }
         const c = Object.assign({}, cx, { fit: fitDistance(cx.R, 40, innerWidth / innerHeight, fr.h / innerHeight) });
         const cam = shotCamera(shot, p, c);
         Object.assign(api.cam, cam, { target: cam.target.slice() });
@@ -122,7 +152,8 @@ export function installSaver(api) {
       document.documentElement.classList.remove('saving');
       api.saving = false; api.saverCam = null; api.saverOff = null; api.fade = 1;
       api.st.speed = run.saved.speed; api.st.playing = run.saved.playing;
-      api.setParams(run.saved.P).then(() => api.fitGoal(true));
+      const sp = run.saved.speed;
+      api.setParams(run.saved.P).then(() => { api.fitGoal(true); api.setSpeed(sp); });
       run = null;
     },
   };

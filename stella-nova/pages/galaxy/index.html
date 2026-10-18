@@ -23,7 +23,8 @@
      #panel     right drawer on desktop, bottom sheet on phones
                 presets #presets, type #type, seed #seed #reroll,
                 sliders [data-p], view #incl #azim, #speed #ev #quality,
-                toggles #sky #bg, #fly #reset
+                toggles #sky #bg, #fly #reset; a pair only (#pairRows):
+                #follow (the shot director), #enc (the encounter time)
      #eqPanel   the four equations, TeX through lib/sci-math.js
      #dock      phone dock: #dockPanel #dockPrev #dockNext #dockFly #dockPlay
      #msg       a message when WebGPU is missing
@@ -81,6 +82,10 @@
   <div class="row"><label><span class="w">azimuth</span></label><input type="range" id="azim" min="-180" max="180" step="1"><span class="val"></span></div>
   <div class="row"><label><span class="w">time, Myr per s</span></label><input type="range" id="speed" min="0" max="40" step="0.5" value="6"><span class="val"></span></div>
   <div class="row"><label><span class="w">exposure, EV</span></label><input type="range" id="ev" min="-3" max="3" step="0.1" value="0"><span class="val"></span></div>
+  <div id="pairRows" hidden>
+    <div class="modes"><label class="tog"><input type="checkbox" id="follow" checked> Follow the action</label></div>
+    <div class="row"><label><span class="w">encounter</span></label><input type="range" id="enc" min="0" max="1000" step="1" value="0"><span class="val"></span></div>
+  </div>
   <div class="modes"><button id="fly">Fly into the disk</button><button id="reset">Reset view</button></div>
   <div class="modes">
     <label class="tog"><input type="checkbox" id="sky" checked> foreground stars</label>
@@ -91,7 +96,8 @@
   <div class="sec-label">About</div>
   <div class="about">
     <p>The light is a sum of profiles: a triaxial Sérsic bulge, thin and thick exponential disks, a young disk in the arms, a bar and a faint halo. The arms are a density wave: a log-spiral pattern turns at one speed, the stars at another, so the arms never wind up. Young blue stars and pink HII regions are born in an arm and drift ahead of it.</p>
-    <p>Dust absorbs blue light more than red, so lanes look brown and stars behind them redden. The diffuse light and dust are ray marched; the brightest stars, clusters and tails are sprites. Interacting pairs come from a restricted three-body run on a parabolic orbit.</p>
+    <p>Dust absorbs blue light more than red, so lanes look brown and stars behind them redden. The diffuse light and dust are ray marched; the brightest stars, clusters and tails are sprites. Interacting pairs play a restricted three-body run: two masses start on a parabolic orbit, a drag at close range (a stand-in for dynamical friction) takes their orbital energy, and they pass, swing out, return and merge. The test stars of the outer disks feel the two masses and form the bridge and the tails.</p>
+    <p>With "Follow the action" on, the camera picks its shot from the measured separation: both disks on the approach, the cores and the bridge at pericentre, the full tails after it, the remnant at the merger. Drag or zoom to take the camera; it comes back after a few seconds without input.</p>
     <p>Sizes are true to type; dust is a little thicker than real so the lanes read at page size.</p>
   </div>
 </aside>

@@ -10,11 +10,24 @@
 //  change the stars, so they rebuild on release; the others repack the
 //  galaxy blocks at once (E.setGals).
 //
+//  An interacting pair plays its recorded encounter (built.enc, see
+//  encounter.js) on st.encT, at the page time rate. At the end it holds on
+//  the remnant, fades, and starts again. With "Follow the action" on, the
+//  shot director (director.js) drives the camera goal. A drag, pinch,
+//  wheel, key or view slider gives the camera to the user at once; after
+//  IDLE s with no input, the director takes it back over EASE s (it adopts
+//  the user's yaw and pitch, so the view does not spin).
+//  Density: every frame gets dens (director.js coreGain on the action
+//  camera's brightness hint), which sets the sprite size and the local
+//  tone compression in the engine.
+//
 //  grep -n targets
 //    "function rebuild"    build in the worker, upload
 //    "function repack"     new uniforms only
 //    "function occlusion"  the panel and dock margins that frame the view
 //    "function frame"      the frame loop
+//    "function follow"     the director, the user override and the hand-back
+//    "function encClock"   the encounter time, the hold and the restart
 //    "function bindUI"     every control
 //    "const api"           what saver.js gets
 // ============================================================================
@@ -25,6 +38,9 @@ import * as C from './camera.js';
 import { shotCamera } from './saverplan.js';
 import { typesetAll } from '../../lib/sci-math.js';
 import { installSaver } from './saver.js';
+import { createDirector, coreGain, FILL } from './director.js';
+import { coresAt, keyU, phaseAt } from './encounter.js';
+import { createActionCamera } from '../../lib/action-camera.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -40,6 +56,14 @@ const goal = { ...cam, target: [0, 0, 0] };
 const vel = { yaw: 0, pitch: 0, dist: 0, fov: 0, t: [0, 0, 0] };
 let anim = null;              // a camera move (fly into the disk)
 const api = { saverCam: null, saverOff: null, saving: false };
+// the encounter of a pair: time (Myr), hold at the end (s), page fade
+Object.assign(st, { encT: 0, encHold: 0, fadeP: 1, follow: true });
+const IDLE = 5, EASE = 3, HOLD = 5, PAIR_SPEED = 14, BASE_SPEED = 6;
+const PHASE_NAME = { approach: 'approach', peri: 'pericentre', tails: 'tidal tails', merger: 'merger' };
+const dir = createDirector({ fov: 40 });
+const acSingle = createActionCamera({ fill: FILL });
+let userAt = -1e9, handBack = null, viewSync = 0, dens = 1;
+const userInput = () => { userAt = performance.now() / 1000; handBack = null; };
 
 // ── build ──────────────────────────────────────────────────────────────────
 let worker = null;
@@ -62,8 +86,12 @@ async function rebuild({ refit = false } = {}) {
   try { b = await buildAsync(JSON.parse(JSON.stringify(P)), { stars: bud.stars, sky: st.sky, bg: st.bg }); }
   catch (e) { console.error(e); b = M.buildGalaxy(P, { stars: bud.stars, sky: st.sky, bg: st.bg }); }
   if (n !== buildN) return built;
+  const wasPair = !!(built && built.enc);
   built = b;
   E.setGalaxy(b);
+  if (b.enc) { st.encT = 0; st.encHold = 0; st.fadeP = 1; dir.snap(); }
+  if (!api.saving && wasPair !== !!b.enc) setSpeed(b.enc ? PAIR_SPEED : BASE_SPEED);
+  pairUI();
   if (refit) fitGoal(true);
   showHud();
   return b;
@@ -121,6 +149,19 @@ const fmt = { m: v => String(v), pitch: v => v.toFixed(1) + '°', armAmp: v => v
 function syncSliders() {
   document.querySelectorAll('[data-p]').forEach(inp => { const k = inp.dataset.p; inp.value = P[k] ?? 0; inp.parentElement.querySelector('.val').textContent = fmt[k] ? fmt[k](+inp.value) : inp.value; });
 }
+function setSpeed(v) { st.speed = v; const i = $('speed'); i.value = v; i.parentElement.querySelector('.val').textContent = v.toFixed(1); }
+// the pair rows (follow, encounter time) show only for a pair
+function pairUI() {
+  const on = !!(built && built.enc);
+  $('pairRows').hidden = !on;
+}
+function syncEnc() {
+  if (!built || !built.enc) return;
+  const enc = built.enc, ph = phaseAt(enc, st.encT);
+  const i = $('enc');
+  if (document.activeElement !== i) i.value = Math.round(1000 * st.encT / enc.tEnd);
+  i.parentElement.querySelector('.val').textContent = `${Math.round(st.encT)} Myr · ${PHASE_NAME[ph.phase]}`;
+}
 function syncView() {
   const i = 90 - goal.pitch / C.DEG, a = ((goal.yaw / C.DEG + 540) % 360) - 180;
   $('incl').value = i; $('incl').parentElement.querySelector('.val').textContent = i.toFixed(0) + '°';
@@ -146,8 +187,11 @@ function bindUI() {
       if ('rebuild' in inp.dataset) { clearTimeout(reb); reb = setTimeout(() => rebuild(), 250); } else repack();
     });
   });
-  $('incl').oninput = () => { goal.pitch = C.inclToPitch(+$('incl').value); anim = null; syncView(); };
-  $('azim').oninput = () => { goal.yaw = +$('azim').value * C.DEG; anim = null; syncView(); };
+  $('incl').oninput = () => { userInput(); goal.pitch = C.inclToPitch(+$('incl').value); anim = null; syncView(); };
+  $('azim').oninput = () => { userInput(); goal.yaw = +$('azim').value * C.DEG; anim = null; syncView(); };
+  $('follow').checked = st.follow;
+  $('follow').onchange = () => { st.follow = $('follow').checked; if (st.follow) { userAt = performance.now() / 1000 - IDLE; handBack = null; } };
+  $('enc').oninput = () => { if (!built || !built.enc) return; st.encT = +$('enc').value / 1000 * built.enc.tEnd; st.encHold = 0; st.fadeP = 1; syncEnc(); };
   const val = (id, f) => { const i = $(id); const s = () => { i.parentElement.querySelector('.val').textContent = f(+i.value); }; i.addEventListener('input', s); s(); };
   $('speed').addEventListener('input', () => { st.speed = +$('speed').value; });
   val('speed', v => v.toFixed(1));
@@ -158,7 +202,7 @@ function bindUI() {
   $('quality').value = quality;
   $('quality').onchange = () => { quality = $('quality').value; resize(); rebuild(); };
   $('fly').onclick = $('dockFly').onclick = fly;
-  $('reset').onclick = () => { anim = null; fitGoal(false); };
+  $('reset').onclick = () => { anim = null; fitGoal(false); if (built && built.enc) { st.follow = true; $('follow').checked = true; userAt = performance.now() / 1000 - IDLE; handBack = null; } };
   $('dockPrev').onclick = () => cyclePreset(-1);
   $('dockNext').onclick = () => cyclePreset(1);
   $('dockName').onclick = () => cyclePreset(1);
@@ -195,9 +239,10 @@ function bindUI() {
 
   // orbit: one pointer drags, two pinch
   const pts = new Map(); let pinch0 = 0, dist0 = 0;
-  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); anim = null; $('hint').classList.add('gone'); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = goal.dist; } });
+  canvas.addEventListener('pointerdown', e => { userInput(); canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); anim = null; $('hint').classList.add('gone'); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = goal.dist; } });
   canvas.addEventListener('pointermove', e => {
     const p = pts.get(e.pointerId); if (!p) return;
+    userInput();
     if (pts.size === 1) {
       goal.yaw -= (e.clientX - p[0]) * 0.006;
       goal.pitch = Math.max(-1.55, Math.min(1.55, goal.pitch + (e.clientY - p[1]) * 0.005));
@@ -208,9 +253,9 @@ function bindUI() {
   });
   const up = e => { pts.delete(e.pointerId); pinch0 = 0; };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-  canvas.addEventListener('wheel', e => { e.preventDefault(); anim = null; goal.dist = clampDist(goal.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); userInput(); anim = null; goal.dist = clampDist(goal.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
   const keys = new Set();
-  addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return; keys.add(e.key.toLowerCase()); if (e.key === ' ') { st.playing = !st.playing; e.preventDefault(); } });
+  addEventListener('keydown', e => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return; keys.add(e.key.toLowerCase()); if ('wasdqe'.includes(e.key.toLowerCase())) userInput(); if (e.key === ' ') { st.playing = !st.playing; e.preventDefault(); } });
   addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
   api.keys = keys;
 }
@@ -221,6 +266,7 @@ function cyclePreset(d) {
 }
 // Fly into the disk: the saver's dive shot, from the current view.
 function fly() {
+  userInput();
   const shot = { kind: 'dive', yaw0: goal.yaw, spin: 0.25, incl: Math.max(30, Math.min(70, 90 - goal.pitch / C.DEG)) };
   anim = { shot, p: 0, dur: 7, ctx: ctx() };
 }
@@ -233,9 +279,11 @@ function frame(now) {
   if (++fpsN && now - fpsT > 1000) { st.fps = Math.round(fpsN * 1000 / (now - fpsT)); fpsN = 0; fpsT = now; if (!api.saving) showHudStat(); }
   if (!E || !built) return;
   if (st.playing) st.time += st.speed * dt * (api.saving ? api.timeScale || 1 : 1);
+  if (built.enc) encClock(dt);
   let c;
   if (api.saving && api.saverCam) c = api.saverCam(dt);
   else {
+    if (built.enc && st.follow && !anim) follow(dt, now / 1000);
     if (anim) {
       anim.p = Math.min(1, anim.p + dt / anim.dur);
       const s = shotCamera(anim.shot, anim.p, anim.ctx);
@@ -258,6 +306,15 @@ function frame(now) {
     [cam.fov, vel.fov] = C.spring(cam.fov, vel.fov, goal.fov, w, dt);
     for (let i = 0; i < 3; i++) [cam.target[i], vel.t[i]] = C.spring(cam.target[i], vel.t[i], goal.target[i], w, dt);
     c = cam;
+    if (now - viewSync > 250) { viewSync = now; syncView(); syncEnc(); }
+  }
+  // density gain: the brightness hint of the action camera for the radius
+  // that the camera frames now, on the cores (two for a pair)
+  {
+    const g = acSingle.follow({ c: c.target, r: c.dist * Math.tan(c.fov * C.DEG / 2) * FILL, n: built.count }, dt);
+    dens = built.enc
+      ? coreGain(g, { viewPx: bud.w * bud.h, nStars: built.count, coreShare: 0.45, rc: 0.3 * built.enc.rDisk, cores: phaseAt(built.enc, st.encT).phase === 'merger' ? 1 : 2 })
+      : coreGain(g, { viewPx: bud.w * bud.h, nStars: built.count, coreShare: Math.min(0.6, P.BT + 0.25), rc: Math.max(P.re, 0.5 * P.Rd), cores: 1 });
   }
   // frame the galaxy in the clear part of the window
   let off = [0, 0];
@@ -265,11 +322,51 @@ function frame(now) {
   else { const o = occlusion(); off = [(o.l - o.r) / innerWidth, (o.b - o.t) / innerHeight]; }
   E.render({
     cam: C.frameUniform(c, bud.w / bud.h), off, time: st.time, wall: now / 1000, frame: st.frame++,
-    exposure: Math.pow(2, st.ev) * (api.saving ? api.fade ?? 1 : 1), sbRef: M.refSB(P), skyGain: 1, autoKey: 0.09, autoRate: Math.min(1, dt * 2.5), bloom: 0.06,
+    exposure: Math.pow(2, st.ev) * (api.saving ? api.fade ?? 1 : st.fadeP), sbRef: M.refSB(P), skyGain: 1, autoKey: 0.09, autoRate: Math.min(1, dt * 2.5), bloom: 0.06,
     snapExposure: api.snap ? (api.snap = false, true) : false,
+    centres: built.enc ? coresAt(built.enc, st.encT) : null, encU: built.enc ? keyU(built.enc, st.encT) : 0, dens,
   });
 }
-function showHudStat() { if (built && bud) $('hudStat').textContent = `${built.count.toLocaleString('en')} stars · ${bud.w}×${bud.h} · ${st.fps} fps`; }
+
+// The encounter time. The page: play, hold HOLD s on the remnant, fade,
+// start again (the director snaps behind the black). The saver sets the
+// time and the rate per shot, and the time stops at the end.
+function encClock(dt) {
+  const enc = built.enc;
+  if (st.playing) st.encT += st.speed * dt;
+  if (st.encT < enc.tEnd) { st.fadeP = Math.min(1, st.fadeP + dt / 0.8); return; }
+  st.encT = enc.tEnd;
+  if (api.saving || !st.playing) return;
+  st.encHold += dt;
+  st.fadeP = Math.max(0, 1 - Math.max(0, st.encHold - HOLD) / 0.8);
+  if (st.encHold > HOLD + 0.8) { st.encT = 0; st.encHold = 0; st.fadeP = 0; dir.snap(); api.snap = true; }
+}
+
+// Follow the action: the director's camera, the user's camera, or a blend
+// while the director takes the view back after IDLE s with no input.
+function follow(dt, nowS) {
+  const o = occlusion(), W = innerWidth, H = innerHeight;
+  const cw = Math.max(0.3, (W - o.l - o.r) / W), ch = Math.max(0.3, (H - o.t - o.b) / H);
+  const d = dir.update({ enc: built.enc, t: st.encT, dt, aspect: W / H * cw, band: ch, viewPx: bud.w * bud.h, nStars: built.count });
+  const since = nowS - userAt;
+  if (since < IDLE) return;
+  const a = C.ease(Math.min(1, (since - IDLE) / EASE));
+  if (!handBack) {
+    // take over from the user's view: the director starts at their yaw and
+    // pitch; the target and the distance blend over EASE s
+    handBack = { target: goal.target.slice(), dist: goal.dist, full: a >= 1 };
+    if (!handBack.full) dir.adopt({ yaw: goal.yaw, pitch: goal.pitch });
+  }
+  const k = handBack.full ? 1 : a;
+  for (let i = 0; i < 3; i++) goal.target[i] = C.lerp(handBack.target[i], d.target[i], k);
+  goal.dist = Math.exp(C.lerp(Math.log(handBack.dist), Math.log(d.dist), k));
+  goal.yaw = d.yaw; goal.pitch = d.pitch; goal.fov = d.fov;
+}
+function showHudStat() {
+  if (!built || !bud) return;
+  const ph = built.enc ? ' · ' + PHASE_NAME[phaseAt(built.enc, st.encT).phase] : '';
+  $('hudStat').textContent = `${built.count.toLocaleString('en')} stars · ${bud.w}×${bud.h} · ${st.fps} fps${ph}`;
+}
 
 // ── boot ───────────────────────────────────────────────────────────────────
 async function boot() {
@@ -294,10 +391,16 @@ async function boot() {
 }
 
 // What saver.js may use.
+// E, built and P are live getters (Object.assign would copy their values
+// at load: null, null and the first preset, and the saver plate then
+// named the first preset for every shot).
+Object.defineProperties(api, {
+  E: { get: () => E }, built: { get: () => built }, P: { get: () => P },
+});
 Object.assign(api, {
-  get E() { return E; }, get built() { return built; }, get P() { return P; }, st, cam, goal, ctx,
+  st, cam, goal, ctx,
   setPreset, setType, rebuild, setParams(p) { P = p; return rebuild(); },
-  canvas, resize, fitGoal, showHud,
+  canvas, resize, fitGoal, showHud, dir, setSpeed,
 });
 installSaver(api);
 window.__galaxy = api;

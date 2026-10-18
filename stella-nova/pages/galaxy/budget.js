@@ -10,7 +10,10 @@
 //    volume    rgba16float at volScale^2 of it       8 B/px x volScale^2
 //    bloom     rgba16float, 1/2 .. 1/2^L per side    8 B/px x sum 4^-i
 //    canvas    two swap buffers and one in flight    12 B/px
-//  Fixed: the 3D noise tile (N^3 x 4 B) and the star buffer (64 B a star).
+//  Fixed: the 3D noise tile (N^3 x 4 B), the star buffer (64 B a star)
+//  and an interacting pair's encounter track (K keyframes x 8 B a test
+//  star, model.js tidalEncounter); the track is counted for every galaxy,
+//  so a switch to a pair never goes over the limit.
 //
 //  galaxyBudget(cssW, cssH, dpr, { phone, tablet, quality }) gives the
 //  pixel ratio, the target sizes, the ray steps and the star count. The
@@ -23,10 +26,13 @@
 //  defaultQuality({ phone, tablet }) gives the start level for a profile.
 //
 //  EXPORTS  QUALITY, LIMITS, NOISE_N, bloomLevels, defaultQuality,
-//           galaxyBudget
+//           galaxyBudget, trackBytes
 // ============================================================================
 
+import { ENC, encounterStars } from './model.js';
+
 export const NOISE_N = 96;
+export const trackBytes = stars => encounterStars(stars) * ENC.K * 8;
 export const QUALITY = {
   low: { pr: 1, vol: 0.4, steps: 30, stars: 45000, detail: 0.6 },
   medium: { pr: 1.5, vol: 0.45, steps: 46, stars: 95000, detail: 0.85 },
@@ -59,7 +65,7 @@ export function galaxyBudget(cssW, cssH, dpr = 1, { phone = false, tablet = fals
   const Q = QUALITY[quality || defaultQuality({ phone, tablet })] || QUALITY.medium;
   const lim = phone ? LIMITS.phone : tablet ? LIMITS.tablet : LIMITS.desktop;
   const area = Math.max(1, cssW * cssH);
-  const stars = Q.stars, fixed = NOISE_N ** 3 * 4 + stars * 1.06 * 64;
+  const stars = Q.stars, fixed = NOISE_N ** 3 * 4 + stars * 1.06 * 64 + trackBytes(stars);
   let pr = Math.min(dpr || 1, Q.pr, Math.sqrt(lim.maxPx / area));
   pr = Math.max(0.25, Math.floor(pr * 1000) / 1000);
   let w, h, b, total;

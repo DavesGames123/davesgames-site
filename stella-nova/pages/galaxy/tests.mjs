@@ -15,10 +15,26 @@
 //    saver ........ shots last 5-12 s, the order changes with the seed
 //    budget ....... every display fits the GPU memory limit; phones and
 //                   tablets start at a lower level and stay small
+//    encounter .... half floats round-trip; the record passes, swings out
+//                   and merges; the phase follows the measured separation;
+//                   the CPU mirror hits the keyframes
+//    director ..... through a whole encounter (16:9 and 9:16): the view
+//                   holds >= 80 % of the action weight, the camera steps
+//                   stay small (no shake, no cut), it moves in at
+//                   pericentre and pulls back for the tails (the tails
+//                   shot holds >= 75 % of the test stars alone), it never
+//                   zooms under MIN_R; the brightness hint sets the gain
+//    saver pair ... each phase shot fits the run; in the plate band, at
+//                   16:9 and 9:16, the view holds >= 80 % of the action
+//    action cam ... update(sample) equals follow(measure(sample))
 // ============================================================================
 import * as M from './model.js';
 import * as B from './budget.js';
 import * as C from './camera.js';
+import * as EN from './encounter.js';
+import * as D from './director.js';
+import { createActionCamera, actionWeights } from '../../lib/action-camera.js';
+import { pairShot } from './saver.js';
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; console.log((c ? 'ok   ' : 'FAIL ') + msg); if (!c) fail++; };
@@ -179,6 +195,115 @@ for (const pitch of [10, 18, 30]) {
   ok(true, `budget: ${cases} screen x quality cases fit; 5K at DPR 2 renders ${big.w}x${big.h} in ${(big.total / 1e6).toFixed(0)} MB; phone ${ph.w}x${ph.h}, ${ph.stars} stars, ${ph.steps} steps, ${(ph.total / 1e6).toFixed(0)} MB`);
   const old = 5120 * 2 * 2880 * 2 * (8 + 8 * 4 + 12);
   ok(big.total < old / 3, `budget: 5K is ${(big.total / 1e6).toFixed(0)} MB, not the ${(old / 1e6).toFixed(0)} MB of full-DPR 4x MSAA HalfFloat`);
+}
+
+
+// ── encounter ──
+const encBuilt = M.buildGalaxy(M.presetParams('antennae'), { stars: 40000 }), enc = encBuilt.enc;
+{
+  let worst = 0;
+  for (const v of [0, 1e-3, 0.37, -2.5, 17.123, -63.9, 118.7, 1024.5, 60000]) worst = Math.max(worst, Math.abs(M.fromHalf(M.toHalf(v)) - v) / Math.max(1, Math.abs(v)));
+  ok(worst < 1e-3, `encounter: half floats round-trip to ${worst.toExponential(1)} (relative, 1 kpc floor)`);
+  ok(enc && enc.track.length === enc.K * enc.n * 2 && encBuilt.stars.every(Number.isFinite), `encounter: the pair records ${enc.K} keyframes of ${enc.n} test stars (${(enc.track.byteLength / 1e6).toFixed(1)} MB), ${enc.tEnd.toFixed(0)} Myr`);
+  const s0 = enc.sep[0], minSep = Math.min(...enc.sep), last = enc.sep[enc.NC - 1];
+  ok(enc.peri.length >= 2 && enc.peri[0] < enc.tMerge && enc.tMerge < enc.tEnd && last < 0.35 * enc.UL && s0 > 3 * enc.sepPeri,
+    `encounter: starts ${s0.toFixed(1)} kpc apart, first pericentre ${enc.sepPeri.toFixed(1)} kpc at ${enc.peri[0].toFixed(0)} Myr, second at ${enc.peri[1].toFixed(0)} Myr, merged at ${enc.tMerge.toFixed(0)} Myr, ends ${last.toFixed(1)} kpc apart (min ${minSep.toFixed(2)})`);
+  // the CPU mirror hits the keyframes, and the curve is continuous
+  let keyErr = 0, jump = 0;
+  for (const k of [0, 9, 64, enc.K - 1]) for (const i of [0, 77, enc.n - 1]) {
+    const p = EN.starAt(enc, i, k * enc.dtK), q = enc.track[(k * enc.n + i) * 2];
+    keyErr = Math.max(keyErr, Math.abs(p[0] - M.fromHalf(q & 0xffff)), Math.abs(p[1] - M.fromHalf(q >>> 16)));
+  }
+  for (let t = 0; t < enc.tEnd; t += 0.5) { const a = EN.coresAt(enc, t), b = EN.coresAt(enc, t + 0.5); jump = Math.max(jump, Math.hypot(b[0][0] - a[0][0], b[0][1] - a[0][1], b[0][2] - a[0][2])); }
+  ok(keyErr < 1e-9 && jump < 0.5, `encounter: the mirror hits the keyframes (err ${keyErr.toExponential(1)}); a core moves at most ${jump.toFixed(3)} kpc per 0.5 Myr`);
+  // the phase follows the separation and the events
+  let order = [], bad = 0;
+  for (let t = 0; t <= enc.tEnd; t += 2) {
+    const ph = EN.phaseAt(enc, t);
+    if (order[order.length - 1] !== ph.phase) order.push(ph.phase);
+    const want = t >= enc.tMerge ? 'merger' : ph.sep < 1.6 * enc.sepPeri ? 'peri' : t > enc.peri[0] ? 'tails' : 'approach';
+    if (want !== ph.phase) bad++;
+  }
+  ok(bad === 0 && order.join() === 'approach,peri,tails,peri,merger', `encounter: phases by separation ${order.join(' > ')} (${bad} mismatches)`);
+}
+
+// ── director: a whole encounter at 60 fps ──
+const runs = {};
+for (const [name, aspect] of [['16:9', 16 / 9], ['9:16', 9 / 16]]) {
+  const d = D.createDirector({ fov: 40 }), dt = 1 / 60, speed = 14;
+  let prev = null, minShare = 1, minAt = 0, step = 0, zoom = 0, ang = 0, minR = 1e9, tailShare = 1;
+  const rByPhase = {}, gainByPhase = {};
+  for (let t = 0; t <= enc.tEnd; t += speed * dt) {
+    const c = d.update({ enc, t, dt, aspect, viewPx: 2e6, nStars: encBuilt.count });
+    const s = EN.sampleAt(enc, t, { count: 1000 });
+    const aw = actionWeights(s), sh = D.viewShare(c, C.basis, s, aw, aspect);
+    if (sh < minShare) { minShare = sh; minAt = t; }
+    // the tidal material alone (the hosts out): the tails shot must hold it
+    if (c.phase === 'tails' && c.weights.tails > 0.9) { aw[s.nStars] = aw[s.nStars + 1] = 0; tailShare = Math.min(tailShare, D.viewShare(c, C.basis, s, aw, aspect)); }
+    if (prev) {
+      step = Math.max(step, Math.hypot(c.target[0] - prev.target[0], c.target[1] - prev.target[1], c.target[2] - prev.target[2]) / c.dist);
+      zoom = Math.max(zoom, Math.abs(Math.log(c.dist / prev.dist)));
+      ang = Math.max(ang, Math.abs(c.pitch - prev.pitch), Math.abs(c.yaw - prev.yaw));
+    }
+    minR = Math.min(minR, c.radius);
+    (rByPhase[c.phase] ||= []).push(c.radius); (gainByPhase[c.phase] ||= []).push(c.gain);
+    prev = c;
+  }
+  const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+  runs[name] = { rByPhase, gainByPhase };
+  ok(minShare >= 0.8, `director ${name}: the view holds >= ${minShare.toFixed(3)} of the action weight (min at ${minAt.toFixed(0)} Myr)`);
+  ok(tailShare >= 0.75, `director ${name}: the tails shot holds >= ${tailShare.toFixed(3)} of the action weight of the test stars alone`);
+  ok(step < 0.004 && zoom < 0.35 / 60 + 1e-6 && ang < 0.006, `director ${name}: per frame the target moves <= ${step.toFixed(4)} of the distance, log zoom <= ${zoom.toFixed(4)}, angles <= ${ang.toFixed(4)} rad (no shake, no cut)`);
+  const r = Object.fromEntries(Object.entries(rByPhase).map(([k, v]) => [k, med(v)]));
+  ok(r.peri < r.approach && r.peri < r.tails && r.merger < r.tails && minR >= D.MIN_R,
+    `director ${name}: median radius approach ${r.approach.toFixed(1)}, peri ${r.peri.toFixed(1)}, tails ${r.tails.toFixed(1)}, merger ${r.merger.toFixed(1)} kpc; never under ${D.MIN_R} kpc (min ${minR.toFixed(1)})`);
+}
+{
+  // the brightness hint sets the gain: a wide view of dense cores gets a
+  // low gain (strong compression), a close view gets 1
+  const ac = createActionCamera({ fill: D.FILL });
+  const near = D.coreGain(ac.follow({ c: [0, 0, 0], r: 8, n: 1e5 }), { viewPx: 2e6, nStars: 1e5 });
+  ac.reset();
+  const far = D.coreGain(ac.follow({ c: [0, 0, 0], r: 60, n: 1e5 }), { viewPx: 2e6, nStars: 1e5 });
+  const g = runs['16:9'].gainByPhase, mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  ok(near === 1 && far < 0.5 && mean(g.tails) < mean(g.peri), `director: the brightness hint gives gain ${near.toFixed(2)} at 8 kpc, ${far.toFixed(2)} at 60 kpc; mean gain peri ${mean(g.peri).toFixed(2)}, tails ${mean(g.tails).toFixed(2)}`);
+}
+
+// ── saver pair shots: plate band, 16:9 and 9:16 ──
+{
+  let worst = 1, worstAt = '', inRun = true, step = 0;
+  for (const [name, aspect] of [['16:9', 16 / 9], ['9:16', 9 / 16]]) for (const phase of D.PHASES) for (const dur of [5, 12]) {
+    const w = pairShot(enc, phase, dur);
+    if (!(w.start >= 0 && w.start < enc.tEnd && w.rate >= 6 && w.rate <= 30)) inRun = false;
+    const d = D.createDirector({ fov: 40 }), band = 0.55, dt = 1 / 30;
+    d.snap({ side: phase === 'peri' ? -1 : 1, jitter: 0.3 });
+    let prev = null;
+    for (let el = 0, t = w.start; el < dur; el += dt, t = Math.min(enc.tEnd, t + w.rate * dt)) {
+      const c = d.update({ enc, t, dt, aspect, band, yawRate: 0.05 });
+      const s = EN.sampleAt(enc, t, { count: 600 });
+      const sh = D.viewShare(c, C.basis, s, actionWeights(s), aspect, band);
+      if (sh < worst) { worst = sh; worstAt = `${name} ${phase} ${dur} s at ${el.toFixed(1)} s`; }
+      if (prev) step = Math.max(step, Math.hypot(c.target[0] - prev.target[0], c.target[1] - prev.target[1], c.target[2] - prev.target[2]) / c.dist);
+      prev = c;
+    }
+  }
+  ok(inRun, 'saver pair: every phase window starts inside the run at 6-30 Myr/s');
+  ok(worst >= 0.8 && step < 0.01, `saver pair: in a 55 % band the view holds >= ${worst.toFixed(3)} of the action weight (${worstAt}); target step <= ${step.toFixed(4)} of the distance`);
+  const plan = (await import('./saverplan.js')).makePlan(11, 0.7), phases = new Set();
+  for (let i = 0; i < 42; i++) { const s = plan.next(); if (s.kind === 'pair') phases.add(s.phase); }
+  ok(D.PHASES.every(p => phases.has(p)), `saver pair: two decks hold the phases ${[...phases].join(', ')}`);
+}
+
+// ── action camera: the two halves ──
+{
+  const a = createActionCamera(), b = createActionCamera();
+  let worst = 0;
+  for (let f = 0; f < 300; f++) {
+    const s = EN.sampleAt(enc, f * 2, { count: 300 });
+    const ga = a.update(s, 1 / 60), gb = b.follow(b.measure(s), 1 / 60);
+    worst = Math.max(worst, Math.abs(ga.radius - gb.radius), ...ga.center.map((v, k) => Math.abs(v - gb.center[k])));
+  }
+  ok(worst === 0, `action camera: update equals follow(measure) over 300 frames (max difference ${worst})`);
 }
 
 console.log(`\n${n - fail}/${n} passed`);

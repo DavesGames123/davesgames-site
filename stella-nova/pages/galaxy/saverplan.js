@@ -2,7 +2,9 @@
 //  GALAXY  ·  saverplan.js — the screensaver shot list (no DOM)
 // ----------------------------------------------------------------------------
 //  makePlan(seed, calm).next() gives one shot:
-//    { key, subject, kind, dur, yaw0, spin, incl }
+//    { key, subject, kind, dur, yaw0, spin, incl, phase }
+//  phase (pair shots only): approach, peri, tails or merger. saver.js
+//  starts the encounter at that phase and lets director.js frame it.
 //  key is a preset key or "type:seed" (a random galaxy of that type).
 //  A deck holds every (subject, kind) pair once; it is shuffled with the
 //  seed, and a new shuffle starts when it runs out. The same subject never
@@ -14,7 +16,8 @@
 //    dive   from outside down into the disk, level at the end
 //    bulge  a lateral fly-by of the bulge, close in
 //    edge   edge-on, the dust lane across the frame
-//    pair   a wide arc round an interacting pair
+//    pair   a wide arc round an interacting pair (the fallback when a
+//           build has no encounter record)
 //  ctx = { R (fit radius, kpc), Rd, fit (fit distance, kpc), re }.
 // ============================================================================
 import { rng } from './model.js';
@@ -27,8 +30,8 @@ const BASE = [
   ['sombrero', 'edge'], ['sombrero', 'bulge'],
   ['ngc1300', 'face'], ['ngc1300', 'orbit'],
   ['flocculent', 'orbit'], ['flocculent', 'dive'],
-  ['antennae', 'pair'],
-  ['pair:*', 'pair'], ['grand:*', 'dive'], ['barred:*', 'face'], ['flocculent:*', 'orbit'],
+  ['antennae', 'pair', 'approach'], ['antennae', 'pair', 'tails'],
+  ['pair:*', 'pair', 'peri'], ['pair:*', 'pair', 'merger'], ['grand:*', 'dive'], ['barred:*', 'face'], ['flocculent:*', 'orbit'],
   ['elliptical:*', 'bulge'], ['lenticular:*', 'edge'], ['irregular:*', 'orbit'],
 ];
 const INCL = { orbit: [35, 65], face: [8, 22], dive: [45, 65], bulge: [55, 75], edge: [84, 88], pair: [30, 60] };
@@ -37,7 +40,7 @@ export function makePlan(seed, calm = 0.7) {
   const r = rng((seed >>> 0) * 2246822519 + 3);
   let deck = [], i = 0, last = '';
   const shuffle = () => {
-    deck = BASE.map(([k, kind]) => ({ key: k.endsWith(':*') ? k.replace('*', String(1 + Math.floor(r() * 9999))) : k, kind }));
+    deck = BASE.map(([k, kind, phase]) => ({ key: k.endsWith(':*') ? k.replace('*', String(1 + Math.floor(r() * 9999))) : k, kind, phase }));
     for (let j = deck.length - 1; j > 0; j--) { const q = Math.floor(r() * (j + 1)); [deck[j], deck[q]] = [deck[q], deck[j]]; }
     i = 0;
   };
@@ -51,7 +54,7 @@ export function makePlan(seed, calm = 0.7) {
       last = s.key;
       const [a, b] = INCL[s.kind];
       const dur = Math.min(12, Math.max(5, (6 + 5 * r()) * (0.85 + 0.25 * calm)));
-      return { key: s.key, subject: s.key.split(':')[0], kind: s.kind, dur, yaw0: r() * 6.2832, spin: (r() < 0.5 ? -1 : 1) * (0.25 + 0.3 * r()) * (1.1 - 0.5 * calm), incl: lerp(a, b, r()) };
+      return { key: s.key, subject: s.key.split(':')[0], kind: s.kind, phase: s.phase || null, dur, yaw0: r() * 6.2832, spin: (r() < 0.5 ? -1 : 1) * (0.25 + 0.3 * r()) * (1.1 - 0.5 * calm), incl: lerp(a, b, r()) };
     },
   };
 }

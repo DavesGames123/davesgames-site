@@ -20,14 +20,17 @@
 //    gals   Float32Array, GAL_FLOATS per galaxy: the volume uniforms
 //    stars  Float32Array, STAR_FLOATS per star: the point-sprite instances
 //  Interacting pairs run a restricted three-body model (Toomre and Toomre
-//  1972) in tidalPair: two point masses on a parabolic orbit and test
-//  stars in two disks.
+//  1972): two point masses on a parabolic orbit and test stars in two
+//  disks. tidalEncounter (used by buildGalaxy) records the whole
+//  encounter, with a close-range drag on the two masses so they merge;
+//  built.enc carries the record and encounter.js reads it.
 //
 //  EXPORTS (grep -n "^export" model.js)
 //    sersicB sersicI sersicTotal sersicRho sersicRhoTotal prugnielP gammaFn
 //    diskRho diskTotal vcirc omega armAzimuth spiralRadius blackbodyRGB
-//    TYPES PRESETS randomParams buildGalaxy packGalaxy tidalPair rng
+//    TYPES PRESETS randomParams buildGalaxy packGalaxy rng
 //    GAL_FLOATS STAR_FLOATS OFF
+//    tidalEncounter encounterStars ENC toHalf fromHalf
 // ============================================================================
 
 export const KMS_KPC = 1.0227e-3;          // 1 km/s/kpc in rad/Myr
@@ -338,6 +341,7 @@ function vnoise(x, y, seed) {
 //   pop 3 bar        p = x_bar, y_bar, z      q = -, -, twinklePhase
 //   pop 4 static     p = world x, y, z        q = -, -, twinklePhase
 //   pop 5 sky        p = unit direction       q = elongation, position angle, twinklePhase; gal = kind (0 star, 1 galaxy)
+//   pop 6 encounter  p = track index, -, -    q = -, -, twinklePhase (the path is enc.track, see tidalEncounter)
 class StarWriter {
   constructor(cap) { this.d = new Float32Array(cap * STAR_FLOATS); this.n = 0; this.cap = cap; }
   push(a, b, c, d) {
@@ -477,14 +481,37 @@ function fillJet(W, gi, r, re) {
   }
 }
 
-// ── interacting pair: restricted three-body ─────────────────────────────────
-// Two softened point masses on a parabolic orbit; massless stars start on
-// circular orbits in a disk round each mass. Units G = M1 = 1, length
-// unit UL kpc. Returns centres, normals, and star positions (in kpc).
-export function tidalPair(seed, { n = 12000, mass2 = 0.8, rp = 0.8, incl1 = 15, incl2 = 60, tEnd = 5.4, UL = 8 } = {}) {
+// ── interacting pair: a restricted three-body run, recorded in time ─────────
+// Two softened point masses (G = M1 = 1, length unit UL kpc) start on a
+// parabolic orbit; massless test stars start on circular orbits in a disk
+// round each mass. The run covers the approach, the first pericentre, the
+// tails, the return and the merger. Dynamical friction is a drag on the two masses only,
+//   dv_i/dt = -gamma(d) v_i,  gamma(d) = gamma_0 exp(-(d/d_0)^2)
+// in the centre-of-mass frame (both velocities scale by the same factor,
+// so the centre of mass stays at rest). The drag takes orbital energy at
+// close range, so the pair comes back and merges. The test stars feel the
+// two masses only.
+// The run records K keyframes of every test star (half floats, two u32 a
+// star: x|y, z|0, in kpc from the centre of mass) and 4 (K-1) + 1 samples
+// of the two centres. Time: the code unit of time is TU Myr, set so that
+// the test disks turn at about v_flat.
+export const ENC = { K: 128, sub: 16, tEnd: 17, drag: 0.32, dragR: 1.0, mergeSep: 0.35 };
+export function encounterStars(stars) { return Math.round(Math.min(10000, stars * 0.16)); }
+const f32b = new Float32Array(1), u32b = new Uint32Array(f32b.buffer);
+// IEEE half from a float (round to nearest, clamped to +-65504).
+export function toHalf(v) {
+  f32b[0] = Math.max(-65504, Math.min(65504, v));
+  const x = u32b[0], sign = (x >>> 16) & 0x8000, e = ((x >>> 23) & 0xff) - 112, m = x & 0x7fffff;
+  if (e <= 0) { if (e < -10) return sign; const mm = (m | 0x800000) >> (1 - e); return sign | ((mm + 0x1000) >> 13); }
+  return Math.min(0x7bff, ((e << 10) | (m >> 13)) + ((m >> 12) & 1)) | sign;
+}
+export function fromHalf(h) {
+  const s = h & 0x8000 ? -1 : 1, e = (h >> 10) & 31, m = h & 1023;
+  return e === 0 ? s * m * 5.960464477539063e-8 : s * (1 + m / 1024) * Math.pow(2, e - 15);
+}
+export function tidalEncounter(seed, { n = 8000, mass2 = 0.8, rp = 0.8, incl1 = 15, incl2 = 60, UL = 8, vflat = 200, K = ENC.K, sub = ENC.sub, tEnd = ENC.tEnd, drag = ENC.drag, dragR = ENC.dragR } = {}) {
   const r = rng(seed * 104729 + 7), eps2 = 0.04;
   const M = [1, mass2], Mt = 1 + mass2;
-  // parabolic relative orbit, start at true anomaly f0 before pericentre.
   const f0 = -2.2, p = 2 * rp;
   const rr = p / (1 + Math.cos(f0)), h = Math.sqrt(Mt * p);
   const rel = [rr * Math.cos(f0), rr * Math.sin(f0), 0];
@@ -493,14 +520,15 @@ export function tidalPair(seed, { n = 12000, mass2 = 0.8, rp = 0.8, incl1 = 15, 
     { x: rel.map(v => -v * mass2 / Mt), v: vrel.map(v => -v * mass2 / Mt) },
     { x: rel.map(v => v * 1 / Mt), v: vrel.map(v => v * 1 / Mt) },
   ];
-  // disk normals: tilt from the orbit normal (prograde when small).
   const tilt = (deg, az) => { const a = deg * Math.PI / 180; return [Math.sin(a) * Math.cos(az), Math.sin(a) * Math.sin(az), Math.cos(a)]; };
   const N = [tilt(incl1, r() * 6.28), tilt(incl2, r() * 6.28)];
   const F = N.map(nn => frameFromNormal(nn));
-  const np = n, X = new Float64Array(np * 3), V = new Float64Array(np * 3), host = new Uint8Array(np), R0 = new Float32Array(np);
-  for (let i = 0; i < np; i++) {
-    const g = i < np * 0.55 ? 0 : 1; host[i] = g;
-    const Rg = 0.08 + 0.85 * Math.sqrt(r()) * (g ? 0.9 : 1);
+  const X = new Float64Array(n * 3), V = new Float64Array(n * 3), A = new Float64Array(n * 3), host = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = i < n * 0.55 ? 0 : 1; host[i] = g;
+    // the outer disk only (0.22 to 0.94 UL): the inner disk is the rigid
+    // fill disk of the host, and it is the outer disk that the tide pulls out
+    const Rg = (0.22 + 0.72 * Math.sqrt(r())) * (g ? 0.9 : 1);
     const ph = r() * 6.283185307, vc = Math.sqrt(M[g] * Rg * Rg / Math.pow(Rg * Rg + eps2, 1.5));
     const lx = Rg * Math.cos(ph), ly = Rg * Math.sin(ph), lz = r.gauss() * 0.012;
     const vx = -vc * Math.sin(ph), vy = vc * Math.cos(ph);
@@ -509,39 +537,60 @@ export function tidalPair(seed, { n = 12000, mass2 = 0.8, rp = 0.8, incl1 = 15, 
       X[i * 3 + a] = B[g].x[a] + e1[a] * lx + e2[a] * ly + nn[a] * lz;
       V[i * 3 + a] = B[g].v[a] + e1[a] * vx + e2[a] * vy;
     }
-    R0[i] = Rg;
   }
-  const acc = (px, py, pz, out) => {
-    out[0] = out[1] = out[2] = 0;
-    for (let g = 0; g < 2; g++) {
-      const dx = B[g].x[0] - px, dy = B[g].x[1] - py, dz = B[g].x[2] - pz;
-      const d2 = dx * dx + dy * dy + dz * dz + eps2, f = M[g] / (d2 * Math.sqrt(d2));
-      out[0] += f * dx; out[1] += f * dy; out[2] += f * dz;
+  const accAll = () => {
+    const b0 = B[0].x, b1 = B[1].x;
+    for (let i = 0; i < n; i++) {
+      const o = i * 3, px = X[o], py = X[o + 1], pz = X[o + 2];
+      let dx = b0[0] - px, dy = b0[1] - py, dz = b0[2] - pz, d2 = dx * dx + dy * dy + dz * dz + eps2, f = M[0] / (d2 * Math.sqrt(d2));
+      let ax = f * dx, ay = f * dy, az = f * dz;
+      dx = b1[0] - px; dy = b1[1] - py; dz = b1[2] - pz; d2 = dx * dx + dy * dy + dz * dz + eps2; f = M[1] / (d2 * Math.sqrt(d2));
+      A[o] = ax + f * dx; A[o + 1] = ay + f * dy; A[o + 2] = az + f * dz;
     }
   };
-  const dt = 0.008, steps = Math.round(tEnd / dt), a = [0, 0, 0];
-  for (let s = 0; s < steps; s++) {
-    // bodies: kick-drift-kick on the pair
-    const kickB = (hh) => {
-      const dx = B[1].x[0] - B[0].x[0], dy = B[1].x[1] - B[0].x[1], dz = B[1].x[2] - B[0].x[2];
-      const d2 = dx * dx + dy * dy + dz * dz + eps2, f = 1 / (d2 * Math.sqrt(d2));
-      B[0].v[0] += hh * f * M[1] * dx; B[0].v[1] += hh * f * M[1] * dy; B[0].v[2] += hh * f * M[1] * dz;
-      B[1].v[0] -= hh * f * M[0] * dx; B[1].v[1] -= hh * f * M[0] * dy; B[1].v[2] -= hh * f * M[0] * dz;
-    };
-    for (let i = 0; i < np; i++) { acc(X[i * 3], X[i * 3 + 1], X[i * 3 + 2], a); V[i * 3] += 0.5 * dt * a[0]; V[i * 3 + 1] += 0.5 * dt * a[1]; V[i * 3 + 2] += 0.5 * dt * a[2]; }
-    kickB(0.5 * dt);
-    for (let g = 0; g < 2; g++) for (let c = 0; c < 3; c++) B[g].x[c] += dt * B[g].v[c];
-    for (let i = 0; i < np * 3; i++) X[i] += dt * V[i];
-    kickB(0.5 * dt);
-    for (let i = 0; i < np; i++) { acc(X[i * 3], X[i * 3 + 1], X[i * 3 + 2], a); V[i * 3] += 0.5 * dt * a[0]; V[i * 3 + 1] += 0.5 * dt * a[1]; V[i * 3 + 2] += 0.5 * dt * a[2]; }
-  }
-  // centre of mass frame, then kpc.
+  const kickB = hh => {
+    const dx = B[1].x[0] - B[0].x[0], dy = B[1].x[1] - B[0].x[1], dz = B[1].x[2] - B[0].x[2];
+    const d2 = dx * dx + dy * dy + dz * dz + eps2, f = 1 / (d2 * Math.sqrt(d2));
+    B[0].v[0] += hh * f * M[1] * dx; B[0].v[1] += hh * f * M[1] * dy; B[0].v[2] += hh * f * M[1] * dz;
+    B[1].v[0] -= hh * f * M[0] * dx; B[1].v[1] -= hh * f * M[0] * dy; B[1].v[2] -= hh * f * M[0] * dz;
+  };
+  const steps = (K - 1) * sub, dt = tEnd / steps, cs = sub / 4;
+  const NC = 4 * (K - 1) + 1, cores = new Float32Array(NC * 6), track = new Uint32Array(K * n * 2);
   const cm = [0, 1, 2].map(c => (B[0].x[c] * M[0] + B[1].x[c] * M[1]) / Mt);
-  const pos = new Float32Array(np * 3);
-  for (let i = 0; i < np; i++) for (let c = 0; c < 3; c++) pos[i * 3 + c] = (X[i * 3 + c] - cm[c]) * UL;
+  const recCores = j => { for (let g = 0; g < 2; g++) for (let c = 0; c < 3; c++) cores[j * 6 + g * 3 + c] = (B[g].x[c] - cm[c]) * UL; };
+  const recStars = k => {
+    const o = k * n * 2;
+    for (let i = 0; i < n; i++) {
+      const x = toHalf((X[i * 3] - cm[0]) * UL), y = toHalf((X[i * 3 + 1] - cm[1]) * UL), z = toHalf((X[i * 3 + 2] - cm[2]) * UL);
+      track[o + i * 2] = (x | (y << 16)) >>> 0; track[o + i * 2 + 1] = z;
+    }
+  };
+  accAll(); recCores(0); recStars(0);
+  for (let s = 1; s <= steps; s++) {
+    for (let i = 0; i < n * 3; i++) V[i] += 0.5 * dt * A[i];
+    kickB(0.5 * dt);
+    const dd = Math.hypot(B[1].x[0] - B[0].x[0], B[1].x[1] - B[0].x[1], B[1].x[2] - B[0].x[2]);
+    const kd = Math.exp(-drag * Math.exp(-((dd / dragR) ** 2)) * dt);
+    for (let g = 0; g < 2; g++) for (let c = 0; c < 3; c++) { B[g].v[c] *= kd; B[g].x[c] += dt * B[g].v[c]; }
+    for (let i = 0; i < n * 3; i++) X[i] += dt * V[i];
+    kickB(0.5 * dt);
+    accAll();
+    for (let i = 0; i < n * 3; i++) V[i] += 0.5 * dt * A[i];
+    if (s % cs === 0) recCores(s / cs);
+    if (s % sub === 0) recStars(s / sub);
+  }
+  // events, from the recorded centres: pericentres (local minima of the
+  // separation) and the merger (the separation stays under mergeSep UL)
+  const vunit = vflat / 1.15, TU = UL / (vunit * KMS_KPC), dtC = tEnd * TU / (NC - 1);
+  const sep = new Float32Array(NC);
+  for (let j = 0; j < NC; j++) sep[j] = Math.hypot(cores[j * 6 + 3] - cores[j * 6], cores[j * 6 + 4] - cores[j * 6 + 1], cores[j * 6 + 5] - cores[j * 6 + 2]);
+  const peri = [];
+  for (let j = 1; j < NC - 1; j++) if (sep[j] < sep[j - 1] && sep[j] <= sep[j + 1]) peri.push(j * dtC);
+  let jm = NC - 1; while (jm > 0 && sep[jm - 1] < ENC.mergeSep * UL) jm--;
   return {
-    centres: B.map(b => b.x.map((v, c) => (v - cm[c]) * UL)),
-    normals: N, frames: F, pos, host, R0, UL, n: np,
+    K, n, NC, UL, TU, tEnd: tEnd * TU, dtK: tEnd * TU / (K - 1), dtC, track, cores, sep, host, frames: F, normals: N,
+    peri, tMerge: sep[NC - 1] < ENC.mergeSep * UL ? jm * dtC : Infinity,
+    sepPeri: peri.length ? sep[Math.round(peri[0] / dtC)] : rp * UL, rDisk: 0.94 * UL,
   };
 }
 
@@ -555,40 +604,42 @@ export function buildGalaxy(P, { stars = 120000, sky = true, bg = true } = {}) {
   const gals = new Float32Array(GAL_FLOATS * 2);
   const list = [];
   const pa = (P.pa || 0) * Math.PI / 180;
-  let meta = { R: P.Rd * 6, centre: [0, 0, 0] };
+  let meta = { R: P.Rd * 6, centre: [0, 0, 0] }, enc = null;
 
   if (P.type === 'pair') {
-    const T = tidalPair(P.seed || 1, { n: Math.round(Math.min(16000, stars * 0.3)) });
+    const T = tidalEncounter(P.seed || 1, { n: encounterStars(stars), vflat: P.vflat });
+    const c0 = [[T.cores[0], T.cores[1], T.cores[2]], [T.cores[3], T.cores[4], T.cores[5]]];
     for (let g = 0; g < 2; g++) {
       const Pg = Object.assign({}, P, g ? { Rd: P.Rd * 0.85, BT: P.BT * 1.4, seed: (P.seed || 1) + 7 } : {});
-      list.push({ P: Pg, rot: T.frames[g], centre: T.centres[g], L: g ? 0.7 : 1, scale: 1, seedOff: g * 3.7 });
+      list.push({ P: Pg, rot: T.frames[g], centre: c0[g], L: g ? 0.7 : 1, scale: 1, seedOff: g * 3.7 });
     }
-    // test stars: those still close to their host become rotating disk
-    // stars of that host; the rest are the static tails and bridge.
+    // test stars: pop 6, their path is the recorded track (the GPU reads it
+    // by index). The disk fill of each host is rigid and moves with the
+    // host centre, which the engine sets each frame.
     const C0 = components(P, 1);
     const Lper = (C0.Lthin + C0.Lyoung) * 0.35 / T.n;
     for (let i = 0; i < T.n; i++) {
-      const g = T.host[i], c = T.centres[g], F = T.frames[g];
-      const dx = T.pos[i * 3] - c[0], dy = T.pos[i * 3 + 1] - c[1], dz = T.pos[i * 3 + 2] - c[2];
-      const lx = F[0][0] * dx + F[0][1] * dy + F[0][2] * dz, ly = F[1][0] * dx + F[1][1] * dy + F[1][2] * dz, lz = F[2][0] * dx + F[2][1] * dy + F[2][2] * dz;
       const young = r() < 0.3, T0 = young ? 9000 + 20000 * r() ** 2 : 3600 + 2600 * r();
       const col = starRGB(T0), L = Lper * (young ? 2.2 : 0.8) * (0.4 + r());
-      const Rl = Math.hypot(lx, ly);
-      if (Rl < T.R0[i] * T.UL * 1.25 + 1.5 && Math.abs(lz) < 1.2 && Rl < 9) {
-        W.push([0, Rl, Math.atan2(ly, lx), lz], [g, young ? 0.3 : 0.1, 1, r() * 6.28], [col[0], col[1], col[2], L], [1, 0.08, 0, 0]);
-      } else {
-        // tail stars, plus diffuse puffs so the tails glow as a whole
-        const puff = r() < 0.18;
-        W.push([4, T.pos[i * 3], T.pos[i * 3 + 1], T.pos[i * 3 + 2]], [g, 0, 0, r() * 6.28], [col[0], col[1], col[2], L * (puff ? 7 : 1)], [1, 0.06, puff ? 0.3 + 0.45 * r() : 0, 0]);
-      }
+      // plus diffuse puffs so the tails glow as a whole
+      const puff = r() < 0.18;
+      W.push([6, i, 0, 0], [T.host[i], 0, 0, r() * 6.28], [col[0], col[1], col[2], L * (puff ? 7 : 1)], [1, 0.06, puff ? 0.3 + 0.45 * r() : 0, 0]);
     }
     const rest = stars - W.n;
     fillStars(W, list[0].P, 0, Math.round(rest * 0.55), r, 1, 1, 0);
     fillStars(W, list[1].P, 1, Math.round(rest * 0.4), r, 1, 0.7, 3.7);
-    // fit radius: the 92nd percentile of the star distances from the centre
-    const ds = []; for (let i = 0; i < T.n; i++) ds.push(Math.hypot(T.pos[i * 3], T.pos[i * 3 + 1], T.pos[i * 3 + 2]));
-    ds.sort((a, b) => a - b);
-    meta = { R: ds[Math.floor(ds.length * 0.92)] + 3, centre: [0, 0, 0], centres: T.centres };
+    // fit radius: the largest 92nd percentile of the distances from the
+    // centre of mass, over the second half of the run
+    let R = 0;
+    for (const k of [T.K >> 1, (3 * T.K) >> 2, T.K - 1]) {
+      const ds = [], o = k * T.n * 2;
+      for (let i = 0; i < T.n; i += 3) { const q = T.track[o + i * 2]; ds.push(Math.hypot(fromHalf(q & 0xffff), fromHalf(q >>> 16), fromHalf(T.track[o + i * 2 + 1] & 0xffff))); }
+      ds.sort((a, b) => a - b); R = Math.max(R, ds[Math.floor(ds.length * 0.92)]);
+    }
+    meta = { R: R + 3, centre: [0, 0, 0], centres: c0 };
+    enc = { K: T.K, n: T.n, NC: T.NC, UL: T.UL, TU: T.TU, tEnd: T.tEnd, dtK: T.dtK, dtC: T.dtC, track: T.track, cores: T.cores, sep: T.sep, host: T.host, peri: T.peri, tMerge: T.tMerge, sepPeri: T.sepPeri, rDisk: T.rDisk,
+      // the share of the pair's light in the two hosts (rigid disks, bulges), not in the test stars
+      coreShare: 1 - 0.35 * (C0.Lthin + C0.Lyoung) / 1.7 };
   } else {
     const rot = frameFromNormal([0, 0, 1], pa);
     list.push({ P, rot, centre: [0, 0, 0], L: 1, scale: 1, seedOff: 0 });
@@ -608,7 +659,7 @@ export function buildGalaxy(P, { stars = 120000, sky = true, bg = true } = {}) {
   }
   list.forEach((g, i) => packGalaxy(g, gals, i * GAL_FLOATS));
   fillSky(W, r, nSky, nBg);
-  return { gals, nGal: list.length, list, stars: W.d.subarray(0, W.n * STAR_FLOATS), count: W.n, meta, P };
+  return { gals, nGal: list.length, list, stars: W.d.subarray(0, W.n * STAR_FLOATS), count: W.n, meta, P, enc };
 }
 
 // Surface brightness that sets the brightness scale (sky stars, the peak
