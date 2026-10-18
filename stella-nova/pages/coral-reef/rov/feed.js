@@ -26,7 +26,17 @@
 //  one per update, never a burst). A governor drops the rate by steps
 //  (30, 24, 20, 15, 12, 10) when the main frame time goes up or the feed
 //  render takes more than its budget, and steps up again after 4 s.
-//  setActive(false) (the card is hidden) stops the live renders.
+//  setActive(false) (the card is hidden) stops the live renders, the new
+//  SSTV captures and the panel redraws.
+//
+//  MANY FEEDS (rov/feeds.js, one card per ROV). o.drive 'external': update()
+//  does not render live frames; the feed set calls liveFrame(dt) when its
+//  shared rate (o.rate, one liveRate for all the feeds) and its weighted
+//  round robin give this feed the next frame. o.gate() -> false defers a
+//  new SSTV capture (the set allows one capture per main frame). o.port:
+//  one feed worker for all the feeds ({ post(msg, transfer), listen(stream,
+//  fn) }; o.stream is the key of this feed). setLook({ colour, compact }):
+//  the ROV colour and the small card of hud.js.
 //
 //  SSTV ('r8', 'r36', 'm1': Robot 8 B&W, Robot 36, Martin M1). The true
 //  slow-scan link (link.js SstvLink over pages/sstv):
@@ -54,6 +64,7 @@
 //    "export function analogFrame"  the live look on the CPU (node)
 //    "export function liveRate"     the frame accumulator and governor
 //    "function capture"  "function startFrame"  "function renderLive"
+//    "liveFrame(dt)"     one live frame now (the feed set of rov/feeds.js)
 //    "export function createFeed"
 // ============================================================================
 import { SstvLink, frameToMode, makeSamples, byId } from './link.js';
@@ -322,7 +333,9 @@ export function createFeed(THREE, o = {}) {
     // the first AGC value: a gain of 8
     return L;
   }
-  const rate = liveRate({ fps: FPS, min: o.minFps || Math.min(10, FPS), budgetMs: o.budgetMs ?? 3, adapt: o.adapt });
+  const rate = o.rate || liveRate({ fps: FPS, min: o.minFps || Math.min(10, FPS), budgetMs: o.budgetMs ?? 3, adapt: o.adapt });
+  const external = o.drive === 'external';
+  const look = { colour: o.colour || null, compact: !!o.compact };
   let active = true, liveT = 0, roll = 0, liveFrames = 0, fpsWin = [], livePic = null;
   const lr = { R: (o.seed ?? 1) * 9301 + 49297, slant: 0.012, bar: 0.2, glitch: 0, snr: 34 };
   const rnd = () => { lr.R = (lr.R * 16807) % 2147483647; return lr.R / 2147483647; };
@@ -330,17 +343,26 @@ export function createFeed(THREE, o = {}) {
 
   let worker = null, pending = 0, reqId = 0, vid = o.vehicle ?? 1;
   const agc = { g: 8 };
+  const onResult = (d) => {
+    if (d.id !== reqId && d.id !== '*') return;   // a stale frame (mode or vehicle change); '*': the shared worker failed
+    pending = 0;
+    if (d.error) { worker = null; return; }
+    link.beginSamples({ samples: d.samples, env: d.env, envHz: d.envHz, params: d.params });
+  };
   function ensureWorker() {
+    if (o.port) {
+      // one worker for all the feeds (rov/feeds.js): post with the stream
+      // key; a dead port leaves the encode on this thread
+      if (!o.port.dead && !worker) {
+        worker = { postMessage: (m, tr) => o.port.post(Object.assign(m, { stream: o.stream }), tr), terminate() {} };
+        o.port.listen(o.stream, onResult);
+      }
+      return;
+    }
     if (worker || o.worker === false || typeof Worker === 'undefined') return;
     try {
       worker = new Worker(new URL('./feed-worker.js', import.meta.url), { type: 'module' });
-      worker.onmessage = (e) => {
-        const d = e.data;
-        if (d.id !== reqId) return;               // a stale frame (mode or vehicle change)
-        pending = 0;
-        if (d.error) { worker = null; return; }
-        link.beginSamples({ samples: d.samples, env: d.env, envHz: d.envHz, params: d.params });
-      };
+      worker.onmessage = (e) => onResult(e.data);
       worker.onerror = () => { worker = null; pending = 0; };
     } catch { worker = null; }
   }
@@ -378,8 +400,10 @@ export function createFeed(THREE, o = {}) {
     const params = link.nextParams();
     if (worker) {
       pending = ++reqId;
-      worker.postMessage({ id: reqId, img: { w: img.w, h: img.h, data: img.data }, params }, [img.data.buffer]);
-    } else link.beginSamples(makeSamples(img, params));
+      try { worker.postMessage({ id: reqId, img: { w: img.w, h: img.h, data: img.data }, params }, [img.data.buffer]); return true; }
+      catch { worker = null; pending = 0; }      // a dead shared worker: encode here
+    }
+    link.beginSamples(makeSamples(img, params));
     return true;
   }
 
@@ -457,30 +481,39 @@ export function createFeed(THREE, o = {}) {
     const extra = o.info && v ? o.info(v) : {};
     return Object.assign({ id: vid, depth: 0, heading: 0, time: wall }, extra, { status: live ? liveStatus() : link.status(), t: wall });
   }
+  // the panel redraw: 10 Hz (live; 5 Hz on a small card) or 20 Hz (SSTV)
+  const hudO = (hole) => ({ hole, aspect: LW / LH, colour: look.colour, compact: look.compact });
   function update(dt) {
     wall += dt;
     if (live) {
       liveT += dt;
-      if (rate.tick(dt) && active) renderLive(Math.max(dt, 1 / rate.fps));
+      if (!external && rate.tick(dt) && active) renderLive(Math.max(dt, 1 / rate.fps));
       since += dt;
-      if (ctx && since >= 0.1) {
+      if (ctx && active && since >= (look.compact ? 0.2 : 0.1)) {
         since = 0;
         ctx.setTransform(canvas.width / HUD.W, 0, 0, canvas.height / HUD.H, 0, 0);
-        last = drawHud(ctx, info(), null, { hole: true, aspect: LW / LH });
+        last = drawHud(ctx, info(), null, hudO(true));
       }
       return 'live';
     }
     const st = link.advance(dt);
-    if (st === 'need' && !pending) startFrame();
+    if (st === 'need' && !pending && active && (!o.gate || o.gate())) startFrame();
     const rows = link.take();
     if (rows && picCtx && picData) { picData.data.set(link.picture); picCtx.putImageData(picData, 0, 0); }
     since += dt;
-    if (ctx && (since >= 0.05 || rows)) {
+    if (ctx && active && (since >= (look.compact ? 0.1 : 0.05) || rows)) {
       since = 0;
       ctx.setTransform(canvas.width / HUD.W, 0, 0, canvas.height / HUD.H, 0, 0);
-      last = drawHud(ctx, info(), pic);
+      last = drawHud(ctx, info(), pic, hudO(false));
     }
     return st;
+  }
+  // One live frame now (the feed set decides when): dt is the time since
+  // the last live frame of this feed (the AGC and the signal walk use it).
+  function liveFrame(dt) {
+    if (!live || !active) return false;
+    renderLive(Math.max(dt || 0, 1 / 60));
+    return true;
   }
   return {
     canvas, link, HUD, rate,
@@ -503,7 +536,9 @@ export function createFeed(THREE, o = {}) {
     setActive(v) { active = !!v; },
     get active() { return active; },
     present, pictureRect,
-    update,
+    update, liveFrame,
+    setLook(l = {}) { if ('colour' in l) look.colour = l.colour; if ('compact' in l) look.compact = !!l.compact; since = 1; },
+    get look() { return Object.assign({}, look); },
     hud() { return hudFields(info()); },
     lastFields() { return last; },
     dispose() {

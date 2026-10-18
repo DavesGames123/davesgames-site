@@ -17,14 +17,27 @@
 //  gives LIVE fields: the mode 'LIVE 30 FPS', 'ANALOG', the frame count.
 //  o.hole: the picture box is cleared to transparent (the live picture is
 //  drawn under the panel by WebGL, feed.js present); o.aspect: its aspect.
+//  o.colour: the colour of the ROV id (ROV_COLOURS, the same colour on the
+//  camera bar, the feed card, the minimap and the 3D marker).
+//  o.compact: the small card of a feed that is not the selected one (the
+//  card stack of rov/feeds.js): larger text, only the id, the mode, the
+//  depth, the heading and the signal meter, so it reads at about 200 px.
+//  info.task (optional): the vehicle mode ('survey', 'inspect') in place
+//  of 'CAM 1 HD' in the top bar.
 //
 //  grep -n targets
 //    "export const HUD"          layout
+//    "export const ROV_COLOURS"  one colour per ROV id (1 to 4)
 //    "export function hudFields" text of each field
 //    "export function drawHud"   the panel
 // ============================================================================
 
 export const HUD = { W: 352, H: 322, pic: { x: 16, y: 28, w: 320, h: 256 }, bar: 284 };
+// ROV 1 amber (the old HUD id colour), 2 cyan, 3 pink, 4 lime: distinct on
+// the dark blue water and in the three colour vision types; the number is
+// always shown next to the colour.
+export const ROV_COLOURS = ['#f2b705', '#3fd0ff', '#ff6fae', '#9be15d'];
+export const rovColour = (id) => ROV_COLOURS[(((id ?? 1) - 1) % 4 + 4) % 4];
 const pad2 = (n) => String(Math.floor(n)).padStart(2, '0');
 
 export function hudFields(info) {
@@ -33,10 +46,11 @@ export function hudFields(info) {
   const hdg = ((Math.round(info.heading || 0) % 360) + 360) % 360;
   const db = s.signal && Number.isFinite(s.signal.db) ? s.signal.db : null;
   const phase = s.phase || 'idle';
+  const cam = info.task ? String(info.task).toUpperCase().slice(0, 8) : 'CAM 1 HD';
   if (s.live) {
     return {
       id: 'ROV-' + (info.id ?? 1),
-      cam: 'CAM 1 HD',
+      cam,
       depth: 'DEPTH ' + (info.depth ?? 0).toFixed(1) + ' m',
       heading: 'HDG ' + String(hdg).padStart(3, '0') + '°',
       time: 'T+' + pad2(t / 3600) + ':' + pad2((t / 60) % 60) + ':' + pad2(t % 60),
@@ -50,7 +64,7 @@ export function hudFields(info) {
   }
   return {
     id: 'ROV-' + (info.id ?? 1),
-    cam: 'CAM 1 HD',
+    cam,
     depth: 'DEPTH ' + (info.depth ?? 0).toFixed(1) + ' m',
     heading: 'HDG ' + String(hdg).padStart(3, '0') + '°',
     time: 'T+' + pad2(t / 3600) + ':' + pad2((t / 60) % 60) + ':' + pad2(t % 60),
@@ -66,10 +80,11 @@ export function hudFields(info) {
 export function drawHud(ctx, info, picture, o = {}) {
   const F = hudFields(info), s = info.status || {};
   const { W, H, pic, bar } = HUD;
-  const ink = '#cfe6e0', dim = '#6f8a86', amber = '#f2b705', red = '#ff5a3c';
+  const ink = '#cfe6e0', dim = '#6f8a86', amber = o.colour || '#f2b705', red = '#ff5a3c';
   ctx.save();
   ctx.fillStyle = '#05090b'; ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = 'rgba(207,230,224,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  if (o.compact) { compact(ctx, F, s, info, o, amber, ink, dim, red, picture); ctx.restore(); return F; }
   ctx.font = '600 11px ui-monospace, Menlo, Consolas, monospace';
   ctx.textBaseline = 'middle';
   // top bar
@@ -130,4 +145,36 @@ export function drawHud(ctx, info, picture, o = {}) {
   ctx.textAlign = 'right'; ctx.fillStyle = dim; ctx.fillText(F.signal, W - 12, yb2);
   ctx.restore();
   return F;
+}
+
+// The small card: the picture box of the full panel (so the live picture
+// and its hole have the same place), text at 20 px of the 352 px panel.
+function compact(ctx, F, s, info, o, col, ink, dim, red, picture) {
+  const { W, pic, bar } = HUD;
+  ctx.font = '700 20px ui-monospace, Menlo, Consolas, monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left'; ctx.fillStyle = col; ctx.fillText(F.id, 12, 15);
+  const rec = s.phase === 'image' || s.live, blink = Math.floor((info.t || 0) * 1.6) % 2 === 0;
+  if (blink || !rec) { ctx.fillStyle = rec ? red : dim; ctx.beginPath(); ctx.arc(108, 15, 5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.textAlign = 'right'; ctx.fillStyle = s.phase === 'novis' ? red : ink;
+  ctx.font = '600 18px ui-monospace, Menlo, Consolas, monospace';
+  ctx.fillText(s.live ? F.mode : F.mode.replace('ROBOT ', 'R').replace('MARTIN ', ''), W - 12, 15);
+  ctx.fillStyle = '#000'; ctx.fillRect(pic.x, pic.y, pic.w, pic.h);
+  if (o.hole) {
+    const ph = Math.min(pic.h, Math.round(pic.w / (o.aspect || 4 / 3))), py = pic.y + Math.round((pic.h - ph) / 2);
+    ctx.clearRect(pic.x, py, pic.w, ph);
+  } else if (picture) {
+    const p = picture, ar = p.width / p.height, ph = Math.min(pic.h, Math.round(pic.w / ar)), py = pic.y + Math.round((pic.h - ph) / 2);
+    ctx.drawImage(p, pic.x, py, pic.w, ph);
+  }
+  const yb = bar + 19;
+  ctx.textAlign = 'left'; ctx.fillStyle = ink;
+  ctx.fillText(F.depth.replace('DEPTH ', ''), 12, yb);
+  ctx.fillText(F.heading.replace('HDG ', ''), 132, yb);
+  const n = 8, bx = 236, bw = 10, gap = 3, lv = Math.round((F.level || 0) * n);
+  for (let i = 0; i < n; i++) {
+    const h = 8 + i * 2;
+    ctx.fillStyle = i < lv ? (i < 2 ? red : i < 5 ? '#f2b705' : '#6fe0a0') : 'rgba(207,230,224,0.14)';
+    ctx.fillRect(bx + i * (bw + gap), yb + 12 - h, bw, h);
+  }
 }
