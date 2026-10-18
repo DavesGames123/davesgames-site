@@ -238,6 +238,13 @@ export async function domTests({ ok, ROOT }) {
   ok(link && /#d=/.test(link.value), 'MAKE LINK writes a #d= share link', link ? link.value.slice(0, 60) + '…' : 'none');
   ui.examples([{ meta: { key: 'first-led', title: 'First LED', level: 1, blurb: 'A red LED on 5 V', see: ['LED glows'] }, doc: sampleDoc() }]);
   ok(/First LED/.test($('p-examples').textContent), 'ui.examples(list) fills EXAMPLES');
+  // the hover tooltip names the action of an in-scene control
+  bus.emit('hover', { target: { kind: 'part', id: 'p3' }, x: 100, y: 100, control: { kind: 'press', key: 'pressed' } });
+  const tipHtml = $('tip').innerHTML;   // the fake DOM keeps innerHTML as text
+  ok(!$('tip').hidden && /<div class="act">click to press<\/div>/.test(tipHtml), 'hover on a control: the tooltip says what a click does', tipHtml.replace(/<[^>]+>/g, ' ').trim());
+  bus.emit('hover', { target: { kind: 'part', id: 'p3' }, x: 100, y: 100 });
+  ok(!/class="act"/.test($('tip').innerHTML), 'hover on a part body: no control line in the tooltip');
+  bus.emit('hover', { target: null });
   let dErr = null;
   try { ui.dispose(); } catch (e) { dErr = e; }
   ok(!dErr, 'ui.dispose() runs');

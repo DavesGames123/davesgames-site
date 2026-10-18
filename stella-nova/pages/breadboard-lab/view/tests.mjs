@@ -19,7 +19,9 @@
 //    section('camera') ........ pose round trip, zoom anchor, tweens
 //    section('gestures') ...... tap, drag, long press, pinch, context
 //    section('scene') ......... view/scene.js in node with injected THREE
+//    section('controls') ...... rims, pick boxes, hover, touch slop (test/control-tests)
 //    section('light budget') .. luminance of the materials (test/light-tests)
+//    section('glow') .......... bloom layers, LED levels, 30-LED frame estimate
 // ============================================================================
 import { createBus } from '../core/bus.js';
 import * as SP from '../core/space.js';
@@ -566,6 +568,11 @@ if (sceneTests.run) {
   section('scene');
   check('scene tests load', false, String(sceneTests.missing && sceneTests.missing.message));
 }
+
+// ── in-scene controls ──────────────────────────────────────────────────────
+const controlTests = await import('./test/control-tests.mjs').catch(e => ({ missing: e }));
+if (controlTests.run) await controlTests.run({ section, check, near });
+else { section('controls'); check('control tests load', false, String(controlTests.missing && controlTests.missing.message)); }
 
 // ── light budget ───────────────────────────────────────────────────────────
 const lightTests = await import('./test/light-tests.mjs').catch(e => ({ missing: e }));

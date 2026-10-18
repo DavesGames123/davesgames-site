@@ -31,6 +31,14 @@
 //  BASE and FX. After each sim frame the lit halos share one gain
 //  (core/light.js haloGain), so 30 lit LEDs do not add 30 full halos.
 //
+//  CONTROLS. Each mesh of handle.interact (a button cap, a switch lever, a
+//  knob, a key) gets a rim: an inverted shell CONTROL.rimMm thick, on
+//  LAYER.FX. The rims show in the select and probe tools (the tools that
+//  press, switch and turn), and the hovered control gets the bright rim.
+//  A control smaller than CONTROL.minMm gets an invisible pick box of that
+//  size. A touch pick also takes the nearest control within
+//  CONTROL.touchSlopPx of the finger (pick option slop).
+//
 //  GREP MAP
 //    loadParts ............. dynamic import of the PARTS modules
 //    makeRenderer / lights . renderer, PMREM room, mat, shadows, bloom;
@@ -38,6 +46,8 @@
 //    setupBloom ............ RenderPass + emitter bloom + OutputPass
 //    markEmitters .......... EMIT and FX layers of a built object
 //    balanceHalos .......... the shared gain of the lit halos
+//    addControls / setControlHover / showRims  control rims and pick boxes
+//    nearestControl ........ the touch slop of pick
 //    resolver .............. material id → THREE material (presets + doc)
 //    buildBoardRec ......... board objects
 //    buildPartRec .......... part handles, pickable tags, damage carry-over
@@ -60,7 +70,7 @@ import { createCameraRig, PITCH_TOP } from './camera.js';
 import { createGestures, attachGestures } from './touch.js';
 import { createEffects } from './effects.js';
 import { createFlow } from './flow.js';
-import { createInteraction } from './interact.js';
+import { createInteraction, CONTROL } from './interact.js';
 import { createPreview } from './preview.js';
 import { dataTexture, fallbackBoard, fallbackPart, fallbackWire, fallbackWirePath } from './fallback.js';
 import { ndcFromClient, pickBench, pickPoints, projectPoint, rayFromCamera, rayPlaneY, insetViewOffset } from './picking.js';
@@ -229,6 +239,79 @@ export function createView(opts = {}) {
     return lit;
   }
 
+  // ── controls: rims, pick boxes, hover ───────────────────────────────────
+  const rimMat = new THREE.MeshBasicMaterial({ color: CONTROL.rim, transparent: true, opacity: CONTROL.rimOpacity, side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false });
+  const rimHotMat = new THREE.MeshBasicMaterial({ color: CONTROL.rimHot, transparent: true, opacity: 1, side: THREE.BackSide, depthWrite: false, toneMapped: false, fog: false });
+  const proxyGeo = new THREE.BoxGeometry(1, 1, 1);
+  proxyGeo.userData.shared = true;
+  const proxyMat = new THREE.MeshBasicMaterial({ visible: false });
+  let rimsOn = true, hotControl = null, rimsOff = false;   // rimsOff: the saver hides them
+  function addControls(handle) {
+    const list = [];
+    const meshes = (handle.interact && handle.interact.meshes) || [];
+    for (const m of meshes) {
+      if (!m || !m.isMesh || !m.geometry) continue;
+      m.userData.control = true;
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      const bb = m.geometry.boundingBox, size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+      const rim = new THREE.Mesh(m.geometry, rimMat);
+      const t = CONTROL.rimMm;
+      rim.scale.set(1 + 2 * t / Math.max(0.2, size.x), 1 + 2 * t / Math.max(0.2, size.y), 1 + 2 * t / Math.max(0.2, size.z));
+      rim.position.set(c.x * (1 - rim.scale.x), c.y * (1 - rim.scale.y), c.z * (1 - rim.scale.z));
+      rim.layers.set(LAYER.FX);
+      rim.renderOrder = 2;
+      rim.castShadow = false; rim.receiveShadow = false;
+      rim.name = 'control-rim';
+      rim.userData.rim = true;
+      rim.visible = rimsOn;
+      m.add(rim);
+      let proxy = null;
+      if (size.x < CONTROL.minMm || size.z < CONTROL.minMm) {
+        proxy = new THREE.Mesh(proxyGeo, proxyMat);
+        proxy.scale.set(Math.max(size.x, CONTROL.minMm), Math.max(size.y, 2), Math.max(size.z, CONTROL.minMm));
+        proxy.position.copy(c);
+        proxy.visible = false;            // the raycaster still hits it; nothing draws it
+        proxy.castShadow = false;
+        proxy.name = 'control-hit';
+        proxy.userData.hitProxy = true;
+        m.add(proxy);
+        if (handle.pickables && !handle.pickables.includes(proxy)) handle.pickables.push(proxy);
+      }
+      list.push({ mesh: m, rim, proxy, center: c.clone() });
+    }
+    return list;
+  }
+  function showRims(on) {
+    rimsOn = !!on;
+    for (const r of recs.parts.values()) for (const c of r.controls || []) c.rim.visible = rimsOn || c.mesh === hotControl;
+    requestRender();
+  }
+  function setControlHover(mesh) {
+    if (rimsOff) mesh = null;
+    if (mesh === hotControl) return;
+    for (const r of recs.parts.values()) for (const c of r.controls || []) {
+      if (c.mesh === hotControl) { c.rim.material = rimMat; c.rim.visible = rimsOn; }
+      if (c.mesh === mesh) { c.rim.material = rimHotMat; c.rim.visible = true; }
+    }
+    hotControl = mesh || null;
+    requestRender();
+  }
+  const isControl = obj => { for (let o = obj; o; o = o.parent) { if (o.userData && (o.userData.control || o.userData.hitProxy)) return true; if (o.userData && o.userData.bbId) return false; } return false; };
+  // the control nearest to a screen point, within slop px
+  function nearestControl(cx, cy, slop) {
+    const r = rect();
+    let best = null, bd = slop;
+    const w = new THREE.Vector3();
+    for (const [id, rec] of recs.parts) for (const c of rec.controls || []) {
+      w.copy(c.center); c.mesh.localToWorld(w);
+      const pr = projectPoint(rig.cam(), [w.x, w.y, w.z], r, viewOf());
+      if (!pr) continue;
+      const d = Math.hypot(pr.x - cx, pr.y - cy);
+      if (d < bd) { bd = d; best = { id, mesh: c.mesh, point: w.clone() }; }
+    }
+    return best;
+  }
+
   // ── materials ────────────────────────────────────────────────────────────
   const simpleMats = new Map();
   const SIMPLE = { 'gold-pin': '#d6b04a', tin: '#c9ccd1', copper: '#c98a4b', 'fr4-green': '#2e6b3a', 'pcb-black': '#1b1c1f', 'pcb-blue': '#1f4f8f', 'epoxy-black': '#1d1d20', 'abs-white': '#ececec', 'abs-black': '#1e1e22', 'resistor-beige': '#d9c49a', 'resistor-blue': '#5d8fc9', chrome: '#e6e8ea', rubber: '#222222' };
@@ -317,9 +400,10 @@ export function createView(opts = {}) {
     const handle = buildPartHandle(d, p, ctxFor());
     handle.object.userData.bbId = p.id;
     handle.object.traverse(c => { if (c.isMesh && !c.isSprite) c.castShadow = true; });
-    tagPickables(handle.pickables, { kind: 'part', id: p.id });
     gParts.add(handle.object);
-    const rec = { item: p, handle, key: partKey(p, def), live: liveKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d, halos: markEmitters(handle.object) };
+    const controls = addControls(handle);
+    tagPickables(handle.pickables, { kind: 'part', id: p.id });
+    const rec = { item: p, handle, key: partKey(p, def), live: liveKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d, halos: markEmitters(handle.object), controls };
     const pf = lastFrame && lastFrame.parts ? lastFrame.parts[p.id] : undefined;
     if (pf) applyPartFrame(rec, pf, 0);
     return rec;
@@ -630,7 +714,19 @@ export function createView(opts = {}) {
 
   // mode: 'select' (a board hit becomes its hole, with the board id),
   // 'endpoint' (holes and socket pins first), 'delete' (raw mesh targets).
-  function pick(cx, cy, mode = 'select') {
+  function pick(cx, cy, mode = 'select', o = {}) {
+    const t = pickRaw(cx, cy, mode);
+    if (!(o.slop > 0) || mode !== 'select' || (lastHit && isControl(lastHit.object))) return t;
+    // touch: take the nearest control when the finger is near one and the
+    // ray found nothing, a board, a hole or the same part
+    const near = nearestControl(cx, cy, o.slop);
+    if (!near) return t;
+    if (t && !(t.kind === 'board' || t.kind === 'hole' || (t.kind === 'part' && t.id === near.id))) return t;
+    const target = { kind: 'part', id: near.id };
+    lastHit = { object: near.mesh, point: near.point, target };
+    return target;
+  }
+  function pickRaw(cx, cy, mode = 'select') {
     lastPointer = { x: cx, y: cy };
     lastHit = null;
     const { ndcCanvas, ray, inside } = rayAt(cx, cy);
@@ -963,6 +1059,7 @@ export function createView(opts = {}) {
     setSelection, itemsInRect, setBoxRect, focus, fit,
     topView: () => api.topView(), orbitView: () => api.orbitView(),
     setCursor(c) { if (canvas && canvas.style) canvas.style.cursor = c; },
+    setControlHover, showRims,
   };
   const interaction = createInteraction(V);
   const gestures = createGestures({
@@ -997,7 +1094,10 @@ export function createView(opts = {}) {
       offs.push(() => window.removeEventListener('resize', resize));
     }
   }
+  // rims show in the tools that work the controls
+  function controlTool(t) { const on = !rimsOff && (t === 'select' || t === 'probe'); if (!on) setControlHover(null); if (on !== rimsOn) showRims(on); }
   if (bus) {
+    offs.push(bus.on('tool', e => controlTool(e && e.tool)));
     offs.push(bus.on('doc:change', e => {
       interaction.onDocChange(e);
       if (!previewing || (e && e.source !== 'user')) { previewing = false; sync(store.doc); }
@@ -1014,12 +1114,16 @@ export function createView(opts = {}) {
     get tool() { return interaction.tool; },
     get quality() { return quality; },
     get haloGain() { return haloGainNow; },
+    get controlHover() { return hotControl; },
+    // false: hide the control rims (the saver); true: they follow the tool
+    setControlRims(on) { rimsOff = on === false; controlTool(interaction.tool); },
+    controlsOf(id) { const r = recs.parts.get(id); return r ? (r.controls || []) : []; },
     get bloom() { return bloomPass; },
     ready: null,
 
     setFrame,
     setNetlist(nl) { netlist = nl || null; if (netNode !== null) highlightNet(netNode && netNode.strip && netTarget ? nodeOf(netTarget) : netNode, netTarget); },
-    setTool(t) { interaction.setTool(t); requestRender(); },
+    setTool(t) { interaction.setTool(t); controlTool(interaction.tool); requestRender(); },
     setWireColor(hex) { interaction.setWireColor(hex); },
     setWireStyle(s) { interaction.setWireStyle(s); },
     beginPlace(defId, params, pe) { return interaction.beginPlace(defId, params, pe); },
@@ -1122,7 +1226,8 @@ export function createView(opts = {}) {
       recs.parts.clear(); recs.boards.clear(); recs.wires.clear(); recs.probes.clear();
       if (wirePrev) { wirePrev.handle.dispose(); wirePrev = null; }
       effects.dispose(); flow.dispose(); preview.dispose();
-      for (const m of [...leadMats.values(), ...simpleMats.values(), tipMat, ghostMat]) m.dispose();
+      for (const m of [...leadMats.values(), ...simpleMats.values(), tipMat, ghostMat, rimMat, rimHotMat, proxyMat]) m.dispose();
+      proxyGeo.dispose();
       probeBodyGeo.dispose(); needleGeo.dispose();
       matMesh.geometry.dispose(); matMesh.material.dispose(); gridTex.dispose();
       disposeObj(scene);

@@ -384,6 +384,7 @@ export function installSaver(ctx) {
       document.head.appendChild(styleEl);
       offs.push(bus.on('sim:frame', onFrame));
       try { if (realView) realView.setFlow(true); } catch (e) { /* no flow */ }
+      try { if (realView && realView.setControlRims) realView.setControlRims(false); } catch (e) { /* no rims */ }
       order = reelOrder(rnd() * 2 ** 32);
       bench = -1; cuts = 0;
       readBand();
@@ -413,6 +414,7 @@ export function installSaver(ctx) {
         if (store.restore) store.restore(sv.snap); else store.load(sv.snap.doc);
         try { if (realView && sv.cam) realView.cameraTo(sv.cam, 0); } catch (e) { /* gone */ }
         try { if (realView && sv.flow !== null) realView.setFlow(sv.flow); } catch (e) { /* no flow */ }
+        try { if (realView && realView.setControlRims) realView.setControlRims(true); } catch (e) { /* no rims */ }
         if (sv.run) {
           sim.setSpeed(sv.run.speed || 1);
           if (sv.run.running) sim.start(); else sim.pause();

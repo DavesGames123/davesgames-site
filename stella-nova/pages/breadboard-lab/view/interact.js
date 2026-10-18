@@ -45,6 +45,12 @@ import { BOARD_TYPES, G, holeWorld, parseHoleId, partFrame, pinLocal, rotXZ } fr
 import { occupiedHoles, shiftPlace, snapBoard, snapPart, snapWirePoint } from './snap.js';
 
 export const TOOLS = ['select', 'wire', 'probe', 'delete', 'place'];
+// In-scene controls (button caps, levers, knobs, keys): the rim colours of
+// view/scene.js, the smallest pick box, and the touch slop of a pick.
+// 24 px round the finger makes a 48 px target, over the 44 px minimum.
+export const CONTROL = { rim: 0x3d8bff, rimHot: 0xffc94a, rimOpacity: 0.55, rimMm: 0.45, minMm: 6, touchSlopPx: 24 };
+const ACTION = { press: 'press', toggle: 'switch', knob: 'turn', slider: 'set' };
+const slopOf = ev => (ev && ev.pointerType && ev.pointerType !== 'mouse' ? CONTROL.touchSlopPx : 0);
 const LABEL_PREFIX = [
   [/^res$/, 'R'], [/^(pot|trimpot)$/, 'RV'], [/^cap-/, 'C'], [/^inductor$/, 'L'], [/^fuse$/, 'F'],
   [/^(ldr|thermistor)$/, 'R'], [/^led/, 'LED'], [/^(diode|zener)/, 'D'], [/^(npn|pnp|nmos|pmos)/, 'Q'],
@@ -262,7 +268,7 @@ export function createInteraction(V) {
     const kind = rec.handle.interact.kind || (def.interact && def.interact.kind);
     const pd = (def.params || []).find(p => p.key === key) || { key, type: 'number', min: 0, max: 1, default: 0 };
     const cur = part.params[key] !== undefined ? part.params[key] : pd.default;
-    return { id: target.id, key, kind, pd, cur };
+    return { id: target.id, key, kind, pd, cur, mesh: o };
   }
   function toggleValue(pd, cur) {
     if (pd.type === 'bool') return !cur;
@@ -407,7 +413,7 @@ export function createInteraction(V) {
   // ── gesture handlers ─────────────────────────────────────────────────────
   function onDown(ev) {
     const mode = tool === 'wire' ? 'endpoint' : tool === 'delete' ? 'delete' : 'select';
-    down = { target: V.pick(ev.x, ev.y, mode), x: ev.x, y: ev.y };
+    down = { target: V.pick(ev.x, ev.y, mode, { slop: slopOf(ev) }), x: ev.x, y: ev.y };
     down.hit = V.lastHit;
     if ((tool === 'select' || tool === 'probe') && down.target && down.target.kind === 'part') {
       const it = interactOf(down.target);
@@ -429,7 +435,7 @@ export function createInteraction(V) {
     if (placing) { commitPlace(ev.x, ev.y, shift); return; }
     switch (tool) {
       case 'select': {
-        const t = V.pick(ev.x, ev.y, 'select');
+        const t = V.pick(ev.x, ev.y, 'select', { slop: slopOf(ev) });
         const it = down && down.interact;
         if (it && it.kind === 'toggle' && t && t.kind === 'part' && t.id === it.id) {
           store.apply({ op: 'set', id: it.id, path: 'params.' + it.key, value: toggleValue(it.pd, it.cur) });
@@ -576,11 +582,17 @@ export function createInteraction(V) {
       else { const e = endOf(t); V.effects.setHover(e ? V.endWorld(e) : null); V.requestRender(); }
     } else if (tool === 'probe') {
       V.highlightNet(t && (t.kind === 'hole' || t.kind === 'pin') ? V.nodeOf(t) : null, t);
-    } else if (tool === 'select') {
-      const it = t && t.kind === 'part' ? interactOf(t) : null;
-      V.setCursor(it ? 'pointer' : t && (t.kind === 'part' || t.kind === 'probe' || t.kind === 'lead') ? 'grab' : 'default');
     }
-    if (bus) bus.emit('hover', { target: t, x: ev.x, y: ev.y });
+    let control = null;
+    if (tool === 'select' || tool === 'probe') {
+      const it = t && t.kind === 'part' ? interactOf(t) : null;
+      if (V.setControlHover) V.setControlHover(it ? it.mesh : null);
+      if (it) control = { kind: it.kind, key: it.key, action: ACTION[it.kind] || 'use' };
+      if (tool === 'select') V.setCursor(it ? (it.kind === 'knob' || it.kind === 'slider' ? 'ew-resize' : 'pointer') : t && (t.kind === 'part' || t.kind === 'probe' || t.kind === 'lead') ? 'grab' : 'default');
+      else if (it) V.setCursor('pointer');
+      else V.setCursor('crosshair');
+    }
+    if (bus) bus.emit('hover', { target: t, x: ev.x, y: ev.y, control });
   }
 
   function onCancel() {

@@ -489,7 +489,9 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     st.n.classList.toggle('bad', issueCounts.error > 0); st.n.classList.toggle('warn', !issueCounts.error && issueCounts.warn > 0);
     st.hint.textContent = hintText;
   }
-  function tooltip(t, x, y) {
+  // control: { kind, action } of an in-scene control under the pointer
+  const CONTROL_HINT = { press: 'click to press', toggle: 'click to switch', knob: 'drag right or up to turn', slider: 'drag right or up to set' };
+  function tooltip(t, x, y, control) {
     if (!t || C.phone()) { D.tip.hidden = true; return; }
     const v = voltOf(t);
     let title = '', rows = [];
@@ -500,7 +502,8 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     else if (t.kind === 'board') title = 'board ' + t.id;
     else if (t.kind === 'probe' || t.kind === 'lead') title = t.kind === 'lead' ? `${t.lead.toUpperCase()} lead` : 'instrument';
     if (v !== null) rows.unshift(`<span class="v">${si(v, 'V')}</span>`);
-    D.tip.innerHTML = `<div class="t">${title.replace(/[<>&]/g, '')}</div>${rows.filter(Boolean).join(' · ')}`;
+    const act = control && CONTROL_HINT[control.kind] ? `<div class="act">${CONTROL_HINT[control.kind]}</div>` : '';
+    D.tip.innerHTML = `<div class="t">${title.replace(/[<>&]/g, '')}</div>${rows.filter(Boolean).join(' · ')}${act}`;
     D.tip.style.left = x + 'px'; D.tip.style.top = y + 'px';
     D.tip.hidden = false;
   }
@@ -570,7 +573,7 @@ export function createUI({ store, registry, bus, view, sim, mcu, materials }) { 
     if (C.sel.length && !dock.phone && !panels.isOpen('inspect') && dismissed.inspect !== C.sel.join(',')) openPanel('inspect');
   }
   on('select', ({ ids = [], source } = {}) => { if (source === 'ui') return; setSel(ids); });
-  on('hover', ({ target = null, x = 0, y = 0 } = {}) => { hoverT = target; renderStatus(); tooltip(target, x, y); });
+  on('hover', ({ target = null, x = 0, y = 0, control = null } = {}) => { hoverT = target; renderStatus(); tooltip(target, x, y, control); });
   on('tool', ({ tool: t, source } = {}) => { if (source === 'ui' || !t) return; setTool(t, true); if (t !== 'probe' && lead) endLead(); });
   on('doc:change', ({ source } = {}) => {
     if (source === 'user' || source === 'undo' || source === 'redo') dirty = true;
