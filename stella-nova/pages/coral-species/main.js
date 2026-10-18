@@ -489,3 +489,98 @@ if (S) { coral = makeCoral(); startColony(); }
 readout(true);
 requestAnimationFrame(frame);
 
+// ── screensaver ─────────────────────────────────────────────────────────────
+// enter({ calm, seconds, caption, seed, label }) -> { canvas, warmupMs }.
+// A seeded plan of the species (species.js saverPlan): each colony grows
+// once (about SAVER_GROW_S s), stays full for the hold, then the view
+// fades to the next species. Calm shots of 8 to 12 s turn round it. The
+// subject is framed in the clear band of the label plate (plateBand of
+// lib/saver-clear.js) for 16:9 and 9:16.
+window.snSaver = {
+  enter(o = {}) {
+    if (!S) return { canvas, warmupMs: 0 };
+    saverOn = true;
+    document.documentElement.classList.add('sn-saver');
+    setPanel(false);
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    const label = typeof o.label === 'function' ? o.label : () => {};
+    const seed = (o.seed >>> 0) || 1;
+    const plan = saverPlan(seed, { n: 12, calm });
+    const saved = { species: G.species, seed: G.seed, mode: G.mode, gradient: G.gradient, rev: G.rev, dir: G.dir, speed: G.speed, playing: G.playing };
+    sv = { plan, i: -1, stage: null, t: 0, band: null, bandFn: null, bandT: 0, labT: 0, fading: false, cut: true, saved, label };
+    import('../../lib/saver-clear.js').then(m => { if (sv) sv.bandFn = m.plateBand; }).catch(() => { /* no plate */ });
+    G.speed = 1;
+    function makeLabel() {
+      const d = sv.stage; if (!d) return null;
+      const s = stats(), H = speciesHook(d.species), src = H.fn.toString();
+      const modeLbl = (MODES.find(m => m.id === d.mode) || MODES[0]).label;
+      return {
+        title: s.sp.label,
+        sub: `${s.sp.latin} · ${s.sp.form.toLowerCase()} · one colony grows from a seed on a rock`,
+        params: [
+          { sym: 'N', name: 'particles', value: s.n.toLocaleString(), cls: 'm1' },
+          { sym: 'h', name: 'height', value: `${(s.h * 100).toFixed(1)} cm`, cls: 'm2' },
+          { sym: 'P', name: 'polyps', value: s.polyps.toLocaleString(), cls: 'm3' },
+          { sym: 't', name: 'age (from a typical extension rate)', value: ageText(s.years), cls: 'm4' },
+        ],
+        tex: [String.raw`\mathbf{v} = \boldsymbol{\xi} + d\,\mathbf{u} - f\,\hat{\mathbf{y}}`],
+        eq: ['v = ξ + d u − f ŷ'],
+        rules: [['N', 'm1'], ['h', 'm2'], ['P', 'm3'], ['t', 'm4']],
+        lines: [s.done ? `Full grown. Colour by ${modeLbl.toLowerCase()}.` : `Colour by ${modeLbl.toLowerCase()}. Marine snow drifts down with the current and sticks to the tips that it meets first.`],
+        code: src.split('\n').length <= 14 ? { lang: 'js', name: `reef.js · ${s.sp.label.toLowerCase()} · ${H.name}`, text: src } : undefined,
+      };
+    }
+    function begin(d) {
+      sv.stage = d; sv.t = 0; sv.cut = true; sv.labT = 0;
+      G.species = d.species; G.seed = d.seed; G.dir = d.current;
+      setGradient(d.gradient, d.reversed);
+      setMode(d.mode);
+      G.playing = true;
+      if (coral) coral.post({ type: 'env', env: { speed: 1 } });
+      startColony(SAVER_GROW_S);
+      label(makeLabel());
+    }
+    function next() {
+      sv.i = (sv.i + 1) % plan.length;
+      const d = plan[sv.i];
+      sv.fading = true; canvas.style.opacity = '0';
+      setTimeout(() => { if (!saverOn || !sv) return; begin(d); canvas.style.opacity = '1'; sv.fading = false; }, sv.stage ? 900 : 0);
+    }
+    sv.tick = dt => {
+      if (sv.bandFn && (sv.bandT += dt) > 0.4) { sv.bandT = 0; try { sv.band = sv.bandFn(canvas.clientHeight); } catch (e) { sv.band = null; } }
+      const d = sv.stage;
+      if (!d) { if (!sv.fading) next(); return; }
+      sv.t += dt; sv.labT += dt;
+      if (sv.labT > 1) { sv.labT = 0; label(makeLabel()); }
+      if (sv.fading) return;
+      // the next species: the hold after the colony is full, or a cap on time
+      const full = coral && coral.done && coral.gen >= coral.want;
+      const heldS = full ? (nowMs() - coral.doneT) / 1000 : 0;
+      if ((full && heldS > d.hold) || sv.t > d.grow * 2.2 + d.hold) next();
+    };
+    next();
+    return { canvas, warmupMs: 1500 };
+  },
+  // the state for node checks
+  debug() {
+    return { on: saverOn, stage: sv && sv.stage ? { i: sv.i, species: sv.stage.species, t: sv.t } : null, band: sv ? sv.band : null, count: coral ? coral.reef.count : 0, done: !!(coral && coral.done) };
+  },
+  exit() {
+    if (!saverOn) return;
+    saverOn = false;
+    document.documentElement.classList.remove('sn-saver');
+    canvas.style.opacity = '';
+    const s = sv && sv.saved; sv = null;
+    if (S) S.controls.enabled = true;
+    if (s) {
+      G.seed = s.seed; G.dir = s.dir; G.speed = s.speed;
+      if (coral) coral.post({ type: 'env', env: { speed: s.speed } });
+      setGradient(s.gradient, s.rev);
+      setMode(s.mode);
+      setSpecies(s.species, false);
+      startColony();
+      setPlaying(s.playing);
+    }
+    setPanel(!PHONE_Q.matches);
+  },
+};

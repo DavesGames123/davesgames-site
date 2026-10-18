@@ -237,6 +237,18 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     const nP = d.getElementById('rN').textContent; await P.run(1500);
     ok(d.getElementById('rN').textContent === nP && /Paused/.test(d.getElementById('rState').textContent), `pause holds the colony at ${nP}`);
     d.getElementById('bPlay').click();
+    const sv = P.win.snSaver;
+    ok(sv && typeof sv.enter === 'function' && typeof sv.exit === 'function', 'window.snSaver has enter and exit');
+    const labels = [];
+    const r = sv.enter({ calm: 0.7, seed: 4, label: i => labels.push(i) });
+    ok(r && r.canvas === d.getElementById('view') && r.warmupMs > 0, 'enter returns the canvas and a warmup');
+    await P.run(3000);
+    const dbg = sv.debug();
+    const L = labels.filter(Boolean).pop();
+    ok(dbg.on && dbg.stage && L && L.title && L.params.length === 4 && L.code && /function|=>|\(/.test(L.code.text), `saver stage ${dbg.stage && dbg.stage.species}, label "${L && L.title}", code ${L && L.code ? L.code.name : 'none'}`);
+    ok(d.documentElement.classList.contains('sn-saver'), 'saver class on html');
+    sv.exit();
+    ok(!d.documentElement.classList.contains('sn-saver') && !P.errors.length, `exit restores the page${P.errors.length ? ': ' + P.errors[0].slice(0, 200) : ''}`);
     P.close();
   }
   const Q = await boot({ w: 390, h: 844, coarse: true, dpr: 3 });
