@@ -203,10 +203,11 @@ function runFrames(f, n = 6) {
     if (raw) ok(/precision highp float;/.test(vs) && /precision highp float;/.test(fs), `safari: raw ${name} declares highp float in both stages`);
     // texelFetch only on the particle textures (RGBA32F, NEAREST: no
     // filtering needed), the blue noise (RGBA8, NEAREST) and the volume
-    // history in the bilateral upsample (texelFetch reads one texel, with
-    // no filter, so the filter of the target does not matter)
+    // history in the bilateral upsample and the volume history pass (uCur,
+    // uHist: texelFetch reads one texel, with no filter, so the filter of
+    // the target does not matter)
     const tf = [...(vs + fs).matchAll(/texelFetch\((\w+)/g)].map(m => m[1]);
-    ok(tf.every(t => ['uPartA', 'uPartB', 'uPartC', 'uBlue', 'uVol'].includes(t)), `safari: ${name} texelFetch only on uPartA / uPartB / uPartC / uBlue / uVol`, tf.join());
+    ok(tf.every(t => ['uPartA', 'uPartB', 'uPartC', 'uBlue', 'uVol', 'uCur', 'uHist'].includes(t)), `safari: ${name} texelFetch only on uPartA / uPartB / uPartC / uBlue / uVol / uCur / uHist`, tf.join());
     rows.push(`${name} ${all.size} samplers, ${slots(fs)} fs vectors, ${loops.length} loops`);
   }
   const sc = fs.readFileSync(new URL('../scene.js', import.meta.url), 'utf8');

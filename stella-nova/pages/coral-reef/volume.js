@@ -8,12 +8,17 @@
 //                  made once at load) that moves by the golden ratio each
 //                  frame. Output: rgb in-scatter, a = the linear view
 //                  depth (m) of the pixel.
-//    2. history .. VOL_TAA_FS: reproject each pixel with the view-
-//                  projection of the last frame (from its depth), clip the
-//                  history to the 3 x 3 neighbourhood of this frame (mean
-//                  +- 1.25 sd, inside min and max), and blend 1 / 10 new.
-//                  A history pixel whose depth does not agree (more than
-//                  10 %), or that is off the screen, starts again.
+//    2. history .. VOL_TAA_FS (taaFrame below is the CPU copy): a 5 x 5
+//                  joint bilateral blur of this frame (depth weight, with
+//                  a floor for thin coral), the variance box of the same
+//                  taps (mean +- 1.25 sd, 4x wider when the view and the
+//                  lamps are still), and two history candidates: the
+//                  surface point moved by the camera, and the ray point
+//                  nearest to a lamp axis moved with that lamp (this one
+//                  wins in a cone). Each history fetch is a 2 x 2
+//                  bilateral (texels of another depth get a low weight),
+//                  so a thin coral branch keeps a history. Blend 8 % new
+//                  (35 % for a weak match). No candidate: the blur.
 //    3. upsample . COMP_FS: a joint bilateral upsample of the history to
 //                  the full frame. The 2 x 2 low-res texels round a pixel
 //                  get the bilinear weight times exp(-r^2), r = the depth
@@ -37,19 +42,32 @@
 //    volCost(profile, w, h, o) the texture taps and spot evaluations of
 //                                one frame (before and after the change)
 //
-//  grep -n targets: "export function blueNoise", "export function reproject",
+//    beamPhase(c)             the phase of the lamp in-scatter (BEAM_PHASE)
+//    snowLight(o)             the lamp light on one flake (SNOW_LIGHT)
+//    taaFrame(cur, hist, W, H, ctx) one history frame (VOL_TAA_FS)
+//    lampPx(now, prev, fy)    the largest screen move of a lamp (uLampPx)
+//
+//  grep -n targets: "export function taaFrame", "export function snowLight",
+//  "export function blueNoise", "export function reproject",
 //  "export function bilateral", "export function volCost", "export const VOL_K"
 // ============================================================================
 
 // The constants of the shaders (shaders.js reads them, the tests too).
 export const VOL_K = {
-  blend: 0.1,          // the weight of the new frame in the history
+  blend: 0.08,         // the weight of the new frame in the history
+  blendLo: 0.35,       // the weight of the new frame for a weak history match
+  depthFloor: 0.25,    // the least weight of a history texel at another depth
+  blurFloor: 0.15,     // the least weight of a blur tap at another depth (thin coral)
   clipSd: 1.25,        // the neighbourhood box: mean +- clipSd x sd
+  clipStill: 4,        // the box is this much wider for a still view and still lamps (0.02 .. 0.2 px)
   depthReject: 0.1,    // relative depth difference that drops the history
   sigmaRel: 0.04,      // the bilateral depth scale: sigmaRel x depth + sigmaAbs
   sigmaAbs: 0.02,
   scatter: 0.4,        // the in-scatter level (was 1): see NOTES.md 2026-10-18
   nearLamp: 1.0,       // m: the in-scatter fades in over this distance from a lamp
+  snowBeam: 0.25,      // the snow: lamp radiance x beamPhase x this (shaders.js SNOW_LIGHT)
+  snowGlint: 0.6,      // the snow: the glint near the cone axis
+  snowSky: 0.08,       // the snow: the light from above out of the cones (was 0.6)
 };
 
 // ── blue noise ─────────────────────────────────────────────────────────────
@@ -160,4 +178,112 @@ export function volCost(p, w, h, o = {}) {
     return { vw, vh, steps, spotEvals: vpx * steps * spots, march, hist, comp, taps: march + hist + comp };
   };
   return { before: one(before.scale, before.steps, false), after: one(p.vol.scale, p.vol.steps, true) };
+}
+
+// ── the beam phase and the snow light (shaders.js BEAM_PHASE, SNOW_LIGHT) ──
+export function beamPhase(c) { const g = 0.55; return 0.08 + 0.25 * (1 - g * g) / Math.pow(1 + g * g - 2 * g * c, 1.5); }
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// o: { rad (the spot radiance at p, a number), shadow, dl (m to the lamp),
+// cosV (dot(-L, V)), cosAx (dot(-L, D)), cosIn (the inner cone cos),
+// sky (the light from above at p), skyPhase } -> the flake light
+export function snowLight(o) {
+  const ax = sstep(o.cosIn, 1, o.cosAx);
+  const lamp = o.rad * o.shadow * sstep(0, VOL_K.nearLamp, o.dl) * (beamPhase(o.cosV) * VOL_K.snowBeam + VOL_K.snowGlint * ax ** 4);
+  return lamp + (o.sky || 0) * (o.skyPhase ?? 1) * VOL_K.snowSky;
+}
+
+// ── one history frame (VOL_TAA_FS), on one channel ─────────────────────────
+// cur, hist: Float32Array W*H*2 (value, view depth a); hist null = reset.
+// ctx: { eye: [3], surface(x, y, a) -> the render-space point of pixel
+// (x, y) at view depth a, prevUv(p) -> [u, v, w] or null, spots: [{ P, D,
+// cosO }], prev: [{ P, D }] (the last frame), lampPx (the largest screen
+// move of a lamp since the last frame, px) }.
+// -> { out: Float32Array W*H*2, w: Float32Array W*H (the history weight,
+// 0 = no history: the pixel starts again) }
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = (a) => mul(a, 1 / Math.max(Math.hypot(a[0], a[1], a[2]), 1e-12));
+export function turn(a, b, v) {
+  const k = cross(a, b), c = dot(a, b);
+  if (c < -0.999) return mul(v, -1);
+  return add(add(mul(v, c), cross(k, v)), mul(k, dot(k, v) / (1 + c)));
+}
+const BIN5 = [1, 4, 6, 4, 1];
+export function taaFrame(cur, hist, W, H, ctx, K = VOL_K) {
+  const out = new Float32Array(W * H * 2), wOut = new Float32Array(W * H);
+  const at = (x, y) => (Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x))) * 2;
+  const histAt = (u, v, wz) => {
+    const st = [u * W - 0.5, v * H - 0.5], i0 = [Math.floor(st[0]), Math.floor(st[1])], f = [st[0] - i0[0], st[1] - i0[1]];
+    const tol = K.depthReject * Math.max(wz, 0.1);
+    let acc = 0, w = 0;
+    for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+      const qx = i0[0] + i, qy = i0[1] + j;
+      if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+      const h = (qy * W + qx) * 2, r = (hist[h + 1] - wz) / tol;
+      const k = (i ? f[0] : 1 - f[0]) * (j ? f[1] : 1 - f[1]) * Math.max(Math.exp(-r * r), K.depthFloor);
+      acc += hist[h] * k; w += k;
+    }
+    return [w > 1e-4 ? acc / w : 0, w];
+  };
+  const onScreen = (u) => u && u[2] > 0 && u[0] >= 0 && u[0] <= 1 && u[1] >= 0 && u[1] <= 1;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const c = at(x, y), ca = cur[c + 1], sig = K.sigmaRel * ca + K.sigmaAbs;
+    let s1 = 0, s2 = 0, ws = 0;
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+      const s = at(x + i, y + j), r = (cur[s + 1] - ca) / sig;
+      const k = BIN5[i + 2] * BIN5[j + 2] * Math.max(Math.exp(-r * r), K.blurFloor);
+      s1 += cur[s] * k; s2 += cur[s] * cur[s] * k; ws += k;
+    }
+    const f = s1 / ws, sd = Math.sqrt(Math.max(s2 / ws - f * f, 0));
+    let hb = f, wb = 0, db = Infinity, mv = 1e9;
+    if (hist) {
+      const pw = ctx.surface(x, y, ca), rd = norm(sub(pw, ctx.eye)), tS = Math.hypot(...sub(pw, ctx.eye));
+      const ua = ctx.prevUv(pw);
+      if (onScreen(ua)) {
+        mv = Math.max(Math.hypot((ua[0] - (x + 0.5) / W) * W, (ua[1] - (y + 0.5) / H) * H), ctx.lampPx || 0);
+        const [h, w] = histAt(ua[0], ua[1], ua[2]); if (w > 0.02) { hb = h; wb = w; db = Math.abs(h - f); }
+      }
+      let bi = -1, bs = -2, bt = 0;
+      (ctx.spots || []).forEach((sp, i) => {
+        const w0 = sub(ctx.eye, sp.P), b = dot(rd, sp.D), d = dot(rd, w0), e = dot(sp.D, w0), den = 1 - b * b;
+        let t = den > 1e-4 ? (b * e - d) / den : -d;
+        t = Math.min(tS, Math.max(0, t));
+        const q = add(ctx.eye, mul(rd, t)), sc = dot(norm(add(sub(q, sp.P), mul(sp.D, 1e-3))), sp.D);
+        if (sc > bs) { bs = sc; bi = i; bt = t; }
+      });
+      if (bi >= 0 && bs > ctx.spots[bi].cosO - 0.05) {
+        const sp = ctx.spots[bi], pv = ctx.prev[bi], q = add(ctx.eye, mul(rd, bt));
+        const uq = ctx.prevUv(add(pv.P, turn(sp.D, pv.D, sub(q, sp.P))));
+        const us = ctx.prevUv(add(pv.P, turn(sp.D, pv.D, sub(pw, sp.P))));
+        if (onScreen(uq) && us && us[2] > 0) {
+          const [h, w] = histAt(uq[0], uq[1], us[2]), dd = Math.abs(h - f);
+          if (w > 0.02) { hb = h; wb = w; db = dd; }
+        }
+      }
+    }
+    // a still view and still lamps: a wide box (the box adds noise)
+    const g = K.clipSd * (1 + (K.clipStill - 1) * (1 - sstep(0.02, 0.2, mv)));
+    const lo = Math.max(f - g * sd, 0), hi = f + g * sd;
+    const a = wb > 0.02 ? K.blendLo + (K.blend - K.blendLo) * sstep(K.depthFloor, 0.7, wb) : 1;
+    const o = Math.min(hi, Math.max(lo, hb)) * (1 - a) + f * a;
+    out[(y * W + x) * 2] = o; out[(y * W + x) * 2 + 1] = ca; wOut[y * W + x] = wb;
+  }
+  return { out, w: wOut };
+}
+// The largest screen move of a lamp since the last frame (px): the turn of
+// its axis plus its shift at 5 m, times fy (px per unit of tan, that is
+// the frame height / (2 tan(fov / 2))). scene.js sets uLampPx with it.
+export function lampPx(now, prev, fy) {
+  let m = 0;
+  for (let i = 0; i < now.length; i++) {
+    const a = now[i], b = prev[i];
+    if (!a || !b) continue;
+    const c = Math.min(1, Math.max(-1, a.D[0] * b.D[0] + a.D[1] * b.D[1] + a.D[2] * b.D[2]));
+    const s = Math.hypot(a.P[0] - b.P[0], a.P[1] - b.P[1], a.P[2] - b.P[2]);
+    m = Math.max(m, (Math.acos(c) + s / 5) * fy);
+  }
+  return m;
 }

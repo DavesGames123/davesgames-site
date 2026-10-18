@@ -38,7 +38,7 @@
 //  forward), with the shadow of each mapped lamp (one tap: light shafts
 //  through gaps in the rock and the coral), a turbid density, and faint shafts of downwell light that
 //  carry the caustic map down the water column. VOL_TAA_FS keeps a
-//  history of it (reprojection, neighbourhood clip). COMP_FS adds the
+//  history of it (blur, variance box, camera and lamp reprojection). COMP_FS adds the
 //  volume to the frame with a joint bilateral upsample (volume.js has the
 //  plan), tone-maps (ACES fit) and adds a vignette, a grain and a dither.
 //
@@ -66,6 +66,7 @@
 import { SURFACE_Y, FADE_K, N_WAVES } from './water.js';
 import { ROCK_GLSL } from './rock/material.js';
 import { marineSnowVS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
+import { VOL_K } from './volume.js';
 
 export { SURFACE_Y };
 export const MAX_SPOTS = 4;
@@ -827,7 +828,19 @@ void main() {
 // this page: each ROV spot (spotRad, one shadow tap) and the light from
 // above, through the two-lobe phase msPhase (forward bright: a flake shows
 // most when you look toward the lamp).
+// The beam phase: the in-scatter of the lamp volume (VOL_FS) and the snow
+// (SNOW_LIGHT) use the same function, so a flake in a cone shows the same
+// forward glow as the cone (volume.js beamPhase is the CPU copy).
+export const BEAM_PHASE = /* glsl */`
+float beamPhase(float c) { const float g = 0.55; return 0.08 + 0.25 * (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5); }
+`;
+// The snow in the lamp light: the same spot radiance (spotRad), shadow
+// tap, fade near the lamp and phase as the beam, times VOL_K.snowBeam. A
+// flake near the cone axis gets a small glint. Out of all the cones a
+// flake gets only a dim trace of the light from above, so the beams show
+// the snow (volume.js snowLight is the CPU copy).
 export const SNOW_LIGHT = /* glsl */`
+${BEAM_PHASE}
 vec3 msLight(vec3 p, vec3 V) {
   vec3 c = vec3(0.0);
   for (int i = 0; i < ${MAX_SPOTS}; i++) {
@@ -835,11 +848,13 @@ vec3 msLight(vec3 p, vec3 V) {
     vec3 L;
     vec3 R = spotRad(i, p, L);
     if (max(R.r, max(R.g, R.b)) < 1e-6) continue;
-    c += R * (shadowTap(i, p) * msPhase(dot(-L, V)));
+    R *= shadowTap(i, p) * smoothstep(0.0, ${VOL_K.nearLamp.toFixed(3)}, length(uSpotP[i].xyz - p));
+    float ax = smoothstep(uSpotC[i].w, 1.0, dot(-L, uSpotD[i].xyz));
+    c += R * (beamPhase(dot(-L, V)) * ${VOL_K.snowBeam.toFixed(3)} + ${VOL_K.snowGlint.toFixed(3)} * ax * ax * ax * ax);
   }
-  // the light from above goes down: forward scatter when the eye looks up
+  // the light from above goes down: a dim trace out of the cones
   vec3 sky = vec3(0.10, 0.30, 0.52) * uDown * exp(-(SURF_Y - p.y) * 0.03);
-  c += sky * (msPhase(-V.y) * 0.6);
+  c += sky * (msPhase(-V.y) * ${VOL_K.snowSky.toFixed(3)});
   return c;
 }
 `;
@@ -874,6 +889,7 @@ uniform highp sampler2D uDepth;
 uniform mediump sampler2D uBlue;
 uniform mat4 uProjInv, uCamW;
 uniform float uSteps, uVolMax, uScatter, uShaft, uFrame, uNearLamp;
+${BEAM_PHASE}
 void main() {
   float z = texture(uDepth, vUv).r;
   vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
@@ -907,9 +923,8 @@ void main() {
       R *= shadowTap(i, pj);
       // less in-scatter in the first uNearLamp metres: no hot ball at the lamp
       R *= smoothstep(0.0, uNearLamp, dl);
-      float c = dot(-L, -rd);                 // light goes from the lamp past p; c = 1 straight at the eye
-      float g = 0.55, hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
-      s += R * (0.08 + hg * 0.25);
+      // light goes from the lamp past p; c = 1 straight at the eye
+      s += R * beamPhase(dot(-L, -rd));
     }
     // shafts of downwell light that carry the caustic net down the water
     vec3 cs = causticAt(p);
@@ -919,41 +934,135 @@ void main() {
   oCol = vec4(acc * uScatter, -vp.z);
 }`;
 
-// The history of the volume (volume.js step 2): reproject with the view-
-// projection of the last frame, clip to the neighbourhood, blend.
+// The history of the volume (volume.js step 2, volume.js taaFrame is the
+// CPU copy). The user (2026-10-18): the cones "shimmer between frames ...
+// kind of like tv static" and do not "play nicely with background corals".
+//   a. a 5 x 5 joint bilateral blur of this frame (weights 1 4 6 4 1,
+//      times exp(-r^2) of the depth difference, at least uBlurFloor): the
+//      blue-noise jitter averages out in space. The floor treats the
+//      volume as continuous in depth, so a thin coral branch (one texel,
+//      there in one frame, gone in the next) does not flicker.
+//   b. the variance box (mean +- uClip sd) of the same weighted taps, up
+//      to uClipStill times wider when the view and the lamps are still
+//   c. two history candidates: (A) the surface point of the pixel moved by
+//      the camera, (B) the point of the ray nearest to the axis of a lamp,
+//      moved with that lamp (the cone moves with its ROV, so the world
+//      point is wrong for the light). In a cone, B wins.
+//   d. each history fetch is a 2 x 2 bilateral: texels of another depth
+//      get at most uDepthFloor, so a thin coral branch keeps a history
+//   e. no candidate: the blur, not the raw jittered pixel
 export const VOL_TAA_FS = /* glsl */`
 precision highp float;
+precision highp int;
 in vec2 vUv;
 out vec4 oCol;
 uniform highp sampler2D uCur, uHist;
 uniform mat4 uProjInv, uCamW, uPrevVP;
 uniform vec2 uTexel;
-uniform float uBlend, uReset, uClip, uReject;
+uniform vec3 uEye;
+uniform vec4 uSpotP[${MAX_SPOTS}], uSpotD[${MAX_SPOTS}], uPrevSpotP[${MAX_SPOTS}], uPrevSpotD[${MAX_SPOTS}];
+uniform float uSpotN, uBlend, uBlendLo, uReset, uClip, uClipStill, uLampPx, uReject, uSigRel, uSigAbs, uBlurFloor, uDepthFloor;
 bool bad4(vec4 c) { return any(isnan(c)) || any(isinf(c)); }
-void main() {
-  vec4 c = texture(uCur, vUv);
-  vec3 m1 = vec3(0.0), m2 = vec3(0.0), mn = vec3(1e9), mx = vec3(-1e9);
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    vec3 s = texture(uCur, vUv + vec2(float(i), float(j)) * uTexel).rgb;
-    m1 += s; m2 += s * s; mn = min(mn, s); mx = max(mx, s);
+// the history at uv for a point of view depth wz: 2 x 2 texels, bilinear
+// weight times the depth agreement. w = the weight sum (0 .. 1).
+vec3 histAt(vec2 uv, float wz, out float w) {
+  vec2 sz = 1.0 / uTexel;
+  vec2 st = uv * sz - 0.5, i0 = floor(st), f = st - i0;
+  ivec2 b = ivec2(i0), top = ivec2(sz) - 1;
+  float tol = uReject * max(wz, 0.1);
+  vec3 acc = vec3(0.0);
+  w = 0.0;
+  for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+    ivec2 q = b + ivec2(i, j);
+    if (q.x < 0 || q.y < 0 || q.x > top.x || q.y > top.y) continue;
+    vec4 h = texelFetch(uHist, q, 0);
+    if (bad4(h)) continue;
+    float r = (h.a - wz) / tol;
+    float k = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y) * max(exp(-r * r), uDepthFloor);
+    acc += h.rgb * k; w += k;
   }
-  m1 /= 9.0; m2 /= 9.0;
-  vec3 sd = sqrt(max(m2 - m1 * m1, vec3(0.0)));
-  vec3 lo = max(mn, m1 - uClip * sd), hi = min(mx, m1 + uClip * sd);
-  // this pixel in the world, from its view depth (c.a)
+  return w > 1e-4 ? acc / w : vec3(0.0);
+}
+// the last-frame uv and clip w of a render-space point
+vec3 prevUv(vec3 p) {
+  vec4 pc = uPrevVP * vec4(p, 1.0);
+  if (pc.w <= 1e-4) return vec3(-1.0, -1.0, 0.0);
+  return vec3(pc.xy / pc.w * 0.5 + 0.5, pc.w);
+}
+bool onScreen(vec3 u) { return u.z > 0.0 && u.x >= 0.0 && u.x <= 1.0 && u.y >= 0.0 && u.y <= 1.0; }
+// rotate v by the turn that takes the unit a to the unit b
+vec3 turn(vec3 a, vec3 b, vec3 v) {
+  vec3 k = cross(a, b);
+  float c = dot(a, b);
+  if (c < -0.999) return -v;
+  return v * c + cross(k, v) + k * (dot(k, v) / (1.0 + c));
+}
+void main() {
+  ivec2 px = ivec2(gl_FragCoord.xy), top = ivec2(1.0 / uTexel) - 1;
+  vec4 c = texelFetch(uCur, clamp(px, ivec2(0), top), 0);
+  if (bad4(c)) { oCol = vec4(0.0, 0.0, 0.0, 1e4); return; }
+  // a + b: the joint bilateral blur and the variance box
+  float sig = uSigRel * c.a + uSigAbs;
+  vec3 s1 = vec3(0.0), s2 = vec3(0.0);
+  float ws = 0.0;
+  const float BIN[5] = float[5](1.0, 4.0, 6.0, 4.0, 1.0);
+  for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
+    vec4 s = texelFetch(uCur, clamp(px + ivec2(i, j), ivec2(0), top), 0);
+    if (bad4(s)) continue;
+    float r = (s.a - c.a) / sig;
+    float k = BIN[i + 2] * BIN[j + 2] * max(exp(-r * r), uBlurFloor);
+    s1 += s.rgb * k; s2 += s.rgb * s.rgb * k; ws += k;
+  }
+  vec3 f = s1 / ws;
+  vec3 sd = sqrt(max(s2 / ws - f * f, vec3(0.0)));
+  // the ray of this pixel and its surface point (render space)
   vec4 vr = uProjInv * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
   vr.xyz /= vr.w;
   vec3 pv = vr.xyz * (c.a / max(-vr.z, 1e-6));
   vec3 pw = (uCamW * vec4(pv, 1.0)).xyz;
-  vec4 pc = uPrevVP * vec4(pw, 1.0);
-  vec2 puv = pc.xy / max(pc.w, 1e-6) * 0.5 + 0.5;
-  vec4 h = texture(uHist, puv);
-  bool inside = pc.w > 0.0 && puv.x >= 0.0 && puv.x <= 1.0 && puv.y >= 0.0 && puv.y <= 1.0;
-  bool agree = abs(h.a - pc.w) <= uReject * max(pc.w, 0.1);
-  float a = (inside && agree && uReset < 0.5 && !bad4(h)) ? uBlend : 1.0;
-  vec3 hc = clamp(h.rgb, lo, hi);
-  vec3 o = mix(hc, c.rgb, a);
-  oCol = vec4(bad4(vec4(o, 0.0)) ? c.rgb : o, c.a);
+  vec3 rd = normalize(pw - uEye);
+  float tS = length(pw - uEye);
+  // c, candidate A: the surface point
+  vec3 hb = f;
+  float wb = 0.0, mv = 1e9;
+  vec3 ua = prevUv(pw);
+  if (onScreen(ua)) {
+    mv = max(length((ua.xy - vUv) / uTexel), uLampPx);
+    float w;
+    vec3 h = histAt(ua.xy, ua.z, w);
+    if (w > 0.02) { hb = h; wb = w; }
+  }
+  // c, candidate B: the ray point nearest to the axis of the best lamp
+  int bi = -1;
+  float bs = -2.0, bt = 0.0;
+  for (int i = 0; i < ${MAX_SPOTS}; i++) {
+    if (float(i) >= uSpotN) break;
+    vec3 P = uSpotP[i].xyz, D = uSpotD[i].xyz, w0 = uEye - P;
+    float b = dot(rd, D), d = dot(rd, w0), e = dot(D, w0), den = 1.0 - b * b;
+    float t = den > 1e-4 ? (b * e - d) / den : -d;
+    t = clamp(t, 0.0, tS);
+    vec3 q = uEye + rd * t;
+    float sc = dot(normalize(q - P + D * 1e-3), D);
+    if (sc > bs) { bs = sc; bi = i; bt = t; }
+  }
+  if (bi >= 0 && bs > uSpotD[bi].w - 0.05) {
+    vec3 P = uSpotP[bi].xyz, D = uSpotD[bi].xyz, P0 = uPrevSpotP[bi].xyz, D0 = uPrevSpotD[bi].xyz;
+    vec3 q = uEye + rd * bt;
+    vec3 uq = prevUv(P0 + turn(D, D0, q - P));
+    vec3 us = prevUv(P0 + turn(D, D0, pw - P));
+    if (onScreen(uq) && us.z > 0.0) {
+      float w;
+      vec3 h = histAt(uq.xy, us.z, w);
+      if (w > 0.02) { hb = h; wb = w; }
+    }
+  }
+  // d + e: the blend; a weak history match gets a larger share of new
+  // a still view and still lamps: a wide box (the box adds noise)
+  float g = uClip * (1.0 + (uClipStill - 1.0) * (1.0 - smoothstep(0.02, 0.2, mv)));
+  vec3 lo = max(f - g * sd, vec3(0.0)), hi = f + g * sd;
+  float a = (uReset < 0.5 && wb > 0.02) ? mix(uBlendLo, uBlend, smoothstep(uDepthFloor, 0.7, wb)) : 1.0;
+  vec3 o = mix(clamp(hb, lo, hi), f, a);
+  oCol = vec4(bad4(vec4(o, 0.0)) ? f : o, c.a);
 }`;
 
 // The frame: the scene, the volume (a joint bilateral upsample with the

@@ -26,8 +26,9 @@
 //    3. volume .... VOL_FS at vol.scale: the lamp cones, the shadow
 //                   shafts of each mapped lamp and the downwell shafts,
 //                   blue-noise jitter (volume.js has the plan)
-//    3b. history .. VOL_TAA_FS: reprojection with the last view-
-//                   projection, neighbourhood clip, two ping-pong targets
+//    3b. history .. VOL_TAA_FS: a depth-aware blur, a variance box, a
+//                   camera candidate and a lamp candidate (the spots of
+//                   the last frame), two ping-pong targets
 //    4. frame ..... COMP_FS: scene + volume (joint bilateral upsample
 //                   with the full-res depth), ACES, vignette, grain,
 //                   dither, sRGB
@@ -76,7 +77,7 @@ import * as SH from './shaders.js';
 import { waveSpectrum, wavePhases, noiseOffsets, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
-import { blueNoise, VOL_K } from './volume.js';
+import { blueNoise, lampPx, VOL_K } from './volume.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
 import { DOME_R, domeRadius, HAZE_GLSL } from './haze.js';
 
@@ -640,6 +641,11 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const taaU = {
       uCur: { value: rtVol.texture }, uHist: { value: rtHist[0].texture }, uProjInv: { value: projInv }, uCamW: { value: camW }, uPrevVP: { value: new THREE.Matrix4() },
       uTexel: { value: new THREE.Vector2() }, uBlend: { value: VOL_K.blend }, uReset: { value: 1 }, uClip: { value: VOL_K.clipSd }, uReject: { value: VOL_K.depthReject },
+      // the lamp candidate of the history: the spots now and in the last frame
+      uEye: volU.uEye, uSpotN: U.uSpotN, uSpotP: U.uSpotP, uSpotD: U.uSpotD, uBlendLo: { value: VOL_K.blendLo },
+      uPrevSpotP: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uPrevSpotD: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
+      uSigRel: { value: VOL_K.sigmaRel }, uSigAbs: { value: VOL_K.sigmaAbs },
+      uClipStill: { value: VOL_K.clipStill }, uLampPx: { value: 0 }, uBlurFloor: { value: VOL_K.blurFloor }, uDepthFloor: { value: VOL_K.depthFloor },
     };
     const taaMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_TAA_FS, uniforms: taaU, depthTest: false, depthWrite: false });
     const debugNaN = typeof location !== 'undefined' && /[?&]debug\b/.test(location.search || '') ? 1 : 0;
@@ -665,7 +671,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       volU, taaU, compU, volScene, taaScene, compScene, ortho, scale: LD.volScale,
       // the history state: which target to read, the last view-projection
       // and floating origin, and whether the history is good
-      hist: { read: 0, valid: false, prevVP: new THREE.Matrix4(), origin: [0, 0] },
+      hist: { read: 0, valid: false, prevVP: new THREE.Matrix4(), origin: [0, 0], spotN: -1, spotP: [0, 1, 2, 3].map(() => new THREE.Vector4()), spotD: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
       size(w, h) {
         rtScene.setSize(w, h);
         const vw = Math.max(1, Math.round(w * this.scale)), vh = Math.max(1, Math.round(h * this.scale));
@@ -934,12 +940,26 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       tu.uPrevVP.value.copy(H.prevVP);
       if (o[0] !== H.origin[0] || o[1] !== H.origin[1]) tu.uPrevVP.value.multiply(M4.makeTranslation(o[0] - H.origin[0], 0, o[1] - H.origin[1]));
       tu.uReset.value = H.valid ? 0 : 1;
+      // the spots of the last frame in the render space of this frame (a
+      // new spot count: no lamp motion)
+      const sN = U.uSpotN.value, sameN = H.spotN === sN;
+      for (let i = 0; i < SH.MAX_SPOTS; i++) {
+        const P = tu.uPrevSpotP.value[i], D = tu.uPrevSpotD.value[i];
+        if (sameN) { P.copy(H.spotP[i]); P.x -= o[0] - H.origin[0]; P.z -= o[1] - H.origin[1]; D.copy(H.spotD[i]); }
+        else { P.copy(U.uSpotP.value[i]); D.copy(U.uSpotD.value[i]); }
+      }
+      // the largest screen move of a lamp (px of the volume target)
+      tu.uLampPx.value = lampPx(
+        U.uSpotP.value.slice(0, sN).map((v, i) => ({ P: [v.x, v.y, v.z], D: [U.uSpotD.value[i].x, U.uSpotD.value[i].y, U.uSpotD.value[i].z] })),
+        tu.uPrevSpotP.value.slice(0, sN).map((v, i) => ({ P: [v.x, v.y, v.z], D: [tu.uPrevSpotD.value[i].x, tu.uPrevSpotD.value[i].y, tu.uPrevSpotD.value[i].z] })),
+        passes.rtVol.height / (2 * Math.tan(camera.fov * Math.PI / 360)));
       tu.uHist.value = passes.rtHist[H.read].texture;
       const wr = passes.rtHist[1 - H.read];
       renderer.setRenderTarget(wr);
       renderer.render(passes.taaScene, passes.ortho);
       passes.compU.uVol.value = passes.lumU.uVol.value = wr.texture;
       H.read = 1 - H.read; H.valid = true;
+      H.spotN = sN; for (let i = 0; i < SH.MAX_SPOTS; i++) { H.spotP[i].copy(U.uSpotP.value[i]); H.spotD[i].copy(U.uSpotD.value[i]); }
       H.prevVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); H.origin = [o[0], o[1]];
     } else {
       renderer.setRenderTarget(passes.rtVol); renderer.setClearColor(0x000000, 1); renderer.clear(true, false, false);

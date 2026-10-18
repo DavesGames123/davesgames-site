@@ -139,7 +139,7 @@ function worldOf(c, uv, zView) {
   ok(/0\.61803399 \* uFrame/.test(SH.VOL_FS), 'VOL_FS: the jitter moves by the golden ratio each frame');
   ok(/R \*= shadowTap\(i, pj\);/.test(SH.VOL_FS), 'VOL_FS: the per-ROV shadows stay in the cones (one jittered tap per mapped lamp)');
   ok(/oCol = vec4\(acc \* uScatter, -vp\.z\);/.test(SH.VOL_FS), 'VOL_FS: a = the linear view depth');
-  ok(/uPrevVP/.test(SH.VOL_TAA_FS) && /clamp\(h\.rgb, lo, hi\)/.test(SH.VOL_TAA_FS) && /uReject/.test(SH.VOL_TAA_FS), 'VOL_TAA_FS: reprojection, neighbourhood clip and depth rejection');
+  ok(/uPrevVP/.test(SH.VOL_TAA_FS) && /clamp\(hb, lo, hi\)/.test(SH.VOL_TAA_FS) && /uReject/.test(SH.VOL_TAA_FS), 'VOL_TAA_FS: reprojection, neighbourhood clip and depth rejection');
   ok(!/\(2\.0 - abs\(float\(i\)\)\)/.test(SH.COMP_FS) && /texelFetch\(uVol/.test(SH.COMP_FS) && /linZ\(texture\(uDepth/.test(SH.COMP_FS), 'COMP_FS: no 3 x 3 tent; a joint bilateral upsample with the full-res depth');
   ok(/\/ 255\.0/.test(SH.COMP_FS), 'COMP_FS: a dither of 1 / 255 before the 8-bit output');
   ok(V.VOL_K.scatter < 1, 'the in-scatter level is under the old 1 (the lamp glow drove the exposure)');
