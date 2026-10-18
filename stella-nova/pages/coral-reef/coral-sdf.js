@@ -120,6 +120,46 @@ export const SHAPES = {
     groove: 0.045, polyp: { density: 110, tip: 0, size: 0.006, max: 160, extend: 0.45, tint: [0.95, 0.9, 0.7], fluor: 0.5, trunk: 1, under: 0.5, range: [18, 56] } },
   finger: { cell: 0.012, k: 0.022, bend: 0.4, hold: 0.3, rTip: 0.019, pipe: 3.4, rMax: 0.04, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03, skin: 4,
     polyp: { density: 2200, tip: 1, size: 0.0045, max: 700, extend: 1.0, tint: [1.0, 0.94, 0.96], fluor: 0.12, range: [464, 1483] } },
+
+  // branching stony corals (cones along the branches; elkhorn: a flat web
+  // between near branches at the height of each particle, so the branches
+  // are broad and flat)
+  elkhorn: { post: 'palmate', cell: 0.014, k: 0.03, bend: 0.45, hold: 0.3, rTip: 0.016, pipe: 3.6, rMax: 0.034, sub0: 2, quant: 0.18, rootScale: 1.5, band: 0.04, skin: 0,
+    web: 0.022, half: 0.012, polyp: { density: 1200, tip: 1.5, size: 0.003, max: 700, extend: 0.6, tint: [0.96, 0.9, 0.8], fluor: 0.4, range: [227, 726] } },
+  pocillopora: { cell: 0.01, k: 0.024, bend: 0.4, hold: 0.3, rTip: 0.012, pipe: 3.4, rMax: 0.026, sub0: 2, quant: 0.18, rootScale: 1.5, band: 0.026, skin: 13,
+    polyp: { density: 1400, tip: 1, size: 0.0028, max: 700, extend: 0.5, tint: [1.0, 0.9, 0.9], fluor: 0.5, range: [336, 1074] } },
+  stylophora: { cell: 0.012, k: 0.026, bend: 0.45, hold: 0.3, rTip: 0.017, pipe: 3.2, rMax: 0.03, sub0: 2, quant: 0.18, rootScale: 1.5, band: 0.03, skin: 5,
+    polyp: { density: 1300, tip: 1.2, size: 0.003, max: 700, extend: 0.6, tint: [1.0, 0.92, 0.96], fluor: 0.4, range: [356, 1139] } },
+  seriatopora: { cell: 0.0075, k: 0.016, bend: 0.4, hold: 0.3, rTip: 0.0065, pipe: 3.6, rMax: 0.014, sub0: 3, quant: 0.16, rootScale: 1.5, band: 0.018, skin: 0,
+    polyp: { density: 1600, tip: 1.2, size: 0.0022, max: 700, extend: 0.5, tint: [1.0, 0.92, 0.94], fluor: 0.3, range: [441, 1411] } },
+  pillar: { cell: 0.022, k: 0.06, bend: 0.5, hold: 0.3, rTip: 0.05, pipe: 4, rMax: 0.07, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.05, skin: 4,
+    polyp: { density: 900, tip: 0.5, size: 0.004, max: 700, extend: 1.0, tint: [0.96, 0.92, 0.82], fluor: 0.2, range: [178, 570] } },
+
+  // plating and foliose corals (cones cut to a plate that rises by the
+  // colony tilt)
+  montipora: { post: 'plate', cell: 0.013, k: 0.022, bend: 0.3, hold: 0.4, rTip: 0.012, pipe: 3, rMax: 0.034, sub0: 2, quant: 0.2, rootScale: 1.5, band: 0.03, skin: 5,
+    inflate: 0.011, half: 0.008, polyp: { density: 2400, tip: 1, size: 0.0018, max: 800, extend: 0.35, tint: [0.96, 0.9, 0.86], fluor: 0.5, range: [400, 1282] } },
+  turbinaria: { post: 'plate', cell: 0.013, k: 0.022, bend: 0.3, hold: 0.4, rTip: 0.013, pipe: 3, rMax: 0.036, sub0: 2, quant: 0.2, rootScale: 1.5, band: 0.032, skin: 5,
+    inflate: 0.011, half: 0.009, polyp: { density: 1200, tip: 1, size: 0.003, max: 700, extend: 0.7, tint: [1.0, 0.98, 0.8], fluor: 0.6, range: [236, 757] } },
+  pachyseris: { post: 'plate', cell: 0.013, k: 0.022, bend: 0.3, hold: 0.4, rTip: 0.012, pipe: 3, rMax: 0.03, sub0: 2, quant: 0.2, rootScale: 1.5, band: 0.03, skin: 8,
+    inflate: 0.012, half: 0.006, polyp: { density: 300, tip: 0.5, size: 0.002, max: 400, extend: 0.2, tint: [0.92, 0.9, 0.8], fluor: 0.2, range: [42, 134] } },
+  echinopora: { post: 'plate', cell: 0.013, k: 0.024, bend: 0.3, hold: 0.4, rTip: 0.013, pipe: 3, rMax: 0.034, sub0: 2, quant: 0.2, rootScale: 1.5, band: 0.032, skin: 0,
+    inflate: 0.011, half: 0.009, polyp: { density: 1000, tip: 1, size: 0.003, max: 700, extend: 0.5, tint: [0.96, 0.96, 0.82], fluor: 0.5, range: [192, 616] } },
+  merulina: { post: 'plate', cell: 0.013, k: 0.022, bend: 0.3, hold: 0.4, rTip: 0.013, pipe: 3, rMax: 0.034, sub0: 2, quant: 0.2, rootScale: 1.5, band: 0.032, skin: 2,
+    inflate: 0.012, half: 0.009, polyp: { density: 700, tip: 1, size: 0.0028, max: 600, extend: 0.4, tint: [1.0, 0.94, 0.86], fluor: 0.4, range: [120, 386] } },
+
+  // massive, encrusting and free-living corals (fat cones, a wide blend:
+  // one smooth surface; the lobes come from the growth rule)
+  porites: { cell: 0.024, k: 0.1, chain: 1, rTip: 0.11, pipe: 4, rMax: 0.11, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.04, skin: 5,
+    polyp: { density: 900, tip: 0, size: 0.0016, max: 400, extend: 0.3, tint: [0.98, 0.94, 0.8], fluor: 0.3, trunk: 1, under: 0.5, range: [144, 462] } },
+  favites: { cell: 0.02, k: 0.09, chain: 1, rTip: 0.1, pipe: 4, rMax: 0.1, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.04, skin: 6,
+    polyp: { density: 150, tip: 0, size: 0.006, max: 200, extend: 0.45, tint: [0.9, 1.0, 0.8], fluor: 0.8, trunk: 1, under: 0.5, range: [37, 118] } },
+  lobophyllia: { cell: 0.02, k: 0.09, chain: 1, rTip: 0.1, pipe: 4, rMax: 0.1, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.04, skin: 7,
+    polyp: { density: 40, tip: 0, size: 0.012, max: 80, extend: 0.6, tint: [0.9, 1.0, 0.86], fluor: 0.6, trunk: 1, under: 0.5, range: [10, 32] } },
+  encrusting: { cell: 0.018, k: 0.08, chain: 1, rTip: 0.08, pipe: 4, rMax: 0.08, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.035, skin: 5,
+    polyp: { density: 1500, tip: 0, size: 0.0016, max: 500, extend: 0.3, tint: [0.96, 0.9, 0.96], fluor: 0.5, trunk: 1, under: 0.5, range: [292, 936] } },
+  mushroom: { cell: 0.004, k: 0.016, chain: 1, rTip: 0.016, pipe: 4, rMax: 0.016, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.012, skin: 2,
+    polyp: { density: 120, tip: 0, size: 0.004, max: 60, extend: 0.7, tint: [0.96, 1.0, 0.9], fluor: 0.6, trunk: 1, under: 0.2, range: [43, 138] } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
 // The skin code of each species (scene.js uSpecies: the species branch of
