@@ -130,14 +130,18 @@ export async function createSky(gpu) {
 
   const tex2 = (w, h, format, label, extra = 0) => device.createTexture({ label, size: [w, h], format, usage: T.TEXTURE_BINDING | T.STORAGE_BINDING | T.COPY_SRC | extra });
   const tex3 = (n, format, label, extra = 0) => device.createTexture({ label, size: [n, n, n], dimension: '3d', format, usage: T.TEXTURE_BINDING | T.STORAGE_BINDING | T.COPY_SRC | extra });
+  // a phone profile (gpu/budget.js) gives smaller noise volumes and maps;
+  // the shaders take the size from textureDimensions
+  const cn = (gpu.profile && gpu.profile.cloudNoise) || {};
+  const SH = cn.shadow || 512, NB = cn.base || 128, ND = cn.detail || 32, N2 = cn.n2d || 512;
   const lut = {
     trans: tex2(256, 64, 'rgba16float', 'sky trans'),
     multi: tex2(32, 32, 'rgba16float', 'sky multi'),
     view: tex2(192, 108, 'rgba16float', 'sky view'),
-    shadow: tex2(512, 512, 'rgba16float', 'cloud shadow'),
-    base: tex3(128, 'rgba8unorm', 'cloud base noise'),
-    detail: tex3(32, 'rgba8unorm', 'cloud detail noise'),
-    n2d: tex2(512, 512, 'rgba8unorm', 'cloud 2d noise'),
+    shadow: tex2(SH, SH, 'rgba16float', 'cloud shadow'),
+    base: tex3(NB, 'rgba8unorm', 'cloud base noise'),
+    detail: tex3(ND, 'rgba8unorm', 'cloud detail noise'),
+    n2d: tex2(N2, N2, 'rgba8unorm', 'cloud 2d noise'),
   };
   const V = {};
   for (const k in lut) V[k] = lut[k].createView();
@@ -218,7 +222,7 @@ export async function createSky(gpu) {
   let tg = null;
   function makeTargets(w, h, q) {
     if (tg) for (const t of tg.all) t.destroy();
-    const k = q >= 0.5 ? 0.5 : 0.34;
+    const k = Math.min(q >= 0.5 ? 0.5 : 0.34, (gpu.profile && gpu.profile.cloudK) || 1);
     const cw = Math.max(8, Math.round(w * k)), ch = Math.max(8, Math.round(h * k));
     const mk = (label) => tex2(cw, ch, 'rgba16float', label);
     tg = { w, h, cw, ch, k, raw: mk('cloud raw'), rawZ: mk('cloud raw z'), acc: [mk('cloud acc 0'), mk('cloud acc 1')], all: [] };
@@ -305,7 +309,7 @@ export async function createSky(gpu) {
     st.sig = sig;
     put(SKYU.vol2, grid[0], grid[1], grid[2], st.haveFrame && !tg.fresh && !jump ? 0.88 : 0);
     // cloud shadow square round the camera, snapped to its texels
-    const size = clamp(ws * 1.4, 30000, 90000), texel = size / 512;
+    const size = clamp(ws * 1.4, 30000, 90000), texel = size / SH;
     const x0 = Math.floor((cam[0] - size / 2) / texel) * texel, z0 = Math.floor((cam[2] - size / 2) / texel) * texel;
     put(SKYU.shadow, x0, z0, size, 0);
     // rainbow: rain in the air and a sun lower than 42 deg that the deck lets through
@@ -364,9 +368,9 @@ export async function createSky(gpu) {
         pass.setPipeline(p); pass.setBindGroup(1, g1); pass.setBindGroup(3, g3); pass.dispatchWorkgroups(x, y, z);
       };
       if (!st.noiseDone) {
-        run(P.base, BG.uOnly, BG.outBase, 32, 32, 32);
-        run(P.detail, BG.uOnly, BG.outDetail, 8, 8, 8);
-        run(P.n2d, BG.uOnly, BG.outN2d, 64, 64);
+        run(P.base, BG.uOnly, BG.outBase, NB / 4, NB / 4, NB / 4);
+        run(P.detail, BG.uOnly, BG.outDetail, ND / 4, ND / 4, ND / 4);
+        run(P.n2d, BG.uOnly, BG.outN2d, N2 / 8, N2 / 8);
         st.noiseDone = true;
       }
       const mie = u[SKYU.mieS];
@@ -393,7 +397,7 @@ export async function createSky(gpu) {
         pass.setPipeline(p); pass.setBindGroup(1, g1); pass.setBindGroup(3, g3); pass.dispatchWorkgroups(x, y, z);
       };
       run(P.view, BG.skyView, BG.outView, 24, 14);
-      run(P.shadow, BG.shadowRead, BG.outShadow, 64, 64);
+      run(P.shadow, BG.shadowRead, BG.outShadow, SH / 8, SH / 8);
       if (st.clouds) {
         run(P.march, BG.read, tg.march, Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
         tg.ping = 1 - tg.ping;
