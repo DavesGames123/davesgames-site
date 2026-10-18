@@ -47,17 +47,33 @@
 //  final terrain; ground.wgsl puts the snow line where T falls to the
 //  season's limit (-7 C summer, +1 C winter), lowered by G.weather2.y.
 //
+//  SURFACE  render/surface-sim.js derives material fields from the history
+//  of each final terrain (bedrock and regolith, scree, alluvium, wet banks,
+//  snow drift and cornices, exposure age, playa, strata warp, glacial
+//  polish, erosion scars, the D8 drainage field). startSurface runs it in
+//  render/surface-worker.js (or on this thread with pauses), applySurface
+//  uploads the 4 layers as one rgba8unorm 2D array (group 1 binding 7) and
+//  sets U.surf / U.geo / U.geo2 (surfaceUniforms). Until then, and while a
+//  new terrain forms, U.surf.x = 0 and the shader keeps its slope rules.
+//  The grid is min(n, 1024), 512 on Low and phones (4 MB). setSurface(on)
+//  and surfaceReady() are for tests and debug views 7 to 9.
+//
 //  grep -n targets: "export function lodConfig", "export function buildMinMax",
 //  "export function fitLapse", "export function farRingParams",
 //  "export function farRingMesh", "function buildRing",
 //  "export function nodeBounds", "export function frustumPlanes",
 //  "export function selectNodes", "export function morphVertex",
 //  "export function gridIndices", "export function groundLayerMap",
-//  "export async function createGround", "drawOpaque", "drawShadow"
+//  "export async function createGround", "drawOpaque", "drawShadow",
+//  "export function surfaceUniforms", "function startSurface", "function applySurface"
 // ============================================================================
+
+import { simulateSurface, surfRes, SURF_LAYERS } from './surface-sim.js';
 
 const INST_FLOATS = 8;          // a: x0, z0, size, N; b: morph start, morph end, level, 0
 const MAX_INST = 6144;
+// GroundU (ground.wgsl struct GroundU) in floats: 18 vec4
+export const U_FLOATS = 72;
 export const LAYERS = ['rock', 'cliff', 'grass', 'forest floor', 'sand', 'snow', 'mud', 'gravel'];
 // texture array size per quality (three arrays of 13 sets: about 180 MB at 1024)
 export const layerRes = (q) => (q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256);
@@ -404,6 +420,16 @@ export function farRingMesh(ws, M = 160, K = 56) {
   return { pos, idx };
 }
 
+// U.surf, U.geo, U.geo2 of a finished surface job r (render/surface-sim.js)
+// on terrain cpu: [on, grid m, wind x, wind z, strata hmin, hspan, layers,
+// strength, glacier, hemisphere (1 north, -1 south), dune wavelength m, 0]
+export function surfaceUniforms(r, cpu) {
+  const o = (cpu && cpu.opts) || {};
+  const lat = o.latitude ?? 45;
+  const lam = 150 + (90 * Math.min(1, Math.max(0, o.dunes || 0)));
+  return [1, r.m, r.wind[0], r.wind[1], ...r.strata, r.glacier || 0, lat < 0 ? -1 : 1, lam, 0];
+}
+
 // ----------------------------------------------------------------- module --
 
 const MIP_WGSL = /* wgsl */`
@@ -440,11 +466,12 @@ export async function createGround(gpu) {
       { binding: 4, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+      { binding: 7, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
     ],
   });
   // the shadow pass reads U (group 1) too: the morph needs the terrain top
-  const uBuf = device.createBuffer({ size: 60 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
-  const uData = new Float32Array(60);
+  const uBuf = device.createBuffer({ size: U_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: 'ground U' });
+  const uData = new Float32Array(U_FLOATS);
   // SKY's cloud shadow map (module.cloudShadow), when CORE hands it over as
   // gpu.cloudShadow or frame.cloudShadow; a lit 1 x 1 stand-in until then
   const litTex = device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST, label: 'ground lit' });
@@ -463,6 +490,13 @@ export async function createGround(gpu) {
   let texNrm = mkArray(4, 'rgba8unorm', 1, 'ground nrm dummy');
   let texOrm = mkArray(4, 'rgba8unorm', 1, 'ground orm dummy');
   let texOn = 0;
+  // the surface fields (render/surface-sim.js): a neutral 1 x 1 stand-in
+  // until the simulation of the final terrain is done (U.surf.x = 0)
+  const mkSurf = (m) => device.createTexture({
+    size: [m, m, SURF_LAYERS], format: 'rgba8unorm', label: `ground surface ${m}`,
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  let surfTex = mkSurf(1);
   const makeBG = () => device.createBindGroup({
     layout: groundLayout, label: 'ground g1',
     entries: [
@@ -473,6 +507,7 @@ export async function createGround(gpu) {
       { binding: 4, resource: sRepeat },
       { binding: 5, resource: cloud ? cloud.view : litTex.createView() },
       { binding: 6, resource: cloud ? cloud.sampler : litSampler },
+      { binding: 7, resource: surfTex.createView({ dimension: '2d-array' }) },
     ],
   });
   let groundBG = makeBG();
@@ -512,6 +547,56 @@ export async function createGround(gpu) {
   }
   const snowFit = new Float32Array(4);
   const ringU = new Float32Array(4);
+  // U.surf, U.geo, U.geo2 (see surfaceUniforms)
+  const surfU = new Float32Array(12);
+
+  // ---- the surface simulation of each final terrain: in a module worker
+  // (render/surface-worker.js), else on this thread with pauses between
+  // the passes. A newer terrain drops the older job (surfJob).
+  let surfJob = 0, surfCpu = null, surfRes0 = 0, surfStats = null, surfAllow = true, surfReady = false;
+  let surfWorker = null, surfWorkerBad = typeof Worker === 'undefined';
+  let surfDone = Promise.resolve(false), surfResolve = null;
+  function applySurface(r) {
+    if (!r || r.id !== surfJob) return;
+    if (r.error) { console.warn('ground: surface fields', r.error); surfResolve && surfResolve(false); return; }
+    const m = r.m;
+    const tex = mkSurf(m);
+    for (let k = 0; k < SURF_LAYERS; k++) {
+      queue.writeTexture({ texture: tex, origin: [0, 0, k] }, r.data, { offset: k * m * m * 4, bytesPerRow: m * 4, rowsPerImage: m }, [m, m, 1]);
+    }
+    surfTex.destroy();
+    surfTex = tex;
+    groundBG = makeBG();
+    surfU.set(surfaceUniforms(r, surfCpu));
+    surfReady = true;
+    if (!surfAllow) surfU[0] = 0;
+    surfStats = { m, ...r.stats };
+    surfResolve && surfResolve(true);
+  }
+  function startSurface(cpu) {
+    const res = surfRes(cpu.n, quality, gpu.coarse);
+    if (cpu === surfCpu && res === surfRes0) return;
+    surfCpu = cpu; surfRes0 = res;
+    const id = ++surfJob;
+    surfU[0] = 0; surfReady = false;
+    surfDone = new Promise((r) => { surfResolve = r; });
+    const t = { n: cpu.n, worldSize: cpu.worldSize, seaLevel: cpu.seaLevel, opts: cpu.opts, height: cpu.height, flow: cpu.flow,
+      sediment: cpu.sediment, water: cpu.water, river: cpu.river, moisture: cpu.moisture, temperature: cpu.temperature };
+    const local = () => simulateSurface(cpu, { res, yieldFn: () => new Promise((ok) => setTimeout(ok, 0)) })
+      .then((s) => applySurface({ id, m: s.m, data: s.data, wind: s.wind, strata: s.strata, glacier: s.glacier, stats: s.stats }))
+      .catch((e) => applySurface({ id, error: e.message }));
+    if (!surfWorkerBad && !surfWorker) {
+      try {
+        surfWorker = new Worker(new URL('./surface-worker.js', import.meta.url), { type: 'module' });
+        surfWorker.onmessage = (e) => applySurface(e.data);
+        surfWorker.onerror = (e) => { console.warn('ground: surface worker', e.message || e); surfWorkerBad = true; surfWorker = null; if (surfCpu) { const c = surfCpu; surfCpu = null; startSurface(c); } };
+      } catch (e) { surfWorkerBad = true; surfWorker = null; }
+    }
+    if (surfWorker) {
+      try { surfWorker.postMessage({ id, res, t }); return; } catch (e) { surfWorkerBad = true; }
+    }
+    local();
+  }
 
   const shadowPipe = await device.createRenderPipelineAsync({
     label: 'ground shadow',
@@ -570,6 +655,9 @@ export async function createGround(gpu) {
     // snapshot with no temperature keeps the last fit)
     const tc = t.cpu && t.cpu.temperature && t.cpu.height ? t.cpu : null;
     if (tc) snowFit.set(fitLapse(tc.height, tc.temperature));
+    // the surface fields follow the final terrain; a forming one has none
+    if (t.cpu && t.cpu.height && t.cpu.flow) startSurface(t.cpu);
+    else if (!t.cpu) { surfJob++; surfCpu = null; surfU[0] = 0; surfReady = false; }
     ringU.set(farRingParams(t, hMin, hMax));
   }
 
@@ -593,6 +681,7 @@ export async function createGround(gpu) {
       quality = q;
       cfg = lodConfig(terrain.worldSize, quality, frame.coarse);
       cfgSh = lodConfig(terrain.worldSize, quality, frame.coarse, 0.55);
+      if (surfCpu) startSurface(surfCpu);   // the field grid follows the quality
     }
     const cam = frame.camera?.pos ? [frame.camera.pos[0], frame.camera.pos[1], frame.camera.pos[2]] : [g[80], g[81], g[82]];
     const origin = -terrain.worldSize / 2;
@@ -624,6 +713,7 @@ export async function createGround(gpu) {
     uData.set(layerMap.map, 32);
     uData.set(snowFit, 52);
     uData.set(ringU, 56);
+    uData.set(surfU, 60);
     queue.writeBuffer(uBuf, 0, uData);
   }
 
@@ -723,7 +813,19 @@ export async function createGround(gpu) {
     const a = gpu.assets;
     if (!a) return 0;
     let sets = null;
-    if (a.loadGround && !pf) sets = await a.loadGround();
+    if (gpu.groundImageLoader) {
+      // a test harness with no image decoder (Deno): loader(url, size) ->
+      // { data RGBA, width, height }
+      const recs = groundRecords(a.manifest || a);
+      const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
+      const r0 = layerRes(quality);
+      sets = await Promise.all(recs.map(async (rec) => {
+        const t = rec.textures;
+        const get = (f) => (f ? gpu.groundImageLoader(new URL(f, base).href, r0).catch(() => null) : null);
+        const [albedo, normal, orm] = await Promise.all([get(t.albedo), get(t.normal), get(t.orm)]);
+        return { record: rec, albedo, normal, orm };
+      }));
+    } else if (a.loadGround && !pf) sets = await a.loadGround();
     else {
       let recs = groundRecords(a.manifest || a);
       if (pf) recs = recs.filter((r) => PHONE_SETS.includes(r.id)).sort((x, y) => PHONE_SETS.indexOf(x.id) - PHONE_SETS.indexOf(y.id)).slice(0, pf.groundLayers || 8);
@@ -769,7 +871,7 @@ export async function createGround(gpu) {
     texOn = 1;
     return ok;
   }
-  const texturesReady = loadAssetTextures().catch((e) => { console.warn('ground: textures', e.message); return 0; });
+  let texturesReady = loadAssetTextures().catch((e) => { console.warn('ground: textures', e.message); return 0; });
 
   return {
     name: 'ground',
@@ -778,17 +880,28 @@ export async function createGround(gpu) {
     update,
     drawOpaque,
     drawShadow,
-    texturesReady,
-    setDebug(mode) { debug = mode | 0; },     // 0 lit, 1 layer weights, 2 normals, 3 LOD
+    get texturesReady() { return texturesReady; },
+    // load the ground sets again (after gpu.groundImageLoader is set)
+    reloadTextures() { texturesReady = loadAssetTextures().catch((e) => { console.warn('ground: textures', e.message); return 0; }); return texturesReady; },
+    // resolves true when the surface fields of the current terrain are on
+    surfaceReady: () => surfDone,
+    // 0 lit, 1 layer weights, 2 normals, 3 LOD, 4 sun shadow, 5 albedo,
+    // 6 geometric normal, 7 fields (bedrock, scree, alluvium + gullies),
+    // 8 fields (snow drift, cornice + glacial, age)
+    setDebug(mode) { debug = mode | 0; },
+    // the simulated surface on or off (off: the slope and biome rules alone)
+    setSurface(on) { surfAllow = !!on; surfU[0] = surfAllow && surfReady ? 1 : 0; },
     setAerial(on) { aerialOn = on ? 1 : 0; }, // off when SKY's volume does all of the haze
     setFarRing(on) { ringOn = !!on; },          // the mirrored land past the world edge
-    stats() { return { patches: sel.count, full: sel.full, half: sel.half, shadowPatches: shSel.count, levels: cfg?.levels, N: cfg?.N, textures: texOn }; },
+    stats() { return { patches: sel.count, full: sel.full, half: sel.half, shadowPatches: shSel.count, levels: cfg?.levels, N: cfg?.N, textures: texOn, surface: surfU[0] ? surfStats : null }; },
     resize() {},
     dispose() {
       for (const b of [uBuf, instBuf, shInstBuf]) b.destroy();
       if (ring) { ring.vbuf.destroy(); ring.ibuf.destroy(); }
       for (const k of Object.keys(idxBufs)) idxBufs[k].buf.destroy();
-      texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy();
+      texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy(); surfTex.destroy();
+      surfJob++;
+      if (surfWorker) { surfWorker.terminate(); surfWorker = null; }
     },
   };
 }

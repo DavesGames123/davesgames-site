@@ -26,6 +26,17 @@
 //  G.weather2.x and near water, rain ripples from G.weather.y, snow cover
 //  from G.weather2.y with height, slope and aspect.
 //
+//  SURFACE FIELDS  render/surface-sim.js (tSurf, 4 layers): bedrock shows
+//  where the regolith is thin, plants need soil, scree aprons lie under
+//  cliffs (the parent rock colour), alluvium is gravel or silt by grain,
+//  playas crack, wet banks darken, snow follows drift, shade and slope with
+//  cornices on lee crests, rock carries the LIB strata (hard bands as
+//  ledges, a colour per layer), lichen, moss and desert varnish by age and
+//  climate, glacial polish and striations. Under one field texel: the D8
+//  drainage lines (fn drainLine), couloirs from the log-area field, dunes
+//  across the prevailing wind (fn dune), rock facets, a macro scan of the
+//  cliff set at 34 m and 122 m tiles (fn macroRock), gully cavity light.
+//
 //  LIGHT  sun (GGX + Lambert) with CORE's cascaded shadow map (common.wgsl
 //  fn sunShadow, group 2) and
 //  a height-field march toward the sun for long ridge shadows past the
@@ -55,7 +66,9 @@
 //  grep -n targets: "struct GroundU", "fn vs", "fn vsShadow", "fn vsRing",
 //  "fn foldXZ", "fn ringHeight", "climate snow line", "fn vnoised",
 //  "fn fbmd", "fn biomeMix", "fn layerRock", "fn layerGrass", "fn layerSand",
-//  "fn layerGravel", "fn marchShadow", "fn aerial", "fn fs"
+//  "fn layerGravel", "fn marchShadow", "fn aerial", "fn fs", "fn surfAt",
+//  "fn drainLine", "fn dune", "fn snowAmount", "fn strataAt", "fn strataCol",
+//  "fn facets", "fn macroRock", "struct RockGeo"
 // ============================================================================
 
 struct GroundU {
@@ -68,6 +81,9 @@ struct GroundU {
   cloud: vec4f,   // SKY cloud shadow: xy rect origin (world xz), z rect size m, w cloud base y m
   snow: vec4f,    // climate: x T at 0 m (C), y lapse dT/dh (C per m, < 0), z fit valid (0/1), w 0
   ring: vec4f,    // far ring: x floor height m, y fade length m, z floor relief m, w 0
+  surf: vec4f,    // surface fields: x on (0/1), y grid m (cells per side), zw prevailing wind (unit, toward)
+  geo: vec4f,     // LIB strata: x hmin m, y hspan m, z layers, w strength 0..1
+  geo2: vec4f,    // x glacier 0..1, y hemisphere (1 north, -1 south), z dune wavelength m, w 0
 };
 @group(1) @binding(0) var<uniform> U: GroundU;
 @group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // ASSETS ground sets, rgba8unorm-srgb
@@ -76,6 +92,7 @@ struct GroundU {
 @group(1) @binding(4) var sRepeat: sampler;                  // linear, repeat, anisotropic
 @group(1) @binding(5) var tCloudSh: texture_2d<f32>;         // SKY module.cloudShadow.view (r: sun transmittance)
 @group(1) @binding(6) var sCloudSh: sampler;
+@group(1) @binding(7) var tSurf: texture_2d_array<f32>;      // render/surface-sim.js fields, 4 layers rgba8unorm
 
 const GPI: f32 = 3.14159265;
 
@@ -446,25 +463,210 @@ fn streakNoise(p: vec3f, down: vec2f, f: f32, st: f32, seed: f32) -> vec4f {
 }
 
 // Gullies and spurs on steep ground, in metres, at every distance: ridged
-// streak noise (crests where |n| is small). Returns the slope (dh/dx,
-// dh/dz) to add to the ground, faded per octave by the footprint.
-fn macroErosion(p: vec3f, down: vec2f, steep: f32, fp: f32) -> vec2f {
-  if (steep <= 0.0) { return vec2f(0.0); }
+// streak noise (crests where |n| is small), 210 m down to 18 m. Returns the
+// slope (dh/dx, dh/dz) to add to the ground, faded per octave by the
+// footprint, and the rib / gully value (colour: debris and snow in the
+// gullies, bare rock on the ribs).
+fn macroErosion(p: vec3f, down: vec2f, steep: f32, fp: f32) -> vec3f {
+  if (steep <= 0.0) { return vec3f(0.0); }
   var g = vec2f(0.0);
-  var wl = 90.0;
-  var amp = 26.0;
-  let octs = select(3, 1, U.mat.w < 0.45);
-  for (var i = 0; i < 3; i++) {
+  var hv = 0.0;
+  var hw = 0.0;
+  var wl = 160.0;
+  var amp = 200.0;
+  let octs = select(select(3, 4, U.mat.w >= 0.95), 2, U.mat.w < 0.45);
+  for (var i = 0; i < 4; i++) {
     if (i >= octs) { break; }
     let fade = 1.0 - smoothstep(wl * 0.12, wl * 0.3, fp);
     if (fade <= 0.0) { break; }
-    let n = streakNoise(p, down, 1.0 / wl, 0.12, f32(i) * 17.1);
+    let n = streakNoise(p, down, 1.0 / wl, 0.22, f32(i) * 17.1);
     // smooth |n| = sqrt(n^2 + e): a hard sign() draws crease lines
-    let s = -(n.x / sqrt((n.x * n.x) + 0.04));
+    let r = sqrt((n.x * n.x) + 0.04);
+    let s = -(n.x / r);
     g += vec2f(n.y, n.w) * (s * amp * fade);
-    wl *= 0.42; amp *= 0.42;
+    // the relief itself: -|n| is high on the ribs, low in the gullies
+    let wt = select(0.6, 1.0, i == 0) * fade;
+    hv += (0.42 - r) * wt;
+    hw += wt;
+    wl *= 0.44; amp *= 0.38;
   }
-  return g * steep;
+  // x, y: the slope to add; z: -1 in a gully .. 1 on a rib
+  return vec3f(g * steep, clamp((hv / max(hw, 1e-3)) * 3.5, -1.0, 1.0) * steep);
+}
+
+// ------------------------------------------------------ surface fields --
+// render/surface-sim.js derives the fields from the terrain history; the
+// functions here read them and add the detail under one field texel. JS
+// twins in surface-sim.js: dune, snowAmount, drainLine, cellJitter.
+
+struct Surf {
+  a: vec4f,  // regolith, scree, alluvium, wet bank
+  b: vec4f,  // snow drift (0.5 neutral), cornice, exposure age, playa
+  c: vec4f,  // strata warp (0.5 none), glacial, ice direction / PI, scar
+  d: vec4f,  // D8 code x 28 / 255, log area (log10 A km2 + 2.5) / 5, coarse grain, erosion
+};
+
+// The fields at xz (bilinear). Off (no fields yet): neutral values, and
+// a.x < 0 tells fs to use its slope rules alone.
+fn surfAt(xz: vec2f) -> Surf {
+  var s: Surf;
+  if (U.surf.x < 0.5) {
+    s.a = vec4f(-1.0, 0.0, 0.0, 0.0);
+    s.b = vec4f(0.5, 0.0, 0.5, 0.0);
+    s.c = vec4f(0.5, 0.0, 0.0, 0.0);
+    s.d = vec4f(1.0, 0.0, 0.0, 0.0);
+    return s;
+  }
+  let uv = gUV(xz);
+  s.a = textureSampleLevel(tSurf, sLinear, uv, 0, 0.0);
+  s.b = textureSampleLevel(tSurf, sLinear, uv, 1, 0.0);
+  s.c = textureSampleLevel(tSurf, sLinear, uv, 2, 0.0);
+  s.d = textureSampleLevel(tSurf, sLinear, uv, 3, 0.0);
+  return s;
+}
+
+// Broken rock faces: planar facets (Voronoi cells on two vertical planes,
+// blended by which way the face looks), each with its own tilt, 26 m and
+// 8.6 m. nh: the horizontal normal (xz). -> xy the slope to add, z a tone
+// -0.5..0.5 per facet (fresh and weathered planes).
+fn facets(p: vec3f, nh: vec2f, fp: f32) -> vec3f {
+  var g = vec2f(0.0);
+  var tone = 0.0;
+  let wx = smoothstep(0.3, 0.7, abs(nh.x) / max(abs(nh.x) + abs(nh.y), 1e-4));
+  var cell = 26.0;
+  for (var o = 0; o < 2; o++) {
+    let fade = 1.0 - smoothstep(cell * 0.08, cell * 0.25, fp);
+    if (fade <= 0.0) { break; }
+    var hA = vec3f(0.5);
+    var hB = vec3f(0.5);
+    if (wx > 0.01) {
+      let v = voronoi2((vec2f(p.z, p.y * 0.8) / cell) + vec2f(f32(o) * 7.1));
+      hA = hash33(vec3i(i32(v.w * 65535.0), o, 19));
+    }
+    if (wx < 0.99) {
+      let v = voronoi2((vec2f(p.x, p.y * 0.8) / cell) + vec2f(f32(o) * 3.7));
+      hB = hash33(vec3i(i32(v.w * 65535.0), o, 23));
+    }
+    let h = mix(hB, hA, wx);
+    g += (h.xy - 0.5) * (select(1.0, 0.6, o == 1) * fade);
+    tone += (h.z - 0.5) * fade * select(1.0, 0.5, o == 1);
+    cell *= 0.33;
+  }
+  return vec3f(g, tone);
+}
+
+// one layer of the fields at xz
+fn surfLayer(xz: vec2f, k: i32) -> vec4f { return textureSampleLevel(tSurf, sLinear, gUV(xz), k, 0.0); }
+
+// a hashed offset of a field cell centre (+-0.25 cell), so the drainage
+// lines meander and do not follow the grid (twin: surface-sim cellJitter)
+fn cellJit(c: vec2i) -> vec2f {
+  var h = (bitcast<u32>(c.x) * 73856093u) ^ (bitcast<u32>(c.y) * 19349663u);
+  h = (h ^ (h >> 15u)) * 0x2c1b3c6du;
+  h = (h ^ (h >> 12u)) * 0x297a2d39u;
+  h = h ^ (h >> 15u);
+  return ((vec2f(f32(h & 0xffffu), f32(h >> 16u)) / 65535.0) - 0.5) * 0.5;
+}
+fn d8Off(k: u32) -> vec2i {
+  var ox = array<i32, 8>(1, -1, 0, 0, 1, 1, -1, -1);
+  var oz = array<i32, 8>(0, 0, 1, -1, 1, -1, 1, -1);
+  return vec2i(ox[k], oz[k]);
+}
+
+// The drainage network under one texel: each cell with a log area over thr
+// draws a segment from its (jittered) centre to its D8 receiver. Returns
+// x distance m to the nearest line, y its log area (0..1), zw the unit
+// offset from the line to xz (the gully wall gradient).
+fn drainLine(xz: vec2f, thr: f32) -> vec4f {
+  let m = i32(U.surf.y);
+  let cs = G.terrain.x / f32(m);
+  let pc = worldToUV(xz) * f32(m);
+  let ci = vec2i(floor(pc));
+  var best = vec4f(9.0, 0.0, 0.0, 0.0);
+  for (var dj = -1; dj <= 1; dj++) {
+    for (var di = -1; di <= 1; di++) {
+      let c = ci + vec2i(di, dj);
+      if (any(c < vec2i(0)) || any(c >= vec2i(m))) { continue; }
+      let t = textureLoad(tSurf, c, 3, 0);
+      let k = u32(round((t.r * 255.0) / 28.0));
+      if ((k >= 8u) || (t.g < thr)) { continue; }
+      let r = c + d8Off(k);
+      let a = vec2f(c) + 0.5 + cellJit(c);
+      let b = vec2f(r) + 0.5 + cellJit(r);
+      let e = b - a;
+      let tt = clamp(dot(pc - a, e) / max(dot(e, e), 1e-4), 0.0, 1.0);
+      let q = pc - (a + (e * tt));
+      let d = length(q);
+      if (d < best.x) { best = vec4f(d, t.g, q / max(d, 1e-4)); }
+    }
+  }
+  return vec4f(best.x * cs, best.yzw);
+}
+
+// Transverse dunes across the prevailing wind wd (unit, toward): gentle
+// stoss slope upwind, steep slip face downwind, sinuous crests. lam: the
+// wavelength m. -> (h m, dh/dx, dh/dz). Twin: surface-sim dune.
+fn dune(xz: vec2f, wd: vec2f, lam: f32) -> vec3f {
+  let ac = vec2f(-wd.y, wd.x);
+  let along = dot(xz, wd);
+  let across = dot(xz, ac);
+  let s1 = across / (lam * 2.7);
+  let s2 = (across / (lam * 1.1)) + 1.3;
+  let s = (along / lam) + (0.35 * sin(s1)) + (0.25 * sin(s2));
+  let dsA = 1.0 / lam;
+  let dsC = ((0.35 * cos(s1)) / (lam * 2.7)) + ((0.25 * cos(s2)) / (lam * 1.1));
+  let f = fract(s);
+  let c = 0.72;
+  var p = 0.0;
+  var dp = 0.0;
+  if (f < c) {
+    p = 0.5 - (0.5 * cos(GPI * f / c));
+    dp = (0.5 * GPI / c) * sin(GPI * f / c);
+  } else {
+    let g = (f - c) / (1.0 - c);
+    p = 0.5 + (0.5 * cos(GPI * g));
+    dp = -(0.5 * GPI / (1.0 - c)) * sin(GPI * g);
+  }
+  let A = 0.07 * lam;
+  let gr = (A * dp) * ((wd * dsA) + (ac * dsC));
+  return vec3f(A * p, gr);
+}
+
+// Snow cover at height y with the snow line `line`: it holds on low slopes
+// (slope = 1 - n.y), in shade (shade -1 sunny .. 1 shaded) and in the lee
+// (drift > 0.5). Twin: surface-sim snowAmount.
+fn snowAmount(y: f32, line: f32, slope: f32, shade: f32, drift: f32) -> f32 {
+  var a = smoothstep(line - 160.0, line + 80.0, y + (shade * 120.0) + ((drift - 0.5) * 260.0));
+  a *= 1.0 - smoothstep(0.30, 0.52, slope);
+  return a;
+}
+
+// The rock layers (LIB erodeGrid strata): phase at height y with the warp
+// of the fields; one period (2) holds a hard band and a soft band.
+// -> x phase, y hard 0..1, z layer index
+fn strataAt(y: f32, warp: f32) -> vec3f {
+  let ph = (((y - U.geo.x) / max(U.geo.y, 1.0)) * U.geo.z * 2.0) + ((warp - 0.5) * 6.0);
+  let band = 0.5 + (0.5 * cos(ph * GPI));
+  return vec3f(ph, smoothstep(0.55, 0.8, band), floor((ph + 1.0) * 0.5));
+}
+
+// The colour of rock layer idx: a sedimentary palette (red and buff
+// sandstone, limestone, grey shale, chocolate mudstone) for the sandstone
+// region, a grey tone shift for granite and gneiss.
+fn strataCol(idx: f32, region: vec3f) -> vec3f {
+  let k = vec2i(i32(idx), 0);
+  let h0 = hash21(k, 11u);
+  let h1 = hash21(k, 5u);
+  var sc = vec3f(0.36, 0.165, 0.085);
+  if (h0 > 0.30) { sc = vec3f(0.46, 0.31, 0.19); }
+  if (h0 > 0.52) { sc = vec3f(0.54, 0.46, 0.36); }
+  if (h0 > 0.70) { sc = vec3f(0.27, 0.25, 0.22); }
+  if (h0 > 0.86) { sc = vec3f(0.30, 0.18, 0.14); }
+  sc *= 0.88 + (0.24 * h1);
+  // granite / gneiss: light and dark bands (felsic and mafic)
+  let gc = vec3f(0.136, 0.131, 0.124) * mix(0.72, 1.3, h0) * mix(vec3f(1.04, 1.0, 0.95), vec3f(0.96, 1.0, 1.05), h1);
+  let bc = vec3f(0.078, 0.073, 0.068) * mix(0.85, 1.15, h0);
+  return (gc * region.x) + (sc * region.y) + (bc * region.z);
 }
 
 // --------------------------------------------------------------- layers --
@@ -502,26 +704,45 @@ fn worley3(p: vec3f) -> Cell3 {
   return o;
 }
 
-// Rock: jointed blocks (3D Worley cracks), bedding ledges on cliffs,
-// gullies down the slope, lichen in moist air. region: x granite / gneiss,
-// y sandstone (deserts), z basalt. down: the downhill direction (xz).
-fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec2f, slope: f32) -> Mat {
+// What the surface fields tell the rock at a point.
+struct RockGeo {
+  warp: f32,   // strata warp field (0.5 none)
+  vis: f32,    // how much the layers show (LIB strata strength, sandstone region)
+  age: f32,    // exposure age 0..1 (lichen, moss, varnish)
+  glac: f32,   // glacial polish 0..1
+  ice: f32,    // ice flow direction / PI
+  shade: f32,  // -1 sunny face .. 1 shaded face
+  arid: f32,   // 1 dry climate
+  facet: f32,  // the tone of the rock facet (fn facets)
+};
+
+// Rock: the LIB strata (hard bands stand out as ledges, each layer its own
+// colour), jointed blocks (3D Worley cracks), gullies down the slope,
+// lichen and moss by moisture, aspect and age, desert varnish on old dry
+// faces, glacial polish and striations. region: x granite / gneiss, y
+// sandstone (deserts), z basalt. down: the downhill direction (xz).
+fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec2f, slope: f32, geo: RockGeo) -> Mat {
   var m: Mat;
   let big = fbmd(p, 0.07, 3, 0.5, fp);
+  let polish = 1.0 - (0.7 * geo.glac);
   // grain: 4 octaves with the ASSETS textures on (they bring the fine grain)
   let fine = fbmd(p, 0.9, select(6, 4, U.mat.x > 0.5), 0.5, fp);
   // one mid-scale field for the mottle, the lichen and the weathering
   let midN = fbmd(p, 0.3, 3, 0.55, fp).x;
   // plain fbm for the grain (a ridged |n| drew worm lines all over)
   let ridged = fine.x * 0.5 + 0.5;
-  var h = 0.42 + (0.24 * big.x) + (0.16 * fine.x);
-  var g = (big.yzw * 0.24) + (fine.yzw * 0.16);
-  // joints: blocks 2.5..5 m, cracks fade out past ~1 m footprint
+  var h = 0.42 + (0.24 * big.x) + (0.16 * fine.x * polish);
+  var g = (big.yzw * 0.24) + (fine.yzw * (0.16 * polish));
+  // the strata of the LIB: hard bands form ledges and lighter cliffs, soft
+  // bands recess (the scree field covers them)
+  let warpY = (big.x * 4.0) + (fbm2(p.xz * 0.01, 2) * 6.0);
+  let st = strataAt(p.y + warpY, geo.warp);
+  let hard = st.y;
   // joints: big blocks, only some joints open (a noise mask), so the rock
-  // does not read as paving
-  let bs = mix(9.0, 5.0, cliff);
+  // does not read as paving; hard bands have bigger blocks
+  let bs = mix(9.0, 5.0, cliff) * mix(0.8, 1.3, hard * geo.vis);
   let wq = (p / bs) + vec3f(big.x * 0.6, big.x * 0.3, -big.x * 0.5);
-  let open = smoothstep(-0.05, 0.35, fbm2((p.xz * 0.11) + (p.y * 0.07), 3) + (cliff * 0.25));
+  let open = smoothstep(-0.05, 0.35, fbm2((p.xz * 0.11) + (p.y * 0.07), 3) + (cliff * 0.25)) * (1.0 - (0.6 * geo.glac));
   let fadeJ = (1.0 - smoothstep(0.08 * bs, 0.3 * bs, fp)) * open;
   // the 27-cell Worley only where joints show
   var cw: Cell3;
@@ -536,12 +757,12 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   // block faces tilt a little each (the joints are not flat)
   let tilt = (hash33(vec3i(i32(cw.id * 7919.0), 3, 5)) - 0.5) * 0.25 * fadeJ;
   g += tilt / bs;
-  // bedding ledges on cliffs: a step every ledge metres in y
+  // bedding ledges on steep faces: a step every ledge metres in y, strong
+  // in the hard bands
   let lh = 5.5;
-  let warpY = (big.x * 4.0) + (fbm2(p.xz * 0.01, 2) * 6.0);
   let sy = (p.y + warpY) / lh;
   let fr = fract(sy);
-  let fadeL = (1.0 - smoothstep(0.2 * lh, 0.6 * lh, fp)) * cliff * smoothstep(0.5, 0.7, slope) * mix(0.12, 1.0, region.y);
+  let fadeL = (1.0 - smoothstep(0.2 * lh, 0.6 * lh, fp)) * cliff * smoothstep(0.5, 0.7, slope) * mix(0.15, 1.0, geo.vis) * mix(0.5, 1.3, hard) * polish;
   let step = smoothstep(0.62, 0.92, fr);
   h += (step - 0.5) * 0.3 * fadeL;
   let dstep = select(0.0, 6.0 * (fr - 0.62) * (0.92 - fr) / (0.3 * 0.3 * 0.3), (fr > 0.62) && (fr < 0.92));
@@ -549,43 +770,60 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   // gullies: streaks down the slope, a few metres apart (seen from afar)
   let gu = streakNoise(p, down, 0.06, 0.12, 3.7).x;
   let fadeG = 1.0 - smoothstep(1.5, 5.0, fp * 0.35);
-  let gully = smoothstep(0.1, 0.7, gu) * (0.4 + (0.6 * cliff)) * fadeG;
+  let gully = smoothstep(0.1, 0.7, gu) * (0.4 + (0.6 * cliff)) * fadeG * polish;
+  // glacial striations: fine scratches along the ice flow, close up only
+  let ia = geo.ice * GPI;
+  let perp = vec2f(-sin(ia), cos(ia));
+  let stri = sin((dot(p.xz, perp) * 23.0) + (fbm2(p.xz * 0.7, 2) * 3.0));
+  let fadeS = geo.glac * (1.0 - smoothstep(0.02, 0.08, fp));
+  g += vec3f(perp.x, 0.0, perp.y) * (cos((dot(p.xz, perp) * 23.0)) * 0.025 * fadeS);
   m.h = vec4f(clamp(h, 0.0, 1.0), g);
-  // colour: strata bands fade with the footprint (no stripes far away)
-  // strata show on steep faces only (on gentle ground the bands would
-  // trace the contour lines)
-  let strat = smoothstep(0.5, 0.7, slope) * mix(0.2, 1.0, region.y);
-  let bandA = (1.0 - smoothstep(1.5, 4.0, fp)) * strat;
-  let band = mix(0.5, sin((p.y + warpY) * 0.55) * 0.5 + 0.5, bandA);
+  // colour: the layer of the strata, fine laminations close up
+  let lam = sin(st.x * GPI * 7.0) * (1.0 - smoothstep(0.4, 1.5, fp));
+  var c = strataCol(st.z, region) * (1.0 + (0.06 * lam));
+  // the layer colour shows as much as the strata are there (granite: soft
+  // tone bands), around the mottle of the region
   let mott = (big.x * 0.6) + (midN * 0.4) + 0.5;
-  let band2 = mix(mott, sin((p.y + warpY * 1.7) * 1.3) * 0.5 + 0.5, (1.0 - smoothstep(0.5, 1.5, fp)) * strat * 0.7);
+  let regionCol = rockMean(region) * mix(0.85, 1.15, mott);
+  c = mix(regionCol, c * mix(0.92, 1.08, mott), geo.vis);
+  c *= mix(0.9, 1.1, hard * geo.vis);
   let blockTint = mix(0.92, 1.08, cw.id);
-  let granite = mix(vec3f(0.105, 0.097, 0.088), vec3f(0.180, 0.166, 0.148), band2) * mix(1.0, blockTint, fadeJ);
-  let sandst = mix(vec3f(0.290, 0.150, 0.080), vec3f(0.400, 0.255, 0.150), band) * mix(1.0, blockTint, fadeJ);
-  let basalt = mix(vec3f(0.060, 0.058, 0.056), vec3f(0.095, 0.088, 0.080), band2);
-  var c = (granite * region.x) + (sandst * region.y) + (basalt * region.z);
+  c *= mix(1.0, blockTint, fadeJ);
   // hue by rock body (0.5..2 km): warm iron-stained faces, cool grey-blue
   // gneiss, so a range is not one grey
   let body = fbm2((p.xz * 0.0011) + vec2f(p.y * 0.0004, 3.1), 3);
   c *= mix(vec3f(1.12, 0.99, 0.84), vec3f(0.90, 0.97, 1.06), smoothstep(-0.35, 0.35, body));
-  c = mix(c, c * mix(0.88, 1.1, band), cliff * 0.6);
-  // water stains and desert varnish run down the cliffs
+  // tone at 50..400 m: weathered brown patches and fresh grey rock, so a
+  // face reads from the air
+  let tone = fbm2((p.xz * 0.006) + vec2f(p.y * 0.004, 7.7), 3);
+  c *= mix(vec3f(0.78, 0.76, 0.74), vec3f(1.16, 1.08, 0.98), smoothstep(-0.45, 0.45, tone));
+  // water stains run down the cliffs; desert varnish (manganese, black-brown)
+  // coats old faces in dry climates
   let streak = vnoised(vec3f(p.x * 0.8, p.y * 0.05, p.z * 0.8)).x;
-  c *= 1.0 - (cliff * 0.30 * smoothstep(0.1, 0.8, streak));
+  c *= 1.0 - (cliff * 0.30 * smoothstep(0.1, 0.8, streak) * (1.0 - geo.arid));
+  let varnish = geo.arid * smoothstep(0.35, 0.85, geo.age) * smoothstep(0.35, 0.7, slope) * smoothstep(-0.3, 0.5, streak + (midN * 0.5));
+  c = mix(c, vec3f(0.050, 0.036, 0.026), varnish * 0.72);
   c *= 1.0 - (gully * 0.35);
-  // lichen: grey-green and ochre crusts on the block tops
+  // lichen: grey-green and ochre crusts on old block tops, more on the
+  // shaded and moist faces; moss on wet shaded old rock
   let lichN = (midN * 0.8) + (fine.x * 0.3);
-  let lich = smoothstep(0.1, 0.55, lichN + (moist - 0.45)) * (1.0 - crack);
-  c = mix(c, mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, lichN)), lich * 0.4 * (1.0 - (region.y * 0.8)));
-  // cracks dark, block tops a little lighter
+  let lichK = lichN + (moist - 0.45) + (0.2 * geo.shade) + (0.6 * (geo.age - 0.5)) - (0.5 * geo.arid);
+  let lich = smoothstep(0.1, 0.55, lichK) * (1.0 - crack);
+  c = mix(c, mix(vec3f(0.16, 0.17, 0.11), vec3f(0.30, 0.25, 0.10), smoothstep(0.3, 0.7, lichN)), lich * 0.45 * (1.0 - (region.y * 0.6)));
+  let moss = smoothstep(0.55, 0.85, moist) * smoothstep(-0.1, 0.6, geo.shade + (midN * 0.4)) * smoothstep(0.3, 0.8, geo.age) * (1.0 - smoothstep(0.75, 1.0, slope));
+  c = mix(c, vec3f(0.040, 0.068, 0.022) * (0.8 + (0.4 * fine.x)), moss * 0.85);
   // weathering: tone patches at 1..6 m, so a face is not one flat grey
-  let wz = midN;
-  c *= mix(0.68, 1.18, smoothstep(-0.55, 0.55, wz));
+  c *= mix(0.68, 1.18, smoothstep(-0.55, 0.55, midN));
   c *= mix(1.0, 0.5, crack) * mix(0.86, 1.06, clamp(h, 0.0, 1.0));
+  // each rock facet its own tone (fresh breaks lighter)
+  c *= 1.0 + (0.12 * geo.facet);
   // ledge undercuts shade dark, ledge tops catch light
   c *= mix(1.0, mix(0.7, 1.1, step), fadeL);
+  // ice polish: lighter, smoother, pale striations
+  c = mix(c, c * (1.12 + (0.06 * stri)), geo.glac * 0.8);
   m.alb = c;
-  m.rough = mix(0.85, 0.65, ridged * (1.0 - crack));
+  m.rough = mix(mix(0.85, 0.65, ridged * (1.0 - crack)), 0.42, geo.glac * 0.8);
+  m.rough = mix(m.rough, 0.55, varnish * 0.5);
   return m;
 }
 
@@ -641,7 +879,8 @@ fn layerForest(p: vec3f, fp: f32, litter: vec3f, moist: f32) -> Mat {
 // the troughs.
 fn layerSand(p: vec3f, fp: f32, region: vec3f, slope: f32) -> Mat {
   var m: Mat;
-  let wd = normalize(G.wind.xy + vec2f(0.6, 0.3));
+  // the prevailing wind of LIB climate (the fields), else the weather wind
+  let wd = select(normalize(G.wind.xy + vec2f(0.6, 0.3)), U.surf.zw, U.surf.x > 0.5);
   // wind ripples: 0.35 m apart, nearly parallel, a little sinuous
   let warp = (fbm2(p.xz * 0.35, 3) * 1.3) + (fbm2(p.xz * 0.04, 2) * 3.0);
   let kr = 18.0;
@@ -671,15 +910,31 @@ fn layerSnow(p: vec3f, fp: f32) -> Mat {
   return m;
 }
 
-// Mud: smooth, dark, with drying cracks in low moisture.
-fn layerMud(p: vec3f, fp: f32, moist: f32) -> Mat {
+// Mud and bare soil: dark and smooth when wet, lighter and crumbly when
+// dry; on a playa (dry closed basin, surface field) a pale crust that
+// cracks into curled polygons with salt in the cracks.
+fn layerMud(p: vec3f, fp: f32, moist: f32, playa: f32) -> Mat {
   var m: Mat;
   let n = fbmd(p, 0.9, 4, 0.5, fp);
-  let cr = voronoi2(p.xz * 0.9);
-  let crack = (1.0 - smoothstep(0.0, 0.06, abs(cr.x - 0.5) * 0.5)) * (1.0 - smoothstep(0.1, 0.3, fp)) * (1.0 - smoothstep(0.3, 0.7, moist));
-  m.h = vec4f(0.25 + (0.15 * n.x) - (0.15 * crack), n.yzw * 0.15);
-  m.alb = mix(vec3f(0.085, 0.065, 0.045), vec3f(0.12, 0.095, 0.065), n.x * 0.5 + 0.5) * (1.0 - crack * 0.4);
-  m.rough = 0.62;
+  let dry = 1.0 - smoothstep(0.3, 0.7, moist);
+  // desiccation polygons: 0.4..1.2 m, two scales (big plates, small cracks)
+  let cr = voronoi2((p.xz * 1.6) + vec2f(fbm2(p.xz * 0.9, 2) * 0.35));
+  let cr2 = voronoi2((p.xz * 4.1) + 3.7);
+  let fadeC = 1.0 - smoothstep(0.08, 0.3, fp);
+  let e1 = 1.0 - smoothstep(0.0, 0.08, abs(cr.x - 0.5) * 0.5);
+  let e2 = (1.0 - smoothstep(0.0, 0.05, abs(cr2.x - 0.5) * 0.5)) * 0.6;
+  let crack = max(e1, e2 * playa) * fadeC * max(dry, playa);
+  // the plates curl up at their edges
+  let curl = smoothstep(0.25, 0.48, abs(cr.x - 0.5)) * playa * fadeC;
+  m.h = vec4f(0.25 + (0.15 * n.x) - (0.2 * crack) + (0.08 * curl), n.yzw * 0.15);
+  let wetC = mix(vec3f(0.085, 0.065, 0.045), vec3f(0.12, 0.095, 0.065), n.x * 0.5 + 0.5);
+  let dryC = mix(vec3f(0.17, 0.13, 0.085), vec3f(0.23, 0.18, 0.12), n.x * 0.5 + 0.5);
+  let crust = mix(vec3f(0.44, 0.40, 0.34), vec3f(0.58, 0.55, 0.50), smoothstep(-0.3, 0.6, fbm2(p.xz * 0.05, 3) + (cr.w * 0.3)));
+  var c = mix(wetC, dryC, dry);
+  c = mix(c, crust, playa);
+  c *= 1.0 - (crack * mix(0.45, 0.55, playa));
+  m.alb = c;
+  m.rough = mix(mix(0.62, 0.85, dry), 0.9, playa);
   return m;
 }
 
@@ -808,6 +1063,47 @@ fn texSetCal(k: u32, tgt: vec3f, p: vec3f, n: vec3f, tri: bool, gx: vec3f, gy: v
   return t;
 }
 
+// Macro rock: the cliff scan again at 34 m and 120 m tiles (triplanar),
+// as detail relative to its mean. Rock is self-similar, so the same cracks
+// and slabs read as buttresses and ledges from 50 m to 8 km.
+// -> xyz normal offset (in the tangent plane of n), w albedo factor.
+fn macroRock(k: u32, p: vec3f, n: vec3f, gx: vec3f, gy: vec3f, dist: f32) -> vec4f {
+  let mean = max(textureSampleLevel(tLayerAlb, sRepeat, vec2f(0.5), k, 16.0).rgb, vec3f(0.01));
+  let ml = dot(mean, vec3f(0.3, 0.59, 0.11));
+  var w = pow(abs(n), vec3f(4.0));
+  w /= (w.x + w.y + w.z);
+  var off = vec3f(0.0);
+  var lum = 0.0;
+  var ws = 0.0;
+  var T = 34.0;
+  for (var o = 0; o < 2; o++) {
+    // two windows that overlap only from 700 to 1600 m (cost)
+    let fo = select(smoothstep(20.0, 80.0, dist) * (1.0 - smoothstep(900.0, 1600.0, dist)),
+                    smoothstep(700.0, 1600.0, dist) * (1.0 - smoothstep(6000.0, 9000.0, dist)), o == 1);
+    if (fo > 0.01) {
+      let s = 1.0 / T;
+      let sh = vec2f(0.37, 0.71) * f32(o);
+      let ux = (vec2f(p.z, -p.y) * s) + sh;
+      let uy = (p.xz * s) + sh;
+      let uz = (vec2f(p.x, -p.y) * s) + sh;
+      let ax = textureSampleGrad(tLayerAlb, sRepeat, ux, k, vec2f(gx.z, -gx.y) * s, vec2f(gy.z, -gy.y) * s).rgb;
+      let ay = textureSampleGrad(tLayerAlb, sRepeat, uy, k, gx.xz * s, gy.xz * s).rgb;
+      let az = textureSampleGrad(tLayerAlb, sRepeat, uz, k, vec2f(gx.x, -gx.y) * s, vec2f(gy.x, -gy.y) * s).rgb;
+      let nx = textureSampleGrad(tLayerNrm, sRepeat, ux, k, vec2f(gx.z, -gx.y) * s, vec2f(gy.z, -gy.y) * s).xy * 2.0 - 1.0;
+      let ny = textureSampleGrad(tLayerNrm, sRepeat, uy, k, gx.xz * s, gy.xz * s).xy * 2.0 - 1.0;
+      let nz = textureSampleGrad(tLayerNrm, sRepeat, uz, k, vec2f(gx.x, -gx.y) * s, vec2f(gy.x, -gy.y) * s).xy * 2.0 - 1.0;
+      let a = (ax * w.x) + (ay * w.y) + (az * w.z);
+      lum += (dot(a, vec3f(0.3, 0.59, 0.11)) / ml) * fo;
+      off += ((vec3f(0.0, nx.y, nx.x * sign(n.x)) * w.x) + (vec3f(ny.x, 0.0, -ny.y) * w.y) + (vec3f(nz.x * sign(n.z), nz.y, 0.0) * w.z)) * fo;
+      ws += fo;
+    }
+    T *= 3.6;
+  }
+  if (ws < 0.01) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+  off = off - (dot(off, n) * n);
+  return vec4f(off / max(ws, 1.0), mix(1.0, clamp(lum / ws, 0.4, 1.8), min(ws, 1.0)));
+}
+
 fn mixTex(a: TexS, b: TexS, f: f32) -> TexS {
   var o: TexS;
   o.alb = mix(a.alb, b.alb, f); o.nrm = mix(a.nrm, b.nrm, f); o.orm = mix(a.orm, b.orm, f);
@@ -819,7 +1115,7 @@ fn mapIdx(i: u32) -> u32 { return u32(U.map[i >> 2u][i & 3u] + 0.5); }
 // mean albedo of the procedural rock palette (the ratio carries the cracks,
 // lichen, strata and weathering of the procedural rock onto the texture)
 fn rockMean(region: vec3f) -> vec3f {
-  return (vec3f(0.142, 0.131, 0.118) * region.x) + (vec3f(0.345, 0.2, 0.115) * region.y) + (vec3f(0.078, 0.073, 0.068) * region.z);
+  return (vec3f(0.136, 0.131, 0.124) * region.x) + (vec3f(0.345, 0.2, 0.115) * region.y) + (vec3f(0.078, 0.073, 0.068) * region.z);
 }
 
 // ---------------------------------------------------------------- light --
@@ -967,16 +1263,77 @@ fn fs(v: VOut) -> @location(0) vec4f {
     let dz = detailHeight(xz + vec2f(0.0, e)) - d0;
     gD += (vec2f(dx, dz) / e) * (1.0 - smoothstep(600.0, 900.0, dist));
   }
-  let down0 = normalize(gD + vec2f(1e-5, 0.0));
-  let steep0 = smoothstep(0.18, 0.7, length(gB));
-  let gE = macroErosion(p, down0, steep0 * (0.5 + (0.5 * q)), fp);
-  let nGeo = normalize(vec3f(-(gD.x + gE.x), 1.0, -(gD.y + gE.y)));
-  let aoT = clamp(nA.w, 0.0, 1.0);
   let aux = auxAt(xz);
   let flow = aux.r;
   let river = clamp(aux.g, 0.0, 1.0);
   let moist = clamp(aux.b, 0.0, 1.0);
   let wdepth = max(aux.a, 0.0);
+  var bw = biomeMix(xz);
+  // ---- surface fields (render/surface-sim.js); hasSurf false: none yet
+  let sf = surfAt(xz);
+  let hasSurf = sf.a.x >= 0.0;
+  let down0 = normalize(gD + vec2f(1e-5, 0.0));
+  let steep0 = smoothstep(0.18, 0.7, length(gB));
+  // rills: soft ground under high stream power cuts more, ice-polished
+  // rock less
+  let erod = select(1.0, mix(0.55, 1.35, sf.d.w) * (1.0 - (0.6 * sf.c.y)), hasSurf);
+  let mE = macroErosion(p, down0, steep0 * (0.5 + (0.5 * q)) * erod, fp);
+  let gE = mE.xy;
+  let gully = clamp(-mE.z, 0.0, 1.0);
+  // gullies at the field texel scale: the log-area field carves the
+  // drainage lines of steep faces into the shading at every distance
+  // (couloirs and ribs seen from the air); the D8 lines below add the
+  // close-up detail
+  var gC = vec2f(0.0);
+  var couloir = 0.0;
+  let csF = G.terrain.x / max(U.surf.y, 1.0);
+  if (hasSurf && !outside) {
+    let e = csF * 0.6;
+    let cx = surfLayer(xz + vec2f(e, 0.0), 3).y;
+    let cz = surfLayer(xz + vec2f(0.0, e), 3).y;
+    let vis = (1.0 - smoothstep(csF * 0.5, csF * 1.6, fp)) * smoothstep(0.1, 0.5, length(gB));
+    gC = -(vec2f(cx - sf.d.y, cz - sf.d.y) / e) * (csF * 1.2 * vis);
+    couloir = smoothstep(0.2, 0.42, sf.d.y) * smoothstep(0.25, 0.7, length(gB));
+  }
+  // gullies and rills of the drainage network, under one field texel: a V
+  // section along each D8 line, as wide as its upstream area allows
+  var gL = vec2f(0.0);
+  var lineK = 0.0;
+  var lineA = 0.0;
+  let cs = csF;
+  if (hasSurf && (q >= 0.45) && !outside && (dist < select(1200.0, 2500.0, q >= 0.95))) {
+    let dl = drainLine(xz, 0.2);
+    let W = clamp(mix(0.9, 0.38 * cs, smoothstep(0.2, 0.75, dl.y)), 0.6, 0.45 * cs);
+    let vis = smoothstep(0.6, 2.0, W / fp) * (1.0 - smoothstep(0.3, 0.8, river));
+    if ((dl.x < W) && (vis > 0.0)) {
+      let u = 1.0 - (dl.x / W);
+      let D = W * mix(0.22, 0.12, dl.y);
+      gL = dl.zw * ((2.0 * D * u / W) * vis);
+      lineK = smoothstep(0.35, 0.9, u) * vis;
+      lineA = dl.y;
+    }
+  }
+  // dunes in the sand seas of desert biomes: transverse to the prevailing
+  // wind of LIB climate
+  var gU = vec2f(0.0);
+  var duneM = 0.0;
+  if (hasSurf && !outside) {
+    let erg = smoothstep(-0.2, 0.3, fbm2((xz * 0.00035) + 11.0, 3));
+    duneM = clamp(bw.kind.y * 1.3, 0.0, 1.0) * (1.0 - smoothstep(0.05, 0.16, length(gB))) * erg * (1.0 - sf.b.w) * (1.0 - smoothstep(0.0, 0.5, wdepth));
+    if (duneM > 0.01) { gU = dune(xz, U.surf.zw, U.geo2.z).yz * duneM; }
+  }
+  // broken rock: planar facets on steep bare faces (the bedrock field)
+  var facetT = 0.0;
+  var gF = vec2f(0.0);
+  let rockMask = steep0 * select(0.6, 1.0 - smoothstep(0.12, 0.4, sf.a.x), hasSurf) * (1.0 - smoothstep(0.3, 0.7, sf.a.y));
+  if ((rockMask > 0.01) && (q >= 0.95) && !outside && (dist < 3000.0)) {
+    let fc = facets(p, normalize(gB + vec2f(1e-5, 0.0)), fp);
+    gF = fc.xy * (rockMask * 0.45);
+    facetT = fc.z * rockMask;
+  }
+  let gS = gE + gL + gU + gC + gF;
+  let nGeo = normalize(vec3f(-(gD.x + gS.x), 1.0, -(gD.y + gS.y)));
+  let aoT = clamp(nA.w, 0.0, 1.0);
 
   let slope = 1.0 - nGeo.y;
   let sea = G.terrain.z;
@@ -986,11 +1343,11 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let hRel = clamp((p.y - sea) / max(hMax - sea, 1.0), 0.0, 1.0);
 
   // region of the rock type: granite, sandstone, basalt (macro noise + biome)
-  var bw = biomeMix(xz);
   let rn = fbm2(xz * 0.00025, 3);
   let desertish = clamp(bw.w1.x * (1.0 - smoothstep(0.0, 3.0, wdepth)) * 0.8, 0.0, 1.0);
   var region = vec3f(0.0);
-  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25), 0.0, 1.0);
+  // a dry world with LIB strata is a sandstone plateau country
+  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25) + (U.geo.w * (1.0 - smoothstep(0.25, 0.55, moist)) * select(0.0, 0.9, U.surf.x > 0.5)), 0.0, 1.0);
   region.z = clamp(smoothstep(0.3, 0.7, -rn), 0.0, 1.0) * (1.0 - region.y) * 0.8;
   region.x = max(1.0 - region.y - region.z, 0.0);
   let down = normalize(nGeo.xz + vec2f(1e-5, 0.0));
@@ -1038,6 +1395,53 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // moisture: dry ground shows gravel and sand through thin grass
   w1.x += (1.0 - smoothstep(0.08, 0.3, moist)) * w0.z * 0.5;
 
+  // ---- the simulated surface (render/surface-sim.js)
+  var scr = 0.0;
+  var alv = 0.0;
+  let playa = select(0.0, sf.b.w, hasSurf);
+  if (hasSurf) {
+    let reg = sf.a.x;
+    // bare bedrock where the soil is thin, at any slope; plants need soil
+    let bedrock = 1.0 - smoothstep(0.08, 0.45, reg + (jit * 0.06));
+    let soilOK = smoothstep(0.1, 0.45, reg);
+    w0.x += bedrock * 1.3 * (1.0 - cliffS);
+    w0.z *= mix(0.12, 1.0, soilOK) * (1.0 - (0.9 * sf.c.w));
+    w0.w *= mix(0.1, 1.0, soilOK);
+    // slips, gullied soil and thin cover: bare soil (the mud layer, dry)
+    w1.z += ((sf.c.w * 1.4) + ((1.0 - soilOK) * (1.0 - bedrock) * 0.5)) * soft;
+    // scree aprons under the cliffs (talus, angular, of the rock above)
+    scr = smoothstep(0.06, 0.55, sf.a.y + (jit * 0.04) + (couloir * 0.35) + (gully * 0.4)) * (1.0 - (cliffS * (1.0 - (max(couloir, gully) * 0.6))));
+    w1.w += scr * 2.6;
+    // a thin stony mantle (regolith too thin for soil, too thick for bare
+    // rock): broken debris over the bedrock
+    let mantle = smoothstep(0.04, 0.18, reg) * (1.0 - smoothstep(0.3, 0.55, reg)) * (1.0 - cliffS);
+    w1.w += mantle * 1.1;
+    w0.x *= 1.0 - (mantle * 0.5);
+    w0.x *= 1.0 - (scr * 0.75);
+    w0.z *= 1.0 - scr;
+    w0.w *= 1.0 - scr;
+    // alluvial fans, gravel bars and flood plains: bare where active (near a
+    // channel) or dry; coarse on steep fans and beds, fine on the plains
+    let act = clamp(max(smoothstep(0.55, 0.8, sf.d.y) * sf.a.w, 1.0 - smoothstep(0.15, 0.35, moist)), 0.0, 1.0);
+    alv = sf.a.z * act * soft;
+    w1.w += alv * sf.d.z * 1.4;
+    w1.x += alv * (1.0 - sf.d.z) * 0.9 * (1.0 - moist);
+    w1.z += alv * (1.0 - sf.d.z) * 0.9 * moist;
+    w0.z *= 1.0 - (alv * 0.7);
+    // playa: a dry closed basin cracks (the mud layer with crust)
+    w1.z += playa * 3.0;
+    w0.z *= 1.0 - playa;
+    w1.x *= 1.0 - (playa * 0.8);
+    // channel floors of the drainage lines: gravel and sand washes
+    // (light sand and gravel washes in dry land, wet gravel in wet land)
+    let aridL = 1.0 - smoothstep(0.2, 0.45, moist);
+    w1.w += lineK * smoothstep(0.25, 0.6, lineA) * 1.5;
+    w1.x += lineK * aridL * 1.2;
+    w0.z *= 1.0 - (lineK * aridL * 0.8);
+    // dune sand
+    w1.x += duneM * 1.5;
+  }
+
   // snow: snow line from the cover uniform, lower on north faces (world
   // frame: +z is south, so a north face has n.z < 0), less on steep
   // slopes; plus the snow biome
@@ -1050,14 +1454,23 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let climLine = select(hMax + 300.0, (tSnow - U.snow.x) / min(U.snow.y, -1e-5), fitOk);
   // weather cover pulls the line down: 0.5 the upper slopes, 1 to the sea
   let snowLine = mix(min(climLine, hMax + 300.0), sea - 150.0, pow(cover, 0.7));
+  // shade: 1 on faces away from the sun's side of the sky (north in the
+  // northern hemisphere, U.geo2.y = -1 flips it), -1 on sunny faces
   let aspect = clamp(-nGeo.z * 2.0, -1.0, 1.0);
+  let shade = aspect * select(1.0, U.geo2.y, hasSurf);
   let snowN = fbm2(xz * 0.004, 4) * 160.0;
-  var snow = smoothstep(snowLine - 160.0, snowLine + 80.0, p.y + snowN + (aspect * 120.0));
-  // fresh snowfall dusts everything that is not too steep
-  snow = max(snow, smoothstep(0.1, 0.8, G.weather.z) * 0.55);
-  // steep faces shed snow: bare rock above ~60 deg, a full cover below ~45
-  snow *= 1.0 - smoothstep(0.32 + (jit * 0.04), 0.52 + (jit * 0.04), slope);
-  snow = max(snow, w1.y * (1.0 - cliffS * 0.6));
+  // snow holds on low slopes, in shade and in the wind's lee (drift); steep
+  // faces shed it, scoured crests stay bare
+  let drift = clamp(sf.b.x + (couloir * 0.3) + (gully * 0.35) - (clamp(mE.z, 0.0, 1.0) * 0.2), 0.0, 1.0);
+  let slopeJ = slope - (jit * 0.04) + 0.02;
+  // couloirs and gullies hold snow on steeper ground than open faces
+  var snow = snowAmount(p.y + snowN, snowLine, slopeJ - (max(gully, couloir) * 0.12), shade, drift);
+  // fresh snowfall dusts everything that is not too steep, deeper in the lee
+  snow = max(snow, smoothstep(0.1, 0.8, G.weather.z) * 0.55 * mix(0.5, 1.3, drift) * (1.0 - smoothstep(0.30, 0.52, slopeJ)));
+  // cornices on the lee edge of sharp crests near and above the line
+  let corn = sf.b.y * smoothstep(snowLine - 250.0, snowLine + 50.0, p.y + snowN);
+  snow = max(snow, corn);
+  snow = max(snow, w1.y * (1.0 - cliffS * 0.6) * smoothstep(0.12, 0.42, drift));
   snow *= 1.0 - clamp(under + bed, 0.0, 1.0);
 
   // ---- evaluate the layers that matter
@@ -1081,6 +1494,20 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // mid-scale tone and hue (10..60 m) for the textured layers
   let vm = fbm2(xz * 0.035, 3);
   let vh = fbm2((xz * 0.06) + 3.3, 2);
+  // the parent rock: talus, desert sand and dry soil take the colour of
+  // the layer they came from
+  let stP = strataAt(p.y + 6.0, sf.c.x);
+  let parent = mix(rockMean(region), strataCol(stP.z, region), select(0.0, mix(0.45, 1.0, max(U.geo.w, region.y)), hasSurf));
+  // what the fields tell the rock
+  var geo: RockGeo;
+  geo.warp = sf.c.x;
+  geo.vis = select(0.3 * region.y, mix(0.45, 1.0, max(U.geo.w, region.y)), hasSurf);
+  geo.age = sf.b.z;
+  geo.glac = sf.c.y;
+  geo.ice = sf.c.z;
+  geo.shade = shade;
+  geo.arid = 1.0 - smoothstep(0.15, 0.4, moist);
+  geo.facet = facetT;
   for (var i = 0u; i < 8u; i++) {
     let wi = wa[i] / wsum;
     wa[i] = wi;
@@ -1095,15 +1522,15 @@ fn fs(v: VOut) -> @location(0) vec4f {
       switch (i) {
         // rock and cliff share one evaluation (cliff share = the blend of
         // the two weights): it is the most costly layer
-        case 0u: { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope); rockDone = true; m = rockM; }
+        case 0u: { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope, geo); rockDone = true; m = rockM; }
         case 1u: {
-          if (!rockDone) { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope); rockDone = true; }
+          if (!rockDone) { rockM = layerRock(p, fp, cliffShare, moist, region, down, slope, geo); rockDone = true; }
           m = rockM;
         }
         case 2u: { m = layerGrass(p, fp, bw.grass, moist); }
         case 3u: { m = layerForest(p, fp, bw.litter, moist); }
         case 4u: { m = layerSand(p, fp, region, slope); }
-        case 6u: { m = layerMud(p, fp, moist); }
+        case 6u: { m = layerMud(p, fp, moist, playa); }
         default: { m = layerGravel(p, fp, region); }
       }
     } else {
@@ -1112,7 +1539,8 @@ fn fs(v: VOut) -> @location(0) vec4f {
     m.tn = vec3f(0.0);
     m.ao = 1.0;
     if (hasSet) {
-      let tri = triOn && (i == 1u);
+      // rock and cliff triplanar on slopes (a planar map stretches there)
+      let tri = ((i == 1u) && triOn) || ((i == 0u) && (slope > 0.22));
       // far: the mean of the set (its 1 x 1 mip), so the colour does not
       // change where the texture fades out
       // target colours of the roles (tuned with the procedural palettes)
@@ -1123,10 +1551,19 @@ fn fs(v: VOut) -> @location(0) vec4f {
         case 1u: { tgtP = rockMean(region) * 0.9; tgtA = rockMean(region); }
         case 2u: { tgtP = sg; tgtA = seasonGrass(vec3f(0.20, 0.155, 0.075), G.weather2.w, 0.0); rmin = 0.8; }
         case 3u: { tgtP = bw.litter; tgtA = vec3f(0.10, 0.075, 0.05); rmin = 0.8; }
-        case 4u: { tgtP = mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y); tgtA = vec3f(0.40, 0.30, 0.19); rmin = 0.75; }
+        case 4u: {
+          tgtP = mix(mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y), parent * 1.15, region.y * 0.45);
+          tgtA = mix(vec3f(0.40, 0.30, 0.19), parent * 1.05, region.y * 0.5);
+          rmin = 0.75;
+        }
         case 5u: { tgtP = vec3f(0.82, 0.85, 0.90); rmin = 0.35; }
-        case 6u: { tgtP = vec3f(0.085, 0.066, 0.045); rmin = 0.45; }
-        case 7u: { tgtP = vec3f(0.19, 0.172, 0.152); tgtA = vec3f(0.17, 0.16, 0.148); }
+        case 6u: {
+          tgtP = mix(mix(vec3f(0.085, 0.066, 0.045), vec3f(0.19, 0.145, 0.10), 1.0 - smoothstep(0.3, 0.7, moist)), vec3f(0.50, 0.46, 0.40), playa);
+          rmin = mix(0.45, 0.85, playa);
+        }
+        // gravel: river pebbles; scree: the broken rock of the cliff above,
+        // lighter than its face (fresh fractures)
+        case 7u: { tgtP = vec3f(0.19, 0.172, 0.152); tgtA = mix(parent, vec3f(dot(parent, vec3f(0.33))), 0.25) * 1.3; }
         default: {}
       }
       var t = texSetCal(kP, tgtP, pw, nGeo, tri, dpx, dpy, farMix, texF);
@@ -1138,7 +1575,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
         case 2u: { af = clamp((1.0 - smoothstep(0.18, 0.42, moist)) + (smoothstep(0.1, 0.5, fbm2(xz * 0.013, 3)) * 0.5), 0.0, 1.0); }
         case 3u: { af = bw.kind.x; }
         case 4u: { af = bw.kind.y; }
-        case 7u: { af = 1.0 - tree; }
+        case 7u: { af = max(1.0 - tree, scr); }
         default: {}
       }
       let kA = mapIdx(i + 8u);
@@ -1154,7 +1591,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
       // the procedural modulation: rock keeps its cracks, lichen, strata
       // and weathering; the other layers get a mid-scale tone and hue
       var ratio = vec3f(0.84 + (0.32 * vm));
-      if (i <= 1u) { ratio = clamp(m.alb / rockMean(region), vec3f(0.3), vec3f(1.8)); }
+      if (i <= 1u) {
+        // near, the scan carries the grain: the procedural rock keeps its
+        // strata colour, lichen, varnish and broad tone, less of its fine mottle
+        ratio = clamp(m.alb / rockMean(region), vec3f(0.25), vec3f(2.8));
+        let rl = dot(ratio, vec3f(0.3, 0.59, 0.11));
+        ratio = mix(ratio, ratio / max(rl, 0.05) * mix(rl, 1.0, 0.45), texF * 0.7);
+      }
       else if (i == 2u) { ratio *= mix(vec3f(1.0), vec3f(1.12, 1.04, 0.82), smoothstep(0.0, 0.6, vh)); }
       m.alb = t.alb * ratio;
       m.h = vec4f(mix(m.h.x, t.orm.b, max(texF, 0.5)), m.h.yzw * (1.0 - (texF * 0.6)));
@@ -1184,6 +1627,14 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let bumpK = mix(0.035, 0.07, q) * bumpFade;
   let gt = hg.yzw - (dot(hg.yzw, nGeo) * nGeo);
   var n = normalize(nGeo - (gt * bumpK) + tnS);
+  // the macro rock scan on bare rock (high quality, textures on)
+  let rockW = clamp(wa[0] + wa[1], 0.0, 1.0);
+  let kC = mapIdx(1u);
+  if ((rockW > 0.05) && (U.mat.x > 0.5) && (kC < 64u) && (q >= 0.45) && !outside) {
+    let mr = macroRock(kC, p, nGeo, dpx, dpy, dist);
+    alb *= mix(1.0, mr.w, rockW * 0.85);
+    n = normalize(n + (mr.xyz * (rockW * 0.7)));
+  }
 
   // ---- snow on top (height blended: crevices fill first)
   let snowM = layerSnow(p, fp);
@@ -1220,7 +1671,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
 
   // ---- wetness and puddles
   let rain = clamp(G.weather.y, 0.0, 1.0);
-  let nearW = max(max(1.0 - smoothstep(0.3, 2.5, hAbove), bank), max(smoothstep(0.0, 0.3, wdepth), bed));
+  // wet banks (the field: distance to water) and wet gully floors
+  let wetF = max(sf.a.w * 0.9, lineK * smoothstep(0.35, 0.7, max(moist, rain)) * 0.7 * (1.0 - playa));
+  let nearW = max(max(max(1.0 - smoothstep(0.3, 2.5, hAbove), bank), max(smoothstep(0.0, 0.3, wdepth), bed)), wetF);
   var wet = clamp(max(G.weather2.x, nearW * 0.85), 0.0, 1.0) * (1.0 - snowF);
   let porous = 1.0 - clamp((w0.x + w0.y) / max(wsum * 0.5, 1e-3), 0.0, 1.0);
   alb *= mix(1.0, mix(0.65, 0.38, porous), wet);
@@ -1240,6 +1693,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   rough = mix(rough, 0.03, puddle);
 
   // ---- lighting
+  // cavity: the gullies of the macro relief and the drainage couloirs see
+  // less sky and less low sun; the ribs a little more
+  let cav = clamp(max(gully * 0.8, couloir * 0.5), 0.0, 1.0) * (1.0 - snowF * 0.5);
   let L = normalize(G.sunDir.xyz);
   // SKY: sunColor.rgb is the full sun irradiance at the ground (sunDir.w
   // repeats its scale, so it is not applied again)
@@ -1263,7 +1719,13 @@ fn fs(v: VOut) -> @location(0) vec4f {
     sh *= smoothstep(-0.02, 0.08, dot(nGeo, L) + 0.03);
     sh *= cloudShadowAt(p);
   }
-  var col = brdf(n, V, L, alb, rough, f0) * sunE * sh;
+  // micro-shadowing (Chan 2018): the texture and crevice occlusion also
+  // shadow the sun, where the surface turns from the light
+  let aoMs = clamp(aoS * mix(1.0, clamp(hg.x * 1.6, 0.35, 1.0), bumpFade), 0.0, 1.0);
+  let microSh = clamp(abs(dot(n, L)) + (2.0 * aoMs * aoMs) - 1.0, 0.0, 1.0);
+  // a low sun leaves the gully floors in the shadow of their walls
+  let gullySh = 1.0 - (cav * 0.55 * (1.0 - smoothstep(0.1, 0.6, L.y)));
+  var col = brdf(n, V, L, alb, rough, f0) * sunE * (sh * microSh * gullySh);
   // snow subsurface: a soft wrap and blue tint in shadow
   col += alb * sunE * (snowF * 0.08 * max(dot(n, L) + 0.4, 0.0));
   // moon
@@ -1275,7 +1737,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let microAO = mix(0.55, 1.0, clamp(hg.x * 1.2, 0.0, 1.0));
   // the baked terrain AO is soft-limited at 0.45: a deep valley still sees
   // a band of sky and the lit far wall (at full strength it went black)
-  let ao = mix(0.45, 1.0, aoT) * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8);
+  let ao = mix(0.45, 1.0, aoT) * mix(1.0, microAO, bumpFade * (1.0 - texF)) * mix(1.0, aoS, 0.8) * mix(1.0, 0.55, cav) * (1.0 + (0.12 * clamp(mE.z, 0.0, 1.0)));
   // the sky is brighter toward the sun: a mild sun-side bias keeps the
   // form of slopes in shadow at a low sun
   let sunSide = normalize(vec3f(L.x, 0.35, L.z));
@@ -1309,6 +1771,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   else if (dbg == 4u) { col = vec3f(sh) * (G.ambient.w + 1.0); }
   else if (dbg == 5u) { col = alb * (G.ambient.w + 1.0) * 2.0; }
   else if (dbg == 6u) { col = (nGeo * 0.5) + 0.5; }
+  else if (dbg == 7u) { col = vec3f(1.0 - max(sf.a.x, 0.0), sf.a.y, max(sf.a.z, lineK)) * (G.ambient.w + 1.0); }
+  else if (dbg == 9u) { col = vec3f(sf.d.y, couloir, length(gC)) * (G.ambient.w + 1.0); }
+  else if (dbg == 8u) { col = vec3f(sf.b.x, sf.b.y + sf.c.y, sf.b.z) * (G.ambient.w + 1.0); }
 
   if (U.shadow.x > 0.5) { col = aerial(col, p); }
   return vec4f(col, 1.0);
