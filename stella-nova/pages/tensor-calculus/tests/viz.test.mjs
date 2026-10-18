@@ -12,6 +12,8 @@
 //     when it plays real MATH trace steps at t = 0, 0.5, 1.
 //  4. The saver shots: 20 or more, known scenes and params, finite cameras,
 //     the subject in the middle band at 16:9 and 9:16.
+//  5. viz/fit.js: sceneFit() frames each scene at aspects 0.46 to 2.4 so
+//     the subject fills the view and stays in it; dl.picks and nearestPick.
 //  index.js (three.js, WebGL) is checked only for its imports, with a node
 //  hook that maps 'three' to the vendor copy. No browser runs here.
 // ============================================================================
@@ -355,6 +357,57 @@ check('fitFov widens tall views only', () => {
   near(SH.fitFov(40, 16 / 9), 40, 1e-9); ok(SH.fitFov(40, 9 / 16) > 60, 'tall'); ok(SH.fitFov(90, 0.3) <= 100, 'cap');
 });
 
+// ---- 5. viz/fit.js: the subject fills the pane, a tap picks an index ------------
+const FIT = await imp('viz/fit.js');
+function coverOf(cam, id, aspect) {
+  const dl = new DLm.DL(), pts = [];
+  for (const time of [0, 2, 5]) { dl.reset(null, time); R.frameScene(id, dl, { time, aspect }); pts.push(...FIT.dlPoints(dl, 900)); }
+  const { f, r, u } = FIT.cameraFrame(cam.pos, cam.target);
+  const ty = Math.tan(SH.fitFov(cam.fov, aspect) * Math.PI / 360), tx = ty * aspect;
+  const xs = [], ys = [];
+  for (const p of pts) {
+    const v = [p[0] - cam.pos[0], p[1] - cam.pos[1], p[2] - cam.pos[2]];
+    const z = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
+    if (z <= 0.01) continue;
+    xs.push((v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / z / tx); ys.push((v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / z / ty);
+  }
+  const q = a => { a.sort((x, y) => x - y); return [a[Math.floor(a.length * 0.02)], a[Math.floor(a.length * 0.98)]]; };
+  const [x0, x1] = q(xs), [y0, y1] = q(ys);
+  return { fill: Math.max(x1 - x0, y1 - y0) / 2, out: Math.max(-x0, x1, -y0, y1) };
+}
+let fitLow = 1;
+check('fit: every scene fills half or more of its pane and stays in view (aspect 0.46 to 2.4)', () => {
+  for (const id of R.SCENE_IDS) for (const aspect of [0.46, 0.75, 1.0, 1.6, 2.4]) {
+    const cam = FIT.sceneFit(id, { aspect });
+    ok(cam && cam.pos.every(Number.isFinite) && cam.target.every(Number.isFinite), `${id} @${aspect}: finite camera`);
+    const c = coverOf(cam, id, aspect);
+    fitLow = Math.min(fitLow, c.fill);
+    ok(c.out < 0.97, `${id} @${aspect}: subject leaves the view (${c.out.toFixed(2)})`);
+    ok(c.fill > 0.5, `${id} @${aspect}: subject is small (${c.fill.toFixed(2)})`);
+  }
+  console.log(`     fit: smallest fill ${fitLow.toFixed(2)} of the half view, over ${R.SCENE_IDS.length} scenes x 5 aspects`);
+});
+check('fit: a step state frames too, and keeps the scene camera direction', () => {
+  const S = R.SCENES.contraction.camera;
+  const cam = FIT.sceneFit('contraction', { aspect: 0.6, step: { kind: 'contract' } });
+  const a = FIT.cameraFrame(S.pos, S.target).f, b = FIT.cameraFrame(cam.pos, cam.target).f;
+  near(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], 1, 1e-9, 'same direction');
+  ok(FIT.sceneFit('no-such-scene', {}) === null, 'unknown scene');
+});
+check('fit: dl.picks holds the sym of each glyph; nearestPick takes the closest within r', () => {
+  const dl = new DLm.DL();
+  dl.reset(null, 0);
+  dl.seg([0, 0, 0], [2, 0, 0], '#fff', { sym: 'i' });
+  dl.arrow([0, 0, 0], [0, 2, 0], '#fff', { sym: 'j' });
+  dl.seg([0, 0, 0], [0, 0, 1], '#fff');
+  ok(dl.picks.length === 3 && dl.picks[0].sym === 'i' && dl.picks[2].sym === 'j', 'picks ' + JSON.stringify(dl.picks));
+  const list = FIT.projectPicks(dl.picks, p => [p[0] * 100, p[1] * 100, p[2] > -1]);
+  ok(FIT.nearestPick(list, 95, 5, 24) === 'i', 'near i');
+  ok(FIT.nearestPick(list, 3, 190, 24) === 'j', 'near j');
+  ok(FIT.nearestPick(list, 300, 300, 24) === null, 'none in reach');
+  dl.reset(null, 0); ok(dl.picks.length === 0, 'reset clears picks');
+});
+
 // ---- index.js imports (three mapped to the vendor copy) --------------------------------
 try {
   const hook = 'data:text/javascript,' + encodeURIComponent(`
@@ -368,6 +421,8 @@ export async function resolve(s, c, n) {
   const V = await imp('viz/index.js');
   check('viz/index.js exports the contract API', () => {
     for (const k of ['createViz', 'SCENE_IDS', 'SAVER_SHOTS', 'LINE_VS', 'LINE_FS']) ok(k in V, k);
+    const src = readFileSync(join(page, 'viz/index.js'), 'utf8');
+    for (const k of ['fitView(', 'sceneFit(', 'nearestPick(', 'opts.onPick(sym)']) ok(src.includes(k), 'index.js uses ' + k);
     ok(typeof V.createViz === 'function' && V.createViz.length >= 1, 'createViz');
   });
 } catch (e) { fail++; console.log('FAIL import viz/index.js: ' + e.message); }

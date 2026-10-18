@@ -26,6 +26,8 @@
 //    setOrbit(degPerSec)   slow auto orbit (0 stops it)
 //    setSpeed(k)           clock speed for the internal clock
 //    setViewOffset(x, y)   shift the picture (CSS px), for saver framing
+//    fitView(ms)           frame the subject again (viz/fit.js) and go
+//                          back to auto framing
 //    sceneInfo(id)         { id, label, blurb, params, camera }
 //    state()               { scene, params, time, t, pick, step kind }
 //    readouts()            the numbers the scene shows (pairing, angles..)
@@ -36,7 +38,18 @@
 //  OPTIONS  { labelHost: element for the HTML labels (default: parent of
 //    the canvas), coarse: touch profile (default: (pointer:coarse)),
 //    autoStart: true, externalClock: false, speed: 1, scene, params,
-//    bloom: true on desktop, orbit: 0 }
+//    bloom: true on desktop, orbit: 0, autoFit: true, onPick(sym) }
+//
+//  FRAMING. With autoFit, a new scene (setScene, or a step with another
+//  scene) gets a camera from sceneFit(): the scene camera direction, with
+//  the target and the distance set so that the subject fills the view at
+//  its real aspect. A resize frames it again, until the reader drags the
+//  view. setCamera() and setShot() (SAVER) are manual and stop the auto
+//  framing until the next scene; fitView() starts it again.
+//
+//  TAP PICK. A tap or a click with no drag on the canvas projects
+//  dl.picks and calls opts.onPick(sym) for the nearest index glyph (24 px,
+//  32 px on touch). One finger orbits, two fingers pinch to zoom.
 //
 //  PIPELINE  Each frame the scene writes a display list (dl.js): lit
 //  opaque triangles, lit see-through triangles, thick lines and labels.
@@ -63,6 +76,7 @@ import { SCENES, SCENE_IDS, frameScene, paramsFor, sceneInfo } from './registry.
 import { SAVER_SHOTS, fitFov } from './shots.js';
 import { stepScene } from './trace-map.js';
 import { LOOK } from './look.js';
+import { sceneFit, projectPicks, nearestPick } from './fit.js';
 
 export { SCENE_IDS, SAVER_SHOTS, sceneInfo, stepScene };
 
@@ -307,7 +321,10 @@ export function createViz(canvas, opts = {}) {
   controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   controls.autoRotateSpeed = 0;
   let glide = null;
-  controls.addEventListener('start', () => { glide = null; });
+  controls.addEventListener('start', () => { glide = null; fitMode = 'user'; });
+  // fitMode: 'auto' (frame from the scene bounds), 'user' (the reader moved
+  // the view), 'manual' (setCamera or setShot from a caller)
+  let fitMode = opts.autoFit === false ? 'manual' : 'auto', fitAspect = 0;
 
   function setCamera(cam, ms = 1200) {
     if (!cam) return;
@@ -361,12 +378,51 @@ export function createViz(canvas, opts = {}) {
     camera.fov = fitFov(view.fov, w / h);
     if (view.ox || view.oy) camera.setViewOffset(w, h, view.ox, view.oy, w, h); else camera.clearViewOffset();
     camera.updateProjectionMatrix();
+    if (typeof refit === 'function') refit();
     lineMat.uniforms.uRes.value.set(w * pr, h * pr);
     lineMat.uniforms.uPR.value = pr;
     overlay.style.left = canvas.offsetLeft + 'px'; overlay.style.top = canvas.offsetTop + 'px';
     overlay.style.width = w + 'px'; overlay.style.height = h + 'px';
   }
   function setViewOffset(ox = 0, oy = 0) { view.ox = ox; view.oy = oy; resize(); }
+
+  // ---- framing (viz/fit.js)
+  function fittedCamera(id) {
+    const S = SCENES[id];
+    if (fitMode !== 'auto' || view.w < 2 || view.h < 2) return S.camera;
+    fitAspect = view.w / view.h;
+    try { return sceneFit(id, { params: st.params, step: st.step, aspect: fitAspect, time: st.time }) || S.camera; }
+    catch (e) { return S.camera; }
+  }
+  function sceneCamera(id, ms) {
+    if (opts.autoFit !== false && fitMode !== 'manual') fitMode = 'auto';
+    setCamera(fittedCamera(id), ms);
+  }
+  function refit() {
+    if (fitMode !== 'auto' || view.w < 2 || view.h < 2) return;
+    if (fitAspect && Math.abs(view.w / view.h - fitAspect) / fitAspect < 0.02) return;
+    setCamera(fittedCamera(st.id), 250);
+  }
+
+  // ---- tap pick: a pointer that goes up near where it went down
+  let down = null;
+  const onDown = e => { down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId }; };
+  const onUp = e => {
+    const d = down; down = null;
+    if (!d || d.id !== e.pointerId || !opts.onPick) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8 || performance.now() - d.t > 450) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const list = projectPicks(dl.picks, p => {
+      v3.set(p[0], p[1], p[2]).project(camera);
+      return [(v3.x * 0.5 + 0.5) * view.w, (0.5 - v3.y * 0.5) * view.h, v3.z < 1 && v3.z > -1];
+    });
+    const sym = nearestPick(list, x, y, e.pointerType === 'touch' ? 32 : 24);
+    if (sym) opts.onPick(sym);
+  };
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointercancel', () => { down = null; });
 
   function frame() {
     const S = SCENES[st.id];
@@ -398,7 +454,7 @@ export function createViz(canvas, opts = {}) {
     if (!SCENES[id]) return false;
     const changed = id !== st.id;
     st.id = id; st.params = paramsFor(id, params); st.step = null; st.t = null;
-    if (changed) setCamera(SCENES[id].camera, 1200);
+    if (changed) sceneCamera(id, 1200);
     return true;
   }
   function play(step, t = 0) {
@@ -406,10 +462,11 @@ export function createViz(canvas, opts = {}) {
     const changed = m.scene !== st.id;
     if (changed || st.step !== step) { st.params = paramsFor(m.scene, m.params); }
     st.id = m.scene; st.step = step; st.t = Math.max(0, Math.min(1, +t || 0));
-    if (changed) setCamera(SCENES[m.scene].camera, 1000);
+    if (changed) sceneCamera(m.scene, 1000);
   }
 
   resize();
+  sceneCamera(st.id, 0);
   const ro = win.ResizeObserver ? new win.ResizeObserver(() => resize()) : null;
   if (ro) ro.observe(canvas);
   if (opts.autoStart !== false) start();
@@ -423,6 +480,7 @@ export function createViz(canvas, opts = {}) {
     pickIndex(sym) { st.pick = sym || null; },
     dispose() {
       stop(); if (ro) ro.disconnect();
+      canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointerup', onUp);
       controls.dispose();
       solid.mesh.geometry.dispose(); glass.mesh.geometry.dispose(); lines.mesh.geometry.dispose();
       solidMat.dispose(); glassMat.dispose(); lineMat.dispose(); envTex.dispose();
@@ -432,12 +490,16 @@ export function createViz(canvas, opts = {}) {
       overlay.remove(); listeners.clear();
     },
     setParams(p) { st.params = { ...st.params, ...p }; },
-    setCamera, setOrbit,
+    setCamera(cam, ms) { fitMode = 'manual'; setCamera(cam, ms); },
+    setOrbit,
     setShot(shot, ms = 1600) {
       if (!shot) return;
+      fitMode = 'manual';
       setScene(shot.scene, shot.params || {});
       setCamera(shot.camera || SCENES[shot.scene].camera, ms);
     },
+    fitView(ms = 900) { if (opts.autoFit === false) return false; fitMode = 'auto'; fitAspect = 0; setCamera(fittedCamera(st.id), ms); return true; },
+    fitMode: () => fitMode,
     setSpeed(k) { st.speed = +k || 0; },
     setViewOffset,
     sceneInfo,

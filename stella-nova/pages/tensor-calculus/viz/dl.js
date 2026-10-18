@@ -40,6 +40,10 @@
 //      label(p, html, o)        HTML text at a world point, or at o.screen =
 //                               [x, y] in 0..1 of the view (p = null)
 //      read(key, value)         a readout number
+//
+//  TAP TARGETS. seg, arrow and label calls with o.sym also push { p, sym }
+//  to dl.picks (the segment middle, the arrow tip and middle, the label
+//  point). viz/index.js projects them and picks the nearest on a tap.
 // ============================================================================
 
 const SIDES = 14;
@@ -101,11 +105,15 @@ export class DL {
     this.fog = 0.035;          // scene fog density (world units)
     this.bg = null;             // optional [top, bottom] background colours
     this.lineScale = 1;         // phone screens draw a little thicker
+    this.picks = [];            // [{ p, sym }]: tap targets (viz/fit.js)
   }
   reset(pick = null, time = 0) {
     this.solid.n = 0; this.glass.n = 0; this.lines.n = 0;
     this.labels = []; this.reads = {}; this.pick = pick; this.time = time;
+    this.picks = [];
   }
+  // a tap target for the index sym at world point p (at most 3000 a frame)
+  _pickAt(p, sym) { if (sym && this.picks.length < 3000) this.picks.push({ p: [p[0], p[1], p[2]], sym }); }
   // linear rgba for a colour, with the pick lens
   col(c, sym, a = 1) {
     let r = linOf(c);
@@ -121,6 +129,7 @@ export class DL {
 
   // ---- lines
   seg(a, b, c, o = {}) {
+    if (o.sym) this._pickAt([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], o.sym);
     const C = this.col(c, o.sym, o.a ?? 1);
     if (C[3] < 0.004) return;
     const L = this.lines; L.need(1);
@@ -160,6 +169,7 @@ export class DL {
     this._tri(o.glass || C[3] < 0.999 ? this.glass : this.solid, p0, p1, p2, n, n, n, C);
   }
   arrow(p, v, c, o = {}) {
+    if (o.sym) { this._pickAt(V.add(p, v), o.sym); this._pickAt(V.add(p, V.scl(v, 0.5)), o.sym); }
     const L = V.len(v);
     const C = this.col(c, o.sym, o.a ?? 1);
     if (C[3] < 0.004) return;
@@ -191,6 +201,7 @@ export class DL {
     }
   }
   ball(p, r, c, o = {}) {
+    if (o.sym) this._pickAt(p, o.sym);
     const C = this.col(c, o.sym, o.a ?? 1);
     if (C[3] < 0.004) return;
     const B = o.glass || C[3] < 0.999 ? this.glass : this.solid;
@@ -297,6 +308,7 @@ export class DL {
     }, o.nu ?? 40, o.nv ?? 24, c, { ...o, closeU: true, flipN: mixedSign(A, B, C) });
   }
   label(p, html, o = {}) {
+    if (o.sym && p && !o.screen) this._pickAt(p, o.sym);
     let a = 1;
     if (this.pick) a = o.sym && symEq(o.sym, this.pick) ? 1 : o.sym ? 0.3 : 0.6;
     this.labels.push({ p, html, c: o.c ?? null, size: o.size ?? 15, key: o.key ?? html, anchor: o.anchor ?? 'c', a: a * (o.a ?? 1), cls: o.cls ?? '', hi: this.picked(o.sym), screen: o.screen ?? null });
