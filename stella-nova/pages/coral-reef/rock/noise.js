@@ -8,7 +8,8 @@
 //    n.g2(x, z)          gradient noise in 2D, about -1..1
 //    n.fbm2(x, z, oct)   sum of g2 octaves, about -1..1
 //    n.ridged3(x, y, z)  1 - |g3|, 0..1, sharp crests at 1
-//    n.worley3(x, y, z, out)  out[0] = F1, out[1] = F2 (cell size 1)
+//    n.worley3(x, y, z, out)  out[0] = F1, out[1] = F2 (cell size 1),
+//                        out[2] = 0..1 id of the nearest cell
 //  mulberry32(seed) is the seeded random source (0 <= r < 1).
 //
 //  grep -n targets
@@ -26,6 +27,13 @@ export function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+// Worley cell offsets: centre, 6 faces, 12 edges, 8 corners.
+const ORDER = (() => {
+  const o = [];
+  for (let n = 0; n <= 3; n++) for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) === n) o.push(dx, dy, dz);
+  return new Int8Array(o);
+})();
 
 // Gradient directions: the 12 edge midpoints of a cube (Perlin 2002).
 const G3 = new Float64Array([1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1]);
@@ -77,18 +85,26 @@ export function makeNoise(seed) {
 
   // Worley F1, F2 (distance to the nearest and second-nearest feature
   // point; one point per unit cell, jittered by the permutation table).
+  // Cells in the order centre, faces, edges, corners; a cell is skipped
+  // when its nearest possible feature point is further than F2 so far.
   function worley3(x, y, z, out) {
     const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-    let f1 = 9, f2 = 9;
-    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const fx = x - ix, fy = y - iy, fz = z - iz;
+    const lx = [(fx + 0.05) * (fx + 0.05), 0, (1.05 - fx) * (1.05 - fx)];
+    const ly = [(fy + 0.05) * (fy + 0.05), 0, (1.05 - fy) * (1.05 - fy)];
+    const lz = [(fz + 0.05) * (fz + 0.05), 0, (1.05 - fz) * (1.05 - fz)];
+    let f1 = 9, f2 = 9, id = 0;
+    for (let o = 0; o < 81; o += 3) {
+      const dx = ORDER[o], dy = ORDER[o + 1], dz = ORDER[o + 2];
+      if (lx[dx + 1] + ly[dy + 1] + lz[dz + 1] >= f2) continue;
       const cx = ix + dx, cy = iy + dy, cz = iz + dz;
       const h = P[P[P[cx & 255] + (cy & 255)] + (cz & 255)];
       const h2 = P[h + 37], h3 = P[h2 + 101];
       const px = cx + h / 255 * 0.9 + 0.05 - x, py = cy + h2 / 255 * 0.9 + 0.05 - y, pz = cz + h3 / 255 * 0.9 + 0.05 - z;
       const d = px * px + py * py + pz * pz;
-      if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+      if (d < f1) { f2 = f1; f1 = d; id = h3; } else if (d < f2) f2 = d;
     }
-    out[0] = Math.sqrt(f1); out[1] = Math.sqrt(f2);
+    out[0] = Math.sqrt(f1); out[1] = Math.sqrt(f2); out[2] = id / 255;
     return out;
   }
 

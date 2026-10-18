@@ -72,7 +72,7 @@ export function meshChunk(geo, lay, ci, cj, ck) {
     Cv[(k * CY + j) * CX + i] = geo.base(x0 + (ca[0] + i) * K * cell, y0 + (ca[1] + j) * K * cell, z0 + (ca[2] + k) * K * cell);
   }
   // A coarse cell is "far" when every corner is far from the surface.
-  const thr = 1.35 * K * cell * 0.866 + 0.65 * geo.detail + 4 * cell;
+  const thr = 1.35 * K * cell * 0.866 + 0.55 * geo.detail + 4 * cell;
   const far = new Uint8Array((CX - 1) * (CY - 1) * (CZ - 1));
   for (let k = 0; k < CZ - 1; k++) for (let j = 0; j < CY - 1; j++) for (let i = 0; i < CX - 1; i++) {
     let lo = Infinity, pos = 0;

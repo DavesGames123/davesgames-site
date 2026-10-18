@@ -52,10 +52,13 @@ const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t 
 export function smin(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; }
 export function smax(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.max(a, b) + h * h * k * 0.25; }
 
-// Strata: hard beds stand out, soft beds recede. u is the bed coordinate
-// (0..1 in one period). 0 = flush, 1 = full recess.
-function strataProfile(u) {
-  return sstep(0.22, 0.42, u) - sstep(0.78, 0.96, u);
+// Strata. u is the place in a bed (0..1), soft is the recess of a soft
+// bed (0 for a hard bed). A narrow bedding-plane notch at every bed joint,
+// and a wide recess in the soft beds, so hard beds stand out as ledges.
+// 0 = flush, 1 = full recess.
+function strataProfile(u, soft) {
+  const j = u < 0.5 ? u : 1 - u;
+  return 0.45 * (1 - sstep(0.0, 0.12, j)) + soft * (sstep(0.3, 0.45, u) - sstep(0.82, 0.95, u));
 }
 
 // 1D squared distance transform (Felzenszwalb and Huttenlocher 2012).
@@ -81,6 +84,13 @@ function edt2(mask, n) {
   for (let x = 0; x < n; x++) { for (let y = 0; y < n; y++) f[y] = out[y * n + x]; dt1(f, n, d, v, z); for (let y = 0; y < n; y++) out[y * n + x] = d[y]; }
   for (let y = 0; y < n; y++) { for (let x = 0; x < n; x++) f[x] = out[y * n + x]; dt1(f, n, d, v, z); for (let x = 0; x < n; x++) out[y * n + x] = Math.sqrt(d[x]); }
   return out;
+}
+
+function minFilter2(a, n, r) {
+  const t = new Float32Array(n * n), o = new Float32Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { let m = Infinity; for (let k = -r; k <= r; k++) { const v = a[y * n + clamp(x + k, 0, n - 1)]; if (v < m) m = v; } t[y * n + x] = m; }
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { let m = Infinity; for (let k = -r; k <= r; k++) { const v = t[clamp(y + k, 0, n - 1) * n + x]; if (v < m) m = v; } o[y * n + x] = m; }
+  return o;
 }
 
 function boxBlur2(a, n, r) {
@@ -148,8 +158,8 @@ export function makeGeology(opts = {}) {
   const N2 = n * n;
 
   // Seed-level geology numbers.
-  const P = 1.05 + rng() * 0.55;                        // strata period (m)
-  const strA = 0.22 + rng() * 0.2;                      // strata recess (m)
+  const P = 1.4 + rng() * 1.0;                          // strata period (m)
+  const strA = 0.35 + rng() * 0.2;                      // strata recess (m)
   const dipX = (rng() - 0.5) * 0.12, dipZ = (rng() - 0.5) * 0.12;
   const rockShare = 0.34 + rng() * 0.1;
   const hMean = 4.6 + rng() * 1.6;
@@ -207,12 +217,27 @@ export function makeGeology(opts = {}) {
     if (C[q] < bank) rock = true;                         // canyon banks are always rock
     mask[q] = rock ? 1 : 0; inv[q] = rock ? 0 : 1;
   }
-  const dOut = edt2(mask, n), dIn = edt2(inv, n);
+  // Opening (erode, then grow back) by OPEN metres: slivers and necks
+  // thinner than 2 * OPEN go, so no thin fin of rock is left to break up.
+  const OPEN = 1.25;
+  const dIn0 = edt2(inv, n);
+  const core = new Uint8Array(N2), coreInv = new Uint8Array(N2);
+  for (let q = 0; q < N2; q++) { const c = mask[q] && (dIn0[q] - 0.5) * G >= OPEN; core[q] = c ? 1 : 0; coreInv[q] = c ? 0 : 1; }
+  const dOut = edt2(core, n), dIn = edt2(coreInv, n);
   let F = new Float32Array(N2);
-  for (let q = 0; q < N2; q++) F[q] = (mask[q] ? -(dIn[q] - 0.5) : dOut[q] - 0.5) * G;
+  for (let q = 0; q < N2; q++) F[q] = (core[q] ? -(dIn[q] - 0.5) : dOut[q] - 0.5) * G - OPEN;
   F = boxBlur2(F, n, 2);
+  // Mean footprint distance over about 3 m: high on thin fins and ribbons.
+  // The base notch is scaled down there, so no fin loses its foot.
+  const FB = boxBlur2(boxBlur2(F, n, 6), n, 6);
+  // Half thickness of the rock near each point: the deepest footprint
+  // distance within 3 m. The recesses (notch, strata) never cut more than
+  // half of it, so no wall is cut through and no rock floats.
+  const HT = minFilter2(F, n, 9);
+  for (let q = 0; q < N2; q++) HT[q] = Math.max(0, -HT[q]);
 
   // ── top height, sand, strata phase, notch depth, cap overhang ─────────
+  const BT = new Float32Array(N2);
   const H = new Float32Array(N2), S = new Float32Array(N2), PH = new Float32Array(N2), U = new Float32Array(N2), OV = new Float32Array(N2);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = gx(i), z = gx(j), q = j * n + i, r = Math.hypot(x, z);
@@ -224,7 +249,7 @@ export function makeGeology(opts = {}) {
     // strata phase: a gentle dip plus warps
     PH[q] = dipX * x + dipZ * z + nz.fbm2(x * 0.04 - 9, z * 0.04 + 4, 2) * 0.8;
     // top height
-    let h = hMean + 1.8 * nz.fbm2(x * 0.045 + 5, z * 0.045 - 3, 4) + 1.4 * (1 - Math.abs(nz.g2(x * 0.09 + 2, z * 0.09))) - 0.7;
+    let h = hMean + 2.4 * nz.fbm2(x * 0.045 + 5, z * 0.045 - 3, 4) + 2.0 * (1 - Math.abs(nz.g2(x * 0.08 + 2, z * 0.08))) - 1.0;
     const rim = sstep(CW[q] + 9, CW[q] + 2, C[q]);
     h += 1.4 * rim;
     // soft terraces at the strata period
@@ -232,7 +257,8 @@ export function makeGeology(opts = {}) {
     h = 0.75 * ((tf + sstep(0.5, 0.95, tr)) * P - PH[q]) + 0.25 * h;
     h = clamp(h, 2.4, 11.5);
     H[q] = S[q] + h * (1 - 0.75 * fade);
-    U[q] = clamp(0.95 + 0.8 * nz.fbm2(x * 0.11 + 13, z * 0.11, 2), 0.3, 1.8);
+    U[q] = clamp(0.7 + 0.6 * nz.fbm2(x * 0.11 + 13, z * 0.11, 2), 0.2, 1.2) * sstep(1.2, -2.2, FB[q]);
+    BT[q] = clamp(0.12 + 0.2 * nz.fbm2(x * 0.06 + 31, z * 0.06 - 17, 2), 0, 0.3);
     OV[q] = clamp(0.15 + 1.0 * nz.fbm2(x * 0.08 - 21, z * 0.08 + 6, 2), 0, 1.1);
   }
 
@@ -347,7 +373,7 @@ export function makeGeology(opts = {}) {
       if (arches.some(q => Math.hypot(q.x - x, q.z - z) < q.Ra + r0 + 2.5)) continue;
       if (pinnacles.some(q => Math.hypot(q.x - x, q.z - z) < q.r0 + r0 + 4)) continue;
       const hgt = 4 + rng() * 6, cap = rng() < 0.55;
-      pinnacles.push({ x, z, y0: sandAt(x, z), r0, h: hgt, lx: (rng() - 0.5) * 0.16, lz: (rng() - 0.5) * 0.16, cap, capR: r0 * (1.35 + rng() * 0.35), capT: 0.7 + rng() * 0.5, R2: (r0 * 2 + 2 + hgt * 0.1) ** 2 });
+      pinnacles.push({ x, z, y0: sandAt(x, z), r0, h: hgt, ph: rng() * 6.283, lx: (rng() - 0.5) * 0.16, lz: (rng() - 0.5) * 0.16, cap, capR: r0 * (1.35 + rng() * 0.35), capT: 0.7 + rng() * 0.5, R2: (r0 * 2 + 2 + hgt * 0.1) ** 2 });
     }
   }
 
@@ -429,9 +455,18 @@ export function makeGeology(opts = {}) {
   // Beds of uneven thickness, and an uneven recess per bed (some beds are
   // flush, some stand out as ledges).
   const bp1 = rng() * 6.283, bp2 = rng() * 6.283, bseed = Math.floor(rng() * 1e6);
-  function bedCoord(y, ph) { const u = (y + ph) / P; return u + 0.2 * Math.sin(u * 2.31 + bp1) + 0.1 * Math.sin(u * 5.13 + bp2); }
-  function bedAmp(b) { let h = Math.imul(b + bseed, 0x2c1b3c6d) ^ 0x297a2d39; h = Math.imul(h ^ (h >>> 12), 0x297a2d39); const r = ((h ^ (h >>> 15)) >>> 0) / 4294967296; return r < 0.25 ? 0.15 : 0.45 + 0.75 * r; }
-  const BAND = 0.9 + 0.5 * detail;
+  // bedCoord(y, ph) = u + 0.2 sin(2.31 u + bp1) + 0.1 sin(5.13 u + bp2), u = (y + ph) / P,
+  // from a table (linear, step 1/64 in u) over the u range of the plot.
+  const BU0 = -12, BU1 = 30, BS = 64, BED = new Float64Array((BU1 - BU0) * BS + 2);
+  for (let i = 0; i < BED.length; i++) { const u = BU0 + i / BS; BED[i] = u + 0.2 * Math.sin(u * 2.31 + bp1) + 0.1 * Math.sin(u * 5.13 + bp2); }
+  function bedCoord(y, ph) {
+    const t = ((y + ph) / P - BU0) * BS;
+    if (t <= 0 || t >= BED.length - 1) { const u = (y + ph) / P; return u + 0.2 * Math.sin(u * 2.31 + bp1) + 0.1 * Math.sin(u * 5.13 + bp2); }
+    const i = t | 0, f = t - i;
+    return BED[i] + (BED[i + 1] - BED[i]) * f;
+  }
+  function bedAmp(b) { let h = Math.imul(b + bseed, 0x2c1b3c6d) ^ 0x297a2d39; h = Math.imul(h ^ (h >>> 12), 0x297a2d39); const r = ((h ^ (h >>> 15)) >>> 0) / 4294967296; return r < 0.45 ? 0 : 0.5 + 0.9 * (r - 0.45); }
+  const BAND = 0.8 + 0.35 * detail;
 
   // ── the base field (no crag detail) ────────────────────────────────────
   function base(x, y, z) {
@@ -442,13 +477,15 @@ export function makeGeology(opts = {}) {
     const f0 = lerp(F), h = lerp(H), s = lerp(S);
     const fade = r <= R ? 0 : sstep(R, R13, r);
     const yr = y - s;
-    const ub = bedCoord(y, lerp(PH)), bi = Math.floor(ub), st = strataProfile(ub - bi) * bedAmp(bi);
+    const ub = bedCoord(y, lerp(PH)), bi = Math.floor(ub), st = strataProfile(ub - bi, bedAmp(bi));
     const un = lerp(U), ov = lerp(OV);
     const nb2 = (yr - 0.85) / 0.75, notch = un * Math.exp(-nb2 * nb2);
     const capT = ov * sstep(h - 2.8, h - 1.3, y);
     // massif
-    const f = f0 + strA * st + notch - capT + fade * 8;
-    let d = smax(f, y - h, 0.7);
+    const thin = fade * 8, ht = lerp(HT) - thin;
+    const bat = lerp(BT) * Math.max(0, yr - 1.2);           // walls lean back with height
+    const f = f0 + Math.min(strA * st + notch, Math.max(0, 0.5 * ht - 0.75 * detail)) - capT * sstep(2, 3.5, ht) + thin + bat;
+    let d = smax(f, y - h, 0.9);
     // canyon voids (with bridge slabs left in), one per canyon, joined
     let cvAll = 99;
     for (let ck = 0; ck < CK.length; ck++) {
@@ -457,7 +494,7 @@ export function makeGeology(opts = {}) {
       if (c > 12) continue;
       const cw = lerp(K.CW);
       const yf = Math.max(0, yr - 2.6);
-      const w = cw + 0.18 * yf + 0.05 * yf * yf + notch * 1.15 + strA * st * 0.8;
+      const w = cw + 0.18 * yf + 0.05 * yf * yf + Math.min(notch * 0.9 + strA * st * 0.8, 0.4 * Math.max(0, -f0));
       let cv = c - w;
       if (cv < 2.5 && K.bridges.length) {
         const cs = lerp(K.CS);
@@ -506,7 +543,8 @@ export function makeGeology(opts = {}) {
       const dx = x - p.x - p.lx * yy, dz = z - p.z - p.lz * yy;
       if (dx * dx + dz * dz > p.R2) continue;
       const tH = clamp(yy / p.h, 0, 1);
-      let rad = p.r0 * (1 - 0.38 * tH) + 0.8 * Math.exp(-Math.max(0, yy) / 0.8) - strA * 0.8 * st - notch * 0.25;
+      const th = Math.atan2(dz, dx);
+      let rad = p.r0 * (1 - 0.38 * tH) * (1 + 0.18 * Math.sin(3 * th + p.ph + yy * 0.35) + 0.1 * Math.sin(5 * th - yy * 0.6)) + 0.8 * Math.exp(-Math.max(0, yy) / 0.8) - strA * 0.5 * st - notch * 0.25;
       let dp = smax(Math.sqrt(dx * dx + dz * dz) - rad, yy - p.h, 0.5);
       if (p.cap) {
         const cy = yy - (p.h - p.capT * 0.5);
@@ -534,35 +572,41 @@ export function makeGeology(opts = {}) {
   }
 
   // ── crag detail (near the surface only) ────────────────────────────────
-  const W2 = [0, 0];
+  const W2 = [0, 0, 0];
+  const crackW = 0.1 + 0.2 * (1 - fine);          // crack width (Worley F2 - F1 units), wider on coarse meshes
   const ampR = 0.34 * detail, ampR2 = 0.15 * detail * fine, ampW = 0.2 * detail * (0.4 + 0.6 * fine), ampP = 0.05 * detail * (fine > 0.9 ? 1 : 0);
   function crag(x, y, z) {
     // domain warp
-    const wx = nz.g3(x * 0.21, y * 0.21, z * 0.21 + 5.2) * 1.3;
-    const wy = nz.g3(x * 0.21 + 9.7, y * 0.21, z * 0.21) * 0.6;
-    const wz = nz.g3(x * 0.21, y * 0.21 - 3.3, z * 0.21) * 1.3;
+    const wx = nz.g3(x * 0.19, y * 0.19, z * 0.19 + 5.2) * 1.0;
+    const wy = nz.g3(x * 0.19 + 9.7, y * 0.19, z * 0.19) * 0.45;
+    const wz = nz.g3(x * 0.19, y * 0.19 - 3.3, z * 0.19) * 1.0;
     const qx = x + wx, qy = y + wy, qz = z + wz;
-    // ridged crests (stand out) at about 2.2 m and 0.9 m
-    const r1 = nz.ridged3(qx * 0.45, qy * 0.6, qz * 0.45);
-    const r2 = nz.ridged3(qx * 1.1 + 3, qy * 1.3, qz * 1.1);
-    let disp = -ampR * (r1 * r1 - 0.45) - ampR2 * (r2 * r2 - 0.45);
-    // Worley joints: grooves on the cell borders, blocks bulge
-    nz.worley3(qx * 0.62, qy * 0.75, qz * 0.62, W2);
+    // Buttresses and recesses: broad, smooth, about 5 m.
+    let disp = ampR * 1.4 * nz.g3(qx * 0.18, qy * 0.12, qz * 0.18);
+    // Joints: tall Worley cells, so the cracks are near vertical planes.
+    // With the bedding planes of the strata they cut the rock into blocks.
+    // Each block sits a little out or in (the step hides in the crack).
+    nz.worley3(qx * 0.45, qy * 0.2, qz * 0.45, W2);
     const e = W2[1] - W2[0];
-    disp += ampW * (1 - sstep(0.0, 0.28, e)) - ampW * 0.45 * sstep(0.3, 0.9, e);
+    disp += ampW * 1.6 * (1 - sstep(0.0, crackW, e)) + ampW * 0.7 * (W2[2] - 0.5) * sstep(0.02, crackW, e);
+    if (fine > 0.9) {
+      // a finer joint set and small chips
+      nz.worley3(qx * 1.0 + 7, qy * 0.6, qz * 1.0, W2);
+      const e2 = W2[1] - W2[0];
+      disp += ampR2 * (1 - sstep(0.0, 0.25, e2)) + ampR2 * 0.5 * (W2[2] - 0.5) * sstep(0.02, 0.25, e2);
+    }
     // fine pits
     if (ampP > 0) disp += ampP * nz.g3(x * 2.3, y * 2.3, z * 2.3);
-    // limit the outward relief (no thin fins or loose flakes in the water)
-    if (disp < -0.16 * detail) disp = -0.16 * detail + (disp + 0.16 * detail) * 0.35;
     return disp;
   }
 
   function sdf(x, y, z) {
     const b = base(x, y, z);
-    const ab = b < 0 ? -b : b;
-    if (ab >= BAND || detail <= 0) return b;
-    const w = 1 - sstep(BAND * 0.55, BAND, ab);
-    return b + crag(x, y, z) * w;
+    // The crag acts in a band: from 0.8 m inside the base surface (so it
+    // can not cut through thin rock: no loose blocks) to BAND outside.
+    if (b <= -0.8 || b >= BAND || detail <= 0) return b;
+    const c = crag(x, y, z);
+    return b + c * (b < 0 ? sstep(-0.8, -0.3, b) : 1 - sstep(BAND * 0.5, BAND, b));
   }
 
   // Features for the ROV survey paths and the tests.
