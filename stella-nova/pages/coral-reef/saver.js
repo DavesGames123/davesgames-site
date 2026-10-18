@@ -1,34 +1,65 @@
 // ============================================================================
-//  CORAL REEF  ·  screensaver shots and camera framing (DOM-free)
+//  CORAL REEF  ·  screensaver plan and camera framing (DOM-free)
 // ----------------------------------------------------------------------------
-//  shotList(seed, n) gives a seeded shuffle of shots. Each shot grows a new
-//  reef (a preset) or one new colony from its own seed, with its own
-//  gradient, colour mode, hold time (5 to 12 s) and camera path. Two shots
-//  in a row never share a preset or a colour mode. A colony shot comes
-//  closer (zoom 0.5 to 0.8 of the fit distance) to show the polyps.
+//  The saver is one ROV that analyses ONE coral colony while it grows. A
+//  run is a list of dives (divePlan). A dive picks a species and a site
+//  with a view (an arch top, a canyon wall, a pinnacle, a ledge), grows
+//  one colony there from a seed to full size (reef.growColony), and cuts
+//  between calm camera shots while it grows. Then the frame fades and a
+//  new dive starts at a new site. Every choice comes from the seed, so
+//  each run differs and one seed gives one run.
+//
+//  SHOTS (shotPose)
+//    orbit ..... a slow turn round the colony; the ROV is near it
+//    push ...... a slow push-in on the growth front (zoom 1.3 to 0.75)
+//    shoulder .. from behind the ROV: its frame and its beams in the
+//                foreground, the colony in the light
+//    wide ...... far out: the ROV, its beams and the colony small in the
+//                black water (at most one in four shots, never two in a row)
+//  Each shot holds 7 to 14 s. The distance comes from frameFit with the
+//  clear band of the plate (plateBand of lib/saver-clear.js), so the
+//  subject stays between the text blocks in 16:9 and in 9:16.
+//
+//  ROCK. clearPath() moves a camera that rock hides (sphere tracing on
+//  rock.sdf from the subject to the camera) to the near side of the rock.
+//  pickSite() ranks rock.sampleSurface points by their feature and
+//  exposure and takes one by the dive seed.
 //
 //  frameFit() gives the camera distance and the view offset that put a
-//  sphere (the reef) in the middle of the clear part of the canvas: the
-//  canvas less the panel and dock on the page, or less the text bands of
-//  the saver plate (plateBand of lib/saver-clear.js). setViewOffset(w, h,
-//  ox, oy, w, h) then moves the subject to the centre of the clear part.
+//  sphere (or a wide, low ellipse) in the middle of the clear part of the
+//  canvas: the canvas less the panel and dock on the page, or less the
+//  text bands of the saver plate. setViewOffset(w, h, ox, oy, w, h) then
+//  moves the subject to the centre of the clear part.
 //
 //  grep -n targets
-//    the shot list ........ "export function shotList"
+//    the dives ............ "export function divePlan"
+//    the shots ............ "function shotList"
+//    a camera pose ........ "export function shotPose"
+//    a site on the rock ... "export function pickSite"
+//    rock in the way ...... "export function clearPath"
 //    the fit .............. "export function frameFit"
 //    the check (tests) .... "export function projectedBox"
 // ============================================================================
-import { rng } from '../../lib/dla-engine.js';
-import { PRESET_IDS, SPECIES_IDS } from './reef.js';
-import { MODE_IDS } from './colour.js';
 
 export const SAVER_GRADIENTS = ['reef', 'viridis', 'inferno', 'aurora', 'ice', 'magma', 'turbo', 'plasma', 'ember', 'spectral'];
+export const SHOT_KINDS = ['orbit', 'push', 'shoulder', 'wide'];
+const SITE_KINDS = ['arch', 'canyon', 'pinnacle', 'ledge', 'overhang', 'cave'];
+const TAU = Math.PI * 2;
 
+function mulberry(seed) {
+  let a = (seed >>> 0) || 1;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function shuffle(a, rand) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-
 // A shuffled pick from a pool, never the same as the one before.
 function deck(pool, rand) {
   let d = [], last = null;
@@ -38,43 +69,160 @@ function deck(pool, rand) {
   };
 }
 
-export function shotList(seed = 1, n = 12) {
-  const rand = rng((seed >>> 0) || 1);
-  const preset = deck(PRESET_IDS, rand), species = deck(SPECIES_IDS, rand);
-  const grad = deck(SAVER_GRADIENTS, rand), mode = deck(MODE_IDS, rand);
+// Shots that cover dur seconds. calm 0..1 makes the moves slower.
+function shotList(rand, dur, calm) {
+  const out = [];
+  let t = 0, prev = null, nWide = 0;
+  while (t < dur) {
+    let kind;
+    for (let k = 0; k < 8; k++) {
+      const r = rand();
+      kind = out.length === 0 ? (r < 0.5 ? 'shoulder' : 'orbit') : r < 0.3 ? 'orbit' : r < 0.55 ? 'push' : r < 0.8 ? 'shoulder' : 'wide';
+      if (kind === prev) continue;
+      if (kind === 'wide' && (nWide + 1) * 4 > out.length + 1) continue;
+      break;
+    }
+    if (kind === prev || (kind === 'wide' && (nWide + 1) * 4 > out.length + 1)) kind = prev === 'orbit' ? 'push' : 'orbit';
+    const hold = 7 + rand() * 7;
+    const slow = 1 - 0.5 * calm;
+    out.push({
+      kind, t0: t, hold,
+      az: rand() * TAU,
+      spin: (rand() < 0.5 ? -1 : 1) * (0.03 + rand() * 0.04) * slow,      // rad/s
+      elev: kind === 'wide' ? 0.08 + rand() * 0.2 : 0.18 + rand() * 0.38,
+      zoom: kind === 'wide' ? 1 : kind === 'push' ? 1.3 : 0.95 + rand() * 0.35,
+      zoom1: kind === 'push' ? 0.72 + rand() * 0.12 : null,
+      side: rand() < 0.5 ? -1 : 1,
+      lift: 0.3 + rand() * 0.6,
+    });
+    if (kind === 'wide') nWide++;
+    prev = kind; t += hold;
+  }
+  return out;
+}
+
+// n dives. species: the ids to pick from (reef.js SPECIES_IDS). Each dive:
+// { species, siteKind, siteR, seed, grow (s), gradient, reversed, mode,
+//   current, shots: [{ kind, t0, hold, az, spin, elev, zoom, zoom1, side, lift }] }
+export function divePlan(seed = 1, { n = 6, species = ['staghorn', 'fan', 'table', 'boulder', 'finger'], modes = ['natural', 'age', 'natural', 'height', 'natural', 'flow'], calm = 0.7 } = {}) {
+  const rand = mulberry((seed >>> 0) * 2654435761 + 7);
+  const sp = deck(species, rand), site = deck(SITE_KINDS, rand), grad = deck(SAVER_GRADIENTS, rand), mode = deck(modes, rand);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const kind = rand() < 0.72 ? 'reef' : 'colony';
+    const grow = 110 + rand() * 90;              // s from seed to full size
     out.push({
-      kind,
-      preset: preset(),
-      species: species(),
-      gradient: grad(),
-      reversed: rand() < 0.15,
-      mode: mode(),
-      seed: 1 + Math.floor(rand() * 1e6),
-      hold: 5 + rand() * 7,                    // seconds, 5 to 12
-      az: rand() * Math.PI * 2,                // camera start azimuth
-      spin: (rand() < 0.5 ? -1 : 1) * (0.025 + rand() * 0.035), // rad/s, calm
-      elev: 0.2 + rand() * 0.22,               // radians above the horizon
-      current: Math.floor(rand() * 360),
-      // a colony shot comes closer, so the polyps and the surface show
-      zoom: kind === 'colony' ? 0.5 + rand() * 0.3 : 0.92 + rand() * 0.08,
+      species: sp(), siteKind: site(), siteR: rand(), seed: 1 + Math.floor(rand() * 1e6), grow,
+      gradient: grad(), reversed: rand() < 0.15, mode: mode(), current: Math.floor(rand() * 360),
+      shots: shotList(rand, grow + 14, calm),
     });
   }
   return out;
 }
 
+// The shot that is on at time t of a dive, and its progress u (0..1).
+export function shotAt(dive, t) {
+  const S = dive.shots;
+  for (let i = S.length - 1; i >= 0; i--) if (t >= S[i].t0) return { shot: S[i], i, u: Math.min(1, (t - S[i].t0) / S[i].hold) };
+  return { shot: S[0], i: 0, u: 0 };
+}
+
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const len3 = a => Math.hypot(a[0], a[1], a[2]);
+const norm3 = a => { const l = len3(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+// The camera of a shot at progress u (0..1) and shot time ts (s).
+// subj: { c (colony centre), r (colony sphere radius), front (growth
+// front point), rov (ROV position or null) }. fitDist(r): the distance
+// that fits a sphere of radius r in the clear band (frameFit). Returns
+// { pos, tgt, r } where r is the radius of the subject sphere that the
+// shot frames (for the tests).
+export function shotPose(shot, u, ts, subj, fitDist) {
+  const c = subj.c, r = Math.max(0.3, subj.r);
+  const ease = u * u * (3 - 2 * u);
+  const aim = (w) => [c[0] + (subj.front[0] - c[0]) * w, c[1] + (subj.front[1] - c[1]) * w, c[2] + (subj.front[2] - c[2]) * w];
+  const orbitAt = (tgt, dist, az, el) => [tgt[0] + Math.sin(az) * Math.cos(el) * dist, tgt[1] + Math.sin(el) * dist, tgt[2] + Math.cos(az) * Math.cos(el) * dist];
+  if (shot.kind === 'wide' && subj.rov) {
+    // a sphere round the colony and the ROV
+    const m = [(c[0] + subj.rov[0]) / 2, (c[1] + subj.rov[1]) / 2, (c[2] + subj.rov[2]) / 2];
+    const R = len3(sub3(subj.rov, c)) / 2 + Math.max(r, 1.2) + 1.5;
+    const dist = fitDist(R) * 1.15;
+    return { pos: orbitAt(m, dist, shot.az + shot.spin * ts, shot.elev), tgt: m, r: R };
+  }
+  if (shot.kind === 'shoulder' && subj.rov) {
+    // behind the ROV, on the line from the colony through the ROV, a little to one side and up
+    const tgt = aim(0.35);
+    const d0 = sub3(subj.rov, c), dh = Math.hypot(d0[0], d0[2]) || 1;
+    const az = Math.atan2(d0[0], d0[2]) + shot.side * (0.25 + 0.1 * Math.sin(ts * 0.1)) + shot.spin * ts * 0.3;
+    const dist = Math.max(fitDist(r) * shot.zoom, Math.hypot(dh, d0[1]) + 1.6);
+    const el = Math.max(0.12, Math.atan2(d0[1], dh) + 0.12 * shot.lift);
+    return { pos: orbitAt(tgt, dist, az, el), tgt, r };
+  }
+  if (shot.kind === 'push') {
+    const tgt = aim(0.55);
+    const z = shot.zoom + (shot.zoom1 - shot.zoom) * ease;
+    return { pos: orbitAt(tgt, fitDist(r) * Math.max(z, 1), shot.az + shot.spin * ts * 0.5, shot.elev), tgt, r: r * Math.min(1, z) };
+  }
+  // orbit (and wide or shoulder with no ROV)
+  const tgt = aim(0.3);
+  return { pos: orbitAt(tgt, fitDist(r) * Math.max(1, shot.zoom), shot.az + shot.spin * ts, shot.elev), tgt, r };
+}
+
+// A site for the dive colony: points of rock.sampleSurface, ranked by
+// how near they are to a feature of the wanted kind (then any feature)
+// and by exposure, with no overhang. siteR (0..1) picks among the best.
+// Returns { p, n, feature } or null.
+export function pickSite(rock, kind, siteR = 0, rand = Math.random, R = 30) {
+  if (!rock || typeof rock.sampleSurface !== 'function') return null;
+  let pts;
+  try { pts = rock.sampleSurface(160, rand, s => (s.n ? s.n[1] > 0.25 : true) && Math.hypot(s.p[0], s.p[2]) < R * 0.8); } catch (e) { pts = []; }
+  if (!pts || !pts.length) return null;
+  const feats = (rock.features || []).filter(f => f && f.center);
+  const want = feats.filter(f => f.kind === kind);
+  const fsize = f => (Array.isArray(f.size) ? Math.max(...f.size) : f.size || 4);
+  const score = s => {
+    let best = 0;
+    for (const f of (want.length ? want : feats)) {
+      const d = len3(sub3(s.p, f.center)) / (fsize(f) * 0.6 + 1);
+      best = Math.max(best, Math.exp(-d * d) * (f.kind === kind ? 1 : 0.5));
+    }
+    const ex = s.exposure ?? 0.5, ov = s.overhang ?? 0;
+    return best * 2 + ex - ov * 2 + (s.n ? s.n[1] : 0.5) * 0.3;
+  };
+  const ranked = pts.map(s => ({ s, v: score(s) })).sort((a, b) => b.v - a.v).slice(0, 6);
+  const pick = ranked[Math.min(ranked.length - 1, Math.floor(siteR * ranked.length))].s;
+  let feature = null, fd = Infinity;
+  for (const f of feats) { const d = len3(sub3(pick.p, f.center)); if (d < fd) { fd = d; feature = f; } }
+  return { p: pick.p.slice(), n: (pick.n || [0, 1, 0]).slice(), feature };
+}
+
+// Move pos toward tgt until the segment tgt..pos has margin of free water
+// (sdf: rock.sdf). Sphere tracing from tgt. Returns a new pos.
+export function clearPath(sdf, tgt, pos, margin = 0.6) {
+  if (typeof sdf !== 'function') return pos.slice();
+  const d = sub3(pos, tgt), L = len3(d);
+  if (L < 1e-6) return pos.slice();
+  const u = [d[0] / L, d[1] / L, d[2] / L];
+  let t = Math.min(L, 0.5), hit = L;
+  for (let i = 0; i < 96 && t < L; i++) {
+    const p = [tgt[0] + u[0] * t, tgt[1] + u[1] * t, tgt[2] + u[2] * t];
+    const s = sdf(p[0], p[1], p[2]);
+    if (s < margin) { hit = t; break; }
+    t += Math.max(0.05, s - margin * 0.5);
+  }
+  if (hit >= L) return pos.slice();
+  const k = Math.max(0.6, hit - margin);
+  return [tgt[0] + u[0] * k, tgt[1] + u[1] * k, tgt[2] + u[2] * k];
+}
+
 // w, h: canvas CSS px. clear: { l, r, t, b } px covered at each edge.
 // radius: the subject sphere, or rx and ry: the half sizes of the subject
-// across and up the screen (a reef is wide and low). fov: the vertical
-// field of view in degrees. fill: the part of the clear size that the
-// subject may span. Returns { dist, ox, oy, cx, cy, wc, hc }.
+// across and up the screen. fov: the vertical field of view in degrees.
+// fill: the part of the clear size that the subject may span. Returns
+// { dist, ox, oy, cx, cy, wc, hc }.
 export function frameFit({ w, h, clear = {}, radius, rx, ry, fov = 40, fill = 0.84 }) {
   const l = clear.l || 0, r = clear.r || 0, t = clear.t || 0, b = clear.b || 0;
   const wc = Math.max(1, w - l - r), hc = Math.max(1, h - t - b);
   const T = Math.tan(fov * Math.PI / 360);
-  // the angular half-size that the subject may have, in each direction
   const av = Math.atan(T * (hc / h) * fill), ah = Math.atan(T * (wc / h) * fill);
   const dist = radius !== undefined
     ? radius / Math.sin(Math.min(av, ah))
@@ -84,13 +232,27 @@ export function frameFit({ w, h, clear = {}, radius, rx, ry, fov = 40, fill = 0.
 }
 
 // Where the subject lands on screen for a fit: { x0, x1, y0, y1 } in px.
-// The camera looks at the subject centre. A sphere has a circle outline of
-// angular radius asin(radius / dist). A flat subject of half sizes rx, ry
-// at distance dist spans rx / dist and ry / dist in tan units.
 export function projectedBox({ w, h, fov = 40 }, fit, radius, rx, ry) {
   const T = Math.tan(fov * Math.PI / 360), k = (h / 2) / T;
   const px = radius !== undefined ? Math.tan(Math.asin(Math.min(1, radius / fit.dist))) * k : rx / fit.dist * k;
   const py = radius !== undefined ? px : ry / fit.dist * k;
   const x = w / 2 - fit.ox, y = h / 2 - fit.oy;
   return { x0: x - px, x1: x + px, y0: y - py, y1: y + py };
+}
+
+// Project a world sphere through a look-at camera with a view offset:
+// the screen box (px) of its outline, or null if it is behind the eye.
+export function projectSphere({ w, h, fov = 40, ox = 0, oy = 0 }, pos, tgt, c, r) {
+  const f = norm3(sub3(tgt, pos));
+  const rt = norm3([-f[2], 0, f[0]]);          // f x (0, 1, 0): the screen right
+  const up = [rt[1] * f[2] - rt[2] * f[1], rt[2] * f[0] - rt[0] * f[2], rt[0] * f[1] - rt[1] * f[0]];
+  const d = sub3(c, pos);
+  const z = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+  if (z <= r) return null;
+  const x = d[0] * rt[0] + d[1] * rt[1] + d[2] * rt[2], y = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+  const k = (h / 2) / Math.tan(fov * Math.PI / 360);
+  const ang = Math.asin(Math.min(1, r / Math.hypot(x, y, z)));
+  const sx = w / 2 - ox + x / z * k, sy = h / 2 - oy - y / z * k;
+  const pr = Math.tan(ang) * k * Math.hypot(x, y, z) / z;
+  return { x0: sx - pr, x1: sx + pr, y0: sy - pr, y1: sy + pr };
 }

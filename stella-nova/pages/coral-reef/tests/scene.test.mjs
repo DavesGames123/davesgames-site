@@ -8,12 +8,20 @@
 //                   near 1, patches of contrast that differ, and it moves.
 //                   The old 6-wave tile pattern fails the same test, so
 //                   the test can see a regular net.
+//    saver ........ saver.js: the dive plan (one colony per dive, seeded,
+//                   calm shots, few wide shots), each shot keeps its
+//                   subject in the clear band of the plate in 16:9 and
+//                   9:16, pickSite takes a feature site, clearPath keeps
+//                   rock out of the camera line
 //    glsl ......... every program of shaders.js passes naga (as GLSL 450)
 //                   and glslangValidator as GLSL ES 3.00 with the prefix
 //                   that three.js r160 adds (the browser form)
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
 // ============================================================================
+import { divePlan, shotAt, shotPose, pickSite, clearPath, frameFit, projectedBox, projectSphere, SHOT_KINDS, SAVER_GRADIENTS } from '../saver.js';
+import { createStubRock } from '../rov/stub-rock.js';
+import { GRADIENTS } from '../../../lib/growth-gradients.js';
 import * as SH from '../shaders.js';
 import { checkPrograms } from '../glsl-check.mjs';
 import { execFileSync } from 'node:child_process';
@@ -99,6 +107,77 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
     ok(mono && jump < 0.02, `fade R ${R}: falls smoothly, no step (largest step ${f3(jump)} per 0.2% of R)`);
     ok(fadeAt(R * 1.005, R) > 0.998 && fadeAt(R * 1.295, R) < 0.002, `fade R ${R}: no edge at R or at ${FADE_K} R (the slope is 0 at both ends)`);
   }
+}
+
+// ── saver ───────────────────────────────────────────────────────────────────
+{
+  const sp = ['staghorn', 'fan', 'table', 'boulder', 'finger'];
+  const a = divePlan(42, { n: 8, species: sp }), b = divePlan(42, { n: 8, species: sp }), c = divePlan(43, { n: 8, species: sp });
+  ok(JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c), 'saver: one seed gives one run, another seed another');
+  ok(a.every(d => sp.includes(d.species) && GRADIENTS[d.gradient] && d.grow >= 110 && d.grow <= 200), 'saver: each dive grows one colony of a species for 110 to 200 s');
+  ok(a.every((d, i) => i === 0 || d.species !== a[i - 1].species), 'saver: no species twice in a row');
+  ok(new Set(a.map(d => d.seed)).size === a.length && new Set(a.map(d => d.siteKind)).size >= 4, 'saver: every dive has a new seed, and the sites vary');
+  ok(SAVER_GRADIENTS.every(g => GRADIENTS[g]), 'saver: the gradients exist');
+  let shots = 0, wide = 0, twice = 0, holdOk = true, calmOk = true, cover = true;
+  for (const d of a) {
+    const S = d.shots; shots += S.length;
+    cover = cover && S[S.length - 1].t0 + S[S.length - 1].hold >= d.grow;
+    for (let i = 0; i < S.length; i++) {
+      if (S[i].kind === 'wide') wide++;
+      if (i && S[i].kind === S[i - 1].kind) twice++;
+      if (S[i].hold < 7 || S[i].hold > 14) holdOk = false;
+      if (Math.abs(S[i].spin) > 0.07 || !SHOT_KINDS.includes(S[i].kind)) calmOk = false;
+    }
+    ok(S[0].kind === 'orbit' || S[0].kind === 'shoulder', 'saver: a dive opens on the colony, not a wide shot');
+  }
+  console.log(`saver: 8 dives, ${shots} shots, ${wide} wide (${(wide / shots * 100).toFixed(0)}%), kinds ${SHOT_KINDS.map(k => `${k} ${a.flatMap(d => d.shots).filter(s => s.kind === k).length}`).join(', ')}`);
+  ok(twice === 0 && holdOk && calmOk && cover, 'saver: no shot kind twice in a row, 7 to 14 s holds, calm turns, shots cover the growth');
+  ok(wide > 0 && wide / shots <= 0.25, 'saver: some wide shots of the ROV in the dark, at most one in four', `${wide}/${shots}`);
+  ok(shotAt(a[0], 0).i === 0 && shotAt(a[0], a[0].shots[1].t0 + 0.1).i === 1 && shotAt(a[0], 1e6).u === 1, 'saver: shotAt finds the shot on at a time');
+
+  // framing: each shot keeps its subject in the clear band (16:9, 9:16)
+  const subj = { c: [2, 1.2, -1], r: 1.4, front: [2.3, 2.1, -0.8], rov: [5.5, 2.6, 1.8] };
+  let worst = 0, n = 0;
+  for (const [w, h, name] of [[1920, 1080, '16:9'], [1080, 1920, '9:16']]) {
+    for (const band of [{ t: 0.2 * h, b: 0.27 * h }, { t: 0.3 * h, b: 0.32 * h }]) {
+      const fitDist = r => frameFit({ w, h, clear: band, radius: r, fov: 40 }).dist;
+      const f0 = frameFit({ w, h, clear: band, radius: 1, fov: 40 });
+      for (const d of a.slice(0, 4)) for (const s of d.shots) for (const u of [0, 0.5, 1]) {
+        const P = shotPose(s, u, u * s.hold, subj, fitDist);
+        const box = projectSphere({ w, h, fov: 40, ox: f0.ox, oy: f0.oy }, P.pos, P.tgt, P.tgt, P.r);
+        const tol = 0.03 * h;
+        const inside = box && box.y0 >= band.t - tol && box.y1 <= h - band.b + tol && box.x0 >= -tol && box.x1 <= w + tol;
+        n++;
+        if (!inside) { worst++; if (worst < 4) console.log(`  out of band: ${name} ${s.kind} u ${u}`, JSON.stringify(box)); }
+        // the colony itself is in the frame (it may be larger in a push-in)
+        const cb = projectSphere({ w, h, fov: 40, ox: f0.ox, oy: f0.oy }, P.pos, P.tgt, subj.c, subj.r);
+        if (!cb || (cb.x0 + cb.x1) / 2 < 0 || (cb.x0 + cb.x1) / 2 > w || (cb.y0 + cb.y1) / 2 < band.t * 0.5 || (cb.y0 + cb.y1) / 2 > h - band.b * 0.5) { worst++; if (worst < 4) console.log(`  colony off frame: ${name} ${s.kind} u ${u}`, JSON.stringify(cb)); }
+      }
+    }
+  }
+  console.log(`saver framing: ${n} poses checked, ${worst} out of the band`);
+  ok(worst === 0, `saver framing: ${n} poses in 16:9 and 9:16 keep the subject in the clear band and the colony on screen`, worst);
+  const fw = frameFit({ w: 1920, h: 1080, clear: { t: 216, b: 292 }, radius: 1.4 }), fv = frameFit({ w: 1080, h: 1920, clear: { t: 384, b: 518 }, radius: 1.4 });
+  const bw = projectedBox({ w: 1920, h: 1080 }, fw, 1.4), bv = projectedBox({ w: 1080, h: 1920 }, fv, 1.4);
+  console.log(`saver framing: a 1.4 m colony at ${fw.dist.toFixed(1)} m (16:9, box y ${bw.y0.toFixed(0)}..${bw.y1.toFixed(0)} of band 216..788), ${fv.dist.toFixed(1)} m (9:16, box x ${bv.x0.toFixed(0)}..${bv.x1.toFixed(0)} of 1080)`);
+  ok(bw.y0 >= 215.5 && bw.y1 <= 788.5 && bv.x0 >= -0.5 && bv.x1 <= 1080.5, 'saver framing: frameFit puts a colony in the band at both aspects');
+
+  // a site on the rock, and rock out of the camera line (the ROV stub rock)
+  const rock = createStubRock({ seed: 3, radius: 30 });
+  let r = 7; const rand = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
+  const arch = rock.features.find(f => f.kind === 'arch');
+  const site = pickSite(rock, 'arch', 0, rand, 30);
+  const dArch = site ? Math.hypot(site.p[0] - arch.center[0], site.p[1] - arch.center[1], site.p[2] - arch.center[2]) : Infinity;
+  console.log(`saver site: arch site ${site ? site.p.map(v => v.toFixed(1)).join(',') : 'none'}, ${dArch.toFixed(1)} m from the arch centre, sdf ${site ? rock.sdf(...site.p).toFixed(3) : '-'}`);
+  ok(site && dArch < 8 && Math.abs(rock.sdf(...site.p)) < 0.2 && site.n[1] > 0.25, 'saver: pickSite takes a site on the rock near the wanted feature');
+  ok(pickSite(null, 'arch') === null && pickSite({ sampleSurface: () => [] }, 'arch') === null, 'saver: pickSite with no rock gives null');
+  // a camera inside a canyon wall comes to the open side
+  const tgt = [0, 2, 0], pos = [-4.2, 2, 0];
+  const cp = clearPath(rock.sdf, tgt, pos, 0.5);
+  let minD = Infinity; for (let i = 0; i <= 50; i++) { const t = i / 50; minD = Math.min(minD, rock.sdf(tgt[0] + (cp[0] - tgt[0]) * t, tgt[1] + (cp[1] - tgt[1]) * t, tgt[2] + (cp[2] - tgt[2]) * t)); }
+  ok(rock.sdf(...pos) < 0 && minD > 0.2 && Math.hypot(...cp.map((v, i) => v - tgt[i])) >= 0.6, 'saver: clearPath moves a camera out of the rock to the open side', `${cp.map(v => v.toFixed(2))} min sdf ${minD.toFixed(2)}`);
+  const free = [0, 6, 6];
+  ok(JSON.stringify(clearPath(rock.sdf, [0, 6, 0], free, 0.5)) === JSON.stringify(free), 'saver: clearPath keeps a camera with a free line');
 }
 
 // ── glsl ────────────────────────────────────────────────────────────────────
