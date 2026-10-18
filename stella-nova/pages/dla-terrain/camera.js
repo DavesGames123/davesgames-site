@@ -24,11 +24,16 @@
 //            centripetal Catmull-Rom through resampled points, the height a
 //            windowed max of the ground + clearance, arc-length table
 //  bandShift(band, H) -> NDC y shift that centres the subject in the band
+//  pickGround(invViewProj, ndcX, ndcY, world, maxDist) -> [x, y, z] | null
+//            the first ground (or sea) point on the ray through a screen
+//            point: a march with a step that grows with the distance, then
+//            a bisection (the double tap "fly there" of main.js)
 //
 //  grep -n targets: "export function createCamera", "export function dronePath",
-//  "export function bandShift", "function collide", "CLEAR"
+//  "export function bandShift", "export function pickGround",
+//  "function collide", "CLEAR"
 // ============================================================================
-import { lookAt, perspectiveRZ, mul, invert } from './gpu/mat.js';
+import { lookAt, perspectiveRZ, mul, invert, project } from './gpu/mat.js';
 
 export const CLEAR = 2.2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -42,6 +47,31 @@ export function bandShift(band, H) {
   if (!band || !(H > 0)) return 0;
   const yc = band.t + (H - band.t - band.b) / 2;   // px from the top
   return 1 - 2 * yc / H;                            // NDC y of the band centre
+}
+
+export function pickGround(inv, nx, ny, world = {}, maxDist = 1e5) {
+  // reverse-Z: depth 1 is the near plane, 0.5 is at twice the near distance
+  const a = project(inv, [nx, ny, 1, 1]), b = project(inv, [nx, ny, 0.5, 1]);
+  let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const l = Math.hypot(d[0], d[1], d[2]);
+  if (!(l > 0) || !a.slice(0, 3).every(Number.isFinite)) return null;
+  d = d.map(v => v / l);
+  const sea = world.seaLevel ?? -Infinity;
+  const below = t => {
+    const x = a[0] + d[0] * t, y = a[1] + d[1] * t, z = a[2] + d[2] * t;
+    const g = Math.max(world.heightAt ? world.heightAt(x, z) : 0, sea);
+    return y <= g;
+  };
+  if (below(0)) return [a[0], a[1], a[2]];
+  let t0 = 0, t = 1;
+  while (t < maxDist) {
+    if (below(t)) {
+      for (let i = 0; i < 24; i++) { const m = (t0 + t) / 2; if (below(m)) t = m; else t0 = m; }
+      return [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + d[2] * t];
+    }
+    t0 = t; t += Math.max(2, t * 0.02);
+  }
+  return null;
 }
 
 export function createCamera(opts = {}) {
