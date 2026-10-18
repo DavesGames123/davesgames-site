@@ -889,6 +889,8 @@ function frame(t) {
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
   if (!saverOn && (fitTick++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
   if (cam) { S.setCausticCentre(cam.eye[0] - origin[0], cam.eye[2] - origin[1], 96); depthLook(SURFACE_Y - cam.eye[1]); }
+  // the fog of war: the explored cells of the squad (and what the lamps lit)
+  if (S.setExplored) S.setExplored(squad && squad.visited, cam ? cam.eye : null, squad ? squad.vehicles.map(v => v.state) : null);
   S.flushChunks(COARSE ? 2.5 : 3.5, now);
   if (fauna && cam) fauna.frame(dt, S.camera, cam.eye);
   S.render(dt, now);

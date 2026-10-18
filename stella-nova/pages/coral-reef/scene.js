@@ -56,6 +56,7 @@
 //
 //  grep -n targets
 //    world chunks ........... "the infinite world (CONTRACT-V4.md"
+//    fog of war ............. "function setExplored" (haze.js)
 //    shared uniforms ........ "const U = {"
 //    caustic pass ........... "function makeCaustics"
 //    lamps .................. "function setLights"
@@ -79,7 +80,7 @@ import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
 import { blueNoise, lampPx, VOL_K } from './volume.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
-import { DOME_R, domeRadius, HAZE_GLSL } from './haze.js';
+import { DOME_R, domeRadius, HAZE_GLSL, createExplored } from './haze.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
@@ -274,8 +275,24 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   const waterU = () => {
     const o = {};
     for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCausN', 'uPixAng', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
+    o.uFow = U.uFow; o.uFowBox = U.uFowBox;
     return o;
   };
+  // ── the fog of war (haze.js createExplored) ───────────────────────────────
+  // One byte a 12 m cell round the eye, linear; uFowBox.w = 0 (off) until
+  // setExplored. shaders.js underwater() reads it.
+  const fow = createExplored();
+  const fowTex = new THREE.DataTexture(fow.data, fow.n, fow.n, THREE.RedFormat, THREE.UnsignedByteType);
+  fowTex.magFilter = THREE.LinearFilter; fowTex.minFilter = THREE.LinearFilter;
+  fowTex.wrapS = THREE.ClampToEdgeWrapping; fowTex.wrapT = THREE.ClampToEdgeWrapping; fowTex.needsUpdate = true;
+  U.uFow = { value: fowTex }; U.uFowBox = { value: new THREE.Vector4(0, 0, 0, 0) };
+  // visited: rov/squad.js S.visited; eye: world [x, y, z]; vehicles: the
+  // squad states (p, look: the lamps). on = false: no fog of war.
+  function setExplored(visited, eye, vehicles, on = true) {
+    if (!on || !visited || !eye) { U.uFowBox.value.w = 0; return; }
+    if (fow.update({ visited, eye, vehicles })) fowTex.needsUpdate = true;
+    const b = fow.box(W3o); U.uFowBox.value.set(b[0], b[1], b[2], 1);
+  }
   let W3o = [0, 0];          // the floating origin (setOrigin) for the caustic pass
   const PIXV = new THREE.Vector2();
   const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic, () => W3o);
@@ -987,7 +1004,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },
     PART_W, maxParticles: NP,
     // the infinite world (CONTRACT-V4.md)
-    worldRoot, setWorldMode, setOrigin, addWorldRock, removeWorldRock, addWorldCoral, removeWorldCoral, addWorldFine, removeWorldFine, clearWorld, setWorldPolyps,
+    worldRoot, setWorldMode, setOrigin, setExplored, fow, addWorldRock, removeWorldRock, addWorldCoral, removeWorldCoral, addWorldFine, removeWorldFine, clearWorld, setWorldPolyps,
     setCausticCentre: (x, z, size) => caus.setCentre(x, z, size),
     get world() { return { rock: W3.rock.size, coral: W3.coral.size, fine: W3.fine.size, dying: W3.dying.length, gpu: W3.gpu, origin: W3.origin.slice() }; },
   };

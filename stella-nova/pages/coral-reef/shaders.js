@@ -65,6 +65,7 @@
 // ============================================================================
 import { SURFACE_Y, FADE_K, N_WAVES } from './water.js';
 import { ROCK_GLSL } from './rock/material.js';
+import { HAZE_GLSL } from './haze.js';
 import { marineSnowVS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
 import { VOL_K } from './volume.js';
 
@@ -286,11 +287,33 @@ vec3 lightSurf(vec3 base, vec3 w, vec3 n, vec3 V, float wrap, float spec, float 
 }
 // The path from w to the eye: absorption and in-scatter.
 vec3 fogCol(vec3 dir) { return uFogCol * (0.55 + 0.9 * clamp(dir.y * 0.5 + 0.5, 0.0, 1.0)); }
+// The fog of war (haze.js): uFow is the explored field round the eye
+// (one byte a 12 m cell, linear), uFowBox its square in render space (x0,
+// z0, 1 / size, on). Out of it the surface takes the haze colour; the ROV
+// lamps show what they light now.
+uniform mediump sampler2D uFow;
+uniform vec4 uFowBox;
+vec3 fowHaze(vec3 w, vec3 dir) {
+  return max(uFogCol, ${HAZE_GLSL}) * (0.55 + 0.9 * clamp(dir.y * 0.5 + 0.5, 0.0, 1.0)) * (0.8 + 0.4 * smoothstep(-30.0, 30.0, w.y - cameraPosition.y));
+}
+float fowSeen(vec3 w) {
+  if (uFowBox.w < 0.5) return 1.0;
+  vec2 uv = (w.xz - uFowBox.xy) * uFowBox.z;
+  vec2 inb = step(vec2(0.0), uv) * step(uv, vec2(1.0));
+  float e = smoothstep(0.1, 0.9, texture(uFow, uv).r) * inb.x * inb.y;
+  for (int i = 0; i < ${MAX_SPOTS}; i++) {
+    if (float(i) >= uSpotN) break;
+    float r = max(uSpotP[i].w, 1.0);
+    e = max(e, 1.0 - smoothstep(0.45 * r, 0.75 * r, distance(w, uSpotP[i].xyz)));
+  }
+  return e;
+}
 vec3 underwater(vec3 col, vec3 w) {
   vec3 d = w - cameraPosition;
   float dist = length(d);
   vec3 tr = exp(-dist * uFogK);
-  return col * tr + fogCol(d / max(dist, 1e-3)) * (1.0 - tr);
+  vec3 dir = d / max(dist, 1e-3);
+  return mix(fowHaze(w, dir), col * tr + fogCol(dir) * (1.0 - tr), fowSeen(w));
 }`;
 
 // ── caustic map ─────────────────────────────────────────────────────────────
