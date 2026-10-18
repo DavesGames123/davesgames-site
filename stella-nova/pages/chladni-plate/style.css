@@ -96,6 +96,11 @@ html.in-frame #gear{display:none!important}
 .row .val{grid-row:1;grid-column:2;text-align:right;font:0.76rem var(--mono);color:var(--text)}
 .note{font-size:0.78rem;line-height:1.5;color:var(--dim);margin-top:6px}
 .about p{font-size:0.74rem;line-height:1.6;color:var(--dim);margin-bottom:8px}
+/* Chladni's engraved plates (artwork/, CREDITS.md): two columns in the panel. */
+.plates{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:2px 0 6px}
+.plates img{display:block;width:100%;height:auto;border-radius:6px;border:1px solid var(--line)}
+.plates figcaption{grid-column:1 / -1;font-size:0.72rem;line-height:1.5;color:var(--dim)}
+.plates figcaption a{color:var(--sand)}
 #luth{font-size:0.74rem;line-height:1.55;color:var(--dim)}
 #luth table{width:100%;border-collapse:collapse;margin:4px 0 8px;font-variant-numeric:tabular-nums}
 #luth td{padding:4px 0;border-bottom:1px solid var(--line)}
