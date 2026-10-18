@@ -2,9 +2,10 @@ Coral Reef Growth (stella-nova/pages/coral-reef) - credits and licences
 =====================================================================
 
 The page code (reef.js, colour.js, saver.js, scene.js, shaders.js,
-terrain.js, coral-sdf.js, mesh-worker.js, assets.js, raster.js,
-thumb.mjs, glsl-check.mjs, diagram.js, main.js, index.html, style.css,
-tests.mjs) and stella-nova/lib/dla-sdf.js are our own code. The coral
+water.js, terrain.js, coral-sdf.js, mesh-worker.js, assets.js,
+raster.js, thumb.mjs, glsl-check.mjs, diagram.js, main.js, shell.js,
+layout.js, index.html, style.css, tests.mjs, tests/, rock/, rov/) and
+stella-nova/lib/dla-sdf.js are our own code. The coral
 species are hooks that we wrote for the engine below.
 
 
@@ -46,7 +47,7 @@ MIT License, Copyright (C) 2010-2023 three.js authors. The full text is in
 stella-nova/vendor/three@0.160.0/LICENSE.
 
 
-3. Seabed: NOAA NCEI lidar bathymetry (seabed-data.js)
+3. Seabed: NOAA NCEI lidar bathymetry (seabed-data.js, v2 only)
 -----------------------------------------------------
 Source: NOAA National Centers for Environmental Information (NCEI),
 Continuously Updated Digital Elevation Model (CUDEM), 1/9 arc-second
@@ -60,6 +61,9 @@ The place is the lagoon of Buck Island Reef National Monument: sand with
 patch reefs and the back-reef ridge. seabed-data.js stores the 160 x 160
 depths in centimetres. terrain.js scales the relief to the reef (the
 scene is not to scale) and adds procedural ripples, rubble and rocks.
+Since v3 (the ROV dive) the page does not draw this seabed: the reef
+grows on the seeded rock of rock/. terrain.js and seabed-data.js stay
+as a compatibility layer until no file imports them.
 Licence: a work of the US Government (NOAA). It is not subject to
 copyright in the United States (public domain). The NCEI coastal DEM
 metadata states: "Produced by the NOAA National Geophysical Data Center.
@@ -89,6 +93,11 @@ textures to 512 px.
       "Coral Gravel" by Rob Tuytel, https://polyhaven.com/a/coral_gravel
   assets/tex/sand_diff.jpg, sand_nor.jpg
       "Sand 01" by Rob Tuytel, https://polyhaven.com/a/sand_01
+  assets/tex/rock/reef_rock_albedo.webp, reef_rock_normal.webp,
+  reef_rock_orm.webp (v3 rock, 1024 px WebP)
+      "Rock 3" by Rob Tuytel, https://polyhaven.com/a/rock_3
+Since v3 the page draws the rock and sand sets only; the scanned models
+and the other textures are not on screen.
 
 
 5. Code ideas with credit
@@ -97,8 +106,17 @@ textures to 512 px.
   minimum follow the formulas of Inigo Quilez (iquilezles.org articles
   "distance functions" and "smooth minimum"; MIT). Surface nets after
   S. F. F. Gibson, "Constrained elastic surface nets" (1998). Our code.
-- shaders.js: the caustic map uses the mesh-area method of our own page
-  stella-nova/pages/photon-caustics (topview.js). Bump mapping from
+- shaders.js and water.js: the caustic map uses the mesh-area method of
+  our own page stella-nova/pages/photon-caustics (topview.js), on a
+  random sea of 28 waves (swell, wind sea, chop; deep-water dispersion
+  omega = sqrt(g k)), warped and broken into patches by fbm noise.
+  The lamp volume uses the Henyey-Greenstein phase function (L. G.
+  Henyey and J. L. Greenstein, Astrophysical Journal 93, 70, 1941) and
+  the tone map is the ACES fit of K. Narkowicz (2015).
+- rov/link.js: the SSTV camera link uses the encoder and decoder of our
+  own SSTV page, stella-nova/pages/sstv (codec.js, modes.js,
+  session.js), imported, not copied. Its CREDITS.md names the sources
+  of the mode timings. Bump mapping from
   screen derivatives after M. Mikkelsen, "Bump mapping unparametrized
   surfaces on the GPU" (2010).
 
@@ -115,5 +133,5 @@ textures to 512 px.
 - T. A. Witten and L. M. Sander, "Diffusion-limited aggregation, a
   kinetic critical phenomenon", Physical Review Letters 47, 1400 (1981).
 
-The caustics, the water shading, the coral and polyp shading and the
-light shafts are our own GLSL.
+The caustics, the water and lamp shading, the volume pass, the coral
+and polyp shading and the marine snow are our own GLSL.
