@@ -12,9 +12,12 @@
 //                        skyState result), grows lightning bolts
 //    compute(enc, frame) LUTs (transmittance and multiple scattering when
 //                        the haze changes; the sky view each frame), the
-//                        cloud shadow map, the cloud raymarch at half or a
-//                        third of the render size, the temporal resolve,
-//                        then the froxel haze of render/weather.js
+//                        cloud map, the cloud shadow map, then the froxel
+//                        haze of render/weather.js
+//    volumetricPrep(enc, frame, ctx)
+//                        the cloud raymarch at half or a third of the render
+//                        size against the depth of this frame, the temporal
+//                        resolve, then the light shafts (render/weather.js)
 //    drawSky(pass)       in CORE's opaque pass, at depth 0
 //    drawVolumetric(pass, frame, ctx)
 //                        cloud composite, haze, rain and snow, the bolt
@@ -49,8 +52,11 @@
 //                   the draw passes.
 //                   Draw pipelines use 2 groups only, so CORE's group 2 in
 //                   the volumetric pass stays as it is.
-//    group 1 small  per writer pass, only what it reads (no usage clash)
-//    group 3        the outputs of each compute pass
+//    group 1 small  per writer pass, only what it reads (no usage clash);
+//                   the shaft passes take L.shaft (0..5), as READ there
+//                   was 17 sampled textures (tests/skylimits.test.mjs)
+//    group 3        the outputs of each compute pass; the march also reads
+//                   the scene depth (9) and the cloud map (10, 11)
 //
 //  CLOUD SHADOW FOR OTHER PACKAGES: module.cloudShadow = { view, sampler,
 //    rect () -> [x0, z0, size], base () -> cloud base y }. In WGSL see
@@ -58,7 +64,19 @@
 //    cloud base, uv = (q - rect.xy) / rect.z, sample r. NOTES.md has the
 //    copy-paste version.
 //
+//  CHILL  the visible motion is capped in real time: CLOUD_DRIFT_RATE,
+//    CLOUD_RISE, HAZE_DRIFT_RATE (the weather clock is in sky-state.js).
+//  COST (Deno, this Mac, 1280 x 800 Ultra, GPU timestamps of one frame):
+//    the SKY compute passes take 2.2 .. 2.9 ms (cloud map + shadow about
+//    0.45, froxels 0.7 .. 1.0, march + resolve 0.6 .. 0.8, shafts 0.9).
+//    _debug.timeFrame() arms the timestamps of the next frame (when the
+//    device has 'timestamp-query'); _debug.timing.result has them in ms.
+//  PHONES  lutSizes, cloudSteps, the cloud map (512^2) and the noise sizes
+//    follow gpu.profile.
+//
 //  grep -n targets: "export async function createSky", "function wgslFor",
+//  "export function coverFloor", "export function cloudSteps",
+//  "export function lutSizes", "function marchClouds", "function timeFrame",
 //  "function makeLayouts", "function fillUniform", "function cloudLayer",
 //  "function makeTargets", "compute(enc", "drawSky(", "drawVolumetric(",
 //  "export const SKYU_FLOATS"
@@ -72,7 +90,8 @@ import { createWeather, precipPhases } from './weather.js';
 export const CLOUD_DRIFT_RATE = 6;     // cloud shapes: at most 6 x the upper wind
 export const CLOUD_RISE = [1.2, 3.0];  // m/s: shape and detail noise rise (evolution)
 export const HAZE_DRIFT_RATE = 6;      // haze banks: at most 6 x the low wind
-export const SKYU_FLOATS = 26 * 4;   // struct SkyU: 26 vec4 (416 bytes)
+export const CLOUD_MAP_M = 120000;     // side of the cloud map square (clouds.wgsl csCloudMap)
+export const SKYU_FLOATS = 27 * 4;   // struct SkyU: 27 vec4 (432 bytes)
 const U = (typeof GPUBufferUsage !== 'undefined') ? GPUBufferUsage : { UNIFORM: 64, COPY_DST: 8, STORAGE: 128 };
 const T = (typeof GPUTextureUsage !== 'undefined') ? GPUTextureUsage : { COPY_SRC: 1, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
 const SS = (typeof GPUShaderStage !== 'undefined') ? GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
@@ -83,7 +102,7 @@ export const SKYU = Object.freeze({
   rayleigh: 0, mieS: 4, mieA: 8, ozone: 12, radii: 16, sun: 20, moon: 24,
   cloud0: 28, cloud1: 32, cloud2: 36, bolt: 40, vol0: 44, vol1: 48, vol2: 52,
   shadow: 56, misc: 60, counts: 64, precip: 68, prevCam: 72,
-  wx0: 76, wx1: 80, anim0: 84, anim1: 88, anim2: 92, anim3: 96, anim4: 100,
+  wx0: 76, wx1: 80, anim0: 84, anim1: 88, anim2: 92, anim3: 96, anim4: 100, cmap: 104,
 });
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -134,6 +153,51 @@ export function cloudLayer(terrain, wx) {
 export function coverFloor(wx) {
   const air = clamp(wx.coverAir ?? wx.cover ?? 0, 0, 1);
   return clamp(0.6 * air, 0, 0.6);
+}
+// ── JS twins of the WGSL mappings (shaders/sky.wgsl), for the tests ──────
+// sk_transUV: (r km, mu) -> uv of the transmittance LUT; sk_uvTrans: back.
+export function transUV(r, mu, bot = ATMO.bottom, top = ATMO.top) {
+  const H = Math.sqrt(Math.max(0, top * top - bot * bot));
+  const rho = Math.sqrt(Math.max(0, r * r - bot * bot));
+  const disc = r * r * (mu * mu - 1) + top * top;
+  const d = Math.max(0, -r * mu + Math.sqrt(Math.max(disc, 0)));
+  const dMin = top - r, dMax = rho + H;
+  return [(d - dMin) / Math.max(dMax - dMin, 1e-4), rho / Math.max(H, 1e-4)];
+}
+export function uvTrans(u, v, bot = ATMO.bottom, top = ATMO.top) {
+  const H = Math.sqrt(Math.max(0, top * top - bot * bot));
+  const rho = H * v, r = Math.sqrt(rho * rho + bot * bot);
+  const dMin = top - r, dMax = rho + H, d = dMin + u * (dMax - dMin);
+  let mu = 1;
+  if (d > 0) mu = (H * H - rho * rho - d * d) / (2 * r * d);
+  return [r, clamp(mu, -1, 1)];
+}
+// sk_skyViewUV: the v of a view zenith cosine dy at radius r (km): 0.5 at
+// the horizon of the planet, 0 at the zenith, 1 at the nadir.
+export function skyViewV(r, dy, bot = ATMO.bottom) {
+  const vh = Math.sqrt(Math.max(r * r - bot * bot, 0));
+  const beta = Math.acos(clamp(vh / r, -1, 1)), zha = Math.PI - beta;
+  const vz = Math.acos(clamp(dy, -1, 1));
+  if (vz < zha) return 0.5 * (1 - Math.sqrt(Math.max(1 - vz / zha, 0)));
+  return 0.5 + 0.5 * Math.sqrt(clamp((vz - zha) / beta, 0, 1));
+}
+// sk_sunDisc (no granulation, no edge): radiance at angle ang (rad) from
+// the centre for irradiance E; SUN_DISC_K is the WGSL constant
+export const SUN_DISC_K = 0.1;
+export function sunDiscRadiance(ang, E, r = SUN_RADIUS) {
+  if (ang > r) return 0;
+  const x = Math.min(ang / r, 1), mu = Math.sqrt(Math.max(1 - x * x, 0));
+  return (E / (Math.PI * r * r * (1 - 0.6 / 3))) * SUN_DISC_K * (1 - 0.6 * (1 - mu));
+}
+
+// LUT sizes (Hillaire 2020): transmittance, multiple scattering (one
+// workgroup per texel) and the sky view. A phone profile (it has
+// cloudNoise caps in gpu/budget.js) takes smaller ones.
+export function lutSizes(profile) {
+  const phone = !!(profile && profile.cloudNoise);
+  return phone
+    ? { trans: [128, 32], multi: [32, 32], view: [128, 72] }
+    : { trans: [256, 64], multi: [32, 32], view: [192, 108] };
 }
 // View steps of the cloud march (clouds.wgsl CL_STEPS_MAX caps them).
 export const CLOUD_STEPS_MAX = 128;
@@ -196,14 +260,21 @@ export async function createSky(gpu) {
   // the shaders take the size from textureDimensions
   const cn = (gpu.profile && gpu.profile.cloudNoise) || {};
   const SH = cn.shadow || 512, NB = cn.base || 128, ND = cn.detail || 32, N2 = cn.n2d || 512;
+  // the cloud map: 1024^2 over CLOUD_MAP_M (117 m texels), 512^2 on a phone
+  const CM = cn.n2d && cn.n2d < 512 ? 512 : 1024;
+  const LUT = lutSizes(gpu.profile);
   const lut = {
-    trans: tex2(256, 64, 'rgba16float', 'sky trans'),
-    multi: tex2(32, 32, 'rgba16float', 'sky multi'),
-    view: tex2(192, 108, 'rgba16float', 'sky view'),
+    trans: tex2(LUT.trans[0], LUT.trans[1], 'rgba16float', 'sky trans'),
+    multi: tex2(LUT.multi[0], LUT.multi[1], 'rgba16float', 'sky multi'),
+    view: tex2(LUT.view[0], LUT.view[1], 'rgba16float', 'sky view'),
     shadow: tex2(SH, SH, 'rgba16float', 'cloud shadow'),
     base: tex3(NB, 'rgba8unorm', 'cloud base noise'),
     detail: tex3(ND, 'rgba8unorm', 'cloud detail noise'),
     n2d: tex2(N2, N2, 'rgba8unorm', 'cloud 2d noise'),
+    // the cloud map (clouds.wgsl csCloudMap): the 2D cloud field round the
+    // camera, worked out each frame
+    cmap0: tex2(CM, CM, 'rgba16float', 'cloud map 0'),
+    cmap1: tex2(CM, CM, 'rgba16float', 'cloud map 1'),
     // the weather model: 6 tiles of N x N (snapshot a: A B C, snapshot b:
     // A B C), stacked in y; the shaders interpolate a to b (S.wx0.z)
     wx: device.createTexture({ label: 'weather model', size: [WX_N, WX_N * 6], format: 'rgba16float', usage: T.TEXTURE_BINDING | T.COPY_DST }),
@@ -228,10 +299,12 @@ export async function createSky(gpu) {
     lut: bgl3('sky out lut', [st2(0)]),
     vol: bgl3('cloud out vol', [st3(0, 'rgba8unorm')]),
     n2d: bgl3('cloud out 2d', [st2(1, 'rgba8unorm')]),
-    shadow: bgl3('cloud out shadow', [st2(2)]),
+    shadow: bgl3('cloud out shadow', [st2(2), tx(10), tx(11)]),
     // 9: the scene depth (the march stops at the ground; render/sky.js
     // marchGroup, a 1 x 1 sky stand-in when there is no depth yet)
-    march: bgl3('cloud out march', [st2(3), st2(4), { binding: 9, texture: { sampleType: 'depth' } }]),
+    march: bgl3('cloud out march', [st2(3), st2(4), { binding: 9, texture: { sampleType: 'depth' } }, tx(10), tx(11)]),
+    // the cloud map (csCloudMap) and its readers
+    cmap: bgl3('cloud map out', [st2(12), st2(13)]),
     resolve: bgl3('cloud resolve', [tx(5), tx(6), tx(7), st2(8)]),
   };
   const comp = (module, entry, g1, g3) => device.createComputePipelineAsync({
@@ -240,7 +313,7 @@ export async function createSky(gpu) {
   });
   const blendPremul = { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
   const P = {};
-  [P.trans, P.multi, P.view, P.base, P.detail, P.n2d, P.shadow, P.march, P.resolve, P.sky, P.comp] = await Promise.all([
+  [P.trans, P.multi, P.view, P.base, P.detail, P.n2d, P.shadow, P.march, P.resolve, P.sky, P.comp, P.cmap] = await Promise.all([
     comp(mSky, 'csTrans', L.uOnly, G3.lut),
     comp(mSky, 'csMulti', L.multi, G3.lut),
     comp(mSky, 'csSkyView', L.skyView, G3.lut),
@@ -263,6 +336,7 @@ export async function createSky(gpu) {
       fragment: { module: mCloud, entryPoint: 'fsCloudComp', targets: [{ format: gpu.hdrFormat, blend: blendPremul }] },
       primitive: { topology: 'triangle-list' },
     }),
+    comp(mCloud, 'csCloudMap', L.read, G3.cmap),
   ]);
 
   // ── bind groups that do not change ──────────────────────────────────────
@@ -278,12 +352,13 @@ export async function createSky(gpu) {
     empty: bg(L.empty, [], 'empty'),
     outTrans: bg(G3.lut, [[0, V.trans]]), outMulti: bg(G3.lut, [[0, V.multi]]), outView: bg(G3.lut, [[0, V.view]]),
     outBase: bg(G3.vol, [[0, V.base]]), outDetail: bg(G3.vol, [[0, V.detail]]), outN2d: bg(G3.n2d, [[1, V.n2d]]),
-    outShadow: bg(G3.shadow, [[2, V.shadow]]),
+    outShadow: bg(G3.shadow, [[2, V.shadow], [10, V.cmap0], [11, V.cmap1]]),
+    outCmap: bg(G3.cmap, [[12, V.cmap0], [13, V.cmap1]]),
   };
   const readEntries = [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]];
 
   const weather = await createWeather(gpu, {
-    lib, weatherText, layouts: L, readBindGroup: BG.read, shaftBindGroup: BG.shaft, ubo, u, SKYU, sClamp,
+    lib, weatherText, layouts: L, readBindGroup: BG.read, shaftBindGroup: BG.shaft, passDesc: (l) => passDesc(l), ubo, u, SKYU, sClamp,
   });
 
   // ── size dependent targets ──────────────────────────────────────────────
@@ -312,6 +387,48 @@ export async function createSky(gpu) {
     weather.resize(w, h, q);
   }
 
+  // ── GPU timing (debug, _debug.timeFrame): timestamps round each SKY
+  // compute pass of one frame, read back in the next update ───────────────
+  const timing = { armed: false, qs: null, buf: null, read: null, n: 0, labels: [], result: null, pending: false };
+  function passDesc(label) {
+    if (!timing.armed || timing.n + 2 > 32) return { label };
+    const i = timing.n;
+    timing.n += 2;
+    timing.labels.push(label);
+    return { label, timestampWrites: { querySet: timing.qs, beginningOfPassWriteIndex: i, endOfPassWriteIndex: i + 1 } };
+  }
+  function timingEnd(enc) {
+    if (!timing.armed) return;
+    timing.armed = false;
+    if (!timing.n) return;
+    enc.resolveQuerySet(timing.qs, 0, timing.n, timing.buf, 0);
+    enc.copyBufferToBuffer(timing.buf, 0, timing.read, 0, timing.n * 8);
+    timing.pending = true;
+  }
+  function timingRead() {
+    if (!timing.pending || timing.mapping) return;
+    timing.mapping = true;
+    const labels = timing.labels.slice(), n = timing.n;
+    timing.read.mapAsync(GPUMapMode.READ).then(() => {
+      const t = new BigUint64Array(timing.read.getMappedRange().slice(0, n * 8));
+      timing.read.unmap();
+      const out = {};
+      for (let i = 0; i < n / 2; i++) out[labels[i]] = (out[labels[i]] || 0) + Number(t[2 * i + 1] - t[2 * i]) / 1e6;
+      timing.result = out;
+      timing.pending = false; timing.mapping = false;
+    }).catch(() => { timing.pending = false; timing.mapping = false; });
+  }
+  function timeFrame() {
+    if (!device.features || !device.features.has('timestamp-query') || timing.pending) return false;
+    if (!timing.qs) {
+      timing.qs = device.createQuerySet({ type: 'timestamp', count: 32 });
+      timing.buf = device.createBuffer({ size: 256, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      timing.read = device.createBuffer({ size: 256, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    }
+    timing.armed = true; timing.n = 0; timing.labels = [];
+    return true;
+  }
+
   // the march group for a depth view (cached; the 1 x 1 stand-in reads as
   // sky, so the march has no limit)
   const skyDepth = device.createTexture({ label: 'cloud no depth', size: [1, 1], format: 'depth32float', usage: T.TEXTURE_BINDING | T.RENDER_ATTACHMENT });
@@ -320,15 +437,16 @@ export async function createSky(gpu) {
     const dv = depthView || skyDepthView;
     let g = tg.marchBG.get(dv);
     if (!g) {
-      g = bg(G3.march, [[3, tg.v.raw], [4, tg.v.rawZ], [9, dv]], 'cloud march out');
+      g = bg(G3.march, [[3, tg.v.raw], [4, tg.v.rawZ], [9, dv], [10, V.cmap0], [11, V.cmap1]], 'cloud march out');
       tg.marchBG.set(dv, g);
       if (tg.marchBG.size > 6) tg.marchBG.delete(tg.marchBG.keys().next().value);
     }
     return g;
   }
   // the march and the temporal resolve, into the next history target
-  function marchClouds(enc, depthView) {
-    const pass = enc.beginComputePass({ label: 'cloud march' });
+  function marchClouds(enc, depthView, timestampWrites) {
+    st.marches = (st.marches || 0) + 1;
+    const pass = enc.beginComputePass(timestampWrites ? { label: 'cloud march', timestampWrites } : passDesc('cloud march'));
     pass.setBindGroup(0, gpu.globalsBindGroup);
     pass.setBindGroup(2, BG.empty);
     pass.setBindGroup(1, BG.read);
@@ -505,6 +623,9 @@ export async function createSky(gpu) {
     // SHAFTS: the mode (0 off, 1 volumetric, 2 screen) and the range m
     const shf = weather.shaftFrame(frame);
     put(SKYU.shadow, x0, z0, size, shf.mode);
+    // the cloud map square round the camera, snapped to its texels
+    const mt = CLOUD_MAP_M / CM;
+    put(SKYU.cmap, Math.floor((cam[0] - CLOUD_MAP_M / 2) / mt) * mt, Math.floor((cam[2] - CLOUD_MAP_M / 2) / mt) * mt, CLOUD_MAP_M, CM);
     // rainbow: rain in the air and a sun lower than 42 deg that the deck lets through
     const sunEl = Math.asin(clamp(sunY, -1, 1)) * 180 / Math.PI;
     const rainbow = (s.rainbow ?? 1) * smooth(0.02, 0.25, wx.rain) * smooth(-1, 4, sunEl) * smooth(42, 30, sunEl) * (1 - smooth(0.88, 1.0, wx.cover) * 0.8);
@@ -526,18 +647,19 @@ export async function createSky(gpu) {
       rect: () => [u[SKYU.shadow], u[SKYU.shadow + 1], u[SKYU.shadow + 2]],
       base: () => u[SKYU.cloud0],
     },
-    // the Hillaire sky-view LUT (192 x 108, radiance per unit sun), for
+    // the Hillaire sky-view LUT (192 x 108, 128 x 72 on a phone; radiance per unit sun), for
     // reflections: see NOTES.md for the uv mapping; multiply by scale
     skyView: { view: V.view, sampler: sClamp, scale: SUN_ILLUM },
     get uniformBuffer() { return ubo; },
     get readLayout() { return L.read; },
     get readBindGroup() { return BG.read; },
     weather,
-    _debug: { lut, targets: () => tg, u, SKYU },
+    _debug: { lut, targets: () => tg, u, SKYU, st, march: (enc, dv, tw) => marchClouds(enc, dv, tw), timeFrame, timing },
 
     setTerrain(t) { st.terrain = t; weather.setTerrain(t); },
 
     update(frame) {
+      timingRead();
       // a phone (coarse pointer) runs the low path: a third-size cloud
       // target and the small froxel grid
       const qe = Math.min(frame.quality ?? st.q, frame.coarse ? 0.3 : 1);
@@ -556,7 +678,7 @@ export async function createSky(gpu) {
 
     compute(enc, frame) {
       if (!tg) mod.update(frame);
-      const pass = enc.beginComputePass({ label: 'sky compute' });
+      const pass = enc.beginComputePass(passDesc('sky compute'));
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(2, BG.empty);
       const run = (p, g1, g3, x, y = 1, z = 1) => {
@@ -570,12 +692,12 @@ export async function createSky(gpu) {
       }
       const mie = u[SKYU.mieS];
       if (Math.abs(mie - st.lutMie) > st.lutMie * 0.02) {
-        run(P.trans, BG.uOnly, BG.outTrans, 32, 8);
+        run(P.trans, BG.uOnly, BG.outTrans, LUT.trans[0] / 8, LUT.trans[1] / 8);
         pass.end();
         // a new pass, so that the multi pass reads the finished trans LUT
-        const p2 = enc.beginComputePass({ label: 'sky multi' });
+        const p2 = enc.beginComputePass(passDesc('sky multi'));
         p2.setBindGroup(0, gpu.globalsBindGroup); p2.setBindGroup(2, BG.empty);
-        p2.setPipeline(P.multi); p2.setBindGroup(1, BG.multi); p2.setBindGroup(3, BG.outMulti); p2.dispatchWorkgroups(32, 32);
+        p2.setPipeline(P.multi); p2.setBindGroup(1, BG.multi); p2.setBindGroup(3, BG.outMulti); p2.dispatchWorkgroups(LUT.multi[0], LUT.multi[1]);
         p2.end();
         st.lutMie = mie;
         return mod.compute2(enc, frame);
@@ -585,13 +707,15 @@ export async function createSky(gpu) {
     },
 
     compute2(enc, frame) {
-      const pass = enc.beginComputePass({ label: 'clouds' });
+      const pass = enc.beginComputePass(passDesc('clouds'));
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(2, BG.empty);
       const run = (p, g1, g3, x, y = 1, z = 1) => {
         pass.setPipeline(p); pass.setBindGroup(1, g1); pass.setBindGroup(3, g3); pass.dispatchWorkgroups(x, y, z);
       };
-      run(P.view, BG.skyView, BG.outView, 24, 14);
+      run(P.view, BG.skyView, BG.outView, Math.ceil(LUT.view[0] / 8), Math.ceil(LUT.view[1] / 8));
+      // the cloud map first: the shadow and the march read it
+      run(P.cmap, BG.read, BG.outCmap, Math.ceil(CM / 8), Math.ceil(CM / 8));
       run(P.shadow, BG.shadowRead, BG.outShadow, SH / 8, SH / 8);
       pass.end();
       // the cloud march runs in volumetricPrep, where the depth of this
@@ -620,6 +744,7 @@ export async function createSky(gpu) {
       if (st.clouds && st.lastPrep === st.frameNo - 1 && ctx && ctx.depthView) marchClouds(enc, ctx.depthView);
       if (ctx && ctx.depthView) st.lastPrep = st.frameNo;
       weather.prep(enc, frame, ctx, st.clouds ? tg.v.acc[tg.ping] : null);
+      timingEnd(enc);
     },
 
     drawVolumetric(pass, frame, ctx) {

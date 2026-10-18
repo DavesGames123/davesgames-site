@@ -30,7 +30,7 @@ globalThis.GPUBufferUsage = { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 
 globalThis.GPUTextureUsage = { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16 };
 const LIMITS = { maxSampledTexturesPerShaderStage: 16, maxSamplersPerShaderStage: 16, maxStorageTexturesPerShaderStage: 4, maxStorageBuffersPerShaderStage: 8, maxUniformBuffersPerShaderStage: 12, maxBindGroups: 4 };
 
-const pipes = [];
+const pipes = [], texs = [];
 const obj = (extra = {}) => ({ createView: () => obj(), destroy() {}, ...extra });
 const device = {
   createBindGroupLayout: (d) => ({ entries: d.entries, label: d.label }),
@@ -39,7 +39,7 @@ const device = {
   createComputePipelineAsync: async (d) => { pipes.push({ label: d.label, stages: [STAGE.COMPUTE], layout: d.layout }); return obj(); },
   createRenderPipelineAsync: async (d) => { pipes.push({ label: d.label, stages: [STAGE.VERTEX, STAGE.FRAGMENT], layout: d.layout }); return obj(); },
   createBuffer: (d) => obj({ size: d.size }),
-  createTexture: (d) => obj({ size: d.size }),
+  createTexture: (d) => { texs.push({ label: d.label, size: d.size }); return obj({ size: d.size }); },
   createSampler: () => obj(),
   createBindGroup: (d) => ({ layout: d.layout, entries: d.entries }),
 };
@@ -105,6 +105,21 @@ await check('the shaft passes use the small group 1 (no noise, no weather model)
   for (const p of sh) {
     const b = p.layout.groups[1].entries.map((e) => e.binding);
     for (const no of [6, 7, 9, 16]) assert.ok(!b.includes(no), p.label + ' has binding ' + no);
+  }
+});
+
+await check('a phone profile: smaller LUTs, cloud map and noise, the same limits, no throw', async () => {
+  const { PROFILES } = await import('../gpu/budget.js');
+  for (const id of ['phone', 'phone-min']) {
+    pipes.length = 0; texs.length = 0;
+    const m = await createSky({ ...gpu, profile: PROFILES[id], quality: 0.3 });
+    const size = (l) => (texs.find((t) => t.label === l) || {}).size;
+    assert.deepEqual(size('sky trans'), [128, 32], id + ' trans');
+    assert.deepEqual(size('sky view'), [128, 72], id + ' view');
+    assert.deepEqual(size('cloud map 0'), [512, 512], id + ' cloud map');
+    assert.ok(size('cloud base noise')[0] <= 64, id + ' base noise');
+    for (const p of pipes) for (const st of p.stages) assert.ok(count(p.layout, st).sampled <= 16, p.label);
+    m.dispose();
   }
 });
 

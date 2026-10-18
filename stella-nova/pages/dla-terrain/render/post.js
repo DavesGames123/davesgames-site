@@ -35,6 +35,17 @@ function bloomExposure(e, s) {
   return Math.min(Math.max(Number.isFinite(v) ? v : 1, s.minExp), s.maxExp) * Math.pow(2, s.ev || 0);
 }
 
+// JS twin of fs_expo (shaders/post.wgsl), for the tests: the exposure of
+// the next frame from the last one, the mean log2 luminance and dt. The
+// target key / 2^avg is clamped to [minExp, maxExp]; a brighter scene
+// (target down) adapts at 1.6 x adapt per s, a darker one at 0.6 x.
+export function exposureStep(prev, avgLog2, dt, s = POST_DEFAULTS) {
+  const tgt = Math.min(Math.max(s.key / Math.pow(2, avgLog2), s.minExp), s.maxExp);
+  if (!(prev > 0)) return tgt;
+  const rate = tgt < prev ? s.adapt * 1.6 : s.adapt * 0.6;
+  return Math.exp(Math.log(prev) + (Math.log(tgt) - Math.log(prev)) * (1 - Math.exp(-dt * rate)));
+}
+
 export function halton(i, b) {
   let f = 1, r = 0;
   while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); }

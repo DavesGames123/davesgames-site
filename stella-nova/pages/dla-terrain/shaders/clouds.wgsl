@@ -14,19 +14,33 @@
 //    sk_hash3 (no hash table), and each cell has a 3D feature offset.
 //    The cloud model is after Schneider, "Real-time volumetric
 //    cloudscapes" (GPU Pro 7) and Hillaire 2016 (Frostbite).
-//  CLOUDS (compute, each frame, at half resolution)
+//  CLOUDS (compute, each frame)
+//    csCloudMap     the 2D cloud field round the camera (1024^2 over 120 km,
+//                   512^2 on a phone): coverage, type, base, top, storm,
+//                   base offset, deck patches. Cover, type, base, top and
+//                   storms of each place come from the weather model
+//                   (wx_tile, weather-model.js) plus a floor of cover from
+//                   the air mass (S.cloud2.x); the coverage noise is
+//                   stretched to about uniform, so the share of cloud is
+//                   about the cover. cl_density reads the map (2 taps).
 //    csCloudShadow  512^2: sun transmittance through the layer, read by
 //                   cloudShadow(p) in sky.wgsl (ground, water, haze, grass)
-//    csClouds       the raymarch: cumulus / stratus by the cumulus mix,
-//                   storm towers with anvils, cirrus at 8.5 km. Cover,
-//                   type, base, top and storms of each place come from
-//                   the weather model (wx_tile, weather-model.js). Light
-//                   march of 6 cone steps to the sun (or the moon),
-//                   dual-lobe HG with a silver lining lobe, powder,
-//                   3 octave multiple scattering (Wrenninge 2013),
-//                   lightning glow round the bolt, aerial perspective.
-//                   Out: rgba (in-scatter, transmittance), depth (front
-//                   distance, mean distance).
+//    csClouds       the raymarch at half (High, Ultra) or a third of the
+//                   render size, in render/sky.js volumetricPrep with the
+//                   depth of this frame: it stops 60 m past the farthest
+//                   ground under each texel (cl_sceneLimit). Steps grow from
+//                   about 30 m near the eye, at most CL_STEPS_MAX, with a new
+//                   jitter each frame. Density: Perlin-Worley shape cut by
+//                   the coverage (stretched by its measured range), the
+//                   detail erosion before the cut (crisp, lumpy edges), a
+//                   vertical profile by type (stratus, stratocumulus,
+//                   cumulus) and storm towers with anvils; cirrus at 8.5
+//                   km. Light: CL_LIGHT_MAX cone steps to the sun (or the
+//                   moon), a dual-lobe HG with a silver lining lobe, powder,
+//                   3 octave multiple scattering (Wrenninge 2013), grey
+//                   light under a closed deck, lightning glow, aerial
+//                   perspective. Out: rgba (in-scatter, transmittance; 0 when
+//                   the march ends at T < 0.01), depth (front, mean).
 //    csCloudResolve temporal reprojection with G.prevViewProj and the
 //                   cloud motion of the frame (S.anim0.xy), variance
 //                   clipping in the 3x3 neighbourhood, into the history.
@@ -36,7 +50,9 @@
 //                   premultiplied (blend one, one-minus-src-alpha).
 //
 //  grep -n targets: "fn cl_worleyCells", "fn cl_perlin", "fn csNoiseBase",
-//  "fn csNoiseDetail", "fn csNoise2D", "fn cl_coverage", "fn cl_density",
+//  "fn csNoiseDetail", "fn csNoise2D", "fn cl_wx", "fn cl_coverage",
+//  "fn csCloudMap", "fn cl_map", "fn cl_profile", "fn cl_density",
+//  "fn cl_sceneLimit", "CL_STEPS_MAX",
 //  "fn cl_lightMarch", "fn cl_scatter", "fn cl_cirrus", "fn csCloudShadow",
 //  "fn csClouds", "fn csCloudResolve", "fn fsCloudComp"
 //
@@ -278,27 +294,65 @@ fn cl_profile(hf: f32, k: f32) -> f32 {
   return mix(mix(st, sc, clamp(k * 2.0, 0.0, 1.0)), cu, clamp((k * 2.0) - 1.0, 0.0, 1.0));
 }
 
+// ── the cloud map (csCloudMap, each frame) ───────────────────────────────────
+// The 2D part of the cloud field, worked out once per texel and frame over
+// a square of S.cmap.z m round the camera (render/sky.js: 120 km, 1024^2 on
+// desktop, 512^2 on a phone): before, each density sample read the model
+// (4 taps), the coverage (3) and the base offset (1); now it reads 2.
+//   map 0: coverage c, type, base m (with the lift), top m
+//   map 1: storm, base offset (raw), patch value of the deck light, cover
+@group(3) @binding(10) var tCMap0: texture_2d<f32>;
+@group(3) @binding(11) var tCMap1: texture_2d<f32>;
+@group(3) @binding(12) var outCMap0: texture_storage_2d<rgba16float, write>;
+@group(3) @binding(13) var outCMap1: texture_storage_2d<rgba16float, write>;
+
+@compute @workgroup_size(8, 8)
+fn csCloudMap(@builtin(global_invocation_id) id: vec3u) {
+  let sz = textureDimensions(outCMap0);
+  if ((id.x >= sz.x) || (id.y >= sz.y)) { return; }
+  let xz = S.cmap.xy + (((vec2f(id.xy) + 0.5) / vec2f(sz)) * S.cmap.z);
+  let w = cl_wx(xz);
+  var cv = vec4f(0.0, w.kind, 0.0, 0.0);
+  if (w.cover >= 0.005) { cv = cl_coverage(xz, w); }
+  let patchy = sk_ss(-0.3, 0.35, cl_baseOffset((xz * 0.6) + vec2f(913.0, 211.0)));
+  textureStore(outCMap0, vec2i(id.xy), vec4f(cv.x, cv.y, w.base + cv.z, w.top));
+  textureStore(outCMap1, vec2i(id.xy), vec4f(w.storm, max(cl_baseOffset(xz), 0.0), patchy, w.cover));
+}
+
+struct ClMap { m0: vec4f, m1: vec4f }
+// The map at world xz; outside the square: no cloud.
+fn cl_map(xz: vec2f) -> ClMap {
+  var o: ClMap;
+  let uv = (xz - S.cmap.xy) / S.cmap.z;
+  if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { o.m0 = vec4f(0.0); o.m1 = vec4f(0.0); return o; }
+  o.m0 = textureSampleLevel(tCMap0, sClamp, uv, 0.0);
+  o.m1 = textureSampleLevel(tCMap1, sClamp, uv, 0.0);
+  // fade out over the outer tenth of the square (the clouds there are far
+  // and faint behind the air)
+  let e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  o.m0.x *= sk_ss(0.0, 0.05, e);
+  return o;
+}
+
 // Density 0..about 1.5 at world p. full: add the detail erosion.
 fn cl_density(p: vec3f, full: bool) -> f32 {
   let L = cl_layer();
   let h = sk_layerH(p);
   if ((h <= L.h0) || (h >= L.h1)) { return 0.0; }
-  let w = cl_wx(p.xz);
-  if (w.cover < 0.005) { return 0.0; }
-  let cv = cl_coverage(p.xz, w);
-  var cov = cv.x;
+  let mp = cl_map(p.xz);
+  var cov = mp.m0.x;
   if (cov < 0.005) { return 0.0; }
-  let tq = cv.y;
-  let storm = w.storm;
-  let b0 = w.base + cv.z;
+  let tq = mp.m0.y;
+  let storm = mp.m1.x;
+  let b0 = mp.m0.z;
   // a cumulus is tall in the core of its cluster and low at its edge
   // (a dome, not a pillar); a deck keeps its depth
-  let full_top = max(w.top - b0, 200.0);
-  let thick = full_top * mix(1.0, mix(0.35, 1.0, sqrt(cv.w)), tq);
+  let full_top = max(mp.m0.w - b0, 200.0);
+  let thick = full_top * mix(1.0, mix(0.35, 1.0, sqrt(cov)), tq);
   var hf = (h - b0) / thick;
   if ((hf <= 0.0) || (hf >= 1.0)) { return 0.0; }
   // the ragged base of the decks; cumulus keep a flat base
-  let off = max(cl_baseOffset(p.xz), 0.0) * mix(0.8, 0.15, tq) * (1.0 - storm);
+  let off = mp.m1.y * mix(0.8, 0.15, tq) * (1.0 - storm);
   hf = (hf - off) / max(1.0 - off, 0.05);
   if (hf <= 0.0) { return 0.0; }
   var prof = cl_profile(hf, tq);
@@ -404,7 +458,7 @@ fn cl_scatter(p: vec3f, d: f32, cosT: f32, ld: vec3f, lrad: vec3f, hf: f32, step
   // ambient: sky from above (G.ambient is the clear-sky hemisphere), ground bounce below
   let skyA = ambC * (1.0 / SK_PI) * (0.45 + (0.55 * hf)) * mix(1.0, 0.7, S.cloud0.z);
   let grndA = ((G.sunColor.rgb * max(G.sunDir.y, 0.0) * 0.1) + (G.ambient.rgb * 0.05)) * (1.0 - hf) / SK_PI;
-  let patchy = sk_ss(-0.3, 0.35, cl_baseOffset((p.xz * 0.6) + vec2f(913.0, 211.0)));
+  let patchy = cl_map(p.xz).m1.z;
   var above = 1.0;
   if (deck > 0.01) { above = exp(-cl_density(p + vec3f(0.0, 400.0, 0.0), false) * 400.0 * CL_SIGMA * 0.06); }
   let skyLeak = mix(1.0, (0.3 + (0.7 * hf)) * (0.35 + (0.65 * patchy)) * (0.4 + (0.6 * above)), deck);
@@ -526,14 +580,15 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
   var tsum = 0.0;
   // the slab, cut at the ground behind this texel (+ 60 m: a cloud that
   // wraps a peak still shows round its edge)
-  let seg = sk_slab(ro, rd, L.h0, L.h1, min(90000.0, cl_sceneLimit(id.xy, sz) + 60.0));
+  let seg = sk_slab(ro, rd, L.h0, L.h1, min(0.5 * S.cmap.z, cl_sceneLimit(id.xy, sz) + 60.0));
   if (seg.y > seg.x) {
     let n = clamp(i32(S.cloud2.w), 8, CL_STEPS_MAX);
     let len = seg.y - seg.x;
     // the first step: 30 m near the eye, more for a far slab entry
     let dt0 = 30.0 + (0.012 * seg.x);
     let a = clamp((dt0 * f32(n)) / max(len, 1.0), 0.04, 1.0);
-    let lsteps = select(4, CL_LIGHT_MAX, G.frame.z > 0.5);
+    // light steps by quality: 4 below 0.5, 5 below 0.9, 6 (CL_LIGHT_MAX) at Ultra
+    let lsteps = select(select(4, 5, G.frame.z >= 0.5), CL_LIGHT_MAX, G.frame.z >= 0.9);
     var tPrev = seg.x + cl_tAt(jit / f32(n), a, len);
     for (var i = 0; i < CL_STEPS_MAX; i++) {
       if ((i >= n) || (T < 0.01)) { break; }
@@ -542,9 +597,11 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
       let t = tPrev + (0.5 * dt);
       tPrev = tNext;
       let p = ro + (rd * t);
-      let dc = cl_density(p, false);
-      if (dc > 0.0) {
-        let d = cl_density(p, true);
+      // one full sample (it returns early in clear air, before the detail
+      // texture); the old cheap probe and then a full sample cost two
+      // density calls in every cloud step
+      let d = cl_density(p, true);
+      {
         if (d > 0.0) {
           let hf = clamp((sk_layerH(p) - L.h0) / max(L.h1 - L.h0, 1.0), 0.0, 1.0);
           let li = cl_light(p);

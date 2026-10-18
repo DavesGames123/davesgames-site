@@ -72,6 +72,7 @@ struct SkyU {
   anim2: vec4f,     // xy rain box drift m (mod 2R), zw snow box drift m (mod 2R)
   anim3: vec4f,     // rain fall phases a b, snow fall phases a b (render/weather.js precipPhases)
   anim4: vec4f,     // x splash time s, y flutter time s, z rain count max, w snow count max
+  cmap: vec4f,      // the cloud map of clouds.wgsl: xy origin (world xz) m, z side m, w texels
 }
 
 @group(1) @binding(0) var<uniform> S: SkyU;

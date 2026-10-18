@@ -458,7 +458,7 @@ export async function createWeather(gpu, shared) {
 
     compute(enc, frame) {
       const sbg = frame.shadowBindGroup || gpu.shadowSampleBindGroup || (gpu.shadows && gpu.shadows.sampleBindGroup) || (gpu.shadowSampleLayout ? null : dummyShadowBG);
-      const pass = enc.beginComputePass({ label: 'froxels' });
+      const pass = enc.beginComputePass(shared.passDesc ? shared.passDesc('froxels') : { label: 'froxels' });
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(1, shared.readBindGroup);
       vt.ping = 1 - vt.ping;
@@ -507,7 +507,7 @@ export async function createWeather(gpu, shared) {
       shaftReset = false;
       const sbg = frame.shadowBindGroup || gpu.shadowSampleBindGroup || (gpu.shadows && gpu.shadows.sampleBindGroup) || dummyShadowBG;
       const G2 = shaftGroups(ctx.depthView, cloudAccView);
-      const pass = enc.beginComputePass({ label: 'shafts' });
+      const pass = enc.beginComputePass(shared.passDesc ? shared.passDesc('shafts') : { label: 'shafts' });
       pass.setBindGroup(0, gpu.globalsBindGroup);
       pass.setBindGroup(1, shared.shaftBindGroup);
       pass.setPipeline(plan.mode === 1 ? pShaft : pRadial);
