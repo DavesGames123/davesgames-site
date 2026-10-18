@@ -1,0 +1,27 @@
+Coral reef rock (stella-nova/pages/coral-reef/rock and assets/tex/rock)
+======================================================================
+
+The rock code (rock/index.js, geology.js, mesh.js, noise.js, material.js,
+worker.js) is our own. The gradient noise follows Ken Perlin's improved
+noise (2002); the distance transform follows Felzenszwalb and
+Huttenlocher, "Distance Transforms of Sampled Functions" (2012); the
+smooth minimum and the surface nets idea are well known methods (Inigo
+Quilez; Gibson 1998). We wrote the code from the published ideas.
+
+Texture (CC0 1.0 Universal, public domain dedication)
+------------------------------------------------------
+assets/tex/rock/reef_rock_albedo.webp, reef_rock_normal.webp, reef_rock_orm.webp
+    "Rock 3" by Rob Tuytel, Poly Haven, https://polyhaven.com/a/rock_3
+    Licence: CC0, https://polyhaven.com/license
+    Fetched 2026-10-17 from dl.polyhaven.org (1k JPEG: diff, nor_gl, arm)
+    with the User-Agent "davesgames.io asset build", then converted to
+    WebP with cwebp (quality 82, 90, 85). The ORM file is the Poly Haven
+    "arm" map: r ambient occlusion, g roughness, b metal. The normal map
+    is OpenGL (+y).
+    sha256 of the source JPEG files:
+      e68a81e113a4173c0e19f58bedda41b3b13adcfdeb2f8ae4808f63ec5de10225  rock_3_diff_1k.jpg
+      a83383a7468879605b0f2e72ffc7432b0b813f02a12c169a204409040f6ea4b3  rock_3_nor_gl_1k.jpg
+      1f70aecc7751b3db721f92ab208d4f667a26bfb3da80cfc5640836114213d191  rock_3_arm_1k.jpg
+
+The sand material uses assets/tex/sand_diff.jpg and sand_nor.jpg ("Sand
+01" by Rob Tuytel, Poly Haven, CC0), already listed in ../CREDITS.txt.
