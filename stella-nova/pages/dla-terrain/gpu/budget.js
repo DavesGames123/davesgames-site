@@ -25,11 +25,12 @@
 //                  one time, one profile lower; a second loss stops
 //  pressureStep(state) -> the profile id after an out-of-memory error
 //
-//  MEASURED (Deno, tools/render-frame.mjs plus a createTexture /
-//  createBuffer tally, 2026-10-17, before this file): phone 390 x 844 at
-//  Low: 409 MB live, 592 MB peak; desktop 1280 x 800 at High: 700 MB live,
-//  883 MB peak. The largest parts on the phone: the vegetation impostor
-//  atlases (2 x 101 MB) and the asset vertex and index buffers (88 MB).
+//  MEASURED (Deno, gpu/mem-tally.mjs, 2026-10-17): phone 390 x 844 at Low:
+//  409 MB live, 592 MB peak before the profile; 117 MB live, 118 MB peak
+//  with it. Desktop 1280 x 800 at High: 700 MB live, 883 MB peak (no
+//  change). The largest parts on the phone before: the vegetation
+//  impostor atlases (2 x 101 MB) and the asset vertex and index buffers
+//  (88 MB).
 //
 //  grep -n targets: "export const PROFILES", "export function detectProfile",
 //  "export function estimate", "export function resolveSizes",
@@ -147,11 +148,13 @@ export function resolveSizes(profile, view = {}) {
   };
 }
 
-// ASSET_MB: the vertex + index buffers and the material layers of the
-// vegetation assets, measured in Deno (default-view set, 3 variants, LOD 0
-// to 2: 88 MB of buffers, 116 to 118 prototypes). 'small' (1 variant, LOD 1
-// and 2) is about one sixth of the vertices of 'all': the model takes 0.16.
-export const ASSET_MB = { all: 88, small: 14, none: 0 };
+// ASSET_MB: the vertex + index buffers of the vegetation assets, measured
+// in Deno (default-view set). 'all' (3 variants, LOD 0 to 2, 118
+// prototypes): 88 MB. 'small' (1 variant, LOD 1 and 2, 41 prototypes):
+// 7.7 MB. ASSET_LAYERS: the material layers the asset albedos add (Deno:
+// 109 layers in all with 'all', 59 with 'small', 22 procedural).
+export const ASSET_MB = { all: 88, small: 8, none: 0 };
+export const ASSET_LAYERS = { all: 87, small: 37, none: 0 };
 const texMip = (w, h, layers, bpp, mips = true) => w * h * layers * bpp * (mips ? 4 / 3 : 1);
 
 export function estimate(profile, view = {}) {
@@ -162,7 +165,7 @@ export function estimate(profile, view = {}) {
   const ck = s.cloudK, cw = Math.round(s.w * ck), ch = Math.round(s.h * ck);
   const v = s.veg;
   // the procedural vegetation layers: 22 layers of texSize, + 1 per asset albedo
-  const matLayers = 22 + (v.assets === 'all' ? 60 : v.assets === 'small' ? 16 : 0);
+  const matLayers = 22 + (ASSET_LAYERS[v.assets] ?? ASSET_LAYERS.all);
   const parts = {
     // gpu/terrain-gpu.js: height, height prev (r32f), normal, aux, aux prev
     // (rgba16f), biome (r8) + snapshot buffers (4 + 16 B per cell)
@@ -193,8 +196,11 @@ export function estimate(profile, view = {}) {
   let total = 0;
   for (const k in parts) { parts[k] = Math.round(parts[k]); total += parts[k]; }
   // a library rebuild (assets in) holds the old and the new vegetation
-  // library at one time, and the impostor bake has a depth target
-  const peak = total + parts.vegAssets + parts.vegImpostors + parts.vegMaterials;
+  // library at one time; a phone profile frees the old one first
+  // (render/vegetation.js installLibrary), so only the new materials and
+  // the impostor bake depth target come on top
+  const bake = v.impFrame * 4 * v.impFrame * 2 * 4;
+  const peak = total + bake + parts.vegMaterials + (p.veg && p.veg.assets ? 0 : parts.vegAssets + parts.vegImpostors);
   return { parts, total, peak, budget: p.budgetMB * MB, sizes: s };
 }
 
