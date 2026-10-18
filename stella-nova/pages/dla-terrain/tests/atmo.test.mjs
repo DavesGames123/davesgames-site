@@ -133,7 +133,9 @@ check('exposure: slow adaptation (a 10 x brighter scene: under 80 % of the way a
   assert.ok(Math.abs(Math.log(a / b)) < 1e-9, `${a} vs ${b}`);
 });
 check('bloom: the soft clamp works in exposed units (BLOOM_KNEE), not at a fixed 60', () => {
-  assert.ok(/const BLOOM_KNEE: f32 = \d+/.test(post) && post.includes('cm_luminance(o) * P.p6.y'), 'fs_bdown uses the exposure');
+  // SUN FLICKER: the exposure of this frame from the GPU (tC), with the
+  // CPU readback P.p6.y as the fallback
+  assert.ok(/const BLOOM_KNEE: f32 = \d+/.test(post) && post.includes('cm_luminance(o) * kx') && /var kx = P\.p6\.y;/.test(post) && /textureLoad\(tC, vec2i\(0\), 0\)\.r/.test(post), 'fs_bdown uses the exposure');
   assert.ok(!post.includes('cm_luminance(o) - 60.0'), 'the old fixed clamp is gone');
 });
 

@@ -621,7 +621,9 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
   // the march stops at T < 0.01; a thick deck has far less. Take the rest
   // to 0, so the sun disc (about 3.7e4) does not shine through an
   // overcast sky as a white dot (a change of 1 % in the cloud alpha)
-  T = select(T, 0.0, T < 0.01);
+  // a smooth cut (SUN FLICKER: the hard cut at 0.01 turned the sun on and
+  // off behind a thin cloud as the jitter of the march moved T)
+  T = T * sk_ss(0.004, 0.02, T);
   var mean = 1.0e6;
   if (wsum > 1e-4) {
     mean = tsum / wsum;

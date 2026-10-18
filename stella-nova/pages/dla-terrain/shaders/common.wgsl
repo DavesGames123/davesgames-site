@@ -132,7 +132,16 @@ fn worldFromDepth(uv: vec2f, d: f32) -> vec3f {
   let w = G.invViewProj * ndc;
   return w.xyz / w.w;
 }
-fn viewRay(uv: vec2f) -> vec3f { return normalize(worldFromDepth(uv, 1.0) - G.camPos.xyz); }
+// The world ray of a screen uv: the view-space ray (with the jitter and the
+// shift of proj[2].xy) turned by the transpose of the view rotation. The old
+// form, worldFromDepth(uv, 1) - camPos, took a point on the near plane
+// (0.1 .. 0.5 m) minus a camera km from the origin in f32: the ray moved
+// by up to about 1e-2 rad from frame to frame (the sun flicker).
+fn viewRay(uv: vec2f) -> vec3f {
+  let ndc = vec2f((uv.x * 2.0) - 1.0, 1.0 - (uv.y * 2.0));
+  let v = vec3f((ndc.x + G.proj[2][0]) / G.proj[0][0], (ndc.y + G.proj[2][1]) / G.proj[1][1], -1.0);
+  return normalize(vec3f(dot(G.view[0].xyz, v), dot(G.view[1].xyz, v), dot(G.view[2].xyz, v)));
+}
 fn viewDistance(wp: vec3f) -> f32 { return -(G.view * vec4f(wp, 1.0)).z; }
 
 // ── sun shadow ──────────────────────────────────────────────────────────

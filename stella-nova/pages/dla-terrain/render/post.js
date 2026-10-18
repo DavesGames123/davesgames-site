@@ -184,7 +184,8 @@ export async function createPost(gpu) {
       g.lum = [0, 1].map(i => bg(T.histV[i]));
       g.down = lumV.slice(0, -1).map(v => bg(v));
       g.expo = [0, 1].map(i => bg(lumV[lumV.length - 1], expoV[1 - i]));
-      g.bdown = [0, 1].map(i => [bg(T.histV[i]), ...T.bloomV.slice(0, -1).map(v => bg(v))]);
+      // the bloom reads the exposure of this frame (expoV[e], tC)
+      g.bdown = [0, 1].map(i => [0, 1].map(e => [bg(T.histV[i], null, null, expoV[e]), ...T.bloomV.slice(0, -1).map(v => bg(v, null, null, expoV[e]))]));
       g.bup = T.bloomV.slice(1).map(v => bg(v));
       g.comp = [0, 1].map(i => [0, 1].map(e => bg(T.histV[i], T.bloomV[0], null, expoV[e])));
       g.fxaa = bg(T.ldrV);
@@ -199,7 +200,7 @@ export async function createPost(gpu) {
     const e = expoIdx;          // write e, read 1 - e
     fsPass(enc, expoV[e], pipes.expo, g.expo[e]);
     // bloom
-    for (let k = 0; k < BLOOM_LEVELS; k++) fsPass(enc, T.bloomV[k], pipes.bdown, g.bdown[i][k]);
+    for (let k = 0; k < BLOOM_LEVELS; k++) fsPass(enc, T.bloomV[k], pipes.bdown, g.bdown[i][e][k]);
     for (let k = BLOOM_LEVELS - 2; k >= 0; k--) fsPass(enc, T.bloomV[k], pipes.bup, g.bup[k], true);
     // composite
     if (s.taa) fsPass(enc, outView, pipes.composite, g.comp[i][e]);

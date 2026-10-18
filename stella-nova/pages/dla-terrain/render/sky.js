@@ -190,6 +190,21 @@ export function sunDiscRadiance(ang, E, r = SUN_RADIUS) {
   return (E / (Math.PI * r * r * (1 - 0.6 / 3))) * SUN_DISC_K * (1 - 0.6 * (1 - mu));
 }
 
+// sk_sunDisc of one pixel (no granulation): ang the angle of the pixel
+// centre from the sun centre (rad), pxAng the angle of one pixel, E the
+// irradiance. The disc radius is at least SUN_MIN_PX pixels, the energy is
+// kept, the rim is a linear ramp SUN_RAMP_PX pixels wide (shaders/sky.wgsl;
+// tests/sunflicker.test.mjs picked 2.5 and 1.5 from a sweep).
+export const SUN_MIN_PX = 2.5;
+export const SUN_RAMP_PX = 1.5;
+export function sunDiscPixel(ang, pxAng, E, r = SUN_RADIUS, minPx = SUN_MIN_PX, rampPx = SUN_RAMP_PX) {
+  const px = Math.max(pxAng, 1e-6), re = Math.max(r, minPx * px), ramp = rampPx * px;
+  const cov = clamp((re - ang) / ramp + 0.5, 0, 1);
+  if (cov <= 0) return 0;
+  const x = Math.min(ang / re, 1), mu = Math.sqrt(Math.max(1 - x * x, 0));
+  return (E / (Math.PI * r * r * (1 - 0.6 / 3))) * SUN_DISC_K * ((r * r) / (re * re)) * (1 - 0.6 * (1 - mu)) * cov;
+}
+
 // LUT sizes (Hillaire 2020): transmittance, multiple scattering (one
 // workgroup per texel) and the sky view. A phone profile (it has
 // cloudNoise caps in gpu/budget.js) takes smaller ones.

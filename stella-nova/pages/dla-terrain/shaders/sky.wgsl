@@ -573,25 +573,38 @@ fn sk_celestial(d: vec3f) -> vec3f {
 // full value is about 3.7e5). The edge is anti-aliased over one pixel
 // (pxAng), so a disc of 3 px reads round and does not crawl.
 const SUN_DISC_K: f32 = 0.1;
+// SUN FLICKER (the user: "the way the sun is rendered flickers wildly").
+// The angle comes from atan2 of the cross and the dot: acos of a dot near
+// 1 lost the centre of the disc in f32. A disc under SUN_MIN_PX pixels of
+// radius (a reduced render, a phone) is drawn at that radius with the same
+// energy, so it never falls between the pixels. The edge is a linear ramp
+// SUN_RAMP_PX pixels wide centred on the rim: the sum over the pixels keeps the
+// disc area at every sub-pixel position (render/sky.js sunDiscPixel is the
+// JS twin; tests/sunflicker.test.mjs).
+const SUN_MIN_PX: f32 = 2.5;
+const SUN_RAMP_PX: f32 = 1.5;
 fn sk_sunDisc(d: vec3f, s: vec3f, pxAng: f32) -> vec3f {
   let r = S.sun.x;
-  let ang = acos(clamp(dot(d, s), -1.0, 1.0));
-  let w = max(pxAng * 0.7, r * 0.05);
-  let cov = 1.0 - sk_ss(r - w, r + w, ang);
+  let ang = atan2(length(cross(d, s)), dot(d, s));
+  let px = max(pxAng, 1e-6);
+  let re = max(r, SUN_MIN_PX * px);
+  let cov = clamp(((re - ang) / (SUN_RAMP_PX * px)) + 0.5, 0.0, 1.0);
   if (cov <= 0.0) { return vec3f(0.0); }
-  let x = min(ang / r, 1.0);
+  let x = min(ang / re, 1.0);
   let mu = sqrt(max(1.0 - (x * x), 0.0));
   let limb = 1.0 - (0.6 * (1.0 - mu));
   var e = cross(s, vec3f(0.0, 1.0, 0.0));
   if (dot(e, e) < 1e-6) { e = vec3f(1.0, 0.0, 0.0); }
   e = normalize(e);
   let nn = cross(e, s);
-  let q = normalize((e * (dot(d, e) / r)) + (nn * (dot(d, nn) / r)) + (s * mu));
+  let q = normalize((e * (dot(d, e) / re)) + (nn * (dot(d, nn) / re)) + (s * mu));
   let wv = sk_worley((q * 14.0) + vec3f(S.misc.z * 0.004));
   let gran = sk_ss(0.0, 0.5, wv.y - wv.x);
-  // mean of the limb law over the disc: 1 - u / 3
+  // mean of the limb law over the disc: 1 - u / 3; (r / re)^2 keeps the
+  // energy of a disc drawn larger than it is
   let L0 = S.sun.y / (SK_PI * r * r * (1.0 - (0.6 / 3.0)));
-  return vec3f(1.0, 0.98, 0.95) * (L0 * SUN_DISC_K * limb * (0.94 + (0.06 * gran)) * cov);
+  let k = (r * r) / (re * re);
+  return vec3f(1.0, 0.98, 0.95) * (L0 * SUN_DISC_K * k * limb * (0.94 + (0.06 * gran)) * cov);
 }
 
 // The moon: a sphere of 0.26 deg lit by the sun direction.

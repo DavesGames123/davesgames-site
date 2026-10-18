@@ -98,9 +98,9 @@ fn historyCR(uv: vec2f, size: vec2f) -> vec3f {
   let d = textureLoad(tD, ip, 0);
   var prevClip: vec4f;
   if (d <= 0.0) {
-    // the sky: reproject the view direction only
-    let dir = worldFromDepth(uv, 1.0) - G.camPos.xyz;
-    prevClip = G.prevViewProj * vec4f(normalize(dir), 0.0);
+    // the sky: reproject the view direction only (viewRay: the near plane
+    // minus a far camera in f32 moved the sky and the sun each frame)
+    prevClip = G.prevViewProj * vec4f(viewRay(uv), 0.0);
   } else {
     prevClip = G.prevViewProj * vec4f(worldFromDepth(uv, d), 1.0);
   }
@@ -127,7 +127,11 @@ fn historyCR(uv: vec2f, size: vec2f) -> vec3f {
   let c = textureSampleLevel(tA, sL, v.uv, 0.0).rgb;
   let l = max(cm_luminance(c), 1e-5);
   let r = v.uv - vec2f(0.5, 0.55);
-  let w = exp(-dot(r, r) * 6.0) + 0.15;
+  var w = exp(-dot(r, r) * 6.0) + 0.15;
+  // SUN FLICKER: the sun disc and its near glare (1.2 deg) are not
+  // metered: a few disc pixels hit or missed by the 256 x 256 taps moved
+  // the exposure, and with it the whole image
+  if (dot(viewRay(v.uv), G.sunDir.xyz) > 0.99978) { w = 0.0; }
   return vec4f(w * clamp(log2(l), -16.0, 16.0), w, 0.0, 1.0);
 }
 @fragment fn fs_down2(v: VOut) -> @location(0) vec4f {
@@ -162,7 +166,13 @@ const BLOOM_KNEE: f32 = 300.0;   // exposed luminance where the soft clamp start
   // (about 3.7e4 before exposure) keeps enough energy for a soft glare.
   // The old clamp at 60 before exposure took almost all of the sun out.
   let o = c / 8.0;
-  let ex = max(cm_luminance(o) * P.p6.y, 0.0);
+  // SUN FLICKER: the exposure of this frame from the GPU (tC, written by
+  // fs_expo before the bloom); the CPU readback (P.p6.y) is 15 frames
+  // old, so the sun glare jumped at each readback
+  var kx = P.p6.y;
+  let eg = textureLoad(tC, vec2i(0), 0).r;
+  if ((eg > 0.0) && (P.p3.w <= 0.0)) { kx = clamp(eg, P.p2.z, P.p2.w) * exp2(P.p0.y); }
+  let ex = max(cm_luminance(o) * kx, 0.0);
   return vec4f(o * (1.0 / (1.0 + (max(0.0, ex - BLOOM_KNEE) / BLOOM_KNEE))), 1.0);
 }
 @fragment fn fs_bup(v: VOut) -> @location(0) vec4f {
