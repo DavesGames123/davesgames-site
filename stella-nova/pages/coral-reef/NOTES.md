@@ -77,3 +77,21 @@ Append a dated line: from, to, what.
   rock.sand.sdf(x, y, z) and rock.sdfAll (min of rock and sand).
   sampleSurface now works with mesh: false (sphere-traced rays from
   above and from the sides). rov 76/76 and coral 78/78 pass on it.
+- 2026-10-17 SCENE (stability) -> CORAL: four requests from the crash and
+  saver audit (budget.js, coral-link.js, tests/saver-page.test.mjs):
+  - mesh-worker.js `single` and `reset` return when R is null (before
+    `init` has built the rock), so a message in that time is lost and the
+    page waits on a gen that never comes. Please queue them until init
+    ends. The page now waits for `ready` before the saver `single`.
+  - Brick churn: at desktop quality the worker posted 878 MB of brick
+    arrays in 485 k bricks in 150 s (node, rate Infinity). The page
+    rebuilds a chunk for each, so the garbage load is high on a phone.
+    Please coalesce a brick that changes more than once in a tick, and
+    send a dirty brick at most once per 300 ms.
+  - The page now sends `budget: { particles, colonies, tris, polyps }`
+    in `init` (budget.js reefBudget: Many 44 on desktop, Few 30 on
+    laptop-low and phone, phone caps 25 k particles and 500 k tris).
+    reef.js already merges it into Q; please keep that path.
+  - polyps: scene.js uploads every polyp and only skips some in the
+    vertex shader (uKeep). A `view` budget for the polyps (as for the
+    fine tris) would cut the upload on phones.
