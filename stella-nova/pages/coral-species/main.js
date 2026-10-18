@@ -122,6 +122,12 @@ if (S) {
   S.setLut(lut(G.gradient, 256, G.rev));
   S.U.uDown.value = G.down; S.U.uCaust.value = G.caust;
   if (S.passes) { S.passes.volU.uScatter.value = LOOK.scatter; S.passes.volU.uShaft.value = LOOK.shaft; }
+  // the auto exposure of scene.js writes uExposure inside render(), after
+  // any cap set before it: the uniform itself refuses values over expMax
+  if (S.passes) {
+    let ex = Math.min(LOOK.expMax, S.passes.compU.uExposure.value);
+    Object.defineProperty(S.passes.compU.uExposure, 'value', { get: () => ex, set: v => { ex = Math.min(LOOK.expMax, v); }, configurable: true });
+  }
   for (const L of [keyLamp, fillLamp]) { L.target = new THREE.Object3D(); S.scene.add(L, L.target); }
   S.setLights([keyLamp, fillLamp], 1);          // one main lamp: the key lamp casts the shadow
   const C = S.controls;
@@ -490,9 +496,9 @@ function frame(t) {
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
   frameCamera(dt, now);
   placeLamps(ac.goal());
-  // cap the auto exposure (scene.js sets uExposure from post.exposure)
-  if (S.post && S.post.exposure > LOOK.expMax) { S.post.exposure = LOOK.expMax; if (S.passes) S.passes.compU.uExposure.value = LOOK.expMax; }
   S.render(dt, now);
+  // the eased exposure state of scene.js follows the cap too
+  if (S.post && S.post.exposure > LOOK.expMax) S.post.exposure = LOOK.expMax;
 }
 
 // The look state for the node checks (tests.mjs)

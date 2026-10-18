@@ -230,7 +230,9 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     const lk = P.win.__speciesLook && P.win.__speciesLook();
     ok(lk && lk.down <= 1 && Number(d.getElementById('sDown').value) === lk.down, `light from above ${lk && lk.down} (was 2), the slider agrees`);
     ok(lk && lk.scatter !== null && lk.scatter <= 0.25 && lk.shaft <= 0.6, `volume in-scatter ${lk && lk.scatter}, shafts ${lk && lk.shaft} (were 1 and 1: a milky veil)`);
-    ok(lk && lk.exposure <= 3 && lk.uExposure <= 3, `auto exposure capped: ${lk && lk.exposure}`);
+    let expMaxSeen = 0;
+    for (let i = 0; i < 48; i++) { P.frames(1); const q = P.win.__speciesLook(); expMaxSeen = Math.max(expMaxSeen, q.uExposure, q.exposure); }
+    ok(lk && expMaxSeen <= 3, `auto exposure capped on every frame (48 frames, 4 auto exposure updates): most ${expMaxSeen}`);
     ok(lk && lk.key / lk.fill >= 4, `key to fill ${lk && (lk.key / lk.fill).toFixed(1)} (was 2.5): the lamp direction reads`);
     const n1 = Number(d.getElementById('rN').textContent.replace(/\D/g, ''));
     ok(n1 > 5, `the colony grows on the main thread runner: ${n1} particles after 6 s, state "${d.getElementById('rState').textContent}"`);
