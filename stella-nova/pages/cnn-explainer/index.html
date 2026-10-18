@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="A real convolutional neural network (Tiny VGG from CNN Explainer, Wang et al., IEEE VIS 2020) runs in your browser on a 64 × 64 photo. See every feature map, point at a cell to trace what feeds it, and click any map to watch the convolution, ReLU, max pooling and softmax step by step.">
+<meta name="color-scheme" content="dark">
+<title>CNN Explainer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CNN EXPLAINER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Our own page after CNN Explainer (Wang et al., IEEE VIS 2020,
+   github.com/poloclub/cnn-explainer, MIT). It runs their trained Tiny VGG
+   with our own forward pass (net.js) and draws every activation.
+   Sources and licences: CREDITS.md.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: brand · title · #pred · #viewBtn · #creditsBtn            │
+     ├──────────────┬───────────────────────────────────────────────────┤
+     │ #learn       │ #stage                                             │
+     │  explain.js  │   #strip   example photos · #upload · #camBtn      │
+     │  (the walk   │   #netWrap  canvas #netCv: the whole network       │
+     │   through)   │   #detail   the animated detail view (a card)      │
+     └──────────────┴───────────────────────────────────────────────────┘
+     #viewPop   gradient picker (lib/growth-gradients.js) and the scale
+     #credits   a drawer with the sources
+     #cam       the camera snapshot dialog
+
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #stage scrolls: the strip, then the layers as blocks, top to bottom
+     #detail is a bottom sheet; #learn is a bottom sheet (#sheetGrip)
+     #dock   Learn · Photos · Colours
+
+   FILES
+     main.js     boot, state, events, the overview canvas, the page API
+     net.js      the forward pass        layout.js  where each map sits
+     draw.js     the overview drawing    scenes.js  the detail scenes
+     detail.js   the detail view         explain.js the explainer column
+     maps.js     a canvas per map        colour.js  values -> colours
+     image.js    picture -> 64 x 64      playground.js  widget maths
+     data.js     the example photos      saver.js   window.snSaver
+     tests.mjs   runs tests/*.test.mjs
+
+   GREP MAP (main.js)
+     grep -n 'export async function boot'   boot order
+     grep -n 'function run'                 one picture through the net
+     grep -n 'function drawNet'             the overview frame
+     grep -n 'function onPointer'           hover and click on the overview
+     grep -n 'function onKey'               keyboard on the overview
+     grep -n 'SAVER SEAM'                   where saver.js plugs in
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="../../lib/growth-gradients.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header class="topbar">
+  <div class="brand">Stella Nova</div>
+  <h1 class="pagetitle">CNN Explainer</h1>
+  <div id="pred" class="pred" role="status" aria-live="polite"><span class="pred-word">Loading the network…</span></div>
+  <div class="spacer"></div>
+  <button id="viewBtn" class="ghost" aria-controls="viewPop" aria-expanded="false">Colours</button>
+  <button id="creditsBtn" class="ghost" aria-controls="credits" aria-expanded="false">Credits</button>
+</header>
+
+<aside id="learn" class="open" aria-label="How a CNN sees a picture">
+  <div id="sheetGrip" role="button" tabindex="0" aria-label="Resize the explainer"><span></span></div>
+  <button id="learnClose" class="mini sheet-close" aria-label="Close the explainer">✕</button>
+  <div id="learnBody" class="learn-body"></div>
+</aside>
+
+<main id="stage">
+  <div id="strip" class="strip" aria-label="Pictures">
+    <div id="stripEx" class="strip-ex" role="radiogroup" aria-label="Example photos"></div>
+    <div class="strip-own">
+      <label class="ph-btn" id="uploadLbl" title="Pick a photo from your device">
+        <input id="upload" type="file" accept="image/*" hidden>
+        <span>Photo</span>
+      </label>
+      <button id="camBtn" class="ph-btn" type="button" title="Take a picture with your camera">Camera</button>
+    </div>
+  </div>
+  <div id="netWrap" class="net-wrap">
+    <canvas id="netCv" tabindex="0" role="img" aria-roledescription="network view"
+      aria-label="The network, layer by layer. Arrow keys move between feature maps, Enter opens the detail view of a map."></canvas>
+    <div id="netTip" class="net-tip" hidden></div>
+    <div id="netHint" class="net-hint">point at a map to see what feeds it · click it to watch the maths</div>
+  </div>
+  <p id="netLive" class="sr-only" aria-live="polite"></p>
+</main>
+
+<section id="detail" class="detail" hidden aria-labelledby="detailTitle">
+  <header class="d-head">
+    <div class="d-titles"><h2 id="detailTitle"></h2><span id="detailSub" class="d-sub"></span></div>
+    <button id="dClose" class="mini" aria-label="Close the detail view" title="Close (Esc)">✕</button>
+  </header>
+  <div id="detailMath" class="sci-eq d-math"></div>
+  <canvas id="detailCv" class="d-cv" tabindex="0" aria-label="Animated detail of the map. Space plays or pauses, the arrow keys step."></canvas>
+  <footer class="d-foot">
+    <button id="dPrev" class="mini" aria-label="One step back" title="Step back (←)">◀︎</button>
+    <button id="dPlay" class="mini d-play" aria-label="Pause">❚❚</button>
+    <button id="dNext" class="mini" aria-label="One step on" title="Step on (→)">▶︎</button>
+    <label class="d-speed"><span>Speed</span><input id="dSpeed" type="range" min="0" max="100" value="24" aria-label="Scan speed"><b id="dSpeedVal"></b></label>
+    <span id="dPos" class="d-pos"></span>
+  </footer>
+  <p id="detailText" class="d-text"></p>
+  <p id="detailLive" class="sr-only" aria-live="polite"></p>
+</section>
+
+<div id="viewPop" class="pop" hidden role="dialog" aria-label="Colours">
+  <div id="gradHost"></div>
+  <div class="pop-row">
+    <span class="pop-lbl" id="scaleLbl">Colour scale</span>
+    <div id="scaleSeg" class="seg small" role="radiogroup" aria-labelledby="scaleLbl"></div>
+  </div>
+  <p class="pop-note">Map: each map uses the whole gradient. Layer: maps of one layer compare. Network: all layers compare.</p>
+</div>
+
+<aside id="credits" class="drawer" hidden aria-label="Credits">
+  <button id="creditsClose" class="mini drawer-close" aria-label="Close the credits">✕</button>
+  <h2>Credits and sources</h2>
+  <div id="creditsBody"></div>
+</aside>
+
+<div id="cam" class="cam" hidden role="dialog" aria-label="Camera">
+  <div class="cam-card">
+    <video id="camVideo" playsinline muted></video>
+    <p class="cam-note">The centre square becomes the 64 × 64 input. The picture stays on your device.</p>
+    <div class="cam-row">
+      <button id="camCancel" class="ghost" type="button">Cancel</button>
+      <button id="camTake" class="primary" type="button">Take picture</button>
+    </div>
+  </div>
+</div>
+
+<nav id="dock" aria-label="Phone controls">
+  <button id="dockLearn" aria-expanded="false">Learn</button>
+  <button id="dockPhotos">Photos</button>
+  <button id="dockView" aria-controls="viewPop" aria-expanded="false">Colours</button>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
