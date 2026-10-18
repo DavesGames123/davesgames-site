@@ -2,10 +2,14 @@
 // City Atlas: the same light presets, sky, fog, building colours and
 // orbit camera. main.js loads it on the first switch to 3D.
 //
-// createView3D(canvas, { phone, onInput }) -> view
+// createView3D(canvas, { phone, onInput, dprMax }) -> view
+//   phone    no MSAA, a smaller shadow map and pixel budget
+//   dprMax   the cap of the pixel ratio (main.js: layout.js dprFor, 1.5 on a phone)
 //   view.setCity(city, tl, mesh, field)   mesh: mesh3d.js buildMesh(); field:
 //                                         mesh3d.js fieldLines() (line list)
-//   view.frame({ T, dt, light, field, saver })   one frame at playback time T
+//   view.frame({ T, dt, light, field, saver, offsetX, offsetY })   one frame at
+//                     playback time T; offsetX, offsetY shift the image in NDC
+//                     (layout.js offsets3D: the clear area above the sheet)
 //   view.resize()
 //   view.cam          { target: [x, y, z], yaw, pitch, dist } (radians, metres)
 //   view.goal(cam, k) ease the camera to cam (k: share per second, default 2.5)
@@ -26,9 +30,10 @@
 // grep: export async function createView3D  const LIGHTS  function lightFor  function sunMatrix
 //       function bindOrbit  function frame  function setCity  function size
 
-import { viewProj, lookAt, mul, project as proj, orbitEye } from './camera.js';
+import { viewProj, lookAt, mul, invert, project as proj, orbitEye } from './camera.js';
 import { STRIDE } from './mesh3d.js';
 import { TSTRIDE } from './terrain3d.js';
+import { shiftX } from './layout.js';
 
 // The light presets of City Atlas (pages/city-atlas/renderer.js LIGHTS).
 export const LIGHTS = {
@@ -69,7 +74,8 @@ export async function createView3D(canvas, opts = {}) {
   const format = navigator.gpu.getPreferredCanvasFormat();
   ctx.configure({ device, format, alphaMode: 'opaque' });
   const phone = !!opts.phone;
-  const dpr0 = Math.min(window.devicePixelRatio || 1, 2);
+  const dprMax = clamp(+opts.dprMax || 2, 0.5, 2);
+  const dpr0 = Math.min(window.devicePixelRatio || 1, dprMax);
   const sampleCount = !phone && dpr0 < 2 ? 4 : 1;
   const SHADOW_N = phone ? 1024 : 2048;
 
@@ -140,8 +146,8 @@ export async function createView3D(canvas, opts = {}) {
 
   let W = 1, H = 1, colorT = null, depthT = null;
   function size() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const budget = phone ? 1.3e6 : 2.4e6;
+    const dpr = Math.min(window.devicePixelRatio || 1, dprMax);
+    const budget = phone ? 1.0e6 : 2.4e6;
     let w = Math.max(1, Math.round(window.innerWidth * dpr)), h = Math.max(1, Math.round(window.innerHeight * dpr));
     const k = Math.min(1, Math.sqrt(budget / (w * h)));
     w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
@@ -284,7 +290,11 @@ export async function createView3D(canvas, opts = {}) {
     }
     const lt = lightFor(st.light || 'golden', 210);
     const aspect = W / H;
-    const { vp, eye, inv } = viewProj(cam, aspect, 0.75, st.offsetY || 0);
+    let { vp, eye, inv } = viewProj(cam, aspect, 0.75, st.offsetY || 0);
+    if (st.offsetX) {
+      shiftX(vp, st.offsetX);
+      inv = invert(vp);
+    }
     view.vp = vp;
     const f = frameRaw;
     f.set(vp, 0);

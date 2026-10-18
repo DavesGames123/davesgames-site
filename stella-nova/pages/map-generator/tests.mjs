@@ -611,6 +611,13 @@ section('layout (layout.js: phone modes, framing, gestures; no DOM)');
   check('fitClear puts the town left of the landscape drawer', vl.ox + 960 * vl.s <= 844 - occL.r - 6 + 1e-6 && vl.oy + 640 * vl.s <= 390 - 64 - 6 + 1e-6);
   const o3 = L.offsets3D(390, 844, occ);
   check('offsets3D moves the 3D view up into the clear area (and left for a right drawer)', o3.y > 0 && Math.abs(o3.y - (404 - 120) / 844) < 1e-9 && o3.x === 0 && L.offsets3D(844, 390, occL).x < 0);
+  {
+    const { viewProj, project } = await import('./camera.js');
+    const cam = { target: [0, 0, 0], yaw: 0.4, pitch: 0.6, dist: 900 };
+    const m = viewProj(cam, 390 / 844).vp, q0 = project(m, [50, 20, 10], 390, 844);
+    const q1 = project(L.shiftX(Float32Array.from(m), -0.25), [50, 20, 10], 390, 844);
+    check('shiftX moves every point by offsetX x w / 2 px (the 3D framing)', Math.abs(q1.x - q0.x + 0.25 * 390 / 2) < 1e-3 && Math.abs(q1.y - q0.y) < 1e-6);
+  }
   const S = L.sheetSnap;
   check('sheetSnap: open gives half, a tap toggles half and full, a drag down steps to closed',
     S('closed', 0) === 'half' && S('half', 2) === 'full' && S('full', 0) === 'half' && S('half', -80) === 'full' && S('full', 90) === 'half' && S('half', 90) === 'closed' && S('half', 20) === 'half');

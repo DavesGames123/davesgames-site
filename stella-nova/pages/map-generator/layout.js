@@ -32,6 +32,7 @@
 //       export function clampPan  export function isDoubleTap  export function scrubTime
 //       export function dprFor  export function citySizeFor  export const STAGES
 //       export function progressShare  export function accordionToggle  export const DOCK
+//       export function shiftX
 
 export const PHONE_Q = '(max-width: 768px), (max-height: 500px) and (pointer: coarse)';
 export const LAND_Q = '(max-height: 500px) and (orientation: landscape) and (pointer: coarse), (max-height: 500px) and (orientation: landscape) and (max-width: 768px)';
@@ -114,6 +115,13 @@ export function fitClear(mw, mh, w, h, occ, margin = 0) {
 export function offsets3D(w, h, occ) {
   if (!occ) return { x: 0, y: 0 };
   return { x: (occ.l - occ.r) / Math.max(1, w), y: (occ.b - occ.t) / Math.max(1, h) };
+}
+
+// Shift a column-major view-projection matrix by ox in NDC x (in place),
+// as camera.js viewProj does for offsetY. view3d.js calls it.
+export function shiftX(vp, ox) {
+  for (let c = 0; c < 4; c++) vp[c * 4] += ox * vp[c * 4 + 3];
+  return vp;
 }
 
 // The grip of the bottom sheet. state: 'closed' | 'half' | 'full'.
