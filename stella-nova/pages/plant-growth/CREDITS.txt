@@ -60,20 +60,34 @@ textures and one library from the sources below.
      bark-cherry ... Sakura Bark (Charlotte Baglioni)
      bark-bush ..... Jolcham Oak Bark 01 (Charlotte Baglioni), squashed 2:1
      ground-grass .. Forrest Ground 01 (Rob Tuytel)
-     ground-meadow . Leafy Grass (Charlotte Baglioni)
      ground-litter . Forest Leaves 02 (Rob Tuytel)
    1k diffuse and OpenGL normal maps, resized by tools/prep-textures.py
    (colour 1024 px, normal 512 px). bark-birch and bark-fern are drawn by
    that script (our own).
 
-5. Ground props (assets/props.bin, props.json, prop-*.jpg/png)
-   Poly Haven, https://polyhaven.com, CC0 1.0 (public domain), 1k glTF:
-     rocks ...... Rock Moss Set 01 (Kless Gyzen)
-     stump ...... Tree Stump 01 (Rob Tuytel)
-     fern ....... Fern 02 (Rob Tuytel, Rico Cilliers)
-     celandine .. Celandine 01 (Rob Tuytel, Rico Cilliers)
-     grass ...... Grass Medium 01 (Rob Tuytel, Rico Cilliers)
-   tools/prep-props.py packs the meshes (quantised) and resizes the maps.
+5. The ground ecosystem (eco.js, meadow.js, render.js makeGround)
+   The meshes, maps and impostors come from the site nature pack,
+   stella-nova/assets/nature (see its CREDITS.txt). All CC0 1.0:
+     Poly Haven, https://polyhaven.com
+       celandine_01, dandelion_01, nettle_plant, weed_plant_02,
+       fern_02 (Rob Tuytel, Rico Cilliers); flower_empodium,
+       flower_ursinia (Jenelle van Heerden, Rico Cilliers);
+       flower_heliophila, rock_07, rock_09 (Jenelle van Heerden);
+       periwinkle_plant (Amal Kumar); moss_01, tree_stump_01,
+       brown_mud_02 (Rob Tuytel); stone_01 (Dario Barresi, Rico
+       Cilliers); boulder_01, shrub_02 (Rico Cilliers);
+       rock_moss_set_01, rock_moss_set_02 (Kless Gyzen); fir_tree_01,
+       pine_tree_01 (Rob Tuytel, Rico Cilliers)
+     OpenGameArt: free vegetation asset pack mushrooms (rubberduck);
+       Bushes (Nobiax / Yughues)
+     Mantissa CG (Midge Sinnaeve, https://mantissa.xyz/free.html):
+       Generic Tree Pack and Birch Tree Pack (the woodland impostors)
+     ambientCG (Lennart Demes, https://ambientcg.com): Grass004 and
+       Ground037 (the turf and meadow ground maps)
+   The ideas: the Thomas cluster process, the Strauss and Matern II
+   inhibition processes, Ripley's K (L) function and the power-law size
+   distribution of stones are textbook spatial statistics; the code is
+   our own.
 
 6. three.js r160 (the 3D render)
    https://threejs.org, MIT licence, Copyright 2010-2023 three.js authors.

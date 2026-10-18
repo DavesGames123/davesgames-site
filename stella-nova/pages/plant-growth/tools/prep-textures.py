@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------------------
 #  In: Poly Haven 1k JPG maps (CC0, polyhaven.com), downloaded into SRC:
 #    bark_brown_02, trident_maple_bark, pine_bark, bark_willow, sakura_bark,
-#    jolcham_oak_bark_01 (diff + nor_gl), forrest_ground_01, leafy_grass,
+#    jolcham_oak_bark_01 (diff + nor_gl), forrest_ground_01,
 #    forest_leaves_02 (diff/diffuse + nor_gl).
 #  Out (OUT/assets): bark-<id>-color.jpg (1024), bark-<id>-normal.jpg (512),
 #    ground-<id>-color.jpg (1024), ground-<id>-normal.jpg (512).
@@ -38,7 +38,7 @@ for bid, stem in BARK.items():
     save(Image.open(find(stem, 'diff')), 'bark-%s-color.jpg' % bid, 1024, 82)
     save(Image.open(find(stem, 'nor_gl')), 'bark-%s-normal.jpg' % bid, 512, 85)
 
-GROUND = {'grass': 'forrest_ground_01', 'meadow': 'leafy_grass', 'litter': 'forest_leaves_02'}
+GROUND = {'grass': 'forrest_ground_01', 'litter': 'forest_leaves_02'}   # the meadow and turf come from the nature pack
 for gid, stem in GROUND.items():
     save(Image.open(find(stem, 'diff')), 'ground-%s-color.jpg' % gid, 1024, 80)
     save(Image.open(find(stem, 'nor_gl')), 'ground-%s-normal.jpg' % gid, 512, 85)
