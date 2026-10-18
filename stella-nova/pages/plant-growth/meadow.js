@@ -557,7 +557,7 @@ function loadAsset(THREE, cache, man, id, lod) {
 export function createMeadow(ctx) {
   const { THREE, scene, U, COMMON, coarse } = ctx;
   const group = new THREE.Group(); scene.add(group);
-  const cache = { geo: new Map(), tex: new Map(), loader: new THREE.TextureLoader(), mats: new Map() };
+  const cache = { geo: new Map(), tex: new Map(), loader: new THREE.TextureLoader(), mats: new Map(), imp: new Map() };
   let man = null, eco = null, token = 0;
   const manP = fetch(NAT + 'manifest.json').then(r => r.json()).then(j => { man = j; }).catch(() => { man = null; });
 
@@ -584,7 +584,13 @@ export function createMeadow(ctx) {
   let props = [], woods = [];
   const impMats = [];
 
-  function clear(list) { for (const o of list) { group.remove(o); if (o.isInstancedMesh) o.dispose(); else if (o.geometry && o.geometry.isInstancedBufferGeometry) o.geometry.dispose(); } list.length = 0; }
+  // each sowing (each saver shot) rebuilds the props: free the per-build
+  // geometry (a clone with its own aE buffer, or an instanced quad) and
+  // the instance matrices
+  function clear(list) {
+    for (const o of list) { group.remove(o); if (o.isInstancedMesh) o.dispose(); if (o.geometry) o.geometry.dispose(); }
+    list.length = 0;
+  }
   function instGeo(src, attrs, n) {
     const g = new THREE.InstancedBufferGeometry();
     g.index = src.index;
@@ -687,10 +693,12 @@ export function createMeadow(ctx) {
       if (!rec || !rec.impostor) continue;
       const im = rec.impostor, url = new URL(im.albedo, NAT).href;
       if (!cache.tex.has(url)) { const t = cache.loader.load(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; cache.tex.set(url, t); }
-      const decid = !/fir|pine/.test(id);
-      const mat = impostorMaterial(THREE, U, { tex: cache.tex.get(url), half: im.sideHalfSize, cy: im.centre[1] }, decid);
-      mat.uniforms.uClock = U.uClock; mat.uniforms.uSnow = U.uSnow;
-      impMats.push(mat);
+      let mat = cache.imp.get(id);   // one material per tree asset, kept across sowings
+      if (!mat) {
+        mat = impostorMaterial(THREE, U, { tex: cache.tex.get(url), half: im.sideHalfSize, cy: im.centre[1] }, !/fir|pine/.test(id));
+        mat.uniforms.uClock = U.uClock; mat.uniforms.uSnow = U.uSnow;
+        cache.imp.set(id, mat); impMats.push(mat);
+      }
       const W0 = new Float32Array(items.length * 4), W1 = new Float32Array(items.length * 4);
       items.forEach((w, i) => { W0.set([w.x, groundY(w.x, w.z) - 0.2, w.z, w.scale], i * 4); W1.set([w.rot, w.rand, 0, 0], i * 4); });
       const g = instGeo(quadW, [['aW0', W0, 4], ['aW1', W1, 4]], items.length);
