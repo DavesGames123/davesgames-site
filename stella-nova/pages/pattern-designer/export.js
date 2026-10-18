@@ -29,6 +29,9 @@ import { inkOf } from './palettes.js';
 export function applyMode(items, mode) {
   if (!mode || mode === 'auto') return items;
   return items.map(e => {
+    // An echo (engine.js echo) is a paper line inside a solid: in Lines
+    // mode it takes the ink of its solid, and the solid modes keep it.
+    if (e.e != null) return mode === 'stroke' ? Object.assign({}, e, { s: e.e }) : e;
     const closed = e.t !== 'poly' || e.c;
     const ink = e.f !== -1 ? e.f : e.s;
     if (mode === 'stroke') return Object.assign({}, e, { f: -1, s: ink });
@@ -40,6 +43,52 @@ export function applyMode(items, mode) {
 // The colour of slot k: -1 none, -2 the paper.
 const col = (pal, k) => k === -2 ? pal.bg : inkOf(pal, k);
 const n2 = v => (Math.round(v * 100) / 100).toString();
+
+// Compact path data for the pattern body: points on a 0.1 unit grid
+// (0.02 mm on an A4 sheet), an absolute move, then relative steps. Each
+// step is the difference of two rounded points, so no error builds up.
+const T = v => Math.round(v * 10);
+function nums(a) {
+  let s = '';
+  for (let i = 0; i < a.length; i++) {
+    let t = String(a[i] / 10);
+    if (t.startsWith('0.')) t = t.slice(1); else if (t.startsWith('-0.')) t = '-' + t.slice(2);
+    s += (i && t[0] !== '-' ? ' ' : '') + t;
+  }
+  return s;
+}
+export function pathRel(p, closed, sm) {
+  const m = p.length / 2;
+  let px = T(p[0]), py = T(p[1]), d = 'M' + nums([px, py]);
+  if (!sm || m < 3) {
+    const a = [];
+    for (let i = 1; i < m; i++) { const x = T(p[2 * i]), y = T(p[2 * i + 1]); a.push(x - px, y - py); px = x; py = y; }
+    if (a.length) d += 'l' + nums(a);
+  } else {
+    const a = [];
+    crSegments(p, closed, (c1x, c1y, c2x, c2y, x, y) => {
+      const X = T(x), Y = T(y);
+      a.push(T(c1x) - px, T(c1y) - py, T(c2x) - px, T(c2y) - py, X - px, Y - py); px = X; py = Y;
+    });
+    d += 'c' + nums(a);
+  }
+  return closed ? d + 'z' : d;
+}
+// A circle as two arcs, in the positive turn (the same turn as a ring of
+// positive area), so merged solids add under the nonzero rule.
+function circleRel(x, y, r) {
+  const R = T(r);
+  return 'M' + nums([T(x) + R, T(y)]) + 'a' + nums([R, R]) + ' 0 1 1' + nums([-2 * R, 0]) + 'a' + nums([R, R]) + ' 0 1 1' + nums([2 * R, 0]) + 'z';
+}
+// A ring in the positive turn (for a merged solid).
+const posTurn = p => signedArea(p) >= 0 ? p : reverseRing(p);
+function reverseRing(p) { const q = new Array(p.length); for (let i = 0, m = p.length / 2; i < m; i++) { q[2 * i] = p[2 * (m - 1 - i)]; q[2 * i + 1] = p[2 * (m - 1 - i) + 1]; } return q; }
+function signedArea(p) { let s = 0; const m = p.length / 2; for (let i = 0; i < m; i++) { const j = (i + 1) % m; s += p[2 * i] * p[2 * j + 1] - p[2 * j] * p[2 * i + 1]; } return s; }
+// An element can share one path with its neighbours of the same style
+// when the merge draws the same picture: a line or outline (strokes add),
+// or a solid with no stroke that is not even-odd (rings in one turn add).
+const mergeable = e => e.f === -1 || (e.s === -1 && e.t !== 'multi');
+export const MERGE_MAX = 4000;     // subpaths per merged path
 
 // SVG path data for a flat point list. sm: Catmull-Rom as cubic Beziers.
 export function pathData(p, closed, sm) {
@@ -78,20 +127,34 @@ export function toSVG(items, o) {
   if (clipD) L.push(`  <defs><clipPath id="pd-clip"><path d="${clipD}" clip-rule="evenodd"/></clipPath></defs>`);
   L.push(`  <rect id="paper" width="${n2(W)}" height="${n2(H)}" fill="${pal.bg}"/>`);
   L.push(`  <g id="pattern"${clipD ? ' clip-path="url(#pd-clip)"' : ''} stroke-linecap="round" stroke-linejoin="round">`);
-  let cur = null;
+  // A run of mergeable elements of one style goes out as one path (at
+  // most MERGE_MAX subpaths), so a dense pattern stays a small file.
+  let cur = null, run = [], runN = 0;
+  const flush = () => { if (run.length) L.push(`      <path d="${run.join('')}"/>`); run = []; runN = 0; };
   for (const e of items) {
     const fill = e.f === -1 ? 'none' : col(pal, e.f), stroke = e.s === -1 ? 'none' : col(pal, e.s);
     const sw = stroke === 'none' ? 0 : lw * (e.w || 1) * (e.s === -2 ? 0.8 : 1);
     const key = fill + '|' + stroke + '|' + n2(sw);
     if (key !== cur) {
+      flush();
       if (cur) L.push('    </g>');
       L.push(`    <g fill="${fill}" stroke="${stroke}"${sw ? ` stroke-width="${n2(sw)}"` : ''}>`);
       cur = key;
     }
+    if (mergeable(e)) {
+      const solid = e.f !== -1;
+      if (e.t === 'circle') run.push(circleRel(e.x, e.y, e.r));
+      else if (e.t === 'multi') for (const r of e.rr) run.push(pathRel(r, true, e.sm));
+      else run.push(pathRel(solid ? posTurn(e.p) : e.p, !!e.c, e.sm));
+      if (++runN >= MERGE_MAX) flush();
+      continue;
+    }
+    flush();
     if (e.t === 'circle') L.push(`      <circle cx="${n2(e.x)}" cy="${n2(e.y)}" r="${n2(e.r)}"/>`);
-    else if (e.t === 'multi') L.push(`      <path fill-rule="evenodd" d="${e.rr.map(r => pathData(r, true, e.sm)).join('')}"/>`);
-    else L.push(`      <path d="${pathData(e.p, !!e.c, e.sm)}"/>`);
+    else if (e.t === 'multi') L.push(`      <path fill-rule="evenodd" d="${e.rr.map(r => pathRel(r, true, e.sm)).join('')}"/>`);
+    else L.push(`      <path d="${pathRel(e.p, !!e.c, e.sm)}"/>`);
   }
+  flush();
   if (cur) L.push('    </g>');
   L.push('  </g>');
   if (o.frame && clipD) L.push(`  <path id="frame" d="${clipD}" fill="none" stroke="${inkOf(pal, 0)}" stroke-width="${n2(lw * 1.5)}"/>`);
@@ -132,6 +195,7 @@ export function drawItems(g, items, o) {
     g.clip('evenodd');
   }
   const plan = o.reveal, T = plan ? (o.t ?? 1) * plan.total : Infinity;
+  if (!plan) { drawBatched(g, items, pal, lw); g.restore(); drawFrame(g, o, pal, lw); return; }
   for (let i = 0; i < items.length; i++) {
     const e = items[i];
     let part = 1, alpha = 1;
@@ -156,11 +220,46 @@ export function drawItems(g, items, o) {
     g.globalAlpha = 1;
   }
   g.restore();
-  if (o.frame && o.clip && o.clip.length) {
-    g.save(); g.beginPath();
-    for (const r of o.clip) { g.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) g.lineTo(r[i], r[i + 1]); g.closePath(); }
-    g.lineWidth = lw * 1.5; g.strokeStyle = inkOf(pal, 0); g.stroke(); g.restore();
+  drawFrame(g, o, pal, lw);
+}
+function drawFrame(g, o, pal, lw) {
+  if (!(o.frame && o.clip && o.clip.length)) return;
+  g.save(); g.beginPath();
+  for (const r of o.clip) { g.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) g.lineTo(r[i], r[i + 1]); g.closePath(); }
+  g.lineWidth = lw * 1.5; g.strokeStyle = inkOf(pal, 0); g.stroke(); g.restore();
+}
+// The full draw: a run of mergeable elements of one style (see toSVG)
+// is one canvas path and one fill or stroke call, so 100 000 small
+// motifs cost a few hundred calls, not 100 000.
+function drawBatched(g, items, pal, lw) {
+  let key = '', n = 0, mode = 0;      // mode 1 stroke, 2 fill
+  const flush = () => {
+    if (!n) return;
+    if (mode === 2) g.fill('nonzero'); else g.stroke();
+    n = 0;
+  };
+  for (let i = 0; i < items.length; i++) {
+    const e = items[i];
+    if (mergeable(e)) {
+      const solid = e.f !== -1, k = solid ? 'f' + e.f : 's' + e.s + '|' + (e.w || 1);
+      if (k !== key || n >= MERGE_MAX) {
+        flush(); key = k; mode = solid ? 2 : 1;
+        g.beginPath();
+        if (solid) g.fillStyle = col(pal, e.f);
+        else { g.strokeStyle = col(pal, e.s); g.lineWidth = lw * (e.w || 1) * (e.s === -2 ? 0.8 : 1); }
+      }
+      if (solid && e.t === 'poly') tracePath(g, Object.assign({}, e, { p: posTurn(e.p) }));
+      else tracePath(g, e);
+      n++;
+      continue;
+    }
+    flush(); key = '';
+    g.beginPath();
+    tracePath(g, e);
+    if (e.f !== -1) { g.fillStyle = col(pal, e.f); g.fill(e.t === 'multi' ? 'evenodd' : 'nonzero'); }
+    if (e.s !== -1) { g.strokeStyle = col(pal, e.s); g.lineWidth = lw * (e.w || 1) * (e.s === -2 ? 0.8 : 1); g.stroke(); }
   }
+  flush();
 }
 // The reveal plan: each element gets a start and a length on one time
 // line. Strokes cost their length, fills a fixed share, so a field of
