@@ -7,13 +7,17 @@
 //    composer      MSAA render target, a soft bloom, the output pass
 //    camera        perspective; flyTo() eases it to a pose; OrbitControls
 //                  turn it, and a slow drift turns it when the reader is idle
+//    backdrop      makeBackdrop(): a screen-space quad, lighter at the
+//                  bottom edge; it replaced a world floor disc whose rim
+//                  showed as a flat dark band over the top of the view
 //    light         a room environment (PMREM) plus a key and a rim light
 //    labels        HTML labels that follow 3D points
 //    occlusion     setViewOffset frames the subject in the free part of the
 //                  canvas (the phone sheet covers the lower part)
 //
 //  GREP MAP   (grep -n "<anchor>" stage.js)
-//    "export function createStage"  "function resize"  "function flyTo"
+//    "export function makeBackdrop"  "export function createStage"
+//    "function resize"  "function flyTo"
 //    "function frame"  "function addLabel"  "function setOcclusion"
 // ============================================================================
 import { THREE, LINE_MATS, RES, DPR, ease5 } from './kit.js';
@@ -23,6 +27,23 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// The backdrop: an opaque full-view quad, drawn first (renderOrder), lit
+// from the bottom edge up. It writes no depth, so the scene draws over it.
+// Its colour is a function of the screen y only, so no camera pose, resize
+// or view offset can put an edge in it. Colours are linear: BACKDROP_BG is
+// the clear colour 0x07090d, BACKDROP_TINT the old floor tint.
+export const BACKDROP_BG = [0.00212, 0.00273, 0.00402];
+export const BACKDROP_TINT = [0.10, 0.13, 0.18];
+export function makeBackdrop() {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    transparent: false, depthTest: false, depthWrite: false,
+    vertexShader: 'varying float vY; void main(){ vY = position.y * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: 'varying float vY; void main(){ float s = smoothstep(0.0, 1.0, vY); gl_FragColor = vec4(mix(vec3(' + BACKDROP_BG.join(', ') + '), vec3(' + BACKDROP_TINT.join(', ') + '), mix(0.22, 0.03, s)), 1.0); }',
+  }));
+  m.frustumCulled = false; m.renderOrder = -1e6; m.name = 'backdrop';
+  return m;
+}
 
 export function createStage(canvas, { labelsEl = null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -40,14 +61,10 @@ export function createStage(canvas, { labelsEl = null } = {}) {
   const rim = new THREE.DirectionalLight(0x9cc8ff, 0.9); rim.position.set(-4, 2, -5); scene.add(rim);
   scene.add(new THREE.HemisphereLight(0x8fa6c8, 0x0a0c10, 0.35));
 
-  // A faint floor disc gives depth without a grid.
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(9, 96), new THREE.ShaderMaterial({
-    uniforms: {}, transparent: true, depthWrite: false,
-    vertexShader: 'varying vec2 vU; void main(){ vU = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'varying vec2 vU; void main(){ float r = length(vU) / 9.0; float a = 0.22 * (1.0 - smoothstep(0.0, 1.0, r)); gl_FragColor = vec4(vec3(0.10, 0.13, 0.18), a); }',
-  }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = -2.2;
-  scene.add(floor);
+  // A screen-space backdrop gives depth without a grid. (A world floor disc
+  // ended inside the view at most chapter poses: its far rim cut the view
+  // into a flat dark top and a lit bottom.)
+  scene.add(makeBackdrop());
 
   const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 200);
   camera.position.set(4, 2.6, 5.5);
