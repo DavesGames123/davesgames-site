@@ -132,7 +132,9 @@ function warpItem(e, f, step) {
     }
     const p = [], n = Math.max(24, Math.min(160, Math.ceil(TAU * e.r / step)));
     for (let i = 0; i < n; i++) { const a = TAU * i / n; p.push(...f(e.x + e.r * Math.cos(a), e.y + e.r * Math.sin(a))); }
-    return { t: 'poly', p, c: 1, f: e.f, s: e.s, w: e.w };
+    const q = { t: 'poly', p, c: 1, f: e.f, s: e.s, w: e.w };
+    if (e.e != null) q.e = e.e;
+    return q;
   }
   const map = q => { const r = resample(q, step, true); const o = new Array(r.length); for (let i = 0; i < r.length; i += 2) { const [x, y] = f(r[i], r[i + 1]); o[i] = x; o[i + 1] = y; } return o; };
   if (e.t === 'multi') return Object.assign({}, e, { rr: e.rr.map(map) });
@@ -225,7 +227,7 @@ function doRepeat(items, m, W, H) {
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const ox = g + i * (cw + g) + (cw - W * k) / 2, oy = g + j * (ch + g) + (ch - H * k) / 2;
     for (const e of items) { const q = mapItem(e, [k, 0, 0, k, ox, oy]); if (q.w) q.w *= Math.max(0.35, k); out.push(q); }
-    if (out.length > CAP.nodes) break;
+    if (out.length > LIM.nodes) break;
   }
   return out;
 }
@@ -262,16 +264,19 @@ function doDash(items, m) {
           on = !on; left = on ? D : G;
         }
       }
-      if (out.length > CAP.nodes) break;
+      if (out.length > LIM.nodes) break;
     }
     if (on && cur && cur.length >= 4 && m.kind !== 'dots') out.push(Object.assign({}, e, { t: 'poly', p: cur, c: 0, sm: 0 }));
   }
   return out;
 }
 
+// The caps of the run in progress (applyModifiers sets them).
+let LIM = CAP;
 // Run the stack. Returns { items, clip, frame, capped }. clip: rings for
 // the SVG <clipPath> (the last clip in the stack).
-export function applyModifiers(items, stack, W, H, seed = 1) {
+export function applyModifiers(items, stack, W, H, seed = 1, cap = CAP) {
+  LIM = cap;
   const S = Math.min(W, H), step = S / 160;
   let cur = items, clip = null, frame = false, capped = false;
   (stack || []).forEach((m, i) => {
@@ -286,12 +291,12 @@ export function applyModifiers(items, stack, W, H, seed = 1) {
       case 'jitter': cur = doJitter(cur, m, W, H, sd); break;
       case 'dash': cur = doDash(cur, m); break;
     }
-    if (cur.length > CAP.nodes) { cur = cur.slice(0, CAP.nodes); capped = true; }
+    if (cur.length > LIM.nodes) { cur = cur.slice(0, LIM.nodes); capped = true; }
   });
   let pts = 0; const out = [];
   for (const e of cur) {
     const n = e.t === 'circle' ? 1 : e.t === 'multi' ? e.rr.reduce((a, r) => a + r.length / 2, 0) : e.p.length / 2;
-    if (pts + n > CAP.points) { capped = true; break; }
+    if (pts + n > LIM.points) { capped = true; break; }
     pts += n; out.push(e);
   }
   return { items: out, clip: clip && clip.length ? clip : null, frame, capped };

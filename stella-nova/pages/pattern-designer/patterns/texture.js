@@ -51,7 +51,7 @@ export default [
     gen(P, ctx) {
       const T = tone(toneField(P.field, ctx), P);
       const rFn = (x, y) => { const d = 1 - T(x, y); return P.grain * (1 + P.spread * d * d * 1.4); };
-      const pts = poisson(ctx.W, ctx.H, rFn, P.grain, ctx.rnd, 22000);
+      const pts = poisson(ctx.W, ctx.H, rFn, P.grain, ctx.rnd, Math.min(90000, 22000 * Math.max(1, (ctx.D || 1) ** 2)));
       for (let i = 0; i < pts.length && !ctx.out.full(); i += 2) {
         const x = pts[i], y = pts[i + 1], t = T(x, y);
         const ink = P.inks === 1 ? 0 : clamp(Math.floor((1 - t) * P.inks), 0, P.inks - 1);

@@ -15,25 +15,34 @@
 //    { t:'poly',   p:[x0,y0,x1,y1,..], c:0|1, f, s, w, sm }
 //    { t:'multi',  rr:[[..],[..]], f, s, w, sm }   closed rings, even-odd
 //    { t:'circle', x, y, r, f, s, w }
-//  f and s are palette slots (0..4) or -1 for none. The page maps slot k
+//  f and s are palette slots (0..4), -1 for none or -2 for the paper.
+//  e (echo lines only) is the ink slot of the solid that holds the echo. The page maps slot k
 //  to ink k mod (number of inks), so the palette can change with no new
 //  run. w multiplies the line weight. c: the ring is closed. sm: draw the
 //  points as a Catmull-Rom curve, not as straight segments.
 //
+//  DENSITY. run() takes opt { D, detail } (density.js). D scales the
+//  count params (densify) and thins the line weights (thinFactor); gen()
+//  sees D as ctx.D, so a pattern can raise its own element budget.
+//  detail > 0 adds the echo pass: inner outlines in closed convex motifs.
+//
 //  CAPS. Out stops at CAP.nodes elements and CAP.points points, and sets
-//  capped. Heavy patterns run in worker.js.
+//  capped. A phone passes a lower cap (density.js runCap). Heavy patterns
+//  run in worker.js.
 //
 //  grep -n targets
 //    random source ........ "function makeRng"
 //    noise ................ "function makeNoise"
 //    output list .......... "class Out"
 //    run one pattern ...... "export function run"
+//    echo pass ............ "export function echo"
 //    contours ............. "export function contours"
 //    poisson disc ......... "export function poisson"
 //    geometry helpers ..... "GEOMETRY"
 // ============================================================================
+import { densify, thinFactor, clampD, clampDetail } from './density.js';
 export const UNIT = 1000;
-export const CAP = { nodes: 24000, points: 600000 };
+export const CAP = { nodes: 160000, points: 2400000 };
 export const TAU = Math.PI * 2;
 export const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -167,12 +176,67 @@ export function boardSize(aspect) {
 }
 
 // Run one pattern. Returns { items, capped, points, ms }.
-export function run(pat, P, seed, W, H, cap = CAP) {
+// opt: { D, detail } (density.js). D scales the count params (densify)
+// and thins the line weights; detail adds the echo pass. With no opt the
+// run is the pattern as its sliders say.
+export function run(pat, P, seed, W, H, cap = CAP, opt = null) {
   const t0 = (typeof performance !== 'undefined' ? performance : Date).now();
-  const rng = makeRng(seed, pat.id), out = new Out(cap);
-  const ctx = { W, H, S: Math.min(W, H), cx: W / 2, cy: H / 2, rng, rnd: rng.next, noise: makeNoise(makeRng(seed, pat.id + '/noise').next), out };
-  pat.gen(clampParams(pat, P), ctx);
+  const D = opt && opt.D ? clampD(opt.D) : 1, detail = opt ? clampDetail(opt.detail) : 0;
+  const rng = makeRng(seed, pat.id), out = new Out(cap || CAP);
+  const ctx = { W, H, S: Math.min(W, H), cx: W / 2, cy: H / 2, rng, rnd: rng.next, noise: makeNoise(makeRng(seed, pat.id + '/noise').next), out, D };
+  pat.gen(densify(pat, clampParams(pat, P), D), ctx);
+  if (D !== 1) { const k = thinFactor(pat, D); if (k !== 1) for (const e of out.items) e.w = rd(e.w * k); }
+  if (detail > 0) echo(out, detail, D);
   return { items: out.items, capped: out.capped, points: out.points, ms: (typeof performance !== 'undefined' ? performance : Date).now() - t0 };
+}
+
+// ── echo pass ──────────────────────────────────────────────────────────────
+// Inner outlines inside closed convex motifs (and discs), so a solid tile
+// gets a layered inner pattern. A solid gets paper lines (s -2, with e set
+// to its ink so the Lines mode can draw them in the ink); an outline gets
+// inner outlines of its own ink. The gap between echoes falls with D. The
+// pass reads only the elements of the pattern, never its own echoes.
+const ECHO_GAP = 8;
+export function echo(out, detail, D = 1) {
+  const n0 = out.items.length, gap = Math.max(3, ECHO_GAP / Math.sqrt(D)), K = Math.max(1, Math.round(detail * 6));
+  for (let i = 0; i < n0 && !out.full(); i++) {
+    const e = out.items[i];
+    if (e.e != null) continue;
+    const solid = e.f >= 0, ink = solid ? e.f : e.s;
+    if (ink < 0) continue;
+    const o = solid ? { f: -1, s: -2, w: 0.45 * Math.min(1, e.w || 1) } : { f: -1, s: ink, w: 0.6 * (e.w || 1) };
+    if (e.t === 'circle') {
+      const k = Math.min(K, Math.floor(e.r / gap) - 1);
+      for (let j = 1; j <= k; j++) {
+        const r = e.r * (1 - j / (k + 1));
+        if (out.circle(e.x, e.y, r, o)) out.items[out.items.length - 1].e = ink;
+      }
+      continue;
+    }
+    if (e.t !== 'poly' || !e.c || e.p.length < 6 || !convex(e.p)) continue;
+    const p = e.p, A = Math.abs(ringArea(p)), L = polyLength(p, true), ri = L > 0 ? 2 * A / L : 0;
+    const k = Math.min(K, Math.floor(ri / gap) - 1);
+    if (k < 1) continue;
+    const [cx, cy] = centroid(p);
+    for (let j = 1; j <= k; j++) {
+      const t = 1 - j / (k + 1), q = new Array(p.length);
+      for (let m = 0; m < p.length; m += 2) { q[m] = cx + (p[m] - cx) * t; q[m + 1] = cy + (p[m + 1] - cy) * t; }
+      if (out.poly(q, true, Object.assign({ sm: e.sm }, o))) out.items[out.items.length - 1].e = ink;
+    }
+  }
+}
+// A ring with all its turns the same way (collinear points pass).
+function convex(p) {
+  const m = p.length / 2; let sg = 0;
+  for (let i = 0; i < m; i++) {
+    const a = (i + 1) % m, b = (i + 2) % m;
+    const z = (p[2 * a] - p[2 * i]) * (p[2 * b + 1] - p[2 * a + 1]) - (p[2 * a + 1] - p[2 * i + 1]) * (p[2 * b] - p[2 * a]);
+    if (Math.abs(z) < 1e-9) continue;
+    const s = z > 0 ? 1 : -1;
+    if (sg && s !== sg) return false;
+    sg = s;
+  }
+  return sg !== 0;
 }
 
 // ── GEOMETRY ───────────────────────────────────────────────────────────────

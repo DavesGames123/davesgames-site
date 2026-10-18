@@ -210,7 +210,7 @@ export default [
     gen(P, ctx) {
       const { W, H, S, rng, noise } = ctx, D = S * P.step, infl = D * P.reach, kill = D * 1.8;
       const ex = W * 0.47, ey = H * 0.4, ecx = W / 2, ecy = H * 0.44;
-      const food = poisson(W, H, () => S * P.food, S * P.food, rng.next, 4000);
+      const food = poisson(W, H, () => S * P.food, S * P.food, rng.next, Math.min(16000, 4000 * Math.max(1, (ctx.D || 1) ** 2)));
       const ax = [], ay = [];
       for (let k = 0; k < food.length; k += 2) {
         const x = food[k], y = food[k + 1], a = Math.atan2(y - ecy, x - ecx);

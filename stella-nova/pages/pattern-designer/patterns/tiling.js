@@ -100,9 +100,9 @@ export default [
     blurb: 'Quarter-ring tiles on a grid that splits into smaller cells. Ink and paper swap at each level, so the bands of small tiles weave over the large ones.',
     params: { cells: [2, 10, 1, 4, 'Cells'], depth: [0, 3, 1, 2, 'Levels'], split: [0, 1, 0.01, 0.5, 'Split'], band: [0.15, 0.6, 0.01, 0.34, 'Band width'], dots: [0, 1, 1, 1, 'Edge dots'], inks: [1, 4, 1, 2, 'Inks'] },
     gen(P, ctx) {
-      // The split depth is cut so that cells x 2^depth stays at 40 or less
-      // (the element budget at the finest level).
-      const B = board(ctx), g = cells(ctx, P.cells), depth = Math.min(P.depth, Math.floor(Math.log2(40 / P.cells)));
+      // The split depth is cut so that cells x 2^depth stays at 40 (times
+      // D at a higher density) or less: the element budget at the finest level.
+      const B = board(ctx), g = cells(ctx, P.cells), depth = Math.min(P.depth, Math.floor(Math.log2(Math.min(120, 40 * Math.max(1, ctx.D || 1)) / P.cells)));
       const tile = (x, y, s, lv) => {
         const ink = P.inks === 1 ? 0 : inkAt(ctx, x + s / 2, y + s / 2, P.inks, 0.2);
         const odd = lv % 2 === 1, fg = odd ? -2 : ink, bw = s * P.band;
@@ -204,8 +204,9 @@ export default [
     blurb: 'Hexagon tiles that link the midpoints of their six edges in pairs, with short arcs or a straight bar. Every edge meets the next tile, so the lines never stop.',
     params: { size: [4, 30, 1, 10, 'Hexes across'], bands: [1, 5, 1, 2, 'Lines per path'], straight: [0, 1, 0.01, 0.25, 'Straight tiles'], weight: [0.4, 8, 0.1, 2.4, 'Line weight'], inks: [1, 5, 1, 2, 'Inks'], frame: [0, 1, 1, 0, 'Hex outlines'] },
     gen(P, ctx) {
-      // At most one line per 7 units of radius keeps a dense board in budget.
-      const B = board(ctx), R = ctx.S / (P.size * Math.sqrt(3)), nb = Math.max(1, Math.min(P.bands, Math.floor(R / 7))), g = 0.38 * R / nb;
+      // At most one line per 7 units of radius (less at a higher density)
+      // keeps a dense board in budget.
+      const B = board(ctx), R = ctx.S / (P.size * Math.sqrt(3)), nb = Math.max(1, Math.min(P.bands, Math.floor(R * Math.sqrt(Math.max(1, ctx.D || 1)) / 7))), g = 0.38 * R / nb;
       hexCells(ctx, R, (cx, cy) => {
         const V = [], M = [];
         for (let k = 0; k < 6; k++) { const a = -Math.PI / 2 + k * Math.PI / 3; V.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); }

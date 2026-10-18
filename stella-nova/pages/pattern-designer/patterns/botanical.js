@@ -153,11 +153,12 @@ export default [
     gen(P, ctx) {
       const B = board(ctx), r = ctx.rng;
       // Element budget: lower the orders (then the pairs) until the fronds
-      // fit in about 18000 lines.
+      // fit in about 18000 lines (times D squared at a higher density).
       let depth = P.depth, pairs0 = P.pairs;
+      const BUD = Math.min(80000, 18000 * Math.max(1, (ctx.D || 1) ** 2));
       const est = (d, p) => { const p1 = Math.max(3, Math.round(p * 0.5)); let e = 1; for (let o = d; o >= 1; o--) e = 1 + 2 * (o === 1 ? p : p1) * e; return e * P.fronds; };
-      while (depth > 1 && est(depth, pairs0) > 18000) depth--;
-      while (pairs0 > 6 && est(depth, pairs0) > 18000) pairs0--;
+      while (depth > 1 && est(depth, pairs0) > BUD) depth--;
+      while (pairs0 > 6 && est(depth, pairs0) > BUD) pairs0--;
       // A frond from (x, y) along angle a, length L; order o; side s (bend sign).
       const frond = (x, y, a, L, o, bend, ink) => {
         if (B.full() || L < 2) return;

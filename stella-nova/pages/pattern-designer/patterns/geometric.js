@@ -160,7 +160,7 @@ export default [
       const refl = (a, b, c, o) => [2 * (a[0] + b[0] + c[0]) - o[0], 2 * (a[1] + b[1] + c[1]) - o[1], 2 * (a[2] + b[2] + c[2]) - o[2]];
       const c4 = refl(c0, c1, c2, c3), out = [[c1, 0], [c2, 0], [c3, 1], [c4, 1]];
       const q = [[c0, c1, c3, c2, 2], [c0, c2, c3, c1, 2], [c1, c2, c3, c0, 2], [c0, c1, c4, c2, 2], [c0, c2, c4, c1, 2], [c1, c2, c4, c0, 2]];
-      const MAX = 15000;
+      const MAX = Math.min(60000, 15000 * Math.max(1, (ctx.D || 1) ** 2));
       for (let h = 0; h < q.length && out.length < MAX; h++) {
         const [a, b, c, o, g] = q[h], n = refl(a, b, c, o);
         if (!(n[0] > 0) || 1 / n[0] < P.minR) continue;
