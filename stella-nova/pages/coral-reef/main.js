@@ -46,7 +46,8 @@
 //    grep -n 'function followDefault' the default camera: follow the lead ROV
 //    grep -n 'function setMode'       colour by
 //    grep -n 'function applyCamera'   the render eye (origin, tilt)
-//    grep -n 'function frame'         the loop
+//    grep -n 'function frame'         the loop (no 3D frame while the large map is open)
+//    grep -n 'function moveCamTo'     the large map moves the free camera (map-view.js)
 //    grep -n 'window.snSaver'         the screensaver: the squad explores
 // ============================================================================
 import { createScene } from './scene.js';
@@ -269,6 +270,32 @@ function goRegion(id, why = '') {
     flash(`${REGION_LABEL[id]}${why}: ${Math.round(SURFACE_Y - to[1])} m down.`);
     if (panel) panel.find('regions').set(id);
   }, 700);
+  return true;
+}
+// The large map (map-view.js) moves the free camera to a point: the orbit
+// target goes to the ground there. A near point glides; a far one (over
+// MOVE_FADE m) fades out, moves at once and fades in when the chunk has rock.
+const MOVE_FADE = 160;
+function moveCamTo(x, z) {
+  if (!cam || !W || saverOn || regionBusy) return false;
+  const target = [x, W.ground(x, z) + 1.2, z];
+  camChoice = 'orbit'; $('tourList').hidden = true;
+  if (Math.hypot(x - cam.eye[0], z - cam.eye[2]) <= MOVE_FADE) { cam.frame({ target, dist: 8, pitch: 0.55 }); camUI(); return true; }
+  regionBusy = true;
+  canvas.style.opacity = '0';
+  setTimeout(() => {
+    setOrigin(x, z);
+    cam.frame({ target, dist: 8, pitch: 0.55, snap: true });
+    if (streamer) streamer.update(cam.eye.slice(), [cam.eye.slice(), target]);
+    const t0 = performance.now();
+    const wait = () => {
+      if (!streamer || streamer.ready(target) || performance.now() - t0 > 9000) { canvas.style.opacity = ''; regionBusy = false; return; }
+      setTimeout(wait, 200);
+    };
+    wait();
+    camUI();
+  }, 400);
+  flash(`The camera goes to the point on the map: ${Math.round(SURFACE_Y - target[1])} m down.`);
   return true;
 }
 // The squad wanders between the regions: every 20 to 40 minutes a new
@@ -655,6 +682,9 @@ function buildUI() {
     doc: document, win: window, THREE: S ? S.THREE : null, canvas, camera: () => (S ? S.camera : null),
     getSquad: () => squad, getRovs: () => rovs, getField: () => W, getCam: () => cam, surfaceY: SURFACE_Y,
     phoneQ: PHONE_Q, isSaver: () => saverOn, feedOn: () => G.feed, onSelect: onSelectRov, flash,
+    // the large map (map-view.js): region shortcuts, the free camera, the colonies found
+    goRegion: id => goRegion(id), moveCam: moveCamTo, colonies: () => (streamer ? streamer.colonies() : []),
+    speciesLabel: id => (SPECIES[id] && SPECIES[id].label) || null,
   });
   setTimeout(hideHint, 9000);
 }
@@ -787,6 +817,8 @@ function frame(t) {
     if (squad) pts.push(squad.vehicles[0].state.look.slice());
     try { streamer.update(pts[0], pts); } catch (e) { console.error('coral-reef: stream', e); }
   }
+  // the large map covers the view: no 3D frame (squad-hud.js map-view.js)
+  if (hud && hud.mapCovers()) { try { hud.tick(dt); } catch (e) { console.error('coral-reef: HUD', e); } return; }
   S.U.uTime.value = now / 1000;
   S.U.uCount.value = 1;
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;

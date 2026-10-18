@@ -25,7 +25,8 @@
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
      2. style.css, lib/sci.css, lib/growth-gradients.css, lib/sn-panel.css,
-        hud.css (the camera bar ROV group, the feed cards, tags, minimap)
+        hud.css (the camera bar ROV group, the feed cards, tags, minimap),
+        map-view.css (the large map)
      3. importmap for three r160, then main.js as a module
 
    LAYOUT  (# marks an element id that main.js binds)
@@ -47,7 +48,9 @@
                  (the selected one large; a tap on a small card selects its
                  ROV; #feedSize or a tap on the main card makes it large;
                  phones: one card and #feedTabs). #minimap at the lower
-                 left: the explored seafloor. #rovTags: the 3D tags.
+                 left: the explored seafloor; a click, Enter or M opens
+                 the large map #xmap (map-view.js: pan, zoom, send an ROV,
+                 move the camera, regions, history). #rovTags: the 3D tags.
 
    GREP MAP  (main.js)
      grep -n 'function buildWorld'   the streamer, the squad and the ROVs
@@ -61,6 +64,7 @@
 <link rel="stylesheet" href="../../lib/growth-gradients.css">
 <link rel="stylesheet" href="../../lib/sn-panel.css">
 <link rel="stylesheet" href="hud.css">
+<link rel="stylesheet" href="map-view.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
@@ -102,11 +106,13 @@
 <div id="tapMark" aria-hidden="true"></div>
 <div id="legend" class="snp-card"><div class="lg-title" id="lgTitle">Age</div><div id="lgBar"></div><div class="lg-ticks"><span id="lgLo">old</span><span id="lgHi">new</span></div></div>
 <div id="minimap" role="region" aria-label="Map of the explored seafloor">
-  <canvas id="mmCanvas" role="img" aria-label="Map of the explored seafloor"></canvas>
+  <canvas id="mmCanvas" role="button" aria-label="Map of the explored seafloor. Click, or press Enter or M, to open the large map."></canvas>
   <div class="mm-tools">
     <button id="mmFold" type="button" aria-expanded="true" aria-controls="mmCanvas" title="Show or hide the map"><span class="when-open" aria-hidden="true">▾</span><span class="when-fold">Map</span><span class="sr">Map</span></button>
     <button id="mmIn" type="button" aria-label="Zoom the map in">+</button>
     <button id="mmOut" type="button" aria-label="Zoom the map out">−</button>
+    <button id="mmSize" type="button" aria-label="Map size: medium. Press to change (small, medium, large)">M</button>
+    <button id="mmExpand" type="button" aria-label="Open the large map (M)" aria-haspopup="dialog" title="Open the large map (M)">⤢</button>
   </div>
   <div class="mm-legend" aria-label="Depth colours: 0 m to 6 km"><span class="mm-bar"></span><span class="mm-ticks"><i style="left:0">0</i><i style="left:43%">40</i><i style="left:61%">200</i><i style="left:79%">1 km</i><i style="left:100%">6 km</i></span><span id="mmZoom">240 m</span></div>
 </div>

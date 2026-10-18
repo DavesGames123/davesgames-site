@@ -35,6 +35,9 @@
 //                             budget (rov/feeds.js), the small card HUD
 //    tests/minimap.test.mjs . HUD: the minimap projection, the fog of the
 //                             visited cells, the arrows, the card layout
+//    tests/mapview.test.mjs . MAP: the large map (map-view.js): view maths,
+//                             the explored tiles, open and close, send an
+//                             ROV, move the camera, the page pause, phones
 //    tests/hud.test.mjs ..... HUD: the page in jsdom: one card per ROV, the
 //                             ROV selection (bar, cards, keys 1 to 4, tags,
 //                             minimap, camera), phones, the saver card

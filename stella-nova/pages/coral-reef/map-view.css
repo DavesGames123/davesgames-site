@@ -1,0 +1,128 @@
+/* ============================================================================
+   CORAL REEF  ·  map-view.css  ·  the minimap hint and the large map (#xmap)
+   ----------------------------------------------------------------------------
+   map-view.js makes #xmap. Wide screen: a box over most of the window, the
+   3D view dim behind it, the menu (ROVs, regions, found, history, legend)
+   in a column at the right. Phone (class "full", from PHONE_Q): the full
+   screen, the menu is a strip under the map. Open and close: opacity and
+   scale on .on (0.22 s). Touch: 44 px targets. Hidden in the saver.
+     grep -n 'HINT'    the "Click to expand" label on the minimap
+     grep -n 'SIZE'    the minimap sizes S, M, L and the folded phone card
+     grep -n 'XMAP'    the large map
+     grep -n 'FULL'    the phone layout
+     grep -n 'SAVER'   hidden in the screensaver
+   ========================================================================== */
+
+/* HINT */
+.mm-hint{position:absolute;left:12px;bottom:40px;padding:3px 7px;border-radius:7px;background:rgba(2,10,16,0.78);color:var(--snp-ink,#dcecef);
+  font:max(11px,0.66rem)/1.2 var(--sci-mono,ui-monospace,monospace);pointer-events:none;opacity:0;transition:opacity .18s}
+#minimap:hover .mm-hint,#minimap:focus-within .mm-hint{opacity:1}
+#minimap.fold .mm-hint{display:none}
+#mmCanvas:focus-visible{outline:2px solid var(--snp-accent,#7fe0cf);outline-offset:1px}
+@media (pointer:coarse){.mm-hint{opacity:0.85;bottom:8px}}
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){.mm-hint{left:8px;bottom:8px}}
+
+/* SIZE: the minimap size S, M (default) or L (squad-hud.js #mmSize, kept
+   in localStorage). The user: "the minimap on the rov's needs to be
+   bigger". It stays at the lower left; the right side is for the feeds. */
+#minimap.mm-s #mmCanvas{width:200px;height:200px}
+#minimap.mm-m #mmCanvas{width:clamp(240px,22vw,300px);height:clamp(240px,22vw,300px)}
+#minimap.mm-l #mmCanvas{width:min(420px,30vw,52vh);height:min(420px,30vw,52vh)}
+#minimap.mm-m #mmCanvas,#minimap.mm-l #mmCanvas{max-width:calc(100vw - 28px)}
+.mm-tools #mmSize{font:600 0.72rem/1 var(--sci-mono,ui-monospace,monospace)}
+#minimap.fold #mmSize{display:none}
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #minimap.mm-s #mmCanvas{width:140px;height:140px}
+  #minimap.mm-m #mmCanvas{width:min(190px,48vw);height:min(190px,48vw)}
+  #minimap.mm-l #mmCanvas{width:min(250px,64vw);height:min(250px,64vw)}
+  /* folded: a card with "Map" (open the small map) and the expand button
+     (the full-screen map), 44 px targets */
+  #minimap:not(.fold) #mmIn,#minimap:not(.fold) #mmOut{display:none}
+  #minimap.fold{padding:4px}
+  #minimap.fold .mm-tools{display:flex;flex-direction:row;gap:4px}
+  #minimap.fold #mmFold{min-width:72px;height:44px;padding:0 14px;font-size:0.9rem}
+  #minimap.fold #mmExpand{width:44px;height:44px;font-size:1.1rem}
+}
+@media (max-height:500px) and (orientation:landscape){
+  #minimap.mm-s #mmCanvas{width:110px;height:110px}
+  #minimap.mm-m #mmCanvas{width:min(150px,40vh);height:min(150px,40vh)}
+  #minimap.mm-l #mmCanvas{width:min(200px,55vh);height:min(200px,55vh)}
+}
+
+/* XMAP */
+.xmap{position:fixed;inset:0;z-index:80}
+.xmap .xm-back{position:absolute;inset:0;background:rgba(1,6,10,0.55);opacity:0;transition:opacity .22s ease}
+.xmap .xm-box{position:absolute;left:max(24px,4vw);right:max(24px,4vw);top:max(20px,4vh);bottom:max(20px,4vh);display:flex;flex-direction:column;overflow:hidden;
+  background:var(--snp-bg,rgba(3,18,27,0.96));border:1px solid var(--snp-line,rgba(127,224,207,0.2));border-radius:var(--snp-r-l,14px);box-shadow:0 18px 60px rgba(0,0,0,0.6);
+  color:var(--snp-ink,#dcecef);opacity:0;transform:scale(0.96);transform-origin:12% 88%;transition:opacity .22s ease,transform .22s ease}
+.xmap.on .xm-back{opacity:1}
+.xmap.on .xm-box{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.xmap .xm-back,.xmap .xm-box{transition:none}}
+.xm-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px 8px 16px;border-bottom:1px solid var(--snp-line,rgba(127,224,207,0.12))}
+.xm-head h2{font-size:1rem;font-weight:600}
+.xm-sub{font:0.72rem/1.2 var(--sci-mono,ui-monospace,monospace);color:var(--snp-dim,#7fa1a8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.xm-tools{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.xm-tools button,.xm-side button{border:1px solid var(--snp-line,rgba(127,224,207,0.2));background:rgba(2,10,16,0.72);color:var(--snp-ink,#dcecef);border-radius:var(--snp-r,8px);font:inherit;cursor:pointer}
+.xm-tools button{min-width:36px;height:34px;padding:0 10px;font-size:0.82rem}
+.xm-tools button:hover,.xm-side button:hover{background:var(--snp-raise-h,rgba(255,255,255,0.08))}
+.xm-tools button.on,.xm-side button.on{border-color:var(--snp-accent,#7fe0cf);color:var(--snp-accent,#7fe0cf)}
+.xm-tools button:focus-visible,.xm-side button:focus-visible,#xmCanvas:focus-visible{outline:2px solid var(--snp-accent,#7fe0cf);outline-offset:-2px}
+.xm-seg{display:flex}
+.xm-seg button{border-radius:0}
+.xm-seg button:first-child{border-radius:var(--snp-r,8px) 0 0 var(--snp-r,8px)}
+.xm-seg button:last-child{border-radius:0 var(--snp-r,8px) var(--snp-r,8px) 0;border-left:0}
+#xmClose{font-size:1.2rem}
+.xm-body{flex:1 1 auto;display:flex;min-height:0}
+.xm-stage{position:relative;flex:1 1 auto;min-width:0}
+#xmCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;background:#02070c}
+.xm-read{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 180px);padding:4px 8px;border-radius:7px;background:rgba(2,7,12,0.78);
+  font:0.74rem/1.35 var(--sci-mono,ui-monospace,monospace);pointer-events:none}
+.xm-read:empty{display:none}
+.xm-help{position:absolute;left:10px;top:8px;right:60px;font-size:0.72rem;color:var(--snp-dim,#7fa1a8);pointer-events:none;text-shadow:0 1px 2px #000}
+.xm-side{flex:0 0 270px;overflow:auto;padding:10px 12px 16px;border-left:1px solid var(--snp-line,rgba(127,224,207,0.12))}
+.xmap.noside .xm-side{display:none}
+.xm-side section{margin-bottom:14px}
+.xm-side h3{font-size:0.72rem;font-weight:600;letter-spacing:0.04em;color:var(--snp-dim,#7fa1a8);margin:0 0 6px}
+.xm-rovs,.xm-regions{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.xm-rov{display:flex;align-items:center;gap:6px;min-height:34px;padding:0 10px;font-size:0.8rem}
+.xm-rov.on{border-color:var(--c)!important;color:var(--c)!important}
+.xm-dot{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.xm-chip{min-height:34px;padding:0 10px;font-size:0.8rem}
+.xm-wide{width:100%;min-height:34px;padding:0 10px;font-size:0.8rem;color:var(--snp-accent,#7fe0cf)!important}
+.xm-found{list-style:none;display:grid;gap:4px}
+.xm-go{width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:6px 10px;text-align:left}
+.xm-go b{font-weight:600;font-size:0.8rem}
+.xm-go i{font-style:normal;font-size:0.72rem;color:var(--snp-dim,#7fa1a8)}
+.xm-note{font-size:0.74rem;color:var(--snp-dim,#7fa1a8);line-height:1.4}
+#xmHist{width:100%;accent-color:var(--snp-accent,#7fe0cf)}
+.xm-histrow{display:flex;align-items:center;justify-content:space-between;gap:8px;font:0.72rem var(--sci-mono,ui-monospace,monospace);color:var(--snp-dim,#7fa1a8)}
+.xm-histrow button{min-height:30px;padding:0 12px}
+.xm-legend{display:grid;gap:4px;font-size:0.74rem}
+.xm-lrow{display:flex;align-items:center;gap:8px}
+.xm-sw{flex:0 0 14px;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,0.18)}
+.xm-ramp{height:10px;border-radius:4px}
+.xm-rampt{font:0.68rem var(--sci-mono,ui-monospace,monospace);color:var(--snp-dim,#7fa1a8)}
+
+/* FULL: the phone layout (map-view.js sets .full from PHONE_Q) */
+.xmap.full .xm-box{left:0;right:0;top:0;bottom:0;border-radius:0;border:0;transform-origin:50% 50%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.xmap.full .xm-head{padding:6px 8px}
+.xmap.full .xm-head h2,.xmap.full .xm-sub,.xmap.full .xm-help{display:none}
+.xmap.full .xm-tools{margin-left:0;width:100%}
+.xmap.full .xm-tools button{min-width:44px;height:44px}
+.xmap.full #xmClose{margin-left:auto}
+.xmap.full .xm-body{flex-direction:column}
+.xmap.full .xm-stage{flex:1 1 60%}
+.xmap.full .xm-side{flex:0 1 40%;max-height:40%;border-left:0;border-top:1px solid var(--snp-line,rgba(127,224,207,0.12));
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0 14px;align-content:start}
+.xmap.full .xm-rov,.xmap.full .xm-chip,.xmap.full .xm-wide,.xmap.full .xm-go,.xmap.full .xm-histrow button{min-height:44px}
+.xmap.full #xmHist{height:44px}
+.xmap.full .xm-read{max-width:calc(100% - 20px);bottom:auto;top:8px;font-size:max(11px,0.72rem)}
+.xmap.full .xm-note,.xmap.full .xm-legend,.xmap.full .xm-go i{font-size:max(11px,0.74rem)}
+@media (max-height:500px) and (pointer:coarse){
+  .xmap.full .xm-body{flex-direction:row}
+  .xmap.full .xm-side{flex:0 0 240px;max-height:none;border-top:0;border-left:1px solid var(--snp-line,rgba(127,224,207,0.12));display:block}
+}
+
+/* SAVER */
+html.sn-saver .xmap,html.sn-saver .mm-hint{display:none!important}

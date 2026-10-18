@@ -25,11 +25,12 @@
 //  render; only the feeds whose cards show are active (no renders else).
 //
 //  MINIMAP (#minimap, minimap.js). 4 redraws a second, centred on the
-//  selected ROV; the fog buffer paints each new visited cell once. A tap
-//  sends the selected ROV to that point when the squad has goTo(id, [x,
-//  z]) (WORLD, NOTES.md); else it says that the squad takes no waypoints
-//  yet. +, - and the wheel zoom (120 m to 960 m across); the fold button
-//  hides it (phones start folded).
+//  selected ROV; the fog buffer paints each new visited cell once. A click
+//  or a tap (or Enter, or the key M) opens the large map (map-view.js
+//  mountExploreMap, #xmap): there a click sends the selected ROV with
+//  sendTo (squad.goTo(id, [x, z])) or moves the camera. +, - and the
+//  wheel zoom (120 m to 960 m across); the fold button hides it (phones
+//  start folded).
 //
 //    const H = mountSquadHud({ doc, win, THREE, canvas, camera: () => S.camera,
 //      getSquad, getRovs, getField, getCam, surfaceY, phoneQ, isSaver,
@@ -38,6 +39,8 @@
 //    H.select(id, { follow = true })   H.selectNext(+1 | -1)   H.selected
 //    H.tick(dt)        each frame (tags; minimap at 4 Hz)
 //    H.present()       each frame after the main render (live pictures)
+//    H.map             the large map (map-view.js); H.mapCovers() is true
+//                      while it is open (main.js draws no 3D frame then)
 //    H.debug()         state for the tests
 //
 //  grep -n targets
@@ -48,7 +51,8 @@
 //    "  function placeTags"  "  function drawMap"  "  function present"
 // ============================================================================
 import { rovColour } from './rov/hud.js';
-import { createFogMap, drawMinimap, coneOf, mapToWorld, SPANS } from './minimap.js';
+import { createFogMap, drawMinimap, coneOf, SPANS } from './minimap.js';
+import { mountExploreMap } from './map-view.js';
 
 const CARD_AR = 322 / 352;           // rov/hud.js HUD.H / HUD.W
 
@@ -70,6 +74,8 @@ export function feedLayout({ vw, vh, n, top = 0, bottom = 14, phone = false, gap
 export function vehicleTask(squad, i) {
   if (!squad || !squad.vehicles[i]) return '';
   if (i === 0) return squad.task ? squad.task.label : 'surveying';
+  // the spread squad: each ROV has a task of its own (rov/squad.js tasks)
+  if (squad.spread && typeof squad.tasks === 'function') { const t = squad.tasks()[i]; if (t) return t.label; }
   const st = squad.vehicles[i].state;
   return st.mode === 'inspect' ? 'lighting the colony' : `following ROV ${squad.vehicles[0].id}`;
 }
@@ -82,6 +88,7 @@ export function mountSquadHud(o) {
   let rects = new Map(), op = 1;
   const trails = new Map();          // id -> [[x, z], ...]
   const mm = { fog: null, squad: null, W: null, known: -1, target: null, arrows: [], last: null };
+  let big = null;                    // map-view.js: the large map (a click on the minimap or M)
   const V3 = o.THREE ? new o.THREE.Vector3() : null;
 
   const ids = () => (rovs && rovs.vehicles ? rovs.vehicles.map(v => v.id) : []);
@@ -283,25 +290,52 @@ export function mountSquadHud(o) {
     const fb = $('mmFold');
     if (fb) { fb.setAttribute('aria-expanded', String(!fold)); fb.addEventListener('click', () => { fold = !fold; box.classList.toggle('fold', fold); fb.setAttribute('aria-expanded', String(!fold)); mapT = 1; }); }
     const z = (d) => { zoom = Math.max(0, Math.min(SPANS.length - 1, zoom + d)); mapT = 1; const zl = $('mmZoom'); if (zl) zl.textContent = `${SPANS[zoom]} m`; };
+    // the size of the minimap: S, M (the default) or L, kept in localStorage
+    // (the user: "the minimap on the rov's needs to be bigger")
+    const SIZES = ['s', 'm', 'l'], NAMES = { s: 'small', m: 'medium', l: 'large' };
+    let size = 'm';
+    try { const v = win.localStorage.getItem('coral-reef-minimap-size'); if (SIZES.includes(v)) size = v; } catch { /* private mode: the default */ }
+    const setSize = (v) => {
+      size = v;
+      for (const k of SIZES) box.classList.toggle('mm-' + k, k === v);
+      const sb = $('mmSize');
+      if (sb) { sb.textContent = v.toUpperCase(); sb.setAttribute('aria-label', `Map size: ${NAMES[v]}. Press to change (small, medium, large)`); }
+      mapT = 1;
+    };
+    setSize(size);
+    const sb = $('mmSize');
+    if (sb) sb.addEventListener('click', () => {
+      setSize(SIZES[(SIZES.indexOf(size) + 1) % SIZES.length]);
+      try { win.localStorage.setItem('coral-reef-minimap-size', size); } catch { /* not kept */ }
+    });
+    const xb = $('mmExpand');
+    if (xb) xb.addEventListener('click', () => { if (big) big.open(); });
+    mm.size = () => size;
     const zi = $('mmIn'), zo = $('mmOut');
     if (zi) zi.addEventListener('click', () => z(-1));
     if (zo) zo.addEventListener('click', () => z(1));
     cv.addEventListener('wheel', (e) => { e.preventDefault(); z(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+    // a click or a tap opens the large map (map-view.js); Enter and Space too
+    cv.tabIndex = 0;
+    cv.setAttribute('role', 'button'); cv.setAttribute('aria-haspopup', 'dialog'); cv.setAttribute('aria-keyshortcuts', 'M');
+    cv.style.cursor = 'zoom-in';
+    const hint = doc.createElement('span'); hint.className = 'mm-hint'; hint.setAttribute('aria-hidden', 'true'); hint.textContent = win.matchMedia && win.matchMedia('(pointer:coarse)').matches ? 'Tap to expand' : 'Click to expand · M';
+    box.appendChild(hint);
     let down = null;
     cv.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     cv.addEventListener('pointerup', (e) => {
-      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || !mm.view) { down = null; return; }
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) { down = null; return; }
       down = null;
-      const r = cv.getBoundingClientRect();
-      sendTo(mapToWorld(e.clientX - r.left, e.clientY - r.top, mm.view));
+      if (big) big.open();
     });
+    cv.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && big) { e.preventDefault(); big.open(); } });
   }
   function sendTo(xz) {
     const sq = o.getSquad();
     if (!sq) return false;
     if (typeof sq.goTo === 'function') {
       const okk = sq.goTo(sel, xz);
-      if (okk !== false) { mm.target = xz.slice(); mapT = 1; o.flash(`ROV ${sel}: going to the point on the map.`); return true; }
+      if (okk !== false) { mm.target = xz.slice(); mapT = 1; if (big) big.noteTarget(sel, xz); o.flash(`ROV ${sel}: going to the point on the map.`); return true; }
       o.flash(`ROV ${sel} cannot go there.`); return false;
     }
     o.flash('The squad takes no waypoints yet: it picks its own route.');
@@ -316,7 +350,7 @@ export function mountSquadHud(o) {
     }
     const i = Math.max(0, sq.vehicles.findIndex(v => v.id === sel)), L = sq.vehicles[i].state;
     const span = SPANS[zoom];
-    const cw = cv.clientWidth || 200, ch = cv.clientHeight || 200, dpr = Math.min(2, win.devicePixelRatio || 1);
+    const cw = cv.clientWidth || 200, ch = cv.clientHeight || 200, dpr = Math.min(3, win.devicePixelRatio || 1);
     if (cv.width !== Math.round(cw * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
     const view = { cx: L.p[0], cz: L.p[2], k: cw / span, w: cw, h: ch };
     mm.view = view;
@@ -338,7 +372,7 @@ export function mountSquadHud(o) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const r = drawMinimap(ctx, st);
     mm.arrows = r.arrows;
-    cv.setAttribute('aria-label', `Map of the explored seafloor, north up, ${span} m across: ${F.painted.size} cells of 12 m explored here. ROV ${sel} is selected, ${st.sub}${rg ? ' in the ' + rg.name : ''}.`);
+    cv.setAttribute('aria-label', `Map of the explored seafloor, north up, ${span} m across: ${F.painted.size} cells of 12 m explored here. ROV ${sel} is selected, ${st.sub}${rg ? ' in the ' + rg.name : ''}. Click, or press Enter or M, to open the large map.`);
     return st;
   }
   function stepTrails() {
@@ -355,6 +389,9 @@ export function mountSquadHud(o) {
     placeTags(dt);
     if ((trailT += dt) > 1.5) { trailT = 0; stepTrails(); }
     if ((mapT += dt) > 0.25) { mapT = 0; if (!fold && !o.isSaver()) drawMap(); }
+    if (big) big.tick(dt);
+    // the large map covers the view: the ROV feeds rest too (present() wakes them)
+    if (big && big.covers() && rovs && rovs.feed && rovs.feed.setActive) { rovs.feed.setActive(false); frameN = 0; }
   }
 
   // keys 1 to 4 (no text field, no modifier, not in the saver)
@@ -369,6 +406,13 @@ export function mountSquadHud(o) {
   if (o.phoneQ && o.phoneQ.addEventListener) o.phoneQ.addEventListener('change', () => { layout(); frameN = 0; });
   win.addEventListener('resize', layout);
   bindMap();
+  big = mountExploreMap({
+    doc, win, getSquad: o.getSquad, getField: o.getField, getCam: o.getCam, camera: o.camera, canvas: o.canvas,
+    surfaceY: o.surfaceY, phoneQ: o.phoneQ, isSaver: o.isSaver, flash: o.flash,
+    hud: { selected: () => sel, select: (id, opt) => select(id, opt), sendTo: (xz) => sendTo(xz), colourOf: rovColour },
+    goRegion: o.goRegion, moveCam: o.moveCam, colonies: o.colonies, speciesLabel: o.speciesLabel,
+    onOpen: () => { if (rovs && rovs.feed && rovs.feed.setActive) rovs.feed.setActive(false); frameN = 0; },
+  });
 
   function setRovs(r) {
     rovs = r;
@@ -382,6 +426,7 @@ export function mountSquadHud(o) {
   return {
     get selected() { return sel; },
     select, selectNext, setRovs, tick, present, layout, sendTo, drawMap,
+    map: big, mapCovers: () => !!big && big.covers(),
     colourOf: rovColour,
     debug() {
       const set = rovs && rovs.feed;
@@ -392,7 +437,7 @@ export function mountSquadHud(o) {
         tagSel: [...doc.querySelectorAll('#rovTags .rtag.sel')].map(b => +b.dataset.rov),
         feedMain: set ? set.vehicle : null, feedStats: set && set.stats ? JSON.parse(JSON.stringify(set.stats)) : null,
         map: mm.last ? { arrows: mm.arrows.slice(), painted: mm.fog ? mm.fog.painted.size : 0, view: Object.assign({}, mm.view), selArrow: (mm.last.rovs.find(r => r.sel) || {}).id } : null,
-        layout: mm.layout || null, fold, zoom: SPANS[zoom],
+        layout: mm.layout || null, fold, zoom: SPANS[zoom], size: mm.size ? mm.size() : null, big: big ? big.debug() : null,
       };
     },
   };
