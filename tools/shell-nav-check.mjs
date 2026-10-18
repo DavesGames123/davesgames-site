@@ -171,6 +171,28 @@ await (async () => {
   try { for (let n = 0; n < 10; n++) t.d.getElementById('tb-random').click(); } catch (e) { terr = e.message; }
   ok(!terr && !t.errs.length && got.length === 10 && got.every(k => k !== 'home' && keys.has(k)), 'random: sessionStorage that throws still gives valid picks', terr || t.errs.join(' | ') || got.join(','));
   t.w.close();
+
+  // saver button: the user said (2026-10-18) "add a screensaver button in
+  // the top right button much like the share or random page buttons".
+  // lib/screensaver.js adds #sn-saver-touch on every device, before Share.
+  for (const coarse of [false, true]) {
+    const vc = new VirtualConsole(); vc.on('jsdomError', () => {});
+    const dom = new JSDOM(bare, { url: 'http://localhost/stella-nova/index.html#orbital', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+    const sw = dom.window; sw.matchMedia = makeMatchMedia({ w: coarse ? 390 : 1440, h: coarse ? 844 : 900, coarse });
+    sw.Element.prototype.scrollIntoView = function () {};
+    const serr = [];
+    for (const f of ['lib/nav-data.js', 'lib/share-url.js', 'lib/screensaver.js']) { try { sw.eval(lib(f)); } catch (e) { serr.push(f + ': ' + e.message); } }
+    sw.document.dispatchEvent(new sw.Event('DOMContentLoaded'));
+    const sd = sw.document, sb = sd.getElementById('sn-saver-touch'), sbar = sd.getElementById('topbar'), share = sd.getElementById('tb-share');
+    const kids2 = sbar ? [...sbar.children] : [];
+    const tag = coarse ? 'phone' : 'desktop';
+    ok(!serr.length && !!sb && sb.parentElement === sbar, `saver button: ${tag}: #sn-saver-touch is in the top bar`, serr.join(' | '));
+    ok(sb && share && kids2.indexOf(sb) === kids2.indexOf(share) - 1 && kids2.indexOf(sb) > kids2.indexOf(sd.getElementById('topbar-title')), `saver button: ${tag}: it sits right, just before Share`, kids2.map(k => k.id).join(','));
+    ok(sb && /screensaver/i.test(sb.getAttribute('aria-label') || '') && sb.querySelector('.sn-saver-lab') && /Screensaver/.test(sb.textContent), `saver button: ${tag}: an aria-label and the label "Screensaver"`);
+    if (sb) { sb.click(); const m = sd.getElementById('sn-saver-menu'); ok(!!m && !m.hidden, `saver button: ${tag}: a click opens the screensaver menu`); }
+    sw.close();
+  }
+  ok(/min-height: 44px/.test(lib('lib/screensaver.js')) && /\.sn-saver-lab \{ display: none; \}/.test(lib('lib/screensaver.js')), 'saver button: 44 px target; under 520 px only the icon shows');
 })();
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -410,29 +410,35 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
   #sn-saver-menu .tiles { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
   #sn-saver-menu .quick { margin-left: 0; }
 }
-#sn-saver-touch { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: 6px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--dim, #7f91ad); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#sn-saver-touch { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 0 14px 0 12px; border: 1px solid var(--border-b, rgba(150,200,255,.18)); border-radius: 999px; background: none; color: var(--dim, #7f91ad); font: 500 .78rem/1 var(--f-sans, system-ui); white-space: nowrap; cursor: pointer; transition: color .15s, border-color .15s, background .15s; -webkit-tap-highlight-color: transparent; }
+#sn-saver-touch:hover { background: rgba(150,200,255,.06); color: var(--blue, #96c8ff); border-color: rgba(150,200,255,.34); }
 #sn-saver-touch:active { background: rgba(150,200,255,.12); color: var(--ink, #eef3fb); }
-#sn-saver-touch svg { width: 22px; height: 22px; }
+#sn-saver-touch:focus-visible { outline: 2px solid var(--blue, #96c8ff); outline-offset: 2px; }
+#sn-saver-touch svg { width: 18px; height: 18px; flex: none; }
+@media (max-width: 520px) { #sn-saver-touch { padding: 0; } #sn-saver-touch .sn-saver-lab { display: none; } }
 body.sn-saver-on #sn-saver-touch { display: none; }
 `;
 document.head.appendChild(css);
 
-// ── touch entry ────────────────────────────────────────────────────────────
-// A phone or tablet has no keyboard for Cmd+Option+S, so the screensaver
-// could not start there. On a touch screen (any coarse pointer) a 44 px
-// button at the end of the shell's top bar opens the same menu. A single
-// tap during a run still stops it, as before.
-(function addTouchEntry() {
-  if (!matchMedia('(pointer: coarse)').matches) return;
+// ── top bar entry ──────────────────────────────────────────────────────────
+// A "Screensaver" pill in the shell's top bar, beside Share (the same look as
+// the Share and Random page buttons), on every device: it opens the same
+// menu as Cmd+Option+S. A phone has no keyboard for the shortcut, so before
+// 2026-10-18 this button showed on touch screens only. Under 520 px only the
+// icon shows. A single tap during a run still stops it, as before. The id
+// stays sn-saver-touch so earlier checks keep finding it.
+(function addTopbarEntry() {
   const bar = document.getElementById('topbar');
   if (!bar || document.getElementById('sn-saver-touch')) return;
   const b = document.createElement('button');
   b.id = 'sn-saver-touch'; b.type = 'button';
-  b.setAttribute('aria-label', 'Screensaver');
-  b.title = 'Screensaver';
-  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" fill="currentColor"/><path d="M8 20h8"/></svg>';
+  b.setAttribute('aria-label', 'Start the screensaver');
+  b.title = 'Screensaver (Cmd+Option+S)';
+  b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" fill="currentColor"/><path d="M8 20h8"/></svg><span class="sn-saver-lab">Screensaver</span>';
   b.addEventListener('click', e => { e.stopPropagation(); if (!run) openMenu(); });
-  bar.appendChild(b);
+  // before Share (lib/share-url.js adds #tb-share before #tb-wishlist)
+  const at = document.getElementById('tb-share') || document.getElementById('tb-wishlist');
+  if (at && at.parentNode === bar) bar.insertBefore(b, at); else bar.appendChild(b);
 })();
 
 // ── menu ───────────────────────────────────────────────────────────────────
