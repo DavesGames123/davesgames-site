@@ -69,6 +69,13 @@ jobs:
       - name: Fetch pinned Stem Splitter weights
         run: node tools/stem-splitter/fetch.mjs && node tools/stem-splitter/fetch.mjs --check
         continue-on-error: true
+      # Share stubs: one small preview page per page at /stella-nova/<key>/,
+      # with its own Open Graph card and a redirect to /stella-nova/#<key>.
+      # Chat apps do not send the URL hash, so the hash URL shows only the
+      # shell card. The stubs are not in git. A failure keeps the deploy.
+      - name: Write share stubs
+        run: node tools/share-pages.mjs --out . --strict
+        continue-on-error: true
       # The service worker file list and version stamp (sw-manifest.js, sw.js).
       # Run here too, so the deploy never ships a list that is out of date.
       - name: Write offline manifest
