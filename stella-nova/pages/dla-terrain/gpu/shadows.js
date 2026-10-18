@@ -3,12 +3,21 @@
 // ----------------------------------------------------------------------------
 //  cascadeSplits(near, far, count, lambda) -> [far of each cascade]
 //      the practical split scheme: lambda mixes the log and the uniform split.
+//  nearSplits(far, count) -> [far of each cascade]   (the default scheme)
+//      NEAR FIELD: the first cascade ends at FIRST_SPLIT m (16 m with 3 or 4
+//      cascades), the others rise in a geometric series to far. The old
+//      practical split (lambda 0.82, far 9 km) put 410 m in cascade 0, so a
+//      shadow texel was 0.4 to 0.8 m and a bush or a rock cast nothing.
+//      Now cascade 0 has texels of 1.5 cm (2048) and 0.8 cm (4096). One
+//      cascade (phone-min, governor level 1) covers ONE_CASCADE m only.
 //  computeCascades(cam, sunDir, opts) -> { count, size, mats, splits, texel,
 //      depthBias, normalBias, centers, radii }   (no GPU, node tests use it)
 //      cam = { pos, forward, right, up, fovY, aspect, near }
 //      opts = { count, size, far, bounds: { min:[x,y,z], max:[x,y,z] } }
 //      STABLE: each cascade is a bounding sphere of its view slice, so the
-//      ortho box does not change size when the camera turns. The light
+//      ortho box does not change size when the camera turns. The radius is
+//      rounded up to a step of 1/16 of its power of two, so a small change
+//      of the field of view (the saver framing) does not change it. The light
 //      basis depends on the sun only, and the box centre snaps to whole
 //      shadow texels in that basis, so the edges do not crawl when the
 //      camera moves. The depth range covers the whole terrain box, so a far
@@ -20,8 +29,15 @@
 //      count to gpu.profile (gpu/budget.js), so a quality change on a phone
 //      does not make a 2048 x 4 map.
 //
+//      BIAS: depthRange (m) of the light box goes to the GPU (CascadeInfo
+//      depth.x), so common.wgsl gives each cascade a receiver bias in
+//      metres from its texel size (fn shadowBiasZ). depthBias is 3 cm of
+//      clip depth (SKY's shaft march reads it); it was 1.5 m, which took
+//      every caster under 1.5 m out of the shadow.
+//
 //  grep -n targets: "export function computeCascades", "export function cascadeSplits",
-//  "export function createShadowMaps", "SNAP"
+//  "export function nearSplits", "export function createShadowMaps", "SNAP",
+//  "FIRST_SPLIT", "LIGHT_SIZE"
 // ============================================================================
 import { lookAt, orthoRZ, mul, xform } from './mat.js';
 import { packCascades, packShadowPass, CASCADE_FLOATS, SHADOWPASS_FLOATS } from './globals.js';
@@ -36,6 +52,28 @@ export function cascadeSplits(near, far, count, lambda = 0.8) {
   return out;
 }
 
+// m: the far of cascade 0 by cascade count (index = count)
+export const FIRST_SPLIT = [0, 0, 40, 16, 16];
+export const ONE_CASCADE = 220;      // m: the far of one cascade
+// the angular size (tan) of the sun disc for the soft shadow penumbra; a
+// little larger than the true 0.0047 so that canopy shadows are soft
+export const LIGHT_SIZE = 0.012;
+
+export function nearSplits(far, count) {
+  count = Math.max(1, Math.min(4, count | 0));
+  if (count === 1) return [Math.min(far, ONE_CASCADE)];
+  const s0 = Math.min(FIRST_SPLIT[count], far / Math.pow(4, count - 1));
+  const k = Math.pow(far / s0, 1 / (count - 1));
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(i === count - 1 ? far : s0 * Math.pow(k, i));
+  return out;
+}
+// round r up to a step of 1/16 of its power of two (stable radius)
+export function stableRadius(r) {
+  const step = Math.pow(2, Math.floor(Math.log2(Math.max(r, 1e-3)))) / 16;
+  return Math.ceil(r / step) * step;
+}
+
 export function lightBasis(sunDir) {
   const up = Math.abs(sunDir[2]) > 0.98 ? [1, 0, 0] : [0, 0, 1];
   return lookAt([0, 0, 0], [-sunDir[0], -sunDir[1], -sunDir[2]], up);
@@ -44,7 +82,7 @@ export function lightBasis(sunDir) {
 export function computeCascades(cam, sunDir, opts) {
   const count = opts.count || 3, size = opts.size || 2048;
   const far = opts.far || 2000;
-  const splits = cascadeSplits(Math.max(cam.near, 0.1), far, count, opts.lambda ?? 0.82);
+  const splits = opts.lambda != null ? cascadeSplits(Math.max(cam.near, 0.1), far, count, opts.lambda) : nearSplits(far, count);
   const L = lightBasis(sunDir);
   // the terrain box in light view space: the depth range of every cascade
   const bmin = opts.bounds ? opts.bounds.min : [-1e4, -100, -1e4], bmax = opts.bounds ? opts.bounds.max : [1e4, 3000, 1e4];
@@ -68,7 +106,7 @@ export function computeCascades(cam, sunDir, opts) {
     zc = Math.min(zc, d1);
     const r0 = Math.hypot(zc - d0, d0 * Math.sqrt(k2)), r1 = Math.hypot(d1 - zc, d1 * Math.sqrt(k2));
     let r = Math.max(r0, r1);
-    r = Math.ceil(r * 16) / 16;
+    r = stableRadius(r);
     const ctr = [cam.pos[0] + cam.forward[0] * zc, cam.pos[1] + cam.forward[1] * zc, cam.pos[2] + cam.forward[2] * zc];
     // SNAP the centre to whole texels in the light basis
     const tx = (2 * r) / size;
@@ -79,11 +117,14 @@ export function computeCascades(cam, sunDir, opts) {
     mats.push(mul(P, L));
     texel.push(tx); centers.push(ctr); radii.push(r);
   }
+  const depthRange = (zMax - zMin) + 2 * 50;
   return {
-    count, size, mats, splits, texel, centers, radii,
-    // in reverse-Z clip depth over the whole box: about 1.5 m of slack
-    depthBias: 1.5 / Math.max(1, (zMax - zMin) + 100),
-    normalBias: 1.4,
+    count, size, mats, splits, texel, centers, radii, depthRange,
+    // in reverse-Z clip depth over the whole box: 3 cm of slack (the
+    // receiver adds a bias per cascade from its texel, common.wgsl)
+    depthBias: 0.03 / Math.max(1, depthRange),
+    normalBias: 1.0,
+    lightSize: LIGHT_SIZE,
   };
 }
 

@@ -392,13 +392,13 @@ fn vegCloud(p: vec3f) -> f32 {
   return mix(1.0, T, smoothstep(-0.04, 0.03, G.sunDir.y));
 }
 
-fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, trans: f32, specK: f32) -> vec3f {
+fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, trans: f32, specK: f32, fc: vec2f) -> vec3f {
   let V = normalize(G.camPos.xyz - wp);
   var n = n0;
   let L = normalize(G.sunDir.xyz);
   let sunE = G.sunColor.rgb;   // radiance at ground (GROUND and WATER read it so)
   var sh = 1.0;
-  if (L.y > -0.05) { sh = sunShadow(wp, n) * vegCloud(wp); }
+  if (L.y > -0.05) { sh = sunShadowSoft(wp, n, fc) * vegCloud(wp); }
   sh *= smoothstep(-0.06, 0.05, L.y);
   let ndl = dot(n, L);
   var diff: f32;
@@ -593,7 +593,7 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   let snow = G.weather2.y * smoothstep(0.2, 0.85, n.y) * select(1.0, 0.7, leaf);
   alb = mix(alb, vec3f(0.85, 0.88, 0.92), snow);
   let ao = mix(1.0, o.ao, 0.85) * terrainAO(it.p.xz);
-  var col = shadeVeg(alb, n, o.wp, leaf, rough, ao, select(0.0, 1.0, leaf), select(1.0, 0.35, leaf));
+  var col = shadeVeg(alb, n, o.wp, leaf, rough, ao, select(0.0, 1.0, leaf), select(1.0, 0.35, leaf), o.pos.xy);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
 }
@@ -711,7 +711,7 @@ fn fs_imp(o: IOut) -> @location(0) vec4f {
   let hgt = 1.0 - o.uv.y;
   let rim = abs(o.uv.x - 0.5) * 2.0;
   let crown = mix(0.42, 1.0, pow(clamp(hgt, 0.0, 1.0), 0.8)) * mix(1.0, 0.85, 1.0 - rim);
-  var col = shadeVeg(alb * crown, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz), select(0.0, 0.5, leafy), 0.12);
+  var col = shadeVeg(alb * crown, n, o.wp, leafy, 0.7, 0.85 * terrainAO(it.p.xz), select(0.0, 0.5, leafy), 0.12, o.pos.xy);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
 }

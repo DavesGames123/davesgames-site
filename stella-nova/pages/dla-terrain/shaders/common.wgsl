@@ -33,6 +33,9 @@
 //    grep -n 'struct ShadowPass'   the cascade of one shadow pass
 //    grep -n 'fn terrainHeight'    the height in m at a world xz
 //    grep -n 'fn sunShadow'        PCF sun shadow, 0 shadow .. 1 lit
+//    grep -n 'fn sunShadowSoft'    PCSS sun shadow (blocker search + disc
+//                                  PCF), the near-field surfaces use it
+//    grep -n 'fn shadowBiasZ'      the receiver bias of a cascade
 //    grep -n 'fn linearDepth'      reverse-Z depth to view distance
 //    grep -n 'fn worldFromDepth'   a screen uv + depth to a world point
 //    grep -n 'fn cm_'              small shared maths (hash, luminance)
@@ -70,6 +73,7 @@ struct CascadeInfo {
   splits: vec4f,  // far view distance m of cascades 0..3
   texel: vec4f,   // world size m of one shadow texel per cascade
   params: vec4f,  // x cascade count, y map size px, z depth bias, w normal bias (texels)
+  depth: vec4f,   // x depth range m of the light box, y sun disc size (tan), zw 0
 };
 // One shadow pass draws one cascade.
 struct ShadowPass {
@@ -143,6 +147,20 @@ fn shadowTap(c: i32, wp: vec3f) -> vec4f {
   let q = cascades.viewProj[c] * vec4f(wp, 1.0);
   return vec4f(q.xy * vec2f(0.5, -0.5) + vec2f(0.5), q.z, 1.0);
 }
+// The receiver bias of cascade c in clip depth: 1.5 texels of the cascade
+// (in m) over the depth range of the light box, plus the constant part.
+fn shadowBiasZ(c: i32) -> f32 {
+  let range = max(cascades.depth.x, 1.0);
+  return cascades.params.z + ((cascades.texel[c] * 1.5) / range);
+}
+// The offset receiver point: along the normal by the normal bias (more at
+// grazing sun, where acne starts), and a half texel toward the sun.
+fn shadowOffset(wp: vec3f, nrm: vec3f, c: i32) -> vec3f {
+  let tx = cascades.texel[c];
+  let L = normalize(G.sunDir.xyz);
+  let ndl = clamp(dot(nrm, L), 0.0, 1.0);
+  return wp + (nrm * (tx * cascades.params.w * (1.0 + (2.0 * (1.0 - ndl))))) + (L * (tx * 0.5));
+}
 // 0 = in shadow, 1 = lit. wp world point, nrm the surface normal (offset
 // along it by the normal bias). 3x3 PCF on the hardware 2x2 compare.
 fn sunShadowAt(wp: vec3f, nrm: vec3f, c: i32) -> f32 {
@@ -150,7 +168,7 @@ fn sunShadowAt(wp: vec3f, nrm: vec3f, c: i32) -> f32 {
   let p = wp + nrm * (tx * cascades.params.w);
   let s = shadowTap(c, p);
   if (any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0)) || s.z > 1.0) { return 1.0; }
-  let zr = s.z + cascades.params.z;
+  let zr = s.z + shadowBiasZ(c);
   let px = 1.0 / cascades.params.y;
   var sum = 0.0;
   for (var y = -1; y <= 1; y++) {
@@ -174,6 +192,76 @@ fn sunShadow(wp: vec3f, nrm: vec3f) -> f32 {
   }
   // past the last cascade the light is not shadowed (fade out)
   return mix(s, 1.0, smoothstep(cascades.splits[n - 1] * 0.9, cascades.splits[n - 1], z));
+}
+
+// ── soft sun shadow (PCSS) ───────────────────────────────────────────────
+// Percentage-closer soft shadows (Fernando 2005) for the near field.
+// 1 blocker search: SOFT_SEARCH texel loads on a golden-angle disc of
+//   (sun size x 25 m) round the receiver; no blocker -> lit (early out).
+// 2 penumbra: (receiver - mean blocker) m x sun size, in texels of the
+//   cascade, clamped to 1 .. SOFT_MAX_R.
+// 3 filter: SOFT_TAPS hardware 2x2 compare taps on a golden-angle disc of
+//   that radius, turned by the per pixel noise r (0..1; TAA resolves it).
+// The cascade choice dithers over the last 10 % of a cascade (one cascade
+// a pixel, not two). Cost is constant: 8 loads + 12 compare taps at most.
+const SOFT_SEARCH: i32 = 8;
+const SOFT_TAPS: i32 = 12;
+const SOFT_MAX_R: f32 = 14.0;
+const SOFT_REACH: f32 = 25.0;   // m: the highest blocker that the search sees
+fn sunShadowSoftAt(wp: vec3f, nrm: vec3f, c: i32, r: f32) -> f32 {
+  let tx = cascades.texel[c];
+  let s = shadowTap(c, shadowOffset(wp, nrm, c));
+  if (any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0)) || s.z > 1.0) { return 1.0; }
+  let range = max(cascades.depth.x, 1.0);
+  let zr = s.z + shadowBiasZ(c);
+  let size = max(cascades.params.y, 1.0);
+  let px = 1.0 / size;
+  let sunSz = max(cascades.depth.y, 0.002);
+  let ang0 = r * 6.2831853;
+  // 1 blocker search (texel loads, no filter)
+  let searchT = clamp((sunSz * SOFT_REACH) / tx, 1.5, SOFT_MAX_R);
+  var bSum = 0.0;
+  var bN = 0.0;
+  let maxI = vec2i(i32(size) - 1);
+  for (var i = 0; i < SOFT_SEARCH; i++) {
+    let fi = f32(i);
+    let rad = sqrt((fi + 0.5) / f32(SOFT_SEARCH)) * searchT;
+    let a = ang0 + (fi * 2.3999632);
+    let q = s.xy * size + (vec2f(cos(a), sin(a)) * rad);
+    let d = textureLoad(tShadow, clamp(vec2i(floor(q)), vec2i(0), maxI), c, 0);
+    if (d > zr) { bSum += d; bN += 1.0; }
+  }
+  if (bN < 0.5) { return 1.0; }
+  // 2 penumbra width in texels
+  let distM = max(((bSum / bN) - zr) * range, 0.0);
+  let penT = clamp((distM * sunSz) / tx, 1.0, SOFT_MAX_R);
+  // 3 the filter
+  var sum = 0.0;
+  for (var i = 0; i < SOFT_TAPS; i++) {
+    let fi = f32(i);
+    let rad = sqrt((fi + 0.5) / f32(SOFT_TAPS)) * penT;
+    let a = ang0 + 1.3 + (fi * 2.3999632);
+    let uv = s.xy + ((vec2f(cos(a), sin(a)) * rad) * px);
+    sum += textureSampleCompareLevel(tShadow, sShadow, uv, c, zr);
+  }
+  return sum / f32(SOFT_TAPS);
+}
+// fc = the fragment position (px) for the noise
+fn sunShadowSoft(wp: vec3f, nrm: vec3f, fc: vec2f) -> f32 {
+  let n = i32(cascades.params.x);
+  if (n <= 0) { return 1.0; }
+  let z = viewDistance(wp);
+  var c = cascadeOf(z);
+  let r = fract(cm_ign(fc) + (G.frame.x * 0.6180339));
+  let far = cascades.splits[c];
+  let edge = far * 0.9;
+  if ((c + 1 < n) && (z > edge)) {
+    let k = (z - edge) / max(far - edge, 1e-3);
+    if (fract(r * 7.13 + 0.37) < k) { c = c + 1; }
+  }
+  let s = sunShadowSoftAt(wp, nrm, c, r);
+  let lastF = cascades.splits[n - 1];
+  return mix(s, 1.0, smoothstep(lastF * 0.9, lastF, z));
 }
 
 // ── small shared maths (prefix cm_ so that packages do not collide) ─────

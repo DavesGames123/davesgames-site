@@ -78,10 +78,10 @@ export function packGlobals(f, s) {
   return f;
 }
 
-// struct CascadeInfo: viewProj array<mat4x4f, 4>, splits, texel, params.
-export const CASCADE_FLOATS = 4 * 16 + 12;   // 76 floats = 304 bytes
+// struct CascadeInfo: viewProj array<mat4x4f, 4>, splits, texel, params, depth.
+export const CASCADE_FLOATS = 4 * 16 + 16;   // 80 floats = 320 bytes
 // c = { count, size, mats: [Float32Array(16) x count], splits: [], texel: [],
-//       depthBias, normalBias }
+//       depthBias, normalBias, depthRange (m), lightSize (tan of the sun disc) }
 export function packCascades(f, c) {
   f.fill(0);
   for (let i = 0; i < 4; i++) {
@@ -93,6 +93,7 @@ export function packCascades(f, c) {
     f[68 + i] = c.texel[Math.min(i, c.texel.length - 1)] || 0;
   }
   f[72] = c.count; f[73] = c.size; f[74] = c.depthBias ?? 0; f[75] = c.normalBias ?? 0;
+  f[76] = c.depthRange ?? 0; f[77] = c.lightSize ?? 0;
   return f;
 }
 // struct ShadowPass: viewProj, info (cascade, texel m, count, size).

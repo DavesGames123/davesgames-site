@@ -2368,7 +2368,9 @@ fn fs(v: VOut) -> @location(0) vec4f {
   var sh = 1.0;
   var shM = 1.0;
   if (L.y > -0.05) {
-    sh = sunShadow(pW, nGeo);
+    // soft shadows (PCSS, common.wgsl): the penumbra widens with the
+    // distance to the caster, so a trunk foot is sharp and a crown is soft
+    sh = sunShadowSoft(pW, nGeo, v.pos.xy);
     // the march starts on the base surface: detail relief under the base
     // would shadow itself in the bilinear field
     // the cascades hold the terrain casters out to their far split; the
