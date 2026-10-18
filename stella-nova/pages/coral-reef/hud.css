@@ -1,0 +1,126 @@
+/* ============================================================================
+   CORAL REEF  ·  hud.css  ·  the ROV group of the camera bar, the feed cards,
+   the 3D tags and the minimap (squad-hud.js, minimap.js). Loaded after
+   style.css; the tokens are the --snp-* tokens of lib/sn-panel.css (PANEL),
+   with the old page tokens as the fall back. --c is the ROV colour
+   (rov/hud.js ROV_COLOURS), set on each element by squad-hud.js.
+     grep -n 'ROV GROUP'   the ROV buttons of #camBar
+     grep -n 'CARDS'       the feed card stack (#feed, .fcard, #feedTabs)
+     grep -n 'TAGS'        the 3D tags (#rovTags)
+     grep -n 'MINIMAP'     #minimap
+     grep -n 'PHONE'       one card, the folded map
+     grep -n 'SAVER'       the saver keeps one card, no tags, no map
+   ========================================================================== */
+.sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* ROV GROUP */
+#rovPick{display:flex;gap:2px;padding:0 3px;margin:0 2px;border-left:1px solid var(--snp-line,var(--line));border-right:1px solid var(--snp-line,var(--line))}
+#rovPick button{position:relative}
+#rovPick button em{font-style:normal}
+#rovPick .rdot{width:9px;height:9px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px rgba(2,10,16,0.6);flex:0 0 auto}
+#rovPick button.sel{color:var(--snp-ink,var(--ink));box-shadow:inset 0 -2px 0 var(--c)}
+#camBar #rovPick button.on{background:rgba(127,224,207,0.12);background:color-mix(in srgb,var(--c) 17%,transparent);border-color:var(--c);color:var(--snp-ink,var(--ink))}
+#rovPick button:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+
+/* CARDS. #feed holds the stack; each .fcard is one ROV camera. */
+html #feed{width:auto;max-width:none;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+#feedSlot{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.fcard{position:relative;width:var(--fc-thumb,212px);max-width:calc(100vw - 28px);border:1px solid var(--snp-line,var(--line-b));border-radius:var(--snp-r,8px);overflow:hidden;background:#000;box-shadow:var(--snp-shadow,0 6px 30px rgba(0,0,0,0.6));transition:width 0.22s var(--snp-ease,ease)}
+.fcard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c);z-index:1;pointer-events:none}
+.fcard.main{width:var(--fc-main,352px);border-color:var(--c);box-shadow:0 0 0 1px var(--c),var(--snp-shadow,0 6px 30px rgba(0,0,0,0.6))}
+#feed.live .fcard,#feed.live .fcard canvas{background:transparent}
+.fcard canvas{display:block;width:100%;height:auto}
+.fpick{position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;background:transparent;cursor:pointer;padding:0}
+.fcard.main .fpick{cursor:zoom-in}
+#feed.big .fcard.main .fpick{cursor:zoom-out}
+.fpick:focus-visible{outline:2px solid var(--c);outline-offset:-3px}
+html #feed .fcard #feedSize{position:absolute;top:0;right:0;z-index:2}
+#feed.big .fcard:not(.main){display:none}
+html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
+#feedTabs{display:none}
+#feedTabs button{min-width:40px;min-height:32px;padding:2px 8px;border:1px solid var(--snp-line,var(--line));border-bottom:2px solid var(--c);border-radius:var(--snp-r,8px) var(--snp-r,8px) 0 0;background:var(--snp-bg,rgba(3,18,27,0.85));color:var(--snp-dim,var(--dim));font:600 0.75rem var(--sci-mono,ui-monospace,monospace);cursor:pointer}
+#feedTabs button.on{color:var(--snp-ink,var(--ink));background:rgba(255,255,255,0.08);background:color-mix(in srgb,var(--c) 22%,var(--snp-solid,#06161f))}
+#feedTabs button:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+#feed.one .fcard:not(.main){display:none}
+#feed.one #feedTabs{display:flex;gap:3px;justify-content:flex-end}
+#feed.one #feedSlot{gap:0}
+
+/* TAGS: a dot and the id at each ROV; corner marks round the selected one,
+   with its task. They are DOM over the canvas: always readable in the
+   water, never in the rock depth test. */
+#rovTags{position:fixed;inset:0;z-index:15;pointer-events:none;overflow:hidden}
+.rtag{position:absolute;left:0;top:0;--r:20px;will-change:transform}
+.rtag::before{content:'';position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--c);opacity:0.75;box-shadow:0 0 6px var(--c)}
+.rtag .brk{display:none;position:absolute;left:calc(-1 * var(--r));top:calc(-1 * var(--r));width:calc(2 * var(--r));height:calc(2 * var(--r));opacity:0.85;
+  background:
+    linear-gradient(var(--c),var(--c)) left top/10px 1.5px no-repeat,linear-gradient(var(--c),var(--c)) left top/1.5px 10px no-repeat,
+    linear-gradient(var(--c),var(--c)) right top/10px 1.5px no-repeat,linear-gradient(var(--c),var(--c)) right top/1.5px 10px no-repeat,
+    linear-gradient(var(--c),var(--c)) left bottom/10px 1.5px no-repeat,linear-gradient(var(--c),var(--c)) left bottom/1.5px 10px no-repeat,
+    linear-gradient(var(--c),var(--c)) right bottom/10px 1.5px no-repeat,linear-gradient(var(--c),var(--c)) right bottom/1.5px 10px no-repeat}
+.rtag .lbl{position:absolute;left:7px;top:-15px;white-space:nowrap;font:600 10px/1.25 var(--sci-mono,ui-monospace,monospace);color:var(--c);opacity:0.7;text-shadow:0 1px 3px #000,0 0 2px #000}
+.rtag .lbl b{font-weight:600}
+.rtag .lbl i{display:none;font-style:normal;font-weight:500;color:var(--snp-ink,#dcecef)}
+.rtag.sel::before{display:none}
+.rtag.sel .brk{display:block}
+.rtag.sel .lbl{left:calc(var(--r) + 6px);top:calc(-1 * var(--r));opacity:0.95;font-size:11px}
+.rtag.sel .lbl i{display:block;opacity:0.8}
+.rtag.sel.near .brk{opacity:0.35}
+.rtag.sel.near .lbl{left:calc(var(--r) * 0.55);top:calc(-0.75 * var(--r))}
+
+/* MINIMAP */
+#minimap{position:fixed;left:14px;bottom:14px;z-index:24;padding:6px;background:var(--snp-bg,rgba(3,18,27,0.85));border:1px solid var(--snp-line,var(--line));border-radius:var(--snp-r-l,14px);box-shadow:var(--snp-shadow,0 6px 30px rgba(0,0,0,0.5));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--snp-dim,var(--dim))}
+@media (min-width:769px){body:not(.panel-closed) #minimap{left:calc(var(--snp-w,var(--panel-w)) + 14px)}}
+#mmCanvas{display:block;width:200px;height:200px;border-radius:var(--snp-r,8px);touch-action:none;cursor:crosshair;background:#02070c}
+.mm-tools{position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px}
+.mm-tools button{width:26px;height:26px;padding:0;border:1px solid var(--snp-line,var(--line));border-radius:var(--snp-r,8px);background:rgba(2,10,16,0.72);color:var(--snp-ink,var(--ink));font-size:0.85rem;line-height:1;cursor:pointer}
+.mm-tools button:hover{background:var(--snp-raise-h,rgba(255,255,255,0.08))}
+.mm-tools button:focus-visible{outline:2px solid var(--snp-accent,var(--accent));outline-offset:1px}
+.mm-legend{position:relative;margin:6px 2px 1px;height:22px;font:10px/1 var(--sci-mono,ui-monospace,monospace)}
+.mm-bar{position:absolute;left:0;right:0;top:0;height:6px;border-radius:3px;
+  background:linear-gradient(90deg,rgb(143,243,224) 0%,rgb(79,214,200) 27.5%,rgb(42,166,168) 39.4%,rgb(33,127,153) 43.8%,rgb(29,90,138) 60.9%,rgb(27,55,104) 79.4%,rgb(26,32,80) 91.5%,rgb(18,15,48) 100%)}
+.mm-ticks i{position:absolute;top:10px;font-style:normal;transform:translateX(-50%);white-space:nowrap}
+.mm-ticks i:first-child{transform:none}
+.mm-ticks i:last-child{transform:translateX(-100%)}
+#mmZoom{position:absolute;right:0;top:10px;display:none}
+#minimap.fold{padding:0}
+#minimap.fold #mmCanvas,#minimap.fold .mm-legend,#minimap.fold #mmIn,#minimap.fold #mmOut{display:none}
+#minimap.fold .mm-tools{position:static}
+#minimap.fold #mmFold{width:auto;height:32px;padding:0 10px;border:0;background:transparent}
+#mmFold .when-fold{display:none}
+#minimap.fold #mmFold .when-fold{display:inline}
+#minimap.fold #mmFold .when-open{display:none}
+
+/* TOUCH */
+@media (pointer:coarse){
+  .mm-tools button{width:40px;height:40px}
+  #minimap.fold #mmFold{height:44px;min-width:44px}
+  #feedTabs button{min-height:40px;min-width:44px}
+}
+
+/* PHONE (PHONE_Q of main.js): one card with tabs; the map folds at the
+   upper left, under the colour legend when it shows. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #rovPick{flex-direction:column;padding:3px 0;margin:2px 0;border:0;border-top:1px solid var(--snp-line,var(--line));border-bottom:1px solid var(--snp-line,var(--line))}
+  #rovPick button em{display:none}
+  html #feed{right:calc(8px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 8px);width:auto}
+  html #feed .fcard.main{width:150px}
+  html #feed.big .fcard.main{width:calc(100vw - 16px)}
+  #minimap{left:calc(8px + env(safe-area-inset-left));right:auto;top:calc(52px + env(safe-area-inset-top));bottom:auto;padding:4px}
+  html.in-frame #minimap{top:8px}
+  #legend:not(.off) ~ #minimap{top:calc(118px + env(safe-area-inset-top))}
+  #mmCanvas{width:140px;height:140px}
+  .mm-legend{display:none}
+  body:not(.panel-closed) #minimap,body:not(.panel-closed) #rovTags{opacity:0;pointer-events:none}
+}
+@media (max-height:500px) and (orientation:landscape){
+  #rovPick{flex-direction:row;border:0}
+  html #feed .fcard.main{width:132px}
+  #minimap,html.in-frame #minimap{top:8px}
+  #mmCanvas{width:110px;height:110px}
+}
+
+/* SAVER: the main card alone at the cardRect place (main.js placeCard) */
+html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #minimap,html.sn-saver #rovTags{display:none!important}
+html.sn-saver #feed .fcard.main{width:100%!important;max-width:none}
+html.sn-saver #feed .fpick{pointer-events:none}
+@media (prefers-reduced-motion:reduce){.fcard{transition:none}}
