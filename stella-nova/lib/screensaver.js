@@ -421,9 +421,21 @@ body.sn-saver-on #sn-saver-touch { display: none; }
 document.head.appendChild(css);
 
 // ── top bar entry ──────────────────────────────────────────────────────────
+// startHere: the top bar button. On a page with a saver (catalog state not
+// 'no'), start the screensaver for that page only, at once, with no menu
+// and no recording; it stays on the page until the user stops it. On the
+// home page (or a page with no saver) open the menu, as Cmd+Option+S does.
+// The user said (2026-10-18): "the screensaver button should start the
+// screensaver for only this page automatically, not open the menu" and
+// "on the homepage, open the menu".
+function startHere() {
+  const cur = typeof activeTab === 'string' ? activeTab : null;
+  const page = cur && cur !== 'home' ? allPages().find(p => p.key === cur) : null;
+  if (!page || page.state === 'no') { openMenu(); return; }
+  startSaver(null, false, [cur]);
+}
 // A "Screensaver" pill in the shell's top bar, beside Share (the same look as
-// the Share and Random page buttons), on every device: it opens the same
-// menu as Cmd+Option+S. A phone has no keyboard for the shortcut, so before
+// the Share and Random page buttons), on every device: startHere (above). A phone has no keyboard for the shortcut, so before
 // 2026-10-18 this button showed on touch screens only. Under 520 px only the
 // icon shows. A single tap during a run still stops it, as before. The id
 // stays sn-saver-touch so earlier checks keep finding it.
@@ -435,7 +447,7 @@ document.head.appendChild(css);
   b.setAttribute('aria-label', 'Start the screensaver');
   b.title = 'Screensaver (Cmd+Option+S)';
   b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" fill="currentColor"/><path d="M8 20h8"/></svg><span class="sn-saver-lab">Screensaver</span>';
-  b.addEventListener('click', e => { e.stopPropagation(); if (!run) openMenu(); });
+  b.addEventListener('click', e => { e.stopPropagation(); if (!run) startHere(); });
   // before Share (lib/share-url.js adds #tb-share before #tb-wishlist)
   const at = document.getElementById('tb-share') || document.getElementById('tb-wishlist');
   if (at && at.parentNode === bar) bar.insertBefore(b, at); else bar.appendChild(b);
@@ -679,14 +691,17 @@ function menuMsg(t, wait) {
   m.textContent = t; m.hidden = !t; m.classList.toggle('wait', !!wait);
 }
 
-async function startSaver(cap, paint) {
-  const keys = chosenKeys();
+// only: a list of page keys that replaces the chosen list (the top bar
+// button passes the current page). With only, the run stays on its page:
+// no advance timer and no recording.
+async function startSaver(cap, paint, only) {
+  const keys = only || chosenKeys();
   if (!keys.length || run) { if (cap) cap.getTracks().forEach(t => t.stop()); return; }
   const order = S.order === 'shuffle' ? shuffle(keys.slice()) : keys;
   run = {
     order, i: -1, timer: 0, paused: false, left: 0, started: 0, t0: performance.now(),
     back: window.activeTab || null, rec: null, frameWin: null, lock: null, token: 0,
-    onFrameLoad: () => {}, cap: cap || null, paint: !!paint,
+    onFrameLoad: () => {}, cap: cap || null, paint: !!paint, single: !!only,
   };
   const cover = el('sn-saver-cover');
   cover.style.setProperty('--fade', S.fade + 's');
@@ -813,9 +828,9 @@ async function showPage(key) {
   if (S.labels) fallbackPoster(r, token, page);
   else if (S.caption) { setTimeout(() => { if (run === r && token === r.token) cap.classList.add('on'); }, S.fade * 1000 + 400); setTimeout(() => cap.classList.remove('on'), S.fade * 1000 + 6500); }
   hud(`${r.i + 1}/${r.order.length} ${page.label} · ${got.mode}${got.canvas ? '' : ' · no canvas'}`);
-  if (S.record) startRecording(r, key, got.canvas, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
+  if (S.record && !r.single) startRecording(r, key, got.canvas, Math.max(S.recordWarmup * 1000, got.warmupMs || 0), token);
   r.left = S.seconds * 1000; r.started = performance.now();
-  r.timer = setTimeout(() => next(1), r.left);
+  if (!r.single) r.timer = setTimeout(() => next(1), r.left);
 }
 
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
@@ -1162,7 +1177,7 @@ function runKey(e) {
 }
 function togglePause() {
   const r = run; if (!r) return;
-  if (r.paused) { r.paused = false; r.started = performance.now(); r.timer = setTimeout(() => next(1), r.left); hud('playing'); }
+  if (r.paused) { r.paused = false; r.started = performance.now(); if (!r.single) r.timer = setTimeout(() => next(1), r.left); hud('playing'); }
   else { r.paused = true; clearTimeout(r.timer); r.left -= performance.now() - r.started; hud(`paused · ${Math.round(r.left / 1000)} s left`); }
 }
 function hud(t) { const h = el('sn-saver-hud'); h.textContent = t; }

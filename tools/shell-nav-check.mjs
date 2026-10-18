@@ -189,7 +189,30 @@ await (async () => {
     ok(!serr.length && !!sb && sb.parentElement === sbar, `saver button: ${tag}: #sn-saver-touch is in the top bar`, serr.join(' | '));
     ok(sb && share && kids2.indexOf(sb) === kids2.indexOf(share) - 1 && kids2.indexOf(sb) > kids2.indexOf(sd.getElementById('topbar-title')), `saver button: ${tag}: it sits right, just before Share`, kids2.map(k => k.id).join(','));
     ok(sb && /screensaver/i.test(sb.getAttribute('aria-label') || '') && sb.querySelector('.sn-saver-lab') && /Screensaver/.test(sb.textContent), `saver button: ${tag}: an aria-label and the label "Screensaver"`);
-    if (sb) { sb.click(); const m = sd.getElementById('sn-saver-menu'); ok(!!m && !m.hidden, `saver button: ${tag}: a click opens the screensaver menu`); }
+    if (sb) { sb.click(); const m = sd.getElementById('sn-saver-menu'); ok(!!m && !m.hidden, `saver button: ${tag}: on the home page a click opens the screensaver menu`); }
+    sw.close();
+  }
+  // On a page with a saver, the button starts the screensaver for that page
+  // only, with no menu (the user, 2026-10-18: "the screensaver button should
+  // start the screensaver for only this page automatically, not open the menu").
+  {
+    const vc = new VirtualConsole(); vc.on('jsdomError', () => {});
+    const dom = new JSDOM(bare, { url: 'http://localhost/stella-nova/index.html#orbital', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+    const sw = dom.window; sw.matchMedia = makeMatchMedia({ w: 1440, h: 900, coarse: false });
+    sw.Element.prototype.scrollIntoView = function () {};
+    const switched = [];
+    sw.eval('var activeTab = "orbital";');
+    sw.switchTab = (k) => { switched.push(k); };
+    const serr = [];
+    for (const f of ['lib/nav-data.js', 'lib/share-url.js', 'lib/screensaver.js']) { try { sw.eval(lib(f)); } catch (e) { serr.push(f + ': ' + e.message); } }
+    sw.document.dispatchEvent(new sw.Event('DOMContentLoaded'));
+    const sd = sw.document, sb = sd.getElementById('sn-saver-touch');
+    if (sb) sb.click();
+    await new Promise(r => setTimeout(r, 2500));
+    const m = sd.getElementById('sn-saver-menu');
+    ok(!serr.length && sw.snScreensaver && sw.snScreensaver.running && (!m || m.hidden), 'saver button: on a page (orbital) a click starts the screensaver with no menu', serr.join(' | ') || `running ${sw.snScreensaver && sw.snScreensaver.running}, menu ${m ? (m.hidden ? 'hidden' : 'open') : 'none'}`);
+    ok(switched.length >= 1 && switched.every(k => k === 'orbital'), 'saver button: the run shows only this page', JSON.stringify(switched));
+    if (sw.snScreensaver && sw.snScreensaver.running) sw.snScreensaver.stop('test');
     sw.close();
   }
   ok(/min-height: 44px/.test(lib('lib/screensaver.js')) && /\.sn-saver-lab \{ display: none; \}/.test(lib('lib/screensaver.js')), 'saver button: 44 px target; under 520 px only the icon shows');
