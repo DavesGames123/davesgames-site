@@ -9,8 +9,17 @@
 //    release   releaseFrame on a page with lib/gpu-guard.js calls
 //              __snRelease and makes no new canvas context; on a page with
 //              no guard it still loses each WebGL context
+//    random    (jsdom, skipped when jsdom does not resolve) the #tb-random
+//              button: it is a button in the top bar left, before the
+//              title, with a label for screen readers; 44 px at each
+//              viewport, the label hides under 520 px; 60 fast clicks
+//              each call switchTab with a registered key that is not
+//              home, not the current page and not one of the last 8
+//              picks, and leave one page frame (click coalescing);
+//              sessionStorage that throws still gives valid picks; a
+//              page with a WIP badge is never picked
 //
-//  Usage (repo root):
+//  Usage (repo root; jsdom must resolve, for example with NODE_PATH):
 //    node tools/shell-nav-check.mjs            check stella-nova/index.html
 //    node tools/shell-nav-check.mjs --old REV  the same checks on
 //                                              git show REV:stella-nova/index.html
@@ -78,6 +87,91 @@ function frame(canvases, guard) {
   ctx.releaseFrame(n.f);
   ok(cs2[0].lost === 1, 'release: a page with no guard still loses its WebGL context', `lost ${cs2[0].lost}`);
 }
+
+// ── random ──────────────────────────────────────────────────────────────────
+await (async () => {
+  const { createRequire } = await import('node:module');
+  let JSDOM, VirtualConsole;
+  try { ({ JSDOM, VirtualConsole } = createRequire(import.meta.url)('jsdom')); } catch (e) { console.log('skip  random: jsdom not found (set NODE_PATH)'); return; }
+  const { parseCss, styleOf, px, makeMatchMedia } = await import('./css-viewport.mjs');
+  const scripts = [];
+  const bare = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/g, (m, attrs, body) => { const s = attrs.match(/src="([^"]+)"/); scripts.push(s ? { src: s[1] } : { body }); return ''; });
+  const css = parseCss([...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n'));
+  const lib = f => fs.readFileSync(path.join(ROOT, 'stella-nova', f), 'utf8');
+  function boot(vp, badStorage = false) {
+    // jsdom cannot load a frame: drop its "navigation" note, keep other errors.
+    const vc = new VirtualConsole();
+    vc.on('jsdomError', e => { if (!/navigation/.test(e.message)) console.log('jsdom: ' + e.message); });
+    const dom = new JSDOM(bare, { url: 'http://localhost/stella-nova/index.html#orbital', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc });
+    const w = dom.window;
+    w.matchMedia = makeMatchMedia(vp);
+    w.Element.prototype.scrollIntoView = function () {};
+    if (badStorage) Object.defineProperty(w, 'sessionStorage', { get() { throw new Error('denied'); } });
+    const errs = [];
+    for (const s of scripts) {
+      if (s.src && !['lib/nav-data.js', 'lib/wishlist.js'].includes(s.src)) continue;
+      try { w.eval(s.src ? lib(s.src) : s.body); } catch (e) { errs.push((s.src || 'inline') + ': ' + e.message); }
+    }
+    return { w, d: w.document, errs };
+  }
+  const { w, d, errs } = boot({ w: 1440, h: 900, coarse: false });
+  ok(!errs.length, 'random: the shell scripts run with no error', errs.join(' | '));
+  const b = d.getElementById('tb-random'), bar = d.getElementById('topbar');
+  const kids = bar ? [...bar.children] : [];
+  ok(!!b && b.tagName === 'BUTTON' && b.type === 'button' && b.parentElement === bar, 'random: #tb-random is a button in the top bar');
+  ok(b && kids.indexOf(b) > kids.indexOf(d.getElementById('collapse-btn')) && kids.indexOf(b) < kids.indexOf(d.getElementById('topbar-title')), 'random: it sits left, after the menu and collapse buttons, before the title');
+  ok(b && /random page/i.test(b.getAttribute('aria-label') || '') && !!b.querySelector('svg[aria-hidden="true"]'), 'random: it has an aria-label and a dice icon');
+  for (const [W, H, coarse] of [[360, 740, true], [390, 844, true], [844, 390, true], [1024, 768, true], [1440, 900, false]]) {
+    const vp = { w: W, h: H, coarse };
+    const st = styleOf(b, css, vp), lab = styleOf(b.querySelector('.tb-random-label'), css, vp);
+    const hide = W <= 520;
+    ok(px(st['min-height'], vp) >= 44 && px(st['min-width'], vp) >= 44 && st.display !== 'none' && (lab.display === 'none') === hide,
+      `random: ${W}x${H}: shows, 44 px target, label ${hide ? 'hidden (icon only)' : 'shown'}`, JSON.stringify({ mh: st['min-height'], mw: st['min-width'], d: st.display, l: lab.display }));
+  }
+  const keys = new Set(w.snPages().map(p => p.key));
+  // The shell's let bindings are not visible from here: the current page
+  // is the one the active sidebar row names (markTab sets it).
+  const current = () => { const a = d.querySelector('#sb-nav .active'); return a && a.dataset.tab; };
+  const calls = [];
+  const real = w.switchTab;
+  w.switchTab = function (id) { calls.push({ id, from: current() }); return real.apply(this, arguments); };
+  const bad = [];
+  const picks = [];
+  for (let n = 0; n < 60; n++) {
+    b.click();
+    const c = calls[calls.length - 1];
+    if (!c || c.id === 'home' || c.id === c.from || !keys.has(c.id)) bad.push(JSON.stringify(c));
+    if (c && picks.slice(-8).includes(c.id)) bad.push('repeat ' + c.id);
+    if (c) picks.push(c.id);
+  }
+  ok(calls.length === 60 && !bad.length, `random: 60 clicks give 60 switchTab calls to registered pages, never home, the current page or the last 8 picks`, `${calls.length} calls; ${bad.slice(0, 3).join(' | ')}`);
+  let recent = null;
+  try { recent = JSON.parse(w.sessionStorage.getItem('sn-random-recent')); } catch (e) {}
+  ok(Array.isArray(recent) && recent.length === 8 && recent[0] === picks[picks.length - 1], 'random: sessionStorage keeps the last 8 picks, newest first', JSON.stringify(recent));
+  await new Promise(r => setTimeout(r, 1200));
+  const frames = d.querySelectorAll('#frame-wrap iframe').length;
+  ok(frames === 1 && current() === picks[picks.length - 1], `random: after 60 fast clicks one page frame stays (${frames}), on the last pick`);
+  // Not ready: a WIP badge keeps a page out of the pool.
+  const wip = w.SN_NAV[1].constellations[0].groups[0].p[0];
+  wip[2] = 'WIP';
+  let seenWip = false;
+  for (let n = 0; n < 400; n++) if (w.pickRandom('orbital') === wip[0]) seenWip = true;
+  ok(!seenWip && !w.randomPool('orbital').includes(wip[0]) && !w.randomPool('orbital').includes('orbital'), `random: a WIP page (${wip[0]}) and the current page are never picked`);
+  // All but one page in the history: that one is picked.
+  const pool = w.randomPool('home');
+  w.sessionStorage.setItem('sn-random-recent', JSON.stringify(pool.slice(1)));
+  ok(w.pickRandom('home', () => 0.99) === pool[0], 'random: with the rest in the history, the one fresh page is picked');
+  w.close();
+  // sessionStorage that throws.
+  const t = boot({ w: 390, h: 844, coarse: true }, true);
+  const got = [];
+  const real2 = t.w.switchTab;
+  t.w.switchTab = function (id) { got.push(id); return real2.apply(this, arguments); };
+  let terr = null;
+  try { for (let n = 0; n < 10; n++) t.d.getElementById('tb-random').click(); } catch (e) { terr = e.message; }
+  ok(!terr && !t.errs.length && got.length === 10 && got.every(k => k !== 'home' && keys.has(k)), 'random: sessionStorage that throws still gives valid picks', terr || t.errs.join(' | ') || got.join(','));
+  t.w.close();
+})();
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

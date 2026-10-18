@@ -152,6 +152,13 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
    lib/wishlist.js gives both links their UTM tags in markTab. */
 #tb-wishlist{display:none;flex:none;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:999px;background:#ffb31a linear-gradient(135deg,#ffd65c,#ffb31a 55%,#ff8a3d);color:#1a1204;font:600 0.8rem/1 var(--f-sans);text-decoration:none;white-space:nowrap}
 #tb-wishlist:hover{filter:brightness(1.08)}
+/* Random page button (function randomPage): top left, after the menu and
+   collapse buttons. 44 px target. Under 520 px the label hides, the dice stays. */
+#tb-random{flex:none;display:inline-flex;align-items:center;gap:7px;min-width:44px;min-height:44px;padding:0 14px 0 11px;border:1px solid var(--border-b);border-radius:999px;background:none;color:var(--dim);font:500 0.78rem/1 var(--f-sans);letter-spacing:.04em;white-space:nowrap;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
+#tb-random svg{width:20px;height:20px;flex:none}
+#tb-random:hover{background:rgba(150,200,255,0.06);color:var(--blue);border-color:rgba(150,200,255,.34)}
+#tb-random:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media (max-width:520px){#tb-random{padding:0;justify-content:center}#tb-random .tb-random-label{display:none}}
 body.sb-collapsed #tb-wishlist{display:inline-flex}
 @media (max-width:768px),(max-height:500px) and (pointer:coarse){#tb-wishlist{display:inline-flex;min-height:40px}}
 /* ── phone and tablet drawer ─────────────────────────────────────────────
@@ -235,6 +242,7 @@ body.sb-collapsed #tb-wishlist{display:inline-flex}
     <div id="topbar">
       <button id="menu-btn" onclick="openSidebar()" aria-label="Open the page index" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
       <button id="collapse-btn" onclick="toggleSidebar()" title="Collapse / expand index">&#171;</button>
+      <button id="tb-random" type="button" onclick="randomPage()" aria-label="Open a random page" title="Open a random page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8.2" cy="8.2" r="1.45" fill="currentColor"/><circle cx="15.8" cy="8.2" r="1.45" fill="currentColor"/><circle cx="12" cy="12" r="1.45" fill="currentColor"/><circle cx="8.2" cy="15.8" r="1.45" fill="currentColor"/><circle cx="15.8" cy="15.8" r="1.45" fill="currentColor"/></svg><span class="tb-random-label">Random page</span></button>
       <span id="topbar-title">S T E L L A  N O V A</span>
       <span id="topbar-active">Overview</span>
       <a id="tb-wishlist" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener">&#9733; Wishlist</a>
@@ -354,6 +362,21 @@ var x0=null,y0=0;sb.addEventListener('touchstart',function(e){var t=e.touches[0]
 var n=document.querySelectorAll('#sb-nav .nav-item, #sb-nav .cluster-head.solo').length;if(q)q.placeholder='Search '+n+' pages';markRegion()})();
 function toggleSidebar(){var c=document.body.classList.toggle('sb-collapsed');try{localStorage.setItem('sn-sb-collapsed',c?'1':'0')}catch(e){}}
 window.toggleSidebar=toggleSidebar;
+/* ── random page ──────────────────────────────────────────────────────
+   The #tb-random button opens a random page from lib/nav-data.js through
+   switchTab, so the page swap rules apply (GPU release, click coalescing).
+   The pool (function randomPool): each snPages() key once, not home, not
+   the current page, not a page whose badge marks it as not ready
+   (RANDOM_NOT_READY). SN_HIDDEN pages are not in snPages(). The last
+   RANDOM_KEEP picks (sessionStorage 'sn-random-recent') are skipped while
+   other pages are left. Storage errors only lose that history.
+   grep -n targets: "function randomPage", "function pickRandom" */
+var RANDOM_KEY='sn-random-recent',RANDOM_KEEP=8,RANDOM_NOT_READY=/^(SOON|WIP|DRAFT|TODO|HIDDEN)$/i;
+function randomPool(cur){var seen={};return snPages().filter(function(p){if(seen[p.key]||p.key==='home'||p.key===cur||!PAGES[p.key]||(p.badge&&RANDOM_NOT_READY.test(p.badge)))return false;seen[p.key]=1;return true}).map(function(p){return p.key})}
+function randomRecent(){try{var a=JSON.parse(sessionStorage.getItem(RANDOM_KEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
+function pickRandom(cur,rnd){var pool=randomPool(cur);if(!pool.length)return null;var recent=randomRecent();var fresh=pool.filter(function(k){return recent.indexOf(k)<0});var from=fresh.length?fresh:pool;return from[Math.floor((rnd||Math.random)()*from.length)%from.length]}
+function randomPage(){var k=pickRandom(activeTab);if(!k)return;var r=randomRecent().filter(function(x){return x!==k});r.unshift(k);try{sessionStorage.setItem(RANDOM_KEY,JSON.stringify(r.slice(0,RANDOM_KEEP)))}catch(e){}switchTab(k)}
+window.randomPage=randomPage;
 /* ── tilt ─────────────────────────────────────────────────────────────
    The on/off for lib/tilt.js. The setting is localStorage 'sn-tilt'
    ('0' is off). The page in the frame gets a storage event, and also a
