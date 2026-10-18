@@ -14,7 +14,8 @@
 //   1 m steps; the drone speed is even (low variance in m/s); no yaw step
 //   over a threshold per frame (drone, hairpin, take-over, resume, flyTo);
 //   the speed eases in and brakes at the end; the take-over keeps the
-//   speed; flyTo and the FOV glide.
+//   speed; flyTo and the FOV glide; the near plane is 0.1 m low down;
+//   the fly eye stays 0.4 m outside a trunk (world.trunkAt).
 
 import { existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -352,6 +353,22 @@ for (const { world: w, t } of [A, F]) {
   let fv = [], mono = true;
   for (let f = 0; f < 90; f++) { cam.update(dt, {}, w); const m = cam.matrices(W, H); if (fv.length && m.fovY < fv[fv.length - 1] - 1e-9) mono = false; fv.push(m.fovY); }
   ok(mono && fv[0] < 52 * Math.PI / 180 && Math.abs(fv[fv.length - 1] - cam.fovY) < 0.01, `FOV glides from 50 to 70 deg with no overshoot (frame 1 ${(fv[0] * 180 / Math.PI).toFixed(2)} deg)`);
+}
+
+// ── the near plane low down, the trunk query
+{
+  const w = { heightAt: () => 100, size: 8000, seaLevel: 0 };
+  const cam = createCamera();
+  cam.setMode('fly', w);
+  const nearAt = h => { cam.fly.pos = [0, 100 + h, 0]; cam.update(1, {}, w); const m = cam.matrices(W, H); return [m.near, m.proj[14]]; };
+  const [n1, p1] = nearAt(2), [n2] = nearAt(80), [n3] = nearAt(120), [n4, p4] = nearAt(400);
+  ok(Math.abs(n1 - 0.1) < 1e-9 && Math.abs(p1 - 0.1) < 1e-6 && Math.abs(n2 - 0.1) < 1e-9 && n3 > 0.1 && n3 < 0.5 && Math.abs(n4 - 0.5) < 1e-9 && Math.abs(p4 - 0.5) < 1e-6,
+    `near plane: ${n1} m at 2 m, ${n2} m at 80 m, ${n3.toFixed(2)} m at 120 m, ${n4} m at 400 m over the ground (proj[14] the same)`);
+  const wt = { ...w, trunkAt: () => ({ x: 0, z: -20, r: 0.6 }) };
+  cam.fly = { pos: [0, 102, 0], yaw: 0, pitch: 0 }; cam.update(1, {}, wt);
+  let minD = Infinity;
+  for (let f = 0; f < 240; f++) { cam.update(1 / 60, { move: [0, 0, 1] }, wt); minD = Math.min(minD, Math.hypot(cam.pos[0], cam.pos[2] + 20)); }
+  ok(minD >= 1.0 - 1e-6, `fly into a trunk (r 0.6 m): the eye stays ${minD.toFixed(3)} m from its axis (>= r + 0.4)`);
 }
 
 console.log(`# camera: ${pass} pass, ${fail} fail`);

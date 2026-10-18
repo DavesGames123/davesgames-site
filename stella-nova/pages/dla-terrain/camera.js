@@ -30,6 +30,8 @@
 //            wheel) x 4 with boost. A velocity with exponential speed-up and
 //            brake, a soft floor ahead of the camera that pushes it up
 //            smoothly, the hard floor CLEAR, and a bank roll (cam.bank).
+//            When world.trunkAt(x, z) -> { x, z, r } is given, the eye stays
+//            0.4 m outside that trunk.
 //    drone   cam.drone = dronePath(...), cam.droneS (m), cam.droneSpeed
 //            (m/s). The speed eases in over DRONE_RAMP s and brakes before
 //            the end. A user input calls setMode('fly'): the drone is held
@@ -44,6 +46,8 @@
 //
 //  cam.matrices(w, h, opts) -> { view, proj, viewProj, invViewProj, pos,
 //            forward, right, up, fovY, aspect, near }   opts = { jitter [px],
+//            (near: NEAR_LOW 0.1 m under NEAR_H 80 m over the ground, then a
+//            blend to cam.near 0.5 m at 160 m)
 //            shift [ndcX, ndcY] (move the image centre) }. It also keeps the
 //            aspect and the shift for the screen rays of the calls above.
 //  cam.pick(nx, ny, world) -> [x, y, z] | null   the ground under a point
@@ -70,6 +74,7 @@ export const MIN_DIST = 12;                     // m, the closest zoom
 export const MAX_K = 1.8;                       // max orbit dist / world size
 export const ZOOM_STEP = 0.8;                   // dist factor per wheel step
 export const DRONE_RAMP = 2.5;                  // s, the drone speed ease-in
+export const NEAR_LOW = 0.1, NEAR_H = 80;       // m, the near plane low down
 const ORBIT_K = 16, ZOOM_K = 11, GOAL_W = 3.2, BLEND_W = 3.4, FOV_W = 7;
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -455,6 +460,17 @@ export function createCamera(opts = {}) {
       F.pos[1] = damp(F.pos[1], ga + soft, 7, dt);
       if (vel[1] < 0) vel[1] *= Math.exp(-10 * dt);
     }
+    // a trunk (world.trunkAt(x, z) -> { x, z, r } | null, VEG): stay 0.4 m out
+    const tr = w.trunkAt ? w.trunkAt(F.pos[0], F.pos[2]) : null;
+    if (tr && Number.isFinite(tr.r)) {
+      const dx = F.pos[0] - tr.x, dz = F.pos[2] - tr.z, d = Math.hypot(dx, dz), m = tr.r + 0.4;
+      if (d < m) {
+        const ux = d > 1e-6 ? dx / d : 1, uz = d > 1e-6 ? dz / d : 0;
+        F.pos[0] = tr.x + ux * m; F.pos[2] = tr.z + uz * m;
+        const vn = vel[0] * ux + vel[2] * uz;
+        if (vn < 0) { vel[0] -= vn * ux; vel[2] -= vn * uz; }
+      }
+    }
     const gh = groundAt(w, F.pos[0], F.pos[2]);
     if (F.pos[1] < gh + CLEAR) { F.pos[1] = gh + CLEAR; if (vel[1] < 0) vel[1] = 0; }
     // bank: into the turn and the side slip
@@ -567,7 +583,12 @@ export function createCamera(opts = {}) {
     dtFov = 0;
     const j = o.jitter || [0, 0], sh = o.shift || [0, 0];
     view.aspect = aspect; view.shift = [sh[0], sh[1]];
-    const proj = perspectiveRZ(fovS, aspect, cam.near);
+    // the near plane: NEAR_LOW m when the eye is under NEAR_H m over the
+    // ground (a leaf at the eye is not cut), blended to cam.near up to
+    // 2 x NEAR_H. Reverse-Z depth32float keeps the precision.
+    const agl = cam.pos[1] - groundAt(world0, cam.pos[0], cam.pos[2]);
+    const near = NEAR_LOW + (Math.max(NEAR_LOW, cam.near) - NEAR_LOW) * smooth(Number.isFinite(agl) ? (agl - NEAR_H) / NEAR_H : 1);
+    const proj = perspectiveRZ(fovS, aspect, near);
     // m[8], m[9]: x and y of clip get + c * z_view, w = -z_view -> ndc - c
     proj[8] = -(2 * j[0] / w + sh[0]);
     proj[9] = -(2 * j[1] / h + sh[1]);
@@ -579,13 +600,13 @@ export function createCamera(opts = {}) {
     const up = basis(yaw, pitch, cam.roll || 0).u;
     const v = lookAt(cam.pos, target, up);
     const viewProj = mul(proj, v);
-    const projNJ = perspectiveRZ(fovS, aspect, cam.near);
+    const projNJ = perspectiveRZ(fovS, aspect, near);
     projNJ[8] = -sh[0]; projNJ[9] = -sh[1];
     const right = [v[0], v[4], v[8]], upv = [v[1], v[5], v[9]];
     cam.up = upv;
     return {
       view: v, proj, viewProj, invViewProj: invert(viewProj), viewProjNoJitter: mul(projNJ, v),
-      pos: cam.pos.slice(), forward: cam.forward.slice(), right, up: upv, fovY: fovS, aspect, near: cam.near,
+      pos: cam.pos.slice(), forward: cam.forward.slice(), right, up: upv, fovY: fovS, aspect, near,
     };
   };
   return cam;
