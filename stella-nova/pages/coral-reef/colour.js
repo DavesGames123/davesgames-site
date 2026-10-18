@@ -30,7 +30,7 @@
 //    radius of each polyp ... "export function radiiOf"
 //    thumbnail data ......... "export function polypData"
 // ============================================================================
-import { SPECIES, polypRadius } from './reef.js';
+import { SPECIES, polypRadius, colourMorph } from './reef.js';
 import { sample } from '../../lib/growth-gradients.js';
 
 export const MODES = [
@@ -110,14 +110,16 @@ export function colourT(reef, mode, out, F) {
 
 // The natural colour of each polyp (rgb, 0..1): the species base colour,
 // lighter toward the tips (small subtrees), with a small seeded jitter.
+// The colours are the morph of the colony (reef.js colourMorph: one of
+// the species colour variants, from the colony seed).
 export function naturalRGB(reef, out, F) {
   const n = reef.count; out = out && out.length >= n * 3 ? out : new Float32Array(Math.max(3, n * 3));
   F = F || fieldsOf(reef);
   for (let i = 0; i < n; i++) {
-    const sp = reef.colonies[reef.col[i]].sp;
+    const c = reef.colonies[reef.col[i]], [b0, t0] = colourMorph(c.sp, c);
     const tip = Math.pow(1 - Math.min(1, Math.log2(F.sub[i]) / 5), 1.6);
     const j = 0.9 + 0.2 * (((i * 2654435761) >>> 0) / 4294967296);
-    for (let k = 0; k < 3; k++) out[i * 3 + k] = Math.min(1, (sp.base[k] + (sp.tip[k] - sp.base[k]) * tip) * j);
+    for (let k = 0; k < 3; k++) out[i * 3 + k] = Math.min(1, (b0[k] + (t0[k] - b0[k]) * tip) * j);
   }
   return out;
 }

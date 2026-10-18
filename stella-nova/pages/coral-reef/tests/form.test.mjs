@@ -41,7 +41,10 @@
 //                    coral; bump strength 0.3 or less except the brain
 // ============================================================================
 import { createRock } from '../rock/index.js';
-import { createReef, SPECIES, SPECIES_IDS } from '../reef.js';
+import { createReef, SPECIES, SPECIES_IDS as ALL_IDS } from '../reef.js';
+// the five species of the old reef page (tests/species.test.mjs checks
+// every species of the table: one root, continuity, planar fans, sway)
+const SPECIES_IDS = ALL_IDS.filter(id => SPECIES[id].core);
 import * as SH from '../shaders.js';
 
 let fails = 0, passes = 0;

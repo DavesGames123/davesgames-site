@@ -83,14 +83,32 @@
 //    R.progress() -> { count, target, limit, colonies, live, fraction, done,
 //                      walkers, walks, lost, fusions, overgrowths }
 //
-//  SPECIES (grep -n 'export const SPECIES')
-//    staghorn ... apex: long round branches, forks at 55 degrees (antlers)
-//    fan ........ apex in the plane across the current, side branches and
-//                 self bridges: a flat net (Gorgonia)
-//    table ...... apex: a short stalk, a whorl at its top, then horizontal
-//                 branches that fork: a flat plate
-//    boulder .... (brain coral) high stubbornness and a dome clamp: compact
-//    finger ..... apex: short thick fingers that fork at 40 degrees
+//  SPECIES (grep -n 'export const SPECIES'): 39 species in six groups
+//  (SPECIES_GROUPS: branching, plating, massive, soft, fans, deep). The
+//  user asked to "create a lot more coral species" and for "generative
+//  species like massive filter feeding fan corals" in the deep. Each has
+//  names, form, depth [min, max] m, habitat, fact, colours and morphs,
+//  site weights, and one growth form (the hooks at the top of the file):
+//    branch ... apex tip growth (staghorn, elkhorn, Pocillopora,
+//               Stylophora, Seriatopora, pillar, soft trees, gorgonians,
+//               black and bamboo corals, Desmophyllum, Madrepora, sea pen,
+//               sea lily). apex.whorl: a crown of branches at the stalk
+//               top (whorlFirst: before the walk goes on); apex.len: a
+//               length limit per branch order; apex.maxOrder; apex.forkH;
+//               apex.planar (true, or 0..1); apex.flatK; apex.net
+//    fan ...... branch + every particle in the colony plane (Gorgonia,
+//               Annella); feed 'plane': the snow crosses the plane
+//    plate .... a stalk, then plates that rise by c.tilt (table, Montipora,
+//               Turbinaria, Pachyseris, Echinopora, Merulina, leather)
+//    mound .... a dome of the particle count, mound.flat, mound.lobes,
+//               mound.oval (brain, Porites, Favites, Lobophyllia,
+//               encrusting Montipora, mushroom coral)
+//    shell .... a sponge wall round the axis (Euplectella, glass vase,
+//               cloud sponge, barrel sponge)
+//  Per colony (vary, from the seed): c.ap (the apex rule with the angles
+//  and rates changed by up to sp.vary), c.tilt, c.lobes, c.bend, c.morph
+//  (the colour variant; colonyInfo carries tilt and morph).
+//  R.ord, R.run: the branch order and the hops since the branch began.
 //
 //  grep -n targets
 //    quality budgets ........... "export const QUALITY"
@@ -109,11 +127,98 @@
 //    shape measures (tests) .... "export function shapeOf"
 //    hook source (saver code) .. "export function speciesHook"
 //    focus with hysteresis ..... "export function holdFocus"
+//    growth form hooks ......... "const BRANCH_HOOKS", "PLATE_HOOKS", "MOUND_HOOKS", "SHELL_HOOKS"
+//    per-colony rule ........... "function vary"
+//    colony colours ............ "export function colourMorph"
+//    shape descriptor .......... "export function silhouetteOf"
 // ============================================================================
 import { createModel, rng, randomInUnitSphere } from '../../lib/dla-engine.js';
-import { SPECIES_SCALE, SDF_EXP } from './coral-sdf.js';
+import { SPECIES_SCALE, SDF_EXP, noise3 } from './coral-sdf.js';
 
 const TAU = Math.PI * 2;
+
+// ── growth forms (the hooks that several species share) ─────────────────────
+// branch: the apex tip growth (apexPick, apexPlace) and the dlaf join.
+// fan: each new particle goes into the vertical plane of the colony.
+// plate: a short stalk, then plates; c.tilt > 0 lifts the plate edge (a
+//   whorl, a funnel or a vase). mound: a dome of the particle count,
+//   flattened by mound.flat, with lobes. shell: the wall of a tube, a vase
+//   or a barrel (a profile of the height), with a floor at the base.
+const BRANCH_HOOKS = {
+  // The tips grow (apex, in createReef): the walker feeds the nearest
+  // live tip, and the new particle continues that branch.
+  shouldJoin(R, p, parent) { return R.dlafJoin(parent); },
+};
+const FAN_HOOKS = {
+  // The new particle goes into the vertical plane of the fan, across the
+  // current, so the fan grows flat and wide; a join from below is rare.
+  placeParticle(R, p, parent, out) {
+    const c = R.colonies[R.col[parent]], f = c.plane, U = R.U;
+    const d = (out[0] - c.base[0] / U) * f[0] + (out[2] - c.base[2] / U) * f[1];
+    out[0] -= f[0] * d; out[2] -= f[1] * d;
+    if (out[1] < R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent)) out[1] = R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent);
+    return out;
+  },
+};
+// the horizontal distance of a model point from the colony axis
+const radU = (R, c, x, z) => Math.hypot(x - c.base[0] / R.U, z - c.base[2] / R.U);
+const PLATE_HOOKS = {
+  // A short stalk grows up. Past it, only joins along the plate stick
+  // (the plate rises by c.tilt per unit of radius).
+  shouldJoin(R, p, parent) {
+    if (!R.dlafJoin(parent)) return false;
+    const P = R.m.pos, i = parent * 3, dy = p[1] - P[i + 1];
+    const dh = Math.hypot(p[0] - P[i], p[2] - P[i + 2]);
+    if (R.m.depth[parent] < R.stalkOf(parent)) return R.kids[parent] === 0 && dy > 0;
+    const c = R.colonies[R.col[parent]], t = c.tilt || 0;
+    const dr = t ? radU(R, c, p[0], p[2]) - radU(R, c, P[i], P[i + 2]) : 0;
+    return dh > 2.5 * Math.abs(dy - t * dr) || R.random() < 0.03;
+  },
+  placeParticle(R, p, parent, out) {
+    if (R.m.depth[parent] >= R.stalkOf(parent)) {
+      const P = R.m.pos, i = parent * 3, y0 = P[i + 1], c = R.colonies[R.col[parent]], t = c.tilt || 0;
+      out[1] = y0 + (out[1] - y0) * 0.12 + (t ? t * (radU(R, c, out[0], out[2]) - radU(R, c, P[i], P[i + 2])) : 0);
+    }
+    return out;
+  },
+};
+const MOUND_HOOKS = {
+  // Accretive growth: the tissue lays each new particle on the surface
+  // of a compact dome of this many particles, so the colony stays a dome
+  // (mound.flat < 1: a low mound or a crust; mound.lobes: lumps).
+  placeParticle(R, p, parent, out) {
+    const c = R.colonies[R.col[parent]], U = R.U, s = R.spU(parent), md = c.sp.mound || {};
+    const f = md.flat ?? 1, ov = md.oval ?? 1;
+    const dome = s / 0.9 * (Math.cbrt(3 * c.count / (TAU * c.sp.density * f * ov)) + 0.3);
+    const bx = c.base[0] / U, by = c.base[1] / U, bz = c.base[2] / U;
+    const dx = out[0] - bx, dy = out[1] - by, dz = out[2] - bz;
+    const r = Math.hypot(dx * c.plane[0] + dz * c.plane[1], dy / f, (dz * c.plane[0] - dx * c.plane[1]) / ov);
+    let lim = dome;
+    if (c.lobes && r > 1e-9) { const l = Math.hypot(dx, dy, dz) || 1; lim *= 1 + c.lobes * noise3(dx / l * 1.9 + c.lobeSeed, dy / l * 1.9, dz / l * 1.9 - c.lobeSeed); }
+    if (r > lim) { const k = lim / r; out[0] = bx + dx * k; out[1] = by + dy * k; out[2] = bz + dz * k; }
+    return out;
+  },
+};
+const SHELL_HOOKS = {
+  // A sponge wall: the new particle goes onto a surface of revolution of
+  // radius r(y) round the colony axis (shell r0 .. r1 over the height,
+  // power p), in a wall of shell.wall spacings, over a floor of
+  // shell.floor spacings at the base. c.bend leans the axis.
+  placeParticle(R, p, parent, out) {
+    const c = R.colonies[R.col[parent]], U = R.U, s = R.spU(parent), sh = c.sp.shell;
+    const by = c.base[1] / U, H = c.size * c.sp.tall / U, half = 0.5 * c.size / U;
+    const dy = Math.max(0, out[1] - by), yn = Math.min(1, dy / H);
+    const lean = (c.bend || 0) * yn * yn * H;
+    const ax = c.base[0] / U + c.plane[0] * lean, az = c.base[2] / U + c.plane[1] * lean;
+    const dx = out[0] - ax, dz = out[2] - az, r = Math.hypot(dx, dz);
+    const rp = half * (sh.r0 + (sh.r1 - sh.r0) * Math.pow(yn, sh.p ?? 1)), w = sh.wall * s;
+    let rt = r;
+    if (r > rp) rt = rp;
+    else if (r < rp - w && dy > sh.floor * s) rt = rp - 0.5 * w;
+    if (rt !== r && r > 1e-9) { out[0] = ax + dx / r * rt; out[2] = az + dz / r * rt; }
+    return out;
+  },
+};
 
 // ── quality ─────────────────────────────────────────────────────────────────
 // particles: the particle budget of the reef. colonies: how many seeds.
@@ -139,84 +244,68 @@ export const QUALITY = {
 // sideAngle: fork angles (degrees), kids, rootKids, whorl: children per
 // particle, planar: in the colony plane, net: self-bridge reach in
 // spacings).
+// SPECIES metadata (the coral-species page card, the WORLD placement):
+// common and latin names, form (the growth form in words), group (the
+// picker group: branching, plating, massive, soft, fans, deep), depth
+// [min, max] (m, the usual range in life), habitat and fact (one line
+// each), morphs (colour variants [base, tip]: a colony takes one from its
+// seed), site (pickSpecies weights of a new species: any, top, wall, shel
+// (sheltered), open (exposed)), vary (the per-colony change of the growth
+// rule, from the seed). core: the five first species, whose site rules
+// and tests come from the old reef page.
 export const SPECIES = {
   staghorn: {
-    label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
+    label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching', group: 'branching', core: true,
+    depth: [1, 30], habitat: 'Clear fore-reef slopes and back-reef lagoons of the Caribbean, in thickets',
+    fact: 'Its branches can extend 10 to 20 cm a year, among the fastest of all stony corals.',
     params: { particleSpacing: 0.04, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 0, stickiness: 0.9 },
     size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 2.2, r0: 0.013, thick: 0.17, sway: 0,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
+    morphs: [[[0.72, 0.56, 0.38], [0.86, 0.80, 0.98]], [[0.66, 0.52, 0.34], [0.92, 0.86, 0.74]], [[0.6, 0.5, 0.42], [0.78, 0.74, 0.96]]],
     apex: { axis: 0.85, up: 0.06, split: 0.35, side: 0.2, every: 3, angle: 50, kids: 2, rootKids: 3 },
-    hooks: {
-      // The tips grow (apex, in createReef): long round branches that
-      // fork at wide angles and spread out, as antlers.
-      shouldJoin(R, p, parent) { return R.dlafJoin(parent); },
-    },
+    hooks: BRANCH_HOOKS,
   },
   fan: {
-    label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
+    label: 'Common sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan', group: 'fans', core: true, feed: 'plane',
+    depth: [1, 30], habitat: 'Caribbean reef walls and channels, the fan across the current',
+    fact: 'A gorgonian: a horny skeleton of gorgonin, with polyps that sieve plankton from the water that crosses the fan.',
     params: { particleSpacing: 0.022, attractionDistance: 0.03, minMoveDistance: 0.016, stubbornness: 0, stickiness: 0.75 },
     size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 3.2, r0: 0.006, thick: 0.1, sway: 1,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
+    morphs: [[[0.62, 0.16, 0.46], [0.95, 0.45, 0.62]], [[0.5, 0.18, 0.55], [0.8, 0.52, 0.86]], [[0.72, 0.6, 0.3], [0.92, 0.82, 0.5]]],
     apex: { axis: 0.75, up: 0.3, split: 0.3, side: 0.35, every: 3, angle: 24, sideAngle: 75, kids: 2, rootKids: 2, planar: true, net: 3 },
-    hooks: {
-      // The new particle goes into the vertical plane of the fan, across the
-      // current, so the fan grows flat and wide; a join from below is rare.
-      placeParticle(R, p, parent, out) {
-        const c = R.colonies[R.col[parent]], f = c.plane, U = R.U;
-        const d = (out[0] - c.base[0] / U) * f[0] + (out[2] - c.base[2] / U) * f[1];
-        out[0] -= f[0] * d; out[2] -= f[1] * d;
-        if (out[1] < R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent)) out[1] = R.m.pos[parent * 3 + 1] - 0.5 * R.spU(parent);
-        return out;
-      },
-    },
+    hooks: FAN_HOOKS,
   },
   table: {
-    label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
+    label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular', group: 'plating', core: true,
+    depth: [1, 25], habitat: 'Indo-Pacific reef crests and upper slopes, in strong light',
+    fact: 'A short central stalk carries a flat plate of fused, fine branches that shades the reef under it.',
     params: { particleSpacing: 0.045, attractionDistance: 0.065, minMoveDistance: 0.03, stubbornness: 1, stickiness: 0.9 },
     size: [3.0, 8.0], tall: 0.4, tpp: 25, dim: 1.6, fill: 3.6, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
+    morphs: [[[0.42, 0.55, 0.42], [0.75, 0.92, 0.72]], [[0.5, 0.48, 0.36], [0.82, 0.78, 0.6]], [[0.44, 0.46, 0.56], [0.7, 0.78, 0.92]]],
     apex: { axis: 0.8, up: 0, split: 0.35, side: 0.1, every: 3, angle: 32, kids: 2, rootKids: 1, whorl: 7 },
-    hooks: {
-      // A short stalk grows up. Past it, only horizontal joins stick.
-      shouldJoin(R, p, parent) {
-        if (!R.dlafJoin(parent)) return false;
-        const P = R.m.pos, i = parent * 3, dy = p[1] - P[i + 1];
-        const dh = Math.hypot(p[0] - P[i], p[2] - P[i + 2]);
-        if (R.m.depth[parent] < R.stalkOf(parent)) return R.kids[parent] === 0 && dy > 0;
-        return dh > 2.5 * Math.abs(dy) || R.random() < 0.03;
-      },
-      placeParticle(R, p, parent, out) {
-        if (R.m.depth[parent] >= R.stalkOf(parent)) {
-          const y0 = R.m.pos[parent * 3 + 1];
-          out[1] = y0 + (out[1] - y0) * 0.12;
-        }
-        return out;
-      },
-    },
+    hooks: PLATE_HOOKS,
   },
   boulder: {
-    label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
+    label: 'Grooved brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome', group: 'massive', core: true,
+    depth: [1, 30], habitat: 'Caribbean fore reefs and patch reefs',
+    fact: 'The valleys are rows of polyps that share walls; a dome grows a few millimetres a year and can live for centuries.',
     params: { particleSpacing: 0.12, attractionDistance: 0.1, minMoveDistance: 0.05, stubbornness: 6, stickiness: 0.6 },
     size: [2.2, 5.0], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
-    hooks: {
-      // Accretive growth: the tissue lays each new particle on the surface
-      // of a compact dome of this many particles, so the colony stays a dome.
-      placeParticle(R, p, parent, out) {
-        const c = R.colonies[R.col[parent]], U = R.U, s = R.spU(parent);
-        const dome = s / 0.9 * (Math.cbrt(3 * c.count / (TAU * c.sp.density)) + 0.3);
-        const bx = c.base[0] / U, by = c.base[1] / U, bz = c.base[2] / U;
-        const dx = out[0] - bx, dy = out[1] - by, dz = out[2] - bz, r = Math.hypot(dx, dy, dz);
-        if (r > dome) { const k = dome / r; out[0] = bx + dx * k; out[1] = by + dy * k; out[2] = bz + dz * k; }
-        return out;
-      },
-    },
+    morphs: [[[0.66, 0.60, 0.30], [0.86, 0.80, 0.50]], [[0.58, 0.5, 0.34], [0.8, 0.72, 0.5]], [[0.56, 0.6, 0.36], [0.76, 0.84, 0.52]]],
+    mound: { flat: 1 },
+    hooks: MOUND_HOOKS,
   },
   finger: {
-    label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
+    label: 'Finger leather coral', latin: 'Sinularia flexibilis', form: 'Soft lobes', group: 'soft', core: true,
+    depth: [1, 30], habitat: 'Indo-Pacific reef flats and lagoons',
+    fact: 'A soft coral: no stony skeleton, only small calcite spicules in a leathery tissue that bends in the surge.',
     params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 1, stickiness: 0.5 },
     size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.4, r0: 0.02, thick: 0.15, sway: 0.6,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
+    morphs: [[[0.72, 0.48, 0.62], [0.96, 0.82, 0.88]], [[0.62, 0.6, 0.42], [0.88, 0.86, 0.66]], [[0.6, 0.56, 0.5], [0.86, 0.84, 0.78]]],
     apex: { axis: 0.75, up: 0.1, split: 0.5, side: 0.35, every: 2, angle: 38, kids: 2, rootKids: 4 },
     hooks: {
       // dlaf ShouldJoin with a low stickiness: the walkers creep into the
@@ -238,7 +327,14 @@ for (const id of SPECIES_IDS) {
   sp.r0 *= Math.pow(sc, SDF_EXP);              // the SDF radii scale by s^SDF_EXP
   sp.tpp *= Math.pow(sc, 1 - SDF_EXP);          // longer cones, thinner than x s: more tris per particle
   if (sp.stalkM) sp.stalkM *= sc;
+  if (sp.vary === undefined) sp.vary = sp.core ? 0.06 : 0.12;
+  if (!sp.morphs) sp.morphs = [[sp.base, sp.tip]];
 }
+export const SPECIES_GROUPS = [
+  { id: 'branching', label: 'Branching' }, { id: 'plating', label: 'Plates and leaves' },
+  { id: 'massive', label: 'Massive and encrusting' }, { id: 'soft', label: 'Soft corals' },
+  { id: 'fans', label: 'Sea fans and whips' }, { id: 'deep', label: 'Deep sea' },
+];
 
 // ── presets ─────────────────────────────────────────────────────────────────
 // weights: a multiplier on the site rule of each species (pickSpecies).
@@ -280,6 +376,13 @@ export function pickSpecies(site, y01, u, weights = {}) {
     boulder: (0.25 + top * 0.5) * shel * (1.3 - y01) * 1.1,
     finger: (0.2 + wall * 0.4) * shel * 0.7,
   };
+  // a new species: its own site weights, and 0 unless the weights name it
+  // (so the old plot and the presets keep their five species)
+  for (const id of SPECIES_IDS) {
+    if (w[id] !== undefined) continue;
+    const q = SPECIES[id].site || {};
+    w[id] = weights[id] === undefined ? 0 : (q.any || 0) + (q.top || 0) * top + (q.wall || 0) * wall + (q.shel || 0) * shel + (q.open || 0) * ex;
+  }
   let sum = 0;
   for (const id of SPECIES_IDS) { w[id] *= weights[id] ?? 1; sum += w[id]; }
   if (sum <= 1e-9) return null;
@@ -373,6 +476,7 @@ export function createReef(opts = {}) {
     col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), parent: new Int32Array(capTotal),
     birth: new Float32Array(capTotal), gy: new Float32Array(capTotal), kids: new Uint8Array(capTotal),
     child: new Int32Array(capTotal), sib: new Int32Array(capTotal), dead: new Uint8Array(capTotal),
+    ord: new Uint8Array(capTotal), run: new Uint16Array(capTotal),
     forks: 0, tipJoins: 0, nets: 0,
     m: null, random: null,
     addColony, populate, loadPreset, growColony, setRate, step, growAll, reset, setCurrent, setParams, done, progress,
@@ -393,8 +497,21 @@ export function createReef(opts = {}) {
         const x = m.pos[i * 3] * U, y = m.pos[i * 3 + 1] * U, z = m.pos[i * 3 + 2] * U;
         R.px[i] = x; R.py[i] = y; R.pz[i] = z;
         R.col[i] = k; R.loc[i] = c.count; R.parent[i] = par; R.birth[i] = R.now; R.gy[i] = c.base[1]; R.kids[i] = 0;
+        // branch order and the hops since the branch began: a root child
+        // continues order 0; a second child (a fork) or a child of the
+        // whorl top starts a branch of the next order
+        let o = 0, rn = 0;
+        if (par >= 0) {
+          if (R.parent[par] < 0) rn = 1;
+          else if (R.kids[par] > 0 || (c.ap && c.ap.whorl && m.depth[par] === c.stalk)) { o = Math.min(255, R.ord[par] + 1); rn = 1; }
+          else { o = R.ord[par]; rn = Math.min(65535, R.run[par] + 1); }
+        }
+        R.ord[i] = o; R.run[i] = rn;
+        if (c.ap && c.ap.whorl && m.depth[i] === c.stalk) c.whorlTop = i;
         if (par >= 0 && R.kids[par] < 255) R.kids[par]++;
         R.child[i] = -1; R.dead[i] = 0; R.sib[i] = -1;
+        // a branch of an order with a length limit (apex.len, hops) stops
+        if (c.ap && c.ap.len && rn >= c.ap.len[Math.min(o, c.ap.len.length - 1)]) R.dead[i] = 1;
         if (par >= 0) { R.sib[i] = R.child[par]; R.child[par] = i; }
         c.ids.push(i); c.count++; c.lastTry = c.tries;
         if (y > c.top) c.top = y;
@@ -437,7 +554,7 @@ export function createReef(opts = {}) {
   let apexFork = false, apexSide = false;
   const LEAN = 0.3;
   function kidsMax(c, i) {
-    const ap = c.sp.apex;
+    const ap = c.ap;
     if (R.parent[i] < 0) return ap.rootKids;
     if (ap.whorl && R.m.depth[i] === c.stalk) return ap.whorl;
     if (ap.whorl && R.m.depth[i] < c.stalk) return 1;
@@ -446,8 +563,12 @@ export function createReef(opts = {}) {
   // i can take one more child as a fork: room for a kid, and no fork in
   // apex.every hops above it or (along its one child) below it
   function forkable(c, i) {
-    const ap = c.sp.apex, kn = R.kids[i];
+    const ap = c.ap, kn = R.kids[i];
     if (kn < 1 || kn >= kidsMax(c, i)) return false;
+    // apex.maxOrder: no fork past that branch order; apex.forkH [lo, hi]:
+    // forks only in that part of the colony height (size x tall)
+    if (ap.maxOrder !== undefined && R.ord[i] >= ap.maxOrder && !(ap.whorl && R.m.depth[i] === c.stalk)) return false;
+    if (ap.forkH) { const h = (R.py[i] - c.base[1]) / (c.size * c.sp.tall); if (h < ap.forkH[0] || h > ap.forkH[1]) return false; }
     if (R.parent[i] < 0 || (ap.whorl && R.m.depth[i] === c.stalk)) return true;
     let a = i;
     for (let h = 0; h < ap.every; h++) { a = R.parent[a]; if (a < 0 || R.kids[a] >= 2) return false; }
@@ -459,8 +580,11 @@ export function createReef(opts = {}) {
   // The particle that gets the walker at P, caught by particle par of
   // colony c: a live tip (apexFork false) or a fork (apexFork true), or -1.
   function apexPick(c, par, P) {
-    const ap = c.sp.apex, pos = R.m.pos, pr = params[c.id];
+    const ap = c.ap, pos = R.m.pos, pr = params[c.id];
     const reach = pr.attractionDistance / U + 1.5 * pr.particleSpacing / U, r2 = reach * reach;
+    // apex.whorlFirst: the whorl at the stalk top takes its branches
+    // first (pillar columns, elkhorn arms), before the walk goes on
+    if (ap.whorlFirst && c.whorlTop >= 0 && R.kids[c.whorlTop] >= 1 && R.kids[c.whorlTop] < ap.whorl) { apexFork = true; apexSide = false; return c.whorlTop; }
     let top = par;
     for (let u = 0; u < 2 && R.parent[top] >= 0; u++) top = R.parent[top];
     let h = 0, t = 1, tip = -1, tipD = r2, fk = -1, fkD = r2, deadNear = false;
@@ -484,8 +608,9 @@ export function createReef(opts = {}) {
   // from the child that t has.
   const AX = [0, 0, 0], WV = [0, 0, 0], LV = [0, 0, 0];
   function apexPlace(c, t, fork, P, out) {
-    const ap = c.sp.apex, pos = R.m.pos, s = spU(t), pl = ap.planar ? c.plane : null;
-    const flat = v => { if (pl) { const q = v[0] * pl[0] + v[2] * pl[1]; v[0] -= pl[0] * q; v[2] -= pl[1] * q; } };
+    const ap = c.ap, pos = R.m.pos, s = spU(t), pl = ap.planar ? c.plane : null, pw = ap.planar === true ? 1 : +ap.planar || 0;
+    // planar: true or 1 keeps the branch in the colony plane; 0..1 a part
+    const flat = v => { if (pl) { const q = (v[0] * pl[0] + v[2] * pl[1]) * pw; v[0] -= pl[0] * q; v[2] -= pl[1] * q; } };
     const unit = v => { const l = Math.hypot(v[0], v[1], v[2]); if (l > 1e-9) { v[0] /= l; v[1] /= l; v[2] /= l; } return l; };
     const p = R.parent[t];
     if (p >= 0) { AX[0] = pos[t * 3] - pos[p * 3]; AX[1] = pos[t * 3 + 1] - pos[p * 3 + 1]; AX[2] = pos[t * 3 + 2] - pos[p * 3 + 2]; }
@@ -518,8 +643,10 @@ export function createReef(opts = {}) {
         if (pl) { LV[0] = -pl[1]; LV[1] = 0; LV[2] = pl[0]; } else { LV[0] = AX[1]; LV[1] = -AX[0]; LV[2] = 0; if (unit(LV) < 1e-6) { LV[0] = 1; LV[1] = 0; LV[2] = 0; } }
         if (random() < 0.5) { LV[0] = -LV[0]; LV[1] = -LV[1]; LV[2] = -LV[2]; }
       }
-      const a = (ap.whorl && R.m.depth[t] === c.stalk ? 84 : apexSide && ap.sideAngle ? ap.sideAngle : ap.angle) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+      const a = (ap.whorl && R.m.depth[t] === c.stalk ? ap.whorlAngle ?? 84 : apexSide && ap.sideAngle ? ap.sideAngle : ap.angle) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
       dx = AX[0] * ca + LV[0] * sa; dy = AX[1] * ca + LV[1] * sa + ap.up * 0.5; dz = AX[2] * ca + LV[2] * sa;
+      // apex.flatK: a fork spreads more to the sides than up (elkhorn)
+      if (ap.flatK) dy *= 1 - ap.flatK;
     }
     const l = Math.hypot(dx, dy, dz) || 1;
     out[0] = pos[t * 3] + dx / l * s; out[1] = pos[t * 3 + 1] + dy / l * s; out[2] = pos[t * 3 + 2] + dz / l * s;
@@ -560,7 +687,7 @@ export function createReef(opts = {}) {
   function contact(i) {
     const k = R.col[i], c = R.colonies[k];
     const lim = 1.6 * params[c.id].particleSpacing + 0.01, l2 = lim * lim;
-    const net = c.sp.apex && c.sp.apex.net, ln = net * params[c.id].particleSpacing, n2 = ln * ln;
+    const net = c.ap && c.ap.net, ln = net * params[c.id].particleSpacing, n2 = ln * ln;
     let self = !net;
     // one rung per 4 hops of a branch: no bridge on the 3 nearest ancestors
     if (net) for (let a = R.parent[i], h = 0; a >= 0 && h < 3; a = R.parent[a], h++) if (R.bridges.has(a)) { self = true; break; }
@@ -592,7 +719,7 @@ export function createReef(opts = {}) {
         // the branch tip met a neighbour colony: the space is taken, so
         // that tip stops (the colonies compete for the gap), and both
         // colonies lean their new growth away from each other (c.away)
-        if (c.sp.apex) R.dead[i] = 1;
+        if (c.ap) R.dead[i] = 1;
         if (t.n === 1) { lean(c, R.colonies[kj]); lean(R.colonies[kj], c); }
         return;
       }
@@ -631,10 +758,37 @@ export function createReef(opts = {}) {
       stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / (3 * sp.scale)) / params[id].particleSpacing)),
       user: { bx: base[0], by: base[1], bz: base[2], normal: [env.cur[0] / cl, env.cur[1] / cl] },
     };
+    colony.whorlTop = -1;
+    vary(colony);
     R.colonies.push(colony);
     rootColony = k;
     R.m.add([base[0] / U, base[1] / U, base[2] / U], -1);
     return colony;
+  }
+
+  // The per-colony rule, from the seed (the reef seed, the colony index
+  // and its base): fork angles, split rates and the lift of the tips change
+  // by up to sp.vary, the plate tilt and the lobes by 2 x vary, and the
+  // colony takes one of the species colour morphs. So two colonies of one
+  // species differ, inside the species.
+  function vary(c) {
+    const sp = c.sp, v = sp.vary || 0;
+    const q = Math.round(c.base[0] * 997) ^ Math.round(c.base[2] * 1009) ^ Math.round(c.base[1] * 1013);
+    const u = j => h01((R.seed | 0) * 131 + c.k * 7 + j, q + j * 7919) * 2 - 1;
+    if (sp.apex) {
+      const a = Object.assign({}, sp.apex);
+      a.angle = sp.apex.angle * (1 + v * u(1));
+      if (a.sideAngle) a.sideAngle = sp.apex.sideAngle * (1 + v * u(2));
+      a.split = Math.min(0.95, sp.apex.split * (1 + v * u(3)));
+      a.side = Math.min(0.95, sp.apex.side * (1 + v * u(4)));
+      a.up = sp.apex.up + 0.5 * v * u(5) * Math.max(0.05, sp.apex.up);
+      c.ap = a;
+    } else c.ap = null;
+    c.tilt = sp.plate ? Math.max(0, sp.plate.tilt * (1 + 2 * v * u(6))) : 0;
+    c.lobes = sp.mound && sp.mound.lobes ? sp.mound.lobes * (1 + 2 * v * u(7)) : 0;
+    c.lobeSeed = 10 * (u(8) + 1);
+    c.bend = (sp.bend || 0) * (1 + 2 * v * u(9));
+    c.morph = Math.floor((u(10) * 0.5 + 0.5) * sp.morphs.length * 0.9999);
   }
 
   // ── colony seeds ──
@@ -778,7 +932,7 @@ export function createReef(opts = {}) {
       const c = pick();
       const a0 = params[c.id].attractionDistance;
       wFall = FALL; wPlane = null;
-      if (c.id === 'fan') {
+      if (c.sp.feed === 'plane') {
         // a sea fan feeds from the water that the current carries THROUGH
         // its plane (the fan stands across the current), so the food comes
         // to every part of the fan, not only to the outer tips: a walker
@@ -796,7 +950,7 @@ export function createReef(opts = {}) {
         return out;
       }
       const D = c.disc;
-      if (c.sp.apex && c.count > 24 && random() < AIM) {
+      if (c.ap && c.count > 24 && random() < AIM) {
         // snow near the growing front: over one of the last particles of
         // the colony (most are at or near a tip), upstream by the drift of
         // its fall. A branching colony is mostly open water, so snow from
@@ -819,7 +973,7 @@ export function createReef(opts = {}) {
       const x = D[0] + Math.cos(a) * rr, z = D[1] + Math.sin(a) * rr;
       let k = 0, y = D[3];
       for (const d of live) {
-        if (d.id === 'fan') continue;
+        if (d.sp.feed === 'plane') continue;
         const e = d.disc, ex = x - e[0], ez = z - e[1];
         if (ex * ex + ez * ez < e[2] * e[2]) { k++; if (e[3] > y) y = e[3]; }
       }
@@ -895,7 +1049,15 @@ export function createReef(opts = {}) {
             continue;
           }
           if (sp.apex) apexPlace(c, tg, fork, P, QP); else m.lerpFrom(tg, P, pr.particleSpacing / U, QP);
-          if (h.placeParticle) h.placeParticle(R, P, tg, QP);
+          if (h.placeParticle) {
+            h.placeParticle(R, P, tg, QP);
+            // a hook that moved the particle past one spacing from its
+            // parent (a tilted plate, a sponge wall): back to one spacing,
+            // so the cones of a branch always touch
+            const ps = pr.particleSpacing / U, o3 = tg * 3;
+            const ex = QP[0] - m.pos[o3], ey = QP[1] - m.pos[o3 + 1], ez = QP[2] - m.pos[o3 + 2], el = Math.hypot(ex, ey, ez);
+            if (el > ps * 1.02) { QP[0] = m.pos[o3] + ex / el * ps; QP[1] = m.pos[o3 + 1] + ey / el * ps; QP[2] = m.pos[o3 + 2] + ez / el * ps; }
+          }
           fitHard = true;
           if (!outOfRock(QP, pr.particleSpacing * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) {
             // a tip that cannot go on (rock, outline, plot) stops for good
@@ -1138,7 +1300,7 @@ export function packParticles(R, from, to) {
 }
 // The colony list in the worker messages (plain data).
 export function colonyInfo(c) {
-  return { k: c.k, id: c.id, base: c.base.slice(), normal: c.normal.slice(), plane: c.plane.slice(), size: c.size, cap: c.cap, stalk: c.stalk };
+  return { k: c.k, id: c.id, base: c.base.slice(), normal: c.normal.slice(), plane: c.plane.slice(), size: c.size, cap: c.cap, stalk: c.stalk, tilt: c.tilt || 0, morph: c.morph || 0 };
 }
 
 // Size measures of one colony (metres, from its base): width (the largest
@@ -1168,4 +1330,42 @@ export function speciesHook(id, which) {
   const names = Object.keys(h);
   const name = which && h[which] ? which : names.includes('shouldJoin') ? 'shouldJoin' : names.includes('placeParticle') ? 'placeParticle' : names[0];
   return { name, fn: h[name] };
+}
+
+// The colours of a colony: the species morph that its seed chose
+// (colonyInfo morph; colour.js naturalRGB). Returns [base, tip].
+export function colourMorph(sp, c) {
+  const M = sp.morphs || [[sp.base, sp.tip]];
+  return M[Math.min(M.length - 1, Math.max(0, (c && c.morph) | 0))];
+}
+
+// A shape descriptor of one colony (the species tests: no two species
+// near-identical). aspect: height / width. tips: the share of particles
+// with no child (open branch ends), forks: the share with two or more.
+// planarity: the thickness across the colony plane / the width in it
+// (0 for a flat fan). flat: height / horizontal span (a plate is low).
+// hollow: the share of the particle mass far from the axis (a tube or a
+// vase is high). spread: the mean distance from the base / the size.
+export function silhouetteOf(R, c) {
+  const b = c.base, f = c.plane, n = c.ids.length;
+  let kids = new Map(), y1 = 0, a0 = Infinity, a1 = -Infinity, t0 = Infinity, t1 = -Infinity, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, sd = 0;
+  for (const g of c.ids) { const p = R.parent[g]; if (p >= 0) kids.set(p, (kids.get(p) || 0) + 1); }
+  let tips = 0, forks = 0;
+  for (const g of c.ids) {
+    const k = kids.get(g) || 0; if (!k) tips++; else if (k >= 2) forks++;
+    const x = R.px[g] - b[0], y = R.py[g] - b[1], z = R.pz[g] - b[2];
+    y1 = Math.max(y1, y);
+    const along = -x * f[1] + z * f[0], across = x * f[0] + z * f[1];
+    a0 = Math.min(a0, along); a1 = Math.max(a1, along); t0 = Math.min(t0, across); t1 = Math.max(t1, across);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+    sd += Math.hypot(x, y, z);
+  }
+  const width = Math.max(x1 - x0, z1 - z0, 1e-6), inPlane = Math.max(a1 - a0, 1e-6);
+  // hollow: particles in the outer 40 % of the radius at their height band
+  const bands = 8, rmax = new Float64Array(bands);
+  for (const g of c.ids) { const k = Math.min(bands - 1, Math.floor(bands * (R.py[g] - b[1]) / Math.max(1e-6, y1))); rmax[k] = Math.max(rmax[k], Math.hypot(R.px[g] - b[0], R.pz[g] - b[2])); }
+  let outer = 0;
+  for (const g of c.ids) { const k = Math.min(bands - 1, Math.floor(bands * (R.py[g] - b[1]) / Math.max(1e-6, y1))); if (Math.hypot(R.px[g] - b[0], R.pz[g] - b[2]) > 0.6 * rmax[k]) outer++; }
+  let my = 0; for (const g of c.ids) my += R.py[g] - b[1];
+  return { n, lift: my / n / Math.max(1e-6, y1), aspect: y1 / width, tips: tips / n, forks: forks / n, planarity: (t1 - t0) / inPlane, hollow: outer / n, spread: sd / n / Math.max(width, y1), width, height: y1 };
 }

@@ -433,7 +433,9 @@ uniform float uMode, uBleach, uSpecies, uDetail, uDetailK;
 in vec3 vN, vW, vL, vNat, vAx;
 in float vT, vGlow, vTip;
 out vec4 oCol;
-// species: 0 staghorn, 1 fan, 2 table, 3 boulder (brain), 4 finger
+// skin (uSpecies): coral-sdf.js SHAPES[id].skin; 0 staghorn, 1 fan,
+// 2 table, 3 brain, 4 finger, 5 pores, 6 cells, 7 fleshy, 8 concentric,
+// 9 soft, 10 glass lattice, 11 sponge, 12 bamboo nodes, 13 knobs, 14 spines
 void main() {
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
@@ -444,13 +446,19 @@ void main() {
   base = mix(base, vec3(0.88, 0.88, 0.84), bl * 0.88);
   float h = 0.0, ao = 1.0, thin = 0.35, sheen = 0.0, kb = 0.22;
   float sp = uSpecies;
+  int si = int(sp + 0.5);
   vec3 q = vL * uDetailK;
+  // the branch direction and a direction across it on the surface
+  vec3 ax = length(vAx) > 0.5 ? normalize(vAx) : vec3(1.0, 0.0, 0.0);
+  vec3 across = cross(ax, n);
+  across = length(across) > 1e-3 ? normalize(across) : vec3(0.0, 0.0, 1.0);
   // Fine detail by species. The user said: "the surface texture of
   // growing corals along the normals is too rough". The bumps are small and
   // shallow now (kb 0.2 to 0.3, was 0.55), with no random noise term: a
-  // smooth skin with the species mark on it.
+  // smooth skin with the species mark on it. The skin code is
+  // coral-sdf.js SHAPES[id].skin (0 to 14).
   if (uDetail > 0.5) {
-    if (sp < 0.5 || sp > 3.5) {
+    if (si == 0 || si == 4) {
       // staghorn and finger: a smooth skin with small corallite cups
       vec2 c = worley(q * (sp < 0.5 ? 9.0 : 11.0));
       float cup = 1.0 - smoothstep(0.05, 0.15, c.x);
@@ -459,17 +467,14 @@ void main() {
       ao = 1.0 - cup * 0.3;
       base *= 0.94 + 0.1 * rim;
       thin = sp < 0.5 ? 0.3 + 0.6 * vTip : 0.6; sheen = sp > 3.5 ? 0.35 : 0.0;
-    } else if (sp < 1.5) {
+    } else if (si == 1) {
       // sea fan: thin blades with fine pores in rows along each blade
       vec2 c = worley(q * 10.0);
       float pore = 1.0 - smoothstep(0.06, 0.16, c.x);
       h = -pore * 0.35; ao = 1.0 - pore * 0.25; thin = 1.0; kb = 0.25;
-    } else if (sp < 2.5) {
+    } else if (si == 2) {
       // table: a flat plate with fine ridges along the radial branches
       // (vAx, the branch direction) and small cups between them
-      vec3 ax = length(vAx) > 0.5 ? normalize(vAx) : vec3(1.0, 0.0, 0.0);
-      vec3 across = cross(ax, n);
-      across = length(across) > 1e-3 ? normalize(across) : vec3(0.0, 0.0, 1.0);
       float ridge = smoothstep(0.1, 0.9, 0.5 + 0.5 * sin(dot(q, across) * 18.0 + noise3(q * 1.5) * 1.5));
       vec2 c = worley(q * 12.0);
       float cup = 1.0 - smoothstep(0.05, 0.13, c.x);
@@ -477,7 +482,7 @@ void main() {
       ao = 0.92 + 0.08 * ridge - cup * 0.2;
       base *= 0.94 + 0.1 * ridge;
       thin = 0.35; kb = 0.3;
-    } else if (sp < 3.5) {
+    } else if (si == 3) {
       // brain coral: meandering valleys and ridges
       float gv = groove(q);
       float sep = 0.5 + 0.5 * sin(dot(q, vec3(7.1, 5.3, 6.7)) + noise3(q * 0.9) * 6.0);
@@ -485,6 +490,82 @@ void main() {
       ao = 1.0 - gv * 0.5;
       base = mix(base, base * vec3(0.72, 0.82, 0.62), gv * 0.6);
       thin = 0.25; kb = 0.9;
+    } else if (si == 5) {
+      // Porites, Montipora, Turbinaria: many fine pores (a texture)
+      vec2 c = worley(q * 17.0);
+      float pore = 1.0 - smoothstep(0.04, 0.12, c.x);
+      h = -pore * 0.3; ao = 1.0 - pore * 0.2; base *= 0.95 + 0.06 * (1.0 - pore);
+      thin = 0.3; kb = 0.2;
+    } else if (si == 6) {
+      // Favites, Desmophyllum, Madrepora: walled cups that share walls
+      vec2 c = worley(q * 7.0);
+      float wall = 1.0 - smoothstep(0.02, 0.1, c.y - c.x);
+      float pit = 1.0 - smoothstep(0.05, 0.25, c.x);
+      h = wall * 0.4 - pit * 0.3;
+      ao = 0.82 + 0.18 * wall - pit * 0.1;
+      base *= 0.88 + 0.16 * wall;
+      thin = 0.3; kb = 0.28;
+    } else if (si == 7) {
+      // Lobophyllia: fleshy lobes with soft valleys
+      vec2 c = worley(q * 3.0);
+      float val = 1.0 - smoothstep(0.08, 0.3, c.y - c.x);
+      h = -val * 0.5;
+      ao = 1.0 - val * 0.35;
+      base = mix(base, base * vec3(0.7, 0.78, 0.7), val * 0.5);
+      thin = 0.5; sheen = 0.45; kb = 0.3;
+    } else if (si == 8) {
+      // Pachyseris: fine ridges across the radial direction (concentric)
+      float ridge = smoothstep(0.2, 0.8, 0.5 + 0.5 * sin(dot(q, ax) * 24.0 + noise3(q * 1.2) * 1.2));
+      h = ridge * 0.3;
+      ao = 0.88 + 0.12 * ridge;
+      base *= 0.92 + 0.12 * ridge;
+      thin = 0.4; kb = 0.3;
+    } else if (si == 9) {
+      // soft corals, sea pens, sea lilies: a smooth, waxy skin with
+      // shallow polyp dimples and a speckle of spicules in the colour
+      vec2 c = worley(q * 9.0);
+      float dimple = 1.0 - smoothstep(0.05, 0.16, c.x);
+      h = -dimple * 0.2; ao = 1.0 - dimple * 0.15;
+      base *= 0.95 + 0.08 * noise3(q * 20.0);
+      thin = 0.7; sheen = 0.45; kb = 0.15;
+    } else if (si == 10) {
+      // glass sponge: a lattice of silica strands, square and diagonal
+      float u = dot(q, across) * 7.0, v = dot(q, ax) * 7.0;
+      vec2 g = abs(fract(vec2(u, v)) - 0.5), d = abs(fract(vec2(u + v, u - v) * 0.5) - 0.5);
+      float line = max(1.0 - smoothstep(0.04, 0.1, min(g.x, g.y)), 0.6 * (1.0 - smoothstep(0.03, 0.08, min(d.x, d.y))));
+      h = line * 0.3 - (1.0 - line) * 0.2;
+      ao = 0.7 + 0.3 * line;
+      base *= 0.82 + 0.25 * line;
+      thin = 0.9; sheen = 0.3; kb = 0.3;
+    } else if (si == 11) {
+      // demosponge and glass vase: a rough skin with small oscules
+      vec2 c = worley(q * 5.0);
+      float osc = 1.0 - smoothstep(0.03, 0.12, c.x);
+      float rib = 0.5 + 0.5 * sin(dot(q, ax) * 9.0 + noise3(q * 2.0) * 2.0);
+      h = rib * 0.2 - osc * 0.5;
+      ao = 1.0 - osc * 0.45;
+      base *= 0.9 + 0.12 * rib;
+      thin = 0.3; kb = 0.3;
+    } else if (si == 12) {
+      // bamboo coral: white chalk joints and dark protein nodes
+      float node = smoothstep(0.86, 0.94, fract(dot(q, ax) * 2.5));
+      base = mix(base, base * vec3(0.22, 0.17, 0.14), node);
+      h = node * 0.2; ao = 1.0 - node * 0.2;
+      thin = 0.5; kb = 0.2;
+    } else if (si == 13) {
+      // Paragorgia, Primnoa, Pocillopora: knobs and warts (verrucae)
+      vec2 c = worley(q * 8.0);
+      float knob = 1.0 - smoothstep(0.0, 0.3, c.x);
+      h = knob * 0.4;
+      ao = 0.85 + 0.15 * knob;
+      base *= 0.92 + 0.12 * knob;
+      thin = 0.45; kb = 0.3;
+    } else if (si == 14) {
+      // black coral: fine spines on the skeleton
+      vec2 c = worley(q * 22.0);
+      float spine = 1.0 - smoothstep(0.0, 0.08, c.x);
+      h = spine * 0.5; ao = 1.0 - spine * 0.1;
+      thin = 0.5; kb = 0.25;
     }
     n = bumpN(n, vW, h, kb);
   }

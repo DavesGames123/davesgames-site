@@ -56,7 +56,10 @@ const pc = (a, p) => { const b = a.slice().sort((x, y) => x - y); return b[Math.
   ok(st.tris < B.tris * 1.15, 'reef: the coral triangles stay in the phone budget (+15 %)', `${st.tris} of ${B.tris}`);
   ok(R.count <= B.particles && mu.arrayBuffers < 160 * 1048576, 'reef: phone particles in budget, array buffers under 160 MB', `${R.count} of ${B.particles}, ${Math.round(mu.arrayBuffers / 1048576)} MB`);
   ok(s < 90, 'reef: the phone reef grows and meshes in under 90 s in node (rate Infinity)', `${f2(s)} s`);
-  ok(Object.values(SPECIES).every(sp => sp.size[1] >= 4.5), 'reef: every species can grow to 4.5 m or more', Object.entries(SPECIES).map(([k, v]) => `${k} ${v.size[1]}`).join(', '));
+  // the five reef species of the old page; the species table (SPECIES)
+  // also has species of their real size (a mushroom coral, a sea pen)
+  const CORE = Object.entries(SPECIES).filter(([, v]) => v.core);
+  ok(CORE.length === 5 && CORE.every(([, sp]) => sp.size[1] >= 4.5), 'reef: every reef species of the old page can grow to 4.5 m or more', CORE.map(([k, v]) => `${k} ${v.size[1]}`).join(', '));
 }
 
 // ── the coral term of the ROV field ─────────────────────────────────────────

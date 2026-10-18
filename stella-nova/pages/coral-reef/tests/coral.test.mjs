@@ -29,7 +29,7 @@
 import os from 'node:os';
 import { createRock } from '../rock/index.js';
 import {
-  createReef, SPECIES, SPECIES_IDS, QUALITY, PRESETS, shapeOf, pickSpecies, chooseFocus,
+  createReef, SPECIES, SPECIES_IDS as ALL_IDS, QUALITY, PRESETS, shapeOf, pickSpecies, chooseFocus,
   createReefMirror, colonyInfo, PARTICLE_FLOATS, speciesHook, polypRadius,
 } from '../reef.js';
 import { createCoralMesher, SHAPES, LOD_K, groove } from '../coral-sdf.js';
@@ -38,6 +38,9 @@ import { MODES, colourT, naturalRGB, radiiOf } from '../colour.js';
 import { meshStats } from '../../../lib/dla-sdf.js';
 
 const QUICK = process.argv.includes('--quick');
+// The five species of the old reef page: these checks compare them with
+// that page (OLD). tests/species.test.mjs checks every species.
+const SPECIES_IDS = ALL_IDS.filter(id => SPECIES[id].core);
 let fails = 0, passes = 0;
 function ok(cond, name, info = '') {
   if (cond) { passes++; console.log(`ok   ${name}${info ? '  ' + info : ''}`); }
@@ -51,6 +54,7 @@ const now = () => performance.now();
 // mesh as below (2 x the median distance of a vertex to its cone axis; for
 // the table, 2 x the median height of a vertex over its plate particle;
 // for the fan, 2 x the median distance of a vertex to the fan plane)
+const POLYPS_BEFORE = { staghorn: 2315, fan: 9242, table: 2815, boulder: 96, finger: 3008 };
 const OLD = {
   staghorn: { size: 39.18, rTip: 0.42, density: 0.9, psize: 0.2, thick: 0.0731 },
   fan: { size: 67.87, rTip: 0.2, density: 3.2, psize: 0.1, thick: 0.00466 },
@@ -233,11 +237,13 @@ const single = {};
     const area = meshStats(list).area;
     let n = 0; for (const m of list) n += m.polyps.length / 8;
     const dens = n / Math.max(1e-9, area), sh = SHAPES[id].polyp;
-    const rel = dens * s.size * s.size, oldRel = OLD[id].density * OLD[id].size * OLD[id].size;
-    const br = dens * SHAPES[id].rTip * SHAPES[id].rTip, oldBr = OLD[id].density * OLD[id].rTip * OLD[id].rTip;
-    ok(dens >= 0.85 * sh.density, `polyps: ${id} density per m^2 meets its table value`, `${Math.round(dens)} /m^2 (table ${sh.density}), ${n} polyps on ${f2(area)} m^2`);
-    ok(rel > 3 * oldRel, `polyps: ${id} has several times more polyps per colony area than before`, `x${f2(rel / oldRel)}; per branch radius^2 x${f2(br / oldBr)}`);
-    ok(br >= 0.95 * oldBr, `polyps: ${id} polyps per branch radius^2 at least as dense as before`, `${f3(br)} vs ${f3(oldBr)}`);
+    // The user said (2026-10-18): "generally polyp density is too high".
+    // BEFORE: polyps per m^2 of these colonies at commit 76076b63 (the
+    // same test). Now a third or less (a texture, not a carpet), and at
+    // least a sixth, inside the range of the species table.
+    const before = POLYPS_BEFORE[id], r = dens / before;
+    ok(r <= 0.5 && r >= 1 / 6, `polyps: ${id} density is a sixth to a half of before`, `${Math.round(dens)} /m^2, before ${before} (x${f2(r)}), ${n} polyps on ${f2(area)} m^2`);
+    ok(dens >= sh.range[0] && dens <= sh.range[1], `polyps: ${id} density in its stated range`, `${Math.round(dens)} /m^2 in [${sh.range}]`);
   }
   // polyps sit on the surface with unit normals, and rand is uniform
   const P = single.staghorn.list.flatMap(m => Array.from(m.polyps));

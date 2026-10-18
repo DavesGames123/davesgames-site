@@ -219,7 +219,11 @@ export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}
     }
     viewFocus(false);
     const left = Math.max(1, meshMs - (clock() - m0));
-    const out = M.update(left);
+    // one field per species, no LOD (coral-species): when the growth is
+    // over and every particle is fed, mesh with no gap, so the last bricks
+    // of a full colony do not wait 250 ms each (a full sea fan took over
+    // 90 s to finish its mesh). The LOD path keeps the gap.
+    const out = M.update(left, [], !M.lod && !(playing && !R.done()) && fed >= R.count);
     if (out.length) {
       const tr = [];
       for (const r of out) tr.push(r.positions.buffer, r.normals.buffer, r.gids.buffer, r.indices.buffer, r.polyps.buffer);

@@ -77,18 +77,14 @@ import { waveSpectrum, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
 import { blueNoise, VOL_K } from './volume.js';
+import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
-const SPECIES_CODE = { staghorn: 0, fan: 1, table: 2, boulder: 3, finger: 4 };
-// polyp look per species: size (m), how far the tentacles reach, tint, green fluorescence
-const POLYP_LOOK = {
-  staghorn: { size: 0.0045, extend: 0.85, tint: [0.92, 0.86, 1.0], fluor: 0.7 },
-  fan: { size: 0.003, extend: 1.0, tint: [1.0, 0.95, 0.92], fluor: 0.15 },
-  table: { size: 0.004, extend: 0.7, tint: [0.85, 1.0, 0.82], fluor: 0.9 },
-  boulder: { size: 0.0036, extend: 0.45, tint: [0.95, 0.9, 0.7], fluor: 0.5 },
-  finger: { size: 0.006, extend: 1.0, tint: [1.0, 0.94, 0.96], fluor: 0.12 },
-};
+// The skin code (shaders.js CORAL_FS uSpecies) and the polyp look (size,
+// tentacle reach, tint, fluorescence) of each species: coral-sdf.js SHAPES
+// (the species tables).
+const SPECIES_CODE = SKIN_CODE;
 // The lamp intensity scale: a three.js SpotLight intensity (candela) to
 // the radiance unit of shaders.js spotRad.
 export const LAMP_K = 0.004;

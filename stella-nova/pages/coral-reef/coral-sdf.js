@@ -19,6 +19,14 @@
 //    boulder .... (brain coral) fat cones and a wide blend give a smooth
 //                 dome; a groove term cuts meandering valleys
 //    finger ..... soft lobes with a wide blend
+//  Every species of reef.js SPECIES has a SHAPES entry. The post term is
+//  sh.post: 'web' (fans), 'plate' (the plate species, tilted by the colony
+//  tilt), 'palmate' (elkhorn: a flat web at each particle height),
+//  'groove' (the brain coral). sh.skin is the skin code of shaders.js
+//  CORAL_FS (SKIN_CODE), sh.polyp the polyp density, size and look
+//  (POLYP_LOOK: tentacle reach, tint, fluorescence; trunk and under: the
+//  share kept on old trunks and on undersides; range: the tested polyps
+//  per m^2).
 //
 //  Each vertex carries the global particle id (gid), so the page colours
 //  the surface from per-particle data (no re-mesh on a colour change).
@@ -55,7 +63,8 @@
 //    const M = createCoralMesher({ polyps, fine, radius, lod = true, gapMs = 250, clock });
 //                                  // lod false: one fine field, all colonies
 //                                  // gapMs: a growing field meshes at most once per gapMs
-//                                  // (a brick that changes again goes out once)
+//                                  // (a brick that changes again goes out once);
+//                                  // M.update(ms, out, true) skips the gap (growth over)
 //    M.addColony({ k, id, base, plane, stalk });   // colonyInfo() of reef.js
 //    M.add(g, parent, x, y, z, k);                 // world metres, ids in order
 //    M.bridge(g, j)                                // a fuse cone g -> j (reef.js R.bridges)
@@ -79,6 +88,7 @@
 //
 //  grep -n targets
 //    species shapes ......... "export const SHAPES"
+//    skin codes, polyp look . "export const SKIN_CODE", "export const POLYP_LOOK"
 //    species scale .......... "export const SPECIES_SCALE"
 //    the post terms ......... "function postFor"
 //    brain groove ........... "export function groove"
@@ -100,18 +110,25 @@ import { createSdf, pipeRadius, smin } from '../../lib/dla-sdf.js';
 // field band (past the largest outward post term). polyp: density per m^2,
 // tip (extra density at the tips), size (polyp radius, m), max per brick.
 export const SHAPES = {
-  staghorn: { cell: 0.0115, k: 0.026, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 4, rMax: 0.019, sub0: 3, quant: 0.16, rootScale: 1.4, band: 0.022,
-    polyp: { density: 3600, tip: 2.5, size: 0.0032, max: 700 } },
-  fan: { own: true, cell: 0.0055, k: 0.005, bend: 0.25, hold: 0.4, rTip: 0.0028, pipe: 3.5, rMax: 0.008, sub0: 3, quant: 0.2, rootScale: 2, band: 0.03,
-    web: 0.011, half: 0.0028, polyp: { density: 14000, tip: 1, size: 0.0016, max: 900 } },
-  table: { cell: 0.016, k: 0.026, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034,
-    inflate: 0.012, half: 0.011, polyp: { density: 5000, tip: 1.5, size: 0.003, max: 700 } },
-  boulder: { cell: 0.025, k: 0.1, chain: 1, rTip: 0.12, pipe: 4, rMax: 0.12, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.045,
-    groove: 0.045, polyp: { density: 240, tip: 0, size: 0.006, max: 160 } },
-  finger: { cell: 0.012, k: 0.022, bend: 0.4, hold: 0.3, rTip: 0.019, pipe: 3.4, rMax: 0.04, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03,
-    polyp: { density: 5000, tip: 1, size: 0.0045, max: 700 } },
+  staghorn: { cell: 0.0115, k: 0.026, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 4, rMax: 0.019, sub0: 3, quant: 0.16, rootScale: 1.4, band: 0.022, skin: 0,
+    polyp: { density: 1900, tip: 2, size: 0.0032, max: 700, extend: 0.85, tint: [0.92, 0.86, 1.0], fluor: 0.7, range: [378, 1208] } },
+  fan: { own: true, post: 'web', cell: 0.0055, k: 0.005, bend: 0.25, hold: 0.4, rTip: 0.0028, pipe: 3.5, rMax: 0.008, sub0: 3, quant: 0.2, rootScale: 2, band: 0.03, skin: 1,
+    web: 0.011, half: 0.0028, polyp: { density: 6000, tip: 1, size: 0.0016, max: 900, extend: 1.0, tint: [1.0, 0.95, 0.92], fluor: 0.15, trunk: 0.35, range: [1600, 5118] } },
+  table: { post: 'plate', cell: 0.016, k: 0.026, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034, skin: 2,
+    inflate: 0.012, half: 0.011, polyp: { density: 2600, tip: 1.5, size: 0.003, max: 700, extend: 0.7, tint: [0.85, 1.0, 0.82], fluor: 0.9, range: [393, 1258] } },
+  boulder: { post: 'groove', cell: 0.025, k: 0.1, chain: 1, rTip: 0.12, pipe: 4, rMax: 0.12, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.045, skin: 3,
+    groove: 0.045, polyp: { density: 110, tip: 0, size: 0.006, max: 160, extend: 0.45, tint: [0.95, 0.9, 0.7], fluor: 0.5, trunk: 1, under: 0.5, range: [18, 56] } },
+  finger: { cell: 0.012, k: 0.022, bend: 0.4, hold: 0.3, rTip: 0.019, pipe: 3.4, rMax: 0.04, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03, skin: 4,
+    polyp: { density: 2200, tip: 1, size: 0.0045, max: 700, extend: 1.0, tint: [1.0, 0.94, 0.96], fluor: 0.12, range: [464, 1483] } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
+// The skin code of each species (scene.js uSpecies: the species branch of
+// shaders.js CORAL_FS) and the polyp look (scene.js polyp materials).
+export const SKIN_CODE = Object.fromEntries(SHAPE_IDS.map(id => [id, SHAPES[id].skin ?? 0]));
+export const POLYP_LOOK = Object.fromEntries(SHAPE_IDS.map(id => {
+  const p = SHAPES[id].polyp;
+  return [id, { size: p.size, extend: p.extend ?? 0.7, tint: p.tint || [1, 1, 1], fluor: p.fluor ?? 0.2 }];
+}));
 // The blend of two cones of one branch (a particle and its parent), as a
 // part of k. They meet on a shared end sphere, so the branch is smooth
 // with a small blend; the full k there made a bead at every particle (the
@@ -131,9 +148,25 @@ export const CHAIN_K = 0.15;
 // branches on a large colony). Triangles per particle go up by s / L.
 // Polyps: the density per m^2 goes down by L x sqrt(s) (the GPU holds
 // every polyp), the polyp radius goes up by sqrt(L).
-export const SPECIES_SCALE = { staghorn: 2.5, fan: 2, table: 2.3, boulder: 2.2, finger: 2.1 };
+export const SPECIES_SCALE = {
+  staghorn: 2.5, fan: 2, table: 2.3, boulder: 2.2, finger: 2.1,
+  elkhorn: 2.4, pocillopora: 1.8, stylophora: 1.7, seriatopora: 1.7, pillar: 1.6,
+  montipora: 2, turbinaria: 1.8, pachyseris: 2, echinopora: 1.9, merulina: 2,
+  porites: 2.2, favites: 1.6, lobophyllia: 1.6, encrusting: 1.8, mushroom: 1,
+  leather: 1.5, carnation: 1.4, xenia: 1,
+  seawhip: 1.6, searod: 1.5, annella: 2.2,
+  bubblegum: 2.4, primnoa: 1.8, blackcoral: 1.8, leiopathes: 2.2, bamboo: 1.8, lophelia: 2.2, madrepora: 1.6,
+  venus: 1, glassvase: 1.3, chimney: 1.4, barrel: 1.4, seapen: 1.2, crinoid: 1.2,
+};
 export const SDF_EXP = 0.65;
 const LEN_KEYS = ['cell', 'k', 'band', 'rTip', 'rMax', 'web', 'half', 'inflate', 'groove'];
+// The user said (2026-10-18): "generally polyp density is too high". The
+// densities of the table are about 0.35 to 0.45 x the old ones; fine
+// stony corals (Porites, Montipora) keep many small polyps (a texture),
+// large-polyp corals (Lobophyllia, Fungia, the soft corals) few large
+// ones. polyp.trunk: the share kept on the old trunk (no tip), polyp.under:
+// the share kept on faces that look down (scatterPolyps). polyp.range:
+// the measured polyps per m^2 of the fine mesh that the tests accept.
 for (const id of SHAPE_IDS) {
   const sh = SHAPES[id], sc = SPECIES_SCALE[id] || 1, L = Math.pow(sc, SDF_EXP);
   sh.scale = sc; sh.len = L;
@@ -181,7 +214,8 @@ export function groove(x, y, z, sc = 1) {
 // local prim id (the nearest cone). C: the colony of each prim.
 function postFor(id, sh, S) {
   const u = sh.u || 1;          // the length unit of this field (species scale x quality)
-  if (id === 'fan') {
+  const kind = sh.post || null;
+  if (kind === 'web') {
     // ribs: the tree field d; web: a slab in the plane of the colony where
     // the field inflated by sh.web is inside
     const W = sh.web, T = sh.half;
@@ -193,18 +227,38 @@ function postFor(id, sh, S) {
       return smin(d, web, 0.005 * u);
     };
   }
-  if (id === 'table') {
-    // plate particles (depth >= stalk) are cut to a slab at their height
-    const I = sh.inflate, T = sh.half;
+  if (kind === 'plate') {
+    // plate particles (depth >= stalk) are cut to a slab at their height;
+    // a colony with a tilt t: the slab rises by t per metre of radius from
+    // the colony axis (a whorl, a funnel, a vase)
+    const I = sh.inflate, T = sh.half, O = S.origin;
     return (x, y, z, d, pid) => {
       if (pid < 0) return d;
       const c = S.cols.get(S.colOf[pid]);
       if (S.depth[pid] < (c.stalk || 7)) return d;
-      const slab = Math.abs(y - S.Y[pid]) - T;
+      const t = c.tilt || 0;
+      let slab;
+      if (!t) slab = Math.abs(y - S.Y[pid]) - T;
+      else {
+        const r = Math.hypot(x - c.base[0], z - c.base[2]);
+        const rp = Math.hypot(S.X[pid * 3] + O[0] - c.base[0], S.X[pid * 3 + 2] + O[2] - c.base[2]);
+        slab = Math.abs(y - S.Y[pid] - t * (r - rp)) / Math.sqrt(1 + t * t) - T;
+      }
       return smax(d - I, slab, 0.012 * u);
     };
   }
-  if (id === 'boulder') {
+  if (kind === 'palmate') {
+    // elkhorn: a flat web at the height of each particle where the field
+    // inflated by sh.web is inside, joined to the branch cones: broad,
+    // flat branches
+    const W = sh.web, T = sh.half;
+    return (x, y, z, d, pid) => {
+      if (pid < 0 || d > W + 0.01 * u) return d;
+      const web = smax(d - W, Math.abs(y - S.Y[pid]) - T, 0.008 * u);
+      return smin(d, web, 0.008 * u);
+    };
+  }
+  if (kind === 'groove') {
     const A = sh.groove, D = 0.03 * u, gs = sh.len || 1;
     return (x, y, z, d) => d > D ? d : d + A * groove(x, y, z, gs) * Math.min(1, Math.max(0, 1 - d / D));
   }
@@ -221,6 +275,7 @@ function h01(a, b) {
 // Polyps on a brick mesh: about density x area x (1 + tip x tipness)
 // per triangle. tipOf(local id) -> 0..1 (1 at a tip). gidOf(local id).
 export function scatterPolyps(mesh, pol, tipOf, gidOf, seed) {
+  const trunk = pol.trunk ?? 0.25, under = pol.under ?? 0.3;
   const P = mesh.positions, N = mesh.normals, I = mesh.indices, ID = mesh.ids;
   const out = [];
   let n = 0;
@@ -232,7 +287,11 @@ export function scatterPolyps(mesh, pol, tipOf, gidOf, seed) {
     const id = ID[a] >= 0 ? ID[a] : ID[b] >= 0 ? ID[b] : ID[c];
     if (id < 0) continue;
     const tip = tipOf(id);
-    const want = area * pol.density * (1 + pol.tip * tip);
+    // live tissue: polyps on the young parts and on faces that look up or
+    // to the side; few on the old trunk and on the shaded undersides
+    const fy = (N[a * 3 + 1] + N[b * 3 + 1] + N[c * 3 + 1]) / 3;
+    const live = (trunk + (1 - trunk) * Math.min(1, tip * 3)) * (fy < -0.3 ? under : 1);
+    const want = area * pol.density * (1 + pol.tip * tip) * live;
     const r0 = h01(seed, t);
     const k = Math.floor(want) + (r0 < want - Math.floor(want) ? 1 : 0);
     for (let q = 0; q < k && n < pol.max; q++) {
@@ -397,7 +456,7 @@ export function createCoralMesher(opts = {}) {
 
   // desc: colonyInfo() of reef.js { k, id, base, plane, stalk }
   function addColony(desc) {
-    const c = { k: desc.k, id: desc.id, base: desc.base.slice(), plane: (desc.plane || [1, 0]).slice(), stalk: desc.stalk, focus: !useLod || !!desc.focus };
+    const c = { k: desc.k, id: desc.id, base: desc.base.slice(), plane: (desc.plane || [1, 0]).slice(), stalk: desc.stalk, tilt: desc.tilt || 0, focus: !useLod || !!desc.focus };
     cols.set(desc.k, c);
     if (c.focus) makeField(desc.id, 0, c);
     if (useLod) makeField(desc.id, 1);
@@ -534,7 +593,7 @@ export function createCoralMesher(opts = {}) {
     const gids = new Float32Array(m.ids.length);
     for (let v = 0; v < m.ids.length; v++) gids[v] = m.ids[v] >= 0 ? F.gid[m.ids[v]] : -1;
     const polyps = F.lev === 0 && m.indices.length && polypScale > 0
-      ? scatterPolyps(m, { density: pol.density * polypScale, tip: pol.tip, max: Math.ceil(pol.max * Math.max(1, polypScale)) }, tipOf, gidOf, (m.key % 2147483647) ^ (F.id.length * 7919))
+      ? scatterPolyps(m, { density: pol.density * polypScale, tip: pol.tip, trunk: pol.trunk, under: pol.under, max: Math.ceil(pol.max * Math.max(1, polypScale)) }, tipOf, gidOf, (m.key % 2147483647) ^ (F.id.length * 7919))
       : new Float32Array(0);
     const nt = m.indices.length / 3;
     const chunk = chunkKey(m.bx, m.by, m.bz, F.cell, O);
@@ -553,7 +612,9 @@ export function createCoralMesher(opts = {}) {
   // field has nothing to mesh, an event { k: -1, state: 'coarse' } goes
   // out (the page shows a restored reef at once, not brick by brick).
   let coarseDone = false;
-  function update(ms = 8, out = []) {
+  // settle: the growth is over (no new particles come), so the gap does
+  // not hold a field back: each tick meshes for its whole budget
+  function update(ms = 8, out = [], settle = false) {
     const t0 = now(), tg = gapNow();
     // the coarse fields first, then the fine fields that wait to show,
     // then the rest (in turn)
@@ -568,7 +629,7 @@ export function createCoralMesher(opts = {}) {
       if (!F.tree.sdf.dirtyCount) { if (F.wait) checkDone(F); continue; }
       // a field meshed less than gap ms ago waits: its bricks that change
       // again (growth) are meshed and sent once per gap, not each tick
-      if (!F.wait && gap > 0 && tg - F.at < gap) continue;
+      if (!settle && !F.wait && gap > 0 && tg - F.at < gap) continue;
       const left = ms - (now() - t0);
       if (left <= 0) break;
       const share = Math.max(1, left / Math.max(1, list.length - q));
