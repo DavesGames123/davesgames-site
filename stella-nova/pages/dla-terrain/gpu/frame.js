@@ -30,8 +30,18 @@
 //  takes the frame time; over budget for 1 s lowers the scale by 0.1, under
 //  70% of budget for 3 s raises it by 0.05 (never over the preset).
 //
+//  GOVERNOR (phones, gpu/budget.js): fg.budgetMs is the profile budget (a
+//  phone: 33 ms). When the scale is at its floor and the frames stay slow
+//  for 2 s, featureStep takes fg.level one step up: 1 one shadow cascade,
+//  2 TAA off, 3 no shadow casters, 4 no grass, 5 no clouds. Fast frames for
+//  8 s take it one step down. fg.render skips the frame while
+//  document.visibilityState is "hidden"; fg.tick drops a frame time over 250 ms (a stall
+//  or a return from a hidden tab). An out-of-memory error (gpu.onPressure)
+//  lowers the pixel ratio and the scale and sets the level to 2 or more.
+//
 //  grep -n targets: "export function createFrameGraph", "function targets",
-//  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "export function scaleStep"
+//  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "export function scaleStep",
+//  "export function featureStep", "fg.level"
 // ============================================================================
 
 export function scaleStep(state, ms, budget, max) {
@@ -46,13 +56,27 @@ export function scaleStep(state, ms, budget, max) {
   return changed;
 }
 
+// state = { level, slow, fast } (s); atFloor: the scale is at its floor.
+// Returns -1, 0 or +1 (the change of level).
+export const MAX_LEVEL = 5;
+export function featureStep(state, ms, budget, atFloor) {
+  const dt = Math.min(ms, 100) / 1000;
+  if (ms > budget * 1.08 && atFloor) { state.slow += dt; state.fast = 0; }
+  else if (ms < budget * 0.6) { state.fast += dt; state.slow = 0; }
+  else { state.slow = Math.max(0, state.slow - dt); state.fast = 0; }
+  if (state.slow > 2 && state.level < MAX_LEVEL) { state.level++; state.slow = 0; return 1; }
+  if (state.fast > 8 && state.level > 0) { state.level--; state.fast = 0; return -1; }
+  return 0;
+}
+
 export function createFrameGraph(gpu, parts) {
   const device = gpu.device, U = GPUTextureUsage;
   const fg = {
     modules: [], fallbacks: {}, scale: gpu.qualityPreset.scale, maxScale: gpu.qualityPreset.scale,
     cssW: 1, cssH: 1, dpr: 1, outW: 1, outH: 1, w: 1, h: 1, key: 0, T: null,
     dyn: { scale: gpu.qualityPreset.scale, over: 0, under: 0 }, dynamic: true,
-    budgetMs: 1000 / 58, stats: { passes: 0 },
+    budgetMs: (gpu.profile && gpu.profile.budgetMs) || 1000 / 58, stats: { passes: 0 },
+    level: 0, gov: { level: 0, slow: 0, fast: 0 }, minScale: 0.5, pressure: 0, skipped: 0,
   };
 
   function targets() {
@@ -99,7 +123,10 @@ export function createFrameGraph(gpu, parts) {
   fg.resize = (cssW, cssH, dpr) => {
     fg.cssW = cssW; fg.cssH = cssH; fg.dpr = dpr;
     // device pixel ratio cap by quality: Low renders at 1x (phones)
-    const cap = [1, 1.25, 1.5, 2][gpu.qualityIndex] ?? 1.5;
+    let cap = [1, 1.25, 1.5, 2][gpu.qualityIndex] ?? 1.5;
+    // the device profile caps it more (a phone 1.5, a low-memory phone 1)
+    if (gpu.profile && gpu.profile.dprCap) cap = Math.min(cap, gpu.profile.dprCap);
+    if (fg.pressure) cap = Math.min(cap, 1);
     fg.outW = Math.max(16, Math.round(cssW * Math.min(dpr, cap)));
     fg.outH = Math.max(16, Math.round(cssH * Math.min(dpr, cap)));
     // 4K and up: keep the render under about 8.3 M px
@@ -109,9 +136,36 @@ export function createFrameGraph(gpu, parts) {
   };
   fg.setScale = s => { fg.scale = Math.max(0.4, Math.min(1, s)); fg.dyn.scale = fg.scale; targets(); };
   fg.tick = ms => {
-    if (!fg.dynamic) return;
+    if (!fg.dynamic || !(ms > 0) || ms > 250) return;
     if (scaleStep(fg.dyn, ms, fg.budgetMs, fg.maxScale)) { fg.scale = fg.dyn.scale; targets(); }
+    const d = featureStep(fg.gov, ms, fg.budgetMs, fg.dyn.scale <= fg.minScale + 1e-6);
+    if (d) setLevel(fg.gov.level);
   };
+  // the features that a level turns off (see GOVERNOR)
+  let taaUser = null, cascUser = null;
+  function setLevel(l) {
+    fg.level = fg.gov.level = Math.max(0, Math.min(MAX_LEVEL, l));
+    const sh = parts.shadows;
+    if (sh && sh.resize) {
+      if (fg.level >= 1) { if (cascUser === null) cascUser = sh.count; sh.resize(sh.size, 1); }
+      else if (cascUser !== null) { sh.resize(sh.size, cascUser); cascUser = null; }
+    }
+    if (parts.post && parts.post.settings) {
+      if (fg.level >= 2) { if (taaUser === null) taaUser = parts.post.settings.taa; parts.post.settings.taa = false; }
+      else if (taaUser !== null) { parts.post.settings.taa = taaUser; taaUser = null; }
+    }
+  }
+  fg.setLevel = setLevel;
+  // out of memory (gpu/device.js): smaller targets now, then the profile
+  // caps apply to what the modules make next
+  if (gpu.onPressure) gpu.onPressure(() => {
+    fg.pressure++;
+    fg.maxScale = Math.min(fg.maxScale, 0.75);
+    fg.dyn.scale = Math.min(fg.dyn.scale, fg.maxScale);
+    fg.scale = fg.dyn.scale;
+    setLevel(Math.max(fg.level, 2));
+    fg.resize(fg.cssW, fg.cssH, fg.dpr);
+  });
 
   const guard = (m, what, f) => {
     try { f(); } catch (e) {
@@ -122,8 +176,11 @@ export function createFrameGraph(gpu, parts) {
   };
 
   fg.render = frame => {
+    // a hidden tab draws nothing (rAF also stops there in most browsers)
+    if (globalThis.document && document.visibilityState === 'hidden') { fg.skipped++; return; }
     const T = fg.T, sh = parts.shadows;
     const mods = fg.active();
+    if (fg.level >= 4) frame.layers = { ...(frame.layers || {}), grass: false, ...(fg.level >= 5 ? { clouds: false } : {}) };
     frame.shadowBindGroup = sh.sampleBindGroup;
     frame.shadowInfo = sh.info;
     const enc = device.createCommandEncoder({ label: 'frame' });
@@ -132,7 +189,7 @@ export function createFrameGraph(gpu, parts) {
     parts.terrain.compute(enc, frame.dt);
     for (const m of mods) if (m.compute) guard(m, 'compute', () => m.compute(enc, frame));
     // ── 2 shadow
-    const casters = mods.filter(m => m.drawShadow);
+    const casters = fg.level >= 3 ? [] : mods.filter(m => m.drawShadow);
     if (sh.info && casters.length) {
       for (let c = 0; c < sh.info.count; c++) {
         const pass = enc.beginRenderPass({

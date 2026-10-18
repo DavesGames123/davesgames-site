@@ -15,6 +15,10 @@
 //      ridge outside the slice still casts into it.
 //  createShadowMaps(gpu) -> { tex, layerViews, sampleBindGroup, passBindGroups,
 //      update(c), resize(size, count) }
+//      The map has one layer per cascade (it had 4 at all counts: 16 MB at
+//      1024 for a phone with 2 cascades, now 8 MB). resize clamps size and
+//      count to gpu.profile (gpu/budget.js), so a quality change on a phone
+//      does not make a 2048 x 4 map.
 //
 //  grep -n targets: "export function computeCascades", "export function cascadeSplits",
 //  "export function createShadowMaps", "SNAP"
@@ -94,14 +98,19 @@ export function createShadowMaps(gpu) {
   const cmp = device.createSampler({ label: 'shadow compare', compare: 'greater-equal', magFilter: 'linear', minFilter: 'linear' });
   const cf = new Float32Array(CASCADE_FLOATS), pf = new Float32Array(SHADOWPASS_FLOATS);
   sh.resize = (size, count) => {
+    const pf = gpu.profile || {};
+    if (pf.shadowSize) size = Math.min(size, pf.shadowSize);
+    if (pf.cascades) count = Math.min(count, pf.cascades);
+    count = Math.max(1, Math.min(4, count | 0 || 1));
     if (sh.tex && sh.size === size && sh.count === count) return;
     if (sh.tex) sh.tex.destroy();
     sh.size = size; sh.count = count;
+    gpu.shadowSize = size; gpu.shadowCascades = count;
     sh.tex = device.createTexture({
-      label: 'sun shadow', size: [size, size, 4], format: 'depth32float',
+      label: 'sun shadow', size: [size, size, count], format: 'depth32float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
-    sh.layerViews = [0, 1, 2, 3].map(i => sh.tex.createView({ dimension: '2d', baseArrayLayer: i, arrayLayerCount: 1 }));
+    sh.layerViews = Array.from({ length: count }, (_, i) => sh.tex.createView({ dimension: '2d', baseArrayLayer: i, arrayLayerCount: 1 }));
     sh.arrayView = sh.tex.createView({ dimension: '2d-array' });
     sh.sampleBindGroup = device.createBindGroup({
       label: 'shadow sample', layout: gpu.shadowSampleLayout,
@@ -111,7 +120,7 @@ export function createShadowMaps(gpu) {
         { binding: 2, resource: { buffer: cascadeBuf } },
       ],
     });
-    sh.passBindGroups = [0, 1, 2, 3].map(i => device.createBindGroup({
+    sh.passBindGroups = Array.from({ length: count }, (_, i) => device.createBindGroup({
       label: 'shadow pass ' + i, layout: gpu.shadowPassLayout,
       entries: [{ binding: 3, resource: { buffer: passBuf, offset: i * 256, size: SHADOWPASS_FLOATS * 4 } }],
     }));

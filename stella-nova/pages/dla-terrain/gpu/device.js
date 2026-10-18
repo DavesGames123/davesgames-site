@@ -22,6 +22,10 @@
 //
 //    loadRawWGSL(url)           one file, no prefix
 //    coarse                     a touch screen (true): packages may do less
+//    profile, profileId         the device profile of gpu/budget.js (caps
+//                               that the modules read: gpu.profile.veg ...)
+//    onPressure(fn)             fn(profileId) after an out-of-memory error
+//                               took the profile one step lower
 //    shadows, shadowSampleBindGroup, shadowSplits   the cascade state
 //
 //  loadWGSL(url) fetches shaders/common.wgsl, then the detail file
@@ -29,10 +33,18 @@
 //  and returns the joined text. A relative url resolves against the page
 //  folder (pages/dla-terrain/). The texts are cached.
 //
+//  PHONES (gpu/budget.js): the profile comes from opts.profile, ?gpu=<id>,
+//  the step after a device loss, or detectProfile. A phone profile asks for
+//  no raised limits (phoneLimits: the WebGPU defaults, plus only what a
+//  module needs over them). device.lost: the next createGPU runs one profile
+//  lower; after a second loss createGPU throws (no restart loop).
+//
 //  grep -n targets: "export async function createGPU", "function loadWGSL",
-//  "globalsLayout", "shadowSampleLayout", "shadowPassLayout"
+//  "globalsLayout", "shadowSampleLayout", "shadowPassLayout",
+//  "export function phoneLimits", "export const recovery"
 // ============================================================================
 import { GLOBALS_BYTES } from './globals.js';
+import { detectProfile, pageEnv, profileFor, lostPolicy, pressureStep, PROFILES } from './budget.js';
 
 const PAGE = new URL('../', import.meta.url);
 export const DETAIL_URLS = [new URL('../../../lib/dla-terrain-detail.wgsl', import.meta.url).href,
@@ -96,16 +108,43 @@ export function deviceLimits(lim) {
   return out;
 }
 
+// A phone asks for the WebGPU defaults, plus only the limits over the
+// defaults that a module needs (each capped at the adapter). NEED lists
+// them; a Deno run of every module on a default-limit device found them.
+export const NEED = {};
+export function phoneLimits(lim) {
+  const out = {};
+  for (const k in NEED) if (lim[k] !== undefined) out[k] = Math.min(lim[k], NEED[k]);
+  return out;
+}
+
+// the state that outlives one device: the profile after a loss, the losses
+export const recovery = { losses: 0, next: null, blocked: false, oom: 0 };
+
+function chooseProfile(opts) {
+  if (opts.profile && PROFILES[opts.profile]) return opts.profile;
+  if (recovery.next) return recovery.next;
+  let q = null;
+  try { q = new URLSearchParams(globalThis.location ? location.search : '').get('gpu'); } catch { /* no location */ }
+  if (q && PROFILES[q]) return q;
+  const env = pageEnv();
+  if (opts.coarse) env.coarse = true;
+  return detectProfile(env);
+}
+
 export async function createGPU(canvas, opts = {}) {
   if (!globalThis.navigator || !navigator.gpu) throw new Error('no WebGPU');
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  if (recovery.blocked) throw new Error('the GPU was lost two times: no restart');
+  const profileId = chooseProfile(opts);
+  const profile = profileFor(profileId);
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: profile.raiseLimits ? 'high-performance' : 'low-power' });
   if (!adapter) throw new Error('no WebGPU adapter');
   const want = [];
   for (const f of ['float32-filterable', 'rg11b10ufloat-renderable', 'timestamp-query']) if (adapter.features.has(f)) want.push(f);
   const lim = adapter.limits;
   const device = await adapter.requestDevice({
     requiredFeatures: want,
-    requiredLimits: deviceLimits(lim),
+    requiredLimits: profile.raiseLimits ? deviceLimits(lim) : phoneLimits(lim),
   });
   let context = null, canvasFormat = 'bgra8unorm';
   if (canvas && canvas.getContext) {
@@ -144,6 +183,7 @@ export async function createGPU(canvas, opts = {}) {
   const sRepeat = device.createSampler({ label: 'linear repeat', magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', addressModeW: 'repeat', maxAnisotropy: 8 });
 
   const qi = Math.max(0, Math.min(QUALITY.length - 1, opts.qualityIndex ?? 2));
+  const capped = (v, cap) => (cap == null ? v : Math.min(v, cap));
   const gpu = {
     device, queue: device.queue, adapter, context, canvasFormat,
     hdrFormat: 'rgba16float', depthFormat: 'depth32float',
@@ -154,13 +194,41 @@ export async function createGPU(canvas, opts = {}) {
     get shadowSampleBindGroup() { return gpu.shadows ? gpu.shadows.sampleBindGroup : null; },
     get shadowSplits() { return gpu.shadows && gpu.shadows.info ? gpu.shadows.info.splits : null; },
     qualityIndex: qi, quality: QUALITY[qi].q, qualityPreset: QUALITY[qi],
-    shadowSize: Math.min(QUALITY[qi].shadow, device.limits.maxTextureDimension2D), shadowCascades: QUALITY[qi].cascades,
+    shadowSize: capped(Math.min(QUALITY[qi].shadow, device.limits.maxTextureDimension2D), profile.shadowSize),
+    shadowCascades: capped(QUALITY[qi].cascades, profile.cascades),
+    profile, profileId, recovery, pressureFns: [],
+    onPressure(fn) { gpu.pressureFns.push(fn); },
     features: want,
     shadowDepthState: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater', depthBias: -2, depthBiasSlopeScale: -2.0, depthBiasClamp: 0 },
     depthState(write = true, compare = 'greater') { return { format: 'depth32float', depthWriteEnabled: write, depthCompare: compare }; },
     _globalsBG: null,
     get globalsBindGroup() { return gpu._globalsBG; },
   };
+  // a loss: the next createGPU (main.js onLost -> bootGPU) runs one profile
+  // lower, one time. This handler is the first on device.lost, so the state
+  // is set before main.js restarts.
+  device.lost.then(info => {
+    const r = lostPolicy(recovery, info, gpu.profileId);
+    if (info && info.reason === 'destroyed') return;
+    if (r.restart) recovery.next = r.profile; else recovery.blocked = true;
+    console.warn('dla-terrain: device lost (' + r.why + '), next profile', r.restart ? r.profile : 'none');
+  });
+  // out of memory: one profile lower for what is made from now on; the frame
+  // graph (gpu/frame.js) also lowers the size of its targets
+  const onError = e => {
+    const err = e && e.error;
+    const oom = err && ((typeof GPUOutOfMemoryError !== 'undefined' && err instanceof GPUOutOfMemoryError) || /out of memory|OutOfMemory/i.test(String(err.message || err.constructor?.name)));
+    if (!oom) return;
+    const next = pressureStep(recovery, gpu.profileId, globalThis.performance ? performance.now() : 0);
+    if (next !== gpu.profileId) {
+      gpu.profileId = next; gpu.profile = profileFor(next);
+      gpu.shadowSize = capped(gpu.shadowSize, gpu.profile.shadowSize); gpu.shadowCascades = capped(gpu.shadowCascades, gpu.profile.cascades);
+      console.warn('dla-terrain: GPU out of memory, profile', next);
+      for (const fn of gpu.pressureFns) try { fn(next); } catch (x) { console.warn(x); }
+    }
+  };
+  if (device.addEventListener) device.addEventListener('uncapturederror', onError);
+  gpu._onError = onError;
   return gpu;
 }
 
