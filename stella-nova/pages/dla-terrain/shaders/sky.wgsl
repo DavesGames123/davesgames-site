@@ -618,6 +618,9 @@ fn sk_moon(d: vec3f, m: vec3f) -> vec4f {
   return vec4f(vec3f(1.0, 0.97, 0.92) * albedo * (lit * 9.0 + earthshine) * edge, edge);
 }
 
+const STAR_K: f32 = 0.15;   // star brightness (sk_starLayer flux 0.5 x 10^(-0.4 m))
+const MOON_K: f32 = 1.2;    // moon disc brightness (sk_moon albedo x lit x 9)
+
 // ── the full sky radiance along world direction d from camera point ro ──
 fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
   let r = S.radii.w;
@@ -635,10 +638,13 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
       let cd = sk_celestial(d);
       let q = G.frame.z;
       let oct = select(4, 3, q < 0.6);
-      var st = sk_milkyWay(cd, oct);
-      st += sk_starLayer(cd, 180.0, 0.9, -1.0, pxAng, 1.0);
-      let near = clamp(dot(st, vec3f(400.0)), 0.0, 1.0);
-      st += sk_starLayer(cd, 520.0, 0.25 + 0.55 * near, 5.5, pxAng, 7.0);
+      let s1 = sk_starLayer(cd, 180.0, 0.9, -1.0, pxAng, 1.0);
+      let near = clamp(dot(s1, vec3f(400.0)), 0.0, 1.0);
+      let s2 = sk_starLayer(cd, 520.0, 0.25 + 0.55 * near, 5.5, pxAng, 7.0);
+      // STAR_K: the brightest star peaks at about 0.19, a full moon at
+      // about 1.1 (before, the stars were 20 x the moon and the moon read
+      // as one more star)
+      let st = sk_milkyWay(cd, oct) + ((s1 + s2) * STAR_K);
       L += st * Tv * night * sk_ss(-0.02, 0.06, d.y);
     }
     let sunT = sk_transmittance(r, G.sunDir.y);
@@ -652,8 +658,8 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
     // are faint next to it)
     let mo = sk_moon(d, S.moon.xyz);
     if (mo.w > 0.0) {
-      // dimmer than nature, so the maria read at a night exposure
-      L += mo.rgb * Tv * 0.07 * sk_ss(-0.01, 0.02, S.moon.y);
+      // dimmer than nature (MOON_K), so the maria read at a night exposure
+      L += mo.rgb * Tv * MOON_K * sk_ss(-0.01, 0.02, S.moon.y);
     }
   }
   return L;
