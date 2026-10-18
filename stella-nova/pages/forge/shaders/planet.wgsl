@@ -33,6 +33,10 @@
 //  that graze the low air). Past the terminator the ground keeps a
 //  twilight sky (fn twilightT); the shadow in the air has a penumbra.
 //
+//  SHORE  rocky water worlds carry the height over the sea in the albedo
+//  alpha (maps.js shoreField): shallow water, a surf line and wet sand
+//  are per-pixel terms of shadeSurface, no extra pass.
+//
 //  GIANTS  no separate cloud field: the high haze is the band cirrus of the
 //  maps (fn gasHaze), advected with the deck's flow, at the shell height;
 //  zones and storms shade the lower belts near the terminator.
@@ -385,6 +389,7 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   var alb: vec3f;
   var nT: vec3f;
   var mat: vec4f;
+  var shore = 1.0;
   var gfa = uv;
   var gfb = uv;
   var gfw = 0.0;
@@ -401,7 +406,9 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
     gfa = f.a; gfb = f.b; gfw = f.w; gh = mix(na.a, nb.a, f.w);
     mat = sampleG(tMat, uv, g);
   } else {
-    alb = sampleG(tAlbedo, uv, g).rgb;
+    let a4 = sampleG(tAlbedo, uv, g);
+    alb = a4.rgb;
+    shore = a4.a;
     var nS = sampleG(tNormal, uv, g);
     // magnified: a cubic sample of the normals (no square facets)
     if (mg > 0.0) { nS = mix(nS, sampleCubic(tNormal, uv), mg); }
@@ -418,9 +425,41 @@ fn shadeSurface(p: vec3f, rd: vec3f, uvIn: vec2f, g: Grad) -> vec3f {
   let L = V.sun.xyz;
   let v = -rd;
   let ao = mat.r;
-  let rough = clamp(mat.g, 0.03, 1.0);
+  var rough = clamp(mat.g, 0.03, 1.0);
+  var specA = mat.a;
+  // the shore (maps.js shoreField in the albedo alpha: the height over a
+  // water sea, 128 + 126 dz / 0.4 km; 255 = no water sea)
+  if (shore < 0.996) {
+    let z = (shore * 255.0 - 128.0) / 126.0;
+    // wet sand: the first ~20 m over the waterline, darker and smoother
+    let wetS = smoothstep(0.05, 0.0, z) * step(0.0, z);
+    alb = alb * (1.0 - 0.32 * wetS);
+    rough = mix(rough, 0.32, wetS);
+    // shallow water: under ~50 m the sandy bottom shows through the
+    // water (bright turquoise), fading with the depth
+    let dep = max(-z, 0.0) * 0.4;
+    let shal = exp(-dep / 0.05) * (1.0 - step(0.0, z));
+    alb = mix(alb, vec3f(0.1, 0.3, 0.34), 0.5 * shal);
+    // surf: a thin foam line on the water side of the waterline. The
+    // distance to the line in texels is z / |grad z| (two level-0 taps);
+    // the line is drawn only where a texel covers about a pixel or more,
+    // so it does not shimmer from orbit
+    let sz = vec2f(textureDimensions(tAlbedo, 0));
+    let fp = max(length(g.dx * sz), length(g.dy * sz));
+    let vis = smoothstep(1.5, 0.6, fp);
+    if (vis > 0.0 && z < 0.06 && z > -0.3) {
+      let zu = (textureSampleLevel(tAlbedo, sMap, uv + vec2f(1.0 / sz.x, 0.0), 0.0).a * 255.0 - 128.0) / 126.0;
+      let zv = (textureSampleLevel(tAlbedo, sMap, uv + vec2f(0.0, 1.0 / sz.y), 0.0).a * 255.0 - 128.0) / 126.0;
+      let gz = max(length(vec2f(zu - z, zv - z)), 0.004);
+      let dT = z / gz;
+      let foam = exp(-pow((dT + 0.1) / 0.06, 2.0)) * vis;
+      alb = mix(alb, vec3f(0.8, 0.83, 0.85), 0.4 * foam);
+      rough = mix(rough, 0.75, foam);
+      specA = mix(specA, 0.5, foam);
+    }
+  }
   let metal = mat.b;
-  let f0 = mix(vec3f(0.08 * mat.a), alb, metal);
+  let f0 = mix(vec3f(0.08 * specA), alb, metal);
   var light = sunLight(p) * cloudShadow(p) * ringShadow(p) * terrainShadow(p, uv, mg) * A.radii.w;
   // giants: zones and storms stand higher than the belts (the height in
   // the normal map alpha). Near the terminator a deck lower than the

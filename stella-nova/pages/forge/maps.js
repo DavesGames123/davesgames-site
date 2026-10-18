@@ -42,7 +42,7 @@
 //
 //  grep -n targets: "export const MAP_INFO", "export function prepare",
 //  "export function sampleRows", "export function finish", "export function channels", "function normals",
-//  "function ambient", "function halo", "export function generate", "export function mapImage",
+//  "function ambient", "function halo", "function shoreField", "export function generate", "export function mapImage",
 //  "export function encodeMaps", "export function hashMaps", "export function shrinkMaps"
 // ============================================================================
 import { prepareRocky, lavaColour } from './rocky.js';
@@ -128,9 +128,11 @@ export function finish(M, P, ctx) {
   M.reliefKm = km;
   if (P.kind !== 'gas' && ctx) {
     const sea = P.ocean.level > 0 ? (ctx.seaH - ctx.hMin) / (ctx.hMax - ctx.hMin) : null;
+    M.sea = sea;   // the sea level on the 0..1 height scale (coast.js, tests)
     const er = erode(M.height, M.W, M.H, { reliefKm: km, radiusKm: P.radiusKm, sea, flow: P.atmo.on ? P.erosion.flow : 0, talus: P.erosion.talus });
     M.height = er.height; M.erosion = { cut: er.cut, net: er.net };
     surface(M, P, er, sea);
+    shoreField(M, P, sea, km);
     if ((P.ocean.liquid | 0) === 1 && P.ocean.level > 0) halo(M);
   }
   M.normal = normals(M.height, M.W, M.H, km, P.radiusKm, P.bump);
@@ -196,6 +198,22 @@ function surface(M, P, er, sea) {
       for (let c = 0; c < 3; c++) M.albedo[j + c] += (ice[c] - M.albedo[j + c]) * snow * 0.95;
       if (M.mat) { M.mat[j] += (140 - M.mat[j]) * snow; M.mat[j + 2] += (71 - M.mat[j + 2]) * snow; }
     }
+  }
+}
+
+// The shore field in the albedo alpha (the exported albedo is RGB, so the
+// alpha is free after surface): the height over a water sea in km,
+// 128 + 126 x clamp(dz / 0.4 km), so 2 = 400 m deep or more, 128 = the
+// waterline, 254 = 400 m up or more. 255 = no water sea (dry, lava and
+// methane worlds, giants). planet.wgsl reads it for the shallow water,
+// the surf line and the wet sand.
+export const SHORE_KM = 0.4;
+function shoreField(M, P, sea, km) {
+  const n = M.W * M.H, wet = sea != null && (P.ocean.liquid | 0) === 0;
+  for (let i = 0; i < n; i++) {
+    if (!wet) { M.albedo[i * 4 + 3] = 255; continue; }
+    const dz = (M.height[i] - sea) * km / SHORE_KM;
+    M.albedo[i * 4 + 3] = Math.round(128 + 126 * Math.max(-1, Math.min(1, dz)));
   }
 }
 

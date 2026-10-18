@@ -302,6 +302,35 @@ for (const id of ['earth', 'moon', 'jupiter', 'neptune']) {
   ok('aurora: the toggle off and a field-less world pack all zeros (the shader skips the march)', off.every(v => v === 0) && moonU.every(v => v === 0));
 }
 
+// coasts (rocky.js coastDetail, coast.js): rugged coastlines with a
+// fractal dimension of a rugged real coast, a power law of island sizes,
+// more coast at a wider map (resolution-aware), and no seam at the date
+// line or the poles
+{
+  const C = await import('./coast.js');
+  const out = [];
+  for (const [id, seed] of [['earth', 4127], ['ocean', 808]]) {
+    const P = PR.fromPreset(id, seed), M = MP.generate(P, 1024), m = C.landMask(M, M.sea);
+    const d = C.boxDim(m, M.W, M.H, { sizes: [2, 4, 8, 16, 32] }), is = C.islands(m, M.W, M.H, { minA: 0.5, maxA: 800 });
+    const M2 = MP.generate(P, 512), d2 = C.boxDim(C.landMask(M2, M2.sea), M2.W, M2.H, { sizes: [2, 4, 8, 16, 32] });
+    // seams: height steps across the date line and across the pole, in
+    // the coast band, against the steps between interior neighbours
+    const W = M.W, H = M.H, band = i => Math.abs(M.height[i] - M.sea) < 0.03;
+    // the date line pair (W - 1, 0) against 31 other column pairs over all
+    // rows: its mean step in the coast band must not stand out
+    const pairStep = x0 => { let s0 = 0, n0 = 0; for (let y = 1; y < H - 1; y++) { const a = y * W + x0, b = y * W + (x0 + 1) % W; if (band(a) || band(b)) { s0 += Math.abs(M.height[a] - M.height[b]); n0++; } } return { m: n0 ? s0 / n0 : 0, n: n0 }; };
+    const dl = pairStep(W - 1), ctl = [...Array(31)].map((_, k) => pairStep(Math.floor((k + 1) * W / 32))).map(c => c.m).sort((p, q) => p - q);
+    const sIn = ctl[ctl.length - 4], nIn = 1, sU = dl.m, nU = dl.n;
+    let sP = 0, nP = 0;
+    for (const y of [0, H - 1]) for (let x = 0; x < W / 2; x++) { const a = y * W + x, b = y * W + x + W / 2; sP += Math.abs(M.height[a] - M.height[b]); nP++; }
+    out.push({ id, D: d.D, k: is.k, isl: is.count, pts: is.points, grow: d.nCoast / d2.nCoast, seamU: sU / Math.max(sIn / nIn, 1e-9), nU, pole: sP / nP });
+  }
+  ok('coasts: box-counting dimension (boxes 2-32 texels) 1.15-1.35 at 1024 (Earth-like, ocean)', out.every(o => o.D >= 1.15 && o.D <= 1.35), out.map(o => `${o.id} D ${o.D.toFixed(3)}`).join(', '));
+  ok('coasts: island sizes follow a power law N(>a) ~ a^-k, k 0.3-1.1', out.every(o => o.pts >= 4 && o.k >= 0.3 && o.k <= 1.1), out.map(o => `${o.id} ${o.isl} islands, k ${o.k.toFixed(2)}`).join(', '));
+  ok('coasts: a map twice as wide has more than twice the coast texels (finer detail, not a sharper copy)', out.every(o => o.grow > 2.15), out.map(o => `${o.id} x${o.grow.toFixed(2)}`).join(', '));
+  ok('coasts: no seam at the date line (its mean step in the coast band <= the 88th percentile of 31 other column pairs) or the poles', out.every(o => o.seamU <= 1 && o.pole < 0.02), out.map(o => `${o.id} date line / p88 ${o.seamU.toFixed(2)} (${o.nU} rows), pole step ${o.pole.toFixed(4)}`).join(', '));
+}
+
 // rust worlds have real relief: basins, shields and canyons (geology.js)
 // span many km, and each member draws basins
 {

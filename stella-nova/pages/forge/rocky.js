@@ -21,6 +21,9 @@
 //    6. dunes, cracks (lineae), calderas, craters. Lineae are zero sets of
 //       noise on their own warp (crackWarp); lineDist gives the distance
 //       to a line, so a line keeps its width and never breaks into dots
+//    7. coasts (coastDetail): a band round the sea level gets extra
+//       relief (fBm of gain 0.6, fjords, billows), and seas of water get
+//       a continental shelf (sampleRocky)
 //    Valleys and rivers come later: erode.js cuts drainage networks into
 //    the joined height map, and maps.js finish lays rivers and snow.
 //  The sea level is the quantile of the height at ocean.level over 6000
@@ -49,7 +52,7 @@
 //
 //  grep -n targets: "export function prepareRocky", "function heightCore", "function lavaSea", "export function lavaColour",
 //  "function craterField", "function buildCraters", "export function craterProfile", "function shade",
-//  "const BIOMES", "export function craterList", "function crackWarp", "function lineDist"
+//  "const BIOMES", "export function craterList", "function crackWarp", "function lineDist", "function coastDetail"
 // ============================================================================
 import { fbm, fbmEroded, ridged, warp, simplex3, worley3, mulberry, onSphere, fibonacci, clamp, mix, smooth, texelAngle } from './noise.js';
 import { cloudSetup, cyclones, cloudField } from './clouds.js';
@@ -123,7 +126,7 @@ export function prepareRocky(P) {
   // height range and sea level over Fibonacci points
   const N = 6000, pts = fibonacci(N), hs = new Float64Array(N), st = {};
   const p = [0, 0, 0];
-  ctx.seaH = -Infinity;
+  ctx.seaH = -Infinity; ctx.coastA = 0;
   for (let i = 0; i < N; i++) { p[0] = pts[i * 3]; p[1] = pts[i * 3 + 1]; p[2] = pts[i * 3 + 2]; heightCore(ctx, p, st); hs[i] = st.h; }
   hs.sort();
   const q = f => hs[Math.min(N - 1, Math.max(0, Math.round(f * (N - 1))))];
@@ -137,6 +140,11 @@ export function prepareRocky(P) {
   // the datum of the lapse rate: the sea, or the median height when dry
   ctx.datum = P.ocean.level > 0 ? ctx.seaH : q(0.5);
   ctx.kmPerUnit = P.relief / (ctx.hMax - ctx.hMin);
+  // coast relief (coastDetail): amplitude and band width in height units,
+  // scaled by the spread of heights near the sea level
+  ctx.sCoast = S(16);
+  ctx.coastA = P.ocean.level > 0 ? 0.12 * (ctx.hMax - ctx.hMin) * (P.coast ?? 1) : 0;
+  ctx.coastBw = 0.07 * (ctx.hMax - ctx.hMin);
   ctx.sample = (pp, out) => sampleRocky(ctx, pp, out);
   ctx.heightAt = pp => { heightCore(ctx, pp, st); return (st.h - ctx.hMin) / (ctx.hMax - ctx.hMin); };
   return ctx;
@@ -618,7 +626,54 @@ function heightCore(ctx, p, st) {
     h = mix(h, Math.min(h, -0.25 * P.terrain.amp), st.maria * 0.85);
   }
   h += st.cYoung;
+  // coasts: extra relief in a band round the sea level (coastDetail)
+  st.coast = 0;
+  if (ctx.coastA > 0 && ctx.seaH > -1e9) { const cd = coastDetail(ctx, p, h, st); h += cd; }
   st.h = h;
+}
+
+// ── coasts ─────────────────────────────────────────────────────────────
+// A sea level that cuts a smooth field draws a smooth coast: the terrain
+// fBm has gain 0.47 (Hurst H ~ 1.1), and the isoline of an fBm surface has
+// dimension 2 - H, so the coast came out near D = 1.0-1.2 at the fine
+// scales. Real rugged coasts are D ~ 1.2-1.3. Here a band round the sea
+// level (|h - sea| < ~2.5 bw) gets extra relief from a domain-warped fBm of
+// gain 0.6 (H ~ 0.74, coast D ~ 1.26). Its octaves fade at the map's band
+// limit (noise.js setBand), so a 4k map gets finer coast, not a sharper
+// copy of the 2k one. The mix depends on the coast:
+//   rocky, high-latitude, mountain coasts  ridged channels cut inland
+//          (fjords) and a sharper, ridged relief (headlands, skerries)
+//   flat, low coasts   billowed noise: rounded islands, spits and
+//          barrier bars just over the sea level, lagoons behind them
+//   offshore    the band reaches below the sea: archipelagos
+// The term is added after the sea level is fixed (prepareRocky: it is
+// off in the quantile pass), so the sea cover does not move much.
+const COAST_O = { freq: 6, octaves: 10, lacunarity: 2.03, gain: 0.6 };
+const BILLOW_O = { freq: 22, octaves: 7, lacunarity: 2.07, gain: 0.55 };
+const FJORD_O = { freq: 9, octaves: 5, lacunarity: 2.1, gain: 0.55 };
+const _cq = [0, 0, 0];
+function coastDetail(ctx, p, h, st) {
+  const d = h - ctx.seaH, bw = ctx.coastBw;
+  // landward the band reaches farther (fjords run inland)
+  const u = d > 0 ? d / (bw * 1.6) : d / bw;
+  const band = Math.exp(-u * u);
+  if (band < 2e-3) return 0;
+  const s = ctx.sCoast;
+  _cq[0] = p[0] + 0.06 * simplex3(p[0] * 4, p[1] * 4, p[2] * 4, s + 1);
+  _cq[1] = p[1] + 0.06 * simplex3(p[0] * 4, p[1] * 4, p[2] * 4, s + 2);
+  _cq[2] = p[2] + 0.06 * simplex3(p[0] * 4, p[1] * 4, p[2] * 4, s + 3);
+  const n = fbm(_cq, COAST_O, s + 4);
+  const rough = clamp(st.mmask * 1.6 + 0.25 * smooth(0.45, 0.75, Math.abs(p[1])));
+  const flat = 1 - rough;
+  let v = n * (0.8 + 0.4 * rough);
+  if (flat > 0.05) v = mix(v, 1.3 * Math.abs(fbm(_cq, BILLOW_O, s + 5)) - 0.35, flat * 0.3);
+  // fjords: the crests of a ridged field become channels on cold,
+  // mountainous coasts (glacial troughs drowned by the sea)
+  const glacial = smooth(0.62, 0.8, Math.abs(p[1])) * smooth(0.05, 0.35, st.mmask);
+  let cut = 0;
+  if (glacial > 0.01) cut = glacial * smooth(0.82, 0.97, ridged(_cq, FJORD_O, s + 6, 2.5)) * 1.8;
+  st.coast = band;
+  return band * ctx.coastA * (v - cut);
 }
 
 // ── colour and materials ───────────────────────────────────────────────
@@ -726,6 +781,14 @@ function lavaSea(ctx, p, out) {
 function sampleRocky(ctx, p, out) {
   const P = ctx.P, st = _st, pal = P.palette;
   heightCore(ctx, p, st);
+  // the continental shelf (water seas): the first 0.6 km of raw depth
+  // becomes a flat shelf 0-0.15 km deep, the next 1.4 km the steeper
+  // slope down to 2 km, deeper is unchanged (monotone, continuous)
+  if (P.ocean.level > 0 && (P.ocean.liquid | 0) === 0 && st.h < ctx.seaH) {
+    const dk = (ctx.seaH - st.h) * ctx.kmPerUnit;
+    const d2 = dk < 0.6 ? 0.25 * dk : dk < 2 ? 0.15 + (dk - 0.6) * (1.85 / 1.4) : dk;
+    st.h = ctx.seaH - d2 / ctx.kmPerUnit;
+  }
   const hn = (st.h - ctx.hMin) / (ctx.hMax - ctx.hMin);
   out.h = clamp(hn);
   const hk = (st.h - ctx.datum) * ctx.kmPerUnit;      // km above the sea (or the median)
