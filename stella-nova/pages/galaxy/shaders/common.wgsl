@@ -15,6 +15,7 @@ struct Uni {
   look: vec4f,    // exposure scale, bloom mix, star gain, twinkle
   misc: vec4f,    // reference surface brightness, sky gain, auto key, auto rate
   extra: vec4f,   // noise detail 0..1, peak clamp (x reference), wall time (s), -
+  enc: vec4f,     // pair track: keyframe time u, stars per keyframe, keyframes K; w = density gain 0.3..1
 }
 
 struct Gal {

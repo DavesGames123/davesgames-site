@@ -20,6 +20,15 @@
 //    E.render(frame, view?)   frame: see "function render"; view: a
 //                             GPUTextureView to draw into (Deno); else the
 //                             canvas
+//  An interacting pair (built.enc, see encounter.js) also uploads its
+//  track: K keyframes of half floats per test star (pop 6), read by
+//  stars.wgsl at binding 5. frame.centres moves the two host blocks and
+//  frame.encU picks the keyframe time.
+//  Density: frame.dens (0.3 dense .. 1 sparse, the brightness hint of
+//  lib/action-camera.js through director.js coreGain) shrinks the star
+//  sprites a little, dims them a little, and sets the local tone
+//  compression of the composite (post.wgsl), so dense cores keep their
+//  structure and do not go to white. The bloom mix is capped at 0.1.
 //    E.destroy()
 //    E.onLost = info => {}
 // ============================================================================
@@ -79,11 +88,13 @@ export async function createEngine({ canvas = null, device = null, format = null
   const clampS = device.createSampler({ addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge', magFilter: 'linear', minFilter: 'linear' });
 
   // ── buffers ──
-  const UNI_FLOATS = 9 * 4;
+  const UNI_FLOATS = 10 * 4;
   const uniBuf = device.createBuffer({ size: UNI_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const galBuf = device.createBuffer({ size: GAL_FLOATS * 2 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const uni = new Float32Array(UNI_FLOATS);
   let gals = new Float32Array(GAL_FLOATS * 2), nGal = 1, starBuf = null, starCount = 0, starCap = 0;
+  let trackBuf = null, trackCap = 0, encN = 0, encK = 1;
+  const noTrack = device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
 
   // ── pipelines ──
   const volPipe = device.createRenderPipeline({
@@ -154,15 +165,36 @@ export async function createEngine({ canvas = null, device = null, format = null
     nGal = built.nGal;
     starCount = built.count;
     const bytes = Math.max(64, starCount * STAR_FLOATS * 4);
+    let rebind = false;
     if (!starBuf || bytes > starCap) {
       if (starBuf) starBuf.destroy();
       starCap = Math.ceil(bytes * 1.15 / 64) * 64;
       starBuf = device.createBuffer({ size: starCap, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-      starBind = device.createBindGroup({ layout: starPipe.getBindGroupLayout(0), entries: [
-        { binding: 0, resource: { buffer: uniBuf } }, { binding: 1, resource: { buffer: galBuf } },
-        { binding: 2, resource: { buffer: starBuf } }, { binding: 3, resource: noiseTex.createView() }, { binding: 4, resource: repeat }] });
+      rebind = true;
     }
     device.queue.writeBuffer(starBuf, 0, built.stars.buffer, built.stars.byteOffset, starCount * STAR_FLOATS * 4);
+    const enc = built.enc;
+    if (enc && enc.track) {
+      const tb = enc.track.byteLength;
+      if (!trackBuf || tb > trackCap) {
+        if (trackBuf) trackBuf.destroy();
+        trackCap = Math.ceil(tb / 256) * 256;
+        trackBuf = device.createBuffer({ size: trackCap, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+        rebind = true;
+      }
+      device.queue.writeBuffer(trackBuf, 0, enc.track.buffer, enc.track.byteOffset, tb);
+      encN = enc.n; encK = enc.K;
+    } else {
+      // a single galaxy: free the track (10 MB), bind the empty buffer
+      if (trackBuf) { trackBuf.destroy(); trackBuf = null; trackCap = 0; rebind = true; }
+      encN = 0; encK = 1;
+    }
+    if (rebind || !starBind) {
+      starBind = device.createBindGroup({ layout: starPipe.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: uniBuf } }, { binding: 1, resource: { buffer: galBuf } },
+        { binding: 2, resource: { buffer: starBuf } }, { binding: 3, resource: noiseTex.createView() }, { binding: 4, resource: repeat },
+        { binding: 5, resource: { buffer: trackBuf || noTrack } }] });
+    }
     firstExpo = true;
   }
 
@@ -171,7 +203,9 @@ export async function createEngine({ canvas = null, device = null, format = null
 
   // frame = { cam: {eye, right, up, fwd, tanHalf, aspect}, off: [x, y],
   //   time (Myr), wall (s), frame, exposure, bloom, starGain, twinkle,
-  //   sbRef, skyGain, autoKey, autoRate, peakClamp, vignette, snapExposure }
+  //   sbRef, skyGain, autoKey, autoRate, peakClamp, vignette, snapExposure,
+  //   centres: [[x,y,z],[x,y,z]] (pair hosts), encU (keyframe time),
+  //   dens (0.3 .. 1, see the header) }
   function render(f, view = null) {
     if (!T || !starBind) return;
     const c = f.cam;
@@ -182,14 +216,19 @@ export async function createEngine({ canvas = null, device = null, format = null
     put(3, c.fwd[0], c.fwd[1], c.fwd[2], nGal);
     put(4, f.off ? f.off[0] : 0, f.off ? f.off[1] : 0, f.frame || 0, T.steps);
     put(5, T.w, T.h, T.vw, T.vh);
-    put(6, 1, f.bloom ?? 0.06, f.starGain ?? 1, f.twinkle ?? 1);
     put(7, f.sbRef || 1e-3, f.skyGain ?? 1, f.autoKey ?? 0.09, f.autoRate ?? 0.05);
+    const dens = Math.max(0.3, Math.min(1, f.dens ?? 1)), bloom = Math.min(0.1, (f.bloom ?? 0.06) * (0.6 + 0.4 * dens));
+    put(6, 1, bloom, f.starGain ?? 1, f.twinkle ?? 1);
     put(8, f.detail ?? T.detail, f.peakClamp ?? 400, f.wall || 0, 0);
+    put(9, f.encU || 0, encN, encK, dens);
     device.queue.writeBuffer(uniBuf, 0, uni);
     for (let g = 0; g < nGal; g++) gals[g * GAL_FLOATS + OFF.phase] = patternSpeed(gals, g) * f.time;
+    if (f.centres) for (let g = 0; g < nGal && g < f.centres.length; g++) { const o = g * GAL_FLOATS, c = f.centres[g]; gals[o + 3] = c[0]; gals[o + 7] = c[1]; gals[o + 11] = c[2]; }
     device.queue.writeBuffer(galBuf, 0, gals);
 
-    const pu = (slot, texel, mix = 1) => device.queue.writeBuffer(ubuf(slot), 0, new Float32Array([texel[0], texel[1], mix, 0, f.exposure ?? 1, f.bloom ?? 0.06, f.autoKey ?? 0.09, (firstExpo || f.snapExposure) ? 1 : (f.autoRate ?? 0.05), f.frame || 0, 0, f.vignette ?? 0.35, T.lv.length]));
+    // local tone compression: weak when sparse, strong in a dense view
+    const squash = 0.5 + 2.5 * (1 - dens) / 0.7;
+    const pu = (slot, texel, mix = 1) => device.queue.writeBuffer(ubuf(slot), 0, new Float32Array([texel[0], texel[1], mix, 0, f.exposure ?? 1, bloom, f.autoKey ?? 0.09, (firstExpo || f.snapExposure) ? 1 : (f.autoRate ?? 0.05), f.frame || 0, squash, f.vignette ?? 0.35, T.lv.length]));
     const S = T.passes;
     pu(S.down0.u, S.down0.texel);
     S.down.forEach(p => pu(p.u, p.texel));

@@ -11,6 +11,12 @@
 //     pop 3  bar stars, rigid with the pattern
 //     pop 4  fixed positions (tidal tails, the jet)
 //     pop 5  the sky: foreground stars and background galaxies
+//     pop 6  an interacting pair's test stars: a Catmull-Rom curve through
+//            the recorded keyframes TR (half floats, encounter.js is the
+//            CPU mirror), at keyframe time U.enc.x; far from both hosts
+//            the sprite widens (0.03 x the distance, the same flux)
+//   Density gain U.enc.w (1 sparse .. 0.3 dense) makes the sprites of a
+//   dense view smaller and dimmer, so the cores do not merge to a blob.
 //   Brightness: a star of light L at distance d gives flux L / (4 pi d^2),
 //   spread over a Gaussian of sigma px, so its peak radiance is
 //   flux / (pixel solid angle * 2 pi sigma^2). The volume uses the same
@@ -23,6 +29,18 @@
 @group(0) @binding(2) var<storage, read> S: array<vec4f>;
 @group(0) @binding(3) var nT: texture_3d<f32>;
 @group(0) @binding(4) var nS: sampler;
+@group(0) @binding(5) var<storage, read> TR: array<vec2u>;
+
+fn trk(k: i32, i: u32) -> vec3f {
+  let q = TR[u32(k) * u32(U.enc.y + 0.5) + i];
+  let xy = unpack2x16float(q.x);
+  return vec3f(xy, unpack2x16float(q.y).x);
+}
+fn catmull(p0: vec3f, p1: vec3f, p2: vec3f, p3: vec3f, f: f32) -> vec3f {
+  let f2 = f * f;
+  let f3 = f2 * f;
+  return 0.5 * (2.0 * p1 + (p2 - p0) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f2 + (3.0 * p1 - p0 - 3.0 * p2 + p3) * f3);
+}
 
 struct VO {
   @builtin(position) pos: vec4f,
@@ -110,6 +128,13 @@ const CORNER = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 
     pw = toWorld(g, vec3f(cs * a.y - sn * a.z, sn * a.y + cs * a.z, a.w));
   } else if (pop == 4) {
     pw = a.yzw;
+  } else if (pop == 6) {
+    let K = i32(U.enc.z + 0.5);
+    if (K < 2) { return o; }
+    let u = clamp(U.enc.x, 0.0, f32(K - 1));
+    let k1 = min(K - 2, i32(floor(u)));
+    let i = u32(a.y + 0.5);
+    pw = catmull(trk(max(k1 - 1, 0), i), trk(k1, i), trk(k1 + 1, i), trk(min(k1 + 2, K - 1), i), u - f32(k1));
   }
   if (bright <= 0.001) { return o; }
 
@@ -119,7 +144,8 @@ const CORNER = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 
   if (zc < 0.01) { return o; }
   let ndc = vec2f(dot(v, U.right.xyz) / (zc * U.right.w), dot(v, U.up.xyz) / (zc * U.up.w)) + U.off.xy;
   let pxAng = 2.0 * U.up.w / U.res.y;
-  let sig0 = max(0.75, U.res.y / 1300.0);
+  let dens = clamp(U.enc.w, 0.3, 1.0);
+  let sig0 = max(0.75, U.res.y / 1300.0) * mix(0.8, 1.0, dens);
   let tw = 1.0 + d.y * U.look.w * 0.5 * sin(U.extra.z * (1.7 + 1.3 * fract(b.w * 3.7)) + b.w * 7.0);
   var peak: f32;
   var sig: f32;
@@ -136,9 +162,16 @@ const CORNER = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 
     }
   } else {
     let dist = length(v);
-    let physPx = d.z / max(1e-4, dist * pxAng);
+    var physR = d.z;
+    if (pop == 6) {
+      // debris far from both hosts is sparse: a wider, fainter sprite (the
+      // same flux), so the tails read as a glow and not as speckle
+      let dm = min(length(pw - vec3f(G[0].rx.w, G[0].ry.w, G[0].rz.w)), length(pw - vec3f(G[1].rx.w, G[1].ry.w, G[1].rz.w)));
+      physR = max(physR, 0.03 * dm);
+    }
+    let physPx = physR / max(1e-4, dist * pxAng);
     sig = max(sig0 * d.x, physPx);
-    let flux = c.w * bright * U.look.z / (12.566 * dist * dist);
+    let flux = c.w * bright * U.look.z * mix(0.75, 1.0, dens) / (12.566 * dist * dist);
     peak = flux / (pxAng * pxAng * 6.2832 * sig * sig);
     peak = min(peak, U.misc.x * U.extra.y);
     var tau = 0.0;

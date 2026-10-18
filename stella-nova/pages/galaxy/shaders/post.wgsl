@@ -14,7 +14,7 @@
 struct Post {
   texel: vec4f,   // 1/w, 1/h of the source level; mix; -
   look: vec4f,    // exposure scale, bloom mix, auto key, auto rate
-  misc: vec4f,    // frame, -, vignette, bloom levels
+  misc: vec4f,    // frame, local tone compression, vignette, bloom levels
 }
 
 @group(0) @binding(0) var<uniform> P: Post;
@@ -100,6 +100,12 @@ fn toSrgb(c: vec3f) -> vec3f {
   var c = mix(st + vo, bl, P.look.y);
   let e = textureLoad(expoT, vec2i(0, 0), 0).r * P.look.x;
   c *= e;
+  // local tone compression: the wide blur is the local light level; where
+  // it is far above the key (a dense core), scale the pixel down. One
+  // factor for r, g and b keeps the colour; the blur is wide, so the core
+  // keeps its inner contrast (the dust lanes, the knots).
+  let Lloc = lum(bl) * e;
+  c *= min(1.0, (1.0 + P.misc.y * P.look.z) / (1.0 + P.misc.y * Lloc));
   // a little saturation back after the shoulder
   var m = aces(c);
   let y = lum(m);
