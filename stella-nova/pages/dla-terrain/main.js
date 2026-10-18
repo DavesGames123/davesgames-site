@@ -115,6 +115,7 @@ import { createUI, todRate } from './ui.js';
 import { stepAim } from './map-view.js';
 import { buildShotPlan, framing, shotLabel, shotTod, extractFn, SHOT_CODE, mulberry } from './saver.js';
 import { createBuildPlayer } from './build-player.js';
+import { createReveal } from './reveal.js';
 import { createBuildOverlay } from './render/build.js';
 import { plateBand } from '../../lib/saver-clear.js';
 import { rollGroup, rollWorld, encodeHash, decodeHash, createHistory, newSeed, VEG0, WATER0, todForElevation } from './world-state.js';
@@ -228,10 +229,15 @@ const player = createBuildPlayer({
 });
 app.player = player;
 app.world = world;   // for the console and the tests
+// REVEAL (reveal.js): a calm veil while a world loads, then a fade-in;
+// not in "Watch it build" and not in the saver
+const reveal = createReveal({ canvas, doc: document });
+app.reveal = reveal;
 app.setBuildMode = on => {
   app.buildMode = !!on;
   try { localStorage.setItem('dla-terrain-build', on ? '1' : '0'); } catch { /* private mode */ }
   if (on) {
+    reveal.show();
     // replay what is recorded (the terrain on screen), else make one
     if (player.rec.order.length) { player.start(); ui.buildShow(true); ui.buildSync(player.info()); }
     else if (booted) app.generate();
@@ -634,6 +640,7 @@ app.generate = () => {
   if (Number.isFinite(+o.latitude)) { app.latitude = clamp(Math.round(+o.latitude), -70, 70); ui.syncSky(); }
   if (tg) { const v = tg.begin({ n, worldSize: ws, heightScale: o.heightScale, seaLevel: 0 }); setTerrainAll(v); }
   player.begin();
+  reveal.begin({ build: player.active, saver: !!app.saverRun });
   if (player.active) ui.buildShow(true);
   else ui.setProgress({ stage: 'dla', label: 'Growing DLA ridges', frac: 0 });
   if (firstOrNewSize && !app.saverRun && !player.active) {
@@ -665,7 +672,9 @@ function onWorker(m) {
     player.record(m);
     if (!player.active) {
       ui.setProgress(m);
-      if (m.snapshot) pendingSnap = { snap: m.snapshot, stage: m.stage, label: m.label };
+      reveal.label(m.label, m.frac);
+      // REVEAL: under the veil the snapshots do not go to the GPU
+      if (m.snapshot && !reveal.hiding) pendingSnap = { snap: m.snapshot, stage: m.stage, label: m.label };
     }
     if (app.saverRun && m.stage !== app.saverRun.labelStage) { app.saverRun.labelStage = m.stage; saverLabel(); }
   } else if (m.type === 'done') {
@@ -842,6 +851,10 @@ function loop(now) {
   frameNo++;
   app.frames = frameNo;
   if (!saving) fg.tick(ms);
+  if (reveal.state.phase !== 'shown') {
+    const vm = reveal.hiding ? fg.modules.find(md => md.role === 'vegetation' && !md.failed && !md.off && md.stats) : null;
+    reveal.tick({ dt, drawn, terrainDone: !!(app.gen && !app.gen.running), modulesDone: !!loading.done, vegPending: vm ? (vm.stats().streamPending | 0) : 0 });
+  }
   if (frameNo % 3 === 0) ui.drawMap(cam);
   if (frameNo % 15 === 0) statusLine(st);
 }
@@ -1035,6 +1048,7 @@ function saverTick(dt) {
 }
 function saverEnter(opts = {}) {
   if (app.saverRun) saverExit();
+  reveal.show();
   const shell = typeof opts.label === 'function';
   const seed = (opts.seed >>> 0) || ((Math.random() * 2 ** 32) >>> 0) || 1;
   app.saverRun = {

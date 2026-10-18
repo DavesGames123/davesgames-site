@@ -182,7 +182,12 @@ if (app && app.fg) {
   ok(fbSky >= 25, 'the fallback sky draws every frame meanwhile', String(fbSky));
   ok(calls.passes > 0 && calls.draws > 0, 'render passes and draws reach the device', `${calls.passes} passes, ${calls.draws} draws`);
   ok(genMsgs >= 1, 'generate() goes to the worker before the modules load', String(genMsgs));
-  ok(app.tg && app.tg.stage === 'dla' && app.tg.cpuN === 32, 'the first DLA snapshot reaches the terrain textures meanwhile', app.tg && `${app.tg.stage} ${app.tg.cpuN}`);
+  // REVEAL (reveal.js, 2026-10-18, the user: "dla doesn't need to show
+  // everything as it loads"): the canvas waits under the veil, and the
+  // DLA snapshots do not go to the terrain textures meanwhile
+  const cv = G.document.getElementById('view');
+  ok(app.reveal && app.reveal.hiding && parseFloat(cv.style.opacity) === 0 && app.reveal.veil, 'the canvas waits under the loading veil while the world is made', app.reveal && `${app.reveal.state.phase} ${cv.style.opacity}`);
+  ok(app.tg && app.tg.stage !== 'dla', 'no DLA snapshot goes to the terrain textures under the veil', app.tg && `${app.tg.stage} ${app.tg.cpuN}`);
   const ll = win.document.getElementById('loadLine');
   ok(ll && !ll.hidden && /Loading/.test(ll.textContent), 'the load line shows while the modules load', ll && ll.textContent);
   // open the gate: the modules plug in, the assets are still held
