@@ -272,7 +272,8 @@ w.SN_NAV = [
     ] },
     { h: "Machine Learning", p: [
       ["4d-codebench", "4DCodeBench", "NEW"],
-      ["legged-rl", "Legged Robot Gym", "NEW"]
+      ["legged-rl", "Legged Robot Gym", "NEW"],
+      ["cnn-explainer", "CNN Explainer", "NEW"]
     ] }
   ] }
 ] },
