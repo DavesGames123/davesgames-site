@@ -19,6 +19,8 @@
 //    snTilt.attach({ camera, pivot: vec3 })
 //  WebGPU and custom-camera pages read the plain offsets once per frame:
 //    const { yaw, pitch } = snTilt.get();    // radians, 0 when off
+//  or turn the eye of their own lookAt (import { tiltEye } from this file):
+//    view = lookAt(tiltEye(eye, target, up), target, up);
 //
 //  HOW THE THREE.JS WRAP WORKS
 //    WebGLRenderer.render calls scene.onBeforeRender after it updates the
@@ -81,6 +83,7 @@
 //    setting .............. "export function readSetting"
 //    controller ........... "export function createTilt"
 //    three.js wrap ........ "export function installThree"
+//    custom cameras ....... "export function tiltEye"
 //    permission ........... "function askPermission"
 //    browser boot ......... "export function bootTilt"
 // ============================================================================
@@ -371,6 +374,41 @@ function tiltBefore(reg, renderer, scene, camera, target, A, B, Q1, Q2, AX) {
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 }
 
+// ------------------------------------------------ custom-camera pages ----
+// Turns eye round target: yaw round the camera up axis, pitch round its
+// right axis, as the three.js wrap does. up is the world up of the page.
+export function orbitEye(eye, target, yaw, pitch, up = [0, 1, 0]) {
+  let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
+  const fl = Math.hypot(fx, fy, fz);
+  if (!(fl > 0)) return [eye[0], eye[1], eye[2]];
+  fx /= fl; fy /= fl; fz /= fl;
+  let rx = fy * up[2] - fz * up[1], ry = fz * up[0] - fx * up[2], rz = fx * up[1] - fy * up[0];
+  const rl = Math.hypot(rx, ry, rz);
+  if (!(rl > 1e-9)) return [eye[0], eye[1], eye[2]];
+  rx /= rl; ry /= rl; rz /= rl;
+  const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
+  const rot = (v, k, a) => { // Rodrigues, unit axis k
+    const c = Math.cos(a), s = Math.sin(a), d = (k[0] * v[0] + k[1] * v[1] + k[2] * v[2]) * (1 - c);
+    return [v[0] * c + (k[1] * v[2] - k[2] * v[1]) * s + k[0] * d,
+      v[1] * c + (k[2] * v[0] - k[0] * v[2]) * s + k[1] * d,
+      v[2] * c + (k[0] * v[1] - k[1] * v[0]) * s + k[2] * d];
+  };
+  let v = [eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]];
+  v = rot(rot(v, [ux, uy, uz], yaw), [rx, ry, rz], pitch);
+  return [target[0] + v[0], target[1] + v[1], target[2] + v[2]];
+}
+
+// The eye with the current tilt, for a page that builds its own view
+// matrix: view = lookAt(tiltEye(eye, target, up), target, up). It gives
+// back the same eye when tilt is off, so page state never sees it.
+export function tiltEye(eye, target, up) {
+  const t = tilt;
+  if (!t) return eye;
+  const o = t.get();
+  if (Math.abs(o.yaw) < 1e-7 && Math.abs(o.pitch) < 1e-7) return eye;
+  return orbitEye(eye, target, o.yaw, o.pitch, up || [0, 1, 0]);
+}
+
 // ------------------------------------------------------------ permission ----
 // Asks once, from the first touchend or click, and only if no sensor event
 // came first. DOE = the DeviceOrientationEvent constructor.
@@ -459,5 +497,8 @@ export function bootTilt(win) {
   return ctl;
 }
 
-export const tilt = (typeof window !== 'undefined' && window.document) ? bootTilt(window) : null;
+function safeBoot() {
+  try { return (typeof window !== 'undefined' && window.document) ? bootTilt(window) : null; } catch (e) { return null; }
+}
+export const tilt = safeBoot();
 export default tilt;

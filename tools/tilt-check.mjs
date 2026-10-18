@@ -30,7 +30,7 @@ register('data:text/javascript,' + encodeURIComponent(
 
 const T = await import(pathToFileURL(path.join(SN, 'lib/tilt.js')).href);
 const { createCore, createTilt, installThree, askPermission, bootTilt, quatFromEuler,
-  screenQuat, relVector, shape, springStep, readSetting, TUNING } = T;
+  screenQuat, relVector, shape, springStep, readSetting, TUNING, orbitEye, tiltEye } = T;
 
 let pass = 0, fail = 0;
 function ok(cond, name, extra) {
@@ -398,6 +398,33 @@ for (const ver of ['0.139.2', '0.128.0']) {
       update() { this.object.lookAt(this.target); } }
     wrapSuite('r185 (lookAt stand-in)', THREE, Orbit);
   }
+}
+
+// ------------------------------------------- custom-camera eye ----
+{
+  const eye = [3, 2, 6], tgt = [0.5, 0.3, -0.2];
+  ok(tiltEye(eye, tgt, [0, 1, 0]) === eye, 'tiltEye with no browser gives the same eye');
+  const z = orbitEye(eye, tgt, 0, 0);
+  ok(z.every((v, i) => Math.abs(v - eye[i]) < 1e-12), 'orbitEye with 0 offset is the eye');
+  const e2 = orbitEye(eye, tgt, 3 * D, -2 * D);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  ok(Math.abs(dist(e2, tgt) - dist(eye, tgt)) < 1e-12, 'orbitEye keeps the distance');
+  const cosA = ((eye[0] - tgt[0]) * (e2[0] - tgt[0]) + (eye[1] - tgt[1]) * (e2[1] - tgt[1]) + (eye[2] - tgt[2]) * (e2[2] - tgt[2])) / dist(eye, tgt) ** 2;
+  const ang = Math.acos(Math.min(1, cosA)) / D;
+  ok(ang > 3 && ang < 3.7, 'orbitEye turns by the offset', ang);
+  // Same as the three.js wrap for the same yaw and pitch.
+  const THREE = await import(T160);
+  const cam = new THREE.PerspectiveCamera(); cam.position.fromArray(eye); cam.lookAt(new THREE.Vector3(...tgt)); cam.updateMatrixWorld();
+  const sc = new THREE.Scene();
+  const ctl = { get: () => ({ yaw: 3 * D, pitch: -2 * D }), attached: new Map([[cam, { camera: cam, pivot: new THREE.Vector3(...tgt) }]]) };
+  const keep = THREE.Scene.prototype.__snTilt.ctl; THREE.Scene.prototype.__snTilt.ctl = ctl;
+  sc.onBeforeRender({ domElement: { width: 1, height: 1 } }, sc, cam, null);
+  const p = [cam.matrixWorld.elements[12], cam.matrixWorld.elements[13], cam.matrixWorld.elements[14]];
+  sc.onAfterRender({}, sc, cam);
+  THREE.Scene.prototype.__snTilt.ctl = keep;
+  ok(dist(p, e2) < 1e-6, 'orbitEye matches the three.js wrap', dist(p, e2));
+  const zUp = orbitEye([0, -10, 4], [0, 0, 0], 2 * D, 1 * D, [0, 0, 1]);
+  ok(Math.abs(Math.hypot(...zUp) - Math.hypot(0, 10, 4)) < 1e-12 && Math.abs(zUp[0]) > 0.2, 'orbitEye with z up (map pages)', zUp);
 }
 
 // --------------------------------------------- page opt-in order ----
