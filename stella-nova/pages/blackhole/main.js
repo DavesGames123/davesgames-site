@@ -45,6 +45,7 @@
 //      pointer input ........ "let dragging"          mouse, touch, wheel
 //      keyboard ............. "keydown"               arrow-key orbit
 //      toggles .............. "function setBtn"       geodesic, RK4, disc, Doppler, bg
+//      Milky Way photo ...... "function loadSky"      lazy texture for mode 3
 //      disc constants ....... "const DISC_IN="        ISCO, outer edge, T0, clock
 //      resize ............... "RenderScale.create"    pixel budget + fps control
 //      frame loop ........... "function frame"        camera basis + uniforms
@@ -86,7 +87,7 @@ gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
 const U={};
 ['u_res','u_camPos','u_camFwd','u_camRight','u_camUp','u_focalLen','u_rs','u_discInner','u_discOuter',
  'u_geodesicDl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_bgMode',
- 'u_time','u_discTemp','u_doppler'
+ 'u_time','u_discTemp','u_doppler','u_sky','u_skyReady'
 ].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 
 // Physics constants and derived Schwarzschild radius. RS is computed from c, G,
@@ -223,13 +224,41 @@ window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',u
 window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);renderScale.reset();};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
 window.toggleDoppler=function(){useDoppler=!useDoppler;setBtn('btnDoppler',useDoppler);};
+// Milky Way photo for background mode 3: the ESO/S. Brunier panorama
+// (CC BY 4.0, CREDITS.md), 2048 x 1024, equirectangular. The texture loads
+// the first time mode 3 is picked, so the default star sky costs no
+// download. Until it is ready the shader shows the procedural nebula.
+// Texture unit 0, linear filter, no mip chain (the shader uses textureLod 0).
+const SKY_SRC='artwork/eso-milky-way-2048.jpg';
+let skyTex=null,skyReady=0;
+function loadSky(){
+  if(skyTex)return;
+  skyTex=gl.createTexture();
+  const img=new Image();
+  img.decoding='async';
+  img.onload=function(){
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,skyTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,img);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    skyReady=1;
+  };
+  img.onerror=function(){console.warn('Milky Way photo did not load; mode 3 keeps the nebula');};
+  img.src=new URL(SKY_SRC,document.baseURI).href;
+}
 // Background selector: set bgMode and highlight the active icon (0..4).
+// Mode 3 also shows the photo credit (CC BY 4.0 asks for it next to the image).
 window.setBg=function(m){
   bgMode=m;
+  if(m===3)loadSky();
+  document.getElementById('bgCredit').classList.toggle('on',m===3);
   document.getElementById('bgStars').classList.toggle('active',m===0);
   document.getElementById('bgGrid').classList.toggle('active',m===1);
   document.getElementById('bgUV').classList.toggle('active',m===2);
-  document.getElementById('bgNebula').classList.toggle('active',m===3);
+  document.getElementById('bgMilky').classList.toggle('active',m===3);
   document.getElementById('bgRings').classList.toggle('active',m===4);
 };
 // Equations panel: collapse or expand the KaTeX overlay, swapping the button glyph.
@@ -285,6 +314,7 @@ function frame(){
   gl.uniform1f(U.u_geodesicDl,dl);gl.uniform1f(U.u_maxSteps,steps);gl.uniform1f(U.u_escapeR,escR);
   gl.uniform1f(U.u_useGeodesic,useGeodesic?1:0);gl.uniform1f(U.u_useRK4,useRK4?1:0);
   gl.uniform1f(U.u_showDisc,showDisc?1:0);gl.uniform1f(U.u_bgMode,bgMode);
+  gl.uniform1i(U.u_sky,0);gl.uniform1f(U.u_skyReady,skyReady);
   // One draw call renders the whole frame through the fragment shader.
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   requestAnimationFrame(frame);

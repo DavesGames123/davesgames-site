@@ -78,7 +78,7 @@
   <span class="eq-collapsed-label">Equations</span>
 </div>
 
-<!-- Background selector: each icon calls setBg(n) to switch the sky sampled behind the hole (stars, grid, UV, nebula, rings). -->
+<!-- Background selector: each icon calls setBg(n) to switch the sky sampled behind the hole (stars, grid, UV, the Milky Way photo, rings). The Milky Way is a real photograph by Serge Brunier for ESO (CC BY 4.0, CREDITS.md); #bgCredit shows its credit while that mode is on. -->
 <div class="bg-bar" id="bgBar" style="display:none">
   <div class="bg-icon bg-stars active" id="bgStars" onclick="setBg(0)">
     <span class="ico">✦</span>
@@ -92,15 +92,17 @@
     <span class="ico">◧</span>
     <span class="lbl">UV</span>
   </div>
-  <div class="bg-icon bg-nebula" id="bgNebula" onclick="setBg(3)">
-    <span class="ico">☁</span>
-    <span class="lbl">Nebula</span>
+  <div class="bg-icon bg-milky" id="bgMilky" onclick="setBg(3)" title="Milky Way photograph: ESO/S. Brunier">
+    <span class="ico">✧</span>
+    <span class="lbl">Milky Way</span>
   </div>
   <div class="bg-icon bg-rings" id="bgRings" onclick="setBg(4)">
     <span class="ico">◎</span>
     <span class="lbl">Rings</span>
   </div>
 </div>
+
+<a class="bg-credit" id="bgCredit" href="https://www.eso.org/public/images/eso0932a/" target="_blank" rel="noopener">Milky Way: ESO/S. Brunier · <span>CC BY 4.0</span> · resized</a>
 
 <!-- Control bar: integrator toggles (Geodesic, RK4), disc and spin toggles, zoom slider, and the three quality presets. -->
 <div class="ctrl-wrap" id="ctrlWrap" style="display:none">

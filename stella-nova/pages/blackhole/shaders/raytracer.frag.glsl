@@ -37,6 +37,7 @@
 //     uniforms ............ "uniform vec2 u_res"     camera, disc, integrator
 //     hash / sky uv ....... "float hash21"           noise and direction->uv
 //     backgrounds ......... "vec3 sampleStars"       5 background modes
+//     Milky Way photo ..... "vec3 sampleMilkyWay"    ESO/S. Brunier panorama
 //     background switch ... "vec3 sampleBg"          pick a mode by u_bgMode
 //     disc emission ....... "vec3 shadeDisc"         T(r), shift g, turbulence
 //     blackbody colour .... "vec3 planckRGB"         B_lambda(T) / B_lambda(6500 K)
@@ -56,8 +57,14 @@ uniform vec3 u_camPos,u_camFwd,u_camRight,u_camUp;
 uniform float u_focalLen,u_rs,u_discInner,u_discOuter;
 uniform float u_geodesicDl,u_maxSteps,u_escapeR;
 uniform float u_useGeodesic,u_useRK4,u_showDisc;
-// Which background sphere to sample: 0 stars, 1 grid, 2 UV, 3 nebula, 4 rings.
+// Which background sphere to sample: 0 stars, 1 grid, 2 UV, 3 Milky Way
+// photo, 4 rings.
 uniform float u_bgMode;
+// The Milky Way panorama (ESO/S. Brunier, CC BY 4.0, see CREDITS.md) as an
+// equirectangular texture. main.js loads it when mode 3 is first picked and
+// sets u_skyReady to 1. Until then mode 3 shows the procedural nebula.
+uniform sampler2D u_sky;
+uniform float u_skyReady;
 // Disc emission: u_time is the clock in units of r_s/c (main.js scales it so
 // that the inner edge turns once in about 16 s), u_discTemp the peak emitted
 // temperature in K, u_doppler 1 = full shift g, 0 = gravitational shift only.
@@ -212,6 +219,14 @@ vec3 sampleNebula(vec3 dir){
   return clamp(col,vec3(0.0),vec3(1.0));
 }
 
+// Milky Way background: a real photograph, the ESO GigaGalaxy Zoom panorama
+// by Serge Brunier, in galactic coordinates with the galactic centre at the
+// image centre. bgUV gives the same equirectangular mapping. textureLod at
+// level 0 has no mip chain, so the u = 0 / 1 seam shows no derivative line.
+vec3 sampleMilkyWay(vec3 dir){
+  return textureLod(u_sky,bgUV(dir),0.0).rgb;
+}
+
 // Concentric-rings background: rings of the spectrum centred on the -z axis
 // with radial spokes, useful for reading the Einstein ring and photon-ring
 // structure the lensing produces.
@@ -250,7 +265,7 @@ vec3 sampleBg(vec3 dir){
   if(u_bgMode<0.5)return sampleStars(dir);
   if(u_bgMode<1.5)return sampleGridBg(dir);
   if(u_bgMode<2.5)return sampleUVMap(dir);
-  if(u_bgMode<3.5)return sampleNebula(dir);
+  if(u_bgMode<3.5)return u_skyReady>0.5?sampleMilkyWay(dir):sampleNebula(dir);
   return sampleRings(dir);
 }
 
