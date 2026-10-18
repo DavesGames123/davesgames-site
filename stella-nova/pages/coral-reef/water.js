@@ -34,6 +34,8 @@
 //    CPU caustic map ...... "export function causticField"
 //    warp and patches ..... "export function warpAt"
 //    the final pattern .... "export function causticPattern"
+//    the map round the eye  "export function causticView" (mips, fades,
+//                           "export function noiseOffsets", "export function wavePhases")
 //    plot fade ............ "export function fadeAt"
 //    autocorrelation ...... "export function autocorrPeak"
 // ============================================================================
@@ -175,6 +177,92 @@ export function causticPattern(F, x, z, t, strength = 1) {
   const w = warpAt(x, z, t);
   const e = Math.min(3.2, Math.log2(1 + lookup(F, x + w[0], z + w[1])));
   return 1 + (e - 1) * patchAt(x, z, t) * strength;
+}
+
+// ── the caustic map round the eye (shaders.js causticAtF) ───────────────────
+// The world offsets of the caustic noise for a map centre (cx, cz) in world
+// metres: for the warp (scale 0.11) and the patches (0.026), per octave the
+// integer part and the fraction of the octave origin. The GPU adds them to
+// small coordinates relative to the centre, so f32 keeps its precision and
+// an origin shift does not move the pattern. 32 floats (uCausN[8]).
+export function noiseOffsets(cx, cz, out = new Float64Array(32)) {
+  const c = 0.7986, sn = 0.6018;
+  [0.11, 0.026].forEach((sc, s) => {
+    let wx = cx * sc, wz = cz * sc;
+    for (let o = 0; o < 4; o++) {
+      const ix = Math.floor(wx), iz = Math.floor(wz), k = (s * 4 + o) * 4;
+      out[k] = ix; out[k + 1] = iz; out[k + 2] = wx - ix; out[k + 3] = wz - iz;
+      const nx = (c * wx - sn * wz) * 2.03 + 17.1, nz = (sn * wx + c * wz) * 2.03 + 3.7;
+      wx = nx; wz = nz;
+    }
+  });
+  return out;
+}
+// The wave phases for a map centred on (cx, cz) world: phase + k . centre,
+// mod 2 pi (the GPU pass then uses coordinates relative to the centre).
+export function wavePhases(waves, cx, cz) {
+  return waves.map(([kx, kz, a, ph]) => { const q = (ph + kx * cx + kz * cz) % TAU; return [kx, kz, a, q < 0 ? q + TAU : q]; });
+}
+const f32 = Math.fround;
+// fbm2 with an offset set (the GLSL fbm2o, in f32 steps). p: local.
+function fbm2o(px, pz, N, set) {
+  let s = 0, a = 0.5;
+  for (let o = 0; o < 4; o++) {
+    const k = (set * 4 + o) * 4;
+    const x = f32(px + N[k + 2]), z = f32(pz + N[k + 3]), fx = Math.floor(x), fz = Math.floor(z);
+    const ix = (fx + N[k]) | 0, iz = (fz + N[k + 1]) | 0, u = f32(x - fx), v = f32(z - fz);
+    const su = u * u * u * (u * (u * 6 - 15) + 10), sv = v * v * v * (v * (v * 6 - 15) + 10);
+    const A = hash2(ix, iz), B = hash2(ix + 1, iz), C = hash2(ix, iz + 1), D = hash2(ix + 1, iz + 1);
+    s += a * (A + (B - A) * su + (C - A) * sv + (A - B - C + D) * su * sv);
+    const nx = f32((0.7986 * px - 0.6018 * pz) * 2.03), nz = f32((0.6018 * px + 0.7986 * pz) * 2.03);
+    px = nx; pz = nz; a *= 0.5;
+  }
+  return s / 0.9375;
+}
+// The mips of a caustic field (box filter, as the GPU makes them).
+export function causticMips(F) {
+  const L = [F.E];
+  for (let r = F.res; r > 1; r >>= 1) {
+    const a = L[L.length - 1], h = r >> 1, b = new Float32Array(h * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < h; x++) b[y * h + x] = (a[2 * y * r + 2 * x] + a[2 * y * r + 2 * x + 1] + a[(2 * y + 1) * r + 2 * x] + a[(2 * y + 1) * r + 2 * x + 1]) / 4;
+    L.push(b);
+  }
+  F.mips = L;
+  return F;
+}
+function lookupLod(F, x, z, lod) {
+  const at = (l) => {
+    const E = F.mips[l], r = F.res >> l;
+    const u = Math.min(r - 1.001, Math.max(0, (x - F.x0) / F.size * r - 0.5)), v = Math.min(r - 1.001, Math.max(0, (z - F.z0) / F.size * r - 0.5));
+    if (r < 2) return E[0];
+    const iu = Math.floor(u), iv = Math.floor(v), fu = u - iu, fv = v - iv;
+    return E[iv * r + iu] * (1 - fu) * (1 - fv) + E[iv * r + iu + 1] * fu * (1 - fv) + E[(iv + 1) * r + iu] * (1 - fu) * fv + E[(iv + 1) * r + iu + 1] * fu * fv;
+  };
+  const l0 = Math.min(F.mips.length - 1, Math.floor(lod)), l1 = Math.min(F.mips.length - 1, l0 + 1), f = lod - Math.floor(lod);
+  return at(l0) * (1 - f) + at(l1) * f;
+}
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// The caustic factor of shaders.js causticAtF (the green tap), for a floor
+// point. F: causticField over the map square, with causticMips. view: {
+// origin [ox, oz], centre [cx, cz] (render space), x, y, z (render space),
+// fp (m, the pixel footprint), t, depth (m), strength }. lod: false for the
+// old look-up (mip 0, no fades) that the tests compare with.
+export function causticView(F, v, lod = true) {
+  const O = v.origin || [0, 0], C = v.centre;
+  const N = noiseOffsets(C[0] + O[0], C[1] + O[1]);
+  const qlx = f32(v.x - C[0]), qlz = f32(v.z - C[1]);
+  const edge = Math.max(Math.abs(qlx), Math.abs(qlz)) / (0.5 * F.size);
+  const L = lod ? Math.min(10, Math.max(0, Math.log2(Math.max(v.fp, 1e-5) / (F.size / F.res)))) : 0;
+  const k = lod ? (1 - sstep(0.62, 0.9, edge)) * (1 - sstep(1.5, 4, L)) * sstep(90, 20, v.depth ?? 10) : 1;
+  if (k <= 0) return 1;
+  const t = v.t || 0;
+  const wx = (fbm2o(f32(qlx * 0.11 + t * 0.021), f32(qlz * 0.11), N, 0) - 0.5) * 4.4;
+  const wz = (fbm2o(f32(qlx * 0.11 + 31.7), f32(qlz * 0.11 - t * 0.017), N, 0) - 0.5) * 4.4;
+  const pt = fbm2o(f32(qlx * 0.026 + t * 0.006), f32(qlz * 0.026 - t * 0.004 + 9.1), N, 1);
+  const s = Math.min(1, Math.max(0, (pt - 0.32) / 0.4)), pch = 0.12 + 0.88 * s * s * (3 - 2 * s);
+  // the field is in world metres: the map square is round C + O
+  const e = Math.min(3.2, Math.log2(1 + lookupLod(F, qlx + wx + C[0] + O[0], qlz + wz + C[1] + O[1], L)));
+  return 1 + (e - 1) * pch * (v.strength ?? 1) * k;
 }
 
 // 1 inside the plot, 0 past FADE_K R, smooth.

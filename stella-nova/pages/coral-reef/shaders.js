@@ -22,8 +22,13 @@
 //  Then the path to the eye: absorption, and in-scatter to a near-black
 //  blue fog. fadeAt() takes the plot to black between R and 1.3 R.
 //
-//  CAUSTICS. CAUSTIC_VS / CAUSTIC_FS fill a map over the plot with the
-//  mesh-area method (water.js has the CPU copy). causticAt() warps the
+//  CAUSTICS. CAUSTIC_VS / CAUSTIC_FS fill a map round the eye with the
+//  mesh-area method (water.js has the CPU copy), relative to the map
+//  centre (small numbers; the wave phases and the noise offsets uCausN
+//  carry the world position, so an origin shift does not move the
+//  pattern). The map has mips: causticAtF(w, footprint) takes the mip of
+//  the pixel footprint and fades the contrast to 1 at the map edge, at a
+//  large footprint and below about 20 m depth. causticAt() warps the
 //  look-up with fbm noise and scales the contrast by a large patch field,
 //  so the net breaks up into patches that come and go. NOISE2 is the same
 //  hash as water.js, so the tests measure what the screen shows.
@@ -139,11 +144,12 @@ float fbm2(vec2 p) {
 
 // Water, lights, caustics, shadow, fog. Needs NOISE2 before it.
 export const WATER = /* glsl */`
-uniform float uTime, uCaust, uR, uDown, uSpotN, uShadowBias, uCaustScale;
+uniform float uTime, uCaust, uR, uDown, uSpotN, uShadowBias, uCaustScale, uPixAng;
 uniform vec4 uShadowOn, uShadowTexel;
 uniform vec3 uFogK, uFogCol, uSunXZ;
 uniform vec4 uCaustBox;
 uniform vec2 uCur;
+uniform vec4 uCausN[8];
 uniform vec4 uSpotP[${MAX_SPOTS}], uSpotD[${MAX_SPOTS}], uSpotC[${MAX_SPOTS}];
 uniform mat4 uShadowM[${MAX_SPOTS}];
 uniform mediump sampler2D uCaustTex;
@@ -154,29 +160,58 @@ float fadeAt(vec3 w) {
   float s = clamp((length(w.xz) - uR) / (${(FADE_K - 1).toFixed(2)} * uR), 0.0, 1.0);
   return 1.0 - s * s * (3.0 - 2.0 * s);
 }
-float causticMap(vec2 q) {
-  vec2 uv = (q - uCaustBox.xy) / uCaustBox.z;
-  return texture(uCaustTex, uv).r * uCaustScale;
+// The caustic map is a square round the eye. uCaustBox: its centre (render
+// space), size (m), texel (m). The look-up is relative to the centre, so
+// the numbers stay small. lod: the mip level (the map has mips).
+float causticMap(vec2 ql, float lod) {
+  return textureLod(uCaustTex, ql / uCaustBox.z + 0.5, lod).r * uCaustScale;
 }
-// The caustic light factor (mean about 1): water.js causticPattern.
-vec3 causticAt(vec3 w) {
+// fbm2 of world coordinates with small numbers: p is relative to the map
+// centre, uCausN[s * 4 + o] holds the world offset of octave o (integer
+// part xy, fraction zw; water.js noiseOffsets, in double on the CPU).
+float vnoise2o(vec2 p, vec4 N) {
+  vec2 pp = p + N.zw, fl = floor(pp); ivec2 i = ivec2(fl) + ivec2(N.xy); vec2 f = pp - fl;
+  vec2 s = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = hash2(i), b = hash2(i + ivec2(1, 0)), c = hash2(i + ivec2(0, 1)), d = hash2(i + ivec2(1, 1));
+  return a + (b - a) * s.x + (c - a) * s.y + (a - b - c + d) * s.x * s.y;
+}
+float fbm2o(vec2 p, int set) {
+  float s = 0.0, a = 0.5;
+  for (int o = 0; o < 4; o++) {
+    s += a * vnoise2o(p, uCausN[set * 4 + o]);
+    p = vec2(0.7986 * p.x - 0.6018 * p.y, 0.6018 * p.x + 0.7986 * p.y) * 2.03;
+    a *= 0.5;
+  }
+  return s / 0.9375;
+}
+// The caustic light factor (mean about 1): water.js causticView. fp: the
+// footprint of one pixel (m). The contrast goes to 1 at the map edge, with
+// the footprint (mip level past 1.5) and with the depth of the point.
+vec3 causticAtF(vec3 w, float fp) {
   if (uCaust <= 0.0) return vec3(1.0);
-  vec2 q = w.xz + uSunXZ.xy * (w.y - uSunXZ.z);
+  vec2 ql = w.xz + uSunXZ.xy * (w.y - uSunXZ.z) - uCaustBox.xy;
+  float edge = max(abs(ql.x), abs(ql.y)) / (0.5 * uCaustBox.z);
+  float lod = clamp(log2(max(fp, 1e-5) / uCaustBox.w), 0.0, 10.0);
+  float k = (1.0 - smoothstep(0.62, 0.9, edge)) * (1.0 - smoothstep(1.5, 4.0, lod)) * smoothstep(90.0, 20.0, SURF_Y - w.y);
+  if (k <= 0.0) return vec3(1.0);
   float t = uTime;
-  vec2 wp = (vec2(fbm2(q * 0.11 + vec2(t * 0.021, 0.0)), fbm2(q * 0.11 + vec2(31.7, -t * 0.017))) - 0.5) * 4.4;
-  float pt = fbm2(q * 0.026 + vec2(t * 0.006, -t * 0.004 + 9.1));
+  vec2 wp = (vec2(fbm2o(ql * 0.11 + vec2(t * 0.021, 0.0), 0), fbm2o(ql * 0.11 + vec2(31.7, -t * 0.017), 0)) - 0.5) * 4.4;
+  float pt = fbm2o(ql * 0.026 + vec2(t * 0.006, -t * 0.004 + 9.1), 1);
   float s = clamp((pt - 0.32) / 0.4, 0.0, 1.0);
   float pch = 0.12 + 0.88 * s * s * (3.0 - 2.0 * s);
-  vec2 qq = q + wp, dq = vec2(0.045, 0.028);
-  vec3 e = min(log2(1.0 + vec3(causticMap(qq - dq), causticMap(qq), causticMap(qq + dq))), vec3(3.2));
-  float deep = clamp(0.55 + w.y * 0.035, 0.35, 1.0);
-  return 1.0 + (e - 1.0) * pch * uCaust * deep;
+  vec2 qq = ql + wp, dq = vec2(0.045, 0.028);
+  vec3 e = min(log2(1.0 + vec3(causticMap(qq - dq, lod), causticMap(qq, lod), causticMap(qq + dq, lod))), vec3(3.2));
+  return 1.0 + (e - 1.0) * pch * uCaust * k;
 }
 // The faint light from above: blue, less with depth; caustics on the faces that look up.
+vec3 causticAt(vec3 w) { return causticAtF(w, length(w - cameraPosition) * uPixAng); }
 vec3 downwell(vec3 w, vec3 n) {
   float up = clamp(n.y, 0.0, 1.0);
   vec3 sky = vec3(0.10, 0.30, 0.52) * uDown * exp(-(SURF_Y - w.y) * 0.03);
-  vec3 c = causticAt(w);
+  // the footprint grows on faces seen at a grazing angle
+  vec3 ev = cameraPosition - w;
+  float dist = length(ev);
+  vec3 c = causticAtF(w, dist * uPixAng / max(abs(dot(n, ev)) / max(dist, 1e-4), 0.15));
   return sky * (0.12 + 0.18 * (n.y * 0.5 + 0.5) + up * 0.9 * c * c);
 }
 float unpackD(vec4 v) { return dot(v, vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0)); }
@@ -279,14 +314,15 @@ vec3 hg(vec2 p) {
   return r;
 }
 void main() {
-  vec2 p = uBox.xy + (aUv * (1.0 + 2.0 * uBox.w) - uBox.w) * uBox.z;
+// p is relative to the map centre; uWave phases hold k . centre (world, CPU)
+  vec2 p = (aUv * (1.0 + 2.0 * uBox.w) - uBox.w - 0.5) * uBox.z;
   vec3 s = hg(p);
   vec3 N = normalize(vec3(-s.y, 1.0, -s.z));
   vec3 T = refract(uSunDir, N, 1.0 / 1.333), T0 = refract(uSunDir, vec3(0.0, 1.0, 0.0), 1.0 / 1.333);
   vec2 sh = T0.xz * (uD / -T0.y);
   vec2 Q = p + T.xz * ((uD + s.x) / -T.y) - sh;
   vOld = p; vNew = Q;
-  gl_Position = vec4((Q - uBox.xy) / uBox.z * 2.0 - 1.0, 0.0, 1.0);
+  gl_Position = vec4(Q / uBox.z * 2.0, 0.0, 1.0);
 }`;
 export const CAUSTIC_FS = /* glsl */`
 precision highp float;

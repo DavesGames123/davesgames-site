@@ -73,7 +73,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SH from './shaders.js';
-import { waveSpectrum, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
+import { waveSpectrum, wavePhases, noiseOffsets, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
 import { blueNoise, VOL_K } from './volume.js';
@@ -91,14 +91,20 @@ const SPECIES_CODE = SKIN_CODE;
 export const LAMP_K = 0.004;
 
 // ── caustic pass ────────────────────────────────────────────────────────────
-// One grid of rays over the plot square and a margin (no tile, no repeat).
-function makeCaustics(renderer, U, coarse, R, cfg) {
+// One grid of rays over the map square and a margin (no tile, no repeat).
+// The pass works relative to the map centre: the wave phases and the noise
+// offsets (uCausN) carry the world centre (render centre + origin, in
+// double), so the pattern stays on the world after an origin shift. The
+// map has mips (causticAtF takes the mip of the pixel footprint). The new
+// square goes to the uniforms only when the map is drawn for it (coarse
+// devices draw the map every other frame).
+function makeCaustics(renderer, U, coarse, R, cfg, originOf = () => [0, 0]) {
   const RES = cfg && cfg.res ? cfg.res : coarse ? 512 : 1024;
   const half = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
   const rt = new THREE.WebGLRenderTarget(RES, RES, {
     type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat,
-    wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
-    depthBuffer: false, stencilBuffer: false,
+    wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+    generateMipmaps: true, depthBuffer: false, stencilBuffer: false,
   });
   const G = cfg && cfg.grid ? cfg.grid : coarse ? 200 : 360;
   const uv = new Float32Array((G + 1) * (G + 1) * 2), idx = new Uint32Array(G * G * 6);
@@ -119,31 +125,35 @@ function makeCaustics(renderer, U, coarse, R, cfg) {
   const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false;
   const sc = new THREE.Scene(); sc.add(mesh);
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  function setSeed(seed) { waveSpectrum(seed).forEach((w, i) => mat.uniforms.uWave.value[i].set(w[0], w[1], w[2], w[3])); }
+  let waves = waveSpectrum(1);
+  // the square of the next map: centre (render space) and size
+  const want = { cx: 0, cz: 0, size: 96 };
+  const NO = new Float64Array(32);
+  function apply() {
+    const O = originOf(), wx = want.cx + O[0], wz = want.cz + O[1];
+    wavePhases(waves, wx, wz).forEach((w, i) => mat.uniforms.uWave.value[i].set(w[0], w[1], w[2], w[3]));
+    noiseOffsets(wx, wz, NO);
+    for (let i = 0; i < 8; i++) U.uCausN.value[i].set(NO[i * 4], NO[i * 4 + 1], NO[i * 4 + 2], NO[i * 4 + 3]);
+    box.set(0, 0, want.size, 0.06);
+    U.uCaustBox.value.set(want.cx, want.cz, want.size, want.size / RES);
+  }
+  function setSeed(seed) { waves = waveSpectrum(seed); apply(); }
   // The map square covers the plot fade; the grid has a 6% margin each side.
-  function setPlot(r) {
-    const size = 2 * FADE_K * r + 8;
-    box.set(-size / 2, -size / 2, size, 0.06);
-    U.uCaustBox.value.set(-size / 2, -size / 2, size, 0);
-  }
+  function setPlot(r) { want.cx = 0; want.cz = 0; want.size = 2 * FADE_K * r + 8; apply(); }
   // The infinite world (CONTRACT-V4.md): a square of `size` m round the eye
-  // (render space). The rays start at absolute positions, so the pattern
-  // at a point does not change when the square moves; the centre snaps to
-  // 4 m steps.
-  function setCentre(x, z, size = 96) {
-    const cx = Math.round(x / 4) * 4, cz = Math.round(z / 4) * 4;
-    box.set(cx - size / 2, cz - size / 2, size, 0.06);
-    U.uCaustBox.value.set(cx - size / 2, cz - size / 2, size, 0);
-  }
+  // (render space); the centre snaps to 4 m steps. It goes to the uniforms
+  // at the next map render.
+  function setCentre(x, z, size = 96) { want.cx = Math.round(x / 4) * 4; want.cz = Math.round(z / 4) * 4; want.size = size; }
   setSeed(1); setPlot(R);
   U.uCaustTex.value = rt.texture;
   U.uCaustScale.value = half ? 1 : 4;
   const T0 = refractY(mat.uniforms.uSunDir.value);
   U.uSunXZ.value.set(T0[0] / -T0[1], T0[2] / -T0[1], 0);
   return {
-    rt, half, setSeed, setPlot, setCentre,
+    rt, half, setSeed, setPlot, setCentre, want,
     render(t) {
       mat.uniforms.uT.value = t;
+      apply();
       const prev = renderer.getRenderTarget();
       renderer.setRenderTarget(rt);
       renderer.setClearColor(0x000000, 0); renderer.clear(true, false, false);
@@ -253,6 +263,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     uFogK: { value: new THREE.Vector3(0.07, 0.04, 0.03) }, uFogCol: { value: new THREE.Vector3(0.0016, 0.0062, 0.0105) },
     uSunXZ: { value: new THREE.Vector3() }, uCaustBox: { value: new THREE.Vector4() }, uCaustTex: { value: null }, uCaustScale: { value: 1 },
     uCur: { value: new THREE.Vector2(1, 0) },
+    uCausN: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uPixAng: { value: 1e-3 },
     uSpotN: { value: 0 }, uSpotP: { value: [v4(), v4(), v4(), v4()] }, uSpotD: { value: [v4(), v4(), v4(), v4()] }, uSpotC: { value: [v4(), v4(), v4(), v4()] },
     uShadowM: { value: Array.from({ length: SH.MAX_SPOTS }, () => new THREE.Matrix4()) }, uShadowOn: { value: new THREE.Vector4() }, uShadowBias: { value: -0.0006 }, uShadowTexel: { value: new THREE.Vector4(1 / 2048, 1 / 2048, 1 / 2048, 1 / 2048) },
     uShadow0: { value: null }, uShadow1: { value: null }, uShadow2: { value: null }, uShadow3: { value: null },
@@ -261,10 +272,12 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   };
   const waterU = () => {
     const o = {};
-    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
+    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCausN', 'uPixAng', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
     return o;
   };
-  const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic);
+  let W3o = [0, 0];          // the floating origin (setOrigin) for the caustic pass
+  const PIXV = new THREE.Vector2();
+  const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic, () => W3o);
 
   // ── the water: fog colour, a dim Snell window above ─────────────────────
   // haze.js: the dome follows the camera that draws it (the main view and
@@ -760,7 +773,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     U.uR.value = on ? 1e7 : R;               // no plot fade: the fog takes the far world
     if (!on) caus.setPlot(R);
   }
-  function setOrigin(ox, oz) { W3.origin = [ox, oz]; worldRoot.position.set(-ox, 0, -oz); worldRoot.updateMatrixWorld(true); snowFx.setOrigin(ox, 0, oz); }
+  function setOrigin(ox, oz) { W3.origin = [ox, oz]; W3o = W3.origin; caus.force = true; worldRoot.position.set(-ox, 0, -oz); worldRoot.updateMatrixWorld(true); snowFx.setOrigin(ox, 0, oz); }
   function worldGeo(m, extra) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', attr(m.positions, 3));
@@ -886,7 +899,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     else camera.clearViewOffset();
     uploadParticles(nowMs);
     U.uCaust.value = opts.caustics ? Math.max(0.0001, U.uCaust.value) : 0;
-    if (opts.caustics && (!coarse || (frameN & 1) === 0)) caus.render(U.uTime.value);
+    if (opts.caustics && (!coarse || (frameN & 1) === 0 || caus.force)) { caus.force = false; caus.render(U.uTime.value); }
+    // one pixel of the frame in radians: the caustic footprint (causticAtF)
+    U.uPixAng.value = 2 * Math.tan(camera.fov * Math.PI / 360) / Math.max(1, renderer.getDrawingBufferSize ? renderer.getDrawingBufferSize(PIXV).y : h);
     snow.visible = opts.snow;
     scene.updateMatrixWorld();
     // the snow: the current (a slow share of the page current), the depth

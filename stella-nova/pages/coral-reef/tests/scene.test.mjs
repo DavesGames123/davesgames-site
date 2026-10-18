@@ -30,7 +30,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { waveSpectrum, causticField, causticPattern, autocorrPeak, fadeAt, FADE_K, surfaceAt, N_WAVES } from '../water.js';
+import { waveSpectrum, causticField, causticPattern, autocorrPeak, fadeAt, FADE_K, surfaceAt, N_WAVES, causticMips, causticView, warpAt } from '../water.js';
 
 let pass = 0, fail = 0;
 export function ok(cond, name, info = '') {
@@ -96,6 +96,59 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
     const W = waveSpectrum(9); let mx = 0;
     for (let i = 0; i < 400; i++) { const s = surfaceAt(W, i * 0.37, i * 0.91, i * 0.1); mx = Math.max(mx, Math.hypot(s[1], s[2])); }
     ok(mx < 0.6, 'caustics: the wave slope stays under 0.6', f3(mx));
+  }
+  // The user said (2026-10-18): "the caustics in the water seem to be
+  // glitching at a distance". The map is a 96 m square round the eye: past
+  // its edge the old look-up clamped to the edge texels (streaks), it had
+  // no mips (far texels alias), and the noise used render coordinates (an
+  // origin shift moved the pattern). causticView is the CPU copy of the new
+  // shaders.js causticAtF: a floor ray out to the fog distance.
+  {
+    const W = waveSpectrum(5), size = 96, eye = [3000.3, 46, -2047.6], floorY = 43, t = 7;
+    const O1 = [2048, -2048], O2 = [3072, -2048];
+    const cen = O => [Math.round((eye[0] - O[0]) / 4) * 4, Math.round((eye[2] - O[1]) / 4) * 4];
+    const C1 = cen(O1), wc = [C1[0] + O1[0], C1[1] + O1[1]];
+    const F = causticMips(causticField({ waves: W, t, x0: wc[0] - size / 2, z0: wc[1] - size / 2, size, res: 1024, sub: 1 }));
+    const pix = 2 * Math.tan(25 * Math.PI / 180) / 1080, dir = [0.6, 0.8], h = eye[1] - floorY;
+    const at = (r, O, lod = true) => {
+      const d = Math.hypot(r, h), fp = d * pix / Math.max(h / d, 0.15);
+      return causticView(F, { origin: O, centre: cen(O), x: eye[0] + dir[0] * r - O[0], z: eye[2] + dir[1] * r - O[1], fp, t, depth: 55 - floorY }, lod);
+    };
+    // continuity along the ray, fine steps (0.02 m) to 150 m
+    let jump = 0, jumpAt = 0, past = 0, prev = at(1, O1);
+    for (let r = 1.02; r < 150; r += 0.02) { const v = at(r, O1); if (Math.abs(v - prev) > jump) { jump = Math.abs(v - prev); jumpAt = r; } if (r > 62) past = Math.max(past, Math.abs(v - 1)); prev = v; }
+    console.log(`caustics far: largest step ${f3(jump)} at ${jumpAt.toFixed(1)} m on a 0.02 m ray step; past the map |factor - 1| <= ${past}`);
+    ok(jump < 0.2 && past === 0, 'caustics far: the factor along a ray to the fog is continuous, no box edge (exactly 1 past the map)', `${f3(jump)} ${past}`);
+    // high-frequency energy: the step from one screen pixel to the next,
+    // and the alias error: a pixel against the mean of 16 old look-ups
+    // over its footprint (the true filtered value)
+    const hf = (lod) => {
+      const B = [2, 10, 25, 40, 60], E = B.slice(1).map(() => [0, 0, 0]);
+      let r = 2, pv = at(r, O1, lod);
+      while (r < 60) {
+        const d = Math.hypot(r, h), fp = d * pix / Math.max(h / d, 0.15);
+        r += fp; const v = at(r, O1, lod), b = r < 10 ? 0 : r < 25 ? 1 : r < 40 ? 2 : 3;
+        let ref = 0; if (b === 2) { for (let j = 0; j < 16; j++) ref += at(r + ((j + 0.5) / 16 - 0.5) * fp, O1, false); ref /= 16; }
+        E[b][0] += (v - pv) ** 2; E[b][1]++; E[b][2] += (v - ref) ** 2; pv = v;
+      }
+      return { hf: E.map(([e, n]) => e / Math.max(1, n)), alias: E[2][2] / E[2][1] };
+    };
+    const nw = hf(true), od = hf(false);
+    console.log(`caustics far: pixel-to-pixel energy at 2-10, 10-25, 25-40, 40-60 m: new ${nw.hf.map(f3).join(' ')}, old look-up ${od.hf.map(f3).join(' ')}; alias error 25-40 m new ${nw.alias.toExponential(2)} old ${od.alias.toExponential(2)}`);
+    ok(nw.hf[3] < nw.hf[2] * 0.5 && nw.hf[3] < od.hf[3] * 0.2, 'caustics far: the high-frequency energy falls off at a distance, the old look-up keeps it', `${nw.hf.map(f3)} vs ${od.hf.map(f3)}`);
+    // inside the square the footprint stays under about 3 texels (desktop),
+    // so the mips change little there: the error stays small (rms < 3%)
+    ok(nw.alias < 1e-3, 'caustics far: the pixel value stays near the filtered value (rms alias error under 3%)', `${nw.alias} (old ${od.alias})`);
+    // the same world points under two floating origins
+    let dmax = 0, oldD = 0;
+    for (let i = 0; i < 300; i++) {
+      const r = 1 + (i * 0.61803) % 1 * 28, v1 = at(r, O1), v2 = at(r, O2);
+      dmax = Math.max(dmax, Math.abs(v1 - v2));
+      const x1 = eye[0] + dir[0] * r - O1[0], x2 = eye[0] + dir[0] * r - O2[0], z = eye[2] + dir[1] * r - O1[1];
+      oldD = Math.max(oldD, Math.abs(warpAt(x1, z, t)[0] - warpAt(x2, z, t)[0]));
+    }
+    console.log(`caustics far: across a 1024 m origin shift the factor moves ${dmax.toExponential(1)} (the old render-space warp moved ${f3(oldD)} m)`);
+    ok(dmax < 2e-3 && oldD > 0.1, 'caustics far: the pattern is stable across an origin shift', `${dmax} ${oldD}`);
   }
   console.log(`caustics: ${Date.now() - t0} ms`);
 }
