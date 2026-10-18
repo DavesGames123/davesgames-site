@@ -485,7 +485,7 @@ fn macroErosion(p: vec3f, down: vec2f, steep: f32, fp: f32) -> vec3f {
     let s = -(n.x / r);
     g += vec2f(n.y, n.w) * (s * amp * fade);
     // the relief itself: -|n| is high on the ribs, low in the gullies
-    let wt = select(0.6, 1.0, i == 0) * fade;
+    let wt = select(select(0.25, 0.7, i == 1), 1.0, i == 0) * fade;
     hv += (0.42 - r) * wt;
     hw += wt;
     wl *= 0.44; amp *= 0.38;
@@ -792,7 +792,7 @@ fn layerRock(p: vec3f, fp: f32, cliff: f32, moist: f32, region: vec3f, down: vec
   // hue by rock body (0.5..2 km): warm iron-stained faces, cool grey-blue
   // gneiss, so a range is not one grey
   let body = fbm2((p.xz * 0.0011) + vec2f(p.y * 0.0004, 3.1), 3);
-  c *= mix(vec3f(1.12, 0.99, 0.84), vec3f(0.90, 0.97, 1.06), smoothstep(-0.35, 0.35, body));
+  c *= mix(vec3f(1.22, 1.0, 0.78), vec3f(0.86, 0.96, 1.10), smoothstep(-0.35, 0.35, body));
   // tone at 50..400 m: weathered brown patches and fresh grey rock, so a
   // face reads from the air
   let tone = fbm2((p.xz * 0.006) + vec2f(p.y * 0.004, 7.7), 3);
@@ -1347,7 +1347,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   let desertish = clamp(bw.w1.x * (1.0 - smoothstep(0.0, 3.0, wdepth)) * 0.8, 0.0, 1.0);
   var region = vec3f(0.0);
   // a dry world with LIB strata is a sandstone plateau country
-  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25) + (U.geo.w * (1.0 - smoothstep(0.25, 0.55, moist)) * select(0.0, 0.9, U.surf.x > 0.5)), 0.0, 1.0);
+  region.y = clamp(desertish + (bw.w0.z * smoothstep(0.2, 0.6, rn) * 0.25) + (U.geo.w * (1.0 - smoothstep(0.25, 0.55, moist)) * select(0.0, 0.55, U.surf.x > 0.5)), 0.0, 1.0);
   region.z = clamp(smoothstep(0.3, 0.7, -rn), 0.0, 1.0) * (1.0 - region.y) * 0.8;
   region.x = max(1.0 - region.y - region.z, 0.0);
   let down = normalize(nGeo.xz + vec2f(1e-5, 0.0));
@@ -1458,7 +1458,8 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // northern hemisphere, U.geo2.y = -1 flips it), -1 on sunny faces
   let aspect = clamp(-nGeo.z * 2.0, -1.0, 1.0);
   let shade = aspect * select(1.0, U.geo2.y, hasSurf);
-  let snowN = fbm2(xz * 0.004, 4) * 160.0;
+  // the snow edge is ragged at every scale: 250 m tongues, 30 m patches
+  let snowN = (fbm2(xz * 0.004, 4) * 160.0) + (fbm2((xz * 0.03) + 5.3, 3) * 70.0);
   // snow holds on low slopes, in shade and in the wind's lee (drift); steep
   // faces shed it, scoured crests stay bare
   let drift = clamp(sf.b.x + (couloir * 0.3) + (gully * 0.35) - (clamp(mE.z, 0.0, 1.0) * 0.2), 0.0, 1.0);
@@ -1552,8 +1553,10 @@ fn fs(v: VOut) -> @location(0) vec4f {
         case 2u: { tgtP = sg; tgtA = seasonGrass(vec3f(0.20, 0.155, 0.075), G.weather2.w, 0.0); rmin = 0.8; }
         case 3u: { tgtP = bw.litter; tgtA = vec3f(0.10, 0.075, 0.05); rmin = 0.8; }
         case 4u: {
-          tgtP = mix(mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y), parent * 1.15, region.y * 0.45);
-          tgtA = mix(vec3f(0.40, 0.30, 0.19), parent * 1.05, region.y * 0.5);
+          // sand is sorted and bleached: a little of the parent rock hue
+          let pSand = mix(vec3f(dot(parent, vec3f(0.33))), parent, 0.6) * 1.15;
+          tgtP = mix(mix(vec3f(0.46, 0.39, 0.28), vec3f(0.50, 0.33, 0.19), region.y), pSand, region.y * 0.25);
+          tgtA = mix(vec3f(0.40, 0.30, 0.19), pSand, region.y * 0.3);
           rmin = 0.75;
         }
         case 5u: { tgtP = vec3f(0.82, 0.85, 0.90); rmin = 0.35; }
@@ -1624,7 +1627,10 @@ fn fs(v: VOut) -> @location(0) vec4f {
 
   // ---- normal: geometry + material bump (surface gradient)
   let bumpFade = 1.0 - smoothstep(30.0, 250.0, dist);
-  let bumpK = mix(0.035, 0.07, q) * bumpFade;
+  // rock relief (joints, block tilts, ledges) is metres deep: a stronger
+  // bump that reaches out to ~900 m on bare rock
+  let rockRel = clamp(wa[0] + wa[1], 0.0, 1.0) * mix(0.12, 0.26, q) * (1.0 - smoothstep(150.0, 900.0, dist));
+  let bumpK = (mix(0.035, 0.07, q) * bumpFade) + rockRel;
   let gt = hg.yzw - (dot(hg.yzw, nGeo) * nGeo);
   var n = normalize(nGeo - (gt * bumpK) + tnS);
   // the macro rock scan on bare rock (high quality, textures on)
@@ -1638,7 +1644,8 @@ fn fs(v: VOut) -> @location(0) vec4f {
 
   // ---- snow on top (height blended: crevices fill first)
   let snowM = layerSnow(p, fp);
-  let snowCov = clamp((snow * 1.7) - (hg.x * 0.7), 0.0, 1.0);
+  // rock ribs poke through, gullies fill first
+  let snowCov = clamp((snow * 1.7) - (hg.x * 0.7) - (clamp(mE.z, 0.0, 1.0) * 0.5) + (gully * 0.3), 0.0, 1.0);
   let snowF = smoothstep(0.05, 0.6, snowCov);
   alb = mix(alb, snowM.alb, snowF);
   rough = mix(rough, snowM.rough, snowF);
@@ -1695,7 +1702,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
   // ---- lighting
   // cavity: the gullies of the macro relief and the drainage couloirs see
   // less sky and less low sun; the ribs a little more
-  let cav = clamp(max(gully * 0.8, couloir * 0.5), 0.0, 1.0) * (1.0 - snowF * 0.5);
+  let cav = clamp(max(gully * 0.8, couloir * 0.5), 0.0, 1.0) * (1.0 - snowF * 0.5) * smoothstep(40.0, 400.0, dist);
   let L = normalize(G.sunDir.xyz);
   // SKY: sunColor.rgb is the full sun irradiance at the ground (sunDir.w
   // repeats its scale, so it is not applied again)
