@@ -153,7 +153,7 @@ function runFrames(f, n = 6) {
   ok(L.slice(0, 3).every(l => l.shadow.map) && on.x === 1 && on.y === 1 && on.z === 1 && on.w === 0, 'shadow: three made 3 maps and uShadowOn is 1, 1, 1, 0', `${on.x},${on.y},${on.z},${on.w}`);
   ok([0, 1, 2].every(i => S.U['uShadow' + i].value === L[i].shadow.map.texture && S.U.uShadowM.value[i].equals(L[i].shadow.matrix)), 'shadow: uShadow0..2 and uShadowM[0..2] are the maps and matrices of the 3 main lamps');
   ok(Math.abs(S.U.uShadowTexel.value.x - 1 / 2048) < 1e-9 && Math.abs(S.U.uShadowTexel.value.y - 1 / 1024) < 1e-9, 'shadow: uShadowTexel per lamp');
-  ok(SH.WATER.includes('R *= shadowAt(i, w, n);') && SH.VOL_FS.includes('R *= shadowTap(i, p);') && !/i == 0\) R \*= shadow/.test(SH.WATER + SH.VOL_FS), 'shadow: the surfaces and the volume shafts use the map of every spot, not only spot 0');
+  ok(SH.WATER.includes('R *= shadowAt(i, w, n);') && SH.VOL_FS.includes('R *= shadowTap(i, pj);') && !/i == 0\) R \*= shadow/.test(SH.WATER + SH.VOL_FS), 'shadow: the surfaces and the volume shafts use the map of every spot, not only spot 0');
   // the governor: the other ROVs lose their maps first, then the lead
   S.setLoads({ shadowExtra: 0, polypShadow: false });
   S.render(1 / 60, 64);
@@ -175,7 +175,7 @@ function runFrames(f, n = 6) {
   const progs = [
     ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['coral-depth', SH.CORAL_DEPTH_VS, SH.DEPTH_FS, false], ['polyp-depth', SH.POLYP_DEPTH_VS, SH.DEPTH_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
     ['sand', SH.SURF_VS, SH.SAND_FS, false], ['snow', SH.SNOW_VS, SH.SNOW_FS, false], ['caustic', SH.CAUSTIC_VS, SH.CAUSTIC_FS, true],
-    ['volume', SH.FULL_VS, SH.VOL_FS, true], ['composite', SH.FULL_VS, SH.COMP_FS, true], ['luminance', SH.FULL_VS, SH.LUM_FS, true],
+    ['volume', SH.FULL_VS, SH.VOL_FS, true], ['volume-history', SH.FULL_VS, SH.VOL_TAA_FS, true], ['composite', SH.FULL_VS, SH.COMP_FS, true], ['luminance', SH.FULL_VS, SH.LUM_FS, true],
   ];
   const samplers = src => new Set([...src.matchAll(/uniform\s+(?:(?:highp|mediump|lowp)\s+)?sampler2D\s+([^;]+);/g)].flatMap(m => m[1].split(',').map(x => x.trim())));
   // uniform vectors: float/vec = 1 slot, mat4 = 4, arrays x n (a high estimate: no packing)
@@ -199,9 +199,12 @@ function runFrames(f, n = 6) {
     const fsInt = /\buint\b|\bivec[234]\b|>>|<</.test(fs);
     if (raw && fsInt) ok(/precision highp int;/.test(fs), `safari: raw ${name} fragment shader with int maths declares highp int`);
     if (raw) ok(/precision highp float;/.test(vs) && /precision highp float;/.test(fs), `safari: raw ${name} declares highp float in both stages`);
-    // texelFetch only on the particle textures (RGBA32F, NEAREST: no filtering needed)
+    // texelFetch only on the particle textures (RGBA32F, NEAREST: no
+    // filtering needed), the blue noise (RGBA8, NEAREST) and the volume
+    // history in the bilateral upsample (texelFetch reads one texel, with
+    // no filter, so the filter of the target does not matter)
     const tf = [...(vs + fs).matchAll(/texelFetch\((\w+)/g)].map(m => m[1]);
-    ok(tf.every(t => t === 'uPartA' || t === 'uPartB' || t === 'uPartC'), `safari: ${name} texelFetch only on uPartA / uPartB / uPartC`, tf.join());
+    ok(tf.every(t => ['uPartA', 'uPartB', 'uPartC', 'uBlue', 'uVol'].includes(t)), `safari: ${name} texelFetch only on uPartA / uPartB / uPartC / uBlue / uVol`, tf.join());
     rows.push(`${name} ${all.size} samplers, ${slots(fs)} fs vectors, ${loops.length} loops`);
   }
   const sc = fs.readFileSync(new URL('../scene.js', import.meta.url), 'utf8');

@@ -73,13 +73,13 @@ export const MB = 1048576;
 export const PROFILES = {
   desktop: {
     id: 'desktop', label: 'Desktop', budgetMB: 700, reef: 'mid', reefMax: 'desktop',
-    cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, shadowExtra: 1024, polypShadow: true, vol: { scale: 0.5, steps: 30 },
+    cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, shadowExtra: 1024, polypShadow: true, vol: { scale: 0.42, steps: 30 },
     dprCap: 2, maxPx: 6.0e6, caustic: { res: 1024, grid: 360 }, snow: 3000, polypDraw: 160000,
     rovs: 3, feed: { w: 320, h: 256, fps: 30 }, stagger: { rovMs: 300, reefMs: 900 }, frameMs: 1000 / 50,
   },
   'laptop-low': {
     id: 'laptop-low', label: 'Laptop', budgetMB: 450, reef: 'phone', reefMax: 'mid',
-    cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.4, steps: 20 },
+    cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.36, steps: 20 },
     dprCap: 1.5, maxPx: 3.0e6, caustic: { res: 512, grid: 240 }, snow: 1800, polypDraw: 80000,
     rovs: 3, feed: { w: 256, h: 204, fps: 20 }, stagger: { rovMs: 500, reefMs: 1500 }, frameMs: 1000 / 40,
   },

@@ -22,9 +22,14 @@
 //                   waves, CAUSTIC_VS / CAUSTIC_FS), over the plot
 //    2. scene ..... into a float target with a depth texture (linear
 //                   light); three renders the lamp shadow maps first
-//    3. volume .... VOL_FS at half size: the lamp cones, the shadow
-//                   shafts of each mapped lamp and the downwell shafts
-//    4. frame ..... COMP_FS: scene + volume, ACES, vignette, grain, sRGB
+//    3. volume .... VOL_FS at vol.scale: the lamp cones, the shadow
+//                   shafts of each mapped lamp and the downwell shafts,
+//                   blue-noise jitter (volume.js has the plan)
+//    3b. history .. VOL_TAA_FS: reprojection with the last view-
+//                   projection, neighbourhood clip, two ping-pong targets
+//    4. frame ..... COMP_FS: scene + volume (joint bilateral upsample
+//                   with the full-res depth), ACES, vignette, grain,
+//                   dither, sRGB
 //    5. exposure .. every 12 frames LUM_FS fills a 32 x 32 log-luminance
 //                   target; gpu-safe.js exposureFrom sets uExposure
 //  With no float target (old phones) the scene goes straight to the
@@ -69,6 +74,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SH from './shaders.js';
 import { waveSpectrum, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
+import { blueNoise, VOL_K } from './volume.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
@@ -603,18 +609,34 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const depthTex = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
     const rtScene = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: depthTex, depthBuffer: true, stencilBuffer: false });
     const rtVol = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+    // the history of the volume: two targets, read one, write the other
+    const rtHist = [0, 1].map(() => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter }));
+    // 64 x 64 blue noise (volume.js blueNoise, made once: about 40 ms)
+    const bn = blueNoise(64), bnData = new Uint8Array(64 * 64 * 4);
+    for (let i = 0; i < bn.length; i++) bnData[i * 4] = bnData[i * 4 + 1] = bnData[i * 4 + 2] = bnData[i * 4 + 3] = bn[i];
+    const blueTex = new THREE.DataTexture(bnData, 64, 64, THREE.RGBAFormat);
+    blueTex.minFilter = blueTex.magFilter = THREE.NearestFilter; blueTex.wrapS = blueTex.wrapT = THREE.RepeatWrapping; blueTex.needsUpdate = true;
+    const projInv = new THREE.Matrix4(), camW = new THREE.Matrix4();
     const volU = Object.assign(waterU(), {
-      uEye: { value: new THREE.Vector3() }, uDepth: { value: depthTex }, uProjInv: { value: new THREE.Matrix4() }, uCamW: { value: new THREE.Matrix4() },
-      uSteps: { value: LD.volSteps }, uVolMax: { value: 40 }, uScatter: { value: 1 }, uShaft: { value: 1 }, uFrame: { value: 0 },
+      uEye: { value: new THREE.Vector3() }, uDepth: { value: depthTex }, uProjInv: { value: projInv }, uCamW: { value: camW }, uBlue: { value: blueTex },
+      uSteps: { value: LD.volSteps }, uVolMax: { value: 40 }, uScatter: { value: VOL_K.scatter }, uShaft: { value: 1 }, uFrame: { value: 0 }, uNearLamp: { value: VOL_K.nearLamp },
     });
     const volMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_FS, uniforms: volU, depthTest: false, depthWrite: false });
+    const taaU = {
+      uCur: { value: rtVol.texture }, uHist: { value: rtHist[0].texture }, uProjInv: { value: projInv }, uCamW: { value: camW }, uPrevVP: { value: new THREE.Matrix4() },
+      uTexel: { value: new THREE.Vector2() }, uBlend: { value: VOL_K.blend }, uReset: { value: 1 }, uClip: { value: VOL_K.clipSd }, uReject: { value: VOL_K.depthReject },
+    };
+    const taaMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_TAA_FS, uniforms: taaU, depthTest: false, depthWrite: false });
     const debugNaN = typeof location !== 'undefined' && /[?&]debug\b/.test(location.search || '') ? 1 : 0;
-    const compU = { uScene: { value: rtScene.texture }, uVol: { value: rtVol.texture }, uVolTexel: { value: new THREE.Vector2() }, uExposure: { value: 4 }, uGrain: { value: 0.012 }, uTime: U.uTime, uVig: { value: 0.55 }, uDebugNaN: { value: debugNaN } };
+    const compU = {
+      uScene: { value: rtScene.texture }, uVol: { value: rtHist[0].texture }, uDepth: { value: depthTex }, uVolTexel: { value: new THREE.Vector2() }, uNearFar: { value: new THREE.Vector2(0.08, 400) },
+      uSigRel: { value: VOL_K.sigmaRel }, uSigAbs: { value: VOL_K.sigmaAbs }, uExposure: { value: 4 }, uGrain: { value: 0.012 }, uTime: U.uTime, uVig: { value: 0.55 }, uDebugNaN: { value: debugNaN },
+    };
     const compMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.COMP_FS, uniforms: compU, depthTest: false, depthWrite: false });
-    const volMesh = new THREE.Mesh(tri, volMat), compMesh = new THREE.Mesh(tri, compMat);
-    volMesh.frustumCulled = compMesh.frustumCulled = false;
-    const volScene = new THREE.Scene(), compScene = new THREE.Scene();
-    volScene.add(volMesh); compScene.add(compMesh);
+    const volMesh = new THREE.Mesh(tri, volMat), compMesh = new THREE.Mesh(tri, compMat), taaMesh = new THREE.Mesh(tri, taaMat);
+    volMesh.frustumCulled = compMesh.frustumCulled = taaMesh.frustumCulled = false;
+    const volScene = new THREE.Scene(), compScene = new THREE.Scene(), taaScene = new THREE.Scene();
+    volScene.add(volMesh); compScene.add(compMesh); taaScene.add(taaMesh);
     // the auto exposure: the log luminance of the frame in a 32 x 32 RGBA8 target
     const LUM_N = 32;
     const rtLum = new THREE.WebGLRenderTarget(LUM_N, LUM_N, { type: THREE.UnsignedByteType, depthBuffer: false, stencilBuffer: false });
@@ -624,12 +646,17 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const lumScene = new THREE.Scene(); lumScene.add(lumMesh);
     const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     return {
-      rtScene, rtVol, rtLum, lumScene, lumBuf: new Uint8Array(LUM_N * LUM_N * 4), LUM_N, lumU,
-      volU, compU, volScene, compScene, ortho, scale: LD.volScale,
+      rtScene, rtVol, rtHist, rtLum, lumScene, lumBuf: new Uint8Array(LUM_N * LUM_N * 4), LUM_N, lumU, blueTex,
+      volU, taaU, compU, volScene, taaScene, compScene, ortho, scale: LD.volScale,
+      // the history state: which target to read, the last view-projection
+      // and floating origin, and whether the history is good
+      hist: { read: 0, valid: false, prevVP: new THREE.Matrix4(), origin: [0, 0] },
       size(w, h) {
         rtScene.setSize(w, h);
         const vw = Math.max(1, Math.round(w * this.scale)), vh = Math.max(1, Math.round(h * this.scale));
-        rtVol.setSize(vw, vh); compU.uVolTexel.value.set(1 / vw, 1 / vh);
+        rtVol.setSize(vw, vh); for (const t of rtHist) t.setSize(vw, vh);
+        compU.uVolTexel.value.set(1 / vw, 1 / vh); taaU.uTexel.value.set(1 / vw, 1 / vh);
+        this.hist.valid = false;
         lumU.uTap.value.set(0.25 / LUM_N, 0.25 / LUM_N);
       },
     };
@@ -693,7 +720,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     renderer.setRenderTarget(passes.rtLum);
     renderer.render(passes.lumScene, passes.ortho);
     try { renderer.readRenderTargetPixels(passes.rtLum, 0, 0, passes.LUM_N, passes.LUM_N, passes.lumBuf); } catch (e) { return; }
-    post.exposure = exposureFrom(passes.lumBuf, post.exposure);
+    // max 8 (was 24): a dark frame does not lift the far water (the user:
+    // "it is dark up close and then bright at a distance")
+    post.exposure = exposureFrom(passes.lumBuf, post.exposure, { max: 8 });
     passes.compU.uExposure.value = post.exposure;
   }
   // ── the infinite world (CONTRACT-V4.md, world/stream.js) ─────────────────
@@ -836,6 +865,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   }
   function setWorldPolyps(on) { for (const o of W3.fine.values()) o.grp.traverse(q => { if (q.userData.polyps) q.visible = on; }); }
 
+  const M4 = new THREE.Matrix4();
   // cam: the camera to draw with (the main camera, or a saver camera).
   function render(dt, nowMs = performance.now()) {
     if (dying.length) reapDying();
@@ -863,12 +893,27 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       vu.uEye.value.setFromMatrixPosition(camera.matrixWorld);
       vu.uProjInv.value.copy(camera.projectionMatrixInverse);
       vu.uCamW.value.copy(camera.matrixWorld);
-      vu.uFrame.value = frameN % 64;
+      vu.uFrame.value = frameN % 1024;
       renderer.setRenderTarget(passes.rtVol);
       renderer.render(passes.volScene, passes.ortho);
+      // the history: render space = world - origin, so a move of the
+      // floating origin by d moves the last view-projection by d
+      const H = passes.hist, tu = passes.taaU, o = W3.origin;
+      tu.uPrevVP.value.copy(H.prevVP);
+      if (o[0] !== H.origin[0] || o[1] !== H.origin[1]) tu.uPrevVP.value.multiply(M4.makeTranslation(o[0] - H.origin[0], 0, o[1] - H.origin[1]));
+      tu.uReset.value = H.valid ? 0 : 1;
+      tu.uHist.value = passes.rtHist[H.read].texture;
+      const wr = passes.rtHist[1 - H.read];
+      renderer.setRenderTarget(wr);
+      renderer.render(passes.taaScene, passes.ortho);
+      passes.compU.uVol.value = passes.lumU.uVol.value = wr.texture;
+      H.read = 1 - H.read; H.valid = true;
+      H.prevVP.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); H.origin = [o[0], o[1]];
     } else {
       renderer.setRenderTarget(passes.rtVol); renderer.setClearColor(0x000000, 1); renderer.clear(true, false, false);
+      passes.compU.uVol.value = passes.lumU.uVol.value = passes.rtVol.texture; passes.hist.valid = false;
     }
+    passes.compU.uNearFar.value.set(camera.near, camera.far);
     if (frameN % 12 === 3) autoExposure();
     renderer.setRenderTarget(null);
     const check = post.checks < 4 && frameN > 1;

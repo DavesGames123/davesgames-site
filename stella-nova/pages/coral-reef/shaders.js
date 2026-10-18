@@ -32,9 +32,10 @@
 //  of the frame: in-scatter from each spot cone (Henyey-Greenstein phase,
 //  forward), with the shadow of each mapped lamp (one tap: light shafts
 //  through gaps in the rock and the coral), a turbid density, and faint shafts of downwell light that
-//  carry the caustic map down the water column. COMP_FS adds the volume
-//  to the frame (a 3 x 3 tent), tone-maps (ACES fit) and adds a vignette
-//  and a fine grain.
+//  carry the caustic map down the water column. VOL_TAA_FS keeps a
+//  history of it (reprojection, neighbourhood clip). COMP_FS adds the
+//  volume to the frame with a joint bilateral upsample (volume.js has the
+//  plan), tone-maps (ACES fit) and adds a vignette, a grain and a dither.
 //
 //  grep -n targets
 //    noise ................. "export const NOISE"
@@ -53,6 +54,7 @@
 //    sand .................. "export const SAND_FS"
 //    marine snow ........... "export const SNOW_VS"
 //    volume pass ........... "export const VOL_FS"
+//    volume history ........ "export const VOL_TAA_FS"
 //    composite ............. "export const COMP_FS"
 //    luminance (exposure) .. "export const LUM_FS"
 // ============================================================================
@@ -201,7 +203,7 @@ float shadowAt(int i, vec3 w, vec3 n) {
   ${SHADOW_IDS.slice(0, -1).map(i => `if (i == ${i}) return pcf${i}(sc, tx);`).join('\n  ')}
   return pcf${MAX_SPOTS - 1}(sc, tx);
 }
-// one tap, for the volume march (the jitter and the tent blur smooth it)
+// one tap, for the volume march (the jitter and the history smooth it)
 float shadowTap(int i, vec3 w) {
   if (i > ${MAX_SPOTS - 1} || uShadowOn[i] < 0.5) return 1.0;
   vec3 sc;
@@ -753,6 +755,12 @@ out vec2 vUv;
 void main() { vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
 // The volume: in-scatter along the eye ray, up to the depth of the frame.
+// volume.js has the plan (march, history, bilateral upsample). The ray
+// start has a 64 x 64 blue-noise jitter (uBlue, volume.js blueNoise) that
+// moves by the golden ratio each frame; the history pass averages it. The
+// shadow tap of each step moves up to 1.2 map texels round the ray (a
+// second blue-noise value), so the history gives soft shaft edges, not
+// the steps of the map texels. a = the linear view depth (m).
 export const VOL_FS = /* glsl */`
 precision highp float;
 precision highp int;
@@ -764,9 +772,9 @@ ${NOISE}
 in vec2 vUv;
 out vec4 oCol;
 uniform highp sampler2D uDepth;
+uniform mediump sampler2D uBlue;
 uniform mat4 uProjInv, uCamW;
-uniform float uSteps, uVolMax, uScatter, uShaft, uFrame;
-float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+uniform float uSteps, uVolMax, uScatter, uShaft, uFrame, uNearLamp;
 void main() {
   float z = texture(uDepth, vUv).r;
   vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
@@ -775,7 +783,10 @@ void main() {
   vec3 rd = wp - cameraPosition;
   float tMax = min(length(rd), uVolMax);
   rd = normalize(rd);
-  float j = fract(ign(gl_FragCoord.xy) + uFrame * 0.61803);
+  ivec2 bq = ivec2(gl_FragCoord.xy) & ivec2(63);
+  float g1 = 0.61803399 * uFrame;
+  float j = fract(texelFetch(uBlue, bq, 0).r + g1);
+  float j2 = fract(texelFetch(uBlue, (bq + ivec2(32, 17)) & ivec2(63), 0).r + g1 * 1.3247);
   vec3 acc = vec3(0.0);
   float dt = tMax / uSteps;
   for (int k = 0; k < 64; k++) {
@@ -789,7 +800,14 @@ void main() {
       vec3 L;
       vec3 R = spotRad(i, p, L);
       if (max(R.r, max(R.g, R.b)) < 1e-6) continue;
-      R *= shadowTap(i, p);
+      // the jittered shadow tap: a disc round p, square to L, of 1.2 texels
+      float dl = length(uSpotP[i].xyz - p);
+      vec3 ax = normalize(cross(L, abs(L.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0))), ay = cross(L, ax);
+      float an = 6.2831853 * fract(j2 + float(k) * 0.7548777), rr = sqrt(fract(j + float(k) * 0.5698403));
+      vec3 pj = p + (ax * cos(an) + ay * sin(an)) * rr * dl * uShadowTexel[i] * 1.2;
+      R *= shadowTap(i, pj);
+      // less in-scatter in the first uNearLamp metres: no hot ball at the lamp
+      R *= smoothstep(0.0, uNearLamp, dl);
       float c = dot(-L, -rd);                 // light goes from the lamp past p; c = 1 straight at the eye
       float g = 0.55, hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
       s += R * (0.08 + hg * 0.25);
@@ -799,29 +817,84 @@ void main() {
     s += vec3(0.10, 0.30, 0.52) * uDown * uShaft * exp(-(SURF_Y - p.y) * 0.03) * max(cs.g - 1.1, 0.0) * 0.004;
     acc += s * dens * exp(-t * uFogK) * dt;
   }
-  oCol = vec4(acc * uScatter, 1.0);
+  oCol = vec4(acc * uScatter, -vp.z);
 }`;
 
-// The frame: the scene, the volume (3 x 3 tent), ACES tone map, vignette, grain.
-export const COMP_FS = /* glsl */`
+// The history of the volume (volume.js step 2): reproject with the view-
+// projection of the last frame, clip to the neighbourhood, blend.
+export const VOL_TAA_FS = /* glsl */`
 precision highp float;
 in vec2 vUv;
 out vec4 oCol;
-uniform sampler2D uScene, uVol;
-uniform vec2 uVolTexel;
-uniform float uExposure, uGrain, uTime, uVig, uDebugNaN;
+uniform highp sampler2D uCur, uHist;
+uniform mat4 uProjInv, uCamW, uPrevVP;
+uniform vec2 uTexel;
+uniform float uBlend, uReset, uClip, uReject;
+bool bad4(vec4 c) { return any(isnan(c)) || any(isinf(c)); }
+void main() {
+  vec4 c = texture(uCur, vUv);
+  vec3 m1 = vec3(0.0), m2 = vec3(0.0), mn = vec3(1e9), mx = vec3(-1e9);
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec3 s = texture(uCur, vUv + vec2(float(i), float(j)) * uTexel).rgb;
+    m1 += s; m2 += s * s; mn = min(mn, s); mx = max(mx, s);
+  }
+  m1 /= 9.0; m2 /= 9.0;
+  vec3 sd = sqrt(max(m2 - m1 * m1, vec3(0.0)));
+  vec3 lo = max(mn, m1 - uClip * sd), hi = min(mx, m1 + uClip * sd);
+  // this pixel in the world, from its view depth (c.a)
+  vec4 vr = uProjInv * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+  vr.xyz /= vr.w;
+  vec3 pv = vr.xyz * (c.a / max(-vr.z, 1e-6));
+  vec3 pw = (uCamW * vec4(pv, 1.0)).xyz;
+  vec4 pc = uPrevVP * vec4(pw, 1.0);
+  vec2 puv = pc.xy / max(pc.w, 1e-6) * 0.5 + 0.5;
+  vec4 h = texture(uHist, puv);
+  bool inside = pc.w > 0.0 && puv.x >= 0.0 && puv.x <= 1.0 && puv.y >= 0.0 && puv.y <= 1.0;
+  bool agree = abs(h.a - pc.w) <= uReject * max(pc.w, 0.1);
+  float a = (inside && agree && uReset < 0.5 && !bad4(h)) ? uBlend : 1.0;
+  vec3 hc = clamp(h.rgb, lo, hi);
+  vec3 o = mix(hc, c.rgb, a);
+  oCol = vec4(bad4(vec4(o, 0.0)) ? c.rgb : o, c.a);
+}`;
+
+// The frame: the scene, the volume (a joint bilateral upsample with the
+// full-res depth, volume.js step 3), ACES tone map, vignette, grain and a
+// dither of 1 / 255 before the 8-bit canvas.
+export const COMP_FS = /* glsl */`
+precision highp float;
+precision highp int;
+in vec2 vUv;
+out vec4 oCol;
+uniform sampler2D uScene;
+uniform highp sampler2D uVol, uDepth;
+uniform vec2 uVolTexel, uNearFar;
+uniform float uExposure, uGrain, uTime, uVig, uDebugNaN, uSigRel, uSigAbs;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
 bool bad3(vec3 c) { return any(isnan(c)) || any(isinf(c)); }
-void main() {
-  vec3 c = texture(uScene, vUv).rgb;
-  vec3 v = vec3(0.0);
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    float w = (2.0 - abs(float(i))) * (2.0 - abs(float(j)));
-    v += texture(uVol, vUv + vec2(float(i), float(j)) * uVolTexel).rgb * w;
+float linZ(float z) { return uNearFar.x * uNearFar.y / (uNearFar.y - z * (uNearFar.y - uNearFar.x)); }
+vec3 volUp() {
+  float zf = linZ(texture(uDepth, vUv).r);
+  vec2 sz = 1.0 / uVolTexel;
+  vec2 st = vUv * sz - 0.5, i0 = floor(st), f = st - i0;
+  ivec2 b = ivec2(i0), top = ivec2(sz) - 1;
+  float sig = uSigRel * zf + uSigAbs;
+  vec3 acc = vec3(0.0), nc = vec3(0.0);
+  float ws = 0.0, nd = 1e9;
+  for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
+    vec4 s = texelFetch(uVol, clamp(b + ivec2(i, j), ivec2(0), top), 0);
+    float bw = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+    float r = (s.a - zf) / sig;
+    float w = bw * exp(-r * r);
+    acc += s.rgb * w; ws += w;
+    float d = abs(s.a - zf);
+    if (d < nd) { nd = d; nc = s.rgb; }
   }
-  c += v / 16.0;
+  return ws > 1e-4 ? acc / ws : nc;
+}
+void main() {
+  vec3 c = texture(uScene, vUv).rgb + volUp();
   // NaN guard: a NaN or an Inf (a half float overflow) gives magenta with
   // uDebugNaN (the ?debug URL), else black; the rest clamps to 0 .. 64
   if (bad3(c)) { oCol = uDebugNaN > 0.5 ? vec4(1.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 1.0); return; }
@@ -830,7 +903,10 @@ void main() {
   vec2 d = vUv - 0.5;
   c *= 1.0 - uVig * dot(d, d) * 1.6;
   c = toSRGB(c);
-  c += (h12(gl_FragCoord.xy + fract(uTime * 7.3) * 113.0) - 0.5) * uGrain;
+  vec2 gp = gl_FragCoord.xy + fract(uTime * 7.3) * 113.0;
+  c += (h12(gp) - 0.5) * uGrain;
+  // triangular dither of 1 LSB: no bands in the dark gradients of the cones
+  c += (h12(gp + 17.31) + h12(gp + 41.7) - 1.0) / 255.0;
   oCol = vec4(c, 1.0);
 }`;
 

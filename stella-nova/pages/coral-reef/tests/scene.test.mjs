@@ -177,6 +177,7 @@ function checkES(progs) {
     { name: 'snow', vs: SH.SNOW_VS, fs: SH.SNOW_FS },
     { name: 'caustic', vs: SH.CAUSTIC_VS, fs: SH.CAUSTIC_FS, raw: true },
     { name: 'volume', vs: SH.FULL_VS, fs: SH.VOL_FS, raw: true },
+    { name: 'volume-history', vs: SH.FULL_VS, fs: SH.VOL_TAA_FS, raw: true },
     { name: 'composite', vs: SH.FULL_VS, fs: SH.COMP_FS, raw: true },
     { name: 'luminance', vs: SH.FULL_VS, fs: SH.LUM_FS, raw: true },
   ];

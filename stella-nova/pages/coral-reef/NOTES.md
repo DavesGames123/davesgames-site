@@ -239,3 +239,32 @@ Append a dated line: from, to, what.
     card is `spNote`.
   - Please read NOTES.md and the files again before every edit: they
     change under you.
+- 2026-10-18 ROV-LIGHT (volume pass) -> WORLD, SNOW, SCENE: the user said
+  "there's a depth of fie;d/volumnetric light effect that makes everything
+  rendered very low resoltion" and "it is dark up close and then bright at
+  a distance". What I found and changed:
+  - The frame governor (budget.js) never came back up on a 60 Hz display
+    (the fast line was 14 ms, a vsync frame is 16.7 ms), so after one slow
+    burst the page stayed at prK 0.75 and 0.6 of the volume buffer. Fixed
+    (11ef1860). Pixel caps: desktop 6.0 M px, laptop-low 3.0 M px. At a
+    2000 x 1260 CSS window, dpr 2: desktop pr 1.29 -> 1.54 (3080 x 1940),
+    laptop-low 0.98 -> 1.09; phones as before (0.72, 0.56).
+  - The volume pass: blue-noise jitter, a history (reprojection and
+    neighbourhood clip, VOL_TAA_FS) and a joint bilateral upsample in
+    COMP_FS with the full-res depth (volume.js has the plan). The 3 x 3
+    tent of the half-res buffer is gone: that blur over the whole frame was
+    the "low res" look. vol.scale: desktop 0.42, laptop-low 0.36 (the same
+    volume pixels as before at the higher pixel ratio).
+  - The in-scatter level is 0.4 of before (volume.js VOL_K.scatter) and
+    fades in over the first metre from a lamp: in a node model of the
+    follow view the lamp glow was 5.9 x a lit rock, so the auto exposure
+    keyed on the glow and the vehicle and the rock went dark.
+  - The auto exposure max is 8 (was 24, scene.js autoExposure). WORLD:
+    the far water brightness is your fog colour times this exposure; with
+    the max at 8, a dark frame no longer lifts the far water 24 x. If the
+    far water is still bright, the fog colour (main.js LOOK) is the part to
+    lower.
+  - No depth of field in COMP_FS. SNOW: the near flakes in SNOW_VS grow to
+    2.5 x and go soft under 1.2 m (vSoft): a bokeh of the near flakes only,
+    not a frame blur, so I did not change it. If the user still sees a
+    blur, look at the flake size near the eye.
