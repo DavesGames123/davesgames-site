@@ -32,11 +32,14 @@
      pose.js        GPU rows per year, colour modes, the CPU twin (no DOM)
      look.js        leaf cells, colours and bark per species (no DOM)
      atlas.js       the leaf atlas cells (written by tools/build-atlas.py)
-     ground.js      ground height, grass field, cut-away (JS and GLSL)
+     ground.js      ground height, micro-relief, flat pads, cut-away (JS and GLSL)
+     eco.js         the ground ecosystem: fields, point processes, seasons (no DOM)
+     meadow.js      three.js: grass, nature-pack plants and stones, litter, woodland
      roots.js       DLA roots on the dlaf hooks, and their GPU rows
      mesh.js        a CPU mesh of a plant at one moment (thumbnails, tests)
      saver.js       screensaver shots and framing maths (no DOM)
-     render.js      three.js: tubes, leaves, sky, ground, grass, shadows
+     render.js      three.js: tubes, leaves, sky, ground, shadows
+     glsl-check.mjs compiles the shaders with glslangValidator (node)
      diagram.js     the 2D diagram of the model (#diagram)
      layout.js      phone layout, occlusion, gestures, dock clock (no DOM)
      main.js        the time-lapse, the controls, the screensaver hook
@@ -139,7 +142,7 @@
   </table>
 
   <div class="modes" style="margin-top:14px"><button id="explainBtn" type="button">How it grows</button></div>
-  <p class="credit">Self-organising tree model after Palubicki et al. (SIGGRAPH 2009). Leaves: ambientCG scans, bark and ground: Poly Haven scans, all CC0. Roots: DLA engine after <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman, MIT. Our own code.</p>
+  <p class="credit">Self-organising tree model after Palubicki et al. (SIGGRAPH 2009). Leaves: ambientCG scans, bark and ground: Poly Haven scans, meadow and woodland: the CC0 nature pack. Roots: DLA engine after <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a> by Michael Fogleman, MIT. Our own code.</p>
 </div>
 
 <section id="explain" aria-label="How it grows" hidden>
@@ -162,13 +165,15 @@
   <p>Each new metamer turns toward the least shade near it (the optimal direction), up (strongest on the leader), level (spruce laterals) or down (willow and birch twigs hang). A branch that gets too little light per metamer dies and falls in the late winter, so the crown is a shell of leaves round bare limbs. Each year the pipe model sets the girth: r<sup>n</sup> = Σ r<sub>child</sub><sup>n</sup>, and a trunk never gets thinner.</p>
   <h3>The year</h3>
   <p>The seed germinates in spring: a short stem with cotyledons, then the first true leaves. Each later spring the buds break and the shoots extend one metamer after the other. Leaves unfold, take the autumn colour of their species, detach, tumble down and lie as litter until the next spring. Cherry blossom opens before its leaves and its petals drift down. Snow lies on the ground and on the upper side of the limbs in winter. The trunk swells through the summer.</p>
+  <h3>The meadow round the tree</h3>
+  <p>The ground is a plant community, not a carpet. Grass grows in tussocks and swards (a Thomas cluster process); it greens up in spring, sends up seed heads in June, cures, browns and lodges in autumn and lies flat under snow. Gusts cross the meadow as waves. Under the crown the light is low, so the sun grasses and meadow flowers give way to shade grass, ferns and periwinkle as the crown spreads, and the floor shows bare soil and leaf litter. Flowers come in drifts by species and bloom in their own months: celandine in March, buttercups in May, oxeye daisies in June; then the petals fall. Stones follow a power law of sizes, a few boulders with many cobbles and pebbles, grouped in outcrops, with moss on their shaded side. Fallen leaves drift into the hollows and against the stones and rot over the winter. Seeds fall from the tree; in deep shade most seedlings die. Past the meadow the wood begins, with a shrub edge.</p>
   <h3>Roots: diffusion-limited aggregation</h3>
   <p>With roots on, a quarter of the soil is cut away. The roots grow with the engine of the Diffusion-Limited Aggregation page, a port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">fogleman/dlaf</a>: particles walk at random in the soil and join the roots where they first touch them. The hooks <code>randomStartingPosition</code>, <code>motionVector</code> and <code>shouldReset</code> start the walkers deep and make them drift to the root crown, so the roots grow down. They grow as the plant does.</p>
   <h3>Colours</h3>
   <p>Natural shows the scanned bark and leaves. The heatmaps colour each metamer by age (the growing tips glow), branch order, pipe flow, the resource of this year, light, or height. A gradient change recolours the plant at once.</p>
   <h3>Credits</h3>
   <p>W. Palubicki et al., Self-organizing tree models for image synthesis, ACM TOG 28(3), 2009; M. Borchert and H. Honda, 1984; K. Shinozaki et al., the pipe model, 1964. Our own code from the papers.</p>
-  <p>Leaf scans: ambientCG LeafSet005, 010, 016, 019, 023, 024 (CC0). Bark and ground: Poly Haven (CC0). dlaf by Michael Fogleman, MIT licence, <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. three.js r160, MIT. See CREDITS.txt in this folder.</p>
+  <p>Leaf scans: ambientCG LeafSet005, 010, 016, 019, 023, 024 (CC0). Bark and ground: Poly Haven (CC0). Meadow plants, stones, shrubs and woodland: the site nature pack (Poly Haven, ambientCG, Mantissa CG, OpenGameArt; all CC0). dlaf by Michael Fogleman, MIT licence, <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>. three.js r160, MIT. See CREDITS.txt in this folder.</p>
 </section>
 
 <div id="status">
