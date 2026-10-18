@@ -82,14 +82,14 @@
     <div id="stripEx" class="strip-ex" role="radiogroup" aria-label="Example photos"></div>
     <div class="strip-own">
       <label class="ph-btn" id="uploadLbl" title="Pick a photo from your device">
-        <input id="upload" type="file" accept="image/*" hidden>
+        <input id="upload" class="sr-only" type="file" accept="image/*" aria-label="Pick a photo from your device">
         <span>Photo</span>
       </label>
       <button id="camBtn" class="ph-btn" type="button" title="Take a picture with your camera">Camera</button>
     </div>
   </div>
   <div id="netWrap" class="net-wrap">
-    <canvas id="netCv" tabindex="0" role="img" aria-roledescription="network view"
+    <canvas id="netCv" tabindex="0" role="application" aria-roledescription="network view"
       aria-label="The network, layer by layer. Arrow keys move between feature maps, Enter opens the detail view of a map."></canvas>
     <div id="netTip" class="net-tip" hidden></div>
     <div id="netHint" class="net-hint">point at a map to see what feeds it · click it to watch the maths</div>

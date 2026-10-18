@@ -148,6 +148,9 @@ for (const size of [{ name: 'desktop 1280x800', width: 1280, height: 800, phone:
     ok(/Output 3 × 3|stride/.test(pg.querySelector('.pg-note').textContent), `${N}: the playground note follows the stride`, pg.querySelector('.pg-note').textContent);
     const act = doc.querySelector('.act'); act.querySelector('button[data-id="sigmoid"]').click();
     ok(/Squeezes/.test(act.querySelector('.act-note').textContent), `${N}: the activation picker changes`);
+    // the photo input is reachable by the keyboard (not display:none)
+    const up = doc.getElementById('upload');
+    ok(!up.hidden && up.tabIndex === 0 && up.closest('label'), `${N}: the photo input can take focus`);
     // credits
     doc.getElementById('creditsBtn').click();
     ok(!doc.getElementById('credits').hidden && doc.querySelectorAll('#creditsBody .cr-photos a').length === 20 && /MIT/.test(doc.getElementById('creditsBody').textContent), `${N}: credits list the photos and the MIT licence`);
