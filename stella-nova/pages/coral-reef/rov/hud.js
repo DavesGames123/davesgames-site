@@ -1,0 +1,108 @@
+// ============================================================================
+//  CORAL REEF  ·  ROV  ·  the SSTV feed panel HUD (canvas 2D, no other DOM)
+// ----------------------------------------------------------------------------
+//  The panel: a top bar (vehicle, camera, received mode and VIS), the
+//  received picture with corner marks, a scan cursor on the row being
+//  received and a centre mark, and a bottom bar (depth, heading, mission
+//  time, line counter, signal meter and SNR). Panel size HUD.W x HUD.H in
+//  CSS pixels; the canvas has dpr times that.
+//
+//  hudFields(info) gives every text field, so the node test checks them
+//  without a canvas. drawHud(ctx, info, picture) draws them; picture is a
+//  canvas (or ImageBitmap) of the received picture, or null.
+//  info: { id, depth (m), heading (deg), time (s), status (SstvLink.status()),
+//          rec (bool), t (s, wall clock for blinks) }
+//
+//  grep -n targets
+//    "export const HUD"          layout
+//    "export function hudFields" text of each field
+//    "export function drawHud"   the panel
+// ============================================================================
+
+export const HUD = { W: 352, H: 322, pic: { x: 16, y: 28, w: 320, h: 256 }, bar: 284 };
+const pad2 = (n) => String(Math.floor(n)).padStart(2, '0');
+
+export function hudFields(info) {
+  const s = info.status || {};
+  const t = Math.max(0, info.time || 0);
+  const hdg = ((Math.round(info.heading || 0) % 360) + 360) % 360;
+  const db = s.signal && Number.isFinite(s.signal.db) ? s.signal.db : null;
+  const phase = s.phase || 'idle';
+  return {
+    id: 'ROV-' + (info.id ?? 1),
+    cam: 'CAM 1 HD',
+    depth: 'DEPTH ' + (info.depth ?? 0).toFixed(1) + ' m',
+    heading: 'HDG ' + String(hdg).padStart(3, '0') + '°',
+    time: 'T+' + pad2(t / 3600) + ':' + pad2((t / 60) % 60) + ':' + pad2(t % 60),
+    mode: (s.mode || 'Robot 36').toUpperCase(),
+    vis: phase === 'novis' ? 'NO VIS' : s.vis != null ? 'VIS ' + s.vis : 'VIS --',
+    signal: db == null ? 'SNR --' : 'SNR ' + Math.round(db) + ' dB',
+    line: 'LN ' + String(s.line || 0).padStart(3, '0') + '/' + (s.lines || 0),
+    phase: { vis: 'SYNC VIS', image: 'RX', done: 'HOLD', hold: 'HOLD', need: 'WAIT', novis: 'NO SIGNAL', idle: 'WAIT' }[phase] || 'RX',
+    level: s.signal ? s.signal.level : 0,
+  };
+}
+
+export function drawHud(ctx, info, picture) {
+  const F = hudFields(info), s = info.status || {};
+  const { W, H, pic, bar } = HUD;
+  const ink = '#cfe6e0', dim = '#6f8a86', amber = '#f2b705', red = '#ff5a3c';
+  ctx.save();
+  ctx.fillStyle = '#05090b'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(207,230,224,0.25)'; ctx.lineWidth = 1; ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+  ctx.font = '600 11px ui-monospace, Menlo, Consolas, monospace';
+  ctx.textBaseline = 'middle';
+  // top bar
+  ctx.fillStyle = amber; ctx.textAlign = 'left'; ctx.fillText(F.id, 12, 14);
+  ctx.fillStyle = dim; ctx.fillText(F.cam, 66, 14);
+  ctx.textAlign = 'right'; ctx.fillStyle = s.phase === 'novis' ? red : ink;
+  ctx.fillText(F.mode + '  ' + F.vis, W - 12, 14);
+  // REC dot, and the receive phase
+  const blink = Math.floor((info.t || 0) * 1.6) % 2 === 0;
+  ctx.textAlign = 'left';
+  if (blink || s.phase !== 'image') { ctx.fillStyle = s.phase === 'image' ? red : dim; ctx.beginPath(); ctx.arc(140, 14, 3.2, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = dim; ctx.fillText(F.phase, 148, 14);
+  // picture
+  ctx.fillStyle = '#000'; ctx.fillRect(pic.x, pic.y, pic.w, pic.h);
+  let py = pic.y, ph = pic.h;
+  if (picture) {
+    const ar = picture.width / picture.height;
+    ph = Math.min(pic.h, Math.round(pic.w / ar)); py = pic.y + Math.round((pic.h - ph) / 2);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(picture, pic.x, py, pic.w, ph);
+  }
+  // scan cursor on the row being received
+  if (s.phase === 'image' && s.lines) {
+    const rows = s.lines * (s.rowsPerLine || 1), y = py + Math.min(ph - 1, ((s.row ?? -1) + 1) / rows * ph);
+    ctx.fillStyle = 'rgba(190,255,230,0.55)'; ctx.fillRect(pic.x, y, pic.w, 1);
+    ctx.fillStyle = 'rgba(190,255,230,0.12)'; ctx.fillRect(pic.x, y + 1, pic.w, 3);
+  }
+  // corner marks and centre mark
+  ctx.strokeStyle = 'rgba(207,230,224,0.6)'; ctx.lineWidth = 1;
+  const c = 12, x0 = pic.x + 4.5, y0 = py + 4.5, x1 = pic.x + pic.w - 4.5, y1 = py + ph - 4.5;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0 + c); ctx.lineTo(x0, y0); ctx.lineTo(x0 + c, y0);
+  ctx.moveTo(x1 - c, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1, y0 + c);
+  ctx.moveTo(x0, y1 - c); ctx.lineTo(x0, y1); ctx.lineTo(x0 + c, y1);
+  ctx.moveTo(x1 - c, y1); ctx.lineTo(x1, y1); ctx.lineTo(x1, y1 - c);
+  const mx = pic.x + pic.w / 2, my = py + ph / 2;
+  ctx.moveTo(mx - 8, my); ctx.lineTo(mx - 3, my); ctx.moveTo(mx + 3, my); ctx.lineTo(mx + 8, my);
+  ctx.moveTo(mx, my - 8); ctx.lineTo(mx, my - 3); ctx.moveTo(mx, my + 3); ctx.lineTo(mx, my + 8);
+  ctx.stroke();
+  // bottom bar
+  const yb = bar + 12, yb2 = bar + 28;
+  ctx.textAlign = 'left'; ctx.fillStyle = ink;
+  ctx.fillText(F.depth, 12, yb); ctx.fillText(F.heading, 130, yb);
+  ctx.textAlign = 'right'; ctx.fillText(F.time, W - 12, yb);
+  ctx.textAlign = 'left'; ctx.fillStyle = dim; ctx.fillText(F.line, 12, yb2);
+  // signal meter: 12 bars
+  const n = 12, bx = 130, bw = 6, gap = 2, lv = Math.round((F.level || 0) * n);
+  for (let i = 0; i < n; i++) {
+    const h = 4 + i * 0.6;
+    ctx.fillStyle = i < lv ? (i < 3 ? red : i < 7 ? amber : '#6fe0a0') : 'rgba(207,230,224,0.12)';
+    ctx.fillRect(bx + i * (bw + gap), yb2 + 5 - h, bw, h);
+  }
+  ctx.textAlign = 'right'; ctx.fillStyle = dim; ctx.fillText(F.signal, W - 12, yb2);
+  ctx.restore();
+  return F;
+}
