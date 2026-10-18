@@ -21,7 +21,9 @@
 //    5 water      HDR + depth (load, store): module.drawWater(pass, frame, ctx)
 //                 ctx.sceneColorView, ctx.depthView = the copy (sceneDepth),
 //                 ctx.depthIsCopy = true
-//    6 volumetric HDR only, no depth attachment: module.drawVolumetric(pass,
+//    6 volumetric module.volumetricPrep(encoder, frame, ctx) first (compute,
+//                 ctx.depthView = the live depth after water), then
+//                 HDR only, no depth attachment: module.drawVolumetric(pass,
 //                 frame, ctx), ctx.depthView = the live depth after water,
 //                 ctx.sceneDepthView = the copy before water. Group 2 too.
 //    7 post       render/post.js: TAA, exposure, bloom, AgX, to the swap chain
@@ -297,7 +299,9 @@ export function createFrameGraph(gpu, parts) {
       for (const m of water) guard(m, 'drawWater', () => m.drawWater(pass, frame, ctx));
       pass.end(); passes++;
     }
-    // ── 6 volumetric
+    // ── 6 volumetric (volumetricPrep first: compute passes that read the
+    // depth after water and the shadow map of this frame, SKY's shafts)
+    for (const m of mods) if (m.volumetricPrep) guard(m, 'volumetricPrep', () => m.volumetricPrep(enc, frame, { ...ctx, depthView: T.depthView, depthTexture: T.depth, depthIsCopy: false }));
     const vol = mods.filter(m => m.drawVolumetric);
     if (vol.length) {
       const pass = enc.beginRenderPass({

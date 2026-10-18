@@ -54,6 +54,8 @@ export const PROFILES = {
     dprCap: null, maxN: 2048, shadowSize: null, cascades: null, taa: null,
     froxel: null, cloudK: null, cloudNoise: null, groundRes: null, groundLayers: null,
     veg: null, startDelayMs: 0,
+    // SHAFTS (render/weather.js shaftPlan): the best light shaft mode
+    shafts: 'volume',
   },
   phone: {
     id: 'phone', label: 'Phone', budgetMB: 280, raiseLimits: false, budgetMs: 1000 / 30,
@@ -67,6 +69,7 @@ export const PROFILES = {
     veg: { impFrame: 128, maxImpostors: 16, variants: 1, firstLod: 1, grassCap: 40000, farK: 0.7, texSize: 256, assets: 'small' },
     // the vegetation assets wait this long after the first finished terrain
     startDelayMs: 2500,
+    shafts: 'screen',
   },
   'phone-min': {
     id: 'phone-min', label: 'Phone (low memory)', budgetMB: 180, raiseLimits: false, budgetMs: 1000 / 30,
@@ -75,6 +78,7 @@ export const PROFILES = {
     groundRes: 256, groundLayers: 6,
     veg: { impFrame: 64, maxImpostors: 8, variants: 1, firstLod: 2, grassCap: 20000, farK: 0.5, texSize: 256, assets: 'none' },
     startDelayMs: 4000,
+    shafts: 'off',
   },
 };
 export const PROFILE_ORDER = ['desktop', 'phone', 'phone-min'];
@@ -186,8 +190,12 @@ export function estimate(profile, view = {}) {
     // render/sky.js: LUTs, cloud noise volumes, cloud shadow, 4 cloud targets
     sky: 256 * 64 * 8 + 32 * 32 * 8 + 192 * 108 * 8 + cn.shadow * cn.shadow * 8
       + cn.base ** 3 * 4 + cn.detail ** 3 * 4 + cn.n2d * cn.n2d * 4 + cw * ch * 8 * 4,
-    // render/weather.js: 5 froxel volumes (rgba16f) + the sky loss plane
-    froxels: fx * fy * fz * 8 * 5 + fx * fy * 8,
+    // render/weather.js: 6 froxel volumes (rgba16f, the sun volume of the
+    // shafts too) + the sky loss plane
+    froxels: fx * fy * fz * 8 * 6 + fx * fy * 8,
+    // render/weather.js SHAFTS: raw + 2 history (rgba16f) at k^2 of the
+    // render size (half on High and Ultra, quarter below and on phones)
+    shafts: p.shafts === 'off' ? 8 : px * (p.shafts === 'screen' || s.q < 0.7 ? 1 / 16 : 1 / 4) * 8 * 3,
     // render/ground.js: albedo, normal, ORM arrays (rgba8, mips)
     ground: texMip(s.groundRes, s.groundRes, s.groundLayers, 4) * 3 + 2 * 6144 * 32,
     // render/ground.js: the surface fields (4 layers rgba8, no mips)

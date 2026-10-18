@@ -126,7 +126,7 @@ const app = {
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
   qualityIndex: clamp(Math.round(+(Q.get('q') ?? (coarse ? 0 : 2))) || 0, 0, 3),   // phones start on Low; a bad ?q= is Low
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
-  camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50 },
+  camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50, shafts: 'auto', shaftK: 1 },
   terrain: null, gen: null, skyT: 0, skySpeed: 1, lastInput: -1e9,
   saverRun: null, drones: { ridge: 0, river: 0 },
   veg: { ...VEG0 }, water: { ...WATER0 }, locks: loadLocks(), hist: createHistory(30),
@@ -154,6 +154,7 @@ let gpu = null, tg = null, sh = null, post = null, fg = null, ui = null, buildOv
 const cam = createCamera({ fovY: 50 * Math.PI / 180 });
 app.cam = cam;   // for the console and the Deno harness
 const G = new Float32Array(GLOBALS_FLOATS), GV = globalsView(G);
+app.G = G;   // the Globals of the last frame, for the console and the Deno harness
 let prevVP = null, frameNo = 0, lastT = 0, fpsAcc = 0, fpsN = 0, fps = 0, pendingSnap = null, lastSnapAt = 0;
 let skyState = null, worker = null, workerKind = null, genId = 0, booted = false, lastBuildSeg = -1;
 
@@ -750,6 +751,8 @@ function loop(now) {
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
+    // SKY's light shafts (render/weather.js shaftPlan) and the governor level
+    shafts: { mode: app.look.shafts, k: app.look.shaftK }, govLevel: fg.level,
     // the vegetation scatter time per frame (ms): less on Low and phones
     budgetMs: coarse || app.qualityIndex === 0 ? 1.5 : app.qualityIndex === 1 ? 2.2 : 3,
   };
