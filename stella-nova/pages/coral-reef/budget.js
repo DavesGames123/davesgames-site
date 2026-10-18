@@ -74,13 +74,13 @@ export const PROFILES = {
   desktop: {
     id: 'desktop', label: 'Desktop', budgetMB: 700, reef: 'mid', reefMax: 'desktop',
     cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, shadowExtra: 1024, polypShadow: true, vol: { scale: 0.5, steps: 30 },
-    dprCap: 2, maxPx: 4.2e6, caustic: { res: 1024, grid: 360 }, snow: 3000, polypDraw: 160000,
+    dprCap: 2, maxPx: 6.0e6, caustic: { res: 1024, grid: 360 }, snow: 3000, polypDraw: 160000,
     rovs: 3, feed: { w: 320, h: 256, fps: 30 }, stagger: { rovMs: 300, reefMs: 900 }, frameMs: 1000 / 50,
   },
   'laptop-low': {
     id: 'laptop-low', label: 'Laptop', budgetMB: 450, reef: 'phone', reefMax: 'mid',
     cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.4, steps: 20 },
-    dprCap: 1.5, maxPx: 2.4e6, caustic: { res: 512, grid: 240 }, snow: 1800, polypDraw: 80000,
+    dprCap: 1.5, maxPx: 3.0e6, caustic: { res: 512, grid: 240 }, snow: 1800, polypDraw: 80000,
     rovs: 3, feed: { w: 256, h: 204, fps: 20 }, stagger: { rovMs: 500, reefMs: 1500 }, frameMs: 1000 / 40,
   },
   phone: {
@@ -230,24 +230,49 @@ export function lostPolicy(state, id, now = Date.now()) {
 // o: { frameMs, slowK (1.35), slowS (3 s), fastK (0.7), fastS (12 s),
 // levels: [{ name, apply(on) }] }. tick(dtMs) eases the frame time; after
 // slowS of frames over frameMs x slowK it applies the next level (on =
-// true); after fastS of frames under frameMs x fastK it undoes the last
+// true); after fastS of frames under the fast line it undoes the last
 // one. At most one change per 4 s. level: the levels in use.
+// The fast line is frameMs x fastK, or 1.15 x the display frame time when
+// that is more. The display frame time (vsync) is the 10th percentile of
+// the last 120 frame times: requestAnimationFrame gives a multiple of it.
+// Before 2026-10-18 the line was frameMs x fastK only: 14 ms for desktop,
+// so on a 60 Hz display (16.7 ms frames) a level never came back (the
+// page stayed at 0.75 of the pixel ratio and the small volume buffer).
+// A level that the governor applies again less than 30 s after it undid
+// it doubles its fastS (at most 16 x): no fast swing between two levels.
 export function frameGovernor(o = {}) {
   const frameMs = o.frameMs || 1000 / 50, slowK = o.slowK ?? 1.35, fastK = o.fastK ?? 0.7;
   const slowS = o.slowS ?? 3, fastS = o.fastS ?? 12, levels = o.levels || [];
-  let ema = frameMs, slow = 0, fast = 0, level = 0, since = 0, n = 0;
+  let ema = frameMs, slow = 0, fast = 0, level = 0, since = 0, n = 0, clock = 0;
+  const ring = new Float32Array(120), hold = levels.map(() => 1), undoneAt = levels.map(() => -1e9);
+  let ringN = 0, vsync = 0;
+  function vsyncOf() {
+    const k = Math.min(ringN, ring.length);
+    if (k < 20) return 0;
+    const a = Array.from(ring.subarray(0, k)).sort((x, y) => x - y);
+    return a[Math.floor(k * 0.1)];
+  }
   return {
-    get level() { return level; }, get ema() { return ema; }, levels,
+    get level() { return level; }, get ema() { return ema; }, get vsync() { return vsync; }, get hold() { return hold.slice(); }, levels,
+    fastLine() { return Math.max(frameMs * fastK, vsync * 1.15); },
     tick(dtMs) {
       if (!(dtMs > 0) || dtMs > 1000) return level;      // a tab that comes back
       n++;
+      clock += dtMs / 1000;
+      ring[ringN++ % ring.length] = dtMs;
+      if ((n & 15) === 0) vsync = vsyncOf();
       ema += (dtMs - ema) * 0.05;
       since += dtMs / 1000;
       if (n < 30) return level;                           // the first frames compile shaders
-      if (ema > frameMs * slowK) { slow += dtMs / 1000; fast = 0; } else if (ema < frameMs * fastK) { fast += dtMs / 1000; slow = 0; } else { slow = 0; fast = 0; }
+      const fastAt = this.fastLine();
+      if (ema > frameMs * slowK) { slow += dtMs / 1000; fast = 0; } else if (ema < fastAt) { fast += dtMs / 1000; slow = 0; } else { slow = 0; fast = 0; }
       if (since < 4) return level;
-      if (slow > slowS && level < levels.length) { levels[level].apply(true); level++; slow = 0; since = 0; ema = frameMs; }
-      else if (fast > fastS && level > 0) { level--; levels[level].apply(false); fast = 0; since = 0; }
+      if (slow > slowS && level < levels.length) {
+        if (clock - undoneAt[level] < 30) hold[level] = Math.min(16, hold[level] * 2);
+        levels[level].apply(true); level++; slow = 0; since = 0; ema = frameMs;
+      } else if (level > 0 && fast > fastS * hold[level - 1]) {
+        level--; levels[level].apply(false); undoneAt[level] = clock; fast = 0; since = 0;
+      }
       return level;
     },
   };

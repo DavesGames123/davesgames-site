@@ -50,7 +50,7 @@ const mb = b => (b / MB).toFixed(0);
   ok(PROFILE_ORDER.every(id => rockWorkers(PROFILES[id], 16) <= 4) && rockWorkers(P, 8) === 2 && rockWorkers(D, 16) === 4 && rockWorkers(D, 2) === 1, 'rock workers: at most 4, 2 on a phone');
   ok(clampQuality(P, 'desktop') === 'phone' && clampQuality(L, 'desktop') === 'mid' && clampQuality(D, 'desktop') === 'desktop', 'the colonies chips clamp to the profile');
   ok(reefBudget(P, 'phone').tris <= 500000 && reefBudget(M, 'phone').particles <= 14000, 'phone caps: tris and particles');
-  ok(pixelRatioFor(D, 2, 900, 1900) < 2 && pixelRatioFor(D, 2, 900, 1900) * pixelRatioFor(D, 2, 900, 1900) * 900 * 1900 <= 4.2e6 * 1.01, 'desktop 900x1900 at dpr 2: the pixel cap', pixelRatioFor(D, 2, 900, 1900));
+  ok(pixelRatioFor(D, 2, 900, 1900) < 2 && pixelRatioFor(D, 2, 900, 1900) * pixelRatioFor(D, 2, 900, 1900) * 900 * 1900 <= D.maxPx * 1.01, 'desktop 900x1900 at dpr 2: the pixel cap', pixelRatioFor(D, 2, 900, 1900));
   ok(pixelRatioFor(P, 3, 390, 844) <= 1.5, 'phone: dpr cap 1.5', pixelRatioFor(P, 3, 390, 844));
   for (const id of PROFILE_ORDER) { const p = PROFILES[id]; ok(p.feed && p.feed.w > 0 && p.feed.h > 0 && p.feed.fps > 0 && p.vol.scale > 0 && p.caustic.res > 0, `${id}: has feed, vol and caustic fields`); }
 }
@@ -123,6 +123,40 @@ const BEFORE = {
   for (let i = 0; i < 200; i++) g2.tick(16); g2.tick(5000);
   ok(g2.level === 0, 'governor: one long frame (a tab that comes back) is not slow');
   console.log('governor: ' + log.join(' '));
+}
+// The user (2026-10-18): "there's a depth of fie;d/volumnetric light effect
+// that makes everything rendered very low resoltion". On a 60 Hz display a
+// frame is 16.7 ms; the old fast line (20 x 0.7 = 14 ms) was never met, so
+// the 'pixels' and 'volume' levels never came back.
+{
+  const log = [];
+  const lv = ['volume', 'polyps', 'shadow', 'pixels'].map(name => ({ name, apply: on => log.push(`${name}:${on ? 'down' : 'up'}`) }));
+  const g = frameGovernor({ frameMs: 20, levels: lv });
+  for (let i = 0; i < 200; i++) g.tick(1000 / 60);
+  for (let i = 0; i < 400; i++) g.tick(i & 1 ? 1000 / 30 : 1000 / 15);     // GPU bound: 33 / 67 ms frames
+  const down = g.level;
+  ok(down >= 2, 'governor 60 Hz: slow frames step down', `${down}`);
+  ok(Math.abs(g.vsync - 1000 / 30) < 1, 'governor 60 Hz: the display frame time is the 10th percentile of the frame times', g.vsync.toFixed(2));
+  for (let i = 0; i < 60 * 120; i++) g.tick(1000 / 60);                   // 120 s at vsync
+  ok(g.level === 0, 'governor 60 Hz: frames at vsync (16.7 ms, frameMs 20) undo every level', `${g.level} ${log.join(' ')}`);
+  ok(Math.abs(g.vsync - 1000 / 60) < 0.5 && g.fastLine() > 1000 / 60, 'governor 60 Hz: the fast line is over the vsync frame time', `${g.vsync.toFixed(2)} ${g.fastLine().toFixed(2)}`);
+  // GPU bound under vsync: 25 ms of work gives 16.7 / 33.3 ms frames: not fast
+  const g3 = frameGovernor({ frameMs: 20, levels: lv.slice(0, 1) });
+  for (let i = 0; i < 300; i++) g3.tick(45);
+  ok(g3.level === 1, 'governor: a GPU bound page steps down', g3.level);
+  for (let i = 0; i < 4000; i++) g3.tick(i & 1 ? 1000 / 30 : 1000 / 60);
+  ok(g3.level === 1, 'governor 60 Hz: frames of 25 ms on average (16.7 and 33.3 ms) do not undo a level', g3.level);
+  // a swing: each level that comes back and is slow again waits twice as long
+  const g4 = frameGovernor({ frameMs: 20, levels: lv.slice(0, 1) });
+  for (let i = 0; i < 300; i++) g4.tick(45);
+  let swings = 0, t = 0;
+  for (let k = 0; k < 6; k++) {
+    let up = 0; while (g4.level === 1 && up < 60 * 400) { g4.tick(1000 / 60); up++; }
+    t += up / 60;
+    if (g4.level === 0) { swings++; for (let i = 0; i < 300 && g4.level === 0; i++) g4.tick(45); }
+  }
+  ok(g4.hold[0] >= 8, 'governor: a level that swings back and forth waits longer each time (fastS x 2, at most 16)', `hold ${g4.hold[0]} swings ${swings} in ${t.toFixed(0)} s`);
+  console.log(`governor 60 Hz: down to ${down}, vsync ${g.vsync.toFixed(1)} ms, back to ${g.level}; swing hold x${g4.hold[0]} after ${swings} swings; ${log.join(' ')}`);
 }
 
 // ── the world budgets (v4) ───────────────────────────────────────────────────
