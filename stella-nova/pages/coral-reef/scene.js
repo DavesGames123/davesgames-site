@@ -20,8 +20,14 @@
 //    3. volume .... VOL_FS at half size: the lamp cones, the lead shadow
 //                   shafts and the downwell shafts, from the depth
 //    4. frame ..... COMP_FS: scene + volume, ACES, vignette, grain, sRGB
+//    5. exposure .. every 12 frames LUM_FS fills a 32 x 32 log-luminance
+//                   target; gpu-safe.js exposureFrom sets uExposure
 //  With no float target (old phones) the scene goes straight to the
-//  canvas with no volume pass.
+//  canvas with no volume pass. The full-frame passes use gpu-safe.js
+//  fullTri (a finite draw range: three r160 skips a geometry with no
+//  index and no 'position'). The first frames clear the canvas to the
+//  SENTINEL colour and read the centre pixel after the composite: two
+//  misses and the scene goes straight to the canvas (S.post has the state).
 //
 //  Per-particle coral data lives in two float textures (PART_W wide):
 //  A = natural rgb, colour t; B = birth s, radius, sway level x 2 + tip,
@@ -45,6 +51,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as SH from './shaders.js';
 import { waveSpectrum, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
+import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
@@ -470,8 +477,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   function makePasses() {
     const fl = caus.half;
     if (!fl) return null;
-    const tri = new THREE.BufferGeometry();
-    tri.setAttribute('aPos', new THREE.BufferAttribute(new Float32Array([-1, -1, 3, -1, -1, 3]), 2));
+    // aPos only: fullTri sets the draw range (three r160 draws nothing
+    // for a geometry with no index and no 'position', gpu-safe.js)
+    const tri = fullTri(THREE);
     const depthTex = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
     const rtScene = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: depthTex, depthBuffer: true, stencilBuffer: false });
     const rtVol = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
@@ -480,19 +488,29 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       uSteps: { value: coarse ? 14 : 30 }, uVolMax: { value: 40 }, uScatter: { value: 1 }, uShaft: { value: 1 }, uFrame: { value: 0 },
     });
     const volMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_FS, uniforms: volU, depthTest: false, depthWrite: false });
-    const compU = { uScene: { value: rtScene.texture }, uVol: { value: rtVol.texture }, uVolTexel: { value: new THREE.Vector2() }, uExposure: { value: 1.25 }, uGrain: { value: 0.012 }, uTime: U.uTime, uVig: { value: 0.55 } };
+    const debugNaN = typeof location !== 'undefined' && /[?&]debug\b/.test(location.search || '') ? 1 : 0;
+    const compU = { uScene: { value: rtScene.texture }, uVol: { value: rtVol.texture }, uVolTexel: { value: new THREE.Vector2() }, uExposure: { value: 4 }, uGrain: { value: 0.012 }, uTime: U.uTime, uVig: { value: 0.55 }, uDebugNaN: { value: debugNaN } };
     const compMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.COMP_FS, uniforms: compU, depthTest: false, depthWrite: false });
     const volMesh = new THREE.Mesh(tri, volMat), compMesh = new THREE.Mesh(tri, compMat);
     volMesh.frustumCulled = compMesh.frustumCulled = false;
     const volScene = new THREE.Scene(), compScene = new THREE.Scene();
     volScene.add(volMesh); compScene.add(compMesh);
+    // the auto exposure: the log luminance of the frame in a 32 x 32 RGBA8 target
+    const LUM_N = 32;
+    const rtLum = new THREE.WebGLRenderTarget(LUM_N, LUM_N, { type: THREE.UnsignedByteType, depthBuffer: false, stencilBuffer: false });
+    const lumU = { uScene: { value: rtScene.texture }, uVol: { value: rtVol.texture }, uTap: { value: new THREE.Vector2() } };
+    const lumMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.LUM_FS, uniforms: lumU, depthTest: false, depthWrite: false });
+    const lumMesh = new THREE.Mesh(tri, lumMat); lumMesh.frustumCulled = false;
+    const lumScene = new THREE.Scene(); lumScene.add(lumMesh);
     const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     return {
-      rtScene, rtVol, volU, compU, volScene, compScene, ortho, scale: coarse ? 0.4 : 0.5,
+      rtScene, rtVol, rtLum, lumScene, lumBuf: new Uint8Array(LUM_N * LUM_N * 4), LUM_N, lumU,
+      volU, compU, volScene, compScene, ortho, scale: coarse ? 0.4 : 0.5,
       size(w, h) {
         rtScene.setSize(w, h);
         const vw = Math.max(1, Math.round(w * this.scale)), vh = Math.max(1, Math.round(h * this.scale));
         rtVol.setSize(vw, vh); compU.uVolTexel.value.set(1 / vw, 1 / vh);
+        lumU.uTap.value.set(0.25 / LUM_N, 0.25 / LUM_N);
       },
     };
   }
@@ -517,6 +535,31 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
 
   const opts = { volume: true, caustics: true, snow: true };
   let frameN = 0;
+  // post: the state of the post chain. checks: the first frames read the
+  // centre pixel after the composite (gpu-safe.js SENTINEL); two misses
+  // and the page draws the scene straight to the canvas.
+  const post = { on: !!passes, checks: 0, misses: 0, failed: false, exposure: passes ? passes.compU.uExposure.value : 1, reason: '' };
+  const px1 = new Uint8Array(4);
+  function postFail(why) {
+    post.on = false; post.failed = true; post.reason = why;
+    renderer.setClearColor(0x000000, 1);
+    console.warn('coral-reef: the post chain did not draw; the scene goes straight to the canvas (' + why + ')');
+  }
+  function checkFrame() {
+    const gl = renderer.getContext();
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    try { gl.readPixels(w >> 1, h >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px1); } catch (e) { return; }
+    post.checks++;
+    if (isSentinel(px1)) { post.misses++; if (post.misses >= 2) postFail('the composite left the sentinel'); }
+  }
+  function autoExposure() {
+    if (!passes) return;
+    renderer.setRenderTarget(passes.rtLum);
+    renderer.render(passes.lumScene, passes.ortho);
+    try { renderer.readRenderTargetPixels(passes.rtLum, 0, 0, passes.LUM_N, passes.LUM_N, passes.lumBuf); } catch (e) { return; }
+    post.exposure = exposureFrom(passes.lumBuf, post.exposure);
+    passes.compU.uExposure.value = post.exposure;
+  }
   // cam: the camera to draw with (the main camera, or a saver camera).
   function render(dt, nowMs = performance.now()) {
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
@@ -533,7 +576,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     if (lamps[0] && lamps[0].castShadow) lamps[0].shadow.updateMatrices(lamps[0]);
     updateLamps();
     frameN++;
-    if (!passes) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+    if (!passes || !post.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     renderer.setRenderTarget(passes.rtScene);
     renderer.render(scene, camera);
     if (U.uShadowOn.value < 0.5) updateLamps();            // the first shadow map is there now
@@ -548,13 +591,17 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     } else {
       renderer.setRenderTarget(passes.rtVol); renderer.setClearColor(0x000000, 1); renderer.clear(true, false, false);
     }
+    if (frameN % 12 === 3) autoExposure();
     renderer.setRenderTarget(null);
+    const check = post.checks < 4 && frameN > 1;
+    if (check) renderer.setClearColor(new THREE.Color(SENTINEL[0], SENTINEL[1], SENTINEL[2]), 1);
     renderer.render(passes.compScene, passes.ortho);
+    if (check) { checkFrame(); if (post.on) renderer.setClearColor(0x000000, 1); }
   }
 
   return {
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
-    get sand() { return sandMesh; },
+    get sand() { return sandMesh; }, post,
     setRock, addRockMeshes, setPlot, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; },

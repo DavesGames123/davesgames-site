@@ -46,6 +46,7 @@
 //    marine snow ........... "export const SNOW_VS"
 //    volume pass ........... "export const VOL_FS"
 //    composite ............. "export const COMP_FS"
+//    luminance (exposure) .. "export const LUM_FS"
 // ============================================================================
 import { SURFACE_Y, FADE_K, N_WAVES } from './water.js';
 import { ROCK_GLSL } from './rock/material.js';
@@ -641,10 +642,11 @@ in vec2 vUv;
 out vec4 oCol;
 uniform sampler2D uScene, uVol;
 uniform vec2 uVolTexel;
-uniform float uExposure, uGrain, uTime, uVig;
+uniform float uExposure, uGrain, uTime, uVig, uDebugNaN;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+bool bad3(vec3 c) { return any(isnan(c)) || any(isinf(c)); }
 void main() {
   vec3 c = texture(uScene, vUv).rgb;
   vec3 v = vec3(0.0);
@@ -653,10 +655,33 @@ void main() {
     v += texture(uVol, vUv + vec2(float(i), float(j)) * uVolTexel).rgb * w;
   }
   c += v / 16.0;
+  // NaN guard: a NaN or an Inf (a half float overflow) gives magenta with
+  // uDebugNaN (the ?debug URL), else black; the rest clamps to 0 .. 64
+  if (bad3(c)) { oCol = uDebugNaN > 0.5 ? vec4(1.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 1.0); return; }
+  c = clamp(c, 0.0, 64.0);
   c = aces(c * uExposure);
   vec2 d = vUv - 0.5;
   c *= 1.0 - uVig * dot(d, d) * 1.6;
   c = toSRGB(c);
   c += (h12(gl_FragCoord.xy + fract(uTime * 7.3) * 113.0) - 0.5) * uGrain;
   oCol = vec4(c, 1.0);
+}`;
+
+// The luminance of the frame for the auto exposure: a small RGBA8 target,
+// r = (log2 L + 16) / 20 (L of 2^-16 .. 2^4), 4 taps per texel.
+export const LUM_FS = /* glsl */`
+precision highp float;
+in vec2 vUv;
+out vec4 oCol;
+uniform sampler2D uScene, uVol;
+uniform vec2 uTap;
+float lum(vec2 uv) {
+  vec3 c = texture(uScene, uv).rgb + texture(uVol, uv).rgb;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  return (l >= 0.0 && l < 1e4) ? l : 0.0;
+}
+void main() {
+  float l = 0.25 * (lum(vUv + uTap * vec2(-1.0, -1.0)) + lum(vUv + uTap * vec2(1.0, -1.0)) + lum(vUv + uTap * vec2(-1.0, 1.0)) + lum(vUv + uTap * vec2(1.0, 1.0)));
+  float e = clamp((log2(max(l, 1.5e-5)) + 16.0) / 20.0, 0.0, 1.0);
+  oCol = vec4(e, 0.0, 0.0, 1.0);
 }`;

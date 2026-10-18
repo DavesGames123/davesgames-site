@@ -7,6 +7,8 @@
 //    tests/coral.test.mjs ... CORAL: growth, SDF meshes, the reef worker
 //    tests/rock.test.mjs .... ROCK: the rock SDF, features, meshes
 //    tests/rov.test.mjs ..... ROV: paths, vehicles, the SSTV link
+//    tests/gpu.test.mjs ..... SCENE: the main view passes on a fake WebGL2
+//                             (tests/fake-gl.mjs), formats, exposure
 //  The jsdom boot (mobile-check.mjs, in scene.test.mjs) needs jsdom 24:
 //  give its folder as JSDOM_DIR or NODE_PATH. Without it the boot skips.
 //  Exit code 1 if any file fails.
