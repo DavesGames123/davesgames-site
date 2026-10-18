@@ -34,7 +34,7 @@
 //
 //  grep -n targets: "export const PROFILES", "export function detectProfile",
 //  "export function estimate", "export function resolveSizes",
-//  "export function lostPolicy", "ASSET_MB"
+//  "export function lostPolicy", "ASSET_MB", "GROUND_SETS"
 // ============================================================================
 
 export const MB = 1048576;
@@ -138,7 +138,9 @@ export function resolveSizes(profile, view = {}) {
     froxel: p.froxel || gridFor(q),
     cloudK: capMin(q >= 0.5 ? 0.5 : 0.34, p.cloudK),
     cloudNoise: p.cloudNoise || { base: 128, detail: 32, n2d: 512, shadow: 512 },
-    groundRes: capMin(q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256, p.groundRes), groundLayers: capMin(13, p.groundLayers),
+    groundRes: capMin(q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256, p.groundRes), groundLayers: capMin(GROUND_SETS, p.groundLayers),
+    // render/surface-sim.js surfRes: the field grid (min(n, 1024), 512 on Low and phones)
+    groundSurface: Math.min(Math.min(view.n || 1024, p.maxN ?? 2048), coarse || q < 0.45 ? 512 : 1024),
     veg: {
       texSize: capMin(q >= 0.5 ? 512 : 256, veg.texSize), maxInst: maxPages * 128, maxPages,
       grassCap: capMin(Math.round(grassN * grassN * 1.6), veg.grassCap),
@@ -156,6 +158,9 @@ export function resolveSizes(profile, view = {}) {
 export const ASSET_MB = { all: 88, small: 8, none: 0 };
 export const ASSET_LAYERS = { all: 87, small: 37, none: 0 };
 const texMip = (w, h, layers, bpp, mips = true) => w * h * layers * bpp * (mips ? 4 / 3 : 1);
+// GROUND_SETS: the ground texture sets render/ground.js loads on desktop
+// (the 17 manifest sets less the skipped mud set, at most MAX_SETS 16)
+export const GROUND_SETS = 16;
 
 export function estimate(profile, view = {}) {
   const p = profile || PROFILES.desktop;
@@ -185,6 +190,8 @@ export function estimate(profile, view = {}) {
     froxels: fx * fy * fz * 8 * 5 + fx * fy * 8,
     // render/ground.js: albedo, normal, ORM arrays (rgba8, mips)
     ground: texMip(s.groundRes, s.groundRes, s.groundLayers, 4) * 3 + 2 * 6144 * 32,
+    // render/ground.js: the surface fields (4 layers rgba8, no mips)
+    groundSurface: s.groundSurface * s.groundSurface * 4 * 4,
     // render/vegetation.js: instances (32 B), visible (24 B), blades (48 B)
     vegBuffers: v.maxInst * 32 + v.maxInst * 24 + v.grassCap * 48,
     vegMaterials: texMip(v.texSize, v.texSize, matLayers, 4),
