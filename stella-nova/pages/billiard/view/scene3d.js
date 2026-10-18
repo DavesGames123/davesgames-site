@@ -170,16 +170,17 @@ function buildTable(T, mats, phone) {
 // A three-shade billiard lamp: a dark metal bar, three cone shades with warm
 // emissive bulbs, a spot light under each.
 function buildLamp(scene, phone) {
-  const grp = new THREE.Group(), y = 1.0;
+  const grp = new THREE.Group(), body = new THREE.Group(), y = 1.0;
+  grp.add(body);
   const metal = new THREE.MeshStandardMaterial({ color: 0x1d2a22, metalness: 0.6, roughness: 0.45 });
-  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.03, 0.05), metal); bar.position.set(0, y + 0.16, 0); grp.add(bar);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.03, 0.05), metal); bar.position.set(0, y + 0.16, 0); body.add(bar);
   const lights = [];
   [-0.55, 0, 0.55].forEach((x, k) => {
     const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.19, 0.16, 40, 1, true), new THREE.MeshStandardMaterial({ color: 0x14402c, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide }));
-    shade.position.set(x, y + 0.07, 0); grp.add(shade);
+    shade.position.set(x, y + 0.07, 0); body.add(shade);
     const bulb = new THREE.Mesh(new THREE.CircleGeometry(0.17, 40), new THREE.MeshBasicMaterial({ color: 0xfff1d6 }));
-    bulb.rotation.x = Math.PI / 2; bulb.position.set(x, y + 0.005, 0); grp.add(bulb);
-    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12), metal); rod.position.set(x, y + 0.2, 0); grp.add(rod);
+    bulb.rotation.x = Math.PI / 2; bulb.position.set(x, y + 0.005, 0); body.add(bulb);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12), metal); rod.position.set(x, y + 0.2, 0); body.add(rod);
     const L = new THREE.SpotLight(0xfff0dc, phone ? 26 : 22, 4, 1.05, 0.75, 1.4);
     L.position.set(x, y - 0.01, 0); L.target.position.set(x * 1.15, 0, 0);
     const shadow = !phone || k === 1;
@@ -188,7 +189,7 @@ function buildLamp(scene, phone) {
     grp.add(L, L.target); lights.push(L);
   });
   scene.add(grp);
-  return lights;
+  return { lights, body };
 }
 
 // The cue: tip, ferrule, maple shaft, ebony butt with a ring and a bumper.
@@ -255,7 +256,7 @@ export function createScene(canvas, T, { phone = false } = {}) {
     ebony: new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex('ebony-color.jpg', true, [4, 0.2]), roughness: 0.35 }),
   };
   scene.add(buildTable(T, mats, phone));
-  const lights = buildLamp(scene, phone);
+  const { lights, body: lampBody } = buildLamp(scene, phone);
   scene.add(new THREE.HemisphereLight(0x8899aa, 0x1a120c, 0.35));
 
   // balls
@@ -290,9 +291,14 @@ export function createScene(canvas, T, { phone = false } = {}) {
   }
   const up = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
 
-  const V = { renderer, scene, camera, controls, balls, lights, mode: 'auto', onUserOrbit: null };
+  const V = { renderer, scene, camera, controls, balls, lights, lamp: lampBody, mode: 'auto', onUserOrbit: null };
   let w = 1, h = 1;
+  let lastSize = '';
   V.resize = (W, H, dpr) => {
+    // the same size again would reset the drawing buffer (the saver calls it every frame)
+    const key = `${Math.round(W)}x${Math.round(H)}@${dpr}`;
+    if (key === lastSize) return;
+    lastSize = key;
     w = Math.max(1, W); h = Math.max(1, H);
     renderer.setPixelRatio(Math.min(dpr || 1, phone ? 1.75 : 2));
     renderer.setSize(w, h, false);
@@ -360,6 +366,7 @@ export function createScene(canvas, T, { phone = false } = {}) {
       const d = [Math.cos(focus.phi), Math.sin(focus.phi)];
       return { p: [focus.cx - d[0] * 1.05, 0.42, -(focus.cy - d[1] * 1.05)], t: [focus.cx + d[0] * 0.55, 0.0, -(focus.cy + d[1] * 0.55)] };
     }
+    lampBody.visible = mode !== 'overhead';
     if (mode === 'overhead') { const dist = Math.max(fitX, fitY) * 1.02; return asp >= 1 ? { p: [0, dist, 0.001], t: [0, 0, 0] } : { p: [0.001, dist * 1.15, 0], t: [0, 0, 0], roll: true }; }
     if (asp < 0.9) {
       // a portrait pane: along the table from behind the head rail
