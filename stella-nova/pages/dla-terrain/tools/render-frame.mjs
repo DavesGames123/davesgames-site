@@ -254,8 +254,30 @@ function closeProp(key, d, pick = 0) {
   console.log('prop', key, d, 'of', hits.length, 'at', x.toFixed(1), z.toFixed(1), 'sun xz', sd.map(q => q.toFixed(2)).join(','));
   return true;
 }
+// riv:<d>[:<pick>] — look down at a river from about d m (a point in the
+// middle of LIB river number pick, the larger rivers first)
+function closeRiver(d, pick = 0) {
+  const t = app.terrain, cam = app.cam, ws = t.worldSize;
+  const H = (x, z) => (app.lib && app.lib.terrainHeightAt ? app.lib.terrainHeightAt(t, x, z) : 0);
+  const rs = (t.rivers || []).filter(r => r.pts.length > 40).sort((a, b) => b.pts.length - a.pts.length);
+  const r = rs[Math.min(pick, rs.length - 1)];
+  if (!r) { console.log('riv: none'); return; }
+  const k = (r.pts.length >> 2) | 0;
+  const x = r.pts[k * 2], z = r.pts[k * 2 + 1];
+  const C = [x + d * 0.6, 0, z + d * 0.45];
+  C[1] = Math.max(H(x, z) + d * 0.55, H(C[0], C[2]) + 2);
+  const P = [x, H(x, z), z];
+  const dx = P[0] - C[0], dy = P[1] - C[1], dz = P[2] - C[2];
+  cam.setMode('fly', { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  app.camMode = 'fly';
+  cam.fly.pos = C;
+  cam.fly.yaw = Math.atan2(dx, -dz); cam.fly.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  cam.update(1, {}, { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  console.log('riv', d, 'at', x.toFixed(0), z.toFixed(0), 'width', r.width[k].toFixed(1));
+}
 let perf = [];
 for (const s of steps) {
+  if (s.startsWith('riv:')) { const [, d, pk] = s.split(':'); closeRiver(+d || 60, +pk || 0); await pump(40, s); continue; }
   if (s.startsWith('prop:')) { const [, key, d, pk] = s.split(':'); closeProp(key, +d || 6, +pk || 0); await pump(40, s); continue; }
   if (s === 'orbit') { await pump(30, 'orbit'); }
   else if (s === 'drone') { app.drone('ridge'); await pump(60, 'drone'); }

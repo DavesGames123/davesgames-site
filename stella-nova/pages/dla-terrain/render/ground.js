@@ -88,11 +88,12 @@
 
 import { simulateSurface, surfRes, SURF_LAYERS } from './surface-sim.js';
 import { createAO } from './ao.js';
+import { buildRiverNet, rasterNearest, riverGridN, RV as RIVER_RV, NONE as RIVER_NONE } from './river-net.js';
 
 const INST_FLOATS = 8;          // a: x0, z0, size, N; b: morph start, morph end, level, 0
 const MAX_INST = 6144;
 // GroundU (ground.wgsl struct GroundU) in floats: 21 vec4
-export const U_FLOATS = 84;
+export const U_FLOATS = 88;
 export const LAYERS = ['rock', 'cliff', 'grass', 'forest floor', 'sand', 'snow', 'mud', 'gravel'];
 // texture array size per quality (three arrays of 13 sets: about 180 MB at 1024)
 export const layerRes = (q) => (q >= 0.95 ? 1024 : q >= 0.45 ? 512 : 256);
@@ -543,6 +544,9 @@ export async function createGround(gpu) {
       { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       { binding: 7, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d-array' } },
+      // carved rivers (render/river-net.js): the nearest segment grid and the rows
+      { binding: 8, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, texture: { sampleType: 'uint' } },
+      { binding: 9, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
     ],
   });
   // the shadow pass reads U (group 1) too: the morph needs the terrain top
@@ -573,6 +577,15 @@ export async function createGround(gpu) {
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
   let surfTex = mkSurf(1);
+  // carved rivers: a 1 x 1 empty grid and one empty row until a final
+  // terrain with rivers arrives (U.river.x = 0)
+  const mkRiverGrid = (m) => device.createTexture({ size: [m, m], format: 'r32uint', label: `ground river grid ${m}`, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  const mkRiverRows = (floats) => device.createBuffer({ size: Math.max(32, floats * 4), usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, label: 'ground river rows' });
+  let riverGrid = mkRiverGrid(1);
+  queue.writeTexture({ texture: riverGrid }, new Uint32Array([RIVER_NONE]), { bytesPerRow: 4 }, [1, 1]);
+  let riverRows = mkRiverRows(8);
+  const riverU = new Float32Array(4);
+  let riverStats = { rows: 0, rivers: 0, gridN: 0, ms: 0, bytes: 0 };
   const makeBG = () => device.createBindGroup({
     layout: groundLayout, label: 'ground g1',
     entries: [
@@ -584,9 +597,42 @@ export async function createGround(gpu) {
       { binding: 5, resource: cloud ? cloud.view : litTex.createView() },
       { binding: 6, resource: cloud ? cloud.sampler : litSampler },
       { binding: 7, resource: surfTex.createView({ dimension: '2d-array' }) },
+      { binding: 8, resource: riverGrid.createView() },
+      { binding: 9, resource: { buffer: riverRows } },
     ],
   });
   let groundBG = makeBG();
+  // lib detailHeight for the river surface (as WATER builds its ribbons)
+  let libDetail = null;
+  try { ({ detailHeight: libDetail } = await import('../../../lib/dla-terrain.js')); } catch (e) { libDetail = null; }
+  // The carved river network of a final terrain (render/river-net.js):
+  // the rows of the WATER ribbons and the nearest segment grid
+  function setRivers(cpu) {
+    riverU[0] = 0;
+    if (!cpu || !cpu.rivers || !cpu.rivers.length || !cpu.height) return;
+    const t0 = performance.now();
+    const hAt = (x, z) => {
+      const n = cpu.n, ws = cpu.worldSize, o = -ws / 2;
+      const fx = Math.min(Math.max((x - o) / ws * n - 0.5, 0), n - 1), fz = Math.min(Math.max((z - o) / ws * n - 0.5, 0), n - 1);
+      const ix = Math.min(Math.floor(fx), n - 2), iz = Math.min(Math.floor(fz), n - 2), ax = fx - ix, az = fz - iz, h = cpu.height;
+      const v = (h[iz * n + ix] * (1 - ax) + h[iz * n + ix + 1] * ax) * (1 - az) + (h[(iz + 1) * n + ix] * (1 - ax) + h[(iz + 1) * n + ix + 1] * ax) * az;
+      let d = 0; try { d = libDetail ? libDetail(x, z, cpu) : 0; } catch (e) { d = 0; }
+      return v + (Number.isFinite(d) ? d : 0);
+    };
+    let net;
+    try { net = buildRiverNet(cpu, { heightAt: hAt, oceanOn: !!(gpu.oceanOn ?? true) }); } catch (e) { (gpu.log || console.warn)('ground: river net ' + (e.message || e)); return; }
+    if (!net.count) return;
+    const gN = riverGridN(cpu.n, phoneP);
+    const ids = rasterNearest(net, gN, cpu.worldSize, -cpu.worldSize / 2);
+    riverGrid.destroy(); riverRows.destroy();
+    riverGrid = mkRiverGrid(gN);
+    queue.writeTexture({ texture: riverGrid }, ids, { bytesPerRow: gN * 4 }, [gN, gN]);
+    riverRows = mkRiverRows(net.verts.length);
+    queue.writeBuffer(riverRows, 0, net.verts);
+    riverU.set([1, gN, cpu.worldSize / gN, net.count]);
+    groundBG = makeBG();
+    riverStats = { rows: net.count, rivers: net.rivers, gridN: gN, ms: Math.round(performance.now() - t0), bytes: gN * gN * 4 + net.verts.length * 4 };
+  }
 
   const vbufs = [{
     arrayStride: INST_FLOATS * 4, stepMode: 'instance',
@@ -701,6 +747,7 @@ export async function createGround(gpu) {
   let shArr = new Float32Array(MAX_INST * INST_FLOATS);
 
   let terrain = null;
+  let riverSrc = null;
   let mm = null, mmPrev = null, mmPrevUntil = 0;
   let hMin = 0, hMax = 1, hMaxPrev = 1;
   let cfg = null, cfgSh = null;
@@ -735,6 +782,9 @@ export async function createGround(gpu) {
     if (tc) snowFit.set(fitLapse(tc.height, tc.temperature));
     // the surface fields follow the final terrain; a forming one has none
     if (t.cpu && t.cpu.height && t.cpu.flow) startSurface(t.cpu);
+    // carved rivers: built for each final terrain; a forming one has none
+    if (t.cpu && t.cpu !== riverSrc) { riverSrc = t.cpu; setRivers(t.cpu); }
+    else if (!t.cpu) { riverSrc = null; riverU[0] = 0; }
     else if (!t.cpu) { surfJob++; surfCpu = null; surfU[0] = 0; surfReady = false; }
     ringU.set(farRingParams(t, hMin, hMax));
   }
@@ -797,6 +847,7 @@ export async function createGround(gpu) {
     // turns off POM and the vertex relief, the close-up rock cost
     uData.set(effectUniforms(quality, phoneP || (frame.govLevel | 0) >= 1, cfg.ranges[0], !!frame.near), 76);
     uData.set(layerMap.rsets, 80);
+    uData.set(riverU, 84);
     queue.writeBuffer(uBuf, 0, uData);
   }
 
@@ -993,13 +1044,14 @@ export async function createGround(gpu) {
     setSurface(on) { surfAllow = !!on; surfU[0] = surfAllow && surfReady ? 1 : 0; },
     setAerial(on) { aerialOn = on ? 1 : 0; }, // off when SKY's volume does all of the haze
     setFarRing(on) { ringOn = !!on; },          // the mirrored land past the world edge
-    stats() { return { patches: sel.count, full: sel.full, half: sel.half, shadowPatches: shSel.count, levels: cfg?.levels, N: cfg?.N, textures: texOn, surface: surfU[0] ? surfStats : null }; },
+    stats() { return { patches: sel.count, full: sel.full, half: sel.half, shadowPatches: shSel.count, levels: cfg?.levels, N: cfg?.N, textures: texOn, surface: surfU[0] ? surfStats : null, rivers: riverU[0] ? riverStats : null }; },
     resize() {},
     dispose() {
       for (const b of [uBuf, instBuf, shInstBuf]) b.destroy();
       if (ring) { ring.vbuf.destroy(); ring.ibuf.destroy(); }
       for (const k of Object.keys(idxBufs)) idxBufs[k].buf.destroy();
       texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy(); surfTex.destroy();
+      riverGrid.destroy(); riverRows.destroy();
       if (ao) ao.dispose();
       surfJob++;
       if (surfWorker) { surfWorker.terminate(); surfWorker = null; }

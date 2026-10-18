@@ -110,6 +110,7 @@ struct GroundU {
   rock: vec4f,    // joint frame: xy set 1 normal (unit xz, the strata dip direction), z bed spacing H0 m, w stair strength
   fx: vec4f,      // x POM on (0/1), y vertex relief on (0/1), z POM range m, w vertex relief range m
   rsets: vec4f,   // array layers of the extra sets: x layered rock, y blocky rock, z outcrop (50 m), w stony soil (255: none)
+  river: vec4f,   // carved rivers (render/river-net.js): x on (0/1), y grid cells per side, z cell m, w row count
 };
 @group(1) @binding(0) var<uniform> U: GroundU;
 @group(1) @binding(1) var tLayerAlb: texture_2d_array<f32>;  // ASSETS ground sets, rgba8unorm-srgb
@@ -119,6 +120,116 @@ struct GroundU {
 @group(1) @binding(5) var tCloudSh: texture_2d<f32>;         // SKY module.cloudShadow.view (r: sun transmittance)
 @group(1) @binding(6) var sCloudSh: sampler;
 @group(1) @binding(7) var tSurf: texture_2d_array<f32>;      // render/surface-sim.js fields, 4 layers rgba8unorm (vertex + fragment)
+@group(1) @binding(8) var tRiverGrid: texture_2d<u32>;       // r32uint: nearest river segment per cell (0xffffffff: none)
+@group(1) @binding(9) var<storage, read> riverV: array<vec4f>;  // 2 vec4 per row: (x, z, water y, half width), (depth, curvature, flow, last)
+
+// ---------------------------------------------------------------- rivers --
+// RIVERS FINER THAN THE HEIGHT MAP (render/river-net.js has the JS twins
+// carveAt and carveProfile; tests/rivers.test.mjs). A grid names the
+// nearest centre-line segment per cell; fn riverFind takes the exact
+// distance to the segments of the 3 x 3 cells round a point, so the
+// channel edge is exact at any distance. fn riverProfile cuts the channel
+// (a bowl from the bank lip to the bed, the deepest line toward the
+// outside of a bend: a cut bank there, a point bar inside) and fills the
+// coarse texel trench out to the reach as a floodplain that rises 3 cm
+// per m; a V valley keeps its sides.
+const RIVER_RV: u32 = 2u;
+const RIVER_REACH_TEXELS: f32 = 2.2;
+const RIVER_LIP: f32 = 0.25;
+const RIVER_RISE: f32 = 0.03;
+const RIVER_NONE: u32 = 0xffffffffu;
+struct RiverHit { found: bool, s: f32, sd: f32, v: vec4f };   // v: water y, half width, depth, curvature
+fn riverReach(hw: f32) -> f32 { return (hw * 1.4) + (RIVER_REACH_TEXELS * G.terrain.w); }
+const RIVER_WIN: u32 = 3u;
+fn riverTry(h: ptr<function, RiverHit>, xz: vec2f, id: u32, cnt: u32) {
+  let A = riverV[id * RIVER_RV];
+  let B = riverV[(id + 1u) * RIVER_RV];
+  let d = B.xy - A.xy;
+  let u = clamp(dot(xz - A.xy, d) / max(dot(d, d), 1e-9), 0.0, 1.0);
+  let e = xz - A.xy - (d * u);
+  let s = length(e);
+  if (s < (*h).s) {
+    let A2 = riverV[(id * RIVER_RV) + 1u];
+    let B2 = riverV[((id + 1u) * RIVER_RV) + 1u];
+    (*h).found = true;
+    (*h).s = s;
+    (*h).sd = select(-s, s, ((d.x * e.y) - (d.y * e.x)) >= 0.0);
+    (*h).v = vec4f(mix(A.z, B.z, u), mix(A.w, B.w, u), mix(A2.x, B2.x, u), mix(A2.y, B2.y, u));
+  }
+}
+fn riverFind(xz: vec2f) -> RiverHit {
+  var h: RiverHit;
+  h.found = false; h.s = 1e9; h.sd = 0.0; h.v = vec4f(0.0);
+  if (U.river.x < 0.5) { return h; }
+  let N = i32(U.river.y);
+  let g = vec2i(floor((xz - G.terrainOrigin.xy) / U.river.z));
+  let cnt = min(u32(U.river.w), arrayLength(&riverV) / RIVER_RV);
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let c = g + vec2i(i, j);
+      if ((c.x < 0) || (c.y < 0) || (c.x >= N) || (c.y >= N)) { continue; }
+      let id = textureLoad(tRiverGrid, c, 0).r;
+      if ((id == RIVER_NONE) || ((id + 1u) >= cnt)) { continue; }
+      // the named segment and RIVER_WIN segments each way along the same
+      // river (a cell names one segment; segments are shorter than a cell)
+      riverTry(&h, xz, id, cnt);
+      for (var k = 1u; k <= RIVER_WIN; k++) {
+        let q = id + k;
+        if (((q + 1u) >= cnt) || (riverV[((q - 1u) * RIVER_RV) + 1u].w > 0.5) || (riverV[(q * RIVER_RV) + 1u].w > 0.5)) { break; }
+        riverTry(&h, xz, q, cnt);
+      }
+      for (var k = 1u; k <= RIVER_WIN; k++) {
+        if (k > id) { break; }
+        let q = id - k;
+        if (riverV[(q * RIVER_RV) + 1u].w > 0.5) { break; }
+        riverTry(&h, xz, q, cnt);
+      }
+    }
+  }
+  if (h.found && (h.s > riverReach(h.v.y))) { h.found = false; }
+  return h;
+}
+// sd signed distance (+ left of the flow), v the hit values, hC the coarse
+// surface, spacing the mesh vertex spacing m (0 in the fragment shader).
+// A mesh too coarse for the channel bowl does not cut it (single vertices
+// would spike); it holds the ground 0.1 m under the water over the half
+// width plus half a vertex step, so the WATER ribbon shows its own crisp
+// edge there and the shading draws the banks.
+// -> (height, under water 0..1, point bar 0..1, cut bank 0..1)
+fn riverProfile(sd: f32, v: vec4f, hC: f32, spacing: f32) -> vec4f {
+  let chanK = 1.0 - smoothstep(v.y, v.y * 3.0, spacing);
+  let y = v.x;
+  let hw = max(v.y, 0.3);
+  let lip = y + RIVER_LIP;
+  let bed = y - v.z;
+  let bend = clamp(v.w * hw * 3.0, -1.0, 1.0);
+  let thal = -0.35 * hw * bend;
+  let x = sd - thal;
+  let inside = (x * bend) > 0.0;
+  let span = max(select(hw + thal, hw - thal, x >= 0.0), hw * 0.3);
+  let r = min(abs(x) / span, 1.5);
+  let ex = select(2.0 + abs(bend), 2.0 / (1.0 + (0.8 * abs(bend))), inside);
+  let chanH = bed + ((lip - bed) * pow(min(r, 1.0), ex));
+  let s = abs(sd);
+  let reach = riverReach(hw);
+  let fill = max(hC, lip + (RIVER_RISE * max(s - hw, 0.0)));
+  let fillH = mix(fill, hC, smoothstep(reach * 0.65, reach, s));
+  let cw = (1.0 - smoothstep(0.9, 1.15, r)) * chanK;
+  var h = min(fillH, mix(fillH, chanH, cw));
+  if (s < (hw + (0.5 * spacing * (1.0 - chanK)))) { h = min(h, y - 0.1); }
+  let bar = select(0.0, abs(bend) * (1.0 - smoothstep(0.4, 1.1, r)), inside);
+  let cut = select(abs(bend) * (1.0 - smoothstep(1.0, 1.6, r)), 0.0, inside);
+  return vec4f(h, 1.0 - smoothstep(0.95, 1.0, r), bar, cut);
+}
+// The carved height at xz over the coarse height hC (vertex shaders).
+fn riverCarve(xz: vec2f, hC: f32, spacing: f32) -> f32 {
+  let hit = riverFind(xz);
+  if (!hit.found) { return hC; }
+  return riverProfile(hit.sd, hit.v, hC, spacing).x;
+}
+// the share of the channel cut a mesh of this vertex spacing can hold: a
+// narrow channel between sparse vertices would only spike single vertices
+fn riverCarveV(xz: vec2f, hC: f32, spacing: f32) -> f32 { return riverCarve(xz, hC, spacing); }
 
 const GPI: f32 = 3.14159265;
 
@@ -207,7 +318,8 @@ fn groundDisp(xz: vec2f, y: f32) -> vec3f {
 @vertex
 fn vs(@builtin(vertex_index) vid: u32, inst: Inst) -> VOut {
   let m = cdlodVertex(vid, inst);
-  let h = terrainHeight(m.xy);
+  let sp = (inst.a.z / max(inst.a.w, 1.0)) * (1.0 + m.z);
+  let h = riverCarveV(m.xy, terrainHeight(m.xy), sp);
   var o: VOut;
   o.base = vec3f(m.x, h, m.y);
   o.world = o.base + groundDisp(m.xy, h);
@@ -250,7 +362,8 @@ fn vsRing(@location(0) a: vec3f) -> VOut {
 @vertex
 fn vsShadow(@builtin(vertex_index) vid: u32, inst: Inst) -> @builtin(position) vec4f {
   let m = cdlodVertex(vid, inst);
-  let h = terrainHeight(m.xy);
+  let sp = (inst.a.z / max(inst.a.w, 1.0)) * (1.0 + m.z);
+  let h = riverCarveV(m.xy, terrainHeight(m.xy), sp);
   return SP.viewProj * vec4f(vec3f(m.x, h, m.y) + groundDisp(m.xy, h), 1.0);
 }
 
@@ -1845,9 +1958,38 @@ fn fs(v: VOut) -> @location(0) vec4f {
   }
   let aux = auxAt(xz);
   let flow = aux.r;
-  let river = clamp(aux.g, 0.0, 1.0);
+  var river = clamp(aux.g, 0.0, 1.0);
   let moist = clamp(aux.b, 0.0, 1.0);
-  let wdepth = max(aux.a, 0.0);
+  var wdepth = max(aux.a, 0.0);
+  // carved rivers (fn riverFind): the slope of the carved surface by
+  // forward differences on the coarse surface plus the profile, and a
+  // channel mask that is exact at every distance (anti-aliased over the
+  // footprint, so a 3 m stream far away is a thin soft line, not a 20 m
+  // block of the LIB mask)
+  var rBar = 0.0;
+  var rCut = 0.0;
+  var rBank = 0.0;
+  let rh = riverFind(xz);
+  if (rh.found && !outside) {
+    let hC = baseHeight(xz) + detailHeight(xz);
+    let r0 = riverProfile(rh.sd, rh.v, hC, 0.0);
+    let e = clamp(fp * 0.5, 0.05, 2.0);
+    let hx = riverFind(xz + vec2f(e, 0.0));
+    let hz = riverFind(xz + vec2f(0.0, e));
+    let px = select(hC + (gD.x * e), riverProfile(hx.sd, hx.v, hC + (gD.x * e), 0.0).x, hx.found);
+    let pz = select(hC + (gD.y * e), riverProfile(hz.sd, hz.v, hC + (gD.y * e), 0.0).x, hz.found);
+    gD = vec2f(px - r0.x, pz - r0.x) / e;
+    let hw = rh.v.y;
+    river = 1.0 - smoothstep(hw - (0.7 * fp), hw + (0.7 * fp), rh.s);
+    rBank = 1.0 - smoothstep(hw, (hw * 1.8) + fp + 1.0, rh.s);
+    if (aux.g > 0.02) { wdepth = max(rh.v.x - r0.x, 0.0) * r0.y; }
+    rBar = r0.z;
+    rCut = r0.w;
+  } else if ((U.river.x > 0.5) && (aux.g > 0.02)) {
+    // the LIB mask of a cell that no carved river reaches: no water here
+    river = 0.0;
+    wdepth = 0.0;
+  }
   var bw = biomeMix(xz);
   // ---- surface fields (render/surface-sim.js); hasSurf false: none yet
   let sf = surfAt(xz);
@@ -1967,10 +2109,12 @@ fn fs(v: VOut) -> @location(0) vec4f {
   w0.w *= 1.0 - beach;
   // river beds: gravel in the channel, sand and silt at the edges, mud on
   // the banks; sediment fans where a big flow reaches flat ground
-  let rj = river + (fbm2(xz * 0.09, 3) * 0.22);
+  let rj = river + (fbm2(xz * 0.09, 3) * select(0.22, 0.04, U.river.x > 0.5));
   let bed = smoothstep(0.3, 0.7, rj);
-  let bank = smoothstep(0.05, 0.3, rj) * (1.0 - bed);
-  let chan = smoothstep(0.8, 2.8, flow) * soft;
+  let bank = max(smoothstep(0.05, 0.3, rj), rBank) * (1.0 - bed);
+  // (the LIB flow field is one texel wide: with carved rivers on, the
+  // channel gravel follows the carved bank band, not the 20 m texels)
+  let chan = smoothstep(0.8, 2.8, flow) * soft * select(1.0, rBank, U.river.x > 0.5);
   let fan = chan * (1.0 - smoothstep(0.02, 0.10, slope)) * (1.0 - bed);
   // a channel carries water all year only with a big flow in a wet
   // climate; a dry wash (most channels of an arid plain) is pale sand and
@@ -1980,6 +2124,12 @@ fn fs(v: VOut) -> @location(0) vec4f {
   w1.w += (bed * 2.0) + (chan * 0.3);
   w1.x += (bed * mix(1.2, 0.6, perennial)) + (fan * 0.9);
   w1.z += (bank * 1.2 * moist * perennial) + (fan * 0.4 * perennial);
+  // point bars (gravel and sand inside a bend) and cut banks (bare wet
+  // soil on the outside)
+  w1.w += rBar * 1.6;
+  w1.x += rBar * 0.5;
+  w1.z += rCut * 0.6;
+  w0.z *= 1.0 - (max(rBar, rCut) * 0.8);
   w0.z *= 1.0 - (bed * 0.95);
   w0.w *= 1.0 - (bed * 0.95);
   // lake and sea floor: silt
