@@ -41,6 +41,8 @@
 //    rovs.feed = { canvas, setVehicle(id), update(dt), setMode('r36'|'m1'),
 //                  setSpeed(s), hud(), picture: { w, h, data }, link }
 //              (createROVs.update calls feed.update; SCENE places canvas)
+//    o.makeFeed(base, ids) -> a feed: the page gives rov/feeds.js
+//              createFeedSet (one feed per vehicle, the same single-feed API)
 //    rovs.lights      every SpotLight, rovs.wash the wash Points
 //    rovs.dispose()
 //
@@ -79,6 +81,7 @@
 //    link.js ........ the SSTV link over pages/sstv ("export class SstvLink")
 //    hud.js ......... the feed panel ("export function drawHud")
 //    feed.js ........ render target, link and panel ("export function createFeed")
+//    feeds.js ....... one feed per ROV in one render budget ("export function createFeedSet")
 //    feed-worker.js . encode and noise in a module worker
 //    stub-rock.js ... a stand-in rock for tests ("export function createStubRock")
 //    coral-field.js . the coral term of the ROV field ("export function createCoralField")
@@ -260,10 +263,13 @@ export function createROVs(THREE, o = {}) {
   const byId = (id) => vehicles.find(v => v.id === id) || vehicles[0];
 
   const feedO = o.feed || {};
-  const feed = createFeed(THREE, Object.assign({
+  // o.makeFeed(base, ids): the page gives the feed set of rov/feeds.js (one
+  // feed per vehicle, HUD); else one feed as before
+  const feedBase = Object.assign({
     renderer: o.renderer || null, scene, seed, getVehicle: byId,
-    info: (v) => ({ depth: depthBase - v.group.position.y, heading: headingOf(v.pilot.state.yaw), time: clock }),
-  }, feedO));
+    info: (v) => ({ depth: depthBase - v.group.position.y, heading: headingOf(v.pilot.state.yaw), time: clock, task: o.makeFeed ? v.pilot.state.mode : undefined }),
+  }, feedO);
+  const feed = o.makeFeed ? o.makeFeed(feedBase, vehicles.map(v => v.id)) : createFeed(THREE, feedBase);
   if (feedO.vehicle == null) feed.setVehicle(1);
 
   function headingOf(yaw) {     // compass: north is -z, east is +x
