@@ -1008,6 +1008,27 @@ export async function loadAssetProtos(lib, texSize, log, accept = null, o = {}) 
 
 // ------------------------------------------------------------ library
 // prototypes -> one VB/IB, species table, lists, draw slots.
+// CPU twin of the colour mip step (vegetation.js mipCode fn fsw), for the
+// tests: src RGBA floats (linear, 0..1) w x h -> the next level. The
+// colour is the alpha-weighted mean of the 2 x 2 box, the alpha the mean x
+// MIP_ALPHA_K (clamped).
+export const MIP_ALPHA_K = 1.2;
+export function alphaMip(src, w, h) {
+  const W = Math.max(1, w >> 1), H = Math.max(1, h >> 1), out = new Float32Array(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let sa = 0; const wc = [0, 0, 0], pc = [0, 0, 0];
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const i = (Math.min(h - 1, y * 2 + dy) * w + Math.min(w - 1, x * 2 + dx)) * 4, a = src[i + 3];
+      sa += a;
+      for (let c = 0; c < 3; c++) { wc[c] += src[i + c] * a; pc[c] += src[i + c] * 0.25; }
+    }
+    const o = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) out[o + c] = sa > 1e-3 ? wc[c] / Math.max(sa, 1e-4) : pc[c];
+    out[o + 3] = Math.min(1, Math.max(0, sa * 0.25 * MIP_ALPHA_K));
+  }
+  return out;
+}
+
 // Bent foliage normals (soft canopy light): each leaf vertex normal turns
 // toward the outward normal of the crown ellipsoid (the box of the LOD0
 // leaf vertices), by k. Flat cards then shade as one round crown and both
@@ -1140,6 +1161,8 @@ export function writeCullParams(P, o) {
     const on = lr.key.startsWith('canopy') ? o.treesOn !== false : o.propsOn !== false;
     P.set([lr.near * fs, on ? lr.far * fs : 0, lr.band, (lr.farBand || 0) * fs], 28 + i * 4);
   });
+  // layers[7].x: TAA on (props.wgsl ditherFrame): the dither turns each frame
+  P[56] = o.taa === false ? 0 : 1;
   return P;
 }
 const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -1268,6 +1291,28 @@ export function planPages(want, have, free) {
 }
 
 // ------------------------------------------------------------ module
+// The fixed sizes of the module (no camera term: the closest zoom and the
+// far orbit have the same caps). maxPages instance pages of PAGE; the
+// grass: fine spacing grassD m (q 1: 4 cm), inner ring grassR0 m (R0 x 8
+// is the outer ring), grassN x grassN threads per ring, at most grassCap
+// blades; farK scales the layer distances (x 0.625 low .. 1 ultra, phones
+// x 0.75 more); shadowCap m: tree shadow casters (near ones draw LOD 1,
+// far ones the impostor quad; past it the impostor crown shading stands
+// for it). vp = gpu.profile.veg caps.
+export function vegCaps(q, coarse, vp = {}, limits = { maxStorageBufferBindingSize: 134217728 }) {
+  const maxPages = Math.round((384 + 3200 * q) * (coarse ? 0.6 : 1));
+  const grassD = (0.075 - 0.035 * q) * (coarse ? 1.3 : 1);
+  const grassR0 = q < 0.4 || coarse ? 7 : 10;
+  const farK = (0.5 + 0.5 * q) * (coarse ? 0.75 : 1) * ((vp && vp.farK) || 1);
+  const shadowCap = (300 + 900 * q) * (coarse ? 0.6 : 1);   // q 0.75: 975 m
+  const grassN = Math.ceil((2 * grassR0) / grassD / 8) * 8 + 8;
+  const grassCap = Math.min(Math.floor(limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6), (vp && vp.grassCap) || Infinity);
+  return { maxPages, maxInst: maxPages * PAGE, grassD, grassR0, farK, shadowCap, grassN, grassCap,
+    // per frame dispatch: 4 grass rings of (grassN / 8)^2 groups, the props
+    // cull at most 2 x maxPages x PAGE / 256 groups
+    grassGroups: 4 * (grassN / 8) * (grassN / 8), propGroupsMax: 2 * Math.ceil(maxPages * PAGE / 256) };
+}
+
 export async function createVegetation(gpu) {
   const device = gpu.device, queue = gpu.queue;
   const q = gpu.quality ?? 0.75;
@@ -1372,19 +1417,40 @@ export async function createVegetation(gpu) {
   // GPU mips (render blit) for the impostor atlases and asset layers
   const mipCode = `
     @group(0) @binding(0) var src: texture_2d<f32>;
-    @group(0) @binding(1) var smp: sampler;
     struct O { @builtin(position) p: vec4f, @location(0) uv: vec2f };
     @vertex fn vs(@builtin(vertex_index) i: u32) -> O {
       var o: O; let x = f32((i << 1u) & 2u); let y = f32(i & 2u);
       o.p = vec4f(x * 2.0 - 1.0, 1.0 - y * 2.0, 0.0, 1.0); o.uv = vec2f(x, y); return o; }
+    // an exact 2 x 2 box of the level above (textureLoad, no filter)
+    fn box(p: vec2f) -> array<vec4f, 4> {
+      let n = vec2i(textureDimensions(src));
+      let b = vec2i(floor(p)) * 2;
+      return array<vec4f, 4>(textureLoad(src, min(b, n - 1), 0), textureLoad(src, min(b + vec2i(1, 0), n - 1), 0),
+                             textureLoad(src, min(b + vec2i(0, 1), n - 1), 0), textureLoad(src, min(b + vec2i(1, 1), n - 1), 0));
+    }
+    // data maps (normals, flags): the plain mean; alpha x 1.2 as before
     @fragment fn fs(o: O) -> @location(0) vec4f {
-      let c = textureSample(src, smp, o.uv);
-      return vec4f(c.rgb, clamp(c.a * 1.2, 0.0, 1.0)); }`;
+      let t = box(o.p.xy);
+      let c = (t[0] + t[1] + t[2] + t[3]) * 0.25;
+      return vec4f(c.rgb, clamp(c.a * MIP_ALPHA_K, 0.0, 1.0)); }
+    // colour with cut-out alpha: the colour is the alpha-weighted mean, so
+    // the dark colour of empty texels does not bleed into the leaf edges
+    // (no dark halo on far crowns); the alpha gets MIP_ALPHA_K, so a 0.5
+    // cut keeps about the coverage of the level above
+    @fragment fn fsw(o: O) -> @location(0) vec4f {
+      let t = box(o.p.xy);
+      let a = vec4f(t[0].a, t[1].a, t[2].a, t[3].a);
+      let sa = a.x + a.y + a.z + a.w;
+      let wc = (t[0].rgb * a.x) + (t[1].rgb * a.y) + (t[2].rgb * a.z) + (t[3].rgb * a.w);
+      let pc = (t[0].rgb + t[1].rgb + t[2].rgb + t[3].rgb) * 0.25;
+      let rgb = select(pc, wc / max(sa, 1e-4), sa > 1e-3);
+      return vec4f(rgb, clamp(sa * 0.25 * MIP_ALPHA_K, 0.0, 1.0)); }
+    const MIP_ALPHA_K: f32 = 1.2;`;
   const mipMod = device.createShaderModule({ label: 'veg mips', code: mipCode });
-  const mipSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
   const mipPipes = {};
   function mipPipe(format) {
-    if (!mipPipes[format]) mipPipes[format] = device.createRenderPipeline({ label: 'veg mip ' + format, layout: 'auto', vertex: { module: mipMod, entryPoint: 'vs' }, fragment: { module: mipMod, entryPoint: 'fs', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
+    // sRGB colour maps (materials, impostor albedo): the alpha-weighted mean
+    if (!mipPipes[format]) mipPipes[format] = device.createRenderPipeline({ label: 'veg mip ' + format, layout: 'auto', vertex: { module: mipMod, entryPoint: 'vs' }, fragment: { module: mipMod, entryPoint: format.endsWith('-srgb') ? 'fsw' : 'fs', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
     return mipPipes[format];
   }
   function genMips(t, layer, format) {
@@ -1393,7 +1459,7 @@ export async function createVegetation(gpu) {
     for (let l = 1; l < t.mipLevelCount; l++) {
       const srcV = t.createView({ dimension: '2d', baseMipLevel: l - 1, mipLevelCount: 1, baseArrayLayer: layer, arrayLayerCount: 1 });
       const dstV = t.createView({ dimension: '2d', baseMipLevel: l, mipLevelCount: 1, baseArrayLayer: layer, arrayLayerCount: 1 });
-      const bg = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: srcV }, { binding: 1, resource: mipSampler }] });
+      const bg = device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: srcV }] });
       const p = enc.beginRenderPass({ colorAttachments: [{ view: dstV, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 0] }] });
       p.setPipeline(pipe); p.setBindGroup(0, bg); p.draw(3); p.end();
     }
@@ -1404,7 +1470,8 @@ export async function createVegetation(gpu) {
   // instance pages: the far canopy fills about 1600 pages at q 0.75, so
   // the pool is larger than that; a phone (gpu.coarse) takes 60 %
   const coarse = !!gpu.coarse;
-  const maxPages = Math.round((384 + 3200 * q) * (coarse ? 0.6 : 1));   // q 0.25: 1184 (152k), 0.75: 2784 (356k), 1: 3584 (459k)
+  const caps = vegCaps(q, coarse, vp, device.limits);
+  const maxPages = caps.maxPages;   // q 0.25: 1184 (152k), 0.75: 2784 (356k), 1: 3584 (459k)
   const maxInst = maxPages * PAGE;
   const instBuf = device.createBuffer({ label: 'veg instances', size: maxInst * 32, usage: BU.STORAGE | BU.COPY_DST });
   const visBuf = device.createBuffer({ label: 'veg visible', size: maxInst * 3 * 8, usage: BU.STORAGE });
@@ -1415,16 +1482,7 @@ export async function createVegetation(gpu) {
   // grass
   // fine spacing m: q 1 -> 4 cm; low quality and phones get fewer blades
   // and a shorter grass range (R0 x 8 is the outer ring)
-  const grassD = (0.075 - 0.035 * q) * (coarse ? 1.3 : 1);
-  const grassR0 = q < 0.4 || coarse ? 7 : 10;
-  // layer distances: x 0.625 (low) .. 1 (ultra), phones x 0.75 more
-  const farK = (0.5 + 0.5 * q) * (coarse ? 0.75 : 1);
-  // tree shadow casters: near ones draw LOD 1 (about 8k triangles for an
-  // asset tree) into each cascade, far ones their impostor quad. Past this
-  // range the impostor crown shading (props.wgsl fs_imp) stands for it.
-  const shadowCap = (300 + 900 * q) * (coarse ? 0.6 : 1);   // q 0.75: 975 m
-  const grassN = Math.ceil((2 * grassR0) / grassD / 8) * 8 + 8;
-  const grassCap = Math.min(Math.floor(device.limits.maxStorageBufferBindingSize / 48), Math.round(grassN * grassN * 1.6), vp.grassCap || Infinity);
+  const { grassD, grassR0, farK, shadowCap, grassN, grassCap } = caps;
   const bladeBuf = device.createBuffer({ label: 'veg blades', size: grassCap * 48, usage: BU.STORAGE });
   const gargsBuf = device.createBuffer({ label: 'veg grass args', size: 16, usage: BU.STORAGE | BU.INDIRECT | BU.COPY_DST });
   const gparamBuf = device.createBuffer({ label: 'veg grass params', size: 160, usage: BU.UNIFORM | BU.COPY_DST });
@@ -1704,6 +1762,10 @@ export async function createVegetation(gpu) {
   }
 
   // ---- per frame state
+  // TAA resolves the dither (props.wgsl ditherFrame) when it runs: not on a
+  // phone profile, at Low (quality under 0.5) or at governor level 2 and up
+  const taaOn = (frame) => !(gpu.profile && gpu.profile.taa === false) && !/^phone/.test(gpu.profileId || '')
+    && (frame.quality ?? q) >= 0.5 && (frame.govLevel | 0) < 2;
   let aerialOn = true;
   let shadowsOn = 1, propsCount = 0, grassOn = true, propsOn = true, treesOn = true, propsOn2 = true, snapUntil = -1;
   const lodPx = LOD_PX;
@@ -1771,7 +1833,8 @@ export async function createVegetation(gpu) {
       const shadowFar = Math.min(frame.shadowDistance ?? 1e9, frame.shadowInfo?.splits?.[frame.shadowInfo.count - 1] ?? 1e9, shadowCap);
       writeCullParams(params, { cam, time: g[GO.camPos + 3], shadowFar: frame.shadowFar ?? shadowFar, slots: highPage * PAGE, q, proj, H,
         frame: g[GO.frame], lodPx, sun: [g[GO.sunDir], g[GO.sunDir + 1], g[GO.sunDir + 2]], shadowsOn,
-        lists: L.lib.nLists, nSlots: L.lib.slots.length, species: L.lib.protos.length, aerial: aerialOn, farK, treesOn, propsOn: propsOn2 });
+        lists: L.lib.nLists, nSlots: L.lib.slots.length, species: L.lib.protos.length, aerial: aerialOn, farK, treesOn, propsOn: propsOn2,
+        taa: taaOn(frame) });
       // cloud shadow: rect (x0, z0, size) and the cloud base y; size 0 = none
       const cs = frame.cloudShadow || gpu.cloudShadow || null;
       if (cs && cs.view) {

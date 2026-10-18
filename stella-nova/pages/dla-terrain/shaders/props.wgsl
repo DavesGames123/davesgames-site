@@ -54,8 +54,13 @@ struct VegParams {
   sun: vec4f,       // xyz toward the sun, w 1 when shadows are on
   counts: vec4f,    // x lists, y slots, z species, w 1 = own aerial fog (0 when SKY haze does it)
   cloud: vec4f,     // SKY cloud shadow: x0, z0, size m (0 = none), cloud base y
-  layers: array<vec4f, 8>,  // near m, far m, band m, far-end band m (0 = band)
+  layers: array<vec4f, 8>,  // near m, far m, band m, far-end band m (0 = band);
+                            // layers[7].x = 1 when TAA resolves the dither
 };
+// the frame term of the dither noise: it turns each frame only when TAA
+// averages it (Low, phones and governor level 2+ have no TAA: a fixed
+// pattern does not flicker)
+fn ditherFrame() -> f32 { return select(0.0, G.frame.x, VP.layers[7].x > 0.5); }
 // Per species: a = height m, radius m, lod count, flags (bit 0 impostor,
 // 1 deciduous, 2 no shadow, 3 rock triplanar, 4 conifer, 5 flower tint)
 // b = bend m per m/s, flutter, sink fraction, lean rad
@@ -519,11 +524,11 @@ fn vs_shadow(v: VIn, @builtin(instance_index) k: u32) -> VOut {
 
 fn ditherKeep(fc: vec2f, fade: u32, seed: f32) -> bool {
   let f = unpack2x16float(fade);
-  let d = fract(cm_ign(fc) + G.frame.x * 0.6180339);
+  let d = fract(cm_ign(fc) + ditherFrame() * 0.6180339);
   if (f.x >= 0.0) { if (d >= f.x) { return false; } }
   else { if (d < -f.x) { return false; } }
   if (f.y < 0.999) {
-    let e = fract(cm_hash12(fc + vec2f(seed * 113.0, seed * 71.0)) + G.frame.x * 0.381966);
+    let e = fract(cm_hash12(fc + vec2f(seed * 113.0, seed * 71.0)) + ditherFrame() * 0.381966);
     if (e >= f.y) { return false; }
   }
   return true;
@@ -587,7 +592,8 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
       let fw = max(fwidth(tx.a), 1e-3);
       let sharp = clamp(((tx.a - 0.5) / fw) + 0.5, 0.0, 1.0);
       let nearK = 1.0 - smoothstep(25.0, 40.0, distance(o.wp, G.camPos.xyz));
-      let thr = fract(cm_ign(o.pos.xy + vec2f(5.0, 13.0)) + (G.frame.x * 0.7548777));
+      // no TAA: the plain 0.5 cut on the sharpened alpha (no noise)
+      let thr = select(0.5, fract(cm_ign(o.pos.xy + vec2f(5.0, 13.0)) + (G.frame.x * 0.7548777)), VP.layers[7].x > 0.5);
       // winter: broadleaf crowns go bare (most of the leaves drop)
       if ((flags & 2u) != 0u) {
         let drop = winterF() * 0.9 + autumnF() * 0.15;
@@ -724,7 +730,7 @@ fn fs_imp(o: IOut) -> @location(0) vec4f {
   let mipA = max(0.0, 0.5 * log2(max(max(dot(ddx, ddx), dot(ddy, ddy)), 1e-8)));
   let lodS = min(mipA, 2.5);
   let a = textureSampleLevel(tImpA, sRep, uv, layer, lodS);
-  let cutT = mix(0.5, 0.2 + (0.6 * fract(cm_ign(o.pos.xy) + (G.frame.x * 0.6180339))), smoothstep(4.0, 6.0, mipA));
+  let cutT = mix(0.5, 0.2 + (0.6 * fract(cm_ign(o.pos.xy) + (ditherFrame() * 0.6180339))), smoothstep(4.0, 6.0, mipA));
   let alpha = a.a;
   if (alpha < cutT) { discard; }
   let nt = textureSampleLevel(tImpN, sRep, uv, layer, lodS);

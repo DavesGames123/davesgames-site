@@ -10,9 +10,12 @@
 //    PLANTS    bent foliage normals (outward, bark untouched), the bush
 //              pool (3D shrubs before card bushes), the wind margins and
 //              the calm frequencies of props.wgsl and grass.wgsl, tufts.
+//    MIPS      the alpha-weighted colour mips (no dark halo), coverage.
+//    CAPS      vegCaps: fixed instance and blade caps (no zoom term), LOD
+//              cross-fade bands, the TAA flag of the dither.
 //    AO        render/ao.js aoPlan (off on phones, Low and governor 2+),
 //              shaders/ao.wgsl constant loops and its fixed cost.
-//  grep -n targets: "── shadows", "── ao", "── plants"
+//  grep -n targets: "── shadows", "── ao", "── plants", "── mips", "── caps"
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -22,7 +25,7 @@ import { packCascades, CASCADE_FLOATS } from '../gpu/globals.js';
 import { project } from '../gpu/mat.js';
 import { aoPlan, AO_MAX_PX, AO_RADIUS } from '../render/ao.js';
 import { effectUniforms, pomSteps, POM_NEAR, POM_MAX } from '../render/ground.js';
-import { bendFoliageNormals, loadAssetProtos } from '../render/vegetation.js';
+import { bendFoliageNormals, loadAssetProtos, alphaMip, MIP_ALPHA_K, vegCaps, writeCullParams, LOD_PX, fadeKeep, PAGE } from '../render/vegetation.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0, passes = 0;
@@ -174,6 +177,56 @@ const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
   check('calm motion: trunk <= 0.35 Hz, branch <= 0.8 Hz, leaf <= 2 Hz, grass <= 1 Hz', fT <= 0.35 && fB <= 0.8 && fL <= 2 && fG <= 1, `trunk ${fT}, branch ${fB}, leaf ${fL}, grass ${fG}`);
   check('gusts travel (noise field moved downwind), grass and trees share it', /fn vegGust/.test(pw) && /fn grassGust/.test(gw) && /t \* \(1\.5 \+ \(sp \* 0\.8\)\)/.test(pw) && /t \* \(1\.5 \+ \(sp \* 0\.8\)\)/.test(gw));
   check('grass blades lean out of tufts and take the soft shadow', /const TUFT: f32/.test(gw) && /outA/.test(gw) && /sunShadowSoft\(o\.wp, tn, o\.pos\.xy\)/.test(gw));
+}
+
+// ── mips
+{
+  // a leaf texel (green, opaque) next to empty texels (dark, alpha 0)
+  const src = new Float32Array(4 * 4 * 4);
+  for (let i = 0; i < 16; i++) src.set([0.02, 0.03, 0.01, 0], i * 4);
+  src.set([0.2, 0.5, 0.1, 1], 0); src.set([0.2, 0.5, 0.1, 1], 4); src.set([0.2, 0.5, 0.1, 1], 16);
+  const m = alphaMip(src, 4, 4);
+  check('colour mips keep the leaf colour (no dark bleed from empty texels)', Math.abs(m[1] - 0.5) < 1e-6 && Math.abs(m[0] - 0.2) < 1e-6);
+  check('colour mips scale the alpha by MIP_ALPHA_K', Math.abs(m[3] - Math.min(1, 0.75 * MIP_ALPHA_K)) < 1e-6 && m[7] === 0);
+  // coverage: leaf blobs (2 x 2 texels, about 45 % cover) keep their 0.5-cut
+  // coverage at the first mip (far crowns: props.wgsl cutAlpha adds a mip bias)
+  let s2 = 3; const r = () => ((s2 = (s2 * 1103515245 + 12345) >>> 0) / 4294967296);
+  const lv = new Float32Array(64 * 64 * 4);
+  for (let by = 0; by < 32; by++) for (let bx = 0; bx < 32; bx++) {
+    const on = r() < 0.45, ox = (bx * 2 + (by % 2)) % 64;
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) lv.set([0.1, 0.4, 0.1, on ? 1 : 0], (((by * 2 + dy) * 64) + ((ox + dx) % 64)) * 4);
+  }
+  const cov = (L, n) => { let c = 0; for (let i = 0; i < n; i++) if (L[i * 4 + 3] >= 0.5) c++; return c / n; };
+  const c0 = cov(lv, 64 * 64), c1 = cov(alphaMip(lv, 64, 64), 32 * 32);
+  check('the 0.5 cut keeps the leaf coverage at the first mip (within 0.15)', Math.abs(c1 - c0) < 0.15, 'base ' + c0.toFixed(2) + ', mip 1 ' + c1.toFixed(2));
+  const vj = readFileSync(join(DIR, 'render/vegetation.js'), 'utf8');
+  check('the GPU mip shader is the alpha-weighted box (fn fsw) on colour maps', /fn fsw/.test(vj) && /wc \/ max\(sa, 1e-4\)/.test(vj) && /format\.endsWith\('-srgb'\) \? 'fsw' : 'fs'/.test(vj));
+}
+
+// ── caps
+{
+  const lim = { maxStorageBufferBindingSize: 134217728 };
+  for (const [q, coarse, vp] of [[1, false, {}], [0.75, false, {}], [0.25, false, {}], [0.75, true, { grassCap: 60000, farK: 0.75 }], [0.25, true, { grassCap: 20000, farK: 0.5 }]]) {
+    const c = vegCaps(q, coarse, vp, lim);
+    const tag = `q ${q}${coarse ? ' phone' : ''}`;
+    check(`${tag}: fixed caps (pages ${c.maxPages}, blades ${c.grassCap}, groups ${c.grassGroups} + ${c.propGroupsMax})`,
+      c.maxPages * PAGE * 32 <= 16 * 1024 * 1024 && c.grassCap * 48 <= lim.maxStorageBufferBindingSize && c.grassGroups <= 4 * 70 * 70 && c.propGroupsMax <= 4000 && (!vp.grassCap || c.grassCap <= vp.grassCap));
+  }
+  check('phone farK of the profile scales the layer distances', vegCaps(0.25, true, { farK: 0.5 }).farK < vegCaps(0.25, true, {}).farK);
+  // LOD cross-fade: each LOD band hands over over 25 % of its threshold,
+  // and the two dithers of a band keep every pixel once
+  const bandsOk = LOD_PX.slice(0, 3).every((t, i) => i === 0 || t * 1 < LOD_PX[i - 1] * 0.75);
+  let sumOk = true;
+  for (let b = 0.05; b <= 1.0001; b += 0.05) if (Math.abs(fadeKeep(-b, 1) + fadeKeep(b, 1) - 1) > 1e-9) sumOk = false;
+  check('LOD bands do not overlap (each fades over its lowest 25 %)', bandsOk, LOD_PX.join(' '));
+  check('a LOD cross-fade keeps every pixel once (fade + 1 - fade)', sumOk);
+  const P = new Float32Array(64);
+  writeCullParams(P, { cam: [0, 0, 0], proj: new Float32Array(16), taa: false });
+  const off = P[56];
+  writeCullParams(P, { cam: [0, 0, 0], proj: new Float32Array(16) });
+  check('the TAA flag rides in layers[7].x (fixed dither without TAA)', off === 0 && P[56] === 1);
+  const pw = readFileSync(join(DIR, 'shaders/props.wgsl'), 'utf8');
+  check('props dither turns per frame only with TAA', /fn ditherFrame\(\) -> f32 \{ return select\(0\.0, G\.frame\.x, VP\.layers\[7\]\.x > 0\.5\); \}/.test(pw) && !/cm_ign\(fc\) \+ G\.frame\.x/.test(pw));
 }
 
 console.log(`nearfield: ${passes} passed, ${fails} failed`);
