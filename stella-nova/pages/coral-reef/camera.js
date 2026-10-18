@@ -26,6 +26,10 @@
 //              glide that rock holds for 0.4 s cuts to the boom, and
 //              follow(id, { snap }) cuts at once. The look comes back
 //              to the back of the vehicle after 3 s with no input.
+//              The ROV body is an obstacle (bodySdf, bodyOut): the boom
+//              is never shorter than the body + BODY_MARGIN, the boom
+//              yaw is a damped spring capped by BOOM_RATE and BOOM_ACC,
+//              and an eye move that crosses the body goes round it.
 //    saver ... saverGoal(pos, look, cut) from the saver director of
 //              main.js; the springs of this module move the camera.
 //
@@ -54,13 +58,39 @@
 //    "export function createExploreCamera"
 //    "  function orbitGoal"  "  function swimStep"  "  function tourStep"
 //    "  function pickBoom"  "  function followGoal" "  function update("
+//    "export function bodySdf"  "export function bodyOut"  "BOOM_RATE"
 // ============================================================================
 
 import { createGrid, pullTight, pushOut as pilotPushOut } from './rov/pilot.js';
 
 export const CLEAR_HARD = 0.35;    // m: the eye is never nearer the rock than this
 export const CLEAR_SOFT = 0.7;     // m: the swim push starts here
-export const TOUR_CLEAR = 0.45;    // m: every tour sample has this much water (arch gaps are about 2 m)
+export const TOUR_CLEAR = 0.45;
+// The ROV body as an obstacle of the follow eye (the user: "when ROV's turn
+// quickly they turn the camera into the rov"): a box round the vehicle
+// (2.2 x 1.4 x 1.5 m x scale 0.6, with a skin), and a margin over it.
+export const BODY_HALF = [0.72, 0.46, 0.5];
+export const BODY_MARGIN = 0.3;
+export const BOOM_RATE = 1.8;      // rad/s: the most the boom turns round the ROV
+export const BOOM_ACC = 5;         // rad/s2: the most its turn rate changes
+// metres from p to the box of a vehicle at c with heading yaw (x forward)
+export function bodySdf(p, c, yaw, half = BODY_HALF) {
+  const dx = p[0] - c[0], dy = p[1] - c[1], dz = p[2] - c[2], cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const qx = Math.abs(dx * cy + dz * sy) - half[0], qy = Math.abs(dy) - half[1], qz = Math.abs(-dx * sy + dz * cy) - half[2];
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0);
+}
+// p moved out from the body centre along c -> p (or along `away` when p is
+// at the centre) to the body + margin shell; p itself when it is outside
+export function bodyOut(p, c, yaw, away, half = BODY_HALF, margin = BODY_MARGIN) {
+  if (bodySdf(p, c, yaw, half) >= margin) return p;
+  let d = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], l = Math.hypot(d[0], d[1], d[2]);
+  if (l < 1e-3 && away) { d = away.slice(); l = Math.hypot(d[0], d[1], d[2]); }
+  if (l < 1e-3) { d = [0, 1, 0]; l = 1; }
+  d = [d[0] / l, d[1] / l, d[2] / l];
+  let lo = 0, hi = Math.hypot(half[0], half[1], half[2]) + margin + 0.05;
+  for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; if (bodySdf([c[0] + d[0] * m, c[1] + d[1] * m, c[2] + d[2] * m], c, yaw, half) >= margin) hi = m; else lo = m; }
+  return [c[0] + d[0] * hi, c[1] + d[1] * hi, c[2] + d[2] * hi];
+}    // m: every tour sample has this much water (arch gaps are about 2 m)
 const TAU = Math.PI * 2;
 const UP = [0, 1, 0];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -347,7 +377,7 @@ export function createExploreCamera(o = {}) {
   const orbit = { target: look0.slice(), yaw: a0.yaw, pitch: a0.pitch, dist: len(sub(eye0, look0)), wYaw: 0, wPitch: 0, pivot: null, grip: null, plane: null, auto: false };
   const swim = { pos: eye0.slice(), vel: [0, 0, 0], yaw: 0, pitch: 0, yawT: 0, pitchT: 0, speedK: 1, move: [0, 0, 0], boost: false };
   const tour = { T: null, s: 0, spd: 0, wait: true, look: null };
-  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0, autoYaw: 0, autoPitch: 0, wantYaw: 0, wantPitch: 0, searchT: 0, snapNext: false, stuckT: 0 };
+  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0, autoYaw: 0, autoPitch: 0, wantYaw: 0, wantPitch: 0, searchT: 0, snapNext: false, stuckT: 0, boomYaw: null, boomRate: 0, vYaw: 0, body: null };
   const saver = { eye: eye0.slice(), look: look0.slice(), omega: 2.2 };
   let mode = 'orbit', blend = 0, idle = 0, tours = null, grid = null;
   let lastGood = eye0.slice();
@@ -407,7 +437,7 @@ export function createExploreCamera(o = {}) {
       if (opt.id != null) follow.id = opt.id;
       follow.yawOff = 0; follow.pitchOff = 0.28; follow.idle = 0;
       follow.autoYaw = follow.autoPitch = follow.wantYaw = follow.wantPitch = 0;
-      follow.searchT = 0; follow.stuckT = 0; follow.snapNext = !!opt.snap;
+      follow.searchT = 0; follow.stuckT = 0; follow.snapNext = !!opt.snap; follow.boomYaw = null; follow.boomRate = 0;
     } else if (m === 'saver') {
       saver.eye = E.x.slice(); saver.look = L.x.slice();
     }
@@ -660,13 +690,32 @@ export function createExploreCamera(o = {}) {
       follow.autoYaw += (follow.wantYaw - follow.autoYaw) * e;
       follow.autoPitch += (follow.wantPitch - follow.autoPitch) * e;
     }
-    const dir = dirOf(yaw0 + follow.autoYaw, clamp(pitch0 + follow.autoPitch, -0.9, 1.3));
+    // the boom yaw follows the wanted yaw with a critically damped spring,
+    // with a cap on its rate and on its acceleration: a fast ROV turn (or
+    // a new pick) swings the eye round the ROV on the boom circle, not
+    // through the vehicle
+    const want = yaw0 + follow.autoYaw;
+    if (follow.boomYaw == null || follow.snapNext) { follow.boomYaw = want; follow.boomRate = 0; }
+    else {
+      let d = (want - follow.boomYaw) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+      const w = 3.2, acc = clamp(w * w * d - 2 * w * follow.boomRate, -BOOM_ACC, BOOM_ACC);
+      follow.boomRate = clamp(follow.boomRate + acc * dt, -BOOM_RATE, BOOM_RATE);
+      follow.boomYaw += follow.boomRate * dt;
+    }
+    // the smoothed heading of the ROV (for the look point)
+    follow.vYaw = follow.boomYaw - Math.PI - follow.yawOff - follow.autoYaw;
+    follow.body = { c: v.pos, yaw: v.yaw, half: v.half || BODY_HALF };
+    const dir = dirOf(follow.boomYaw, clamp(pitch0 + follow.autoPitch, -0.9, 1.3));
+    // the boom is never shorter than the body + margin in its direction
+    const minB = len(sub(bodyOut(piv, v.pos, v.yaw, dir, follow.body.half), piv));
     let eye = add(piv, mul(dir, follow.dist));
     if (F) {
-      eye = add(piv, mul(dir, Math.max(0.6, boomLen(piv, dir))));
+      eye = add(piv, mul(dir, Math.max(minB, boomLen(piv, dir))));
       if (F.metres(eye) < CLEAR_SOFT) { const q = F.pushOut(eye, CLEAR_SOFT); if (q) eye = q; }
     }
-    goal.eye = eye; goal.look = add(v.pos, mul(fw, 1.2 * Math.cos(follow.yawOff + follow.autoYaw)));
+    eye = bodyOut(eye, v.pos, v.yaw, dir, follow.body.half);
+    const sfw = [Math.cos(follow.vYaw), 0, Math.sin(follow.vYaw)];
+    goal.eye = eye; goal.look = add(v.pos, mul(sfw, 1.2 * Math.cos(follow.yawOff + follow.autoYaw)));
     return 4.5;
   }
 
@@ -729,6 +778,21 @@ export function createExploreCamera(o = {}) {
           lastGood = E.x.slice(); follow.stuckT = 0; blend = 0;
         }
         follow.snapNext = false;
+      }
+    }
+    // follow: the eye stays out of the ROV body (+ margin). An eye in the
+    // shell, or a move that crosses the body, goes out from the body
+    // centre on the side the eye came from: round the vehicle, not
+    // through it. Rock wins: a point in rock keeps the last eye.
+    if (mode === 'follow' && follow.body) {
+      const B = follow.body;
+      let cross = false;
+      for (let k = 1; k <= 4 && !cross; k++) if (bodySdf(lerp3(prev, E.x, k / 4), B.c, B.yaw, B.half) < BODY_MARGIN) cross = true;
+      if (cross) {
+        const away = sub(prev, B.c);
+        const q = bodyOut(bodySdf(E.x, B.c, B.yaw, B.half) < BODY_MARGIN ? E.x : lerp3(prev, E.x, 0.5), B.c, B.yaw, away, B.half);
+        const q2 = bodySdf(q, B.c, B.yaw, B.half) >= BODY_MARGIN - 1e-3 ? q : bodyOut(add(B.c, away), B.c, B.yaw, away, B.half);
+        if (!F || F.metres(q2) >= CLEAR_HARD) { E.x = q2; lastGood = q2.slice(); }
       }
     }
     if (len(sub(L.x, E.x)) < 0.05) L.x = add(E.x, dirOf(swim.yaw, swim.pitch));
