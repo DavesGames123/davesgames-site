@@ -33,7 +33,14 @@
 //                               bends, surface follows the bed and falls
 //                               downstream, speed from slope (Manning),
 //                               rapids, waterfalls, confluence foam
-//    buildLakeMeshes(t, o)      flood fill of each lake basin below its level
+//    buildLakeMeshes(t, o)      a grid over each lake: from t.lakeId (the
+//                               cells of world/hydro-lakes.js) or, with no
+//                               lakeId, a flood fill below each level. A
+//                               lake vertex carries the fetch, the kind,
+//                               ice, salt and the depth (LAKE_KIND)
+//    lakeAtFn(t)                (x, z) -> lake level | null, for the
+//                               river ends: a ribbon stops at the first
+//                               row in a lake and starts where it leaves
 //    buildOceanGrid(rMin, rMax, nr, na)  polar grid to the horizon
 //    sampleHeight(t, x, z)      bilinear height at texel centres
 //
@@ -57,6 +64,8 @@ export const CASCADES = [
   { L: 13, lmin: 0.5, lmax: 6 },
 ];
 export const SURF_STRIDE = 12; // floats per river / lake vertex
+// lake kinds as the shader reads them (vertex dir.y)
+export const LAKE_KIND = Object.freeze({ lake: 0, pond: 1, tarn: 2, oxbow: 3, great: 4, user: 5 });
 const GRAV = 9.81;
 const TAU = Math.PI * 2;
 
@@ -262,6 +271,7 @@ export function buildRiverRibbons(t, o = {}) {
   const fallMin = o.fallMin ?? 6;
   const fallSlope = o.fallSlope ?? 1.0;
   const seaLevel = o.oceanOn ? (t.seaLevel ?? 0) : null;
+  const lakeAt = o.lakeAt === undefined ? lakeAtFn(t) : o.lakeAt;
   const rivers = [];
   const all = t.rivers || [];
   // mouths, for the confluence test
@@ -283,6 +293,20 @@ export function buildRiverRibbons(t, o = {}) {
     for (let i = 1; i < m; i++) { F[i] = Math.max(F[i], F[i - 1]); W[i] = Math.max(W[i], W[i - 1]); }
     const rs = resample(P, [W, F], step);
     P = rs.P; W = rs.V[0].map((w) => Math.max(w * widthScale, minWidth)); F = rs.V[1];
+    let mouthLevel = null;
+    if (lakeAt) {
+      // a river starts where it leaves a lake and ends at its first row in
+      // a lake (that row is the mouth, under the lake surface)
+      const inL = P.map(([x, z]) => lakeAt(x, z));
+      let a = 0;
+      while (a < P.length && inL[a] != null) a++;
+      let b = a;
+      while (b < P.length && inL[b] == null) b++;
+      const e = Math.min(b, P.length - 1);
+      if (e - a < 1) { rivers.push(null); continue; }
+      if (b < P.length) mouthLevel = inL[b];
+      P = P.slice(a, e + 1); W = W.slice(a, e + 1); F = F.slice(a, e + 1);
+    }
     const n = P.length;
     for (let i = 1; i < n; i++) { F[i] = Math.max(F[i], F[i - 1]); W[i] = Math.max(W[i], W[i - 1]); }
     // equal flow, equal width: a run of one flow takes the widest width of the run
@@ -306,7 +330,7 @@ export function buildRiverRibbons(t, o = {}) {
       }
       if (!bad) break;
     }
-    rivers.push({ P, W, F, total: rs.total });
+    rivers.push({ P, W, F, total: rs.total, mouthLevel });
     mouths.push({ x: P[n - 1][0], z: P[n - 1][1], idx: rivers.length - 1 });
   }
 
@@ -315,7 +339,7 @@ export function buildRiverRibbons(t, o = {}) {
   for (let ri = 0; ri < rivers.length; ri++) {
     const R = rivers[ri];
     if (!R) { outRivers.push(null); continue; }
-    const { P, W, F } = R;
+    const { P, W, F, mouthLevel } = R;
     const n = P.length;
     // tangents and normals
     const T = [], Nn = [];
@@ -368,6 +392,9 @@ export function buildRiverRibbons(t, o = {}) {
       }
     }
     for (let i = 0; i < n; i++) surf[i] = Math.max(surf[i], floorS[i]);
+    // the mouth in a lake: 5 cm under the lake surface, so the lake draws
+    // over it (no coplanar faces) and the river runs into the lake
+    if (mouthLevel != null) surf[n - 1] = Math.min(surf[n - 1], mouthLevel - 0.05);
     // offsets: the inner bank of a bend is held inside the radius of curvature
     const hl = [], hr = [];
     for (let i = 0; i < n; i++) {
@@ -505,7 +532,83 @@ export function buildRiverRibbons(t, o = {}) {
 // Each lake: flood fill of the cells below its level from the cell nearest
 // to (x, z); a grid mesh over the filled cells plus a one-cell rim (the rim
 // goes under the shore). Lakes at sea level are left to the ocean.
+// The level of the lake at (x, z), or null (t.lakeId of world/hydro-lakes.js).
+export function lakeAtFn(t) {
+  if (!t || !t.lakeId || !t.lakes || !t.lakes.length) return null;
+  const n = t.n, ws = t.worldSize, org = -ws / 2, cs = ws / n, id = t.lakeId, lakes = t.lakes;
+  return (x, z) => {
+    const i = Math.floor((x - org) / cs), j = Math.floor((z - org) / cs);
+    if (i < 0 || j < 0 || i >= n || j >= n) return null;
+    const k = id[j * n + i];
+    const lk = k >= 0 ? lakes[k] : null;
+    return lk && lk.merged == null ? lk.level : null;
+  };
+}
+
+function lakeAttrs(lk, cells, cs) {
+  const area = lk.area || cells * cs * cs;
+  return {
+    fetch: lk.fetch || 2 * Math.sqrt(area / Math.PI),
+    code: LAKE_KIND[lk.kind] ?? 0,
+    ice: clamp(lk.ice || 0, 0, 1),
+    salt: lk.salt ? 1 : 0,
+  };
+}
+
+// t.lakeId path: one grid per lake over its cells plus a rim of one step
+function buildLakesById(t, o) {
+  const n = t.n, ws = t.worldSize, org = -ws / 2, cs = ws / n, H = t.height, id = t.lakeId, L = t.lakes;
+  const maxVerts = o.maxVerts ?? 600000;
+  const K = L.length, x0 = new Int32Array(K).fill(n), z0 = new Int32Array(K).fill(n), x1 = new Int32Array(K).fill(-1), z1 = new Int32Array(K).fill(-1), cnt = new Int32Array(K);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const k = id[j * n + i];
+    if (k < 0 || k >= K) continue;
+    cnt[k]++;
+    if (i < x0[k]) x0[k] = i; if (i > x1[k]) x1[k] = i; if (j < z0[k]) z0[k] = j; if (j > z1[k]) z1[k] = j;
+  }
+  const verts = [], idx = [], lakes = [];
+  let base = 0, totalVerts = 0, skipped = 0;
+  const order = [...Array(K).keys()].sort((a, b) => cnt[b] - cnt[a]);   // big lakes first
+  for (const k of order) {
+    const lk = L[k];
+    if (!lk || cnt[k] === 0 || lk.merged != null) continue;
+    if (o.oceanOn && lk.level <= (t.seaLevel ?? -Infinity) + 0.2) continue;
+    const st = Math.max(1, Math.ceil(Math.sqrt(cnt[k] / (o.cellsPerLake ?? 40000))));
+    const i0 = Math.max(x0[k] - st, 0), j0 = Math.max(z0[k] - st, 0), i1 = Math.min(x1[k] + st, n - 1), j1 = Math.min(z1[k] + st, n - 1);
+    const W = Math.floor((i1 - i0) / st) + 1, Hh = Math.floor((j1 - j0) / st) + 1;
+    if (totalVerts + W * Hh > maxVerts) { skipped++; continue; }
+    const near = (i, j) => {
+      for (let dj = -st; dj <= st; dj++) for (let di = -st; di <= st; di++) {
+        const a = i + di, b = j + dj;
+        if (a >= 0 && b >= 0 && a < n && b < n && id[b * n + a] === k) return true;
+      }
+      return false;
+    };
+    const at = lakeAttrs(lk, cnt[k], cs);
+    const vid = new Int32Array(W * Hh).fill(-1);
+    let count = 0;
+    for (let gj = 0; gj < Hh; gj++) for (let gi = 0; gi < W; gi++) {
+      const i = i0 + gi * st, j = j0 + gj * st;
+      if (!near(i, j)) continue;
+      vid[gj * W + gi] = count++;
+      verts.push(org + (i + 0.5) * cs, lk.level, org + (j + 0.5) * cs, id[j * n + i] === k ? 1 : 0, 0, at.fetch, at.code, at.ice, at.salt, 0, lk.level - H[j * n + i], 2);
+    }
+    totalVerts += count;
+    let tris = 0;
+    for (let j = 0; j < Hh - 1; j++) for (let i = 0; i < W - 1; i++) {
+      const a = vid[j * W + i], b = vid[j * W + i + 1], c = vid[(j + 1) * W + i], d = vid[(j + 1) * W + i + 1];
+      if (a < 0 || b < 0 || c < 0 || d < 0) continue;
+      idx.push(base + a, base + c, base + b, base + b, base + c, base + d);
+      tris += 2;
+    }
+    base += count;
+    lakes.push({ id: k, level: lk.level, kind: lk.kind || 'lake', cells: cnt[k], step: st, verts: count, tris, fetch: at.fetch, ice: at.ice, salt: at.salt, bbox: [org + i0 * cs, org + j0 * cs, org + (i1 + 1) * cs, org + (j1 + 1) * cs] });
+  }
+  return { vertices: new Float32Array(verts), indices: new Uint32Array(idx), lakes, skipped, stride: SURF_STRIDE };
+}
+
 export function buildLakeMeshes(t, o = {}) {
+  if (t.lakeId && t.lakes && t.lakeId.length === t.n * t.n) return buildLakesById(t, o);
   const n = t.n, ws = t.worldSize, org = -ws / 2, cs = ws / n, H = t.height;
   const maxCells = o.maxCells ?? 250000;
   const maxVerts = o.maxVerts ?? 600000;
@@ -557,13 +660,14 @@ export function buildLakeMeshes(t, o = {}) {
     };
     if (totalVerts + W * Hh > maxVerts) { for (const k of filled) inside[k] = 0; skipped++; continue; }
     const vid = new Int32Array(W * Hh).fill(-1);
+    const at = lakeAttrs(lk, cells, cs);
     let count = 0;
     for (let gj = 0; gj < Hh; gj++) for (let gi = 0; gi < W; gi++) {
       const i = i0 + gi * st, j = j0 + gj * st;
       if (!near(i, j)) continue;
       const x = org + (i + 0.5) * cs, z = org + (j + 0.5) * cs;
       vid[gj * W + gi] = count++;
-      verts.push(x, lk.level, z, inside[j * n + i] ? 1 : 0, 0, 1, 0, 0, 0, 0, lk.level - H[j * n + i], 2);
+      verts.push(x, lk.level, z, inside[j * n + i] ? 1 : 0, 0, at.fetch, at.code, at.ice, at.salt, 0, lk.level - H[j * n + i], 2);
     }
     totalVerts += count;
     let tris = 0;
@@ -612,6 +716,9 @@ export async function createWater(gpu) {
   const hdrFormat = gpu.hdrFormat || 'rgba16float';
   const depthFormat = gpu.depthFormat || 'depth32float';
   let quality = gpu.quality ?? 1;
+  // phones and the safe profile: one ripple copy, no screen-space march
+  const profileId = gpu.profileId || 'desktop';
+  const cheapProfile = /^phone|^safe/.test(profileId);
   const code = await gpu.loadWGSL(new URL('../shaders/water.wgsl', import.meta.url).href);
   const module = device.createShaderModule({ code, label: 'water.wgsl' });
   if (module.getCompilationInfo) {
@@ -726,7 +833,7 @@ export async function createWater(gpu) {
   let wind = [6, 2], windInit = false;
   let modes = null, modesAge = 1e9;
   let debugView = 0, frameN = 0;
-  const stats = { rivers: 0, riverVerts: 0, lakes: 0, lakeTris: 0, falls: 0, ocean: false };
+  const stats = { rivers: 0, riverVerts: 0, lakes: 0, lakeTris: 0, lakeKinds: {}, falls: 0, ocean: false, cheap: false };
 
   const destroyAll = (o) => { if (o) for (const b of Object.values(o)) if (b && b.destroy) b.destroy(); };
   const upload = (data, usage) => {
@@ -784,6 +891,8 @@ export async function createWater(gpu) {
     }
     stats.rivers = rb.rivers.filter(Boolean).length; stats.riverVerts = nv;
     stats.lakes = lb.lakes.length; stats.lakeTris = lb.indices.length / 3; stats.falls = rb.falls.length;
+    stats.lakeKinds = {};
+    for (const l of lb.lakes) stats.lakeKinds[l.kind || 'lake'] = (stats.lakeKinds[l.kind || 'lake'] || 0) + 1;
     api.last = { rivers: rb, lakes: lb };
   }
 
@@ -829,7 +938,13 @@ export async function createWater(gpu) {
     U.set([...mulv([0.028, 0.06, 0.06], tk.s), 0], 36);                                                        // lake scatter
     U.set([ws > 1e-3 ? wind[0] / ws : 1, ws > 1e-3 ? wind[1] / ws : 0, ws, storm], 40);
     const night = 1 - smooth(-0.15, 0.05, g[85]);
-    U.set([quality > 0.25 ? 1 : 0, quality > 0.15 ? 1 : 0, clamp(g[109] || 0, 0, 1), night], 44);
+    // the governor's emergency rung (gpu/governor.js) takes the reflection
+    // march, the caustics and the second ripple copy away
+    const gov = frame.gov && frame.gov.level != null ? frame.gov.level : 0;
+    const emergency = gov >= 8 || (frame.govLevel ?? 0) >= 5;
+    const cheap = cheapProfile || emergency || quality <= 0.25;
+    stats.cheap = cheap;
+    U.set([quality > 0.25 && !cheapProfile && !emergency ? 1 : 0, quality > 0.15 && !emergency && profileId !== 'phone-min' ? 1 : 0, clamp(g[109] || 0, 0, 1), night], 44);
     U.set([COUNT, WAVE_N, Math.round(24 + 40 * quality), debugView], 48);
     const cs = frame.cloudShadow || gpu.cloudShadow || null;
     cloudSrc = cs && cs.view ? cs : null;
@@ -837,7 +952,7 @@ export async function createWater(gpu) {
     skySrc = sk && sk.view ? sk : null;
     const rect = cloudSrc && cloudSrc.rect ? cloudSrc.rect() : [0, 0, 1];
     U.set([rect[0], rect[1], rect[2], cloudSrc && cloudSrc.base ? cloudSrc.base() : 2000], 52);
-    U.set([skySrc ? (skySrc.scale ?? 1) : 0, skySrc ? 1 : 0, cloudSrc ? 1 : 0, 0], 56);
+    U.set([skySrc ? (skySrc.scale ?? 1) : 0, skySrc ? 1 : 0, cloudSrc ? 1 : 0, cheap ? 1 : 0], 56);
     queue.writeBuffer(ubuf, 0, U);
   }
 

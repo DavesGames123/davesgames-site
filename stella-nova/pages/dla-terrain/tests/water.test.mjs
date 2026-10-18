@@ -302,5 +302,157 @@ test('water colour slider: 0.35 is the base, peaty takes the blue, glacial scatt
   for (let t = 0; t <= 1.0001; t += 0.05) { const v = waterTint(t); assert.ok([...v.a, ...v.s].every(x => x > 0 && Number.isFinite(x))); }
 });
 
+// ------------------------------------------------- bodies of water ----
+const { readFileSync } = await import('node:fs');
+const { LAKE_KIND, lakeAtFn, createWater } = await import('../render/water.js');
+const hydro = await import('../world/hydro-lakes.js');
+
+// a bowl terrain with a lake from the add water tool (world/hydro-lakes.js)
+function lakeWorld() {
+  const t = makeTerrain((x, z) => 40 - x * 0.01 + Math.abs(z) * 0.004 - 14 * Math.max(0, 1 - Math.hypot(x + 200, z) / 300), { n: 128, worldSize: 2048 });
+  const N = t.n * t.n;
+  Object.assign(t, { water: new Float32Array(N), biome: new Uint8Array(N).fill(4), river: new Float32Array(N), moisture: new Float32Array(N).fill(0.6), temperature: new Float32Array(N).fill(-6), flow: new Float32Array(N).fill(0.01), stats: { hasSea: false } });
+  const r = hydro.addWaterAt(t, -200, 0);
+  return { t, r };
+}
+
+test('lakes from lakeId: one grid per lake at its level, every lake cell covered, attributes per kind', () => {
+  const { t, r } = lakeWorld();
+  assert.ok(r.ok, r.reason);
+  const lb = buildLakeMeshes(t, {});
+  assert.equal(lb.lakes.length, 1);
+  const v = lb.vertices, S = SURF_STRIDE, nv = v.length / S;
+  for (let i = 0; i < nv; i++) {
+    assert.equal(v[i * S + 1], r.lake.level, 'flat at the level');
+    assert.equal(v[i * S + 11], 2, 'kind lake');
+    assert.ok(Math.abs(v[i * S + 5] - r.lake.fetch) < 1e-3, 'fetch');
+    assert.equal(v[i * S + 6], LAKE_KIND.user, 'kind code');
+    assert.ok(Math.abs(v[i * S + 7] - r.lake.ice) < 1e-6 && r.lake.ice > 0.5, 'ice of a cold lake');
+  }
+  // each lake cell centre lies in a quad of the grid (step 1 here)
+  const n = t.n, cs = t.worldSize / n, o = -t.worldSize / 2, key = new Set();
+  for (let i = 0; i < nv; i++) key.add(Math.round((v[i * S] - o) / cs - 0.5) + ',' + Math.round((v[i * S + 2] - o) / cs - 0.5));
+  let lakeCells = 0;
+  for (let c = 0; c < n * n; c++) {
+    if (t.lakeId[c] !== r.id) continue;
+    lakeCells++;
+    const i = c % n, j = (c / n) | 0;
+    assert.ok(key.has(i + ',' + j) && key.has(i + 1 + ',' + j) && key.has(i + ',' + (j + 1)), 'cell ' + c + ' covered');
+  }
+  assert.equal(lakeCells, r.cells);
+  // a merged lake is not drawn twice
+  const t2 = { ...t, lakes: t.lakes.map((l) => ({ ...l, merged: 9 })) };
+  assert.equal(buildLakeMeshes(t2, {}).lakes.length, 0);
+});
+
+test('rivers end at the first row in a lake, under its surface, and start where they leave it', () => {
+  const { t, r } = lakeWorld();
+  const lakeAt = lakeAtFn(t);
+  assert.equal(lakeAt(-200, 0), r.lake.level);
+  assert.equal(lakeAt(600, 600), null);
+  // a river from the east into the lake, and one from inside it to the west
+  const into = [], out = [];
+  for (let k = 0; k <= 40; k++) into.push(500 - k * 20, 0);
+  for (let k = 0; k <= 40; k++) out.push(-200 - k * 18, 30);
+  const m = 41;
+  t.rivers = [
+    { pts: new Float32Array(into), width: new Float32Array(m).fill(8), flow: new Float32Array(m).map((_, i) => 1 + i) },
+    { pts: new Float32Array(out), width: new Float32Array(m).fill(8), flow: new Float32Array(m).map((_, i) => 1 + i) },
+  ];
+  const rb = buildRiverRibbons(t, { step: 10 });
+  const a = rb.rivers[0].rows, b = rb.rivers[1].rows;
+  const last = a[a.length - 1];
+  assert.ok(lakeAt(last.x, last.z) != null, 'the mouth row is in the lake');
+  for (const row of a.slice(0, -1)) assert.equal(lakeAt(row.x, row.z), null, 'no other row in the lake');
+  assert.ok(last.y <= r.lake.level - 0.05 + 1e-6, 'the mouth is under the lake surface');
+  assert.equal(lakeAt(b[0].x, b[0].z), null, 'the outflow starts out of the lake');
+  // SURFACE2's river-net calls the same builder: the same rows
+  assert.deepEqual(buildRiverRibbons(t, { step: 10 }).rivers[0].rows.length, a.length);
+});
+
+test('water normals face up: the flip is by the eye height, never by the winding', () => {
+  const src = readFileSync(new URL('../shaders/water.wgsl', import.meta.url), 'utf8');
+  for (const fn of ['fsOcean', 'fsSurface']) {
+    const head = src.slice(src.indexOf('fn ' + fn + '('), src.indexOf('{', src.indexOf('fn ' + fn + '(')));
+    assert.ok(!/front_facing/.test(head), fn + ' takes no front_facing');
+  }
+  assert.ok(!/if \(!ff\)/.test(src), 'no flip by the triangle side');
+  assert.ok(/if \(G\.camPos\.y < WU\.misc\.y\) \{ N = -N; \}/.test(src), 'ocean: down only under the sea');
+  assert.ok(/if \(G\.camPos\.y < P\.y - 0\.05\) \{ N = -N; \}/.test(src), 'rivers and lakes: down only under the surface');
+  // the JS twin of the lake normal: normalize(-sx, 1, -sz) has y > 0 for any slope
+  for (const [sx, sz] of [[0, 0], [5, -3], [-40, 40], [1e3, 0]]) {
+    const l = Math.hypot(sx, 1, sz);
+    assert.ok(1 / l > 0, 'y up');
+  }
+});
+
+// a recording mock device: counts live buffers and textures, keeps the
+// last uniform write of the water module
+function mockGPU(profileId) {
+  const g = globalThis;
+  g.GPUBufferUsage = g.GPUBufferUsage || { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512 };
+  g.GPUTextureUsage = g.GPUTextureUsage || { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16 };
+  g.GPUShaderStage = g.GPUShaderStage || { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
+  const live = { buffers: 0, textures: 0 }, writes = [];
+  const obj = (o = {}) => ({ ...o, destroy() {}, createView: () => ({}), getBindGroupLayout: () => ({}) });
+  const device = {
+    createTexture: () => { live.textures++; return { createView: () => ({}), destroy() { live.textures--; } }; },
+    createBuffer: (d) => { live.buffers++; const b = { size: d.size, destroy() { live.buffers--; } }; return b; },
+    createSampler: () => ({}), createBindGroupLayout: () => ({}), createPipelineLayout: () => ({}), createBindGroup: () => ({}),
+    createShaderModule: () => ({ getCompilationInfo: async () => ({ messages: [] }) }),
+    createRenderPipelineAsync: async () => obj(), createComputePipelineAsync: async () => obj(),
+  };
+  const queue = { writeBuffer: (b, off, data) => { writes.push({ b, data: data.slice ? data.slice() : data }); }, writeTexture() {}, submit() {} };
+  return { gpu: { device, queue, globalsLayout: {}, globalsBindGroup: {}, loadWGSL: async () => '', quality: 0.8, profileId }, live, writes };
+}
+const lastU = (writes) => [...writes].reverse().find((w) => w.data.length === 60).data;
+function frameOf(extra = {}) {
+  const g = new Float32Array(160);
+  g[80] = 0; g[81] = 300; g[82] = 0; g[85] = 0.5; g[104] = 4; g[105] = 1; g[125] = 400; g[53] = 1.2;
+  return { globals: g, time: 10, dt: 0.016, quality: 0.8, ...extra };
+}
+
+async function atest(name, fn) {
+  try { await fn(); pass++; console.log('ok - ' + name); }
+  catch (e) { fail++; console.log('not ok - ' + name + '\n  ' + (e && e.message)); }
+}
+await atest('water module: no byte growth over rebuilds, cheap flags on phones and at the emergency rung', async () => {
+  const { t } = lakeWorld();
+  const m = mockGPU('desktop');
+  const w = await createWater(m.gpu);
+  const base = { ...m.live };
+  w.setTerrain({ cpu: t, seaLevel: t.seaLevel });
+  const one = { ...m.live };
+  for (let k = 0; k < 20; k++) { t.lakes = t.lakes.slice(); w.setTerrain({ cpu: t, seaLevel: t.seaLevel }); w.update(frameOf()); }
+  assert.deepEqual(m.live, one, 'rebuilds free the old buffers');
+  assert.ok(one.buffers > base.buffers, `buffers ${base.buffers} -> ${one.buffers}`);
+  assert.ok(w.stats.lakes === 1 && w.stats.lakeKinds.user === 1, JSON.stringify(w.stats));
+  let U = lastU(m.writes);
+  assert.equal(U[44], 1, 'desktop: the reflection march is on');
+  assert.equal(U[59], 0, 'desktop: two ripple copies');
+  w.update(frameOf({ gov: { level: 8 } }));
+  U = lastU(m.writes);
+  assert.equal(U[44], 0, 'emergency: no reflection march');
+  assert.equal(U[45], 0, 'emergency: no caustics');
+  assert.equal(U[59], 1, 'emergency: one ripple copy');
+  w.dispose();
+  const p = mockGPU('phone');
+  const wp = await createWater(p.gpu);
+  wp.setTerrain({ cpu: t, seaLevel: t.seaLevel });
+  wp.update(frameOf());
+  U = lastU(p.writes);
+  assert.equal(U[44], 0, 'phone: no reflection march');
+  assert.equal(U[59], 1, 'phone: cheap');
+  assert.equal(U[45], 1, 'phone: caustics stay');
+});
+
+test('lake shading in WGSL: fetch waves, a dawn calm, salt, ice, lap foam', () => {
+  const src = readFileSync(new URL('../shaders/water.wgsl', import.meta.url), 'utf8');
+  for (const k of ['fn wLakeSlope', 'fn wLakeIce', 'let fk = clamp(sqrt(fetch / 1000.0)', 'let calm = dawn', 'v.a.y > 0.5', 'iceK = smoothstep', 'm.foam = (1.0 - smoothstep(0.05, 0.5, v.a.w']) assert.ok(src.includes(k), k);
+  // the JS twin of the fetch factor: a pond is calm, a great lake has waves
+  const fk = (f) => Math.min(1, Math.max(0.04, Math.sqrt(f / 1000) / 3));
+  assert.ok(fk(40) < 0.1 && fk(20000) === 1 && fk(2000) > 0.4);
+});
+
 console.log(`# water: ${pass} passed, ${fail} failed`);
 if (fail) process.exitCode = 1;

@@ -17,7 +17,14 @@
 //              variance goes into the roughness, LEADR style), whitecaps from
 //              the Jacobian, shore foam from the water depth.
 //    vsSurface / fsSurface  river ribbons (two-phase flow-map normals along
-//              the ribbon, rapids, waterfall sheets) and flat lakes (calm).
+//              the ribbon, rapids, waterfall sheets) and flat lakes: waves
+//              from the fetch and the wind (ripples on a pond, short wind
+//              waves on a great lake), a calm mirror at dawn, two turned
+//              ripple copies mixed by noise (no tile repeat), lap foam on
+//              big lakes, kind tints (pond, tarn, salt), ice in the cold.
+//    Normals face up: a surface turns its normal down only when the eye is
+//    under it (never by the triangle winding, which differs between the
+//    ribbons and the lake grids).
 //    vsMist / fsMist  soft spray sprites at the base of each waterfall.
 //  Shared shading (wShade): refraction of the scene copy with depth-based
 //  Beer-Lambert absorption and in-scatter, caustics on the shallow bed,
@@ -41,7 +48,7 @@
 //  grep -n targets: "struct WaterU", "fn csWaves", "fn wWaves", "fn wSky",
 //  "fn wReflect", "fn wShade", "fn vsOcean", "fn fsOcean", "fn vsSurface",
 //  "fn fsSurface", "fn wRiver", "fn wFall", "fn vsMist", "fn fsMist",
-//  "fn wRain", "fn wCaustic", "fn wLinDepth"
+//  "fn wRain", "fn wCaustic", "fn wLinDepth", "fn wLakeSlope", "fn wLakeIce"
 // ============================================================================
 
 struct WaterU {
@@ -59,7 +66,7 @@ struct WaterU {
   flags: vec4f,    // x ssr on, y caustics on, z rain 0..1, w night 0..1
   comp: vec4f,     // x modes per cascade, y texture size, z mist sprites per fall, w debug view (setDebug)
   cloudR: vec4f,   // xy cloud shadow rect origin xz, z rect size m, w cloud base world y
-  skyV: vec4f,     // x sky-view LUT scale, y LUT on, z cloud shadow on, w unused
+  skyV: vec4f,     // x sky-view LUT scale, y LUT on, z cloud shadow on, w cheap (phones, safe, emergency: one ripple copy)
 };
 
 @group(1) @binding(0) var<uniform> WU: WaterU;
@@ -601,7 +608,7 @@ fn vsOcean(@location(0) g: vec2f) -> OceanOut {
 }
 
 @fragment
-fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
+fn fsOcean(v: OceanOut) -> @location(0) vec4f {
   let P = v.world;
   let dist = distance(G.camPos.xyz, P);
   let fp = dist * WU.snap.w;
@@ -610,7 +617,11 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
     1.0 - smoothstep(WU.casc.x / N0 * 1.0, WU.casc.x / N0 * 5.0, fp),
     1.0 - smoothstep(WU.casc.y / N0 * 1.0, WU.casc.y / N0 * 5.0, fp),
     1.0 - smoothstep(WU.casc.z / N0 * 1.0, WU.casc.z / N0 * 5.0, fp));
-  var s = wWaves(v.base, fade);
+  // patches of stronger and weaker short waves (gusts, cat's paws), so the
+  // 83 m and 13 m tiles do not repeat to the eye
+  let patchA = 0.7 + 0.6 * wNoise(v.base * 0.0031 + vec2f(WU.misc.x * 0.006, 0.0));
+  let patchB = 0.65 + 0.7 * wNoise(v.base * 0.017 - vec2f(0.0, WU.misc.x * 0.02));
+  var s = wWaves(v.base, fade * vec3f(1.0, patchA, patchB));
   let amp = v.shore.y;
   s.sx *= amp; s.sz *= amp;
   var N = wWaveNormal(s);
@@ -650,7 +661,8 @@ fn fsOcean(v: OceanOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   m.refr = 0.045;
   m.caust = 1.0;
   m.banks = 0.0;
-  if (!ff) { N = -N; }
+  // the normal faces up; down only for an eye under the sea
+  if (G.camPos.y < WU.misc.y) { N = -N; }
   return wShade(P, N, v.pos, m);
 }
 
@@ -745,8 +757,39 @@ fn wFall(v: SurfOut, P: vec3f, t: f32) -> vec4f {
   return vec4f(dens, streak, fine, 0.0);
 }
 
+// Lake ripples: the small cascades drift with the wind; a second copy is
+// turned 0.9 rad and moved, and a noise field mixes the two, so the tiles
+// of the wave textures do not repeat (one copy on cheap profiles).
+fn wLakeSlope(xz: vec2f, fp: f32, fk: f32) -> vec2f {
+  let t = WU.misc.x;
+  let drift = G.wind.xy * (t * 0.25);
+  let c1 = 0.25 + (0.75 * fk);
+  let a = wLocalSlope(xz + drift, c1, 1.0, fp);
+  if (WU.skyV.w > 0.5) { return a; }
+  let r = mat2x2f(0.6216, 0.7833, -0.7833, 0.6216);
+  let b = wLocalSlope((r * xz) + vec2f(37.0, 91.0) + (drift * 0.8), c1, 1.0, fp);
+  let bw = transpose(r) * b;
+  let k = smoothstep(0.3, 0.7, wNoise((xz * 0.011) + vec2f(t * 0.004, 0.0)));
+  return mix(a, bw, k);
+}
+
+// Lake ice: white-blue, with cracks and snow, lit by sun, sky and moon.
+fn wLakeIce(P: vec3f) -> vec3f {
+  let L = normalize(G.sunDir.xyz);
+  let V = normalize(G.camPos.xyz - P);
+  let cr = wFbm(P.xz * 0.12);
+  let crack = 1.0 - smoothstep(0.02, 0.06, abs(wNoise(P.xz * 0.35) - 0.5));
+  let snow = smoothstep(0.4, 0.7, cr + (G.weather2.y * 0.4));
+  let alb = mix(vec3f(0.55, 0.68, 0.78), vec3f(0.86, 0.9, 0.94), snow) * (1.0 - (crack * 0.25));
+  let lit = sunShadow(P, vec3f(0.0, 1.0, 0.0)) * wCloudShadow(P);
+  let up = vec3f(0.0, 1.0, 0.0);
+  let diff = G.sunColor.rgb * (max(L.y, 0.0) * lit) + (G.ambient.rgb / W_PI) + (wMoonColor() * (max(G.moonDir.y, 0.0) * 0.3));
+  let gloss = G.sunColor.rgb * (wSpec(up, V, L, mix(0.01, 0.2, snow)) * max(L.y, 0.0) * lit * 0.25);
+  return (alb * diff) + gloss;
+}
+
 @fragment
-fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
+fn fsSurface(v: SurfOut) -> @location(0) vec4f {
   let P = v.world;
   let t = WU.misc.x;
   let dist = distance(G.camPos.xyz, P);
@@ -754,19 +797,50 @@ fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f 
   var m: WMat;
   var N = vec3f(0.0, 1.0, 0.0);
   var edge = 1.0;
+  var iceK = 0.0;
   if (v.kind > 1.5) {
-    // lake: calm, wind ruffles fade with distance
-    let ws = WU.lakeAbs.w * clamp(WU.windS.z / 8.0, 0.15, 1.2);
-    let sl = wLocalSlope(P.xz + G.wind.xy * (t * 0.25), 0.25, 1.0, dist * WU.snap.w) * (0.02 * ws);
+    // lake: dir.x fetch m, dir.y kind (0 lake, 1 pond, 2 tarn, 3 oxbow,
+    // 4 great, 5 added), a.x ice 0..1, a.y salt, a.w depth m at rest
+    let fetch = max(v.dir.x, 1.0);
+    let code = v.dir.y;
+    let fk = clamp(sqrt(fetch / 1000.0) / 3.0, 0.04, 1.0);
+    let windK = clamp(WU.windS.z / 7.0, 0.1, 1.6);
+    // a calm mirror at dawn when the wind is light and no rain falls
+    let tod = G.sunColor.w;
+    let dawn = smoothstep(0.17, 0.22, tod) * (1.0 - smoothstep(0.29, 0.34, tod));
+    let calm = dawn * (1.0 - smoothstep(2.5, 6.0, WU.windS.z)) * (1.0 - clamp(rain * 4.0, 0.0, 1.0));
+    let amp = WU.lakeAbs.w * mix(0.012, 0.3, fk * fk) * windK * (1.0 - (0.9 * calm));
+    let sl = wLakeSlope(P.xz, dist * WU.snap.w, fk) * amp;
     N = normalize(vec3f(-sl.x, 1.0, -sl.y));
     m.absorb = WU.lakeAbs.rgb;
     m.scatter = WU.lakeSca.rgb;
-    m.a2 = 0.0009 + (rain * 0.008) + (ws * 0.002);
-    m.foam = 0.0;
+    if (code > 0.5 && code < 1.5) {
+      // ponds: peaty green-brown
+      m.absorb *= vec3f(0.9, 1.4, 2.6);
+      m.scatter *= vec3f(1.1, 1.3, 0.6);
+    } else if (code > 1.5 && code < 2.5) {
+      // tarns: clear and cold blue
+      m.absorb *= vec3f(1.1, 0.75, 0.7);
+      m.scatter *= vec3f(0.6, 0.9, 1.25);
+    }
+    if (v.a.y > 0.5) {
+      // salt lakes: milky turquoise over a white bed
+      m.absorb *= vec3f(0.55, 0.35, 0.45);
+      m.scatter = mix(m.scatter, vec3f(0.07, 0.16, 0.15), 0.8);
+    }
+    m.a2 = 0.0006 + (rain * 0.008) + (fk * windK * 0.004 * (1.0 - calm));
+    // lap foam where the waves of a big lake reach the shore
+    let lapN = wFbm((P.xz * 0.5) + vec2f(t * 0.1, 0.0));
+    m.foam = (1.0 - smoothstep(0.05, 0.5, v.a.w + ((lapN - 0.5) * 0.3))) * smoothstep(0.15, 0.6, fk) * smoothstep(3.0, 9.0, WU.windS.z) * 0.6;
     m.refr = 0.02;
     m.caust = 0.6;
     m.banks = 600.0;
     edge = smoothstep(0.05, 0.6, v.uv.x);
+    // ice: cold lakes freeze in the cold season, the shallows first
+    let w = G.weather2.w;
+    let cold = 0.5 + (0.5 * cos((w - 0.8) * 6.2831853));
+    let ice0 = (v.a.x * 1.4) - 0.35 + ((cold - 0.5) * 0.9) + (G.weather2.y * 0.5);
+    iceK = smoothstep(0.25, 0.6, ice0 + ((1.0 - smoothstep(0.0, 4.0, v.a.w)) * 0.25) + ((wNoise(P.xz * 0.02) - 0.5) * 0.15)) * step(0.01, v.a.x);
   } else if (v.kind > 0.5) {
     let f = wFall(v, P, t);
     let L = normalize(G.sunDir.xyz);
@@ -794,8 +868,10 @@ fn fsSurface(v: SurfOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f 
     let rs = wRain(P.xz, t, rain) * (1.0 - smoothstep(25.0, 60.0, dist));
     N = normalize(N + vec3f(-rs.x, 0.0, -rs.y));
   }
-  if (!ff) { N = -N; }
-  let c = wShade(P, N, v.pos, m);
+  // the normal faces up; down only for an eye under the surface
+  if (G.camPos.y < P.y - 0.05) { N = -N; }
+  var c = wShade(P, N, v.pos, m);
+  if (iceK > 0.0) { c = vec4f(mix(c.rgb, wLakeIce(P) * c.a, iceK), c.a); }
   return c * edge;
 }
 
