@@ -812,13 +812,16 @@ export async function createGround(gpu) {
   async function loadAssetTextures() {
     const a = gpu.assets;
     if (!a) return 0;
+    // the array size is fixed here: quality can change while the sets load
+    // (a loader that returns raw bytes at r0 must match the array size)
+    const res = pf ? Math.min(layerRes(quality), pf.groundRes) : layerRes(quality);
     let sets = null;
     if (gpu.groundImageLoader) {
       // a test harness with no image decoder (Deno): loader(url, size) ->
       // { data RGBA, width, height }
       const recs = groundRecords(a.manifest || a);
       const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
-      const r0 = layerRes(quality);
+      const r0 = res;
       sets = await Promise.all(recs.map(async (rec) => {
         const t = rec.textures;
         const get = (f) => (f ? gpu.groundImageLoader(new URL(f, base).href, r0).catch(() => null) : null);
@@ -840,7 +843,6 @@ export async function createGround(gpu) {
     }
     sets = (sets || []).filter((x) => x && x.albedo).slice(0, MAX_SETS);
     if (!sets.length) return 0;
-    const res = pf ? Math.min(layerRes(quality), pf.groundRes) : layerRes(quality);
     const mips = Math.floor(Math.log2(res)) + 1;
     const L = sets.length;
     const alb = mkArray(res, 'rgba8unorm-srgb', mips, 'ground alb', L);
