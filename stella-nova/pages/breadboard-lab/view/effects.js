@@ -27,6 +27,7 @@
 //    update / dispose ... per-frame step, cleanup
 // ============================================================================
 import { dataTexture } from './fallback.js';
+import { LAYER, SPARK } from '../core/light.js';
 
 const SMOKE_N = 56, SPARK_N = 40, MARK_N = 2048, PIN_N = 96;
 
@@ -49,6 +50,8 @@ export function createEffects(THREE, parent) {
     for (let i = 0; i < n; i++) {
       const mat = keep(new THREE.SpriteMaterial({ map: soft, color: o.color, transparent: true, depthWrite: false, opacity: 0, blending: o.additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
       const s = new THREE.Sprite(mat);
+      s.layers.set(LAYER.FX);            // never in the black depth pass of view/bloom.js
+      if (o.additive) s.layers.enable(LAYER.EMIT);   // sparks are emitters: they bloom
       s.visible = false;
       s.renderOrder = 5;
       group.add(s);
@@ -77,7 +80,7 @@ export function createEffects(THREE, parent) {
     for (let i = 0; i < n; i++) emit(smokeP, at, { jitter: 3, spread: 10, up: 16, life: 2, size0: 3, size1: 18, alpha: 0.55, delay: 0.6 });
   }
   function spark(at) {
-    for (let i = 0; i < 18; i++) emit(sparkP, at, { jitter: 0.6, spread: 90, up: 70, life: 0.4, size0: 1.6, size1: 0.4, alpha: 1, g: -260 });
+    for (let i = 0; i < 18; i++) emit(sparkP, at, { jitter: 0.6, spread: 90, up: 70, life: 0.4, size0: 1.6 * SPARK.size, size1: 0.4, alpha: SPARK.alpha, g: -260 });
   }
 
   function stepPool(P, dt) {

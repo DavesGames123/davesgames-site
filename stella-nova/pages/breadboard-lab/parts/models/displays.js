@@ -16,6 +16,7 @@
 // ============================================================================
 import { G } from '../schema.js';
 import { segDisplay, dotMatrix, SEG_NAMES } from './segments.js';
+import { EMIT } from '../../core/light.js';
 
 export const SEG_ON = { red: '#ff2a1a', green: '#3aff5a', blue: '#4a8aff', yellow: '#ffd21a', white: '#f2f4ff', orange: '#ff7a1a' };
 
@@ -65,7 +66,7 @@ export function buildLcd(K) {
   const blue = K.params.screen === 'blue';
   K.mat('screen', blue ? 'lcd-blue' : 'lcd-green');
   const glass = K.mesh(K.box(64.5, 0.4, 16), 'screen', { x: cx, y: by + bh + 0.2, z: cz - 1 });
-  const gl = K.glow(glass, blue ? '#3a6aff' : '#b8e04a', 0);
+  const gl = K.glow(glass, blue ? '#3a6aff' : '#b8e04a', 0, null, { peak: EMIT.lcd });
   const dots = dotMatrix(THREE, {
     cols: 16, rows: 2, pitch: 0.6, cellGap: 0.35, rowGap: 0.75, y: by + bh + 0.42,
     ink: blue ? '#eef4ff' : '#1a2a0c', blank: blue ? '#2448c8' : '#9cbc34',
@@ -77,7 +78,7 @@ export function buildLcd(K) {
   K.onState(f => {
     const v = (f && f.vis) || {};
     const bl = v.backlight ?? (v.leds && v.leds.bl) ?? 0;
-    K.setGlow(gl, Math.min(1, bl) * 0.35);
+    K.setGlow(gl, Math.min(1, bl));
     dots.setLight(0.15 + 0.85 * Math.min(1, bl || 0));
     if (K.damaged) { dots.setRows(['', '']); return; }
     dots.setRows(v.rows || ['', ''], v.cursor);

@@ -20,6 +20,7 @@
 // ============================================================================
 import { segDisplay } from './segments.js';
 import { makeScreen } from '../labels.js';
+import { EMIT, emissiveFor } from '../../core/light.js';
 
 const PREFIX = [[1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'µ']];
 // 4 significant digits that fit in 4 cells (plus the point) and the prefix
@@ -128,7 +129,7 @@ export function buildScope(K) {
     K.put(K.cyl(2.2, 2.2, 6.4, 12), '@board-hole', { rx: Math.PI / 2, x, y, z: z + 3.1 });
     const m = lamp(K, colors[i]);
     K.mesh(K.box(8, 1.2, 0.6), null, { x, y: y + 9, z: z + 0.3 }, { material: m, pick: false }).userData.lamp = n;
-    m.emissiveIntensity = 0.8;
+    m.emissiveIntensity = emissiveFor(m.emissive, 0.4, EMIT.lamp);   // a colour mark, below the bloom threshold
     leads[n] = new THREE.Vector3(x, y, z + 6);
   });
   K.label('CH1    CH2    CH3    CH4    GND', 130, 5, { rx: Math.PI / 2, x: cx - 28, y: 30, z: 1.0 }, { color: '#cfd2d6' });
@@ -159,7 +160,7 @@ export function buildLogic(K) {
   const scr = makeScreen(THREE, 256, 64);
   K.onState(f0 => {
     const f = f0 && f0.probe !== undefined ? f0.probe : f0;
-    st.emissiveIntensity = f && f.kind === 'logic' ? 1.8 : 0.2;
+    st.emissiveIntensity = emissiveFor(st.emissive, f && f.kind === 'logic' ? 1 : 0.1, EMIT.lamp);
   });
   return K.finish({ leads, screens: scr ? { main: scr } : {} });
 }

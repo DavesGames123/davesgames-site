@@ -25,10 +25,19 @@
 //  now, keys (true: the view binds every key of 4.4 itself), env (false:
 //  no environment map), bloom (false: no bloom pass).
 //
+//  GLOW. Bloom sees the emitters only (view/bloom.js). markEmitters puts
+//  each glow mesh and each mesh with a non-black emissive colour on
+//  LAYER.EMIT, and every sprite on LAYER.FX (off BASE). The camera sees
+//  BASE and FX. After each sim frame the lit halos share one gain
+//  (core/light.js haloGain), so 30 lit LEDs do not add 30 full halos.
+//
 //  GREP MAP
 //    loadParts ............. dynamic import of the PARTS modules
 //    makeRenderer / lights . renderer, PMREM room, mat, shadows, bloom;
 //                            the numbers come from core/light.js
+//    setupBloom ............ RenderPass + emitter bloom + OutputPass
+//    markEmitters .......... EMIT and FX layers of a built object
+//    balanceHalos .......... the shared gain of the lit halos
 //    resolver .............. material id → THREE material (presets + doc)
 //    buildBoardRec ......... board objects
 //    buildPartRec .......... part handles, pickable tags, damage carry-over
@@ -57,7 +66,8 @@ import { dataTexture, fallbackBoard, fallbackPart, fallbackWire, fallbackWirePat
 import { ndcFromClient, pickBench, pickPoints, projectPoint, rayFromCamera, rayPlaneY, insetViewOffset } from './picking.js';
 import { BOARD_H, BOARD_TYPES, boardHit, boardRect, holeWorld, partFrame, partPinsWorld, strips, parseHoleId, findBoard, stripOf } from '../core/space.js';
 import { lookupDef, probeDefaults } from '../core/doc.js';
-import { ENV, RIG, TONE, scaleEnvironment } from '../core/light.js';
+import { BLOOM, ENV, LAYER, RIG, TONE, haloGain, scaleEnvironment } from '../core/light.js';
+import { createEmitterBloom } from './bloom.js';
 
 export const LEAD_COLORS = {
   red: '#d63b3b', black: '#2b2b2b',
@@ -117,6 +127,7 @@ export function createView(opts = {}) {
   scene.background = new THREE.Color('#19191c');
   scene.fog = new THREE.Fog('#19191c', 1400, 3200);
   const camera = new THREE.PerspectiveCamera(38, 1.6, 2, 6000);
+  camera.layers.enable(LAYER.FX);
   const rig = createCameraRig({ target: [0, 0, 10], dist: 300, yaw: 0, pitch: 0.95 });
 
   const root = new THREE.Group(); root.name = 'bench';
@@ -177,17 +188,46 @@ export function createView(opts = {}) {
     Promise.all([
       import('three/addons/postprocessing/EffectComposer.js'), import('three/addons/postprocessing/RenderPass.js'),
       import('three/addons/postprocessing/UnrealBloomPass.js'), import('three/addons/postprocessing/OutputPass.js'),
-    ]).then(([{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }]) => {
+      import('three/addons/postprocessing/Pass.js'),
+    ]).then(([{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { Pass }]) => {
       if (disposed || quality !== 'high' || composer) return;
       composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
-      bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.35, 0.92);
+      // bloom from LAYER.EMIT only; resize() gives it the canvas size
+      bloomPass = createEmitterBloom(THREE, { Pass, UnrealBloomPass }, scene, camera, BLOOM);
       composer.addPass(bloomPass);
       composer.addPass(new OutputPass());
       resize();
     }).catch(() => {});
   }
   setupBloom();
+
+  // ── emitters and halos ───────────────────────────────────────────────────
+  const BLACK = new THREE.Color(0, 0, 0);
+  function markEmitters(object) {
+    const halos = [];
+    object.traverse(o => {
+      if (o.isSprite) { o.layers.set(LAYER.FX); if (o.userData.halo) halos.push(o); return; }
+      if (!o.isMesh || !o.material) return;
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (o.userData.glow || (m && m.emissive && !m.emissive.equals(BLACK))) o.layers.enable(LAYER.EMIT);
+    });
+    return halos;
+  }
+  // one gain for every lit halo: haloGain(n) = sqrt(full / n) above full
+  let haloGainNow = 1;
+  function balanceHalos() {
+    let lit = 0;
+    const all = [];
+    for (const r of [...recs.parts.values(), ...recs.probes.values()]) for (const h of r.halos || []) { all.push(h); if (h.visible) lit++; }
+    haloGainNow = haloGain(lit);
+    for (const h of all) {
+      const a0 = h.userData.a0 ?? h.material.opacity;
+      h.userData.a0 = a0;
+      h.material.opacity = a0 * haloGainNow;
+    }
+    return lit;
+  }
 
   // ── materials ────────────────────────────────────────────────────────────
   const simpleMats = new Map();
@@ -279,7 +319,7 @@ export function createView(opts = {}) {
     handle.object.traverse(c => { if (c.isMesh && !c.isSprite) c.castShadow = true; });
     tagPickables(handle.pickables, { kind: 'part', id: p.id });
     gParts.add(handle.object);
-    const rec = { item: p, handle, key: partKey(p, def), live: liveKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d };
+    const rec = { item: p, handle, key: partKey(p, def), live: liveKey(p, def), looks: JSON.stringify(p.looks || {}), damage: null, def: d, halos: markEmitters(handle.object) };
     const pf = lastFrame && lastFrame.parts ? lastFrame.parts[p.id] : undefined;
     if (pf) applyPartFrame(rec, pf, 0);
     return rec;
@@ -470,7 +510,7 @@ export function createView(opts = {}) {
         handle.object.traverse(c => { if (c.isMesh) c.castShadow = true; });
         tagPickables(handle.pickables, { kind: 'probe', id: m.id });
         gProbes.add(handle.object);
-        rec = { item: m, handle, key, leads: new Map(), def };
+        rec = { item: m, handle, key, leads: new Map(), def, halos: markEmitters(handle.object) };
         recs.probes.set(m.id, rec);
         pickDirty = true;
       }
@@ -722,6 +762,7 @@ export function createView(opts = {}) {
       for (const s of Object.values(rec.handle.screens || {})) if (s.texture) s.texture.needsUpdate = true;
     }
     if (netlist && frame.wires) flow.setCurrents(netlist.wireIds || [], frame.wires);
+    balanceHalos();
     needs = true;
   }
 
@@ -792,6 +833,7 @@ export function createView(opts = {}) {
   const ghostMat = new THREE.MeshStandardMaterial({ color: 0x9fc3ff, transparent: true, opacity: 0.45, roughness: 0.4, depthWrite: false });
   function makeGhost(def, params) {
     const h = buildPartHandle(def, { id: 'ghost', def: def.id, place: { on: null, x: 0, z: 0, rot: 0 }, params: { ...params } }, { materials: () => ghostMat, quality: 'low', labels: false });
+    markEmitters(h.object);
     h.object.traverse(c => { if (c.isMesh) { c.castShadow = false; c.material = ghostMat; } });
     h.object.visible = false;
     gGhost.add(h.object);
@@ -971,6 +1013,8 @@ export function createView(opts = {}) {
     get rig() { return rig; },
     get tool() { return interaction.tool; },
     get quality() { return quality; },
+    get haloGain() { return haloGainNow; },
+    get bloom() { return bloomPass; },
     ready: null,
 
     setFrame,
@@ -992,7 +1036,7 @@ export function createView(opts = {}) {
       if (q !== 'high' && q !== 'low') return;
       quality = q;
       renderer.shadowMap.enabled = q === 'high';
-      if (q === 'low' && composer) { composer.dispose?.(); composer = null; bloomPass = null; }
+      if (q === 'low' && composer) { composer.dispose?.(); if (bloomPass && bloomPass.dispose) bloomPass.dispose(); composer = null; bloomPass = null; }
       if (q === 'high') setupBloom();
       resize();
       sync(store.doc);
@@ -1084,6 +1128,7 @@ export function createView(opts = {}) {
       disposeObj(scene);
       if (envTex) envTex.dispose();
       if (composer && composer.dispose) composer.dispose();
+      if (bloomPass && bloomPass.dispose) bloomPass.dispose();
       if (boxEl && boxEl.parentElement) boxEl.parentElement.removeChild(boxEl);
       renderer.dispose();
       if (renderer.forceContextLoss) { try { renderer.forceContextLoss(); } catch { /* lost already */ } }

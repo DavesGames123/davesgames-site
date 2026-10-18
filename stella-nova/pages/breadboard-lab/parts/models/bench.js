@@ -23,12 +23,15 @@
 // ============================================================================
 import { G } from '../schema.js';
 import { segDisplay } from './segments.js';
+import { EMIT, emissiveFor } from '../../core/light.js';
 
 const glowMat = (K, color, base = 0x202020) => {
   const m = K.own(new K.THREE.MeshStandardMaterial({ color: base, roughness: 0.35 }));
   m.emissive = new K.THREE.Color(color); m.emissiveIntensity = 0;
   return m;
 };
+// an indicator lamp at the EMIT.lamp level of core/light.js, or off
+const lampOn = (m, on) => { m.emissiveIntensity = on ? emissiveFor(m.emissive, 1, EMIT.lamp) : 0; };
 function display(K, digits, h, on, x, y, z, faceFront = true) {
   const d = segDisplay(K.THREE, { digits, h, w: h * 0.55, gap: h * 0.3, on, off: '#1c1210' });
   d.mesh.position.set(x - d.width / 2, y, z);
@@ -89,9 +92,7 @@ export function buildSupply(K) {
   K.onParams(setKnobs);
   const show = (v, a, cc, on) => {
     vD.setText(fmt4(v, 2)); aD.setText(fmt4(a, 3));
-    ccM.emissiveIntensity = on && cc ? 2.4 : 0;
-    cvM.emissiveIntensity = on && !cc ? 2.0 : 0;
-    outM.emissiveIntensity = on ? 1.6 : 0;
+    lampOn(ccM, on && cc); lampOn(cvM, on && !cc); lampOn(outM, on);
   };
   show(K.params.v, 0, false, K.params.on);
   K.onState(f => {
@@ -121,7 +122,7 @@ export function buildFuncgen(K) {
   const fmtF = f => f >= 1e5 ? String(Math.round(f)) : f >= 1 ? String(Number(f.toPrecision(6))) : f.toFixed(4);
   const set = p => {
     fD.setText(fmtF(p.freq).slice(0, 7));
-    for (const w in waveM) waveM[w].emissiveIntensity = w === p.wave ? 2 : 0;
+    for (const w in waveM) lampOn(waveM[w], w === p.wave);
     pivot.rotation.z = -Math.log10(Math.max(0.01, p.freq) / 0.01) / 8 * 4.7 + 2.35;
   };
   set(K.params);
@@ -177,7 +178,7 @@ export function buildShield(K) {
   const sw = K.mesh(K.box(3, 2.5, 2), '@abs-white', { x: bx + 40, y: 4, z: bz - 10 });
   const ledM = glowMat(K, '#3aff4a');
   K.mesh(K.box(1.6, 0.6, 0.8), null, { x: bx + 40, y: 3, z: bz + 6 }, { material: ledM, pick: false });
-  const set = p => { sw.position.x = bx + 40 + (p.on ? 0.8 : -0.8); ledM.emissiveIntensity = p.on ? 2 : 0; };
+  const set = p => { sw.position.x = bx + 40 + (p.on ? 0.8 : -0.8); lampOn(ledM, p.on); };
   set(K.params); K.onParams(set);
   return K.finish({ interact: { kind: 'toggle', key: 'on', meshes: [sw] } });
 }
@@ -248,7 +249,7 @@ export function buildLamp(K) {
   const bulb = K.mesh(K.sphere(5.6, 18, 12), 'glass', { x: lx, y: 18, z: lz });
   bulb.userData.noChar = true;
   const fil = K.mesh(K.cyl(0.25, 0.25, 4, 6), '@tin', { rz: Math.PI / 2, x: lx, y: 18, z: lz }, { pick: false });
-  const gl = K.glow(fil, '#ffb050', 34, [lx, 18, lz]);
+  const gl = K.glow(fil, '#ffb050', 34, [lx, 18, lz], { peak: EMIT.led });
   for (const p of K.pinsMm) K.put(K.cyl(1.6, 1.6, 1.4, 12), '@brass', { x: p.x, y: p.y - 0.7, z: 0 });
   K.onState(f => K.setGlow(gl, f && f.vis ? (f.vis.b ?? (f.vis.on ? 1 : 0)) : 0));
   return K.finish();

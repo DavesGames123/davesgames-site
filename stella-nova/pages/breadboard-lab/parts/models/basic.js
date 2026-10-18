@@ -29,6 +29,7 @@
 import { G } from '../schema.js';
 import { resistorBands, BAND_HEX, formatOhms } from '../bands.js';
 import { mergeGeometries } from './kit.js';
+import { EMIT, emissiveFor } from '../../core/light.js';
 
 export const LED_GLOW = { red: '#ff2a1a', orange: '#ff7a1a', yellow: '#ffd21a', green: '#3aff4a',
   blue: '#3a7aff', white: '#f4f6ff', ir: '#3a1030' };
@@ -383,7 +384,7 @@ export function buildRelay(K) {
   lamp.material = own;
   own.emissive = new K.THREE.Color('#ff3a2a');
   own.emissiveIntensity = 0;
-  K.onState(f => { own.emissiveIntensity = f && f.vis && f.vis.on ? 2.2 : 0; });
+  K.onState(f => { own.emissiveIntensity = f && f.vis && f.vis.on ? emissiveFor(own.emissive, 1, EMIT.lamp) : 0; });
   return K.finish();
 }
 

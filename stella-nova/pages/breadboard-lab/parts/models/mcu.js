@@ -15,10 +15,11 @@
 // ============================================================================
 import { G } from '../schema.js';
 import { LED_GLOW } from './basic.js';
+import { EMIT } from '../../core/light.js';
 
 function smdLed(K, x, y, z, color) {
   const m = K.mesh(K.box(1.6, 0.6, 0.9), '@abs-white', { x, y: y + 0.3, z }, { pick: false });
-  return K.glow(m, color, 7, [x, y + 1.2, z]);
+  return K.glow(m, color, 7, [x, y + 1.2, z], { peak: EMIT.smd });
 }
 function ledsFrom(K, map) {
   K.onState(f => {

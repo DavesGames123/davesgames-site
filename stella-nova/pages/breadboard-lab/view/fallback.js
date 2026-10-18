@@ -18,6 +18,7 @@
 //    dataTexture .......... a procedural RGBA texture (no canvas needed)
 // ============================================================================
 import { BOARD_H, BOARD_TYPES, G, holeList, holeLocal, pinLocal } from '../core/space.js';
+import { EMIT, emissiveFor } from '../core/light.js';
 
 export function dataTexture(THREE, size, fn, o = {}) {
   const data = new Uint8Array(size * size * 4);
@@ -116,6 +117,7 @@ export function fallbackPart(THREE, def, part, ctx = {}) {
     glowMat = new THREE.MeshStandardMaterial({ color: 0x552222, emissive: 0x000000, roughness: 0.2, transparent: true, opacity: 0.85 });
     own.push(glowMat);
     body.material = glowMat;
+    body.userData.glow = true;           // view/scene.js puts it on LAYER.EMIT
   }
   const baseColor = new THREE.Color();
   const screens = {};
@@ -145,7 +147,7 @@ export function fallbackPart(THREE, def, part, ctx = {}) {
       if (vis && vis.leds) b = Math.max(0, ...Object.values(vis.leds));
       const col = GLOW[(vis && vis.color) || (part.params && part.params.color) || 'red'] ?? GLOW.red;
       baseColor.setHex(col);
-      glowMat.emissive.copy(baseColor).multiplyScalar(damage ? 0 : Math.min(1.5, b) * 1.6);
+      glowMat.emissive.copy(baseColor).multiplyScalar(damage ? 0 : emissiveFor(baseColor, b, EMIT.led));
     },
     setDamage(kind) {
       damage = kind || null;

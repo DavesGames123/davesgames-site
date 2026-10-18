@@ -28,7 +28,8 @@
 //    K.rbox / K.cyl / K.box . geometry makers (rounded box is an extrusion)
 //    K.lead / K.leg ......... wire leads along a polyline, straight pins
 //    K.label ................ a printed text quad (null in node)
-//    K.glow / K.setGlow ..... emissive lenses and halo sprites
+//    K.glow / K.setGlow ..... emissive lenses and halo sprites; the levels
+//                             come from core/light.js (EMIT, HALO)
 //    K.finish ............... merge, pins, the PartHandle (setLook, setDamage, dispose)
 //    mergeGeometries ........ indexed merge of position, normal, uv (+ colour)
 //    detailMaterials ........ the shared vertex-colour detail materials
@@ -39,6 +40,7 @@ import { G, resolveParams, pinGrid } from '../schema.js';
 import { makeMaterial, presetById } from '../materials.js';
 import { labelPlane } from '../labels.js';
 import { sweepArrays } from '../wire.js';
+import { EMIT, HALO, emissiveFor, haloOpacity } from '../../core/light.js';
 
 const METAL_SLOTS = new Set(['legs', 'pins', 'metal', 'terminal', 'shaft', 'contacts', 'tab', 'gold']);
 
@@ -234,15 +236,19 @@ export function createKit(THREE, def, part, ctx = {}) {
     if (m.material.map) owned.textures.add(m.material.map);
     return m;
   }
-  // an emissive mesh: owns a clone of its slot material
-  function glow(m, color, haloSize = 0, haloPos = null) {
+  // an emissive mesh: owns a clone of its slot material. opts.peak is the
+  // bloom luminance at level 1 (core/light.js EMIT: led, smd, lamp, lcd).
+  // The halo is HALO.size x haloSize mm and does not grow with the current.
+  function glow(m, color, haloSize = 0, haloPos = null, opts = {}) {
     const own = m.material.clone();
     own.emissive = new THREE.Color(color);
     own.emissiveIntensity = 0;
     m.material = own; owned.mats.add(own);
     m.userData.glow = true;
-    const gl = { mesh: m, color, halo: null, b: 0 };
+    const gl = { mesh: m, color, halo: null, b: 0, peak: opts.peak ?? EMIT.led };
     if (haloSize > 0) {
+      const asked = haloSize;
+      haloSize *= HALO.size;
       const sm = new THREE.SpriteMaterial({ map: haloTexture(THREE), color: new THREE.Color(color), transparent: true,
         opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
       const sp = new THREE.Sprite(sm);
@@ -251,6 +257,7 @@ export function createKit(THREE, def, part, ctx = {}) {
       sp.visible = false;
       sp.renderOrder = 3;
       sp.userData.halo = true;
+      sp.userData.asked = asked;          // the size the model asked for (tests)
       (m.parent || group).add(sp);
       owned.mats.add(sm);
       gl.halo = sp;
@@ -258,17 +265,20 @@ export function createKit(THREE, def, part, ctx = {}) {
     glows.push(gl);
     return gl;
   }
-  // b: 0..1.5 (1 = rated current)
+  // b: the sim brightness, 1 = rated current. The die gets the emissive
+  // intensity that puts its bloom luminance at peak x emitLevel(b). The
+  // halo opacity goes to userData.a0; the scene multiplies it by the
+  // shared gain of all lit halos (view/scene.js balanceHalos).
   function setGlow(gl, b, color) {
     const v = damage ? 0 : Math.max(0, Math.min(2, b || 0));
     gl.b = v;
     if (color) { gl.color = color; gl.mesh.material.emissive.set(color); if (gl.halo) gl.halo.material.color.set(color); }
-    gl.mesh.material.emissiveIntensity = v * 2.2;
+    gl.mesh.material.emissiveIntensity = emissiveFor(gl.mesh.material.emissive, v, gl.peak);
     if (gl.halo) {
-      gl.halo.visible = v > 0.02;
-      gl.halo.material.opacity = Math.min(1, v * 0.85);
-      const s = gl.halo.userData.s0 || (gl.halo.userData.s0 = gl.halo.scale.x);
-      gl.halo.scale.setScalar(s * (0.6 + 0.5 * Math.min(1.5, v)));
+      const a = haloOpacity(v);
+      gl.halo.visible = a > 0.01;
+      gl.halo.userData.a0 = a;
+      gl.halo.material.opacity = a;
     }
   }
 
