@@ -46,6 +46,7 @@
 //    W.channel(x, z) -> { d (m from the canyon line), w (half width),
 //                          floor, mask }
 //    W.habitat(x, z) 0..1, W.features(x, z, r), W.canyonPath(x, z, len),
+//    W.ground(x, z) the top of the solid (a canyon floor in a canyon),
 //    W.columnRange(x0, z0, size) -> [ymin, ymax] of the surface in a square
 //    W.bedAt(x, y, z) the strata bed coordinate (mesh attribute band)
 //    W.localRock(ox, oy, oz, o) the field in local metres for reef.js
@@ -605,7 +606,7 @@ export function createWorld(opts = {}) {
   return {
     seed, fine, period: P, lipschitz: LIPSCHITZ, sdfScale: SDF_SCALE, sdfClamp: [-D_IN, D_OUT], band: BAND,
     height, heightLarge: heightRaw, sandAt, sdf, sdfAll, sdfExact, sand: { heightAt: sandAt, sdf: sandSdf }, normal, base,
-    column, baseCol, sdfCol, rawCol, crag, channel, habitat, columnRange, features, canyonPath, localRock,
+    column, baseCol, sdfCol, rawCol, crag, channel, habitat, columnRange, features, canyonPath, localRock, ground: groundAt,
     bedAt: (x, y, z) => bedCoord(y, colAt(x, z).U), bedCoord,
     cellFeatures, boulderCell, get tiles() { return tiles.size; }, get tileBuilds() { return tileN; },
   };
