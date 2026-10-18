@@ -16,6 +16,8 @@
 //    5. sessionStorage that throws: no reload
 //    6. a first worker (no worker at load): no reload, stale is false
 //    7. a running screensaver: no reload
+//    8. the background pass message (sn-warm) goes out on a desktop, not
+//       on a touch phone and not with deviceMemory 2
 //
 //  Usage (repo root):
 //    node tools/offline-check.mjs            check lib/offline.js
@@ -46,16 +48,16 @@ function memStorage() {
 const badStorage = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() {} };
 
 // One shell load. Returns controls for the test.
-function load({ session, clock, controller = true, frameY = 0, saver = false }) {
+function load({ session, clock, controller = true, frameY = 0, saver = false, media = null, memory, posts = null }) {
   const swL = {}, winL = {};
   let reloads = 0;
   const sw = {
     controller: controller ? {} : null,
-    ready: new Promise(() => {}),
+    ready: posts ? Promise.resolve({ active: { postMessage: m => posts.push(m) } }) : new Promise(() => {}),
     addEventListener: (t, f) => { (swL[t] = swL[t] || []).push(f); },
     startMessages() {},
     getRegistrations: async () => [],
-    register: () => new Promise(() => {}),
+    register: () => (posts ? Promise.resolve({}) : new Promise(() => {})),
   };
   const frameWin = { scrollY: frameY, document: { scrollingElement: { scrollTop: frameY } } };
   const window = {
@@ -65,16 +67,17 @@ function load({ session, clock, controller = true, frameY = 0, saver = false }) 
   const FakeDate = class extends Date { static now() { return clock.t; } };
   const ctx = vm.createContext({
     window,
-    navigator: { serviceWorker: sw },
+    navigator: { serviceWorker: sw, deviceMemory: memory },
+    matchMedia: q => ({ matches: !!(media && media[q]) }),
     location: { protocol: 'https:', hostname: 'davesgames.io', search: '', reload: () => { reloads++; } },
     document: {
-      baseURI: 'https://davesgames.io/stella-nova/', readyState: 'loading',
+      baseURI: 'https://davesgames.io/stella-nova/', readyState: posts ? 'complete' : 'loading',
       querySelector: s => (s === '#frame-wrap iframe' ? { contentWindow: frameWin } : null),
       createElement: () => ({ style: {}, setAttribute() {} }), body: { appendChild() {} },
     },
     localStorage: memStorage(),
     sessionStorage: session,
-    Date: FakeDate, URL, MessageChannel, setTimeout: () => 0, clearTimeout() {}, console,
+    Date: FakeDate, URL, MessageChannel, setTimeout: f => { if (posts) f(); return 0; }, clearTimeout() {}, console,
   });
   ctx.window.navigator = ctx.navigator;
   vm.runInContext(src, ctx, { filename: REL });
@@ -134,6 +137,17 @@ function load({ session, clock, controller = true, frameY = 0, saver = false }) 
   const clock = { t: 1e12 }, s = load({ session: memStorage(), clock, saver: true });
   clock.t += 1000; s.change();
   ok(s.reloads === 0, '7: no reload while the screensaver runs', `reloads ${s.reloads}`);
+}
+// 8. background pass
+{
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const run = async opts => { const posts = []; load({ session: memStorage(), clock: { t: 1e12 }, posts, ...opts }); for (let k = 0; k < 5; k++) await tick(); return posts.filter(m => m && m.type === 'sn-warm').length; };
+  const desk = await run({ media: { '(hover: hover)': true }, memory: 8 });
+  const phone = await run({ media: { '(pointer: coarse)': true } });
+  const small = await run({ media: { '(hover: hover)': true }, memory: 2 });
+  ok(desk === 1, '8: a desktop sends sn-warm', `messages ${desk}`);
+  ok(phone === 0, '8: a touch phone does not send sn-warm', `messages ${phone}`);
+  ok(small === 0, '8: deviceMemory 2 does not send sn-warm', `messages ${small}`);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

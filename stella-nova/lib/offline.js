@@ -14,8 +14,11 @@
 //     WARM_DELAY_MS, then sends { type: 'sn-warm' }. The worker then
 //     downloads the lazy files (meshes, photos, big data) in the
 //     background. It does not send the message when the browser asks to
-//     save data or the connection is 3g or slower: then each lazy file is
-//     kept when a page first asks for it.
+//     save data or the connection is 3g or slower, and not on a phone or
+//     tablet (touch, no hover) or a device with under 4 GB memory
+//     (function lowMemory): then each lazy file is kept when a page first
+//     asks for it. The pass is about 230 MB, and in Safari each download
+//     goes through the memory of the open tab.
 //  3. When a live-data request fails and the worker answers with its last
 //     good copy, the worker posts { type: 'sn-live-fallback' }. This script
 //     shows a notice with the source and the date of that copy.
@@ -93,8 +96,16 @@
     return !!(c && (c.saveData || /^(slow-2g|2g|3g)$/.test(c.effectiveType || '')));
   }
 
+  // A touch device with no hover (phone, tablet), or one that reports
+  // under 4 GB. Safari gives no deviceMemory, so the pointer test does it.
+  function lowMemory() {
+    var m = navigator.deviceMemory;
+    if (m && m < 4) return true;
+    try { return matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches; } catch (e) { return false; }
+  }
+
   function warmLater() {
-    if (slowLink()) return;
+    if (slowLink() || lowMemory()) return;
     SW.ready.then(function (reg) {
       setTimeout(function () { if (reg.active) reg.active.postMessage({ type: 'sn-warm' }); }, WARM_DELAY_MS);
     });
