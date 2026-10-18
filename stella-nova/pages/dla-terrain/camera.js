@@ -122,8 +122,13 @@ export function bandShift(band, H) {
 }
 
 function groundAt(world, x, z) {
-  const h = world && world.heightAt ? world.heightAt(x, z) : 0;
-  return Math.max(h, world && world.seaLevel !== undefined ? world.seaLevel : -Infinity);
+  let h = world && world.heightAt ? world.heightAt(x, z) : 0;
+  // a NaN height (a terrain that is not there yet, a NaN eye) must not
+  // turn the floor off: Math.max(NaN, sea) is NaN, and then no clamp holds
+  // and the fly speed (from the height over the ground) goes NaN too
+  if (!Number.isFinite(h)) h = 0;
+  const sea = world && Number.isFinite(world.seaLevel) ? world.seaLevel : -Infinity;
+  return Math.max(h, sea);
 }
 
 // the first ground (or sea) point on a ray: a march with a step that grows
@@ -548,6 +553,18 @@ export function createCamera(opts = {}) {
     if (cam.mode === 'fly') p = updFly(dt, input, world, snap);
     else if (cam.mode === 'drone') p = updDrone(dt, input, world, snap);
     else p = updOrbit(dt, input, world, snap);
+    // a NaN pose (a NaN input or dt) would stay NaN for ever and give the
+    // GPU NaN matrices: go back to the last good pose, with no speed
+    if (!p || !p.pos.every(Number.isFinite) || ![p.yaw, p.pitch, p.roll].every(Number.isFinite)) {
+      const b = before || { pos: [0, groundAt(world, 0, 0) + 300, 0], yaw: 0, pitch: -0.3, roll: 0 };
+      p = { pos: b.pos.slice(), yaw: b.yaw, pitch: b.pitch, roll: b.roll || 0 };
+      vel.fill(0);
+      if (cam.mode === 'fly') { cam.fly.pos = p.pos.slice(); cam.fly.yaw = p.yaw; cam.fly.pitch = p.pitch; cam.fly.roll = p.roll; }
+      if (cam.mode === 'orbit') {
+        const o = cam.orbit;
+        if (![o.yaw, o.pitch, o.dist].every(Number.isFinite) || !o.target.every(Number.isFinite)) orbitFrom(p.pos, forwardOf(p.yaw, p.pitch), world, 200);
+      }
+    }
     if (changed && before && !snap) {
       // keep the old pose (moved on at its own speed) as an offset that
       // glides to zero; the offset speed keeps the eye speed continuous

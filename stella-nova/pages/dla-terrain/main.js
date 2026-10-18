@@ -756,8 +756,10 @@ function loop(now) {
   for (const md of fg.active()) if (md.update) {
     try { md.update(frame); } catch (e) { console.warn(`dla-terrain: ${md.role} update failed`, e); md.failed = true; ui.notice(`${md.label || md.role}: update failed`); }
   }
-  try { fg.render(frame); } catch (e) { console.warn('dla-terrain: frame failed', e); }
-  prevVP = m.viewProjNoJitter;
+  let drawn = true;
+  try { drawn = fg.render(frame) !== false; } catch (e) { console.warn('dla-terrain: frame failed', e); }
+  // a frame that the HANG GUARD skipped (GPU busy) keeps the last view for TAA
+  if (drawn) prevVP = m.viewProjNoJitter;
   frameNo++;
   app.frames = frameNo;
   if (!saving) fg.tick(ms);

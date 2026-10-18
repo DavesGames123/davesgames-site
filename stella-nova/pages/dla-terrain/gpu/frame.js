@@ -39,7 +39,20 @@
 //  or a return from a hidden tab). An out-of-memory error (gpu.onPressure)
 //  lowers the pixel ratio and the scale and sets the level to 2 or more.
 //
+//  HANG GUARD (2026-10-17: a full zoom on the ground took the whole computer
+//  down). The GPU queue holds at most MAX_IN_FLIGHT frames: fg.render skips
+//  a frame (fg.stalls) while that many are not done, so a slow GPU never
+//  gets a backlog that stalls the window server. queue.onSubmittedWorkDone
+//  gives fg.gpuMs, the GPU time of a frame. A heavy frame (fg.gpuMs over
+//  HEAVY_MS) calls heavyStep: the scale falls to 0.7 of itself at once
+//  (floor HEAVY_FLOOR), and at the floor the governor level goes up one
+//  step. The scale step and the governor also take fg.gpuMs, so a frame
+//  over 250 ms (which tick drops as a stall of the page) still counts
+//  when the GPU itself was slow. Level 1 and up also turns off the close-up
+//  rock effects of GROUND (POM and vertex relief, frame.govLevel).
+//
 //  grep -n targets: "export function createFrameGraph", "function targets",
+//  "export function heavyStep", "MAX_IN_FLIGHT", "fg.inFlight",
 //  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "export function scaleStep",
 //  "export function featureStep", "fg.level"
 // ============================================================================
@@ -69,6 +82,25 @@ export function featureStep(state, ms, budget, atFloor) {
   return 0;
 }
 
+// HANG GUARD constants (see the header)
+export const MAX_IN_FLIGHT = 2;      // frames on the GPU queue
+export const HEAVY_MS = 120;         // ms of GPU time: a heavy frame
+export const HEAVY_FLOOR = 0.4;      // the least scale after a heavy frame
+// state = { scale, level, cool } (cool: frames to wait, so the frames in
+// flight when the scale changed do not count two times). Returns
+// { scale, level, changed } for the GPU time gpuMs of one frame.
+export function heavyStep(state, gpuMs, floor = HEAVY_FLOOR) {
+  if (state.cool > 0) { state.cool--; return { scale: state.scale, level: state.level, changed: false }; }
+  if (!(gpuMs > HEAVY_MS)) return { scale: state.scale, level: state.level, changed: false };
+  const s0 = state.scale, l0 = state.level;
+  if (state.scale > floor + 1e-6) state.scale = Math.max(floor, Math.round(state.scale * 70) / 100);
+  else state.level = Math.min(MAX_LEVEL, state.level + 1);
+  // a very heavy frame (4 x the limit) also takes a level at once
+  if (gpuMs > HEAVY_MS * 4 && state.level === l0) state.level = Math.min(MAX_LEVEL, state.level + 1);
+  state.cool = MAX_IN_FLIGHT + 1;
+  return { scale: state.scale, level: state.level, changed: state.scale !== s0 || state.level !== l0 };
+}
+
 export function createFrameGraph(gpu, parts) {
   const device = gpu.device, U = GPUTextureUsage;
   const fg = {
@@ -77,6 +109,9 @@ export function createFrameGraph(gpu, parts) {
     dyn: { scale: gpu.qualityPreset.scale, over: 0, under: 0 }, dynamic: true,
     budgetMs: (gpu.profile && gpu.profile.budgetMs) || 1000 / 58, stats: { passes: 0 },
     level: 0, gov: { level: 0, slow: 0, fast: 0 }, minScale: 0.5, pressure: 0, skipped: 0,
+    // HANG GUARD: frames on the GPU queue, the GPU time of the last done one
+    inFlight: 0, maxInFlight: MAX_IN_FLIGHT, gpuMs: 0, stalls: 0, heavy: 0,
+    hv: { scale: 1, level: 0, cool: 0 },
   };
 
   function targets() {
@@ -136,7 +171,13 @@ export function createFrameGraph(gpu, parts) {
   };
   fg.setScale = s => { fg.scale = Math.max(0.4, Math.min(1, s)); fg.dyn.scale = fg.scale; targets(); };
   fg.tick = ms => {
-    if (!fg.dynamic || !(ms > 0) || ms > 250) return;
+    if (!fg.dynamic) return;
+    // a CPU gap over 250 ms is a stall of the page (a hidden tab, a GC),
+    // but a GPU time over 250 ms is a real slow frame: it counts
+    const g = fg.gpuMs > 0 ? fg.gpuMs : 0;
+    if (ms > 250) ms = g > 250 ? g : 0;
+    else ms = Math.max(ms, g);
+    if (!(ms > 0)) return;
     if (scaleStep(fg.dyn, ms, fg.budgetMs, fg.maxScale)) { fg.scale = fg.dyn.scale; targets(); }
     const d = featureStep(fg.gov, ms, fg.budgetMs, fg.dyn.scale <= fg.minScale + 1e-6);
     if (d) setLevel(fg.gov.level);
@@ -156,6 +197,18 @@ export function createFrameGraph(gpu, parts) {
     }
   }
   fg.setLevel = setLevel;
+  // HANG GUARD: the GPU time of each done frame
+  fg.onGpuTime = ms => {
+    fg.gpuMs = ms;
+    if (!fg.dynamic) return;
+    fg.hv.scale = fg.dyn.scale; fg.hv.level = fg.gov.level;
+    const r = heavyStep(fg.hv, ms, Math.min(HEAVY_FLOOR, fg.minScale));
+    if (!r.changed) return;
+    fg.heavy++;
+    console.warn(`dla-terrain: heavy GPU frame ${ms.toFixed(0)} ms: scale ${r.scale}, level ${r.level}`);
+    if (r.scale !== fg.dyn.scale) { fg.dyn.scale = fg.scale = r.scale; fg.dyn.over = 0; fg.dyn.under = 0; targets(); }
+    if (r.level !== fg.gov.level) { fg.gov.slow = 0; fg.gov.fast = 0; setLevel(r.level); }
+  };
   // out of memory (gpu/device.js): smaller targets now, then the profile
   // caps apply to what the modules make next
   if (gpu.onPressure) gpu.onPressure(() => {
@@ -177,7 +230,10 @@ export function createFrameGraph(gpu, parts) {
 
   fg.render = frame => {
     // a hidden tab draws nothing (rAF also stops there in most browsers)
-    if (globalThis.document && document.visibilityState === 'hidden') { fg.skipped++; return; }
+    if (globalThis.document && document.visibilityState === 'hidden') { fg.skipped++; return false; }
+    // HANG GUARD: no backlog on the GPU queue
+    if (fg.inFlight >= fg.maxInFlight) { fg.stalls++; return false; }
+    frame.govLevel = fg.level;
     const T = fg.T, sh = parts.shadows;
     const mods = fg.active();
     if (fg.level >= 4) frame.layers = { ...(frame.layers || {}), grass: false, ...(fg.level >= 5 ? { clouds: false } : {}) };
@@ -259,7 +315,15 @@ export function createFrameGraph(gpu, parts) {
     parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, out, frame.dt);
     device.queue.submit([enc.finish()]);
     parts.post.afterSubmit();
+    const q = device.queue;
+    if (q.onSubmittedWorkDone) {
+      fg.inFlight++;
+      const t0 = performance.now();
+      q.onSubmittedWorkDone().then(() => { fg.inFlight = Math.max(0, fg.inFlight - 1); fg.onGpuTime(performance.now() - t0); },
+        () => { fg.inFlight = Math.max(0, fg.inFlight - 1); });
+    }
     fg.stats.passes = passes;
+    return true;
   };
   fg.targets = targets;
   return fg;

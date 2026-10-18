@@ -780,7 +780,9 @@ export async function createGround(gpu) {
     uData.set(ringU, 56);
     uData.set(surfU, 60);
     uData.set(rockU, 72);
-    uData.set(effectUniforms(quality, !!pf, cfg.ranges[0]), 76);
+    // the frame graph governor (gpu/frame.js HANG GUARD): level 1 and up
+    // turns off POM and the vertex relief, the close-up rock cost
+    uData.set(effectUniforms(quality, !!pf || (frame.govLevel | 0) >= 1, cfg.ranges[0]), 76);
     uData.set(layerMap.rsets, 80);
     queue.writeBuffer(uBuf, 0, uData);
   }
