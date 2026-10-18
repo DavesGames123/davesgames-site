@@ -70,7 +70,7 @@
 </header>
 
 <main id="stage">
-  <canvas id="view" tabindex="0" aria-label="The terrain in 3D. Drag to turn, scroll or pinch to zoom. F flies, O orbits, G starts a drone flight."></canvas>
+  <canvas id="view" tabindex="0" aria-label="The terrain in 3D. Orbit: drag turns round the ground point, right drag or Shift drag pans, the wheel zooms to the cursor, a double click flies there. Fly (F): W A S D move, E or Space up, Q or C down, Shift boosts, L turns mouse look on. Touch: one finger turns, two fingers pan, pinch and twist, a double tap flies there; in fly mode a left stick moves. Drone (G): drag to take over, R resumes."></canvas>
   <div id="progress" data-saver-hide hidden>
     <div class="pg-head"><span id="pgLabel">Growing DLA ridges</span><span id="pgPct"></span></div>
     <div class="pg-bar"><div id="pgFill"></div></div>
@@ -81,7 +81,7 @@
     <figcaption id="mapCap">Map</figcaption>
     <button id="mapToggle" type="button" aria-label="Hide the map">–</button>
   </figure>
-  <div id="hint" data-saver-hide>Drag to turn · scroll to zoom · F fly · O orbit · G drone</div>
+  <div id="hint" data-saver-hide>Drag turns · right drag pans · wheel zooms to the cursor · double click flies there · F fly (WASD, E/Space up, Q/C down, Shift, L look) · G drone (drag takes over, R resumes)</div>
   <section id="build" data-saver-hide aria-label="Watch it build" hidden>
     <div class="bd-head"><b id="bdStage">DLA growth</b><span id="bdTime"></span></div>
     <p id="bdCap"></p>

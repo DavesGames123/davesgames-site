@@ -410,9 +410,9 @@ export function createUI(app, doc = globalThis.document) {
 
   // ── VIEW ──
   const camHints = {
-    orbit: 'Drag to turn, right drag or two fingers to pan, scroll or pinch to zoom. WASD moves the centre.',
-    fly: 'WASD to fly, E or space up, Q down, shift for speed. Drag to look. Touch: one finger looks, two fingers move and pinch.',
-    drone: 'A smooth flight along the ridges and rivers of the terrain. Drag to leave the flight.',
+    orbit: 'Drag turns round the ground point, right drag or Shift drag grabs and pans, the wheel zooms to the cursor, a double click flies there. Touch: one finger turns, two fingers pan, pinch and twist, a double tap flies there.',
+    fly: 'W A S D move, E or Space up, Q or C down, Shift boosts, L turns mouse look on. Touch: a left stick moves, one finger looks.',
+    drone: 'A smooth flight along the ridges and rivers. Drag to take over, R resumes the flight.',
   };
   for (const b of doc.querySelectorAll('#camSeg button')) b.addEventListener('click', () => app.setCam(b.dataset.cam));
   $('droneRidge').addEventListener('click', () => app.drone('ridge'));
@@ -613,7 +613,7 @@ export function createUI(app, doc = globalThis.document) {
     try { seen = win.localStorage.getItem('dla-terrain-tap-hint') === '1'; } catch { /* private mode */ }
     if (seen) return false;
     try { win.localStorage.setItem('dla-terrain-tap-hint', '1'); } catch { /* private mode */ }
-    h.textContent = 'Tap to explore · drag to turn · two fingers pan and pinch · double tap flies there';
+    h.textContent = 'Tap to explore · one finger turns · two fingers pan, pinch and twist · double tap flies there';
     h.classList.add('once'); h.classList.remove('gone');
     setTimeout(() => h.classList.add('gone'), 8000);
     return true;

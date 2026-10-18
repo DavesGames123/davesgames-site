@@ -210,6 +210,25 @@ if (app && app.fg) {
   ok(nt && !nt.hidden && /Phone quality: Phone caps the sizes/.test(nt.textContent), 'High or Ultra on a phone shows the Phone quality note', nt && nt.textContent);
   ok(app.post && app.post.settings.taa === false, 'TAA stays off on a phone profile', app.post && String(app.post.settings.taa));
   g.profile = saved.profile; g.profileId = saved.profileId;
+  // CAMERA requests: the camera ground includes LIB's detailHeight, and
+  // the trunk query of VEG reaches the camera world
+  const lib = await import(pathToFileURL(PAGE + '../../lib/dla-terrain.js').href);
+  const tt = await lib.generateTerrain({ ...lib.PRESETS.alpine.opts, seed: 3, n: 128 });
+  const cpu0 = app.tg.cpu; app.tg.cpu = tt;
+  let same = true, differs = false;
+  for (const [x, z] of [[100, 200], [-3000, 1500], [2500, -2500]]) {
+    const a = app.world.heightAt(x, z), b = lib.terrainHeightAt(tt, x, z);
+    if (Math.abs(a - b) > 1e-6) same = false;
+    if (Math.abs(a - lib.sampleHeight(tt, x, z)) > 1e-3) differs = true;
+  }
+  ok(same && differs, 'world.heightAt is the rendered ground (sampleHeight + detailHeight) on a final terrain');
+  app.tg.cpu = cpu0;
+  const fakeVeg = { role: 'vegetation', trunkAt: (x, z) => ({ x: x + 1, z, r: 0.3 }) };
+  const mods0 = app.fg.modules;
+  app.fg.modules = mods0.filter(m => m.role !== 'vegetation').concat(fakeVeg);
+  const tr = app.world.trunkAt(5, 6);
+  ok(tr && tr.x === 6 && tr.r === 0.3, 'world.trunkAt passes the VEG trunk query to the camera');
+  app.fg.modules = mods0;
   await pump(5);
   ok(!errors.some(e => /^raf:/.test(e)), 'no frame threw', errors.filter(e => /^raf:/.test(e)).slice(0, 2).join(' | '));
 }

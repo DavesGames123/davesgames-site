@@ -158,7 +158,19 @@ let prevVP = null, frameNo = 0, lastT = 0, fpsAcc = 0, fpsN = 0, fps = 0, pendin
 let skyState = null, worker = null, workerKind = null, genId = 0, booted = false, lastBuildSeg = -1;
 
 const world = {
-  heightAt: (x, z) => (tg ? tg.heightAt(x, z) : 0),
+  // the rendered ground: the snapshot height, plus LIB's detailHeight (a
+  // few metres) once the terrain is final, so the camera clearance matches
+  heightAt: (x, z) => {
+    if (!tg) return 0;
+    const t = tg.cpu;
+    if (t && t.height && app.lib.terrainHeightAt) return app.lib.terrainHeightAt(t, x, z);
+    return tg.heightAt(x, z);
+  },
+  // VEG's trunk query (NOTES.md): the fly eye stays 0.4 m outside a trunk
+  trunkAt: (x, z) => {
+    const v = fg && fg.modules.find(m => m.role === 'vegetation' && !m.failed && !m.off);
+    return v && v.trunkAt ? v.trunkAt(x, z) : null;
+  },
   get size() { return tg ? tg.worldSize : 8000; },
   get seaLevel() { return tg ? tg.seaLevel + 0.4 : 0; },
   get midH() { return tg ? (Math.max(tg.minH, tg.seaLevel) + tg.maxH) / 2 : 0; },
@@ -180,6 +192,7 @@ const player = createBuildPlayer({
   distK: () => (app.saverRun ? framing(innerWidth, innerHeight, null).distK : 1),
 });
 app.player = player;
+app.world = world;   // for the console and the tests
 app.setBuildMode = on => {
   app.buildMode = !!on;
   try { localStorage.setItem('dla-terrain-build', on ? '1' : '0'); } catch { /* private mode */ }
