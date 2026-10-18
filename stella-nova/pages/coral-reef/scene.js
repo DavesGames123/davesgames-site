@@ -70,15 +70,15 @@ export const LAMP_K = 0.004;
 
 // ── caustic pass ────────────────────────────────────────────────────────────
 // One grid of rays over the plot square and a margin (no tile, no repeat).
-function makeCaustics(renderer, U, coarse, R) {
-  const RES = coarse ? 512 : 1024;
+function makeCaustics(renderer, U, coarse, R, cfg) {
+  const RES = cfg && cfg.res ? cfg.res : coarse ? 512 : 1024;
   const half = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
   const rt = new THREE.WebGLRenderTarget(RES, RES, {
     type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, format: THREE.RGBAFormat,
     wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
     depthBuffer: false, stencilBuffer: false,
   });
-  const G = coarse ? 200 : 360;
+  const G = cfg && cfg.grid ? cfg.grid : coarse ? 200 : 360;
   const uv = new Float32Array((G + 1) * (G + 1) * 2), idx = new Uint32Array(G * G * 6);
   for (let j = 0, k = 0; j <= G; j++) for (let i = 0; i <= G; i++) { uv[k++] = i / G; uv[k++] = j / G; }
   for (let j = 0, o = 0; j < G; j++) for (let i = 0; i < G; i++) { const a = j * (G + 1) + i, b = a + 1, c = a + G + 1, d = c + 1; idx[o++] = a; idx[o++] = b; idx[o++] = c; idx[o++] = b; idx[o++] = d; idx[o++] = c; }
@@ -170,12 +170,22 @@ function geomOf(m) {
   return g;
 }
 
-export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131072 }) {
+// profile: a budget.js profile (caustic, shadow, vol, snow, polypDraw);
+// none: the old coarse / fine sizes. onShaderError(text): a shader did
+// not compile or link (three r160 renderer.debug.onShaderError).
+export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131072, profile = null, onShaderError = null }) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     if (!renderer.capabilities.isWebGL2) throw new Error('WebGL2 needed');
   } catch (e) { if (onNoGL) onNoGL(e); return null; }
+  const LD = {
+    shadow: profile ? profile.shadow : coarse ? 1024 : 2048,
+    volScale: profile ? profile.vol.scale : coarse ? 0.4 : 0.5, volSteps: profile ? profile.vol.steps : coarse ? 14 : 30,
+    snow: profile ? profile.snow : coarse ? 2600 : 7000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
+  };
+  renderer.debug.checkShaderErrors = true;
+  if (onShaderError) renderer.debug.onShaderError = (gl, program, vs, fs) => { try { onShaderError(shaderErrorText(gl, program, vs, fs)); } catch (e) { onShaderError(String(e)); } };
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.6 : 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -218,7 +228,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
     return o;
   };
-  const caus = makeCaustics(renderer, U, coarse, R);
+  const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic);
 
   // ── the water: fog colour, a dim Snell window above ─────────────────────
   const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), new THREE.ShaderMaterial({
@@ -315,7 +325,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   const colonies = new Map();
   const dirtyChunks = new Set();
   let polypTotal = 0;
-  const polypBudget = coarse ? 30000 : 160000;
+  let polypBudget = LD.polypDraw;
 
   function clearColonies() {
     for (const c of colonies.values()) for (const ch of c.chunks.values()) disposeChunk(ch);
@@ -437,7 +447,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const pts = new THREE.Points(g, mat); pts.frustumCulled = false;
     return pts;
   }
-  const snow = makeSnow(coarse ? 2600 : 7000); scene.add(snow);
+  const snow = makeSnow(LD.snow); scene.add(snow);
 
   // ── lamps ─────────────────────────────────────────────────────────────────
   let lamps = [];
@@ -446,8 +456,8 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     lamps = (list || []).filter(l => l && l.isSpotLight).slice(0, SH.MAX_SPOTS);
     const lead = lamps[0];
     if (lead) {
-      lead.castShadow = true;
-      const sz = coarse ? 1024 : 2048;
+      lead.castShadow = LD.shadow > 0;
+      const sz = Math.max(256, LD.shadow || 512);
       if (lead.shadow.mapSize.x !== sz) { lead.shadow.mapSize.set(sz, sz); if (lead.shadow.map) { lead.shadow.map.dispose(); lead.shadow.map = null; } }
       lead.shadow.bias = 0;
       U.uShadowTexel.value = 1 / sz;
@@ -485,7 +495,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const rtVol = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
     const volU = Object.assign(waterU(), {
       uEye: { value: new THREE.Vector3() }, uDepth: { value: depthTex }, uProjInv: { value: new THREE.Matrix4() }, uCamW: { value: new THREE.Matrix4() },
-      uSteps: { value: coarse ? 14 : 30 }, uVolMax: { value: 40 }, uScatter: { value: 1 }, uShaft: { value: 1 }, uFrame: { value: 0 },
+      uSteps: { value: LD.volSteps }, uVolMax: { value: 40 }, uScatter: { value: 1 }, uShaft: { value: 1 }, uFrame: { value: 0 },
     });
     const volMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_FS, uniforms: volU, depthTest: false, depthWrite: false });
     const debugNaN = typeof location !== 'undefined' && /[?&]debug\b/.test(location.search || '') ? 1 : 0;
@@ -505,7 +515,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     return {
       rtScene, rtVol, rtLum, lumScene, lumBuf: new Uint8Array(LUM_N * LUM_N * 4), LUM_N, lumU,
-      volU, compU, volScene, compScene, ortho, scale: coarse ? 0.4 : 0.5,
+      volU, compU, volScene, compScene, ortho, scale: LD.volScale,
       size(w, h) {
         rtScene.setSize(w, h);
         const vw = Math.max(1, Math.round(w * this.scale)), vh = Math.max(1, Math.round(h * this.scale));
@@ -522,6 +532,15 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   function setLut(bytes) { lutData.set(bytes); lutTex.needsUpdate = true; }
   function setPlot(r) { U.uR.value = r; caus.setPlot(r); }
 
+  // The loads that the frame governor (budget.js frameGovernor) changes:
+  // { volScale, volSteps, polypDraw, shadow (map size, 0 off) }.
+  function setLoads(o = {}) {
+    if (o.polypDraw !== undefined) polypBudget = Math.max(0, o.polypDraw);
+    if (passes && o.volSteps !== undefined) passes.volU.uSteps.value = Math.max(4, Math.round(o.volSteps));
+    if (passes && o.volScale !== undefined && o.volScale !== passes.scale) { passes.scale = o.volScale; resize(); }
+    if (o.shadow !== undefined && o.shadow !== LD.shadow) { LD.shadow = o.shadow; setLights(lamps); if (!o.shadow) U.uShadowOn.value = 0; }
+    Object.assign(LD, o);
+  }
   const view = { ox: 0, oy: 0, tox: 0, toy: 0 };
   function resize() {
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
@@ -602,9 +621,30 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   return {
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
     get sand() { return sandMesh; }, post,
-    setRock, addRockMeshes, setPlot, setPolypSizes, setLights, setLut, resize, render,
+    setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; },
     PART_W, maxParticles: NP,
   };
+}
+
+// The text of a shader that did not compile or link: the program log, each
+// shader log, and the source lines that the logs name (with numbers), so
+// the user can report it.
+export function shaderErrorText(gl, program, vs, fs) {
+  const out = [];
+  const plog = gl.getProgramInfoLog(program) || '';
+  if (plog.trim()) out.push('program: ' + plog.trim());
+  for (const [name, sh] of [['vertex', vs], ['fragment', fs]]) {
+    if (!sh) continue;
+    const ok = gl.getShaderParameter(sh, gl.COMPILE_STATUS);
+    const log = (gl.getShaderInfoLog(sh) || '').trim();
+    if (ok && !log) continue;
+    out.push(`${name}: ${log || '(no log)'}`);
+    const src = (gl.getShaderSource(sh) || '').split('\n');
+    const nums = new Set();
+    for (const m of log.matchAll(/ERROR:\s*\d+:(\d+)/g)) nums.add(+m[1]);
+    for (const n of [...nums].slice(0, 3)) for (let i = Math.max(1, n - 2); i <= Math.min(src.length, n + 2); i++) out.push(`  ${String(i).padStart(4)}${i === n ? ' >' : '  '} ${src[i - 1]}`);
+  }
+  return out.join('\n').slice(0, 4000);
 }
