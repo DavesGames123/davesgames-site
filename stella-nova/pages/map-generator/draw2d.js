@@ -21,7 +21,7 @@
 // an even-odd polygon of several rings (gen.js), so it fills 'evenodd'.
 //
 // grep: export const PAL  export function heightColour  export function drawMap
-//       export function toSVG  export function toJSON  export function fullFrame
+//       export function toSVG  export function toJSON  export function fullFrame  export const ROOF_COL
 
 export const PAL = {
   land: '#2a2d31',
@@ -40,6 +40,9 @@ export const PAL = {
   field: [150, 185, 220],
   hedge: 'rgba(24,30,20,0.85)',
 };
+// the roof colours of the pitched roofs (mesh3d.js ROOFS AND TIERS; the
+// DLA terrain settlements import them too): clay, slate, brown, light clay
+export const ROOF_COL = [[0.50, 0.27, 0.19], [0.27, 0.29, 0.33], [0.40, 0.31, 0.25], [0.56, 0.36, 0.24]];
 // the field colours by crop (edge.js CROPS order), dark like the map
 export const CROP_CSS = ['#4a4430', '#2f3a24', '#3b322a', '#34402c', '#433f33', '#4f4c2a'];
 export const WIDTH = { main: 4.2, major: 2.6, minor: 1.25, coast: 4.2, river: 2.6 };

@@ -48,7 +48,7 @@
 //       export function extent  export function trimRoads  export function earcut  export function fieldLines  function seaApron  function ribbon  function prism
 //       function terrainBases  function riverRibbon  export function building  function hipRoof  function slab
 
-import { heightColour } from './draw2d.js';
+import { heightColour, ROOF_COL } from './draw2d.js';
 import { prog } from './playback.js';
 import { buildTerrainMesh, waterQuads } from './terrain3d.js';
 import { groundAt, riverAt, LIFT } from './terrain.js';
@@ -184,7 +184,6 @@ function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0], bases = null) {
 //     of 55 to 75 % of the footprint from f to 1
 // The shader scales z by the risen height, so each part grows with the
 // building. Kind 3 everywhere; roof flag 1 on the tops.
-const ROOF_COL = [[0.50, 0.27, 0.19], [0.27, 0.29, 0.33], [0.40, 0.31, 0.25], [0.56, 0.36, 0.24]];
 function hashU(i, k) {
   let h = Math.imul((i + 1) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(k + 7, 0xc2b2ae35);
   h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;
