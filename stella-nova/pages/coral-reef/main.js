@@ -67,6 +67,7 @@ import { createPool } from './world/pool.js';
 import { worldPhysics } from './world/physics.js';
 import { chunkMirror, chunkColours, writeChunk, writeHidden } from './world/coral-data.js';
 import { tiltEye } from '../../lib/tilt.js';
+import { mountFauna } from './fauna/hook.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia(PHONE_QUERY);
@@ -116,6 +117,8 @@ if (S) {
   const rig = new S.THREE.Group(); rig.add(S.camera);
   S.controls.enabled = false; S.controls.autoRotate = false;
 }
+// the creatures (fauna/: scans of museum specimens and our generators)
+const fauna = S ? mountFauna({ S, profile: PROFILE_ID, onError: m => console.warn('coral-reef: the creatures are off:', m) }) : null;
 let lostNow = false;
 if (S) canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); onContextLost(); }, false);
 function onContextLost() {
@@ -197,6 +200,7 @@ function setOrigin(x, z) {
   if (rovRoot) { rovRoot.position.set(-origin[0], 0, -origin[1]); rovRoot.updateMatrixWorld(true); }
 }
 function stopWorld() {
+  if (fauna) fauna.stop();
   if (rovs) { try { rovs.dispose(); } catch (e) { /* half built */ } rovs = null; }
   if (streamer) streamer.dispose();
   if (pool) pool.dispose();
@@ -233,6 +237,7 @@ async function buildWorld({ seed = G.seed, keepSquad = false } = {}) {
   setOrigin(start[0], start[2]);
   pool = makePool(WB);
   streamer = createStreamer({ seed, budget: WB, pool, view, now: nowMs });
+  if (fauna) fauna.start({ W, streamer, seed, profile: G.detail, physics: () => P, squad: () => squad, origin: () => origin });
   P = worldPhysics(W, streamer, { clear: SQUAD_CLEAR, eye: () => (cam ? cam.eye : start) });
   squad = createSquad({ field: P, seed, count: G.rovs, clear: SQUAD_CLEAR, start });
   if (cam) {
@@ -260,6 +265,7 @@ function buildROVs() {
   if (rovs) { try { rovs.dispose(); } catch (e) { /* a half-built set */ } rovs = null; }
   try {
     rovs = createROVs(S.THREE, {
+      feedTag: v => (fauna ? fauna.feedTag(v) : null),
       scene: S.scene, root: rovRoot, renderer: S.renderer, rock: P, sdf: P.sdf, reef: null, tether: false,
       pilots: squad.vehicles.map(v => v.state), seed: G.seed, quality: PROFILE_ID === 'desktop' ? 'high' : 'low', profile: PROF,
       origin: () => origin, depthBase: DEPTH_BASE,
@@ -648,6 +654,7 @@ function frame(t) {
   if (!saverOn && (fitTick++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
   if (cam) S.setCausticCentre(cam.eye[0] - origin[0], cam.eye[2] - origin[1], 96);
   S.flushChunks(COARSE ? 2.5 : 3.5, now);
+  if (fauna && cam) fauna.frame(dt, S.camera, cam.eye);
   S.render(dt, now);
   presentFeed();
 }
@@ -678,6 +685,7 @@ window.__coralDebug = () => ({
   world: S ? S.world : null, stream: streamer ? streamer.stats : null, pool: pool ? pool.stats : null, fallback: fallbackWhy,
   squad: squad ? { task: squad.task.kind, label: squad.task.label, stats: Object.assign({}, squad.stats), p: squad.vehicles.map(v => v.state.p.slice()) } : null,
   coralChunks: coral.size, fine: fineK.size, ageMin: youngestAge(),
+  fauna: fauna && fauna.F ? fauna.F.stats() : null,
   solid: P ? (x, y, z) => P.sdf(x, y, z) / P.sdfScale : null,
   post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
 });
@@ -703,6 +711,7 @@ window.snSaver = {
   enter(o = {}) {
     if (!S) return { canvas, warmupMs: 0 };
     saverOn = true;
+    if (fauna) fauna.saver(true);
     document.documentElement.classList.add('sn-saver');
     if (shell) { shell.setOpen(false); shell.closeAbout(); }
     const label = typeof o.label === 'function' ? o.label : () => {};
@@ -791,6 +800,7 @@ window.snSaver = {
   exit() {
     if (!saverOn) return;
     saverOn = false;
+    if (fauna) fauna.saver(false);
     document.documentElement.classList.remove('sn-saver');
     canvas.style.opacity = '';
     const f = $('feed'); if (f) f.removeAttribute('style');

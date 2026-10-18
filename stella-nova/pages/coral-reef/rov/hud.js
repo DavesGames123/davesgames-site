@@ -10,7 +10,9 @@
 //  hudFields(info) gives every text field, so the node test checks them
 //  without a canvas. drawHud(ctx, info, picture, o) draws them; picture is
 //  a canvas (or ImageBitmap) of the received picture, or null.
-//  info: { id, depth (m), heading (deg), time (s), status (SstvLink.status()
+//  info: { id, depth (m), heading (deg), time (s), tag ({ name, sci } of the
+//          creature in view, fauna/hook.js feedTag; drawn as a label over the
+//          picture), status (SstvLink.status()
 //          or the live status of feed.js), rec (bool), t (s, wall clock for
 //          blinks) }
 //  The live status { live: true, fps, target, frames, signal, glitch }
@@ -40,6 +42,12 @@ export const ROV_COLOURS = ['#f2b705', '#3fd0ff', '#ff6fae', '#9be15d'];
 export const rovColour = (id) => ROV_COLOURS[(((id ?? 1) - 1) % 4 + 4) % 4];
 const pad2 = (n) => String(Math.floor(n)).padStart(2, '0');
 
+// The creature in view (fauna/hook.js feedTag): 'OBS name · scientific name'.
+export function tagText(tag) {
+  if (!tag || !tag.name) return '';
+  return 'OBS ' + tag.name + (tag.sci ? ' \u00b7 ' + tag.sci : '');
+}
+
 export function hudFields(info) {
   const s = info.status || {};
   const t = Math.max(0, info.time || 0);
@@ -60,6 +68,7 @@ export function hudFields(info) {
       line: 'FRM ' + String(s.frames || 0).padStart(6, '0'),
       phase: s.glitch ? 'SYNC' : 'LIVE',
       level: s.signal ? s.signal.level : 0,
+      tag: tagText(info.tag),
     };
   }
   return {
@@ -74,6 +83,7 @@ export function hudFields(info) {
     line: 'LN ' + String(s.line || 0).padStart(3, '0') + '/' + (s.lines || 0),
     phase: { vis: 'SYNC VIS', image: 'RX', done: 'HOLD', hold: 'HOLD', need: 'WAIT', novis: 'NO SIGNAL', idle: 'WAIT' }[phase] || 'RX',
     level: s.signal ? s.signal.level : 0,
+    tag: tagText(info.tag),
   };
 }
 
@@ -129,6 +139,16 @@ export function drawHud(ctx, info, picture, o = {}) {
   ctx.moveTo(mx - 8, my); ctx.lineTo(mx - 3, my); ctx.moveTo(mx + 3, my); ctx.lineTo(mx + 8, my);
   ctx.moveTo(mx, my - 8); ctx.lineTo(mx, my - 3); ctx.moveTo(mx, my + 3); ctx.lineTo(mx, my + 8);
   ctx.stroke();
+  // the creature in view (a label over the bottom of the picture)
+  if (F.tag) {
+    ctx.font = '600 10px ui-monospace, Menlo, Consolas, monospace';
+    let t = F.tag; while (t.length > 8 && ctx.measureText(t).width > pic.w - 20) t = t.slice(0, -2);
+    if (t !== F.tag) t += '…';
+    const tw = ctx.measureText(t).width;
+    ctx.fillStyle = 'rgba(5,9,11,0.72)'; ctx.fillRect(pic.x + 6, py + ph - 22, tw + 10, 15);
+    ctx.fillStyle = amber; ctx.textAlign = 'left'; ctx.fillText(t, pic.x + 11, py + ph - 14);
+    ctx.font = '600 11px ui-monospace, Menlo, Consolas, monospace';
+  }
   // bottom bar
   const yb = bar + 12, yb2 = bar + 28;
   ctx.textAlign = 'left'; ctx.fillStyle = ink;
@@ -166,6 +186,15 @@ function compact(ctx, F, s, info, o, col, ink, dim, red, picture) {
   } else if (picture) {
     const p = picture, ar = p.width / p.height, ph = Math.min(pic.h, Math.round(pic.w / ar)), py = pic.y + Math.round((pic.h - ph) / 2);
     ctx.drawImage(p, pic.x, py, pic.w, ph);
+  }
+  if (F.tag) {
+    // the common name only: the small card has no room for the rest
+    ctx.font = '700 15px ui-monospace, Menlo, Consolas, monospace';
+    let t = F.tag.split(' \u00b7 ')[0];
+    while (t.length > 8 && ctx.measureText(t).width > pic.w - 20) t = t.slice(0, -2);
+    ctx.fillStyle = 'rgba(5,9,11,0.72)'; ctx.fillRect(pic.x + 6, pic.y + pic.h - 30, ctx.measureText(t).width + 12, 22);
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.fillText(t, pic.x + 12, pic.y + pic.h - 19);
+    ctx.font = '600 18px ui-monospace, Menlo, Consolas, monospace';
   }
   const yb = bar + 19;
   ctx.textAlign = 'left'; ctx.fillStyle = ink;

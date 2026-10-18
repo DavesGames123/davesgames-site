@@ -10,6 +10,8 @@
 //    import { createROVs } from './rov/index.js';
 //    const rovs = createROVs(THREE, {
 //      scene, renderer,          // renderer null: no camera render (node)
+//      feedTag(v) -> { name, sci } | null  the creature in the feed of v
+//                                (fauna/hook.js; the HUD label)
 //      rock,                     // ROCK createRock(); a stub when missing
 //      reef,                     // CORAL createReef() or its mirror (optional)
 //      count: 3, seed: 1,        // 2 or 3 vehicles; one seed, one dive
@@ -267,7 +269,7 @@ export function createROVs(THREE, o = {}) {
   // feed per vehicle, HUD); else one feed as before
   const feedBase = Object.assign({
     renderer: o.renderer || null, scene, seed, getVehicle: byId,
-    info: (v) => ({ depth: depthBase - v.group.position.y, heading: headingOf(v.pilot.state.yaw), time: clock, task: o.makeFeed ? v.pilot.state.mode : undefined }),
+    info: (v) => ({ depth: depthBase - v.group.position.y, heading: headingOf(v.pilot.state.yaw), time: clock, task: o.makeFeed ? v.pilot.state.mode : undefined, tag: o.feedTag ? o.feedTag(v) : null }),
   }, feedO);
   const feed = o.makeFeed ? o.makeFeed(feedBase, vehicles.map(v => v.id)) : createFeed(THREE, feedBase);
   if (feedO.vehicle == null) feed.setVehicle(1);
