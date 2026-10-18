@@ -23,9 +23,11 @@
 //    pages/forge/shaders/sky.wgsl (which adapts the granule_star cell of
 //    pages/sdf-solids-table). The star sphere turns round the celestial
 //    pole with the sidereal time, so the stars wheel through the night.
-//  SUN  a disc of 0.267 deg radius with limb darkening (Neckel and Labs,
-//    u = 0.6) and granulation after forge sky_sun, reddened by the
-//    transmittance LUT.
+//  SUN  a disc of 0.2665 deg radius (0.533 deg across) with limb darkening
+//    (Neckel and Labs, u = 0.6) and granulation after forge sky_sun,
+//    reddened by the transmittance LUT. Its radiance is the irradiance
+//    over the solid angle x SUN_DISC_K (about 3.7e4, so bloom gives a
+//    soft glare), and its edge is anti-aliased over a pixel.
 //  MOON  a sphere lit by the real sun direction: the phase follows from the
 //    geometry. Maria from noise, earthshine on the dark part.
 //  CLOUD LAYER and CLOUD SHADOW  cloud heights (sk_cloudBase, sk_cloudTop)
@@ -180,11 +182,11 @@ fn sk_sunRadiance(p: vec3f) -> vec3f {
 }
 fn sk_moonRadiance(p: vec3f) -> vec3f {
   // the eye sees moonlight as a cool grey (Purkinje shift): keep only a
-  // third of the reddening of a low moon, so a moonrise does not paint
+  // fifth of the reddening of a low moon, so a moonrise does not paint
   // the clouds and the haze orange
   let T = sk_transmittance(sk_rKm(p.y), S.moon.y);
   let Tl = dot(T, vec3f(0.2126, 0.7152, 0.0722));
-  return S.moon.w * vec3f(0.85, 0.9, 1.0) * mix(vec3f(Tl), T, 0.35);
+  return S.moon.w * vec3f(0.8, 0.88, 1.0) * mix(vec3f(Tl), T, 0.2);
 }
 
 // Sky-view LUT mapping (Hillaire 2020, sec. 5.3): u from the azimuth to
@@ -532,8 +534,11 @@ fn sk_starLayer(d: vec3f, n: f32, keep: f32, mBright: f32, pxAng: f32, salt: f32
   let m = max(mBright, 9.5 + log(max(h2.x, 1e-6)) / (0.45 * 2.302585));
   let flux = 0.5 * pow(10.0, -0.4 * m);
   let Tk = mix(3100.0, 7200.0, h2.y * h2.y) + select(0.0, 14000.0 * h2.z, h2.y > 0.93);
-  let tint = mix(vec3f(1.0), sk_blackbody(Tk), 0.75);
-  return tint * flux * exp(-0.5 * ang * ang / (sig * sig));
+  // star colours are pale to the eye: a third of the blackbody tint
+  let tint = mix(vec3f(1.0), sk_blackbody(Tk), 0.35);
+  // a slow, small twinkle (scintillation), each star its own phase
+  let tw = 1.0 + (0.22 * sin((S.misc.z * (2.0 + (3.0 * h2.z))) + (h.x * 40.0)));
+  return tint * (flux * tw) * exp(-0.5 * ang * ang / (sig * sig));
 }
 const SK_GAL_N: vec3f = vec3f(0.4885, 0.8507, -0.1937);
 const SK_GAL_C: vec3f = vec3f(-0.8549, 0.4157, -0.3104);
@@ -559,24 +564,33 @@ fn sk_celestial(d: vec3f) -> vec3f {
   return vec3f(q.x * cos(a) - q.z * sin(a), q.y, q.x * sin(a) + q.z * cos(a));
 }
 
-// The sun disc radiance along d (0 off the disc). Limb darkening and
-// granulation after forge sky_sun.
-fn sk_sunDisc(d: vec3f, s: vec3f) -> vec3f {
+// The sun disc radiance along d (0 off the disc): a disc of angular
+// radius S.sun.x (0.2665 deg, sky-state.js SUN_RADIUS), limb darkening
+// I(mu) = 1 - u (1 - mu) with u = 0.6 (Neckel and Labs), granulation after
+// forge sky_sun. The mean radiance times the solid angle is the
+// irradiance S.sun.y, scaled by SUN_DISC_K (fp16 holds at most 65504; the
+// full value is about 3.7e5). The edge is anti-aliased over one pixel
+// (pxAng), so a disc of 3 px reads round and does not crawl.
+const SUN_DISC_K: f32 = 0.1;
+fn sk_sunDisc(d: vec3f, s: vec3f, pxAng: f32) -> vec3f {
   let r = S.sun.x;
-  let c = dot(d, s);
-  let x = acos(clamp(c, -1.0, 1.0)) / r;
-  if (x > 1.0) { return vec3f(0.0); }
-  let mu = sqrt(max(1.0 - x * x, 0.0));
-  let limb = 1.0 - 0.6 * (1.0 - mu);
+  let ang = acos(clamp(dot(d, s), -1.0, 1.0));
+  let w = max(pxAng * 0.7, r * 0.05);
+  let cov = 1.0 - sk_ss(r - w, r + w, ang);
+  if (cov <= 0.0) { return vec3f(0.0); }
+  let x = min(ang / r, 1.0);
+  let mu = sqrt(max(1.0 - (x * x), 0.0));
+  let limb = 1.0 - (0.6 * (1.0 - mu));
   var e = cross(s, vec3f(0.0, 1.0, 0.0));
   if (dot(e, e) < 1e-6) { e = vec3f(1.0, 0.0, 0.0); }
   e = normalize(e);
   let nn = cross(e, s);
-  let q = normalize(e * (dot(d, e) / r) + nn * (dot(d, nn) / r) + s * mu);
-  let w = sk_worley(q * 14.0 + vec3f(S.misc.z * 0.004));
-  let gran = sk_ss(0.0, 0.5, w.y - w.x);
-  let edge = sk_ss(1.0, 0.92, x);
-  return vec3f(1.0, 0.96, 0.9) * limb * (0.9 + 0.1 * gran) * edge * 900.0;
+  let q = normalize((e * (dot(d, e) / r)) + (nn * (dot(d, nn) / r)) + (s * mu));
+  let wv = sk_worley((q * 14.0) + vec3f(S.misc.z * 0.004));
+  let gran = sk_ss(0.0, 0.5, wv.y - wv.x);
+  // mean of the limb law over the disc: 1 - u / 3
+  let L0 = S.sun.y / (SK_PI * r * r * (1.0 - (0.6 / 3.0)));
+  return vec3f(1.0, 0.98, 0.95) * (L0 * SUN_DISC_K * limb * (0.94 + (0.06 * gran)) * cov);
 }
 
 // The moon: a sphere of 0.26 deg lit by the sun direction.
@@ -627,7 +641,7 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
       L += st * Tv * night * sk_ss(-0.02, 0.06, d.y);
     }
     let sunT = sk_transmittance(r, G.sunDir.y);
-    L += sk_sunDisc(d, G.sunDir.xyz) * sunT * S.sun.y * 0.05;
+    L += sk_sunDisc(d, G.sunDir.xyz, pxAng) * sunT;
     // the moon is behind the air: add it (it hides only the stars, which
     // are faint next to it)
     let mo = sk_moon(d, S.moon.xyz);

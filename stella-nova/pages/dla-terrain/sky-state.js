@@ -66,6 +66,7 @@ import { createModel, terrainCells, sampleSnap, CH, DT, N as WN, FORCING } from 
 
 export const FRONT_S = 40;          // seconds for a weather front to pass
 export const SUN_ILLUM = 20;        // solar irradiance outside the air (HDR units)
+export const SUN_RADIUS = 0.2665 * Math.PI / 180;   // angular radius of the sun disc, rad (0.533 deg across)
 export const MOON_ILLUM = 0.06;     // full moon, artistic (real ratio is 1/400000)
 
 // The atmosphere of shaders/sky.wgsl (Hillaire 2020 values). km and 1/km.
@@ -320,6 +321,7 @@ function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
   const sunClear = Tsun.map((x) => x * SUN_ILLUM);
   const sunColor = sunClear.map((x) => x * direct);
   const Tmoon = sunTransmittance(moon.dir[1], 0.2, wx.mie);
+  const TmoonL = 0.2126 * Tmoon[0] + 0.7152 * Tmoon[1] + 0.0722 * Tmoon[2];
   const moonScale = MOON_ILLUM * moon.lit * smooth(-0.02, 0.05, moon.dir[1]) * Math.max(0.15, direct);
 
   // ---- ambient irradiance (hemisphere) --------------------------------------
@@ -336,7 +338,9 @@ function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
     let a = SUN_ILLUM * 0.16 * skyBlue[c] * day * (0.35 + 0.65 * Tz[c]);
     a += SUN_ILLUM * 0.012 * [0.28, 0.32, 0.6][c] * tw;
     a += [0.0012, 0.0016, 0.003][c];                               // airglow and stars
-    a += moonScale * 0.35 * [0.55, 0.65, 0.85][c] * Tmoon[c];
+    // the eye sees moonlight as a cool grey (Purkinje shift): keep only a
+    // fifth of the reddening of a low moon, or a night turns brown
+    a += moonScale * 0.35 * [0.55, 0.65, 0.85][c] * mix(TmoonL, Tmoon[c], 0.2);
     // overcast: grey light from the deck, the direct sun spread out
     const grey = (sunClear[0] + sunClear[1] + sunClear[2]) / 3;
     a = mix(a, 0.22 * grey * Math.max(se, 0) + a * 0.55, smooth(0.5, 1.0, wx.cover));

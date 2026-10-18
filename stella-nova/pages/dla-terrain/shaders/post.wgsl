@@ -30,7 +30,7 @@ struct PostU {
   p3: vec4f,   // white balance gain rgb, manual exposure (0 = auto)
   p4: vec4f,   // lift rgb, dt s
   p5: vec4f,   // gain rgb, look power
-  p6: vec4f,   // x 1 / bloom levels (the up chain sums the levels), y -, output size px zw
+  p6: vec4f,   // x 1 / bloom levels (the up chain sums the levels), y exposure (last readback), output size px zw
 };
 @group(1) @binding(0) var<uniform> P: PostU;
 @group(1) @binding(1) var tA: texture_2d<f32>;
@@ -148,6 +148,7 @@ fn historyCR(uv: vec2f, size: vec2f) -> vec3f {
 }
 
 // ── bloom (dual filter) ──
+const BLOOM_KNEE: f32 = 300.0;   // exposed luminance where the soft clamp starts
 @fragment fn fs_bdown(v: VOut) -> @location(0) vec4f {
   let px = 1.0 / vec2f(textureDimensions(tA));
   let h = px * 1.0;
@@ -156,9 +157,13 @@ fn historyCR(uv: vec2f, size: vec2f) -> vec3f {
   c += textureSampleLevel(tA, sL, v.uv + vec2f(h.x, -h.y), 0.0).rgb;
   c += textureSampleLevel(tA, sL, v.uv + vec2f(-h.x, h.y), 0.0).rgb;
   c += textureSampleLevel(tA, sL, v.uv + vec2f(h.x, h.y), 0.0).rgb;
-  // clamp fireflies (a single hot pixel must not bloom a disc)
+  // soft clamp in exposed units (P.p6.y = the exposure of the last
+  // readback): a single hot pixel must not bloom a disc, but the sun
+  // (about 3.7e4 before exposure) keeps enough energy for a soft glare.
+  // The old clamp at 60 before exposure took almost all of the sun out.
   let o = c / 8.0;
-  return vec4f(o * (1.0 / (1.0 + max(0.0, cm_luminance(o) - 60.0) * 0.02)), 1.0);
+  let ex = max(cm_luminance(o) * P.p6.y, 0.0);
+  return vec4f(o * (1.0 / (1.0 + (max(0.0, ex - BLOOM_KNEE) / BLOOM_KNEE))), 1.0);
 }
 @fragment fn fs_bup(v: VOut) -> @location(0) vec4f {
   let px = 1.0 / vec2f(textureDimensions(tA));

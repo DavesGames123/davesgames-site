@@ -22,11 +22,18 @@
 // ============================================================================
 
 export const POST_DEFAULTS = Object.freeze({
-  bloom: 0.045, ev: 0, key: 0.16, adapt: 1.6, vignette: 0.32, grain: 0.022,
+  bloom: 0.04, ev: 0, key: 0.16, adapt: 0.6, vignette: 0.32, grain: 0.022,
   contrast: 1.06, saturation: 1.2, taa: true, taaWeight: 0.1,
   minExp: 0.004, maxExp: 40, wb: [1, 1, 1], manualExposure: 0,
   lift: [0.0, 0.004, 0.012], gain: [1.0, 0.99, 0.97], power: 1.15,
 });
+
+// the exposure for the bloom clamp: the last readback (or the manual
+// exposure), inside the auto exposure limits
+function bloomExposure(e, s) {
+  const v = s.manualExposure > 0 ? s.manualExposure : e;
+  return Math.min(Math.max(Number.isFinite(v) ? v : 1, s.minExp), s.maxExp) * Math.pow(2, s.ev || 0);
+}
 
 export function halton(i, b) {
   let f = 1, r = 0;
@@ -131,7 +138,7 @@ export async function createPost(gpu) {
       s.wb[0], s.wb[1], s.wb[2], s.manualExposure,
       s.lift[0], s.lift[1], s.lift[2], dt,
       s.gain[0], s.gain[1], s.gain[2], s.power,
-      1 / BLOOM_LEVELS, 0, post.outW, post.outH]);
+      1 / BLOOM_LEVELS, bloomExposure(post.exposure, s), post.outW, post.outH]);
     device.queue.writeBuffer(ubuf, 0, uf);
   }
   function fsPass(enc, view, pipe, group, load) {

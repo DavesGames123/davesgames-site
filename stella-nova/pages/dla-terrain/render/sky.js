@@ -63,7 +63,7 @@
 //  "function makeTargets", "compute(enc", "drawSky(", "drawVolumetric(",
 //  "export const SKYU_FLOATS"
 // ============================================================================
-import { ATMO, SUN_ILLUM, GLOBALS, createSky as createSkyState } from '../sky-state.js';
+import { ATMO, SUN_ILLUM, SUN_RADIUS, GLOBALS, createSky as createSkyState } from '../sky-state.js';
 import { CH as WX_CH, N as WX_N } from '../weather-model.js';
 import { createWeather, precipPhases } from './weather.js';
 
@@ -383,7 +383,7 @@ export async function createSky(gpu) {
     const tod = s.tod ?? g[GLOBALS.sunColor + 3];
     const season = s.season ?? g[GLOBALS.weather2 + 3];
     const lat = (s.latitude ?? 46) * Math.PI / 180;
-    put(SKYU.sun, 0.00465, SUN_ILLUM, 2 * Math.PI * (tod + season), smooth(0.06, -0.16, sunY));
+    put(SKYU.sun, SUN_RADIUS, SUN_ILLUM, 2 * Math.PI * (tod + season), smooth(0.06, -0.16, sunY));
     const md = s.moonDir || [g[GLOBALS.moonDir], g[GLOBALS.moonDir + 1], g[GLOBALS.moonDir + 2]];
     put(SKYU.moon, md[0], md[1], md[2], s.moonScale ?? g[GLOBALS.moonDir + 3]);
 
