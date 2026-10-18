@@ -188,6 +188,45 @@ export function rainDropPos(k, ph, cam, rainR, h) {
   return [x, y, z];
 }
 
+// ── FOG FLICKER: JS twins of shaders/weather.wgsl vol_avgExp and
+// vol_mediumSeg (tests/fog.test.mjs). The texture reads are parameters:
+// o = { sea, rayleigh: [r, g, b, H km], mieS: [s, H km], haze (S.vol1.z),
+// valleyK (S.precip.w x the model fog x the bank gain), top (fog top m),
+// bank (0..1.5) }. Rain and snow are left out. -> { sR, sM, sF, ext, ua, ub }
+export const HAZE_DEEP_MAX = 1.4e-4;
+export function volAvgExp(a, b, H) {
+  const d = b - a;
+  if (Math.abs(d) < H * 1e-3) return Math.exp(-(0.5 * (a + b)) / H);
+  return (H * (Math.exp(-a / H) - Math.exp(-b / H))) / d;
+}
+export function volMediumSegJS(p0, p1, g0, g1, o) {
+  const zero = { sR: [0, 0, 0], sM: 0, sF: 0, ext: 0, ua: 0, ub: 0 };
+  const h0 = p0[1] - g0, h1 = p1[1] - g1;
+  if (h0 <= 0 && h1 <= 0) return zero;
+  let ua = 0, ub = 1;
+  if (h0 < 0) ua = h0 / (h0 - h1);
+  if (h1 < 0) ub = h0 / (h0 - h1);
+  const fa = ub - ua, mix = (a, b, t) => a + (b - a) * t;
+  const ya = mix(p0[1], p1[1], ua), yb = mix(p0[1], p1[1], ub);
+  const ha = Math.max(mix(h0, h1, ua), 0), hb = Math.max(mix(h0, h1, ub), 0);
+  const sa = Math.max(ya - o.sea, 0), sb = Math.max(yb - o.sea, 0);
+  const r = o.rayleigh || [5.8e-3, 13.5e-3, 33.1e-3, 8], mi = o.mieS || [3.996e-3, 1.2];
+  const kR = 0.001 * volAvgExp(sa * 0.001, sb * 0.001, r[3]) * fa;
+  const sR = [r[0] * kR, r[1] * kR, r[2] * kR];
+  const sM = mi[0] * 0.001 * volAvgExp(sa * 0.001, sb * 0.001, mi[1]) * fa;
+  const bank = o.bank ?? 0.6, deep = Math.min(o.haze, HAZE_DEEP_MAX);
+  const haze = (o.haze * 0.45 * volAvgExp(ha, hb, 140) + deep * 0.55 * volAvgExp(sa, sb, 1700)) * (0.55 + 0.6 * bank);
+  const ss = (e0, e1, x) => { const u = clamp((x - e0) / (e1 - e0), 0, 1); return u * u * (3 - 2 * u); };
+  let vsum = 0;
+  for (let k = 0; k < 3; k++) {
+    const x = (k - 1) * 0.7745967, wk = k === 1 ? 0.4444444 : 0.2777778, u = mix(ua, ub, 0.5 + 0.5 * x);
+    vsum += wk * ss(o.top + 20, o.top - 60, mix(p0[1], p1[1], u)) * ss(-2, 6, mix(h0, h1, u));
+  }
+  const valley = (o.valleyK || 0) * (0.5 + 0.8 * bank) * vsum;
+  const sF = haze * fa + valley * fa;
+  return { sR, sM, sF, ext: sR[0] * 0.2126 + sR[1] * 0.7152 + sR[2] * 0.0722 + sM * 1.11 + sF, ua, ub };
+}
+
 // ── GPU part ────────────────────────────────────────────────────────────────
 // ── SHAFTS plan (DOM-free, tests/sky.test.mjs and tests/caps.test.mjs) ──────
 export const SHAFT_MODES = ['auto', 'off', 'screen', 'volume'];

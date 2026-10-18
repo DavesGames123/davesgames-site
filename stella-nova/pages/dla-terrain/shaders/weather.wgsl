@@ -15,8 +15,11 @@
 //                   multiple-scattering LUT, sky ambient, the moon, the
 //                   lightning flash. The valley fog (its density and its
 //                   top) and the rain and snow shafts under the cloud bases
-//                   come from the weather model (wx_tile). Jittered in depth each frame and
-//                   blended with the reprojected last frame (G.prevViewProj).
+//                   come from the weather model (wx_tile). The medium is the
+//                   mean over the slice (vol_mediumSeg: closed form, none
+//                   under the ground); only the light point is jittered in
+//                   depth. Blended with the last frame at the reprojected
+//                   froxel centre (G.prevViewProj).
 //    csFroxIntegrate  front to back, energy conserving (Hillaire 2015,
 //                   "Physically based and unified volumetric rendering in
 //                   Frostbite"): rgb in-scatter, a transmittance.
@@ -45,7 +48,7 @@
 //    render/weather.js grows with lib/dla-engine.js (a DLA bolt). Each
 //    segment is a core quad and a wide glow quad, additive HDR.
 //
-//  grep -n targets: "fn vol_sliceDist", "fn vol_medium", "fn csFroxInject",
+//  grep -n targets: "fn vol_sliceDist", "fn vol_mediumSeg", "fn vol_avgExp", "fn csFroxInject",
 //  "fn csFroxIntegrate", "fn vol_rainbow", "fn fsHaze", "fn vsPrecip",
 //  "fn fsPrecip", "fn vsBolt", "fn fsBolt"
 // ============================================================================
@@ -59,56 +62,94 @@ fn vol_distSlice(d: f32) -> f32 {
   return log(max(d, S.vol0.x) / S.vol0.x) / log(S.vol0.y / S.vol0.x) * S.vol2.z;
 }
 
-struct VolMedium { sR: vec3f, sM: f32, sF: f32, ext: f32 }
+struct VolMedium { sR: vec3f, sM: f32, sF: f32, ext: f32, ua: f32, ub: f32 }
 
-// The medium at world point p, per m. sR Rayleigh, sM Mie (aerosol), sF
-// fog-like (ground haze, valley fog, rain and snow).
-fn vol_medium(p: vec3f) -> VolMedium {
+// FOG FLICKER (the user: "the geometry of the near-ground fog is
+// flickering considerably"). The medium was read at one jittered point per
+// froxel: a ground layer of 140 m (and the valley fog edge of 8 m) inside a
+// slice of tens of m gave a new value each frame, and points under the
+// ground (inside a hill) took the full ground density, which the 5-tap
+// apply leaked round the silhouettes. Now vol_mediumSeg gives the MEAN of
+// the medium over the slice segment p0 .. p1: the ground is a line between
+// the heights g0, g1 under the two ends, the part under the ground has no
+// medium, the exponential layers are integrated in closed form
+// (vol_avgExp), the valley fog edge by a 3-point Gauss rule. No term
+// depends on the jitter, so a still camera sees a still fog.
+// render/weather.js volMediumSegJS is the JS twin (tests/fog.test.mjs).
+
+// the mean of exp(-h / H) for h linear from a to b
+fn vol_avgExp(a: f32, b: f32, H: f32) -> f32 {
+  let d = b - a;
+  if (abs(d) < (H * 1e-3)) { return exp(-(0.5 * (a + b)) / H); }
+  return (H * (exp(-a / H) - exp(-b / H))) / d;
+}
+
+// The mean medium per m over the segment p0 .. p1 (ground g0, g1 under
+// the ends). sR Rayleigh, sM Mie (aerosol), sF fog-like (ground haze,
+// valley fog, rain and snow). ua .. ub: the part over the ground (0..1).
+fn vol_mediumSeg(p0: vec3f, p1: vec3f, g0: f32, g1: f32) -> VolMedium {
   var m: VolMedium;
-  let hSea = max(p.y - G.terrain.z, 0.0);
-  let hKm = hSea * 0.001;
-  m.sR = S.rayleigh.xyz * 0.001 * exp(-hKm / S.rayleigh.w);
-  m.sM = S.mieS.x * 0.001 * exp(-hKm / S.mieS.w);
-  let gnd = terrainHeight(p.xz);
-  let hG = max(p.y - gnd, 0.0);
+  m.sR = vec3f(0.0); m.sM = 0.0; m.sF = 0.0; m.ext = 0.0; m.ua = 0.0; m.ub = 0.0;
+  let h0 = p0.y - g0;
+  let h1 = p1.y - g1;
+  if ((h0 <= 0.0) && (h1 <= 0.0)) { return m; }
+  var ua = 0.0;
+  var ub = 1.0;
+  if (h0 < 0.0) { ua = h0 / (h0 - h1); }
+  if (h1 < 0.0) { ub = h0 / (h0 - h1); }
+  m.ua = ua; m.ub = ub;
+  let fa = ub - ua;
+  let ya = mix(p0.y, p1.y, ua);
+  let yb = mix(p0.y, p1.y, ub);
+  let ha = max(mix(h0, h1, ua), 0.0);
+  let hb = max(mix(h0, h1, ub), 0.0);
+  let sea = G.terrain.z;
+  let sa = max(ya - sea, 0.0);
+  let sb = max(yb - sea, 0.0);
+  m.sR = S.rayleigh.xyz * (0.001 * vol_avgExp(sa * 0.001, sb * 0.001, S.rayleigh.w) * fa);
+  m.sM = S.mieS.x * 0.001 * vol_avgExp(sa * 0.001, sb * 0.001, S.mieS.w) * fa;
+  let um = 0.5 * (ua + ub);
+  let pm = mix(p0, p1, um);
+  let gm = mix(g0, g1, um);
   // noise banks that drift with the wind (S.anim1.xy: the drift summed
-  // frame by frame in render/sky.js, never wind x time)
-  let n1 = textureSampleLevel(tNoiseBase, sRepeat, (p - vec3f(S.anim1.x, 0.0, S.anim1.y)) / 1400.0, 0.0);
-  // no detail tile here: its 32-texel cells read as a dotted grid of
-  // circles over the fog sea in far aerial views, even large and weak
+  // frame by frame in render/sky.js, never wind x time), at the middle
+  let n1 = textureSampleLevel(tNoiseBase, sRepeat, (pm - vec3f(S.anim1.x, 0.0, S.anim1.y)) / 1400.0, 0.0);
   let bank = clamp(n1.r * 1.3 - 0.25, 0.0, 1.5);
-  // ground haze: a thin layer on the ground and a deep layer above the sea
-  // the deep layer is capped: thick weather (fog, storms, blizzards) is
-  // thick near the ground and in the valleys, while ridges and the far
-  // land stay readable through it, and a far view is not one grey wall
+  // ground haze: a thin layer on the ground and a deep layer above the
+  // sea; the deep layer is capped (thick weather stays in the valleys)
   let deep = min(S.vol1.z, HAZE_DEEP_MAX);
-  let haze = ((S.vol1.z * 0.45 * exp(-hG / 140.0)) + (deep * 0.55 * exp(-hSea / 1700.0))) * (0.55 + 0.6 * bank);
-  // the weather model here: A cover, type, top, precip; B storm, fog,
-  // base, cirrus; C fog top, wind, freezing level
-  let wa = wx_tile(p.xz, 0.0);
-  let wb = wx_tile(p.xz, 1.0);
-  let wc = wx_tile(p.xz, 2.0);
-  // valley fog: a lake of fog under the model's fog top, which forms on
-  // clear calm nights in low ground and burns off after sunrise
+  let haze = ((S.vol1.z * 0.45 * vol_avgExp(ha, hb, 140.0)) + (deep * 0.55 * vol_avgExp(sa, sb, 1700.0))) * (0.55 + 0.6 * bank);
+  // the weather model: A cover, type, top, precip; B storm, fog, base,
+  // cirrus; C fog top, wind, freezing level
+  let wa = wx_tile(pm.xz, 0.0);
+  let wb = wx_tile(pm.xz, 1.0);
+  let wc = wx_tile(pm.xz, 2.0);
+  // valley fog: a lake of fog under the model's fog top (clear calm
+  // nights, low ground); its edges by a 3-point Gauss rule over ua .. ub
   let top = wc.x + (n1.g - 0.5) * 80.0 + (n1.b - 0.5) * 25.0;
-  let valley = S.precip.w * sk_ss(0.0, 0.5, wb.y) * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
+  var vsum = 0.0;
+  for (var k = 0; k < 3; k++) {
+    let x = (f32(k) - 1.0) * 0.7745967;
+    let wk = select(0.2777778, 0.4444444, k == 1);
+    let u = mix(ua, ub, 0.5 + (0.5 * x));
+    vsum += wk * sk_ss(top + 20.0, top - 60.0, mix(p0.y, p1.y, u)) * sk_ss(-2.0, 6.0, mix(h0, h1, u));
+  }
+  let valley = S.precip.w * sk_ss(0.0, 0.5, wb.y) * (0.5 + 0.8 * bank) * vsum;
   // rain shafts under the cloud base of this place: grey curtains that
-  // read from far away. In broken, dry air (low cover) the rain dries
-  // as it falls: the shaft fades toward the ground (virga). Snow above
-  // the freezing level is denser and whiter.
+  // read from far away; virga in dry air; snow above the freezing level
   let pr = clamp(wa.w, 0.0, 1.0);
   var precip = 0.0;
   if (pr > 0.002) {
     let base = wb.z;
-    let below = sk_ss(base + 150.0, base - 250.0, p.y);
-    let fall = clamp((p.y - gnd) / max(base - gnd, 50.0), 0.0, 1.0);
+    let below = sk_ss(base + 150.0, base - 250.0, pm.y);
+    let fall = clamp((pm.y - gm) / max(base - gm, 50.0), 0.0, 1.0);
     let dry = 1.0 - sk_ss(0.35, 0.9, wa.x);
     let virga = mix(1.0, fall * fall, dry * 0.9);
-    let snowy = sk_ss(wc.w - 120.0, wc.w + 120.0, p.y);
+    let snowy = sk_ss(wc.w - 120.0, wc.w + 120.0, pm.y);
     let curtain = 0.55 + 0.9 * n1.g;
     precip = pr * mix(1.1e-4, 3.0e-4, snowy) * (1.0 + 0.8 * clamp(wb.x, 0.0, 1.0)) * below * virga * curtain;
   }
-  m.sF = haze + valley + precip;
+  m.sF = (haze + precip) * fa + valley * fa;
   m.ext = dot(m.sR, vec3f(0.2126, 0.7152, 0.0722)) + m.sM * 1.11 + m.sF;
   return m;
 }
@@ -142,9 +183,16 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   let uv = (vec2f(id.xy) + 0.5) / vec2f(gd.xy);
   let rd = viewRay(uv);
   let jz = fract(S.vol1.w + 0.25 * cm_ign(vec2f(id.xy) + vec2f(f32(id.z) * 3.1, 0.0)));
-  let d = vol_sliceDist(f32(id.z) + jz);
+  // FOG FLICKER: the mean medium of the whole slice (vol_mediumSeg); the
+  // jitter moves only the point of the light terms (sun shadow, phase)
+  let d0 = vol_sliceDist(f32(id.z));
+  let d1 = vol_sliceDist(f32(id.z) + 1.0);
+  let p0 = G.camPos.xyz + rd * d0;
+  let p1 = G.camPos.xyz + rd * d1;
+  let m = vol_mediumSeg(p0, p1, terrainHeight(p0.xz), terrainHeight(p1.xz));
+  let uj = mix(m.ua, m.ub, jz);
+  let d = mix(d0, d1, uj);
   let p = G.camPos.xyz + rd * d;
-  let m = vol_medium(p);
 
   let cosT = dot(rd, G.sunDir.xyz);
   let pR = sk_phaseR(cosT);
@@ -184,12 +232,14 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   var cur = vec4f(Ls * VOL_K, m.ext * VOL_K);
   var curLoss = vec4f(loss * VOL_K, 1.0);
 
-  // temporal reprojection
-  let pc = G.prevViewProj * vec4f(p, 1.0);
+  // temporal reprojection of the froxel centre (FOG FLICKER: the jittered
+  // point read the history up to half a slice off, a blur that moved)
+  let pcen = G.camPos.xyz + rd * vol_sliceDist(f32(id.z) + 0.5);
+  let pc = G.prevViewProj * vec4f(pcen, 1.0);
   if (pc.w > 0.0 && S.vol2.w > 0.0) {
     let puv = vec2f(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
-    let pd = length(p - S.prevCam.xyz);
-    let pz = (vol_distSlice(pd) + 0.0) / S.vol2.z;
+    let pd = length(pcen - S.prevCam.xyz);
+    let pz = vol_distSlice(pd) / S.vol2.z;
     if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0)) && pz > 0.0 && pz < 1.0) {
       let h = textureSampleLevel(histInject, sClamp, vec3f(puv, pz), 0.0);
       cur = mix(cur, h, S.vol2.w);
