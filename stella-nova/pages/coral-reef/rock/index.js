@@ -163,7 +163,9 @@ function sortMeshes(rock) {
 }
 
 // Mesh the chunks in module workers. opts as createRock. w.workers: count
-// (default hardwareConcurrency - 1, 2..12); w.workerUrl: URL of
+// (default hardwareConcurrency - 1, 1..4: each worker holds its own
+// geology, and 12 at one time starve a laptop; the page gives the count
+// of its profile, budget.js rockWorkers); w.workerUrl: URL of
 // rock/worker.js; w.Worker: a Worker class (tests pass a node adapter).
 export async function createRockAsync(opts = {}, w = {}) {
   const WorkerClass = w.Worker || (typeof Worker !== 'undefined' ? Worker : null);
@@ -174,7 +176,7 @@ export async function createRockAsync(opts = {}, w = {}) {
   const lay = meshLayout(rock._geo, rock.quality);
   rock.stats.cell = lay.cell; rock.stats.chunks = lay.chunks.length;
   const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
-  const nW = Math.max(1, Math.min(lay.chunks.length, w.workers ?? Math.max(2, Math.min(12, hc - 1))));
+  const nW = Math.max(1, Math.min(lay.chunks.length, 4, w.workers ?? Math.max(1, Math.min(4, hc - 1))));
   const url = w.workerUrl || new URL('./worker.js', import.meta.url);
   // Deal the chunks round robin (neighbours cost about the same).
   const parts = Array.from({ length: nW }, () => []);
