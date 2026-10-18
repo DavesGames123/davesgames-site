@@ -488,8 +488,8 @@ export function hexWeights(u, v, lum = [1, 1, 1]) {
   const s = tz <= 0 ? 1 : 0, s2 = 2 * s - 1;
   const base = [-tz * s2, s - fy * s2, s - fx * s2];
   const verts = [[bx + s, by + s], [bx + s, by + 1 - s], [bx + 1 - s, by + s]];
-  const ww = base.map((w, i) => (Math.max(w, 0) * Math.pow(Math.max(lum[i], 1e-3), 0.6)) ** 2);
-  const sum = Math.max(ww[0] + ww[1] + ww[2], 1e-6);
+  const ww = base.map((w, i) => (Math.max(w, 0) * Math.pow(Math.max(lum[i], 1e-3), 0.3)) ** 6);
+  const sum = Math.max(ww[0] + ww[1] + ww[2], 1e-12);
   return { base, verts, w: ww.map((x) => x / sum) };
 }
 

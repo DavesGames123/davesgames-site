@@ -290,7 +290,7 @@ for (const q of [1.0, 0.3]) {
   const h0 = hexWeights(0, 0);
   ok(Math.max(...h0.w) > 0.999, 'hex tiling: a lattice vertex takes all of the weight');
   const src = readFileSync(fileURLToPath(new URL('../shaders/ground.wgsl', import.meta.url)), 'utf8');
-  ok(/uv \* 3\.4641016/.test(src) && /0\.57735027 \* st\.y/.test(src) && /1\.15470054 \* st\.y/.test(src) && /vec3f\(0\.6\)\)/.test(src),
+  ok(/uv \* 3\.4641016/.test(src) && /0\.57735027 \* st\.y/.test(src) && /1\.15470054 \* st\.y/.test(src) && /vec3f\(0\.3\)\)/.test(src) && /pow\(ww, vec3f\(6\.0\)\)/.test(src),
     'fn hexGrid / fn hexSharp use the constants of hexWeights');
   ok(/max\(w, vec3f\(0\.0\)\) \* pow\(/.test(src), 'fn hexSharp clamps the weights before pow() (pow of a negative is NaN in WGSL)');
 }

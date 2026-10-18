@@ -1090,15 +1090,16 @@ fn hexNrm(t: vec4f, x: vec4f) -> vec4f {
   let r = vec2f((x.x * m.x) + (x.y * m.y), (-x.y * m.x) + (x.x * m.y));
   return vec4f((r * 0.5) + 0.5, t.zw);
 }
-// weights sharpened a little by luminance (Mikkelsen: the brighter, higher
-// sample shows at the seams), then normalised to sum 1. A strong
-// sharpening picks the brightest sample everywhere: a speckled granite
-// scan then turned into salt and pepper.
+// weights sharpened (Mikkelsen: an even blend of three samples loses the
+// contrast; leaf litter turned to mush), a little toward the brighter
+// sample, then normalised to sum 1. A strong luminance term picks the
+// brightest sample everywhere: a speckled granite scan then turned into
+// salt and pepper, so the luminance power stays small.
 fn hexSharp(w: vec3f, lum: vec3f) -> vec3f {
   // max(w, 0): a weight a hair under 0 (float) makes pow() NaN in WGSL
-  let ww = max(w, vec3f(0.0)) * pow(max(lum, vec3f(1e-3)), vec3f(0.6));
-  let p = ww * ww;
-  return p / max(p.x + p.y + p.z, 1e-6);
+  let ww = max(w, vec3f(0.0)) * pow(max(lum, vec3f(1e-3)), vec3f(0.3));
+  let p = pow(ww, vec3f(6.0));
+  return p / max(p.x + p.y + p.z, 1e-12);
 }
 fn tex3Hex(k: u32, uv: vec2f, gu: vec2f, gv: vec2f, rot: f32) -> array<vec4f, 3> {
   let hx = hexGrid(uv);
