@@ -27,6 +27,7 @@
 //    star chart ........... "function buildChart"
 //    inspector ............ "function renderInspector"
 //    phone sectors ........ "function buildSectors"
+//    phone sector toggle .. "function openSector"
 //    dock ................. "function initDock"
 //    search index ......... "const FIND_ITEMS"
 //    search ranking ....... "function findResults"
@@ -52,6 +53,8 @@
 //  Image budget: no image has a src at load. The image loader (const LZ)
 //  sets src only for groups near the view and removes it again far from
 //  the view. Small slots take the 320x200 thumbs/sm copies by srcset.
+//  A phone (const SMALL) takes the small copy as src, with no srcset, so a
+//  DPR 3 screen does not fetch the 640 px copy for a 196 px card.
 // ============================================================================
 (function (O) {
 'use strict';
@@ -61,6 +64,10 @@ document.documentElement.classList.add('js');
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 const HOVER = matchMedia('(hover: hover) and (pointer: fine)');
 const PHONE = matchMedia('(max-width: 759px)');
+// The star chart shows from 1024 px. Below that, #sectors is the chart.
+const NO_CHART = matchMedia('(max-width: 1023px)');
+// Phones, also in landscape: images take their small copy (const LZ).
+const SMALL = matchMedia('(max-width: 759px), (max-height: 500px) and (pointer: coarse)');
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -189,7 +196,14 @@ $$('.portal').forEach((el, i) => el.style.setProperty('--i', i));
 // LZ.refresh(group). With no IntersectionObserver, every image loads.
 const LZ = (() => {
   const SEL = 'img[data-src]';
-  const on = img => { if (img.dataset.ld) return; img.dataset.ld = '1'; if (img.dataset.srcset) img.srcset = img.dataset.srcset; img.src = img.dataset.src; };
+  const on = img => {
+    if (img.dataset.ld) return;
+    img.dataset.ld = '1';
+    const set = img.dataset.srcset;
+    if (set && SMALL.matches) { img.src = set.split(',')[0].trim().split(/\s+/)[0]; return; }
+    if (set) img.srcset = set;
+    img.src = img.dataset.src;
+  };
   const off = img => { if (!img.dataset.ld) return; delete img.dataset.ld; img.removeAttribute('srcset'); img.removeAttribute('src'); };
   const empty = g => $$(SEL, g).forEach(off);
   if (typeof IntersectionObserver !== 'function') {
@@ -711,18 +725,34 @@ function renderInspector(sec) {
 }
 
 // ── phone sector cards ─────────────────────────────────────────────────────
+// Below 1024 px the star chart is a list: a heading per region, then one
+// <details class="sector"> per constellation. A tap on its head opens the
+// blurb and a rail of cards, and closes the open one (openSector), so the
+// list stays short on a phone. A closed rail has no box, so the image
+// loader drops its images.
+function openSector(el, on = true) {
+  if (on) $$('#sectors details.sector[open]').forEach(o => { if (o !== el) o.open = false; });
+  el.open = on;
+}
 function buildSectors() {
   const host = $('#sectors');
-  host.innerHTML = `<div class="band-head"><div><p class="kicker">// Star chart &middot; ${UNIQUE.length} pages</p><h2>Pick a <em>heading</em></h2></div></div>` +
+  let region = '';
+  host.innerHTML = `<div class="band-head"><div><p class="kicker">// Star chart &middot; ${UNIQUE.length} pages in ${SECTORS.length} constellations</p><h2>Pick a <em>heading</em></h2></div></div>` +
     SECTORS.map(sec => {
       const pages = sectorGroups(sec).flatMap(g => g.pages).map(withImg);
       const n = pages.filter(p => p.key).length;
-      return `<article class="sector" id="sec-${sec.id}" data-sector="${sec.id}">
-        <div class="sector-head"><span class="ins-g">${sec.glyph}</span><div><h3>${esc(sec.name)}</h3><small>${sec.id === 'game' ? pages.length + ' destinations' : n + ' page' + (n === 1 ? '' : 's')} · swipe →</small></div></div>
+      const head = sec.region !== region ? `<h3 class="sec-region">${esc(sec.regionName)}</h3>` : '';
+      region = sec.region;
+      return `${head}<details class="sector" id="sec-${sec.id}" data-sector="${sec.id}">
+        <summary class="sector-head"><span class="ins-g">${sec.glyph}</span><div><h3>${esc(sec.name)}</h3><small>${sec.id === 'game' ? pages.length + ' destinations' : n + ' page' + (n === 1 ? '' : 's')}</small></div><span class="sec-go" aria-hidden="true">&#8250;</span></summary>
         <p class="sector-blurb">${esc(sec.blurb)}</p>
-        <div class="rail">${pages.map((p, i) => cardHTML(p, i, true)).join('')}</div>
-      </article>`;
+        <div class="rail" aria-label="${esc(sec.name)} pages, swipe">${pages.map((p, i) => cardHTML(p, i, true)).join('')}</div>
+      </details>`;
     }).join('');
+  $$('details.sector', host).forEach(el => {
+    el.querySelector('summary').addEventListener('click', e => { e.preventDefault(); openSector(el, !el.open); });
+    el.addEventListener('toggle', () => { if (el.open) LZ.fill(el.querySelector('.rail')); });
+  });
 }
 
 // ── dock ───────────────────────────────────────────────────────────────────
@@ -730,8 +760,9 @@ function initDock() {
   $$('.chip[data-goto]').forEach(c => c.addEventListener('click', e => {
     e.preventDefault();
     const id = c.dataset.goto;
-    const target = PHONE.matches ? $('#sec-' + id) : $('#chart');
-    if (!PHONE.matches && chartState) chartState.setActive(id, { user: true, dim: false });
+    const target = NO_CHART.matches ? $('#sec-' + id) : $('#chart');
+    if (NO_CHART.matches && target) openSector(target);
+    if (!NO_CHART.matches && chartState) chartState.setActive(id, { user: true, dim: false });
     target.scrollIntoView({ behavior: RM.matches ? 'auto' : 'smooth', block: 'start' });
     c.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   }));

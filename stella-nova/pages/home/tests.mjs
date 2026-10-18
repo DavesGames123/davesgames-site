@@ -27,6 +27,15 @@
 //      jsdom is not in the repo. Set JSDOM_DIR to a folder whose
 //      node_modules holds jsdom (npm i jsdom@24 there), else this part is
 //      skipped with a note.
+//    - phone and tablet layouts (async function phoneLayouts), a jsdom boot
+//      per home viewport with a matchMedia for it. The CSS checks use
+//      tools/css-viewport.mjs (declared sizes, no layout engine):
+//      the dock search and the chip row show, the chips scroll in their row
+//      with snap, html (not body) holds overflow-x, no declared width is
+//      wider than the viewport, touch targets are 44 px, the star chart is
+//      the sector list below 1024 px (6 region headings, 25 sectors, one
+//      open at a time, a chip opens its sector), and a phone image takes
+//      its thumbs/sm copy with no srcset.
 //
 //  Exit 1 on any failure.
 //
@@ -36,6 +45,7 @@
 //    checks ............... "check("
 //    image checks ......... "image budget"
 //    jsdom boot ........... "async function jsdomBoot"
+//    phone layouts ........ "async function phoneLayouts"
 // ============================================================================
 import fs from 'node:fs';
 import path from 'node:path';
@@ -267,6 +277,107 @@ async function jsdomBoot() {
   w.close();
 }
 await jsdomBoot();
+
+// ── phone and tablet layouts ──────────────────────────────────────────────
+// The home page runs in the shell frame. Its viewport is the screen less
+// the top bar (56 px), and on a 1024 px tablet less the sidebar (290 px).
+// 1024x768 is also checked alone (the page opened without the shell).
+async function phoneLayouts() {
+  let JSDOM, VirtualConsole;
+  try {
+    const dir = process.env.JSDOM_DIR;
+    const { createRequire } = await import('node:module');
+    const req = createRequire(dir ? path.join(path.resolve(dir), 'x.js') : import.meta.url);
+    ({ JSDOM, VirtualConsole } = req('jsdom'));
+  } catch (e) { console.log('skip  phone layouts (jsdom not found; set JSDOM_DIR)'); return; }
+  const { mediaMatches, parseCss, styleOf, px, makeMatchMedia } = await import(new URL('../../../tools/css-viewport.mjs', import.meta.url));
+  const css = parseCss(fs.readFileSync(path.join(HOME, 'style.css'), 'utf8'));
+  const VPS = [
+    ['360x740 phone', 360, 684, true], ['390x844 phone', 390, 788, true], ['430x932 phone', 430, 876, true],
+    ['768x1024 tablet', 768, 968, true], ['844x390 landscape phone', 844, 334, true],
+    ['1024x768 tablet in the shell', 734, 712, true], ['1024x768 tablet alone', 1024, 768, true],
+  ];
+  for (const [name, W, H, coarse] of VPS) {
+    const vp = { w: W, h: H, coarse };
+    const tag = `${name} (${W}x${H})`;
+    const errors = [];
+    const vc = new VirtualConsole();
+    vc.on('jsdomError', e => { if (!/Could not parse CSS/.test(e.message)) errors.push(e.message); });
+    vc.on('error', (...a) => errors.push('console.error ' + a.join(' ')));
+    const seen = [];
+    const dom = await JSDOM.fromFile(path.join(HOME, 'index.html'), {
+      runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true, virtualConsole: vc,
+      beforeParse(w) {
+        w.devicePixelRatio = 3;
+        w.innerWidth = W; w.innerHeight = H;
+        w.matchMedia = makeMatchMedia(vp);
+        w.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } };
+        w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+        const g = new Proxy(function () {}, { get: (t, k) => (k === 'createRadialGradient' || k === 'createLinearGradient') ? () => ({ addColorStop() {} }) : typeof k === 'string' && k !== 'canvas' ? () => {} : undefined, set: () => true });
+        w.HTMLCanvasElement.prototype.getContext = function () { return g; };
+        w.scrollTo = () => {}; w.Element.prototype.scrollIntoView = function () { seen.push(this); };
+      },
+    });
+    const w = dom.window, d = w.document;
+    await new Promise(r => (d.readyState === 'complete' ? r() : w.addEventListener('load', r)));
+    await new Promise(r => setTimeout(r, 100));
+    const $ = q => d.querySelector(q), $$ = q => [...d.querySelectorAll(q)];
+    const st = el => styleOf(el, css, vp);
+    const small = mediaMatches('(max-width: 759px), (max-height: 500px) and (pointer: coarse)', vp);
+    check(`${tag}: boots with no error`, !errors.length, errors.slice(0, 3).join(' | '));
+
+    // Controls: the dock search and the chips.
+    const chips = $('.dock-chips'), cs = st(chips), c0 = st($('.chip'));
+    check(`${tag}: the dock search and the chip row show`, st($('.find-dock')).display !== 'none' && cs.display !== 'none' && !!$('.find-dock input'));
+    check(`${tag}: the chips scroll in their row with snap`, cs['overflow-x'] === 'auto' && /^x /.test(cs['scroll-snap-type'] || '') && cs['overscroll-behavior-x'] === 'contain' && c0['scroll-snap-align'] === 'start' && c0.flex === 'none',
+      JSON.stringify({ o: cs['overflow-x'], s: cs['scroll-snap-type'], a: c0['scroll-snap-align'] }));
+    check(`${tag}: overflow-x is on html, not on body (sticky dock)`, st(d.documentElement)['overflow-x'] === 'hidden' && !st(d.body)['overflow-x'] && st($('.dock')).position === 'sticky');
+
+    // Widths.
+    const wide = [];
+    for (const el of $$('body *')) {
+      const s = st(el);
+      for (const pr of ['width', 'min-width']) { const v = px(s[pr], vp); if (v > W + 0.5) wide.push(`${el.tagName.toLowerCase()}.${el.className} ${pr}:${s[pr]}`); }
+    }
+    check(`${tag}: no declared width is wider than ${W} px`, !wide.length, wide.slice(0, 4).join(' | '));
+
+    // Touch targets.
+    const tiny = [];
+    for (const q of ['.chip', '.find-dock input', '.find-hero input', '.dock-mark', '#sectors .sector-head', '.dir li a', '.rail-btn']) {
+      const el = $(q); if (!el) { tiny.push(q + ' missing'); continue; }
+      const s = st(el);
+      if (s.display === 'none') continue;
+      const h = Math.max(px(s['min-height'], vp) || 0, px(s.height, vp) || 0);
+      if (!(h >= 44)) tiny.push(`${q} ${h}`);
+    }
+    check(`${tag}: chips, search fields, sector heads and links are 44 px targets`, !tiny.length, tiny.join(', '));
+
+    // The star chart or the sector list.
+    const noChart = W <= 1023;
+    check(`${tag}: ${noChart ? 'the sector list shows and the chart hides' : 'the star chart shows'}`,
+      noChart ? st($('#chart')).display === 'none' && st($('#sectors')).display === 'block' : st($('#chart')).display !== 'none' && st($('#sectors')).display === 'none');
+    const secs = $$('#sectors details.sector');
+    check(`${tag}: the sector list has 6 region headings and 25 closed sectors`, $$('#sectors .sec-region').length === 6 && secs.length === 25 && secs.every(x => !x.open), `${$$('#sectors .sec-region').length} regions, ${secs.length} sectors`);
+    if (noChart) {
+      secs[3].querySelector('summary').click();
+      secs[7].querySelector('summary').click();
+      check(`${tag}: a tap opens a sector and closes the open one`, secs[7].open && !secs[3].open && $$('#sectors details[open]').length === 1);
+      secs[7].querySelector('summary').click();
+      check(`${tag}: a second tap closes it`, !secs[7].open);
+      $('.chip[data-goto="quantum"]').click();
+      check(`${tag}: a chip opens its sector and scrolls to it`, $('#sec-quantum').open && seen.includes($('#sec-quantum')));
+      check(`${tag}: the sectors stack in one column`, st($('#sectors')).display === 'block' && !st(secs[0]).float && !/inline/.test(st(secs[0]).display || ''));
+    }
+
+    // Thumbnails.
+    const img = $('#sec-quantum .card img[data-srcset]') || $('.card img[data-srcset]');
+    w.Observatory.lazy.on(img);
+    if (small) check(`${tag}: a card image takes the 320x200 thumbs/sm copy, no srcset`, /^thumbs\/sm\/[\w-]+\.jpg$/.test(img.getAttribute('src')) && !img.getAttribute('srcset'), img.getAttribute('src'));
+    else check(`${tag}: a card image takes its srcset (sm 320w, full 640w)`, /thumbs\/sm\/.+ 320w/.test(img.getAttribute('srcset') || ''), img.getAttribute('srcset'));
+    w.close();
+  }
+}
+await phoneLayouts();
 
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
