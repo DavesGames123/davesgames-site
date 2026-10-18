@@ -234,7 +234,7 @@ if (!JSDOM) {
     // the inset at the device pixel ratio, with a hint
     P.U.drawMap(P.cam);
     ok(P.$('mapCanvas').width === 440 && P.draws.drawImage > 0, 'jsdom: the inset draws at the device pixel ratio (220 css px x 2)', `${P.$('mapCanvas').width}`);
-    ok(P.$('map').querySelector('.map-hint') && /expand/i.test(P.$('map').querySelector('.map-hint').textContent) && P.$('mapCanvas').tabIndex === 0 && /large map/.test(P.$('mapCanvas').getAttribute('aria-label')),
+    ok(P.$('map').querySelector('.map-hint') && P.$('map').querySelector('.map-hint').textContent === 'Click to expand · M' && P.$('mapCanvas').tabIndex === 0 && /large map/.test(P.$('mapCanvas').getAttribute('aria-label')),
       'jsdom: the inset has the hint "Click to expand", is focusable and has an aria label');
     // click opens, Esc closes
     P.$('mapCanvas').click();
@@ -350,6 +350,7 @@ if (!JSDOM) {
   {
     const P = await page({ w: 390, h: 844, phone: true, dpr: 3, badStorage: true });
     const mv = P.U.mapView;
+    ok(P.$('map').querySelector('.map-hint').textContent === 'Tap to expand', 'jsdom phone: the inset hint says "Tap to expand" on a touch screen');
     P.$('mapCanvas').click();
     const box = P.$('atlas').querySelector('.at-box'), cs = P.win.getComputedStyle(box);
     ok(mv.isOpen && P.$('atlas').classList.contains('full') && cs.left === '0px' && cs.top === '0px' && cs.right === '0px' && cs.bottom === '0px', 'jsdom phone: the large map fills the screen', `${cs.left} ${cs.top} ${cs.right} ${cs.bottom}`);

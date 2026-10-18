@@ -331,7 +331,7 @@ export function mountMapView(o) {
     mini.style.cursor = 'zoom-in';
     mini.addEventListener('click', e => { e.preventDefault(); open(); });
     mini.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-    if (mapEl) { const h = mk('span', 'map-hint', 'Click to expand · M', { 'aria-hidden': 'true' }); mapEl.appendChild(h); }
+    if (mapEl) { const touch = !!(win.matchMedia && win.matchMedia('(pointer:coarse)').matches); mapEl.appendChild(mk('span', 'map-hint', touch ? 'Tap to expand' : 'Click to expand · M', { 'aria-hidden': 'true' })); }
   }
 
   // ── the large map DOM ──
