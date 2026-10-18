@@ -42,7 +42,9 @@
 //              depth) and their streaks (debris.wgsl)
 //    bloom     post.wgsl (the roche-limit chain, a copy): only light above
 //              f.bloomThreshold (hot melt, the sun) blooms
-//    final     exposure, ACES, vignette, sRGB -> canvas
+//    expose    post.wgsl cs_expose: the exposure adapts to the lit pixels
+//    final     exposure, the hue-keeping ACES tone map (optics.js toneMap),
+//              vignette -> canvas
 //
 //  PARTICLE CLASSES (common.wgsl fn klass): fluid -> the surface, debris
 //  (a summed density far under the reference: a free fragment) ->
@@ -86,7 +88,7 @@
 // ============================================================================
 import { MATERIALS, MAT_LIST, UNIT } from './data.js';
 import { ETA_H } from './build.js';
-import { blackbodyLUT, BB_N, PHASE, SMOKE, vapourCap } from './optics.js';
+import { blackbodyLUT, BB_N, PHASE, SMOKE, vapourCap, EXPOSE } from './optics.js';
 
 const HDR = 'rgba16float';
 const DEPTH = 'depth32float';
@@ -183,6 +185,7 @@ export function defaultFrame() {
     bodies: [{ atm: 1, shadow: 1 }, { atm: 1, shadow: 1 }, { atm: 0, shadow: 0 }, { atm: 0, shadow: 0 }],
     flashes: [],                  // [{ p, r, I, T }]
     exposure: 1.0, bloom: 0.035, bloomThreshold: 2.0, vignette: 0.3,
+    adapt: true,                  // the exposure adapts (post.wgsl cs_expose; false: held at 1)
     coolH: -1,                    // sim hours since the first contact (< 0 before): the skin cools
     grid: 144,                    // volume cells per side (0: no volume, particle spheres)
     vol: null,                    // { c, r }: the sphere the volume must hold (default: the view at the target)
@@ -328,7 +331,16 @@ export class Renderer {
       { binding: 0, visibility: S.FRAGMENT, buffer: { type: 'uniform' } },
       { binding: 1, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 2, visibility: S.FRAGMENT, sampler: { type: 'filtering' } },
-      { binding: 3, visibility: S.FRAGMENT, texture: { sampleType: 'float' } }] });
+      { binding: 3, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 4, visibility: S.FRAGMENT, buffer: ro }] });
+    // the exposure (post.wgsl cs_expose): state x exposure, y mean lum
+    this.expoBuf = dev.createBuffer({ size: 16, usage: U.STORAGE | U.COPY_DST | U.COPY_SRC, label: 'pc exposure' });
+    dev.queue.writeBuffer(this.expoBuf, 0, new Float32Array([1, EXPOSE.key, 1, 0]));
+    this.expoPrm = dev.createBuffer({ size: 32, usage: U.UNIFORM | U.COPY_DST, label: 'pc exposure params' });
+    this.bglExpo = dev.createBindGroupLayout({ label: 'pc expose', entries: [
+      { binding: 5, visibility: S.COMPUTE, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 6, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 7, visibility: S.COMPUTE, buffer: { type: 'uniform' } }] });
+    this.pExpose = dev.createComputePipeline({ label: 'pc expose', layout: pl(this.bglExpo), compute: { module: M.post, entryPoint: 'cs_expose' } });
     const pp = (fs, fmt, blend) => dev.createRenderPipeline({ layout: pl(this.bglPost), vertex: { module: M.post, entryPoint: 'vs_post' },
       fragment: { module: M.post, entryPoint: fs, targets: [tgt(fmt, blend)] }, primitive: { topology: 'triangle-list' } });
     this.pDown = pp('fs_down', HDR, null);
@@ -425,10 +437,12 @@ export class Renderer {
       { binding: 15, resource: this.v.smHist[1 - k] }, { binding: 16, resource: this.v.smCur }, { binding: 17, resource: this.v.smAux }] }));
     this.bgSmM = null;
     const pg = (buf, src, bl) => dev.createBindGroup({ layout: this.bglPost, entries: [
-      { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.sampClamp }, { binding: 3, resource: (bl || this.dummy).createView() }] });
+      { binding: 0, resource: { buffer: buf } }, { binding: 1, resource: src.createView() }, { binding: 2, resource: this.sampClamp }, { binding: 3, resource: (bl || this.dummy).createView() },
+      { binding: 4, resource: { buffer: this.expoBuf } }] });
     this.downBG = this.bloom.map((t, i) => pg(this.postBufs[i], i === 0 ? this.hdr : this.bloom[i - 1]));
     this.upBG = this.bloom.slice(0, -1).map((t, i) => pg(this.postBufs[BLOOM_LEVELS + i], this.bloom[i + 1]));
     this.finalBG = pg(this.postBufs[2 * BLOOM_LEVELS], this.hdr, this.bloom[0]);
+    this.expoBG = dev.createBindGroup({ layout: this.bglExpo, entries: [{ binding: 5, resource: this.v.hdr }, { binding: 6, resource: { buffer: this.expoBuf } }, { binding: 7, resource: { buffer: this.expoPrm } }] });
   }
   // Fill the frame uniform (common.wgsl struct U). f: defaultFrame() fields.
   writeFrame(f) {
@@ -550,7 +564,7 @@ export class Renderer {
       p.setPipeline(this.pDrop); p.draw(6, n * F);
       if (f.streakT > 0) { p.setPipeline(this.pStreak); p.draw(6, n); }
       p.end(); }
-    this._bloom(enc, f); this._final(enc, f);
+    this._bloom(enc, f); this._expose(enc, f); this._final(enc, f);
     dev.queue.submit([enc.finish()]);
   }
   // The volume of G^3 cells: sums, field texture, brick marks.
@@ -702,6 +716,16 @@ export class Renderer {
       p.setPipeline(this.pUp); p.setBindGroup(0, this.upBG[i]); p.draw(3); p.end();
     }
   }
+  // the exposure moves toward key / the mean log luminance of the lit
+  // pixels at the rate of the wall time since the last frame (f.time);
+  // f.adapt false holds it at 1
+  _expose(enc, f) {
+    const t = f.time || 0, dt = this.lastT == null ? 0 : Math.min(0.25, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    if (f.adapt === false) { this.dev.queue.writeBuffer(this.expoBuf, 0, new Float32Array([1, EXPOSE.key, 1, 0])); return; }
+    this.dev.queue.writeBuffer(this.expoPrm, 0, new Float32Array([EXPOSE.key, EXPOSE.min, EXPOSE.max, 1 - Math.exp(-dt / EXPOSE.tau), EXPOSE.litLum, 0, 0, 0]));
+    const p = enc.beginComputePass({ label: 'pc expose' }); p.setPipeline(this.pExpose); p.setBindGroup(0, this.expoBG); p.dispatchWorkgroups(1); p.end();
+  }
   _final(enc, f) {
     const pb = new Float32Array(8);
     pb[0] = 1 / this.W; pb[1] = 1 / this.H;
@@ -712,7 +736,7 @@ export class Renderer {
   }
   destroy() {
     for (const t of this.targets || []) t.destroy();
-    for (const b of [this.frameBuf, this.centresBuf, this.cpBuf, this.origBuf, this.partBuf, ...this.postBufs]) if (b) b.destroy();
+    for (const b of [this.frameBuf, this.centresBuf, this.cpBuf, this.origBuf, this.partBuf, this.expoBuf, this.expoPrm, ...this.postBufs]) if (b) b.destroy();
     this.mapTex.destroy(); this.dummy.destroy(); this._dropVolume(); this._dropSmoke();
     for (const t of [this.bbTex, this.noiseTex, this.curlTex, this.dummy3, this.light1]) t.destroy();
     this.targets = null; this.sim = null;

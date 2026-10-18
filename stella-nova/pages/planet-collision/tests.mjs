@@ -66,7 +66,8 @@
 //  13 optics.js: the black body (red, orange, white, blue; the table and
 //     the WGSL constants), Henyey-Greenstein lobes integrate to 1, the
 //     vapour flagging (smokeWeights), the temperature -> material map
-//     (matterState, skinCap, crustShare, geotherm)
+//     (matterState, skinCap, crustShare, geotherm); the tone map (grey
+//     neutral, hot melt stays orange) and the exposure rule
 //  P  the page (Deno, main.js with the DOM stubbed and an offscreen
 //     texture for the canvas): boot, the relax, the launch, first contact
 //     (the flash and the fades), the numbers, the outcome of a readback,
@@ -499,6 +500,24 @@ async function opticsTests() {
     `${st.join(', ')}; skin cap ${O.skinCap(0).toFixed(0)} -> ${O.skinCap(3).toFixed(0)} K at 3 h; radiance melt ${melt.L.toFixed(2)}, crust ${crust.L.toFixed(2)}; geotherm ${O.geotherm(0, 1)} K centre, ${O.geotherm(0.6, 0).toFixed(0)} K at 0.6 R, ${O.geotherm(1, 0).toFixed(0)} K surface`);
 }
 
+// 13 ─ the tone map and the exposure (optics.js toneMap, adaptExposure)
+async function toneTests() {
+  const O = await import('./optics.js');
+  let mono = true, prev = -1, neutral = true;
+  for (let e = -12; e <= 6; e += 0.25) { const v = Math.pow(2, e), d = O.toneMap([v, v, v]); if (d[0] < prev - 1e-9) mono = false; prev = d[0]; if (Math.abs(d[0] - d[1]) > 1e-9 || Math.abs(d[1] - d[2]) > 1e-9) neutral = false; }
+  const grey = O.toneMap([0.18, 0.18, 0.18])[0], z = O.toneMap([0, 0, 0]);
+  const hot = [1500, 2000, 2500, 3000, 4000].map(T => { const c = O.blackbodyRGB(T), L = O.glowRadiance(T), d = O.toneMap(c.map(x => x * L)); return { T, d }; });
+  const okHot = hot.every(h => h.d[0] >= h.d[1] && h.d[1] >= h.d[2] && Math.max(...h.d) < 0.99) && hot.filter(h => h.T <= 2500).every(h => h.d[1] / h.d[0] < 0.8);
+  ok('13 tone map: neutral and rising for grey, 0.18 -> about 0.55, hot melt stays orange (no channel clips, green under 0.8 red to 2500 K)', mono && neutral && Math.abs(grey - 0.55) < 0.03 && z.every(v => v === 0) && okHot,
+    `0.18 -> ${grey.toFixed(3)}; ${hot.map(h => h.T + ' K ' + h.d.map(v => v.toFixed(2)).join('/')).join(', ')}`);
+  const E = O.EXPOSE, first = O.adaptExposure(0, 0.05, 0.016);
+  let x = 1; for (let k = 0; k < 600; k++) x = O.adaptExposure(x, 3.0, 1 / 60);
+  let y = 1; for (let k = 0; k < 600; k++) y = O.adaptExposure(y, 1e-5, 1 / 60);
+  const half = O.adaptExposure(1, E.key / 0.75, E.tau * Math.LN2);
+  ok('13 exposure: first frame jumps to the aim, a bright frame pulls it down to min, a dark one up to max, half way in tau ln 2', Math.abs(first - Math.min(E.max, E.key / 0.05)) < 1e-9 && Math.abs(x - E.min) < 1e-3 && Math.abs(y - E.max) < 1e-3 && Math.abs(half - 0.875) < 1e-9,
+    `first ${first.toFixed(2)}, bright (mean lum 3) ${x.toFixed(3)}, dark ${y.toFixed(3)}, after tau ln 2 from 1 toward 0.75: ${half.toFixed(3)}`);
+}
+
 async function presetTests() {
   let bad = [], minT = Infinity, maxT = 0;
   for (const p of [...PRESETS, randomScenario(1), randomScenario(2), randomScenario(99)]) {
@@ -651,6 +670,7 @@ async function renderTests() {
     const enc = device.createCommandEncoder(); enc.copyTextureToBuffer({ texture: t }, { buffer: buf, bytesPerRow: bpr }, [w, h]); device.queue.submit([enc.finish()]);
     await buf.mapAsync(GPUMapMode.READ); const a = buf.getMappedRange().slice(0); buf.unmap(); buf.destroy(); return { a, bpr };
   };
+  const readBuf = async (src, n) => { const b = device.createBuffer({ size: n, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }), e = device.createCommandEncoder(); e.copyBufferToBuffer(src, 0, b, 0, n); device.queue.submit([e.finish()]); await b.mapAsync(GPUMapMode.READ); const a = b.getMappedRange().slice(0); b.unmap(); b.destroy(); return a; };
   const rgb = async () => { const { a, bpr } = await readTex(tex, 4, W, H), px = new Uint8Array(a); return (x, y) => { const o = y * bpr + 4 * x; return [px[o], px[o + 1], px[o + 2]]; }; };
   // a settled body is all fluid: its surface layer is not debris (a test
   // on h took 1415 surface particles of Earth for debris here: they sit at
@@ -693,6 +713,16 @@ async function renderTests() {
       const k = Math.max(inD, 1);
       shots.push({ goal, hrs, white: white / k, hot: hot / k, dark: dark / k, bright: bright / k, lum: lum / k / 3, inD });
     }
+    // the exposure adapts on the GPU (post.wgsl cs_expose): the bright
+    // remnant over 2 s of frames pulls it under 1, within EXPOSE
+    { const { EXPOSE } = await import('./optics.js'), g = defaultFrame(), v = makeView(), B = su0.bodies.map((b, i) => ({ c: st0.com[i] || b.X, R: b.R })), ft = frameTarget(B, 0.25, g.fov, Wb / Hb);
+      v.target = ft.target; v.dist = 0.5 * ft.dist;
+      Object.assign(g, { eye: eyeOf(v), target: v.target, sun: [1, 0.25, 0.3], coolH: 0.25, bodies: [0, 1, 2, 3].map(() => ({ atm: 0, shadow: 0 })) });
+      for (let k = 0; k < 120; k++) { g.time = 100 + k / 60; rb2.render(g); }
+      const e = new Float32Array(await readBuf(rb2.expoBuf, 16));
+      ok('R the exposure adapts to the lit pixels (cs_expose): the glowing remnant pulls it under 1, within its bounds', e[0] >= EXPOSE.min - 1e-4 && e[0] < 1 && Math.abs(e[0] - e[2]) < 0.2 * e[2] + 0.02 && e[1] > EXPOSE.key,
+        `exposure ${e[0].toFixed(3)} (aim ${e[2].toFixed(3)}), bright-weighted mean luminance ${e[1].toFixed(3)}; bounds ${EXPOSE.min}-${EXPOSE.max}`);
+      g.adapt = false; rb2.render(g); }
     ok('R the remnant at +0.25, +1 and +3 h is not a white blob, and it glows', tc != null && shots.every(q => q.white < 0.02 && q.hot > 0.02 && q.inD > 300),
       shots.map(q => `+${q.hrs.toFixed(2)} h: ${(100 * q.white).toFixed(1)} % near-white, ${(100 * q.hot).toFixed(1)} % orange-red of ${q.inD} disc px`).join('; '));
     // the lava skin alone (fn lavaSkin): the state at +3 h, framed the
@@ -921,7 +951,7 @@ async function pageTest() {
 }
 
 if (!GPU_ONLY) {
-  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); await volumeTests(); await opticsTests(); cpuTests();
+  eosTests(); bodyTests(); geometryTests(); await presetTests(); analysisTests(); saverPlanTests(); cameraTests(); await volumeTests(); await opticsTests(); await toneTests(); cpuTests();
 }
 if (typeof Deno !== 'undefined') { await gpuTests(); await renderTests(); await pageTest(); }
 else {

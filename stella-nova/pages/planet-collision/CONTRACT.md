@@ -254,6 +254,15 @@ sets it, and a negative value (the default) means before contact: no
 crust, the 4000 K cap. Bloom: only light over `bloomThreshold` (2.0),
 strength 0.035: the hottest melt only.
 
+Tone map and exposure (post.wgsl, optics.js `toneMap`, `adaptExposure`):
+the ACES fit on the brightest channel with the channel ratios kept, so
+hot melt keeps its hue as it brightens, blended toward the per-channel
+fit near white; then sRGB. `cs_expose` meters the lit pixels (sum l^2 /
+sum l: the bright parts set it, the sky does not count) and moves the
+exposure toward 0.5 / that mean, held to 0.5-1.25, with a 0.8 s time
+constant (wall time from `f.time`). `f.exposure` multiplies it;
+`f.adapt` false holds it at 1.
+
 Smoke (smoke.wgsl, optics.js `smokeWeights`): each particle has a gas
 share (the vapour weight xv from `xvLo` 0.05 to `xvHi` 0.5, or hot,
 expanded rock: T 2600-4200 K and rho under 0.6 rho0) and a dust share

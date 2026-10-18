@@ -37,10 +37,18 @@
 //  face shows a drawn geotherm (fn geotherm) where the solver has no heat:
 //  the bodies start at 300 K, a real interior is hot.
 //
+//  TONE MAP (fn toneMap, fn adaptExposure). The ACES filmic fit on the
+//  brightest channel with the channel ratios kept: bright light keeps its
+//  hue and goes to white only near the top, so a hot core stays orange,
+//  not a clipped yellow-white blob. The exposure adapts to the luminance-weighted mean luminance of
+//  the lit pixels (sum l^2 / sum l: the bright parts set it; the sky does
+//  not count), within EXPOSE.min..max, with time constant EXPOSE.tau. shaders/post.wgsl fn toneMap and cs_expose are the twins.
+//
 //  EXPORTS  BB_N, BB_T0, BB_T1, cie1931, planck, blackbodyRGB,
 //           blackbodyLUT, hg, phase, PHASE, SMOKE, smokeWeights, vapourCap,
 //           condensed, skinCap, skinT, crustShare, glowRadiance,
-//           matterState, geotherm, GEOTHERM
+//           matterState, geotherm, GEOTHERM, TONE, acesFit, toneMap, EXPOSE,
+//           adaptExposure
 //
 //  grep -n targets: "export function blackbodyRGB", "export function hg",
 //  "export const PHASE", "export const SMOKE", "export function smokeWeights",
@@ -163,4 +171,28 @@ export function geotherm(r, iron, G = GEOTHERM) {
   // lithosphere, then a steep fall through the outer 6 %
   const m = G.cmb + (G.mantle - G.cmb) * Math.min(1, Math.max(0, (x - 0.55) / 0.39));
   return x <= 0.94 ? m : G.mantle + (G.surface - G.mantle) * (x - 0.94) / 0.06;
+}
+
+// ── the tone map ────────────────────────────────────────────────────────
+// The ACES filmic fit (K. Narkowicz 2015) on the brightest channel, the
+// channel ratios kept (the hue holds: hot melt stays orange as it
+// brightens), blended toward the per-channel fit near white (TONE.white
+// of it at the top), then the sRGB curve.
+export const TONE = { white: 0.6, a: 2.51, b: 0.03, c: 2.43, d: 0.59, e: 0.14 };
+export function acesFit(x, t = TONE) { return Math.min(1, Math.max(0, (x * (t.a * x + t.b)) / (x * (t.c * x + t.d) + t.e))); }
+function srgbEnc(x) { return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055; }
+function sst(e0, e1, x) { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); }
+// linear scene RGB (after exposure) -> display RGB 0..1 (sRGB-encoded)
+export function toneMap(c, t = TONE) {
+  const d = c.map(x => Math.max(0, x)), v = Math.max(d[0], d[1], d[2], 1e-10), y = acesFit(v, t);
+  const w = t.white * sst(0.8, 1.0, y);
+  return d.map(x => srgbEnc((1 - w) * x * (y / v) + w * acesFit(x, t)));
+}
+// the exposure: key / the bright-weighted mean luminance, held to min..max,
+// approached with the time constant tau (s)
+export const EXPOSE = { key: 0.5, min: 0.5, max: 1.25, tau: 0.8, litLum: 0.004 };
+export function adaptExposure(prev, meanLum, dt, e = EXPOSE) {
+  const target = Math.min(e.max, Math.max(e.min, e.key / Math.max(meanLum, 1e-6)));
+  if (!(prev > 0)) return target;
+  return prev + (target - prev) * (1 - Math.exp(-Math.max(dt, 0) / e.tau));
 }
