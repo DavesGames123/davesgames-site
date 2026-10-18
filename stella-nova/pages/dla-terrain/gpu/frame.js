@@ -48,6 +48,12 @@
 //  hidden tab). An out-of-memory error (gpu.onPressure) lowers the pixel
 //  ratio and the scale and keeps the level at RELIEF_LEVEL or more.
 //
+//  UPSCALE (gpu/upscale.js): when the render size is under the swap chain
+//  size, post writes at the render size into fg.U (the canvas format) and
+//  the upscale pass (Catmull-Rom, clamped, adaptive sharpen) draws it to
+//  the swap chain. Without the pipeline (a fake device), post draws to the
+//  swap chain as before.
+//
 //  HANG GUARD (2026-10-17: a full zoom on the ground took the whole computer
 //  down). The GPU queue holds at most MAX_IN_FLIGHT frames: fg.render skips
 //  a frame (fg.stalls) while that many are not done, so a slow GPU never
@@ -89,7 +95,7 @@
 //  the module updates and the queue writes of that frame.
 //
 //  grep -n targets: "export function createFrameGraph", "function targets",
-//  "fg.prepare", "function applyFeatures", "fg.govText",
+//  "function upTargets", "fg.prepare", "function applyFeatures", "fg.govText",
 //  "fg.ready", "fg.setNear", "function relieve", "STUCK_MS", "NEAR_IN",
 //  "export function heavyStep", "MAX_IN_FLIGHT", "fg.inFlight",
 //  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "── 7 post",
@@ -97,6 +103,7 @@
 // ============================================================================
 
 import { createGovernor, governorStep, governorHeavy, featuresOf, planOf, describe, MAX_LEVEL, STEADY_MAX, RELIEF_LEVEL } from './governor.js';
+import { createUpscaler } from './upscale.js';
 export { MAX_LEVEL, STEADY_MAX, RELIEF_LEVEL };
 import { pixelCap, MB } from './budget.js';
 
@@ -144,7 +151,7 @@ export function createFrameGraph(gpu, parts) {
   const gv = createGovernor(gpu.qualityPreset.scale, 0);
   const fg = {
     modules: [], fallbacks: {}, scale: gpu.qualityPreset.scale, maxScale: gpu.qualityPreset.scale,
-    cssW: 1, cssH: 1, dpr: 1, outW: 1, outH: 1, w: 1, h: 1, key: 0, T: null,
+    cssW: 1, cssH: 1, dpr: 1, outW: 1, outH: 1, w: 1, h: 1, key: 0, T: null, U: null,
     dyn: gv, gov: gv, dynamic: true,
     budgetMs: (gpu.profile && gpu.profile.budgetMs) || 1000 / 58, stats: { passes: 0 },
     level: 0, pressure: 0, skipped: 0, nearCapped: false,
@@ -165,6 +172,20 @@ export function createFrameGraph(gpu, parts) {
   // the lowest level: after a memory relief the shadow memory stays down
   const levelFloor = () => Math.max(P().govMin | 0, fg.pressure ? RELIEF_LEVEL : 0);
 
+  // UPSCALE: the pass, and the mid target at the render size
+  const up = gpu.canvasFormat ? createUpscaler(device, gpu.canvasFormat) : null;
+  fg.upscaler = up;
+  function upTargets() {
+    const need = !!(up && up.ready && fg.T && (fg.w < fg.outW || fg.h < fg.outH));
+    if (fg.U && (!need || fg.U.w !== fg.w || fg.U.h !== fg.h)) { fg.U.tex.destroy(); fg.U = null; }
+    if (need && !fg.U) {
+      const tex = device.createTexture({ label: 'upscale source', size: [fg.w, fg.h], format: gpu.canvasFormat, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
+      const view = tex.createView();
+      fg.U = { tex, view, w: fg.w, h: fg.h, bg: up.bindGroup(view) };
+    }
+    if (fg.T) parts.post.resize(fg.w, fg.h, fg.U ? fg.w : fg.outW, fg.U ? fg.h : fg.outH);
+  }
+  if (up) up.onReady = () => upTargets();
 
   function targets() {
     const rs = renderSize();
@@ -188,7 +209,7 @@ export function createFrameGraph(gpu, parts) {
     for (const m of fg.active()) if (m.resize) try { m.resize(w, h, ctx); } catch (e) { console.warn(m.name, e); }
     // the near-ground cap is on when it made the render smaller (status line)
     fg.nearCapped = !!rs.near && w * h + 2 * (w + h) < Math.round(rs.outW * fg.scale) * Math.round(rs.outH * fg.scale);
-    parts.post.resize(w, h, fg.outW, fg.outH);
+    upTargets();
     return true;
   }
 
@@ -216,7 +237,7 @@ export function createFrameGraph(gpu, parts) {
     // 1.5, Safari pxCap 3.5 Mpx), 1x after a memory relief, 8.3 Mpx at most
     const rs = renderSize();
     fg.outW = rs.outW; fg.outH = rs.outH;
-    targets();
+    if (!targets()) upTargets();
   };
   // the eye height over the ground (main.js, each frame): near the ground
   // the render size is under the profile nearPxCap (with hysteresis)
@@ -456,7 +477,11 @@ export function createFrameGraph(gpu, parts) {
     }
     // ── 7 post
     const out = frame.outView || gpu.context.getCurrentTexture().createView();
-    parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, out, frame.dt);
+    if (fg.U) {
+      // UPSCALE: post at the render size, then the filter to the swap chain
+      parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, fg.U.view, frame.dt);
+      up.draw(enc, fg.U.bg, out); passes++;
+    } else parts.post.run(enc, { hdrView: T.hdrView, depthView: T.depthView, key: fg.key }, out, frame.dt);
     device.queue.submit([enc.finish()]);
     parts.post.afterSubmit();
     const q = device.queue;

@@ -341,8 +341,11 @@ export function estimate(profile, view = {}) {
     shadows: s.shadowSize * s.shadowSize * 4 * s.cascades,
     // gpu/frame.js: hdr, scene colour (rgba16f), depth, scene depth (d32)
     frame: px * (8 + 8 + 4 + 4),
-    // render/post.js: 2 TAA history (rgba16f), bloom chain, ldr (output)
-    post: px * 16 + px * 8 * (1 / 4) * (4 / 3) + opx * 4,
+    // render/post.js: 2 TAA history (rgba16f), bloom chain, ldr (the
+    // output size, or the render size when the upscale pass runs)
+    post: px * 16 + px * 8 * (1 / 4) * (4 / 3) + Math.min(px, opx) * 4,
+    // gpu/upscale.js: the mid target (canvas format) when render < output
+    upscale: px < opx ? px * 4 : 0,
     // the swap chain (3 buffers of the output size)
     swap: opx * 4 * 3,
     // render/sky.js: LUTs, cloud noise volumes, cloud shadow, 4 cloud targets

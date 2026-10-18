@@ -19,13 +19,18 @@
 //       a cost cliff between two levels: few probes, the level holds
 //    D  a heavy frame during the step up: the scale drops at once, no step
 //       up in the pause after it
+//    E  the upscale pass: on when the render is under the output, the mid
+//       target is one texture, post writes at the render size; naga
 //    F  fg.prepare: the frame fields that the modules read (ao.js aoPlan,
 //       weather.js shaftPlan), frame.taa, the status text, globals frame.w
 //  A to D use only the frame graph API (fg.render, fg.tick, fg.level,
 //  fg.scale, drawShadow calls), so they also run on the old gpu/frame.js.
 // ============================================================================
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { tmpdir, homedir } from 'node:os';
+import { join } from 'node:path';
 import { profileFor } from '../gpu/budget.js';
 
 let pass = 0, fail = 0;
@@ -228,6 +233,34 @@ for (const [profileId, gpuMs, levelBy, scaleBy, why] of [
   ok(!upInPause, 'no step up in the pause after the heavy frame', `level ${lAfter} -> ${F.fg.level}`);
   const tBack = await F.run(60, FPS58, () => (F.fg.level === 0 ? false : undefined));
   ok(F.fg.level === 0, `after the pause the climb goes on (level 0 after ${tBack.toFixed(1)} s more)`);
+}
+
+// ── E the upscale pass
+if (GOVJS) {
+  const F = fakeFG('safari', () => 9, { pipelines: true });
+  F.fg.resize(2000, 1260, 2);
+  await Promise.resolve(); await Promise.resolve();
+  F.fg.setScale(0.75);
+  ok(!!F.fg.upscaler && F.fg.upscaler.ready, 'the upscale pipeline is ready (async)');
+  await F.frame(FPS58);
+  ok(F.fg.w < F.fg.outW && !!F.fg.U && F.rec.passes.includes('upscale'), `render ${F.fg.w}x${F.fg.h} under the output ${F.fg.outW}x${F.fg.outH}: the upscale pass runs`, F.rec.passes.join(','));
+  ok(F.post.last[2] === F.fg.w && F.post.last[3] === F.fg.h && F.post.out === F.fg.U.view, 'post writes at the render size into the mid target', JSON.stringify(F.post.last));
+  F.fg.setScale(0.7); F.fg.setScale(0.8); F.fg.setScale(0.75);
+  ok(F.live.get('upscale source') === 1, 'one mid target after three scale changes (the old ones destroyed)', String(F.live.get('upscale source')));
+  F.fg.setScale(1);
+  await F.frame(FPS58);
+  ok(F.fg.w === F.fg.outW && !F.fg.U && !F.rec.passes.includes('upscale') && F.post.last[2] === F.fg.outW, 'render size = output: no upscale pass, post to the swap chain', F.rec.passes.join(','));
+  ok((F.live.get('upscale source') || 0) === 0, 'no mid target at the full size');
+  const { UPSCALE_WGSL } = await import('../gpu/upscale.js');
+  const NAGA = join(homedir(), '.cargo/bin/naga');
+  if (existsSync(NAGA)) {
+    const p = join(mkdtempSync(join(tmpdir(), 'dla-up-')), 'upscale.wgsl');
+    writeFileSync(p, UPSCALE_WGSL);
+    const r = spawnSync(NAGA, [p], { encoding: 'utf8' });
+    ok(r.status === 0 && /Validation successful/.test((r.stdout || '') + (r.stderr || '')), 'naga gpu/upscale.js UPSCALE_WGSL', (r.stdout || '') + (r.stderr || ''));
+  } else console.log('# naga is not at ~/.cargo/bin/naga: the upscale WGSL check did not run');
+  const bad = UPSCALE_WGSL.split('\n').filter(l => /&&/.test(l) && /\|\|/.test(l));
+  ok(bad.length === 0, 'upscale WGSL: no mixed && and || (Tint)');
 }
 
 // ── F the frame fields, the status text, the TAA bit

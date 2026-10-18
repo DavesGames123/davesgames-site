@@ -850,7 +850,7 @@ function statusLine(st) {
   const t = tg;
   const stage = app.gen && app.gen.running ? ' · ' + (app.gen.label || app.gen.stage || '') : '';
   ui.status(
-    `${fps.toFixed(0)} fps · ${fg.w}×${fg.h} · ${(t.worldSize / 1000).toFixed(0)} km · ${t.n}² · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m${stage}`,
+    `${fps.toFixed(0)} fps · ${fg.w}×${fg.h}${fg.U ? ' → ' + fg.outW + '×' + fg.outH : ''} · ${(t.worldSize / 1000).toFixed(0)} km · ${t.n}² · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m${stage}`,
     `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${govStatus()}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
     `${fps.toFixed(0)} fps · ${(t.worldSize / 1000).toFixed(0)} km · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m · ${app.camMode}`,
   );
