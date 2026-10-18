@@ -48,6 +48,7 @@
 //    grep -n 'function applyCamera'   the render eye (origin, tilt)
 //    grep -n 'function frame'         the loop (no 3D frame while the large map is open)
 //    grep -n 'function moveCamTo'     the large map moves the free camera (map-view.js)
+//    grep -n 'mountDiscoveries'       discoveries.js: found things on the maps, orbit, highlight
 //    grep -n 'window.snSaver'         the screensaver: the squad explores
 // ============================================================================
 import { createScene } from './scene.js';
@@ -57,6 +58,7 @@ import { SHAPES } from './coral-sdf.js';
 import { createROVs } from './rov/index.js';
 import { createFeedSet } from './rov/feeds.js';
 import { mountSquadHud } from './squad-hud.js';
+import { mountDiscoveries } from './discoveries.js';
 import { createSquad, frontierScore } from './rov/squad.js';
 import { squadPlan, squadShotPose, safeCamera, cardRect, frameFit } from './saver.js';
 import { lut, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
@@ -109,6 +111,7 @@ const G = {
 };
 let shell = null, saverOn = false, saver = null;
 let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
+let disc = null;                       // discoveries.js: what the ROVs found, the orbit and the highlight
 // The world API for other packages (FAUNA, SNOW; NOTES.md): events of the
 // world ('world', 'rock', 'unload', 'coral', 'uncoral') and its queries.
 // A new world (seed, detail) sends 'world' again with the new objects.
@@ -276,16 +279,18 @@ function goRegion(id, why = '') {
 // target goes to the ground there. A near point glides; a far one (over
 // MOVE_FADE m) fades out, moves at once and fades in when the chunk has rock.
 const MOVE_FADE = 160;
-function moveCamTo(x, z) {
+// fr (discoveries.js orbitFrame): { target, dist, yaw, pitch } in place of the ground point.
+function moveCamTo(x, z, fr) {
   if (!cam || !W || saverOn || regionBusy) return false;
-  const target = [x, W.ground(x, z) + 1.2, z];
+  const target = fr ? fr.target.slice() : [x, W.ground(x, z) + 1.2, z];
+  const pose = fr ? { target, dist: fr.dist, yaw: fr.yaw, pitch: fr.pitch } : { target, dist: 8, pitch: 0.55 };
   camChoice = 'orbit'; $('tourList').hidden = true;
-  if (Math.hypot(x - cam.eye[0], z - cam.eye[2]) <= MOVE_FADE) { cam.frame({ target, dist: 8, pitch: 0.55 }); camUI(); return true; }
+  if (Math.hypot(x - cam.eye[0], z - cam.eye[2]) <= MOVE_FADE) { cam.frame(pose); camUI(); return true; }
   regionBusy = true;
   canvas.style.opacity = '0';
   setTimeout(() => {
     setOrigin(x, z);
-    cam.frame({ target, dist: 8, pitch: 0.55, snap: true });
+    cam.frame({ ...pose, snap: true });
     if (streamer) streamer.update(cam.eye.slice(), [cam.eye.slice(), target]);
     const t0 = performance.now();
     const wait = () => {
@@ -678,6 +683,31 @@ function buildUI() {
   });
   if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: () => {}, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => true });
   bindCamBar();
+  // the discoveries (discoveries.js): the log, the map marks, the card,
+  // the toast, the orbit and the 3D highlight with its marine snow
+  disc = mountDiscoveries({
+    doc: document, win: window, THREE: S ? S.THREE : null, scene: S ? S.scene : null,
+    snowAtlas: S && S.marineSnow ? S.marineSnow.atlas : undefined, ext: S ? S.U.uFogK : undefined,
+    getSquad: () => squad, getCam: () => cam, camera: () => (S ? S.camera : null), origin: () => origin, phoneQ: PHONE_Q, isSaver: () => saverOn,
+    colourOf: id => (hud ? hud.colourOf(id) : '#9ff0e6'),
+    env: {
+      colonies: () => (streamer ? streamer.colonies() : []), speciesLabel: id => (SPECIES[id] && SPECIES[id].label) || null,
+      features: (x, z, r) => (W && W.features ? W.features(x, z, r) : []),
+      lookAt: (p, d, m) => (fauna && fauna.enabled && fauna.F ? fauna.F.lookAt(p, d, m) : null),
+      ground: (x, z) => (W ? W.ground(x, z) : 0), regionAt: (x, z) => (W ? W.regionAt(x, z) : null), surfaceY: SURFACE_Y,
+    },
+    clear: p => (P ? P.rockSdf(p[0], p[1], p[2]) / P.sdfScale : null), maxDist: 110,
+    lamps: () => (rovs ? rovs.vehicles.map(v => v.lights && v.lights[0]).filter(Boolean) : []),
+    current: () => (S ? [S.U.uCur.value.x * 0.1, 0, S.U.uCur.value.y * 0.1] : null),
+    flyTo: (fr, e) => {
+      if (!cam || saverOn) return false;
+      const okk = moveCamTo(e.p[0], e.p[2], fr);
+      if (okk !== false) { cam.setAutoRotate(true); flash(`Orbit: ${e.name}, found by ROV ${e.rov}. Esc clears it.`); }
+      return okk;
+    },
+    onClear: () => { if (cam) cam.setAutoRotate(G.orbit); },
+    mapOpen: () => !!(hud && hud.mapCovers()), closeMap: () => { if (hud && hud.map) hud.map.close(); },
+  });
   hud = mountSquadHud({
     doc: document, win: window, THREE: S ? S.THREE : null, canvas, camera: () => (S ? S.camera : null),
     getSquad: () => squad, getRovs: () => rovs, getField: () => W, getCam: () => cam, surfaceY: SURFACE_Y,
@@ -685,6 +715,7 @@ function buildUI() {
     // the large map (map-view.js): region shortcuts, the free camera, the colonies found
     goRegion: id => goRegion(id), moveCam: moveCamTo, colonies: () => (streamer ? streamer.colonies() : []),
     speciesLabel: id => (SPECIES[id] && SPECIES[id].label) || null,
+    marks: disc ? disc.marks : null,
   });
   setTimeout(hideHint, 9000);
 }
@@ -817,6 +848,7 @@ function frame(t) {
     if (squad) pts.push(squad.vehicles[0].state.look.slice());
     try { streamer.update(pts[0], pts); } catch (e) { console.error('coral-reef: stream', e); }
   }
+  if (disc) { try { disc.tick(dt, now / 1000); } catch (e) { console.error('coral-reef: discoveries', e); } }
   // the large map covers the view: no 3D frame (squad-hud.js map-view.js)
   if (hud && hud.mapCovers()) { try { hud.tick(dt); } catch (e) { console.error('coral-reef: HUD', e); } return; }
   S.U.uTime.value = now / 1000;

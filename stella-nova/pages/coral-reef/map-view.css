@@ -11,6 +11,8 @@
      grep -n 'XMAP'    the large map
      grep -n 'FULL'    the phone layout
      grep -n 'SAVER'   hidden in the screensaver
+     grep -n 'SNOW'    the marine snow specks over the large map
+     grep -n 'FOUND'   discoveries.js: the card, the toast, the 3D label
    ========================================================================== */
 
 /* HINT */
@@ -126,3 +128,31 @@
 
 /* SAVER */
 html.sn-saver .xmap,html.sn-saver .mm-hint{display:none!important}
+
+/* SNOW: map-view.js mapSnow draws faint specks; no pointer events */
+.xm-snow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.xm-snow{display:none}}
+
+/* FOUND: discoveries.js. The card at the pointer, the toast over the
+   minimap, the label over the selected discovery in the 3D view. --c is
+   the colour of the ROV that found it. */
+.dsc-card{position:fixed;z-index:60;width:230px;padding:8px 10px 9px;border-radius:10px;background:rgba(3,14,21,0.92);
+  border:1px solid color-mix(in srgb,var(--c,#9ff0e6) 55%,transparent);box-shadow:0 6px 24px rgba(0,0,0,0.5),0 0 14px color-mix(in srgb,var(--c,#9ff0e6) 22%,transparent);
+  color:var(--snp-ink,#dcecef);font:max(11px,0.7rem)/1.35 var(--sci-mono,ui-monospace,monospace);display:grid;gap:2px;pointer-events:none}
+.dsc-card b{color:var(--c,#9ff0e6);font-size:1.08em}
+.dsc-card .dsc-kind,.dsc-card .dsc-meta,.dsc-card .dsc-by{color:var(--snp-dim,#9fb6bb)}
+.dsc-card .dsc-hint{margin-top:3px;opacity:.75}
+.dsc-card .dsc-go{pointer-events:auto;margin-top:5px;min-height:44px;border-radius:8px;border:1px solid var(--c,#9ff0e6);background:rgba(10,40,48,0.8);color:var(--snp-ink,#dcecef);font:inherit;cursor:pointer}
+.dsc-card[hidden],.dsc-label[hidden]{display:none!important}
+.dsc-toast{position:absolute;left:0;bottom:calc(100% + 8px);max-width:min(320px,80vw);padding:5px 10px;border-radius:9px;background:rgba(3,14,21,0.88);
+  border-left:3px solid var(--c,#9ff0e6);color:var(--snp-ink,#dcecef);font:max(11px,0.68rem)/1.3 var(--sci-mono,ui-monospace,monospace);
+  opacity:0;transform:translateY(4px);transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsc-toast.free{position:fixed;left:14px;bottom:14px}
+.dsc-toast.on{opacity:1;transform:none}
+.dsc-label{position:fixed;z-index:22;transform:translate(-50%,-100%);padding:3px 9px;border-radius:999px;background:rgba(3,14,21,0.7);
+  border:1px solid color-mix(in srgb,var(--c,#9ff0e6) 60%,transparent);color:var(--snp-ink,#dcecef);font:max(11px,0.68rem)/1.25 var(--sci-mono,ui-monospace,monospace);
+  pointer-events:none;white-space:nowrap;text-shadow:0 0 6px rgba(0,0,0,0.8);transition:opacity .4s}
+.dsc-label b{color:var(--c,#9ff0e6);margin-right:6px}
+.dsc-label span{opacity:.75}
+@media (prefers-reduced-motion:reduce){.dsc-toast,.dsc-label{transition:none}}
+html.sn-saver .dsc-card,html.sn-saver .dsc-toast,html.sn-saver .dsc-label,html.xmap-open .dsc-label{display:none!important}

@@ -29,6 +29,9 @@
 //  since the page opened, the sent targets, the camera cone, markers for
 //  big colonies and rock features (arches, pinnacles) near the ROVs, a
 //  scale bar, the north arrow, a legend, and under the pointer the place,
+//  the discoveries of discoveries.js (o.marks: hover a mark for its card,
+//  a click orbits it and closes the map), a faint drift of marine snow
+//  specks over the map edges (mapSnow; off with reduced motion), and
 //  the depth and the region (explored cells only). "History" plays the
 //  exploration back: the cells and trails up to a time.
 //
@@ -51,6 +54,7 @@
 //    "export function nearestRov"    the ROV under a click
 //    "export function mountExploreMap"  the DOM part
 //    "  function draw("  "  function onKey"  "  function record("
+//    "export function mapSnow"       the snow specks over the map edges
 // ============================================================================
 import { MAP_CELL, worldToMap, mapToWorld, depthColour, contourLevel, REGION_TINT, niceScale, coneOf, headingVec, cellKey, parseCell, LEGEND_STOPS } from './minimap.js';
 
@@ -225,7 +229,8 @@ export function createAtlas(o) {
 // o = { doc, win, getSquad, getField, getCam, camera() (three), canvas,
 //   surfaceY, phoneQ, isSaver, flash, hud: { selected(), select(id, opt),
 //   sendTo(xz), colourOf(id) }, goRegion(id)?, moveCam(x, z)?,
-//   colonies()?, speciesLabel(id)?, regionNow()? }
+//   colonies()?, speciesLabel(id)?, regionNow()?, marks? (discoveries.js:
+//   draw(ctx, view, 'big'), hover, click, leave, animating) }
 export function mountExploreMap(o) {
   const doc = o.doc, win = o.win || doc.defaultView, H = o.hud;
   const $ = id => doc.getElementById(id);
@@ -267,6 +272,7 @@ export function mountExploreMap(o) {
   <div class="xm-body">
     <div class="xm-stage">
       <canvas id="xmCanvas" tabindex="0" role="application" aria-roledescription="map" aria-describedby="xmHelp"></canvas>
+      <canvas id="xmSnow" class="xm-snow" aria-hidden="true"></canvas>
       <div id="xmRead" class="xm-read"></div>
       <p id="xmHelp" class="xm-help">Click an ROV to select it · click the map to send it there (or move the camera) · Shift-click: the other action · drag: pan · wheel or pinch: zoom · arrows, + − 0 from the keys</p>
     </div>
@@ -301,6 +307,7 @@ export function mountExploreMap(o) {
     row('#ffd36b', 'Big coral colonies the squad passed');
     row('#c9b6ff', 'Rock features: arches and pinnacles');
     row('#ffffff', 'A point an ROV was sent to');
+    if (o.marks) row('#9ff0e6', 'Discoveries in the colour of the ROV: dot coral, diamond rock, fish creature. Hover for the card, click to orbit');
   }
   for (const [id, name] of REGIONS) {
     const b = mk('button', 'xm-chip', name, { type: 'button', 'data-region': id });
@@ -380,13 +387,13 @@ export function mountExploreMap(o) {
     layout();
     if (!M.view || !M.fitDone) { fitAll(false); M.fitDone = true; }
     buildRovs(); buildFound(); syncAct(); syncHist();
-    M.dirty = true; draw(true);
+    M.dirty = true; draw(true); snowFx.start();
     try { cv.focus({ preventScroll: true }); } catch { /* old focus API */ }
     return true;
   }
   function close() {
     if (!M.open) return false;
-    M.open = false; drag = null; pts.clear(); pinch = null; stopPlay();
+    M.open = false; drag = null; pts.clear(); pinch = null; stopPlay(); snowFx.stop(); if (o.marks) o.marks.leave();
     box.classList.remove('on'); root.classList.remove('xmap-open');
     const mm = $('mmCanvas'); if (mm) mm.setAttribute('aria-expanded', 'false');
     const tt = M.closeT = setTimeout(() => { if (!M.open && M.closeT === tt) box.hidden = true; }, 240);
@@ -476,6 +483,8 @@ export function mountExploreMap(o) {
       else { ctx.moveTo(x, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); }
       ctx.fill(); ctx.stroke();
     }
+    // the discoveries (discoveries.js)
+    if (o.marks && tCut === Infinity) { try { o.marks.draw(ctx, v, 'big'); } catch (e) { console.error('coral-reef: map marks', e); } }
     // the camera cone
     const cam = o.getCam(), tc = o.camera ? o.camera() : null;
     if (cam && cam.eye) {
@@ -555,8 +564,9 @@ export function mountExploreMap(o) {
   }
 
   // ── actions ──
-  function act(px, py, alt) {
+  function act(px, py, alt, cx, cy, touch) {
     const v = M.view, w = mapToWorld(px, py, v);
+    if (o.marks && o.marks.click('big', px, py, cx ?? px, cy ?? py, !!touch)) { M.actions.push({ kind: 'discovery' }); draw(true); return { kind: 'discovery' }; }
     const hit = nearestRov(rovList(), px, py, v);
     if (hit) { H.select(hit.id, { source: 'map', follow: false }); M.actions.push({ kind: 'select', id: hit.id }); buildRovs(); syncAct(); draw(true); return { kind: 'select', id: hit.id }; }
     const mode = alt ? (M.act === 'send' ? 'camera' : 'send') : M.act;
@@ -601,6 +611,7 @@ export function mountExploreMap(o) {
     }
     const w = mapToWorld(p[0], p[1], M.view);
     M.read = readout(w[0], w[1]); $('xmRead').textContent = M.read;
+    if (o.marks && e.pointerType !== 'touch' && !(drag && drag.moved)) { const on = o.marks.hover('big', p[0], p[1], e.clientX, e.clientY); cv.style.cursor = on ? 'pointer' : ''; }
   });
   const up = e => {
     pts.delete(e.pointerId);
@@ -608,8 +619,9 @@ export function mountExploreMap(o) {
     const d = drag; drag = null;
     if (!d || d.moved || e.type === 'pointercancel') return;
     const p = local(e);
-    act(p[0], p[1], d.shift || !!e.shiftKey);
+    act(p[0], p[1], d.shift || !!e.shiftKey, e.clientX, e.clientY, e.pointerType === 'touch');
   };
+  cv.addEventListener('pointerleave', () => { if (o.marks) o.marks.leave(); });
   cv.addEventListener('pointerup', up);
   cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', e => {
@@ -723,17 +735,65 @@ export function mountExploreMap(o) {
     if (!M.open) return;
     if (o.isSaver()) { close(); return; }
     if (M.atlas.pending) { M.atlas.work(phone() ? 2 : 4); M.dirty = true; }
+    if (o.marks && o.marks.animating()) M.dirty = true;
     const s = poseSig();
     if (M.dirty || s !== M.poseSig || M.track) draw();
   }
+  // the snow over the map edges: a few dozen slow specks on #xmSnow, about
+  // 20 draws a second while the map is open; none with reduced motion
+  const snowFx = mapSnow(doc.getElementById('xmSnow'), win);
   // squad-hud.js sendTo (the minimap or here): a target mark
   function noteTarget(id, xz) { M.targets.set(id, xz.slice()); M.dirty = true; }
 
   return {
     open, close, toggle: () => (M.open ? close() : open()), tick, act, fitAll, noteTarget,
-    get isOpen() { return M.open; }, covers: () => M.open,
+    get isOpen() { return M.open; }, covers: () => M.open, snow: snowFx,
     get view() { return M.view; }, set view(v) { M.view = v; M.dirty = true; },
     set mode(m) { M.act = m; syncAct(); },
     debug: () => ({ open: M.open, full: box.classList.contains('full'), view: M.view && { ...M.view }, act: M.act, track: M.track, cells: M.atlas ? M.atlas.cells.size : 0, tiles: M.atlas ? M.atlas.tiles.size : 0, pending: M.atlas ? M.atlas.pending : 0, marks: [...M.marks.values()].map(m => m.kind), trails: [...M.trails.entries()].map(([id, T]) => [id, T.reduce((a, s) => a + s.length, 0)]), actions: M.actions.slice(), read: M.read, hist: M.hist, scale: M.scale || null }),
   };
+}
+
+// The marine snow specks over the edges of the large map (2D canvas). n
+// specks drift down and with a slow current; the alpha is low, and higher
+// near the edges (the centre stays clear). Off with prefers-reduced-motion.
+export const MAP_SNOW_N = 36;
+export function mapSnow(cv, win, n = MAP_SNOW_N) {
+  const R = { on: false, frames: 0, specks: [], reduced: false, raf: 0, last: 0 };
+  const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+  let seed = 9;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < n; i++) R.specks.push({ x: rnd(), y: rnd(), vx: (rnd() - 0.3) * 0.006, vy: 0.004 + rnd() * 0.01, r: 0.6 + rnd() * 1.3, a: 0.25 + rnd() * 0.5, ph: rnd() * 6.28 });
+  const edge = (x, y) => { const m = Math.min(x, 1 - x, y, 1 - y); return 1 - Math.min(1, Math.max(0, (m - 0.06) / 0.22)); };
+  function drawOnce(dt) {
+    if (!ctx) return;
+    const w = cv.clientWidth || (cv.parentNode && cv.parentNode.clientWidth) || 800, h = cv.clientHeight || (cv.parentNode && cv.parentNode.clientHeight) || 600;
+    const d = Math.min(2, win.devicePixelRatio || 1);
+    if (cv.width !== Math.round(w * d)) { cv.width = Math.round(w * d); cv.height = Math.round(h * d); }
+    ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, w, h);
+    for (const s of R.specks) {
+      s.ph += dt * 0.6; s.x += (s.vx + Math.sin(s.ph) * 0.002) * dt; s.y += s.vy * dt;
+      if (s.y > 1.02) { s.y = -0.02; s.x = rnd(); }
+      s.x = ((s.x % 1) + 1) % 1;
+      const al = s.a * (0.2 + 0.8 * edge(s.x, s.y)) * 0.32;
+      ctx.fillStyle = `rgba(212,236,239,${al.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, 6.2832); ctx.fill();
+    }
+    R.frames++;
+  }
+  function loop(t) {
+    if (!R.on) return;
+    R.raf = win.requestAnimationFrame(loop);
+    if (t - R.last < 48) return;
+    const dt = R.last ? Math.min(0.2, (t - R.last) / 1000) : 0.05; R.last = t;
+    drawOnce(dt);
+  }
+  R.start = () => {
+    R.reduced = !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (R.on || R.reduced || !ctx || !win.requestAnimationFrame) { if (cv) cv.hidden = R.reduced; return false; }
+    cv.hidden = false; R.on = true; R.last = 0; R.raf = win.requestAnimationFrame(loop); return true;
+  };
+  R.stop = () => { R.on = false; if (R.raf && win.cancelAnimationFrame) win.cancelAnimationFrame(R.raf); R.raf = 0; };
+  R.step = drawOnce;
+  return R;
 }
