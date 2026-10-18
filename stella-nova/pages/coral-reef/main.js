@@ -75,7 +75,7 @@ import { SHAPES } from './coral-sdf.js';
 import { createReefRunner } from './mesh-worker.js';
 import { createRock, createRockAsync } from './rock/index.js';
 import { createROVs, colonyBounds } from './rov/index.js';
-import { divePlan, shotAt, shotPose, pickSite, clearPath, frameFit, createGovernor } from './saver.js';
+import { divePlan, shotAt, shotPose, pickSite, safeCamera, cardRect, frameFit, createGovernor } from './saver.js';
 import { lut, cssGradient, mountGradientPicker, GRADIENTS } from '../../lib/growth-gradients.js';
 import { PARAM_INFO } from '../../lib/dla-engine.js';
 import { mountDiagram } from './diagram.js';
@@ -304,7 +304,8 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = false) {
   G.preset = pid;
   presetUI();
   if (!coral) return;
-  coralNewGen({ type: 'reset', seed, preset: pid });
+  // colonies: the profile count (the init of a saver start asked for 1)
+  coralNewGen({ type: 'reset', seed, preset: pid, colonies: coral.budget ? coral.budget.colonies : undefined });
   if (fit) fitCamera(true);
 }
 
@@ -842,6 +843,10 @@ window.snSaver = {
     saver = { band: null, card: null, gov: null, tick, st, saved, obs: 0, obsN: 0, obsH: 0, hRate: 0 };
     import('../../lib/saver-clear.js').then(m => { st.bandFn = m.plateBand; }).catch(() => { /* no plate */ });
     let rr = seed; const rand = () => { rr = (rr * 16807) % 2147483647; return rr / 2147483647; };
+    // a dive starts only on a built world: the rock, the ROVs and a reef
+    // worker that said 'ready' (a 'single' before 'ready' is dropped by
+    // the worker, and the saver then waited on no colony)
+    const worldOk = () => !!(worldReady && rock && coral && coral.ready);
 
     // the dive colony, once the worker has started the new reef
     function colonyNow() { const reef = coral && coral.reef; return reef && st.colony && coral.gen > st.gen0 ? reef.colonies[st.colony.k] || null : null; }
@@ -886,6 +891,10 @@ window.snSaver = {
       coral.post({ type: 'play', on: true });
       setMode(d.mode);
       if (rovs) {
+        // the ROV starts beside the site (under the fade), not across the
+        // plot: at 0.9 m/s it took more than 30 s to come, and the feed
+        // showed open water
+        placeRov(rovs.vehicles[0], st.site);
         const tgt = { get: () => { const c = colonyNow(); return (c && colonyBounds(coral.reef, c)) || { center: st.site.p, radius: 0.3 }; } };
         rovs.focusOn(tgt, 'inspect', { vehicle: rovs.vehicles[0] && rovs.vehicles[0].id });
         rovs.vehicles.forEach((v, i) => { v.group.visible = i === 0; for (const l of v.lights) l.visible = i === 0; });
@@ -894,28 +903,50 @@ window.snSaver = {
       G.feed = true; showFeed();
       label(makeLabel());
     }
+    // A free point 2.5 to 4 m out from the site (rovs.sdf and its clear
+    // shell), for the pilot state and the vehicle group.
+    function placeRov(v, site) {
+      if (!v || !v.pilot || !v.pilot.state || !site) return false;
+      const sd = rovs.sdf || (rock && (rock.sdfAll || rock.sdf));
+      if (typeof sd !== 'function') return false;
+      const p = site.p, n = site.n;
+      for (const kc of [1.2, 1]) for (const d of [2.5, 3, 3.5, 4]) for (const h of [0.6, 1.2, 1.8]) for (const a of [0, 0.7, -0.7, 1.4, -1.4]) {
+        const cl = (rovs.clear || 1) * kc;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        const nx = n[0] * ca - n[2] * sa, nz = n[0] * sa + n[2] * ca;
+        const q = [p[0] + nx * d, p[1] + n[1] * d + h, p[2] + nz * d];
+        if (sd(q[0], q[1], q[2]) > cl) {
+          const P = v.pilot.state;
+          P.p[0] = q[0]; P.p[1] = q[1]; P.p[2] = q[2];
+          if (P.v) P.v[0] = P.v[1] = P.v[2] = 0;
+          if (P.look) { P.look[0] = p[0]; P.look[1] = p[1]; P.look[2] = p[2]; }
+          v.group.position.set(q[0], q[1], q[2]);
+          return true;
+        }
+      }
+      return false;
+    }
     function next() {
       st.i = (st.i + 1) % dives.length;
       const d = dives[st.i];
       st.fading = true; canvas.style.opacity = '0';
-      setTimeout(() => { if (!saverOn) return; start(d); canvas.style.opacity = '1'; st.fading = false; }, 900);
+      setTimeout(() => { if (!saverOn) return; if (worldOk()) start(d); else st.i--; canvas.style.opacity = '1'; st.fading = false; }, 900);
     }
     // The feed card in the saver: right of the clear band (16:9) or under it (9:16).
     function placeCard() {
       const f = $('feed'); if (!f || f.hidden) { saver.card = null; return; }
-      const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1, band = saver.band || { t: 0, b: 0 };
-      const land = w >= h, cw = land ? Math.min(0.26 * w, 0.42 * (h - band.t - band.b) * 352 / 322) : Math.min(0.5 * w, 0.2 * h * 352 / 322);
-      const ch = cw * 322 / 352;
-      f.style.width = `${cw}px`;
-      f.style.left = 'auto'; f.style.right = `${land ? 16 : (w - cw) / 2}px`;
-      f.style.top = `${land ? band.t + (h - band.t - band.b - ch) / 2 : h - band.b - ch - 8}px`; f.style.bottom = 'auto';
-      saver.card = { w: cw, h: ch };
+      const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+      const R = cardRect(w, h, saver.band);
+      f.style.width = `${R.w}px`;
+      f.style.left = 'auto'; f.style.right = `${w - R.left - R.w}px`;
+      f.style.top = `${R.top}px`; f.style.bottom = 'auto';
+      saver.card = R;
     }
 
     function tick(dt) {
       if (st.bandFn && (st.bandT += dt) > 0.4) { st.bandT = 0; try { saver.band = st.bandFn(canvas.clientHeight); } catch (e) { saver.band = null; } placeCard(); }
       const d = st.dive;
-      if (!d) { if (!st.fading) next(); return; }
+      if (!d) { if (!st.fading && worldOk()) next(); if (!st.cardSet) { st.cardSet = true; placeCard(); } return; }
       st.t += dt; st.labT += dt;
       if (st.t > d.grow + 12 && !st.fading) { next(); return; }
       if (st.labT > 1) {
@@ -935,14 +966,15 @@ window.snSaver = {
       saver.gov.used(saver.gov.take(dt));
       const rNow = saver.gov.current;
       if (Math.abs(rNow - st.rateSent) > Math.max(0.2, 0.03 * rNow)) { st.rateSent = rNow; coral.post({ type: 'rate', value: rNow }); }
-      const c = c0; if (!c) return;
+      // before the first particles the subject is the site (a seed)
+      const c = c0;
       const reef = coral.reef;
-      const b = colonyBounds(reef, c) || { center: c.base, radius: 0.3 };
+      const b = (c && colonyBounds(reef, c)) || { center: c ? c.base : st.site.p, radius: 0.3 };
       // the growth front: the mean of the newest particles of the colony
       const n = reef.count, k = Math.min(n, 120);
       let fx = 0, fy = 0, fz = 0;
       for (let g = n - k; g < n; g++) { fx += reef.px[g]; fy += reef.py[g]; fz += reef.pz[g]; }
-      const front = k ? [fx / k, fy / k, fz / k] : b.center;
+      const front = c && k ? [fx / k, fy / k, fz / k] : b.center;
       const v0 = rovs && rovs.vehicles[0];
       const rp = v0 ? [v0.group.position.x, v0.group.position.y, v0.group.position.z] : null;
       const { shot, i, u } = shotAt(d, st.t);
@@ -951,15 +983,34 @@ window.snSaver = {
       const f0 = frameFit({ w, h, clear, radius: 1, fov: S.camera.fov });
       S.view.tox = f0.ox; S.view.toy = f0.oy;
       const P = shotPose(shot, u, st.t - shot.t0, { c: b.center, r: Math.max(0.25, b.radius), front, rov: rp }, fit);
-      const pos = clearPath(rock && rock.sdf, P.tgt, P.pos, 0.5);
+      // open water and a clear line to the colony (rock and sand)
+      const safe = safeCamera(rock && (rock.sdfAll || rock.sdf), rock ? rock.sdfScale || 1 : 1, P.tgt, P.pos, Math.max(0.25, b.radius));
+      const pos = safe.pos;
+      st.pose = { pos, tgt: P.tgt, how: safe.how, kind: shot.kind, c: b.center, r: Math.max(0.25, b.radius) };
       if (i !== st.shotI) { st.shotI = i; st.cut = true; }
       // the springs of camera.js take the camera to the shot; a cut snaps
       if (cam) cam.saverGoal(pos, P.tgt, st.cut);
       st.cut = false;
     }
 
-    next();
+    if (worldOk()) next();
     return { canvas, warmupMs: 1800 };
+  },
+  // the state for the node checks (tests/saver-page.test.mjs)
+  debug() {
+    const sv = saver, st = sv && sv.st;
+    const v0 = rovs && rovs.vehicles[0];
+    const P = S ? S.camera.position : null;
+    return {
+      on: saverOn, dive: st && st.dive ? { i: st.i, species: st.dive.species, kind: st.dive.siteKind } : null,
+      site: st && st.site ? { p: st.site.p, n: st.site.n, feature: st.site.feature ? st.site.feature.kind : null } : null,
+      colony: st && st.colony && coral && coral.gen > st.gen0 ? (coral.reef.colonies[st.colony.k] ? { count: coral.reef.count, cap: coral.reef.colonies[st.colony.k].cap } : null) : null,
+      pose: st ? st.pose || null : null, cam: P ? [P.x, P.y, P.z] : null,
+      rov: v0 ? { pos: v0.group.position.toArray(), visible: v0.group.visible, cam: v0.camera ? v0.camera.getWorldPosition(new S.THREE.Vector3()).toArray() : null, target: v0.target ? v0.target.toArray() : null, fov: v0.camera ? v0.camera.fov : null } : null,
+      hidden: rovs ? rovs.vehicles.slice(1).every(v => !v.group.visible) : null,
+      card: sv ? sv.card : null, band: sv ? sv.band : null, rock: rock ? { sdfScale: rock.sdfScale } : null,
+      sdfAll: rock ? (x, y, z) => (rock.sdfAll || rock.sdf)(x, y, z) : null,
+    };
   },
   exit() {
     if (!saverOn) return;

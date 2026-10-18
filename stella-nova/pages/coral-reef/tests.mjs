@@ -14,6 +14,8 @@
 //    tests/robust.test.mjs .. SCENE: main.js in jsdom on the fake GL
 //                             (tests/page-harness.mjs): shader error box,
 //                             context loss, worker fall back, phone boot
+//    tests/saver-safe.test.mjs  SCENE: saver sites, safe camera, card place
+//    tests/saver-page.test.mjs  SCENE: the saver end to end in jsdom
 //  The jsdom boot (mobile-check.mjs, in scene.test.mjs) needs jsdom 24:
 //  give its folder as JSDOM_DIR or NODE_PATH. Without it the boot skips.
 //  Exit code 1 if any file fails.
