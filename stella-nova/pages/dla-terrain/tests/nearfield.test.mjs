@@ -18,6 +18,7 @@ import { nearSplits, computeCascades, stableRadius, FIRST_SPLIT, ONE_CASCADE } f
 import { packCascades, CASCADE_FLOATS } from '../gpu/globals.js';
 import { project } from '../gpu/mat.js';
 import { aoPlan, AO_MAX_PX, AO_RADIUS } from '../render/ao.js';
+import { effectUniforms, pomSteps, POM_NEAR, POM_MAX } from '../render/ground.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0, passes = 0;
@@ -93,7 +94,8 @@ const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
   const desk = { id: 'desktop', taa: null };
   check('AO on at High on a desktop', aoPlan({ quality: 0.75, govLevel: 0 }, desk).on);
   check('AO off at Low (no TAA to resolve the noise)', !aoPlan({ quality: 0.25 }, desk).on);
-  check('AO off on a phone profile', !aoPlan({ quality: 1 }, { id: 'phone', taa: false }).on && !aoPlan({ quality: 1 }, { id: 'phone-min', taa: false }).on);
+  check('AO off on a phone profile', !aoPlan({ quality: 1 }, { id: 'phone', taa: false }).on && !aoPlan({ quality: 1 }, { id: 'phone-min', taa: false }).on && !aoPlan({ quality: 1 }, {}, 'phone').on);
+  check('AO on with the safari and safe profiles', aoPlan({ quality: 0.75, govLevel: 1 }, { id: 'safe', taa: null }, 'safe').on && aoPlan({ quality: 1 }, { id: 'safari', taa: null }, 'safari').on);
   check('AO off at governor level 2 and up', !aoPlan({ quality: 1, govLevel: 2 }, desk).on && aoPlan({ quality: 1, govLevel: 1 }, desk).on);
   const plan = aoPlan({ quality: 1 }, desk);
   check('AO radius and screen reach are fixed (no zoom term)', plan.radius === AO_RADIUS && plan.maxPx === AO_MAX_PX && AO_MAX_PX <= 64);
@@ -103,6 +105,21 @@ const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
   check('AO costs at most 24 depth loads a half-size pixel', dirs * 2 * steps + 5 <= 24, (dirs * 2 * steps + 5) + ' loads');
   const gj = readFileSync(join(DIR, 'render/ground.js'), 'utf8');
   check('ground runs the AO in the volumetric hooks', /volumetricPrep: ao \?/.test(gj) && /drawVolumetric: ao \?/.test(gj));
+}
+
+// ── ground caps (NOTES.md CRASH -> GROUND)
+{
+  let worstNear = 0, worstFar = 0;
+  for (const d of [0, 0.5, 2, 10, 30, 50]) for (const ndv of [0, 0.1, 0.5, 1]) {
+    worstNear = Math.max(worstNear, pomSteps(d, ndv, effectUniforms(1, false, 64, true)));
+    worstFar = Math.max(worstFar, pomSteps(d, ndv, effectUniforms(1, false, 64, false)));
+  }
+  check('POM near the ground takes at most POM_NEAR steps', worstNear <= POM_NEAR && worstNear > 0, worstNear + ' steps');
+  check('POM away from the ground keeps POM_MAX', worstFar === POM_MAX);
+  const gw = readFileSync(join(DIR, 'shaders/ground.wgsl'), 'utf8');
+  check('ground.wgsl caps the POM steps from U.fx.x', /min\(i32\(floor\(U\.fx\.x\)\), POM_MAX\)/.test(gw));
+  const gj = readFileSync(join(DIR, 'render/ground.js'), 'utf8');
+  check('the phone path is keyed on the profile id', /\/\^phone\/\.test\(gpu\.profileId/.test(gj) && /effectUniforms\(quality, phoneP/.test(gj));
 }
 
 console.log(`nearfield: ${passes} passed, ${fails} failed`);

@@ -464,8 +464,13 @@ export function rockUniforms(frame) {
 // POM from quality 0.7, the vertex relief from 0.8 (the 0.5 m leaf grid
 // of lodConfig), neither on a phone profile (the cheap path). lod0: the
 // LOD 0 range m (the relief ends inside it).
-export function effectUniforms(quality, phone, lod0 = 64) {
-  const pomOn = !phone && quality >= 0.7 ? 1 : 0;
+// near (frame.near: the eye near the ground on the safari and safe
+// profiles, gpu/frame.js): POM takes at most POM_NEAR steps, so the cost a
+// pixel does not grow when the zoom fills the screen with close rock.
+// fx.x: 0 off, 1 on (POM_MAX steps), 2 and up the step cap.
+export const POM_NEAR = 6;
+export function effectUniforms(quality, phone, lod0 = 64, near = false) {
+  const pomOn = !phone && quality >= 0.7 ? (near ? POM_NEAR : 1) : 0;
   const dispOn = !phone && quality >= 0.8 ? 1 : 0;
   return [pomOn, dispOn, 60, Math.min(55, lod0 * 0.85)];
 }
@@ -476,11 +481,12 @@ export const POM_MAX = 12;
 export function pomSteps(dist, ndv, fx) {
   const on = fx[0], range = fx[2];
   if (on < 0.5 || dist >= range) return 0;
+  const cap = on >= 1.5 ? Math.min(Math.floor(on), POM_MAX) : POM_MAX;
   const sst = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const k = 1 - sst(range * 0.6, range, dist);
-  const n = (4 + (POM_MAX - 4) * Math.min(1, Math.max(0, 1 - ndv))) * k;
+  const n = (4 + (cap - 4) * Math.min(1, Math.max(0, 1 - ndv))) * k;
   if (n < 2) return 0;
-  return Math.min(Math.ceil(n), POM_MAX);
+  return Math.min(Math.ceil(n), cap);
 }
 
 // JS twin of ground.wgsl fn hexGrid + fn hexSharp (Mikkelsen 2022 hex
@@ -789,7 +795,7 @@ export async function createGround(gpu) {
     uData.set(rockU, 72);
     // the frame graph governor (gpu/frame.js HANG GUARD): level 1 and up
     // turns off POM and the vertex relief, the close-up rock cost
-    uData.set(effectUniforms(quality, !!pf || (frame.govLevel | 0) >= 1, cfg.ranges[0]), 76);
+    uData.set(effectUniforms(quality, phoneP || (frame.govLevel | 0) >= 1, cfg.ranges[0], !!frame.near), 76);
     uData.set(layerMap.rsets, 80);
     queue.writeBuffer(uBuf, 0, uData);
   }
@@ -881,7 +887,11 @@ export async function createGround(gpu) {
   // a phone profile (gpu/budget.js): fewer sets, decoded at the array size
   // (not 1024) and not kept in the glb-lite image cache
   const PHONE_SETS = ['ground_grass', 'ground_forest_floor', 'ground_rock', 'ground_cliff', 'ground_gravel', 'ground_sand', 'ground_snow', 'ground_meadow', 'ground_desert', 'ground_scree'];
+  // gpu.profile.groundRes is a size cap only (the safari profile caps the
+  // arrays at 512 with POM on); the phone path (fewer sets, POM off) is
+  // keyed on the profile id (NOTES.md CRASH -> GROUND)
   const pf = gpu.profile && gpu.profile.groundRes ? gpu.profile : null;
+  const phoneP = /^phone/.test(gpu.profileId || '');
 
   // Load the ASSETS ground sets into the three arrays. gpu.assets is the
   // glb-lite library (loadGround) or a bare manifest. Resolves to the
@@ -905,10 +915,11 @@ export async function createGround(gpu) {
         const [albedo, normal, orm] = await Promise.all([get(t.albedo), get(t.normal), get(t.orm)]);
         return { record: rec, albedo, normal, orm };
       }));
-    } else if (a.loadGround && !pf) sets = await a.loadGround();
+    } else if (a.loadGround && !pf && !phoneP) sets = await a.loadGround();
     else {
       let recs = groundRecords(a.manifest || a).filter((r) => !SKIP_SETS.has(r.id));
-      if (pf) recs = recs.filter((r) => PHONE_SETS.includes(r.id)).sort((x, y) => PHONE_SETS.indexOf(x.id) - PHONE_SETS.indexOf(y.id)).slice(0, pf.groundLayers || 8);
+      if (phoneP) recs = recs.filter((r) => PHONE_SETS.includes(r.id)).sort((x, y) => PHONE_SETS.indexOf(x.id) - PHONE_SETS.indexOf(y.id)).slice(0, (pf && pf.groundLayers) || 8);
+      else if (pf && pf.groundLayers) recs = recs.slice(0, pf.groundLayers);
       if (!recs.length || typeof createImageBitmap === 'undefined') return 0;
       const base = a.baseUrl || a.baseURL || new URL('../../../assets/nature/', import.meta.url).href;
       sets = await Promise.all(recs.map(async (rec) => {

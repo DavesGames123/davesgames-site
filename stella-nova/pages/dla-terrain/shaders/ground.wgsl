@@ -1130,10 +1130,12 @@ const POM_MAX: i32 = 12;
 const POM_DEPTH: f32 = 0.35;
 fn pomSteps(dist: f32, ndv: f32) -> i32 {
   if ((U.fx.x < 0.5) || (dist >= U.fx.z)) { return 0; }
+  // U.fx.x 2 and up caps the steps (frame.near, ground.js POM_NEAR)
+  let cap = select(POM_MAX, min(i32(floor(U.fx.x)), POM_MAX), U.fx.x >= 1.5);
   let k = 1.0 - smoothstep(U.fx.z * 0.6, U.fx.z, dist);
-  let n = mix(4.0, f32(POM_MAX), clamp(1.0 - ndv, 0.0, 1.0)) * k;
+  let n = mix(4.0, f32(cap), clamp(1.0 - ndv, 0.0, 1.0)) * k;
   if (n < 2.0) { return 0; }
-  return min(i32(ceil(n)), POM_MAX);
+  return min(i32(ceil(n)), cap);
 }
 // -> the offset position (moved along -V into the relief)
 fn pom(pb: vec3f, V: vec3f, n: vec3f, bc0: f32, gb: vec3f, fp: f32, steps: i32) -> vec3f {

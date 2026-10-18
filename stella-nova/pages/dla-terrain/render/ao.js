@@ -10,7 +10,7 @@
 //          the bilateral blur A -> B -> A (shaders/ao.wgsl).
 //    draw  in the volumetric pass: fs_apply multiplies the HDR target by
 //          the upsampled AO (blend dst x src). No depth attachment.
-//  aoPlan(frame, profile) -> { on, radius, strength, maxPx, fadeStart,
+//  aoPlan(frame, profile, profileId) -> { on, radius, strength, maxPx, fadeStart,
 //  fadeEnd }: off on a phone profile, under quality 0.5 (no TAA to resolve
 //  the noise) and at governor level 2 and up (TAA off). The cost does not
 //  depend on the zoom: a fixed 16 depth loads (+ 4 for the normal) per
@@ -26,10 +26,10 @@ export const AO_STRENGTH = 0.85;
 export const AO_MAX_PX = 56;         // full-size px: the largest screen radius
 export const AO_FADE = [90, 160];    // m: the AO fades out over this range
 
-export function aoPlan(frame = {}, profile = null) {
+export function aoPlan(frame = {}, profile = null, profileId = '') {
   const q = frame.quality ?? 0.75;
   const pf = profile || {};
-  const phone = pf.taa === false || pf.id === 'phone' || pf.id === 'phone-min';
+  const phone = pf.taa === false || /^phone/.test(profileId || pf.id || '');
   const on = !phone && q >= 0.5 && (frame.govLevel | 0) < 2 && frame.ao !== false;
   return { on, radius: AO_RADIUS, strength: AO_STRENGTH * (q >= 0.75 ? 1 : 0.85), maxPx: AO_MAX_PX, fadeStart: AO_FADE[0], fadeEnd: AO_FADE[1] };
 }
@@ -85,10 +85,10 @@ export async function createAO(gpu) {
   }
 
   return {
-    plan: (frame) => aoPlan(frame, gpu.profile),
+    plan: (frame) => aoPlan(frame, gpu.profile, gpu.profileId),
     prep(enc, frame, ctx) {
       ran = false;
-      plan = aoPlan(frame, gpu.profile);
+      plan = aoPlan(frame, gpu.profile, gpu.profileId);
       plan.on = plan.on && enabled;
       st.on = plan.on;
       if (!plan.on || !ctx || !ctx.depthView || !gpu.globalsBindGroup) return;
