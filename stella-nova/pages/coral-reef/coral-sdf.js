@@ -52,10 +52,13 @@
 //  lod: false there is one fine field per species (all colonies fuse).
 //
 //  USE (the reef worker, node tests, thumbnails)
-//    const M = createCoralMesher({ polyps, fine, radius, lod = true });
+//    const M = createCoralMesher({ polyps, fine, radius, lod = true, gapMs = 250, clock });
 //                                  // lod false: one fine field, all colonies
+//                                  // gapMs: a growing field meshes at most once per gapMs
+//                                  // (a brick that changes again goes out once)
 //    M.addColony({ k, id, base, plane, stalk });   // colonyInfo() of reef.js
 //    M.add(g, parent, x, y, z, k);                 // world metres, ids in order
+//    M.bridge(g, j)                                // a fuse cone g -> j (reef.js R.bridges)
 //    M.fields: Map field key -> { id, lev, cell, origin, tree, SM (cone
 //              ends, field frame), localOf (global id -> field id), ... }
 //    M.setFocus([k, ...])                          // the fine-mesh colonies
@@ -76,6 +79,7 @@
 //
 //  grep -n targets
 //    species shapes ......... "export const SHAPES"
+//    species scale .......... "export const SPECIES_SCALE"
 //    the post terms ......... "function postFor"
 //    brain groove ........... "export function groove"
 //    polyp scatter .......... "export function scatterPolyps"
@@ -84,6 +88,7 @@
 //    smooth branch points ... "function smoothPoint"
 //    the coarse field ....... "function makeField"
 //    focus change ........... "function setFocus"
+//    fuse bridges ........... "function bridge"
 //    fine-field events ...... "function takeEvents"
 // ============================================================================
 import { createSdf, pipeRadius, smin } from '../../lib/dla-sdf.js';
@@ -107,6 +112,28 @@ export const SHAPES = {
     polyp: { density: 5000, tip: 1, size: 0.0045, max: 700 } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
+
+// ── species scale ───────────────────────────────────────────────────────────
+// The user said (2026-10-18): "we should be able to simulate much large
+// growing coral reef structures these are pathetically small for the size
+// of seamount we're workign iwht". A species of scale s grows colonies s
+// times larger with the same particle count: reef.js multiplies its
+// particle spacing (and the other dlaf distances) by s. Here the lengths
+// of its shape (cell, blend, radii, band, web, slab, groove) are
+// multiplied by L = s^SDF_EXP (about 1.6 to 1.8), so the branches stay
+// thinner than a plain copy x s would make them (the species look: thin
+// branches on a large colony). Triangles per particle go up by s / L.
+// Polyps: the density per m^2 goes down by L x sqrt(s) (the GPU holds
+// every polyp), the polyp radius goes up by sqrt(L).
+export const SPECIES_SCALE = { staghorn: 2.5, fan: 2, table: 2.3, boulder: 2.2, finger: 2.1 };
+export const SDF_EXP = 0.65;
+const LEN_KEYS = ['cell', 'k', 'band', 'rTip', 'rMax', 'web', 'half', 'inflate', 'groove'];
+for (const id of SHAPE_IDS) {
+  const sh = SHAPES[id], sc = SPECIES_SCALE[id] || 1, L = Math.pow(sc, SDF_EXP);
+  sh.scale = sc; sh.len = L;
+  for (const k of LEN_KEYS) if (sh[k] !== undefined) sh[k] *= L;
+  sh.polyp = Object.assign({}, sh.polyp, { density: sh.polyp.density / (L * Math.sqrt(sc)), size: sh.polyp.size * Math.sqrt(L), max: Math.ceil(sh.polyp.max * L) });
+}
 export const BRICK = 8;
 export const CHUNK_M = 2;      // chunk edge (m): the page draws one mesh per chunk and species
 
@@ -131,10 +158,12 @@ export function noise3(x, y, z) {
   return e + (f - e) * w;
 }
 
-// Brain coral valleys: stripes about 10 cm apart, bent by two octaves of
-// noise (domain warp), so the valleys run side by side and meander, as on
-// a brain coral, with no closed rings. 0 on a ridge, 1 in a valley.
-export function groove(x, y, z) {
+// Brain coral valleys: stripes about 10 cm x s apart (s: the species
+// scale), bent by two octaves of noise (domain warp), so the valleys run
+// side by side and meander, as on a brain coral, with no closed rings.
+// 0 on a ridge, 1 in a valley.
+export function groove(x, y, z, sc = 1) {
+  if (sc !== 1) { x /= sc; y /= sc; z /= sc; }
   const w = noise3(x * 1.7 + 3.1, y * 1.7, z * 1.7) * 2.6 + noise3(x * 4.3, y * 4.3 + 5, z * 4.3) * 0.8;
   const f = (0.62 * x + 0.35 * y + 0.7 * z) * 10 + w;
   const s = Math.abs(Math.sin(f * Math.PI));
@@ -145,16 +174,17 @@ export function groove(x, y, z) {
 // The post term of a species field: (x, y, z, d, id) -> d', id = the
 // local prim id (the nearest cone). C: the colony of each prim.
 function postFor(id, sh, S) {
+  const u = sh.u || 1;          // the length unit of this field (species scale x quality)
   if (id === 'fan') {
     // ribs: the tree field d; web: a slab in the plane of the colony where
     // the field inflated by sh.web is inside
     const W = sh.web, T = sh.half;
     return (x, y, z, d, pid) => {
-      if (pid < 0 || d > W + 0.01) return d;
+      if (pid < 0 || d > W + 0.01 * u) return d;
       const c = S.cols.get(S.colOf[pid]);
       const pd = Math.abs((x - c.base[0]) * c.plane[0] + (z - c.base[2]) * c.plane[1]);
-      const web = smax(d - W, pd - T, 0.006);
-      return smin(d, web, 0.005);
+      const web = smax(d - W, pd - T, 0.006 * u);
+      return smin(d, web, 0.005 * u);
     };
   }
   if (id === 'table') {
@@ -165,12 +195,12 @@ function postFor(id, sh, S) {
       const c = S.cols.get(S.colOf[pid]);
       if (S.depth[pid] < (c.stalk || 7)) return d;
       const slab = Math.abs(y - S.Y[pid]) - T;
-      return smax(d - I, slab, 0.012);
+      return smax(d - I, slab, 0.012 * u);
     };
   }
   if (id === 'boulder') {
-    const A = sh.groove;
-    return (x, y, z, d) => d > 0.03 ? d : d + A * groove(x, y, z) * Math.min(1, Math.max(0, 1 - d / 0.03));
+    const A = sh.groove, D = 0.03 * u, gs = sh.len || 1;
+    return (x, y, z, d) => d > D ? d : d + A * groove(x, y, z, gs) * Math.min(1, Math.max(0, 1 - d / D));
   }
   return null;
 }
@@ -284,7 +314,9 @@ export function createCoralMesher(opts = {}) {
   const fine = opts.fine ?? 1;
   const radius = opts.radius ?? 30;
   const useLod = opts.lod !== false;
+  const gap = opts.gapMs ?? 250;   // update(): a growing field meshes at most once per gap ms
   const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+  const gapNow = opts.clock || now; // the clock of the gap (the reef worker passes its own)
   // the brick keys of lib/dla-sdf.js hold -512..511 bricks per axis: the
   // cell is at least (radius x 1.1) / (511 x BRICK), so the plot fits
   const minCell = radius * 1.1 / (511 * BRICK);
@@ -293,6 +325,7 @@ export function createCoralMesher(opts = {}) {
   // every particle, in global order (to refill a fine field on a focus change)
   let cap = 4096, n = 0;
   let PX = new Float64Array(cap * 3), PAR = new Int32Array(cap), PCOL = new Int32Array(cap);
+  const bridges = new Map();       // g -> [j]: bridge cones (reef.js R.bridges), replayed on a refill
   let turn = 0;
   let tris = [0, 0], polypN = 0, ownN = 0;
 
@@ -315,6 +348,7 @@ export function createCoralMesher(opts = {}) {
     const cell0 = own ? sh0.cell * fine : Math.max(minCell, sh0.cell * fine);
     const r = cell0 / sh0.cell;                 // everything scales with the cell
     const sh = scaled(sh0, r);
+    sh.u = (sh0.len || 1) * r;
     let cell = cell0;
     if (lev === 1) {
       // the coarse field: LOD_K x the cell; thin parts are made just thick
@@ -331,7 +365,7 @@ export function createCoralMesher(opts = {}) {
     // brick keys of own fields are offset so that they are unique over all
     // fields (lib keys are under 2^30)
     const keyBase = own ? (++ownN) * 1073741824 : 0;
-    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O, keyBase, colK: own ? c.k : -1, wait: null,
+    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O, keyBase, colK: own ? c.k : -1, wait: null, at: -1e9,
       X: new Float64Array(3 * 1024), Y: new Float64Array(1024), SM: new Float64Array(3 * 1024), DIR: new Float64Array(3 * 1024),
       depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
     F.tree = createTree({
@@ -403,6 +437,30 @@ export function createCoralMesher(opts = {}) {
     return true;
   }
 
+  // A bridge cone from particle g to particle j (a fuse of two colonies of
+  // one species, reef.js R.bridges): a field point at j with parent g, in
+  // every field that holds g. In a species field that holds both, the two
+  // surfaces join; a per-colony fine field gets a branch that reaches the
+  // other colony. j < g; call it after add(g).
+  function addBridge(F, g, j) {
+    const p = F.localOf.get(g); if (p === undefined) return;
+    if (F.n === F.cap) growF(F);
+    const i = F.n++, x = PX[j * 3] - F.origin[0], y = PX[j * 3 + 1] - F.origin[1], z = PX[j * 3 + 2] - F.origin[2];
+    F.X[i * 3] = x; F.X[i * 3 + 1] = y; F.X[i * 3 + 2] = z; F.Y[i] = PX[j * 3 + 1];
+    F.depth[i] = F.depth[p] + 1; F.gid[i] = g; F.colOf[i] = PCOL[g];
+    F.SM[i * 3] = x; F.SM[i * 3 + 1] = y; F.SM[i * 3 + 2] = z;
+    F.DIR[i * 3] = 0; F.DIR[i * 3 + 1] = 1; F.DIR[i * 3 + 2] = 0;
+    F.tree.add(i, x, y, z, p);
+  }
+  function bridge(g, j) {
+    if (g >= n || j >= g || j < 0) return false;
+    const c = cols.get(PCOL[g]), d = cols.get(PCOL[j]); if (!c || !d || c.id !== d.id) return false;
+    (bridges.get(g) || bridges.set(g, []).get(g)).push(j);
+    if (useLod) addBridge(fields.get(c.id + '|1'), g, j);
+    if (c.focus) { const F = fields.get(fineKey(c)); if (F) addBridge(F, g, j); }
+    return true;
+  }
+
   // Particle g (global id, in order) at world (x, y, z), parent (global id
   // or -1), colony k. Returns false for a particle out of order.
   function add(g, parent, x, y, z, k) {
@@ -440,7 +498,10 @@ export function createCoralMesher(opts = {}) {
       }
       if (!f) { if (old) events.push({ k: c.k, state: 'drop' }); continue; }
       const F = makeField(c.id, 0, c);
-      for (let g = 0; g < n; g++) if (PCOL[g] === c.k) addTo(F, g, PAR[g], PX[g * 3], PX[g * 3 + 1], PX[g * 3 + 2], c.k);
+      for (let g = 0; g < n; g++) if (PCOL[g] === c.k) {
+        addTo(F, g, PAR[g], PX[g * 3], PX[g * 3 + 1], PX[g * 3 + 2], c.k);
+        const B = bridges.get(g); if (B) for (const j of B) addBridge(F, g, j);
+      }
       F.wait = true;
       checkDone(F);
     }
@@ -485,7 +546,7 @@ export function createCoralMesher(opts = {}) {
   // out (the page shows a restored reef at once, not brick by brick).
   let coarseDone = false;
   function update(ms = 8, out = []) {
-    const t0 = now();
+    const t0 = now(), tg = gapNow();
     // the coarse fields first, then the fine fields that wait to show,
     // then the rest (in turn)
     const first = [], rest = [];
@@ -497,10 +558,14 @@ export function createCoralMesher(opts = {}) {
     for (let q = 0; q < list.length; q++) {
       const F = list[q];
       if (!F.tree.sdf.dirtyCount) { if (F.wait) checkDone(F); continue; }
+      // a field meshed less than gap ms ago waits: its bricks that change
+      // again (growth) are meshed and sent once per gap, not each tick
+      if (!F.wait && gap > 0 && tg - F.at < gap) continue;
       const left = ms - (now() - t0);
       if (left <= 0) break;
       const share = Math.max(1, left / Math.max(1, list.length - q));
       for (const m of F.tree.update(share)) { const r = result(F, m); if (r) out.push(r); }
+      F.at = tg;
       if (F.wait) checkDone(F);
     }
     turn++;
@@ -525,7 +590,7 @@ export function createCoralMesher(opts = {}) {
   function dirty() { let d = 0; for (const F of fields.values()) d += F.tree.sdf.dirtyCount; return d; }
 
   return {
-    addColony, add, update, meshAll, dirty, setFocus, focus, takeEvents, cols, fields, lod: useLod,
+    addColony, add, bridge, update, meshAll, dirty, setFocus, focus, takeEvents, cols, fields, lod: useLod,
     // the cone radius of global particle g in the fine (or coarse) field
     radius(g) {
       const c = cols.get(PCOL[g]); if (!c) return 0;

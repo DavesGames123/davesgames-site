@@ -65,6 +65,7 @@
 //    feed.js ........ render target, link and panel ("export function createFeed")
 //    feed-worker.js . encode and noise in a module worker
 //    stub-rock.js ... a stand-in rock for tests ("export function createStubRock")
+//    coral-field.js . the coral term of the ROV field ("export function createCoralField")
 // ============================================================================
 import { buildVehicle } from './build.js';
 import { createPilot, createGrid, hash, rng, zoomFov, trace, surfaceY } from './pilot.js';
@@ -72,6 +73,7 @@ import { createTether } from './tether.js';
 import { createWash } from './wash.js';
 import { createFeed } from './feed.js';
 import { createStubRock } from './stub-rock.js';
+import { createCoralField } from './coral-field.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -139,10 +141,16 @@ export function createROVs(THREE, o = {}) {
   // the water: free of the rock and of the sand floor (ROCK keeps the sand
   // out of rock.sdf; its height field is near enough to a distance)
   const sand = rock.sand && typeof rock.sand.heightAt === 'function' ? rock.sand : null;
-  const sdf = sand ? (x, y, z) => Math.min(rock.sdf(x, y, z), (y - sand.heightAt(x, z)) * 0.9) : rock.sdf;
+  const sdfRock = sand ? (x, y, z) => Math.min(rock.sdf(x, y, z), (y - sand.heightAt(x, z)) * 0.9) : rock.sdf;
   const scene = o.scene || null, reef = o.reef || null;
   const scale = o.scale ?? 0.6, clear = o.clear ?? 1.45 * scale + 0.05;
   const top = (rock.bounds ? rock.bounds.max[1] : 8);
+  // the corals grow to 8 m: the vehicles and the tethers keep clear of
+  // them too (coral-field.js, about 1.3 m from the coral skeleton). The
+  // A* grid is of the rock only (it is built once); the path push-out
+  // and the motion guard read the full field.
+  const coralF = createCoralField({ radius, ymin: (rock.bounds ? rock.bounds.min[1] : -4) - 1, ymax: top + 8, clear });
+  const sdf = (x, y, z) => Math.min(sdfRock(x, y, z), coralF.dist(x, y, z));
   const depthBase = o.depthBase ?? 26;
 
   // inspection targets: the colonies, else exposed rock points
@@ -171,7 +179,7 @@ export function createROVs(THREE, o = {}) {
 
   // the free-water grid for A* routes, shared by the vehicles (about 350k
   // SDF calls once; 0.8 m cells on low quality)
-  const grid = o.grid !== false ? createGrid(sdf, { radius, ymin: rock.bounds ? rock.bounds.min[1] : -4, ymax: top + 6, cell: low ? 0.8 : 0.6 }) : null;
+  const grid = o.grid !== false ? createGrid(sdfRock, { radius, ymin: rock.bounds ? rock.bounds.min[1] : -4, ymax: top + 6, cell: low ? 0.8 : 0.6 }) : null;
 
   const wash = createWash(THREE, { count: low ? 500 : 1000, seed });
   if (scene) scene.add(wash.points);
@@ -312,6 +320,7 @@ export function createROVs(THREE, o = {}) {
   function update(dt, t = clock + dt) {
     dt = clamp(dt || 0, 0, 0.1);
     clock = t;
+    if (reef) coralF.sync(reef, 4000);      // new coral particles into the ROV field
     const n = Math.max(1, Math.ceil(dt / (1 / 30))), h = dt / n;
     for (let s = 0; s < n; s++) {
       for (const v of vehicles) v.pilot.step(h, vehicles.filter(w => w !== v).map(w => w.pilot.state.p));
@@ -350,7 +359,7 @@ export function createROVs(THREE, o = {}) {
   }
 
   return {
-    update, vehicles, focusOn, feed, wash: wash.points, rock, sdf, clear, grid, dispose,
+    update, vehicles, focusOn, feed, wash: wash.points, rock, sdf, sdfRock, coral: coralF, clear, grid, dispose,
     get lights() { return vehicles.flatMap(v => v.lights); },
     get time() { return clock; },
     headingOf,

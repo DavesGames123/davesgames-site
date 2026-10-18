@@ -40,8 +40,8 @@ const mb = b => (b / MB).toFixed(0);
 {
   for (const id of Object.keys(REEF_Q)) ok(REEF_Q[id].particles === QUALITY[id].particles && REEF_Q[id].colonies === QUALITY[id].colonies && REEF_Q[id].tris === QUALITY[id].tris && REEF_Q[id].polyps === QUALITY[id].polyps, `REEF_Q.${id} is the reef.js QUALITY`);
   const D = PROFILES.desktop, L = PROFILES['laptop-low'], P = PROFILES.phone, M = PROFILES['phone-min'];
-  ok(reefBudget(D, D.reef).colonies === 44, 'desktop: Many (44) colonies by default', reefBudget(D, D.reef).colonies);
-  ok(reefBudget(L, L.reef).colonies === 30 && reefBudget(P, P.reef).colonies === 30, 'laptop-low and phone: Few (30)');
+  ok(reefBudget(D, D.reef).colonies === 66, 'desktop: Many (66) colonies by default', reefBudget(D, D.reef).colonies);
+  ok(reefBudget(L, L.reef).colonies === 34 && reefBudget(P, P.reef).colonies === 34, 'laptop-low and phone: Few (34)');
   ok(L.rock === 'medium' && P.rock === 'low' && M.rock === 'low' && D.rock === 'high', 'rock: high, medium, low, low');
   ok(PROFILE_ORDER.every(id => rockWorkers(PROFILES[id], 16) <= 4) && rockWorkers(P, 8) === 2 && rockWorkers(D, 16) === 4 && rockWorkers(D, 2) === 1, 'rock workers: at most 4, 2 on a phone');
   ok(clampQuality(P, 'desktop') === 'phone' && clampQuality(L, 'desktop') === 'mid' && clampQuality(D, 'desktop') === 'desktop', 'the colonies chips clamp to the profile');

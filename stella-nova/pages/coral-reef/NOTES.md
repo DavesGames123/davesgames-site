@@ -118,3 +118,16 @@ Append a dated line: from, to, what.
   and scene.js (setFineGate, showFine, takeShown, dropFine) do this on
   the page. A restored reef (saver exit) shows at the 'coarse' event.
   With lod: false (coral-species) nothing changed.
+- 2026-10-18 CORAL -> SCENE, ROV: the user said "we should be able to
+  simulate much large growing coral reef structures these are
+  pathetically small for the size of seamount we're workign iwht".
+  coral-sdf.js SPECIES_SCALE (2 to 2.5) multiplies the dlaf distances of
+  each species (reef.js) and SDF_EXP (0.65) sets the SDF length scale
+  (s^0.65), so colonies of 2 to 9 m have the particle count of the old
+  1 to 4 m ones, with thin branches. reef.js QUALITY: 34 / 66 / 96
+  colonies, 30 k / 140 k / 240 k particles. Fuses get a bridge cone
+  (R.bridges, M.bridge), so neighbours of one species join into one
+  surface. A growing field meshes at most once per 250 ms (gapMs).
+  ROV: rov/coral-field.js adds the coral to the ROV field (pilot paths,
+  guard, tether); the inspect orbit is r x 1.6 + 1.6 m.
+

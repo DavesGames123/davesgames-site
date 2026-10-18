@@ -54,6 +54,13 @@
 //  after 150 s at full rate: 83 829 particles, 2.24 M coral tris, 415 k
 //  polyps, 133 MB array buffers, 428 MB rss, and 878 MB of brick arrays
 //  posted to the page in 485 k bricks (the page drops the old ones).
+//  MEASURED (node, 2026-10-18, seed 1, R 30, rate Infinity, the larger
+//  corals of reef.js SPECIES_SCALE, grown to the end): desktop default
+//  (mid) 66 colonies, 121 k particles, 2.48 M coral tris, 788 k polyps,
+//  231 MB array buffers, 116 s; desktop Most 199 k particles, 4.64 M
+//  tris, 406 MB; phone 23.9 k particles, 479 k tris, 116 k polyps, 65 MB;
+//  phone-min 13.4 k particles, 237 k tris, 42 MB. The bricks posted fell
+//  from 278 k (431 MB) to 39 k (174 MB) on desktop (coral-sdf.js gapMs).
 //
 //  grep -n targets: "export const PROFILES", "export function detectProfile",
 //  "export function estimate", "export function lostPolicy",
@@ -91,9 +98,9 @@ export const PROFILES = {
 export const PROFILE_ORDER = ['desktop', 'laptop-low', 'phone', 'phone-min'];
 // reef.js QUALITY (copied, so this file has no imports; tests check the copy)
 export const REEF_Q = {
-  desktop: { particles: 120000, colonies: 64, polyps: 1, tris: 2500000 },
-  mid: { particles: 60000, colonies: 44, polyps: 0.7, tris: 1300000 },
-  phone: { particles: 25000, colonies: 30, polyps: 0.45, tris: 600000 },
+  desktop: { particles: 240000, colonies: 96, polyps: 1, tris: 4000000 },
+  mid: { particles: 140000, colonies: 66, polyps: 0.7, tris: 2600000 },
+  phone: { particles: 30000, colonies: 34, polyps: 0.45, tris: 650000 },
 };
 const Q_ORDER = ['phone', 'mid', 'desktop'];
 
@@ -160,9 +167,9 @@ export function estimate(profile, view = {}) {
   const px = Math.round(cssW * pr) * Math.round(cssH * pr);
   const q = clampQuality(p, view.quality || p.reef), B = reefBudget(p, q);
   const NP = Math.ceil((B.particles + 8192) / 512) * 512;
-  // polyps: about 5 per particle at density 1 (measured); scene.js uploads
-  // all of them (uKeep only skips some in the vertex shader)
-  const coralTris = B.tris, polyps = Math.round(B.particles * 5 * B.polyps);
+  // polyps: about 9.5 per particle at density 1 (measured, 2026-10-18);
+  // scene.js uploads all of them (uKeep only skips some in the vertex shader)
+  const coralTris = B.tris, polyps = Math.round(B.particles * 9.5 * B.polyps);
   const cr = p.caustic.res, cg = p.caustic.grid, sh = p.shadow, vs = p.vol.scale;
   const gpu = {
     // the canvas: colour front and back (RGBA8) and depth24-stencil8
@@ -197,8 +204,8 @@ export function estimate(profile, view = {}) {
     coralArrays: 2 * gpu.coral + 2 * gpu.polyps,
     // the page mirror of the particles (reef.js createReefMirror: 8 floats)
     mirror: B.particles * 8 * 4 + NP * 4 * 5,
-    // the reef worker: 133 MB array buffers at 84 k particles (measured)
-    reefWorker: B.particles * 1600 + 7 * MB,
+    // the reef worker: 231 MB array buffers at 121 k particles (measured)
+    reefWorker: B.particles * 2000 + 7 * MB,
     // rock workers live only while the rock builds (7 MB each, measured)
     rockWorkers: rockWorkers(p, view.cores || 8) * 7 * MB,
   };

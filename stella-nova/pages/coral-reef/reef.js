@@ -25,6 +25,14 @@
 //  base creeps over the rock. No particle centre is ever inside the rock
 //  or under the sand (the tests check it).
 //
+//  SIZE. The user said (2026-10-18): "we should be able to simulate much
+//  large growing coral reef structures these are pathetically small for
+//  the size of seamount we're workign iwht". Each species has a scale s
+//  (coral-sdf.js SPECIES_SCALE, 1.75 to 2): its spacing and its SDF
+//  lengths are s times larger, so colonies of 2 to 8 m have the particle
+//  count of the old 1 to 4 m ones. More colonies (34 to 96 by quality) in
+//  larger patches (7 m) meet and fuse into a reef framework.
+//
 //  STOP. A colony stops at its cap, at its soft size outline, when it
 //  gets no join in 6000 walkers (shaded out), or when its join rate past
 //  half its cap falls under 6 % (its outline is full).
@@ -49,6 +57,8 @@
 //    R.colonies[k] = { k, id, sp, base, normal, plane, size, cap, count,
 //                      ids, top, ext, roots, user: { bx, by, bz, normal } }
 //    R.contacts: Map 'a,b' -> { a, b, kind: 'fuse'|'overgrow', n, at }
+//    R.bridges: Map g -> j: particle g of a fuse touched particle j of the
+//               other colony (the mesher adds a bridge cone, M.bridge)
 //    createReefMirror()  the same particle arrays on the main thread, fed by
 //                        the worker messages (colour.js reads either one)
 //    chooseFocus(colonies, points, budgetTris)  the colonies for the fine
@@ -83,6 +93,7 @@
 //    focus with hysteresis ..... "export function holdFocus"
 // ============================================================================
 import { createModel, rng, randomInUnitSphere } from '../../lib/dla-engine.js';
+import { SPECIES_SCALE, SDF_EXP } from './coral-sdf.js';
 
 const TAU = Math.PI * 2;
 
@@ -92,9 +103,9 @@ const TAU = Math.PI * 2;
 // polyps: a scale of the polyp density. tris: the coral triangle budget
 // (coral-sdf.js reports the count; the page can stop the mesh past it).
 export const QUALITY = {
-  desktop: { particles: 120000, colonies: 64, fine: 1, polyps: 1, tris: 2500000 },
-  mid: { particles: 60000, colonies: 44, fine: 1.2, polyps: 0.7, tris: 1300000 },
-  phone: { particles: 25000, colonies: 30, fine: 1.45, polyps: 0.45, tris: 600000 },
+  desktop: { particles: 240000, colonies: 96, fine: 1, polyps: 1, tris: 4000000 },
+  mid: { particles: 140000, colonies: 66, fine: 1.2, polyps: 0.7, tris: 2600000 },
+  phone: { particles: 30000, colonies: 34, fine: 1.45, polyps: 0.45, tris: 650000 },
 };
 
 // ── species ─────────────────────────────────────────────────────────────────
@@ -110,7 +121,7 @@ export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
     params: { particleSpacing: 0.04, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 0, stickiness: 0.9 },
-    size: [2.0, 4.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 1.8, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.1, roots: 30, reach: 0.5,
+    size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 7, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.3, roots: 80, reach: 0.5,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
     hooks: {
       // Tips favoured: a busy particle, or a walker from the side or below,
@@ -127,7 +138,7 @@ export const SPECIES = {
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
     params: { particleSpacing: 0.022, attractionDistance: 0.03, minMoveDistance: 0.016, stubbornness: 0, stickiness: 0.75 },
-    size: [1.4, 2.8], tall: 1, tpp: 72, dim: 1.55, fill: 1.7, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
+    size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 2.3, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
     hooks: {
       // The new particle goes into the vertical plane of the fan, across the
@@ -145,7 +156,7 @@ export const SPECIES = {
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
     params: { particleSpacing: 0.045, attractionDistance: 0.065, minMoveDistance: 0.03, stubbornness: 1, stickiness: 0.9 },
-    size: [1.6, 3.8], tall: 0.4, tpp: 25, dim: 1.6, fill: 2.0, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
+    size: [3.0, 8.5], tall: 0.4, tpp: 25, dim: 1.6, fill: 7, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
@@ -169,7 +180,7 @@ export const SPECIES = {
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
     params: { particleSpacing: 0.12, attractionDistance: 0.1, minMoveDistance: 0.05, stubbornness: 6, stickiness: 0.6 },
-    size: [1.2, 2.6], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0.35, roots: 40, reach: 0.45,
+    size: [2.2, 5.0], tall: 0.6, tpp: 120, dim: 2.75, fill: 0.45, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0.35, roots: 40, reach: 0.45,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
       // Accretive growth: the tissue lays each new particle on the surface
@@ -188,7 +199,7 @@ export const SPECIES = {
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
     params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 3, stickiness: 0.2 },
-    size: [1.0, 2.2], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.4, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
+    size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 2.1, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
     hooks: {
       // dlaf ShouldJoin with a low stickiness: the walkers creep into the
@@ -198,6 +209,19 @@ export const SPECIES = {
   },
 };
 export const SPECIES_IDS = Object.keys(SPECIES);
+// The species scale (coral-sdf.js SPECIES_SCALE): the dlaf distances and
+// the table stalk are s times larger (the particle radius r0 s^SDF_EXP
+// times, as the SDF radii; tpp x s^(1 - SDF_EXP)), so a colony
+// s times larger has the same particle count (cap = fill x (size /
+// spacing)^dim). The sizes above are the scaled ones (old x 1.75 .. 2).
+for (const id of SPECIES_IDS) {
+  const sp = SPECIES[id], sc = SPECIES_SCALE[id] || 1;
+  sp.scale = sc;
+  for (const k of ['particleSpacing', 'attractionDistance', 'minMoveDistance']) sp.params[k] *= sc;
+  sp.r0 *= Math.pow(sc, SDF_EXP);              // the SDF radii scale by s^SDF_EXP
+  sp.tpp *= Math.pow(sc, 1 - SDF_EXP);          // longer cones, thinner than x s: more tris per particle
+  if (sp.stalkM) sp.stalkM *= sc;
+}
 
 // ── presets ─────────────────────────────────────────────────────────────────
 // weights: a multiplier on the site rule of each species (pickSpecies).
@@ -326,7 +350,7 @@ export function createReef(opts = {}) {
 
   const R = {
     rock, env, params, quality: qid, Q, U, fine, radius, capTotal, limit: capTotal, seed: opts.seed ?? 1,
-    colonies: [], contacts: new Map(), count: 0, now: 0, joined: 0, walks: 0, walkers: 0, lost: 0,
+    colonies: [], contacts: new Map(), bridges: new Map(), count: 0, now: 0, joined: 0, walks: 0, walkers: 0, lost: 0,
     rate: opts.rate ?? 900, allowance: 0, single: false, preset: null,
     px: new Float32Array(capTotal), py: new Float32Array(capTotal), pz: new Float32Array(capTotal),
     col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), parent: new Int32Array(capTotal),
@@ -371,7 +395,7 @@ export function createReef(opts = {}) {
   }
 
   // ── contacts: a coarse grid of particle ids (cell 0.12 m) ──
-  const CC = 0.12;
+  const CC = 0.25;
   let cgrid = new Map();
   const ckey = (x, y, z) => ((x + 2048) * 4096 + (y + 2048)) * 4096 + (z + 2048);
   function indexContact(i) {
@@ -399,6 +423,10 @@ export function createReef(opts = {}) {
           R.contacts.set(key, t);
         }
         t.n++;
+        // a fuse: a bridge cone from i to j in the SDF (coral-sdf.js
+        // bridge), so the two surfaces join (the spacing is larger than
+        // the branch radius, so the cones alone seldom touch)
+        if (t.kind === 'fuse' && t.n <= 80) R.bridges.set(i, j);
         return;
       }
     }
@@ -433,7 +461,7 @@ export function createReef(opts = {}) {
       k, id, sp, base, normal: n.slice(), plane: [env.cur[0] / cl, env.cur[1] / cl], size,
       cap: Math.max(20, Math.min(o.cap ?? capFor(id, size), R.limit - R.count)),
       count: 0, ids: [], top: base[1], ext: 0, roots: 1, born: R.now, full: false, tries: 0, lastTry: 0, winT: 0, winN: 0,
-      stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / 3) / params[id].particleSpacing)),
+      stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / (3 * sp.scale)) / params[id].particleSpacing)),
       user: { bx: base[0], by: base[1], bz: base[2], normal: [env.cur[0] / cl, env.cur[1] / cl] },
     };
     R.colonies.push(colony);
@@ -450,7 +478,7 @@ export function createReef(opts = {}) {
   // of two neighbours (+ 0.25 m). So neighbours meet, compete and fuse, but
   // no two seeds clump. Species by pickSpecies, sizes by exposure. Then
   // the caps are scaled to fit the particle and triangle budgets.
-  const PATCH = 4.2;
+  const PATCH = 7;
   function populate(o = {}) {
     reset(o.seed);
     const P = PRESETS[o.preset] || PRESETS.mixed;
@@ -641,12 +669,12 @@ export function createReef(opts = {}) {
   }
 
   // A walker that hits the rock next to the coral of a colony that
-  // encrusts (the nearest particle is of that colony, within 0.3 m) can
+  // encrusts (the nearest particle is of that colony, within 0.55 m) can
   // stick there: a new root of that colony. So the base creeps over the
   // rock from the coral that is there, never into a neighbour's ground.
   function encrust(x, y, z) {
     const n0 = R.m.nearest(P);
-    if (n0.id < 0 || n0.d * U > 0.3) return false;
+    if (n0.id < 0 || n0.d * U > 0.55) return false;
     const c = R.colonies[R.col[n0.id]];
     if (c.full || c.count >= c.cap) return false;
     const s = c.sp; if (!s.encrust || c.roots >= s.roots) return false;
@@ -671,7 +699,7 @@ export function createReef(opts = {}) {
     const m = R.m;
     if ((++R.walkers & 1023) === 0) { starve(); if (liveAt < 0) { refreshLive(); if (!live.length) return -1; } }
     spawn(P);
-    const minMoveU = 0.6 * Math.min(params[spawnC.id].minMoveDistance, 0.03) / U;
+    const minMoveU = 0.6 * Math.min(params[spawnC.id].minMoveDistance, 0.03 * spawnC.sp.scale) / U;
     const AgU = maxAttrU;
     const drift = env.strength * 0.8;
     for (let steps = 0; steps < 3000; steps++) {
@@ -790,7 +818,7 @@ export function createReef(opts = {}) {
   function reset(seed) {
     if (seed !== undefined) R.seed = seed;
     random = rng(R.seed);
-    R.colonies = []; R.contacts = new Map(); R.count = 0; R.joined = 0; R.walks = 0; R.walkers = 0; R.lost = 0;
+    R.colonies = []; R.contacts = new Map(); R.bridges = new Map(); R.count = 0; R.joined = 0; R.walks = 0; R.walkers = 0; R.lost = 0;
     R.allowance = 0; R.single = false; R.preset = null;
     cgrid = new Map(); live = []; liveAt = -1;
     makeModel();

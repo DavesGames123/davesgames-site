@@ -456,9 +456,12 @@ export function zoomFov(d, r, aspect, o = {}) {
 }
 
 // The focus orbit: distance from the colony bounds, slow push-ins (a 50 s
-// cycle) and an elevation that drifts between 12 and 38 degrees.
+// cycle) and an elevation that drifts between 12 and 38 degrees. The
+// corals grow to 8 m: near is r x 1.6 + 1.6 (r x 2.2 + 1.2 before), so a
+// big colony fills the zoom lens from a shorter orbit; the ROV field
+// (coral-field.js) keeps the vehicle out of the coral.
 export function orbitPose(c, r, t, ph, o = {}) {
-  const near = Math.max(r * 2.2 + 1.2, o.minDist ?? 2.2), far = near * 1.9 + 1.5;
+  const near = Math.max(r * 1.6 + 1.6, o.minDist ?? 2.2), far = near * 1.6 + 1.5;
   const push = 0.5 + 0.5 * Math.cos(TAU * t / (o.pushPeriod ?? 50) + ph);
   const d = near + (far - near) * push;
   const el = Math.min(62, 12 + 26 * (0.5 + 0.5 * Math.sin(TAU * t / 83 + ph * 1.7)) + (o.climb || 0)) * Math.PI / 180;

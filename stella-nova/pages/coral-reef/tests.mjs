@@ -22,6 +22,9 @@
 //    tests/lock.test.mjs .... CORAL, SCENE: a grown reef stays locked in while
 //                             the cameras move (no fine mesh made again, one
 //                             full mesh per colony in each frame)
+//    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
+//                             extents, budgets) and the ROVs keep clear
+//                             of the coral (rov/coral-field.js)
 //  The jsdom boot (mobile-check.mjs, in scene.test.mjs) needs jsdom 24:
 //  give its folder as JSDOM_DIR or NODE_PATH. Without it the boot skips.
 //  Exit code 1 if any file fails.

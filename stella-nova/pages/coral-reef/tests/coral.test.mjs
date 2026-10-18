@@ -6,7 +6,8 @@
 //  Checks (reef.js, coral-sdf.js, mesh-worker.js, colour.js):
 //    seeds ......... colony counts by quality (30..80), spread over the plot,
 //                    no clumping, species by site (tops, walls, shelter)
-//    sizes ......... each species grows a colony of 1 to 4 m
+//    sizes ......... each species grows a colony of 2.5 to 9 m (the species
+//                    scale, coral-sdf.js SPECIES_SCALE)
 //    thickness ..... branch thickness measured on the fine mesh, against
 //                    the colony size, finer than the old page (2fdd58cf);
 //                    brain coral valleys 7 to 20 cm apart
@@ -92,7 +93,7 @@ function hashReef(R, n = R.count) {
 function meshOf(R, lod = false, focus) {
   const M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: 1, lod });
   for (const c of R.colonies) M.addColony(colonyInfo(c));
-  for (let g = 0; g < R.count; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+  for (let g = 0; g < R.count; g++) { M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]); const j = R.bridges.get(g); if (j !== undefined) M.bridge(g, j); }
   if (focus) M.setFocus(focus);
   return M;
 }
@@ -114,7 +115,7 @@ const realRock = createRock({ seed: 3, radius: 30, quality: 'low' });
     const R = createReef({ rock: realRock, seed: 7, quality: q });
     R.populate();
     const n = R.colonies.length, Q = QUALITY[q];
-    ok(n >= Math.min(Q.colonies, 30) && n <= 80 && n >= 0.9 * Q.colonies, `seeds: ${q} quality gives about ${Q.colonies} colonies (30..80)`, `${n}`);
+    ok(n >= Math.min(Q.colonies, 30) && n <= 100 && n >= 0.9 * Q.colonies, `seeds: ${q} quality gives about ${Q.colonies} colonies (30..100)`, `${n}`);
     if (q !== 'desktop') continue;
     // spread: all quadrants, far out, no clumps
     const quad = [0, 0, 0, 0];
@@ -139,7 +140,7 @@ const realRock = createRock({ seed: 3, radius: 30, quality: 'low' });
     const upTop = mean([...(by.staghorn || []), ...(by.table || [])], c => c.normal[1]);
     const upFan = mean(by.fan, c => c.normal[1]);
     ok(upTop > 0.6 && (isNaN(upFan) || upFan < upTop - 0.2), 'seeds: staghorn and tables on tops, fans on walls', `normal y: tops ${f2(upTop)}, fans ${f2(upFan)}`);
-    ok(R.colonies.every(c => c.size >= 1 && c.size <= 4), 'seeds: every colony size is 1 to 4 m', `${f2(Math.min(...R.colonies.map(c => c.size)))} .. ${f2(Math.max(...R.colonies.map(c => c.size)))}`);
+    ok(R.colonies.every(c => c.size >= 1.8 && c.size <= 9), 'seeds: every colony size is 1.8 to 9 m (the user: "much large growing coral reef structures")', `${f2(Math.min(...R.colonies.map(c => c.size)))} .. ${f2(Math.max(...R.colonies.map(c => c.size)))}`);
     const R80 = createReef({ rock: realRock, seed: 7, quality: 'desktop' });
     R80.populate({ colonies: 80 });
     ok(R80.colonies.length >= 72, 'seeds: 80 colonies on request', `${R80.colonies.length}`);
@@ -172,9 +173,9 @@ const single = {};
     const list = M.meshAll();
     const mms = now() - t1;
     single[id] = { R, c, s, M, list, ms, mms };
-    ok(s.size >= 1 && s.size <= 4.05, `sizes: ${id} colony is 1 to 4 m`, `size ${f2(s.size)} m (w ${f2(s.width)}, h ${f2(s.height)}), ${c.count} particles, target ${f2(c.size)}`);
+    ok(s.size >= 2.5 && s.size <= 9.2, `sizes: ${id} colony is 2.5 to 9 m`, `size ${f2(s.size)} m (w ${f2(s.width)}, h ${f2(s.height)}), ${c.count} particles, target ${f2(c.size)}`);
   }
-  ok(single.staghorn.s.size > 1.5, 'sizes: staghorn grows past 1.5 m', f2(single.staghorn.s.size));
+  ok(single.staghorn.s.size > 4.5 && single.table.s.width > 4.5, 'sizes: staghorn grows past 4.5 m and the table plate past 4.5 m wide', `${f2(single.staghorn.s.size)}, table w ${f2(single.table.s.width)}`);
   ok(single.fan.s.thickness < 0.06 * single.fan.s.width, 'sizes: the sea fan is planar across the current', `thick ${f3(single.fan.s.thickness)} m, wide ${f2(single.fan.s.width)} m`);
   ok(single.table.s.width > 4 * single.table.s.height, 'sizes: the table coral is a wide plate', `w ${f2(single.table.s.width)} h ${f2(single.table.s.height)}`);
   const fillS = id => single[id].s.fill * Math.pow(single[id].R.params[id].particleSpacing, 3);
@@ -207,7 +208,7 @@ const single = {};
     const need = id === 'finger' ? 0.8 : 0.6;
     const what = id === 'table' ? 'plate is' : id === 'fan' ? 'sheet is' : 'branches are';
     ok(rel < need * old, `thickness: ${id} ${what} finer than before (measured)`, `${f3(thick * 100)} cm on a ${f2(s.size)} m colony = ${f4(rel)} of its size; old page ${f4(old)} (x${f2(rel / old)})`);
-    if (id === 'staghorn' || id === 'fan' || id === 'table') ok(thick < 0.045, `thickness: ${id} median under 4.5 cm`, `${f3(thick * 100)} cm`);
+    if (id === 'staghorn' || id === 'fan' || id === 'table') ok(thick < 0.045 * SHAPES[id].len, `thickness: ${id} median under 4.5 cm x the SDF length scale (${f2(SHAPES[id].len)})`, `${f3(thick * 100)} cm`);
   }
 }
 
@@ -331,7 +332,7 @@ let rockReef;
   const R = createReef({ rock: realRock, seed: 5, quality: 'phone' });
   R.populate();
   const t0 = now();
-  const n = QUICK ? 4000 : 10000;
+  const n = QUICK ? 5000 : 14000;          // the larger colonies (SPECIES_SCALE) take more snow each
   R.growAll(n, 2e6);
   const ms = now() - t0;
   rockReef = { R, ms };

@@ -92,8 +92,13 @@ export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}
   const T0 = clock();
 
   function newMesher() {
-    M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false });
+    M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false, clock, gapMs: cfg.gapMs });
     sent = 0; fed = 0; held = new Map();
+  }
+  // one particle to the mesher, with its fuse bridge (reef.js R.bridges)
+  function feedOne(g) {
+    M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+    const j = R.bridges.get(g); if (j !== undefined) M.bridge(g, j);
   }
   function sendColonies() {
     post({ type: 'colonies', gen, list: R.colonies.map(c => Object.assign(colonyInfo(c), { count: c.count })) });
@@ -161,7 +166,7 @@ export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}
       post({ type: 'particles', gen, from, data }, [data.buffer]);
     }
     sent = R.count;
-    for (let g = 0; g < R.count; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+    for (let g = 0; g < R.count; g++) feedOne(g);
     fed = R.count;
     viewFocus(true);
     idleSent = false;
@@ -209,7 +214,7 @@ export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}
     const m0 = clock();
     while (fed < sent && clock() - m0 < meshMs * 0.5) {
       const end = Math.min(sent, fed + 64);
-      for (let g = fed; g < end; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+      for (let g = fed; g < end; g++) feedOne(g);
       fed = end;
     }
     viewFocus(false);
