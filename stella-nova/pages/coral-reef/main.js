@@ -30,8 +30,11 @@
 //  fly to a point; swim with collision; tours through the canyons and
 //  under the arches; a chase camera behind one ROV; the saver goals) and
 //  input.js (pointer, touch, wheel, keys, pointer lock, the swim stick).
-//  #camBar picks the mode. scene.js still makes OrbitControls; main.js
-//  turns them off. The ROV feed card (rov/feed.js) is live video by
+//  #camBar picks the mode. By default the camera follows the feed ROV
+//  (followDefault, from buildROVs and the saver exit); a mode that the
+//  user picks (camChoice) holds until the next new world (buildWorld).
+//  scene.js still makes OrbitControls; main.js turns them off. The ROV
+//  feed card (rov/feed.js) is live video by
 //  default: presentFeed() draws it into the canvas at the card after the
 //  main render; a tap on the card shows the next ROV.
 //
@@ -61,6 +64,7 @@
 //    grep -n 'function buildROVs'     the vehicles, lamps and the feed card
 //    grep -n 'function presentFeed'   the live feed into the canvas at the card
 //    grep -n 'function camUI'         the camera bar, the tours, the feed card taps
+//    grep -n 'function followDefault' the default camera: follow the feed ROV
 //    grep -n 'function refresh'       radii, natural colours and t
 //    grep -n 'function setMode'       colour by
 //    grep -n 'function clearArea'     the parts of the canvas under overlays
@@ -152,6 +156,10 @@ const nowMs = () => performance.now() - T0;
 const cam = S ? createExploreCamera({ R: G.R, fov: S.camera.fov, eye: S.camera.position.toArray(), look: S.controls.target.toArray() }) : null;
 if (S) { S.controls.enabled = false; S.controls.autoRotate = false; }
 let input = null, camRock = null;
+// camChoice: the camera mode that the user picked (the camera bar, a key,
+// a tour take-over), or null. With no choice the camera follows the feed
+// ROV (followDefault). A new world (seed, radius, quality) clears it.
+let camChoice = null;
 
 let rock = null, coral = null, rovs = null;
 let radBuf = new Float32Array(1), tBuf = new Float32Array(1), natBuf = new Float32Array(3);
@@ -265,6 +273,7 @@ let worldGen = 0, worldReady = false;
 async function buildWorld({ seed = G.seed, R = G.R, keepRock = false } = {}) {
   const my = ++worldGen;
   worldReady = false;
+  camChoice = null;                 // a new world follows an ROV again
   G.seed = seed; G.R = R;
   setState('Building the reef rock…');
   if (!keepRock || !rock) {
@@ -333,6 +342,17 @@ function buildROVs() {
   if (slot && rovs.feed && rovs.feed.canvas) { slot.innerHTML = ''; slot.appendChild(rovs.feed.canvas); }
   applyFeedMode();
   showFeed();
+  followDefault();
+}
+// The default view: the chase camera behind the feed ROV (camera.js
+// 'follow'), unless the user picked a camera mode in this world, or the
+// saver runs.
+function followDefault() {
+  if (!cam || saverOn || camChoice || !rovs || !rovs.vehicles || !rovs.vehicles.length) return false;
+  const V = rovs.vehicles, id = rovs.feed && V.some(v => v.id === rovs.feed.vehicle) ? rovs.feed.vehicle : V[0].id;
+  if (cam.mode !== 'follow' || cam.followId !== id) cam.follow(id);
+  camUI();
+  return true;
 }
 function showFeed() {
   const f = $('feed'); if (!f) return;
@@ -652,7 +672,7 @@ function buildUI() {
   });
   setPlaying(G.playing);
 
-  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap, onMode: camUI, flyOk: () => !G.plantMode });
+  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => !G.plantMode });
   bindCamBar();
   setTimeout(hideHint, 9000);
 }
@@ -676,6 +696,7 @@ function buildTourUI() {
     const b = document.createElement('button'); b.type = 'button'; b.dataset.id = t.id; b.setAttribute('role', 'menuitem'); b.textContent = t.label;
     b.addEventListener('click', () => {
       const T = cam.startTour(t.id);
+      if (T) camChoice = 'tour';
       flash(T ? `${T.label}: a drag, a key or the wheel takes over.` : `${t.label}: no free path for the camera.`);
       box.hidden = true; camUI();
     });
@@ -687,7 +708,7 @@ function bindCamBar() {
   document.querySelectorAll('#camBar button').forEach(b => b.addEventListener('click', () => {
     if (!cam) return;
     const want = b.dataset.cam;
-    if (want !== 'tour') $('tourList').hidden = true;
+    if (want !== 'tour') { $('tourList').hidden = true; camChoice = want; }
     if (want === 'orbit') { if (cam.mode === 'orbit') fitCamera(true); else cam.setMode('orbit'); }
     else if (want === 'swim') {
       cam.setMode('swim');
@@ -808,7 +829,8 @@ addEventListener('resize', onResize);
 
 // The state for the node checks (tests/robust.test.mjs, tests/saver-page.test.mjs).
 window.__coralDebug = () => ({
-  profile: PROFILE_ID, worldReady, lostNow, quality: G.quality, rockQuality: rock ? rock.quality : null, rovs: rovs ? rovs.vehicles.length : 0,
+  profile: PROFILE_ID, worldReady, lostNow, cam: cam ? { mode: cam.mode, followId: cam.followId, choice: camChoice } : null,
+  camOn: [...document.querySelectorAll('#camBar button.on')].map(b => b.dataset.cam), quality: G.quality, rockQuality: rock ? rock.quality : null, rovs: rovs ? rovs.vehicles.length : 0,
   coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget } : null,
   post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
 });
@@ -1024,10 +1046,16 @@ window.snSaver = {
     canvas.style.opacity = '';
     const f = $('feed'); if (f) f.removeAttribute('style');
     const sv = saver && saver.saved; saver = null;
-    if (cam) { cam.setMode('orbit'); cam.setAutoRotate(G.orbit); camUI(); }
     if (rovs) {
       rovs.focusOn(null, 'survey');
       rovs.vehicles.forEach(v => { v.group.visible = true; for (const l of v.lights) l.visible = true; });
+    }
+    // back to the user's camera choice, else follow the feed ROV (orbit
+    // when there are no ROVs)
+    if (cam) {
+      cam.setAutoRotate(G.orbit);
+      if (!followDefault()) cam.setMode(camChoice === 'swim' ? 'swim' : 'orbit');
+      camUI();
     }
     if (sv) {
       G.dir = sv.dir; G.cur = sv.cur; setCurrent(); setTemp(sv.temp);
