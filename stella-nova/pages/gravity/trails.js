@@ -7,7 +7,7 @@
 //  last kept point, or when DTMAX sim seconds went by. The points are in
 //  world units, so a pan or a zoom changes only the transform at draw time.
 //
-//  DRAW PIPELINE   draw(ctx, tr, hx, hy, now, win, ox, oy, z, style, color, wmax)
+//  DRAW PIPELINE   draw(ctx, tr, hx, hy, now, win, ox, oy, z, style, color, wmax, gain)
 //  ---------------------------------------------------------------------------
 //      gather()   ring ▶ screen px. Points older than now − win drop out. The
 //                 tail end is interpolated at t = now − win, so the tail
@@ -255,8 +255,10 @@ function dots(ctx, s, now, win, rmax) {
 // Draw one trail. (hx, hy) is the body now (world), now is the sim time,
 // win the trail length in sim s, (ox, oy, z) the world-to-screen map,
 // style 'line', 'ribbon' or 'dots', color a CSS color, wmax the ribbon
-// width at the head (CSS px). Returns the spline point count.
-function draw(ctx, tr, hx, hy, now, win, ox, oy, z, style, color, wmax) {
+// width at the head (CSS px), gain (optional, default 1) a factor on the
+// alpha (main.js crowd gain, so a crowded view is not washed out).
+// Returns the spline point count.
+function draw(ctx, tr, hx, hy, now, win, ox, oy, z, style, color, wmax, gain) {
   if (!(win > 0)) return 0;
   var m = gather(tr, hx, hy, now, win, ox, oy, z);
   if (m < 2) return 0;
@@ -266,6 +268,7 @@ function draw(ctx, tr, hx, hy, now, win, ox, oy, z, style, color, wmax) {
   if (style === 'ribbon') { w0 = 0.15; w1 = 0.5 * wmax; amax = 0.9; gamma = 1.6; }
   else if (style === 'dots') { w0 = w1 = 0.45; amax = 0.28; gamma = 1; }
   else { w0 = w1 = 0.65; amax = 0.9; gamma = 1.2; }
+  if (gain > 0 && gain < 1) amax *= gain;
   for (i = 0; i < s; i++) {
     u = 1 - (now - ST[i]) / win; u = u < 0 ? 0 : u > 1 ? 1 : u;
     SU[i] = u; SW[i] = w0 + (w1 - w0) * Math.pow(u, 0.8);

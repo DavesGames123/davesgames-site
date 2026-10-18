@@ -29,6 +29,7 @@
 //  FRAME   (loop, requestAnimationFrame)
 //  ---------------------------------------------------------------------------
 //      loop() ─┬─ step(h) × n, h <= dt   PACE·timeScale sim s per real s
+//              ├─ followFrame()    the action camera sets the view (Follow action)
 //              ├─ render()         bodies, vectors, trails, field, grid
 //              └─ every 3rd frame  calcEnergy() ▶ readouts + energy graph
 //
@@ -51,10 +52,12 @@
 //      UI ................ "/* UI */"               toggles, body list, drawers
 //      selected body ..... "function updateSelPanel"    per-body readout
 //      keys .............. "addEventListener('keydown'" keyboard shortcuts
+//      follow action ..... "/* FOLLOW ACTION */"    action camera view, user override
 //      frame loop ........ "function loop"          per-frame update
 //      boot .............. "function init"          first preset, start loop
 //      screensaver ....... "/* SCREENSAVER */"      window.snSaver hook: scene tour
 //      saver scenes ...... saver-scenes.js           orbital patterns; check: saver-test.mjs
+//      framing ........... framing.js                action sample and view; check: framing-test.mjs
 // ============================================================================
 
 /* SIMULATION STATE */
@@ -80,6 +83,13 @@ var camX=0,camY=0,camZoom=1;
 // of the canvas or of the equations panel frames the system again. fitBox is
 // the half extent (world units) of a preset whose shape is not a disc.
 var autoFrame=true,fitBox=null;
+// Follow action (framing.js, lib/action-camera.js): while followAction is
+// on, the view follows the busy part of the system each frame. acam is
+// the action camera (loaded by import() in init), acSample its reused
+// input. A pan, a zoom or a pinch stops the follow; after F.IDLE s with
+// no move it eases back over F.EASE s, from the view the user left
+// (followHold: its world centre and zoom).
+var followAction=true,acMod=null,acam=null,acSample=null,lastUserT=-1e12,followHold=null,plateBandFn=null;
 // Pan gesture bookkeeping: start pointer and start camera, captured on down.
 var isPan=false,panSX=0,panSY=0,panCX=0,panCY=0;
 // Launch-drag bookkeeping: start and current pointer while dragging a new body.
@@ -301,7 +311,7 @@ function initCanvas(){
   // collapses, and at a breakpoint. The canvas changes on rotation. Each
   // change frames the system again, until the user pans or zooms.
   if(window.ResizeObserver){
-    var ro=new ResizeObserver(function(){if(autoFrame&&!window.__snSaverOn)centerCamera();});
+    var ro=new ResizeObserver(function(){vrAt=-1e9;if(autoFrame&&!followAction&&!window.__snSaverOn)centerCamera();});
     ro.observe(document.getElementById('canvasArea'));ro.observe(document.getElementById('eqPanel'));
   }
   canvas.addEventListener('mousedown',onDown);
@@ -373,7 +383,7 @@ function onDown(e){
 // Mouse move: drag the camera while panning, extend the launch vector while
 // dragging, and otherwise show a hover HUD for whatever body is under the cursor.
 function onMove(e){
-  if(isPan){autoFrame=false;camX=panCX+(e.clientX-panSX);camY=panCY+(e.clientY-panSY);return;}
+  if(isPan){autoFrame=false;userMoved();camX=panCX+(e.clientX-panSX);camY=panCY+(e.clientY-panSY);return;}
   var rect=canvas.getBoundingClientRect();
   if(isDrag){dragCX=e.clientX-rect.left;dragCY=e.clientY-rect.top;}
   var mx=e.clientX-rect.left,my=e.clientY-rect.top;
@@ -406,7 +416,7 @@ function onUp(e){
 // re-projecting it after the zoom change and shifting the camera to compensate.
 function zoomAt(sx,sy,factor){
   var w=screenToWorld(sx,sy);
-  autoFrame=false;
+  autoFrame=false;userMoved();
   camZoom=Math.max(0.1,Math.min(5,camZoom*factor));
   var s=worldToScreen(w[0],w[1]);
   camX+=sx-s[0];camY+=sy-s[1];
@@ -452,6 +462,50 @@ function centerCamera(){
   camX=v.cx-a.clientWidth/2-mx*camZoom;
   camY=v.cy-a.clientHeight/2-my*camZoom;
   autoFrame=true;
+  followRestart();
+}
+
+/* FOLLOW ACTION */
+// A user move: the follow stops until the user is idle for F.IDLE s.
+function userMoved(){lastUserT=performance.now();followHold=null;}
+// Ease from the view now to the action view over F.EASE s (a preset, the
+// Center button, the toggle). The action camera snaps to the new bodies.
+function followRestart(){
+  lastUserT=performance.now()-GravityFraming.IDLE*1000;followHold=null;
+  if(acam)acam.reset();
+}
+// viewRect reads the layout; the follow asks for it each frame, so it is
+// kept for 300 ms (a resize clears it).
+var vrCache=null,vrAt=-1e9;
+function viewRectCached(){var t=performance.now();if(!vrCache||t-vrAt>300){vrCache=viewRect();vrAt=t;}return vrCache;}
+// The trail window of the follow sample: one orbit of the body.
+function followWindow(b){return b.tper>0?b.tper:6;}
+// One frame of the follow. The action camera runs each frame (so its goal
+// is fresh when the follow comes back); the view takes its goal when the
+// follow is on and no gesture is live. A launch drag holds the view, so
+// the new body starts where the user aimed.
+function followFrame(fdt){
+  if(!acam||window.__snSaverOn||!bodies.length)return;
+  acSample=GravityFraming.buildSample(bodies,G,simTime,followWindow,acSample);
+  if(!acSample.count)return;
+  var g=acam.update(acSample,fdt);
+  if(!g||!followAction||isDrag||isPan||touch.mode==='pinch')return;
+  var k=GravityFraming.followBlend((performance.now()-lastUserT)/1000,GravityFraming.IDLE,GravityFraming.EASE);
+  if(k<=0)return;
+  var v=viewRectCached(),a=document.getElementById('canvasArea'),W=a.clientWidth,H=a.clientHeight;
+  var f=GravityFraming.toView(g,{W:W,H:H,cx:v.cx,cy:v.cy,hw:v.w/2,hh:v.h/2},GravityFraming.FILL,GravityFraming.Z_MIN,GravityFraming.Z_MAX);
+  if(k>=1){camX=f.x;camY=f.y;camZoom=f.z;followHold=null;return;}
+  // the blend: world centre and ln zoom from the view the user left
+  if(!followHold)followHold={x:(v.cx-W/2-camX)/camZoom,y:(v.cy-H/2-camY)/camZoom,z:camZoom};
+  var fx=(v.cx-W/2-f.x)/f.z,fy=(v.cy-H/2-f.y)/f.z;
+  var z=Math.exp(Math.log(followHold.z)+(Math.log(f.z)-Math.log(followHold.z))*k);
+  var cx=followHold.x+(fx-followHold.x)*k,cy=followHold.y+(fy-followHold.y)*k;
+  camZoom=z;camX=v.cx-W/2-cx*z;camY=v.cy-H/2-cy*z;
+}
+// The Follow action switch (Display section).
+function toggleFollow(el){
+  followAction=!followAction;el.classList.toggle('on',followAction);
+  if(followAction)followRestart();
 }
 
 // Touch state machine: one finger selects or launches, two fingers pinch-zoom
@@ -489,7 +543,7 @@ function onTouchMove(e){
     var cx=(t0.clientX+t1.clientX)/2,cy=(t0.clientY+t1.clientY)/2;
     var pivotX=cx-rect.left,pivotY=cy-rect.top;
     if(touch.lastDist>0) zoomAt(pivotX,pivotY,dist/touch.lastDist);
-    autoFrame=false;camX+=cx-touch.lastCx;camY+=cy-touch.lastCy;
+    autoFrame=false;userMoved();camX+=cx-touch.lastCx;camY+=cy-touch.lastCy;
     touch.lastDist=dist;touch.lastCx=cx;touch.lastCy=cy;
   }
 }
@@ -578,22 +632,28 @@ function render(){
 
   // Trails (trails.js): world points in a ring, drawn through the camera
   // transform, smoothed by a spline, faded by age. Fixed bodies do not move.
+  // Not too much (framing.js crowdGain): many glows in view dim the glows
+  // and the trails, and a glow is at most 6% of the short side.
+  var gain=GravityFraming.crowdGain(bodies,camZoom,w,h),glowMax=0.06*Math.min(w,h);
   if(showTrails){
     var ta=document.getElementById('canvasArea'),tox=ta.clientWidth/2+camX,toy=ta.clientHeight/2+camY;
     for(var b of bodies){
       if(b.fixed)continue;
       GravityTrails.draw(ctx,b.trail,b.x,b.y,simTime,trailWindow(b),tox,toy,camZoom,trailStyle,b.color,
-        Math.max(1.6,Math.min(5,b.radius*camZoom*0.9)));
+        Math.max(1.6,Math.min(5,b.radius*camZoom*0.9)),gain);
     }
   }
 
   // Bodies: a soft outer glow, a lit sphere (radial gradient shifted toward the
   // light), a dashed ring on the selected body, a name label, then the vectors.
+  // A body is at least 1.5 px. A label that would land on an earlier
+  // label (within 13 px) is left out.
+  var labs=[];
   for(var i=0;i<bodies.length;i++){
-    var b=bodies[i],sp=worldToScreen(b.x,b.y),r=b.radius*camZoom;
-    var grad=ctx.createRadialGradient(sp[0],sp[1],0,sp[0],sp[1],r*3);
-    grad.addColorStop(0,hexToRGBA(b.color,0.15));grad.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(sp[0],sp[1],r*3,0,Math.PI*2);ctx.fill();
+    var b=bodies[i],sp=worldToScreen(b.x,b.y),r=Math.max(1.5,b.radius*camZoom),gr=Math.min(glowMax,r*3);
+    var grad=ctx.createRadialGradient(sp[0],sp[1],0,sp[0],sp[1],gr);
+    grad.addColorStop(0,hexToRGBA(b.color,0.15*gain));grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=grad;ctx.beginPath();ctx.arc(sp[0],sp[1],gr,0,Math.PI*2);ctx.fill();
     var bg=ctx.createRadialGradient(sp[0]-r*0.3,sp[1]-r*0.3,0,sp[0],sp[1],r);
     bg.addColorStop(0,lighten(b.color,40));bg.addColorStop(1,b.color);
     ctx.fillStyle=bg;ctx.beginPath();ctx.arc(sp[0],sp[1],r,0,Math.PI*2);ctx.fill();
@@ -601,9 +661,11 @@ function render(){
       ctx.strokeStyle=hexToRGBA(b.color,0.85);ctx.lineWidth=2;ctx.setLineDash([4,4]);
       ctx.beginPath();ctx.arc(sp[0],sp[1],r+6,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
     }
-    if(camZoom>0.3){
+    var ly=sp[1]+r+4,free=b.name&&labs.every(function(q){return Math.abs(q[0]-sp[0])>40||Math.abs(q[1]-ly)>13;});
+    if(camZoom>0.3&&free){
+      labs.push([sp[0],ly]);
       ctx.fillStyle=hexToRGBA(b.color,0.75);ctx.font='500 11px Inter, system-ui, sans-serif';
-      ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(b.name,sp[0],sp[1]+r+4);
+      ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(b.name,sp[0],ly);
     }
     // Fixed bodies carry no motion vectors. The per-vector constants (0.005,
     // 0.15, 2) only scale each quantity to a comparable on-screen arrow length.
@@ -797,7 +859,8 @@ function closeDrawers(){
   document.getElementById('drawerBackdrop').classList.remove('show');
 }
 
-// Keyboard shortcuts: space pauses, +/− zoom, c centres, r reloads the preset,
+// Keyboard shortcuts: space pauses, +/− zoom, c centres, f toggles Follow
+// action, r reloads the preset,
 // digits 1..5 load a preset. Ignored while typing in an input.
 document.addEventListener('keydown',function(e){
   if(e.target.tagName==='INPUT')return;
@@ -806,6 +869,7 @@ document.addEventListener('keydown',function(e){
   else if(e.key==='-'||e.key==='_'){zoomOut();}
   else if(e.key==='c'||e.key==='C'){centerCamera();}
   else if(e.key==='r'||e.key==='R'){if(currentPreset)loadPreset(currentPreset);}
+  else if(e.key==='f'||e.key==='F'){toggleFollow(document.getElementById('followTog'));}
   else if(e.key==='t'||e.key==='T'){var ts=['line','ribbon','dots'];setTrailStyle(ts[(ts.indexOf(trailStyle)+1)%3]);}
   else if(e.key>='1'&&e.key<='5'){
     var presets=['laplace','binary','figure8','solar','chaos'];
@@ -844,6 +908,7 @@ function loop(now){
     computeForces();
   }
   updatePeriods();
+  followFrame(fdt);
   render();
   // Throttle the expensive readout/graph updates to one frame in three.
   if(frameCount%3===0){
@@ -868,6 +933,10 @@ function loop(now){
 // forces so the first frame has vectors, populate the list, and start the loop.
 function init(){
   initCanvas();
+  // The action camera and the plate band are ES modules: import() from
+  // this classic script (the paths are relative to main.js).
+  import('../../lib/action-camera.js').then(function(m){acMod=m;acam=m.createActionCamera(GravityFraming.CAM);}).catch(function(){});
+  import('../../lib/saver-clear.js').then(function(m){plateBandFn=m.plateBand;}).catch(function(){});
   laplace();
   computeForces();
   updateBodyList();
@@ -882,9 +951,10 @@ document.addEventListener('DOMContentLoaded',init);
 // of the orbital patterns in saver-scenes.js (window.GRAVITY_SAVER): a seeded
 // order, one scene per hold of seconds/6 (8 to 12 s), a 0.5 s fade between.
 // Before a scene shows, it runs once out of sight for 1.3 holds with the
-// page's own step(), and the box of its framed bodies sets the camera
-// (saverFrame: 92% of the width, or the band plus half of each poster
-// block in height). A scene with omega is
+// page's own step(). That run records look-ahead frames, and the action
+// camera frames them (saverCam: the same framing as the page view, in the
+// plate band of lib/saver-clear.js, for 16:9 and the 9:16 column, with a
+// seeded fill and dolly per scene; framing-test.mjs). A scene with omega is
 // drawn in the frame that turns with its planet; a scene with extra adds a
 // force after computeForces(). opts.calm (1 = slowest) sets the time scale.
 // No exit(): the shell reloads the page on stop.
@@ -936,7 +1006,7 @@ window.snSaver={enter:function(o){
   function measure(sc){
     // The sim time of 1.3 holds at the page pace, in steps of dt, with a
     // sample every 20th of a second.
-    var x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,rad=1,T=1.3*hold/1000*PACE*timeScale,n=Math.max(1,Math.round(T/dt)),every=Math.max(1,Math.round(PACE*timeScale/20/dt));
+    var frames=[],wts=[],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,rad=1,T=1.3*hold/1000*PACE*timeScale,n=Math.max(1,Math.round(T/dt)),every=Math.max(1,Math.round(PACE*timeScale/20/dt));
     computeForces();
     for(var f=0;f<n;f++){
       step(dt);
@@ -946,8 +1016,13 @@ window.snSaver={enter:function(o){
       xs.sort(function(a,b){return a-b;});ys.sort(function(a,b){return a-b;});
       var lo=xs.length>=10?Math.floor(0.08*(xs.length-1)):0,hi=xs.length>=10?Math.ceil(0.92*(xs.length-1)):xs.length-1;
       x0=Math.min(x0,xs[lo]);x1=Math.max(x1,xs[hi]);y0=Math.min(y0,ys[lo]);y1=Math.max(y1,ys[hi]);
+      // the look-ahead frame of the action camera: drawn position less
+      // the follow body, and the action weight (framing.js weights)
+      GravityFraming.weights(bodies,G,wts);var pts=[];
+      for(var i=0;i<bodies.length;i++)if(wts[i]>0){var q=shown(bodies[i]);pts.push(q[0]-org[0],q[1]-org[1],wts[i]);}
+      frames.push({t:simTime,pts:pts});
     }
-    return{x0:x0-rad,x1:x1+rad,y0:y0-rad,y1:y1+rad};
+    return{x0:x0-rad,x1:x1+rad,y0:y0-rad,y1:y1+rad,frames:frames};
   }
   function load(){
     si++;
@@ -956,46 +1031,39 @@ window.snSaver={enter:function(o){
     m=build(si);cur=m.S;curSc=m.sc;       // the same seed: the run repeats the measured path
     for(var b of bodies){GravityTrails.reset(b.trail);if(b.rtrail)GravityTrails.reset(b.rtrail);}
     computeForces();E0=0;shownAt=performance.now();
-    var f=saverFrame();camX=f.x;camY=f.y;camZoom=f.z;tgt=f;
+    look=GravityFraming.saverLook(rng(seed*131+si*7919+17));
+    if(sacam)sacam.reset();
+    var f=saverCam(0);camX=f.x;camY=f.y;camZoom=f.z;
     plate();
   }
-  // The shell poster is centred: a header block at the top, equations and
-  // parameters at the base. posterBand reads the poster boxes from the
-  // shell (same origin), in canvas px. Before the poster shows, the band is
-  // the whole canvas.
-  function posterBand(a){
-    var H=a.clientHeight,band={y0:0,y1:H};
-    try{
-      var P=window.parent&&window.parent!==window&&window.parent.snScreensaver,b=P&&P.plate&&P.plate();
-      var fr=window.frameElement&&window.frameElement.getBoundingClientRect(),ar=a.getBoundingClientRect();
-      if(b&&b.top&&fr){
-        var off=fr.top+ar.top;
-        band.y0=Math.max(0,b.top.y+b.top.h-off+16);
-        band.y1=b.bot&&b.bot.h>0?Math.min(H,b.bot.y-off-16):H-24;
-        if(band.y1-band.y0<120)band={y0:0,y1:H};
-      }
-    }catch(e){}
-    return band;
+  // The view: the clear band of the shell plate (lib/saver-clear.js
+  // plateBand, read every 250 ms) and framing.js saverView. With no plate
+  // (or before the module loads) the band is the whole canvas.
+  var band=null,bandAt=-1e9;
+  function saverViewNow(){
+    var a=document.getElementById('canvasArea'),W=a.clientWidth,H=a.clientHeight,t=performance.now();
+    if(t-bandAt>250){bandAt=t;try{band=plateBandFn?plateBandFn(H):null;}catch(e){band=null;}}
+    return GravityFraming.saverView(W,H,band);
   }
-  // Fit the box: 92% of the width, and in height the free band between the
-  // poster blocks plus half of each block. In a landscape window the band
-  // alone is about a quarter of the height, and a fit to it made every
-  // system tiny, so the orbits may pass under the poster gradient. The box
-  // centre (plus the follow body) goes to the band centre.
-  function saverFrame(){
-    var a=document.getElementById('canvasArea'),band=posterBand(a),W=a.clientWidth,H=a.clientHeight,bh=band.y1-band.y0;
-    var bw=Math.max(20,box.x1-box.x0),bH=Math.max(20,box.y1-box.y0);
-    var rmax=1;for(var b of bodies)if(!b.noframe)rmax=Math.max(rmax,b.radius);
-    // No body draws larger than 3% of the short side of the canvas.
-    var z=Math.max(0.05,Math.min(6,0.92*W/bw,(bh+0.5*(H-bh))/bH,0.03*Math.min(W,H)/rmax));
-    var org=curSc.follow!=null?shown(bodies[curSc.follow]):[0,0];
-    var cx=org[0]+(box.x0+box.x1)/2,cy=org[1]+(box.y0+box.y1)/2;
-    return{x:-cx*z,y:(band.y0+band.y1)/2-H/2-cy*z,z:z};
-  }
-  var tgt=null;
-  function reframe(){
-    var f=saverFrame();
-    if(!tgt||curSc.follow!=null||Math.abs(f.y-tgt.y)>12||Math.abs(f.z/tgt.z-1)>0.05)tgt=f;
+  // The saver camera: the action camera (framing.js SAVER_CAM) on the
+  // look-ahead frames from look.back holds before now to look.ahead holds
+  // after it, so the view starts to move before the action comes. The
+  // fill is the seeded look.fill with a slow dolly over the hold. No body
+  // draws larger than 3% of the short side. Before the module loads: the
+  // box of the whole look-ahead run.
+  var sacam=null,look=null,sSample=null;
+  function saverCam(dtReal){
+    var v=saverViewNow(),rmax=1;for(var b of bodies)if(!b.noframe)rmax=Math.max(rmax,b.radius);
+    var zMax=Math.min(6,0.03*Math.min(v.W,v.H)/rmax),org=curSc.follow!=null?shown(bodies[curSc.follow]):[0,0];
+    if(!sacam&&acMod)sacam=acMod.createActionCamera(GravityFraming.SAVER_CAM);
+    var holdSim=hold/1000*PACE*timeScale,g=null;
+    if(sacam&&box.frames.length){
+      sSample=GravityFraming.windowSample(box.frames,simTime,look.back*holdSim,look.ahead*holdSim,sSample);
+      if(sSample.count)g=sacam.update(sSample,dtReal);
+    }
+    if(!g)g={center:[(box.x0+box.x1)/2,(box.y0+box.y1)/2],radius:Math.max(10,Math.max(box.x1-box.x0,box.y1-box.y0)/2)};
+    var fill=look.fill*(1+look.dolly*Math.min(1,simTime/holdSim));
+    return GravityFraming.toView({center:[g.center[0]+org[0],g.center[1]+org[1]],radius:g.radius},v,fill,0.05,zMax);
   }
   // The plate (o.label): "Gravity · <scene>", the scene law (sc.tex) over
   // the energy of the pair sum, the scene values (S.info) and the energy
@@ -1036,15 +1104,14 @@ window.snSaver={enter:function(o){
     return{x:cx,y:cy,r:r,pts:on.slice(0,8).map(function(p){return{x:p.x,y:p.y};})};
   }
   resizeCanvas();load();
-  setInterval(function(){plate();reframe();},1000);
-  // Draw: ease the camera to tgt, swap in the turned positions and trails
+  setInterval(plate,1000);
+  // Draw: the saver camera (saverCam) sets the view, swap in the turned positions and trails
   // for a scene with omega, then the fade. A scene ends after its hold, or
   // early if a framed body leaves three box sizes.
   var base=render;
   render=function(){
-    if(tgt){var now=performance.now(),k=1-Math.exp(-3*Math.min(1/30,(now-(render.t||now))/1000));render.t=now;
-      if(curSc&&curSc.follow!=null)tgt=saverFrame();
-      camX+=(tgt.x-camX)*k;camY+=(tgt.y-camY)*k;camZoom+=(tgt.z-camZoom)*k;}
+    if(curSc){var now=performance.now(),dts=Math.min(0.1,(now-(render.t||now))/1000);render.t=now;
+      var f=saverCam(dts);camX=f.x;camY=f.y;camZoom=f.z;}
     // The swap keeps the world values in fields of each body (no new
     // objects per frame).
     var turned=!!(cur&&cur.omega&&bodies.length&&bodies[0].rtrail),i,b;

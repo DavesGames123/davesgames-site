@@ -1,7 +1,8 @@
 // ============================================================================
 //  GRAVITY PLAYGROUND  ·  trail tests  (Node)
 // ----------------------------------------------------------------------------
-//  Checks trails.js with a mock 2D context and runs saver-test.mjs.
+//  Checks trails.js with a mock 2D context and runs saver-test.mjs and
+//  framing-test.mjs (the action camera of the page view and the saver).
 //    - sample(): a point per DS world units or DTMAX sim s, ring wrap at
 //      CAP, a reset when the time goes back
 //    - oscPeriod(): the Kepler period of a circle and of an ellipse is
@@ -117,6 +118,13 @@ try {
   const last = out.trim().split('\n').pop();
   check(last === 'all scenes pass', 'saver-test.mjs', last);
 } catch (e) { check(false, 'saver-test.mjs', String(e.stdout || e).trim().split('\n').pop()); }
+
+// The action framing of the page view and the saver (framing.js).
+try {
+  const out = execFileSync(process.execPath, [new URL('./framing-test.mjs', import.meta.url).pathname], { encoding: 'utf8' });
+  const last = out.trim().split('\n').pop();
+  check(last === 'all framing checks pass', 'framing-test.mjs', last);
+} catch (e) { check(false, 'framing-test.mjs', String(e.stdout || e).trim().split('\n').filter(l => l.startsWith('FAIL')).join(' | ') || String(e).slice(0, 200)); }
 
 console.log(fail ? `${fail} failures` : 'all tests pass');
 process.exit(fail ? 1 : 0);

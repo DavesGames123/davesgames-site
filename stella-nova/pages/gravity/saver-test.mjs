@@ -13,6 +13,7 @@
 //    - each Trojan stays a tadpole: its angle from the planet never
 //      reaches 0° or 180°
 //  Run: node stella-nova/pages/gravity/saver-test.mjs
+//  forces() and step() are exported for framing-test.mjs.
 //  grep: function run  function forces  const HOLD
 // ============================================================================
 import { createRequire } from 'node:module';
@@ -22,7 +23,7 @@ const { SCENES } = require('./saver-scenes.js');
 const G = 1000, DT = 0.01, EPS = 4, HOLD = 10, FPS = 60;
 const mk = (name, x, y, vx, vy, mass, radius, color, fixed) => ({ name, x, y, vx, vy, ax: 0, ay: 0, mass, radius, color, fixed: !!fixed });
 function rng(seed) { return () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function forces(B, extra) {
+export function forces(B, extra) {
   for (const b of B) { b.ax = 0; b.ay = 0; }
   for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
     const dx = B[j].x - B[i].x, dy = B[j].y - B[i].y, d2 = dx * dx + dy * dy, d = Math.sqrt(d2 + EPS), F = G / (d2 + EPS);
@@ -37,7 +38,7 @@ function energy(B, pe) {
   for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) E -= G * B[i].mass * B[j].mass / Math.sqrt((B[j].x - B[i].x) ** 2 + (B[j].y - B[i].y) ** 2 + EPS);
   return E + (pe ? pe(B) : 0);
 }
-function step(B, h, extra) {
+export function step(B, h, extra) {
   for (const b of B) if (!b.fixed) { b.vx += 0.5 * b.ax * h; b.vy += 0.5 * b.ay * h; b.x += b.vx * h; b.y += b.vy * h; }
   forces(B, extra);
   for (const b of B) if (!b.fixed) { b.vx += 0.5 * b.ax * h; b.vy += 0.5 * b.ay * h; }

@@ -20,8 +20,9 @@
      1. style.css    the page stylesheet
      2. sci.css      shared science type (STIX Two Text, Inter) and the
                      math colors .m1 to .m6. It loads the fonts.
-     3. body scripts saver-scenes.js and trails.js (classic, they set
-                     window.GRAVITY_SAVER and window.GravityTrails), main.js
+     3. body scripts saver-scenes.js, trails.js and framing.js (classic,
+                     they set window.GRAVITY_SAVER, window.GravityTrails
+                     and window.GravityFraming), main.js
                      (classic), then equations.js (ES module). The
                      module typesets the [data-tex] boxes as MathJax SVG
                      through lib/sci-math.js.
@@ -198,6 +199,7 @@
         <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(150,200,255,0.4)"></span>Gravity field</span><div class="toggle" onclick="tog(this,'showField')"></div></div>
         <div class="tog-row"><span class="label"><span class="dot" style="background:var(--yellow)"></span>Force lines</span><div class="toggle" onclick="tog(this,'showLines')"></div></div>
         <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(255,255,255,0.2)"></span>Grid</span><div class="toggle on" onclick="tog(this,'showGrid')"></div></div>
+        <div class="tog-row" title="The view follows the closest interactions; a pan or zoom stops it for 5 s"><span class="label"><span class="dot" style="background:var(--yellow)"></span>Follow action</span><div class="toggle on" id="followTog" onclick="toggleFollow(this)"></div></div>
         <!-- Trails (trails.js): a style group, a unit group (orbits of each
              body, or sim seconds) and a log length slider. Key T cycles the style. -->
         <div class="tog-row" style="margin-top:6px"><span class="label">Trail style</span>
@@ -307,6 +309,7 @@
      equation panel (ES module). Both load at end of body so the DOM exists. -->
 <script src="saver-scenes.js"></script>
 <script src="trails.js"></script>
+<script src="framing.js"></script>
 <script src="main.js"></script>
 <script type="module" src="equations.js"></script>
 
