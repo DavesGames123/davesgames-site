@@ -67,8 +67,10 @@
 //  "cam.orbitGesture", "cam.resumeDrone", "function compose", "CLEAR"
 // ============================================================================
 import { lookAt, perspectiveRZ, mul, invert, project } from './gpu/mat.js';
+import { tiltEye } from '../../lib/tilt.js';
 
 export const CLEAR = 2.2;                       // m, the eye over the ground
+const TILT_PIVOT = 40;                          // m, the tilt pivot ahead of the eye (not orbit)
 export const PITCH_MIN = -1.53, PITCH_MAX = -0.03;
 export const MIN_DIST = 12;                     // m, the closest zoom
 export const MAX_K = 1.8;                       // max orbit dist / world size
@@ -615,7 +617,16 @@ export function createCamera(opts = {}) {
     const yaw = same ? pose.yaw : yawOf(cam.forward), pitch = same ? pose.pitch : pitchOf(cam.forward);
     const target = [cam.pos[0] + cam.forward[0], cam.pos[1] + cam.forward[1], cam.pos[2] + cam.forward[2]];
     const up = basis(yaw, pitch, cam.roll || 0).u;
-    const v = lookAt(cam.pos, target, up);
+    // the phone tilt (lib/tilt.js): the render eye turns a few degrees
+    // round the orbit target, or round a point TILT_PIVOT m ahead in the
+    // other modes. cam.pos does not change. tiltEye gives back cam.pos
+    // with tilt off, on a desktop and in the saver; an eye that the turn
+    // takes under CLEAR m over the ground keeps cam.pos.
+    const piv = cam.mode === 'orbit' && cam.orbit && cam.orbit.target ? cam.orbit.target
+      : [cam.pos[0] + cam.forward[0] * TILT_PIVOT, cam.pos[1] + cam.forward[1] * TILT_PIVOT, cam.pos[2] + cam.forward[2] * TILT_PIVOT];
+    let eye = tiltEye(cam.pos, piv, up);
+    if (eye !== cam.pos && !(eye[1] - groundAt(world0, eye[0], eye[2]) >= CLEAR)) eye = cam.pos;
+    const v = eye === cam.pos ? lookAt(cam.pos, target, up) : lookAt(eye, piv, up);
     const viewProj = mul(proj, v);
     const projNJ = perspectiveRZ(fovS, aspect, near);
     projNJ[8] = -sh[0]; projNJ[9] = -sh[1];
@@ -623,7 +634,7 @@ export function createCamera(opts = {}) {
     cam.up = upv;
     return {
       view: v, proj, viewProj, invViewProj: invert(viewProj), viewProjNoJitter: mul(projNJ, v),
-      pos: cam.pos.slice(), forward: cam.forward.slice(), right, up: upv, fovY: fovS, aspect, near,
+      pos: eye.slice(), forward: eye === cam.pos ? cam.forward.slice() : [-v[2], -v[6], -v[10]], right, up: upv, fovY: fovS, aspect, near,
     };
   };
   return cam;

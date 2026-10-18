@@ -410,6 +410,23 @@ for (const { world: w, t } of [A, F]) {
   ok(mv[2] > 0.8 && Math.abs(mv[0]) < 1e-9 && input.take().move[2] === 0, `input: the left touch stick pushed up flies forward (move z ${mv[2].toFixed(2)}), the release stops it`);
 }
 
+// ── phone tilt ─────────────────────────────────────────────────────────────
+// camera.js matrices() turns the render eye with lib/tilt.js tiltEye. In
+// node (no phone) tiltEye gives back the same eye, so matrices() must
+// give back cam.pos and cam.forward unchanged, in orbit over 60 turns.
+{
+  const cam = createCamera();
+  cam.frameWorld(A.world, 0.5);
+  let same = true;
+  for (let i = 0; i < 60; i++) {
+    cam.orbitRotate(37, (i % 5) - 2);
+    cam.update(0.05, {}, A.world);
+    const m = cam.matrices(W, H, {});
+    if (m.pos.some((v, k) => v !== cam.pos[k]) || m.forward.some((v, k) => v !== cam.forward[k])) same = false;
+  }
+  ok(same, 'phone tilt: with no tilt, matrices() gives back cam.pos and cam.forward unchanged');
+}
+
 console.log(`# camera: ${pass} pass, ${fail} fail`);
 if (fail) process.exitCode = 1;
 export default { pass, fail };
