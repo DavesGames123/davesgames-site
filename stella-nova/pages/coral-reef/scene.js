@@ -78,6 +78,7 @@ import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
 import { blueNoise, VOL_K } from './volume.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
+import { DOME_R, domeRadius, HAZE_GLSL } from './haze.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
@@ -266,20 +267,27 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic);
 
   // ── the water: fog colour, a dim Snell window above ─────────────────────
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), new THREE.ShaderMaterial({
+  // haze.js: the dome follows the camera that draws it (the main view and
+  // each feed), inside its far plane; the colour never goes under the floor.
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(DOME_R, 32, 16), new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3, side: THREE.BackSide, depthWrite: false,
     uniforms: { uFogCol: U.uFogCol, uTime: U.uTime, uDown: U.uDown },
     vertexShader: 'out vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }',
     fragmentShader: /* glsl */`
       uniform vec3 uFogCol; uniform float uTime, uDown; in vec3 vD; out vec4 oCol;
       void main() {
-        vec3 c = uFogCol * (0.55 + 0.9 * clamp(vD.y * 0.5 + 0.5, 0.0, 1.0));
+        vec3 c = max(uFogCol, ${HAZE_GLSL}) * (0.55 + 0.9 * clamp(vD.y * 0.5 + 0.5, 0.0, 1.0));
         float win = smoothstep(0.62, 0.8, vD.y);
         c += vec3(0.004, 0.016, 0.03) * uDown * win * (0.85 + 0.15 * sin(uTime * 0.4 + vD.x * 9.0) * sin(uTime * 0.31 + vD.z * 7.0));
         oCol = linearToOutputTexel(vec4(c, 1.0));
       }`,
   }));
-  dome.renderOrder = -1; dome.frustumCulled = false;
+  dome.name = 'water-dome'; dome.renderOrder = -1; dome.frustumCulled = false;
+  dome.onBeforeRender = (r, sc, cam) => {
+    dome.position.setFromMatrixPosition(cam.matrixWorld);
+    dome.scale.setScalar(domeRadius(cam.far) / DOME_R);
+    dome.updateMatrixWorld(true);
+  };
   scene.add(dome);
 
   // ── textures ──────────────────────────────────────────────────────────────

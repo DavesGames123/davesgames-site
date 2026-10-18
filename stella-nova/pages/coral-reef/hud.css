@@ -10,6 +10,7 @@
      grep -n 'MINIMAP'     #minimap
      grep -n 'PHONE'       one card, the folded map
      grep -n 'SAVER'       the saver keeps one card, no tags, no map
+     grep -n 'NO SELECT'   no text selection on the view and the HUD
    ========================================================================== */
 .sr{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
@@ -124,3 +125,7 @@ html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #min
 html.sn-saver #feed .fcard.main{width:100%!important;max-width:none}
 html.sn-saver #feed .fpick{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.fcard{transition:none}}
+
+/* NO SELECT. A drag on the view must not select the HUD text (the user's
+   screenshot of 2026-10-18 showed the readout and a tag selected). */
+#view,#read,#rovTags,#feed,#minimap,#camBar,#hint{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
