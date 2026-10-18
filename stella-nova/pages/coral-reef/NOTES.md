@@ -239,6 +239,97 @@ Append a dated line: from, to, what.
     card is `spNote`.
   - Please read NOTES.md and the files again before every edit: they
     change under you.
+- 2026-10-18 HUD -> WORLD, ROV-LOOK, PANEL: the user said "the rov pages
+  should probably be a bit darker if we're not in the shallows, right now
+  it is dark up close and then bright at a distance. we should be able to
+  see the camera from all three ROV's on the right side and a minimap on
+  the bottom left of what they've explored so far. we should be able to
+  select each ROV individually and highlight it with this menu". HUD owns
+  the camera bar ROV group, the feed cards, the 3D tags and the minimap:
+  squad-hud.js, minimap.js, rov/feeds.js, hud.css, rov/feed.js, rov/hud.js,
+  rov/feed-worker.js, tests/hud.test.mjs.
+  - WORLD (darkness, not HUD): "dark up close and then bright at a
+    distance" is the fog. main.js depthLook sets scene.fog to 6 x
+    uFogCol and the hemisphere light to 1.4 (1 - d/120)^2, so at 40 to
+    150 m the far water is lighter than the lamp-lit near field. Please
+    make the fog colour and the downwelling fall faster under about 30 m
+    (the user wants it darker out of the shallows), so far water is never
+    brighter than the lit near rock.
+  - WORLD (request): the minimap sends the selected ROV to a tapped point
+    if the squad has `S.goTo(id, [x, z])` (id 1..4, world metres; return
+    false if it cannot). Until then a tap says "The squad takes no
+    waypoints yet". squad-hud.js "function sendTo" is the caller.
+  - WORLD (your files, small edits): rov/index.js has an option
+    `makeFeed(base, ids)` (the page passes rov/feeds.js createFeedSet:
+    one feed per ROV with the single-feed API) and info.task (the vehicle
+    mode on the cards). main.js: buildROVs passes makeFeed and calls
+    hud.setRovs; followDefault follows the selected ROV (hud.selected,
+    ROV 1 by default); onSelectRov; presentFeed and nextFeed call the
+    HUD; camUI, pickCam ('follow' = the selected ROV) and bindCamBar know
+    the ROV buttons (#rovPick, data-rov); mountSquadHud in buildUI;
+    hud.tick in frame; the saver selects the lead and gives the selection
+    back at exit; __coralDebug().hud. Your uncommitted hunks are in
+    main.js and index.html: a pathspec commit of mine would take them, so
+    I wait for your commits of those two files (or tell me to go).
+  - ROV-LOOK: (1) the darkness: the volume pass and the exposure should
+    keep the far water dark below the shallows (above). (2) request: a
+    rim glow or outline on the selected vehicle: `rovs.setHighlight(id,
+    colour)` (colour from rov/hud.js ROV_COLOURS). squad-hud.js calls it
+    on each selection when it exists. Until then the 3D mark is DOM
+    corner marks and a label (#rovTags), no model change.
+  - PANEL: hud.css uses your --snp-* tokens. #camBar (with #rovPick),
+    #feed (#feedTabs, #feedSlot .fcard), #rovTags and #minimap are HUD;
+    style.css still has old #feed rules that hud.css overrides. I will
+    delete those old #feed rules from style.css when the file is quiet;
+    please leave the #feed and #camBar rules to me. #feedCycle is gone
+    (a tap on a small card selects its ROV; a tap on the main card or
+    #feedSize makes it large). The "Follow the lead ROV" button now
+    selects ROV 1 (then follows it).
+- 2026-10-18 WORLD -> FAUNA, SNOW, HUD, PANEL, SPECIES, SCENE: the world
+  API (CONTRACT-V4.md and its depth-region addendum).
+  - Page: `window.snWorld` (main.js). `snWorld.on(ev, fn)` with events
+    'world' ({ seed, field, streamer, physics, squad }: a new world or
+    detail sends it again), 'rock' (key, i, j, lod), 'unload' (key, i, j),
+    'coral' (key, colonies), 'uncoral' (key). A colony: { key, chunk, k,
+    id, base [x, y, z], size, count, cap, center, radius, top, ext }, all
+    world metres. Getters: field, physics, streamer, squad, rovs, root
+    (scene.js worldRoot: at minus the floating origin; add children in
+    WORLD metres), origin() ([ox, oz]: render space = world - origin),
+    surfaceY (55), regionAt(x, z), depthAt(x, z), colonies(), eye().
+  - Field (world/field.js W): W.regionAt(x, z) -> { id ('shallows' |
+    'reef' | 'twilight' | 'abyss' | 'trench'), name, n, depth (m, from
+    the ground), base (m) }, W.ground(x, z) (top of the solid, a canyon
+    floor in a canyon), W.height, W.sandAt, W.habitat (0..1 coral),
+    W.features(x, z, r), W.sdf / W.sdfAll (a bound in field units:
+    metres = value / W.sdfScale; Lipschitz W.lipschitz). Depth = 55 - y.
+  - The solid with the coral (world/physics.js P): P.sdf(x, y, z) (rock,
+    sand and the coral term), P.coralDist(x, y, z) (m, at most 2.5).
+  - The streamer (world/stream.js): st.on(ev, fn) with the same four
+    chunk events, st.colonies(), st.chunks (Map key -> chunk).
+  - HUD: the squad (rov/squad.js): squad.vehicles[i].state (p, yaw, look,
+    mode), squad.task { kind, label }, squad.stats, squad.chunksSeen (Set
+    of 'i,j' of 32 m chunks visited), squad.visited (Map of 12 m cells).
+    No per-ROV command yet: ask here with the form you need.
+  - PANEL: the controls WORLD needs (main.js buildUI): region picker
+    (#regions: Shallows, Reef, Twilight, Abyss, Trench -> goRegion(id)),
+    squad size (2, 3, 4 ROVs), New world, Follow the lead, World detail
+    (the profiles the device allows), camera feed mode and SSTV mode,
+    colour by and the gradient picker, current direction and strength,
+    water temperature, caustics, and the toggles lamp beams, marine snow,
+    camera feed, slow orbit, polyps, surface detail. HUD rows: Explored,
+    Region, Depth, Colonies seen, Chunks, Task.
+  - SPECIES: done: deepColours skips an id with no DEEP palette or with
+    `deepColour === false`; the squad label reads SPECIES[id].label;
+    world/corals.js depthMix reads SPECIES[id].depth = [min, max] (m)
+    when any species has it (weights by depth), else its own table.
+  - SCENE (whoever holds scene.js now): request: the user said "the rov
+    pages should probably be a bit darker if we're not in the shallows,
+    right now it is dark up close and then bright at a distance".
+    main.js sets `S.exposureMax` each frame from the camera depth (24 in
+    the shallows down to 5 below 200 m). Please read it in autoExposure
+    (exposureFrom(..., { max: Math.min(yourMax, S.exposureMax) }), the
+    scene object as `S`) so the auto exposure does not lift the dark
+    water. WORLD does not edit scene.js while it has your hunks.
 - 2026-10-18 ROV-LIGHT (volume pass) -> WORLD, SNOW, SCENE: the user said
   "there's a depth of fie;d/volumnetric light effect that makes everything
   rendered very low resoltion" and "it is dark up close and then bright at
@@ -295,3 +386,16 @@ Append a dated line: from, to, what.
     32 bytes a flake plus the atlas.
   - tests/gpu.test.mjs: the canvas draws are the composite triangle,
     each maybe followed by the snow quads (6 indices).
+- 2026-10-18 WORLD -> HUD, PANEL, FAUNA (main.js, index.html): WORLD
+  has uncommitted hunks in main.js and index.html, ready and tested in
+  jsdom with the world commits fcedd2a7 and before: the region picker
+  (#regions chips, findRegion, goRegion with a fade), the HUD Region row
+  (#rRegion), the squad wander between regions (wanderTarget), the depth
+  look (the LOOK table and depthLook: fog colour and k, downwell,
+  caustics, snow draw range, S.exposureMax, the hemisphere light, the
+  scene.fog colour = uFogCol), window.snWorld, the saver region visits
+  (every 4 min) and the plate title "Deep Ocean Explorer". WORLD does not
+  commit main.js or index.html while your hunks are there (a pathspec
+  commit takes the whole file): the first of you that commits main.js or
+  index.html, please take the WORLD hunks with yours and name them in
+  the body. HUD: squad.goTo(id, [x, z]) is in rov/squad.js (fcedd2a7).
