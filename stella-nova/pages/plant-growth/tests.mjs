@@ -288,6 +288,9 @@ for (const id of QUICK ? ['conifer', 'willow', 'fern', 'cherry', 'bush'] : SPECI
   ok(groundY(0.3, 0.2) === 0 && groundY(6.2, -2.1) === 0, 'a pad keeps the ground level at a trunk base');
   ok(Math.abs(groundY(0, 0.5 + PAD_RISE + 0.5) - relief(0, 0.5 + PAD_RISE + 0.5)) < 1e-9, 'past the pad the full relief comes back');
   ok(groundY(60, 10) > 0.5 && Number.isFinite(groundY(200, -300)), 'hills beyond');
+  const mixed = standLayout('mixed', 'oak', 3);
+  setPads([{ x: 0, z: 0, r: 3.7 }, ...mixed.map(p => ({ x: p.x, z: p.z, r: 0.5 }))]);
+  ok(mixed.length >= 9 && mixed.every(p => groundY(p.x, p.z) === 0), `every plant of a mixed stand (${mixed.length}) stands on a level pad, with the cut-away pad too`);
   ok(GROUND_GLSL.includes(`FLAT_R = ${FLAT_R.toFixed(1)}`) && GROUND_GLSL.includes(PAD_RISE.toFixed(2)) && GROUND_GLSL.includes('uPads'), 'GLSL ground: the same radius, pad rise and pads');
   setPads([]);
 }

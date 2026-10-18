@@ -27,7 +27,7 @@
 
 export const FLAT_R = 16;          // the hills start here
 export const PAD_RISE = 1.4;       // m from a pad edge to the full relief
-export const MAX_PADS = 8;
+export const MAX_PADS = 12;   // the plants of a mixed stand (9) and the cut-away
 
 // [kx, kz, phase, amplitude]: wave vectors in rad/m
 const WAVES = [
