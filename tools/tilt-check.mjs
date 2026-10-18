@@ -336,6 +336,10 @@ function wrapSuite(tag, THREE, Orbit) {
   ok(eq(small.seen, A.cam.matrixWorld.elements), tag + ': small render target is not tilted');
   const full = frame(THREE, renderer, A.scene, A.cam, { width: 800, height: 600 });
   ok(!eq(full.seen, A.cam.matrixWorld.elements), tag + ': canvas-size target (composer) is tilted');
+  const half = frame(THREE, renderer, A.scene, A.cam, { width: 399.5, height: 299.6 });
+  ok(!eq(half.seen, A.cam.matrixWorld.elements), tag + ': half-size target, same aspect (render scale) is tilted');
+  const sq = frame(THREE, renderer, A.scene, A.cam, { width: 512, height: 512 });
+  ok(eq(sq.seen, A.cam.matrixWorld.elements), tag + ': square 512 target (reflection) is not tilted');
   // Orthographic: no tilt, unless attached.
   const oc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10); oc.position.set(0, 0, 5);
   const o1 = frame(THREE, renderer, A.scene, oc);

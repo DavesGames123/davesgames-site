@@ -35,9 +35,10 @@
 //    on the view axis, else a point at |camera.position| along the view.
 //    The wrap applies to perspective cameras with no parent or the scene as
 //    parent. It applies to the default framebuffer, and to a render target
-//    of the same size as the canvas (an EffectComposer pass). It never
-//    applies in WebXR, to small targets (picking, reflections) or to an
-//    orthographic camera, unless the page attaches that camera.
+//    with the canvas aspect and at least 64 px (an EffectComposer pass, a
+//    render-scale pass). It never applies in WebXR, to small or square
+//    targets (picking, reflections) or to an orthographic camera, unless
+//    the page attaches that camera.
 //
 //  SIGNAL PATH  (the pure core, createCore; tools/tilt-check.mjs tests it)
 //    deviceorientation alpha, beta, gamma  ->  quaternion (W3C Z-X'-Y'')
@@ -322,7 +323,10 @@ function tiltBefore(reg, renderer, scene, camera, target, A, B, Q1, Q2, AX) {
     if (camera.parent && camera.parent !== scene) return;
     if (target) {
       const c = renderer && renderer.domElement;
-      if (!c || target.width !== c.width || target.height !== c.height) return;
+      // A composer or render-scale pass: the canvas aspect (1 %), at
+      // least 64 px. Picking (1 x 1) and square reflection maps fail.
+      if (!c || !c.width || !c.height || !(target.width >= 64) || !(target.height >= 64)) return;
+      if (Math.abs((target.width / target.height) / (c.width / c.height) - 1) > 0.01) return;
     }
   }
   const o = ctl.get();
