@@ -16,6 +16,9 @@
 //                  worker budget (init message 'budget'), on top of QUALITY.
 //                  rock: rock quality; rockWorkers: at most this many rock
 //                  module workers. shadow: the lead lamp map size (0 off).
+//                  shadowExtra: the map size of the main lamp of each
+//                  other ROV (0: only the lead lamp has a map; phone-min).
+//                  polypShadow: the polyps cast into the maps (desktop).
 //                  vol: { scale, steps } the volume pass. dprCap and maxPx:
 //                  the pixel ratio cap and the drawing buffer pixel cap.
 //                  caustic: { res, grid }. snow: flakes. polypDraw: the
@@ -42,7 +45,8 @@
 //                  a WebGL context loss reloads one time, one profile
 //                  lower; a second loss in 10 min stops
 //  frameGovernor(o) the frame governor: on slow frames it steps down the
-//                  volume pass, the polyps, the shadow and the pixel ratio
+//                  volume pass, the polyps, the shadow maps of the other
+//                  ROVs, the lead shadow map and the pixel ratio
 //
 //  MEASURED (node, 2026-10-17, seed 1, R 30): rock tris high 728 476,
 //  medium 360 992, low 171 248; sand tris medium 56 448, low 29 282; one
@@ -61,25 +65,25 @@ export const MB = 1048576;
 export const PROFILES = {
   desktop: {
     id: 'desktop', label: 'Desktop', budgetMB: 700, reef: 'mid', reefMax: 'desktop',
-    cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, vol: { scale: 0.5, steps: 30 },
+    cap: {}, rock: 'high', rockWorkers: 4, shadow: 2048, shadowExtra: 1024, polypShadow: true, vol: { scale: 0.5, steps: 30 },
     dprCap: 2, maxPx: 4.2e6, caustic: { res: 1024, grid: 360 }, snow: 3000, polypDraw: 160000,
     rovs: 3, feed: { w: 320, h: 256, fps: 30 }, stagger: { rovMs: 300, reefMs: 900 }, frameMs: 1000 / 50,
   },
   'laptop-low': {
     id: 'laptop-low', label: 'Laptop', budgetMB: 450, reef: 'phone', reefMax: 'mid',
-    cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, vol: { scale: 0.4, steps: 20 },
+    cap: { particles: 40000, tris: 900000 }, rock: 'medium', rockWorkers: 3, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.4, steps: 20 },
     dprCap: 1.5, maxPx: 2.4e6, caustic: { res: 512, grid: 240 }, snow: 1800, polypDraw: 80000,
     rovs: 3, feed: { w: 256, h: 204, fps: 20 }, stagger: { rovMs: 500, reefMs: 1500 }, frameMs: 1000 / 40,
   },
   phone: {
     id: 'phone', label: 'Phone', budgetMB: 250, reef: 'phone', reefMax: 'phone',
-    cap: { particles: 25000, tris: 500000, polyps: 0.45 }, rock: 'low', rockWorkers: 2, shadow: 1024, vol: { scale: 0.35, steps: 14 },
+    cap: { particles: 25000, tris: 500000, polyps: 0.45 }, rock: 'low', rockWorkers: 2, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.35, steps: 14 },
     dprCap: 1.5, maxPx: 1.3e6, caustic: { res: 512, grid: 200 }, snow: 1200, polypDraw: 30000,
     rovs: 2, feed: { w: 224, h: 180, fps: 15 }, stagger: { rovMs: 800, reefMs: 2500 }, frameMs: 1000 / 30,
   },
   'phone-min': {
     id: 'phone-min', label: 'Phone (low memory)', budgetMB: 160, reef: 'phone', reefMax: 'phone',
-    cap: { particles: 14000, colonies: 20, tris: 280000, polyps: 0.3 }, rock: 'low', rockWorkers: 1, shadow: 512, vol: { scale: 0.3, steps: 10 },
+    cap: { particles: 14000, colonies: 20, tris: 280000, polyps: 0.3 }, rock: 'low', rockWorkers: 1, shadow: 512, shadowExtra: 0, polypShadow: false, vol: { scale: 0.3, steps: 10 },
     dprCap: 1, maxPx: 0.8e6, caustic: { res: 256, grid: 128 }, snow: 700, polypDraw: 15000,
     rovs: 2, feed: { w: 160, h: 128, fps: 10 }, stagger: { rovMs: 1200, reefMs: 4000 }, frameMs: 1000 / 30,
   },
@@ -168,8 +172,10 @@ export function estimate(profile, view = {}) {
     volTarget: Math.round(px * vs * vs) * 8 + 32 * 32 * 4,
     // scene.js makeCaustics: RGBA16F map, the grid (aUv) and its Uint32 index
     caustics: cr * cr * 8 + (cg + 1) * (cg + 1) * 8 + cg * cg * 24,
-    // the lead lamp shadow map: RGBA8 packed depth + a depth buffer
-    shadow: sh * sh * 8,
+    // the shadow maps, RGBA8 packed depth + a depth buffer each: the lead
+    // lamp, and the main lamp of each other ROV (scene.js setLights, at
+    // most 4 spots)
+    shadow: sh * sh * 8 + Math.max(0, Math.min(p.rovs || 1, 4) - 1) * (p.shadowExtra || 0) ** 2 * 8,
     // scene.js mkPart: two RGBA32F particle textures
     particles: 2 * NP * 16,
     rock: ROCK_TRIS[p.rock] * B_ROCK_TRI + SAND_TRIS[p.rock] * (0.5 * 40 + 12),

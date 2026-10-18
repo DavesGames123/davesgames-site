@@ -42,10 +42,11 @@
 //  START. The water draws from the first frame. buildWorld makes the rock
 //  (at most 4 workers), then after stagger.reefMs the reef worker, then
 //  after stagger.rovMs the ROVs and their feed worker. frameGovernor
-//  steps the volume, the polyps, the shadow and the pixels down on slow
-//  frames. ERRORS. crash.js shows window errors, shader errors and a
-//  context loss in a box (#errBox). coral-link.js runs the reef on this
-//  thread when the worker fails.
+//  steps the volume, the polyps, the shadow maps (the other ROVs first,
+//  then the lead) and the pixels down on slow frames. ERRORS. crash.js
+//  shows window errors, shader errors and a context loss in a box
+//  (#errBox). coral-link.js runs the reef on this thread when the worker
+//  fails.
 //
 //  FRAMING. clearArea() measures the panel, the dock and the plant bar.
 //  The camera view offset (setViewOffset) puts the reef in the middle of
@@ -311,7 +312,8 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = false) {
 
 // ── the ROVs ────────────────────────────────────────────────────────────────
 // The lamps go to the scene, lead lamp first (vehicle 1, lamp 0), then
-// lamp 0 of each other vehicle, then the rest (the scene takes 4).
+// lamp 0 of each other vehicle, then the rest (the scene takes 4). The
+// main lamps (lamp 0 of each vehicle) get the shadow maps.
 function buildROVs() {
   if (!S || !rock) return;
   if (rovs) { try { rovs.dispose(); } catch (e) { /* a half-built set */ } rovs = null; }
@@ -326,7 +328,7 @@ function buildROVs() {
   const V = rovs.vehicles || [];
   const first = V.map(v => v.lights && v.lights[0]).filter(Boolean);
   const rest = V.flatMap(v => (v.lights || []).slice(1));
-  S.setLights([...first, ...rest]);
+  S.setLights([...first, ...rest], first.length);       // a shadow map for each main lamp
   const slot = $('feedSlot');
   if (slot && rovs.feed && rovs.feed.canvas) { slot.innerHTML = ''; slot.appendChild(rovs.feed.canvas); }
   applyFeedMode();
@@ -742,12 +744,15 @@ function readout(dt) {
 
 // ── loop ────────────────────────────────────────────────────────────────────
 let last = performance.now(), fitTick = 0, viewT = 0, prK = 1;
-// slow frames: the volume pass, then the polyps, the shadow and the pixels
+// slow frames: the volume pass, then the polyps, the shadow maps of the
+// other ROVs, the lead shadow map and the pixels
 const gov = frameGovernor({
   frameMs: PROF.frameMs,
   levels: [
     { name: 'volume', apply: on => S && S.setLoads(on ? { volScale: PROF.vol.scale * 0.6, volSteps: PROF.vol.steps * 0.6 } : { volScale: PROF.vol.scale, volSteps: PROF.vol.steps }) },
     { name: 'polyps', apply: on => S && S.setLoads({ polypDraw: on ? Math.round(PROF.polypDraw / 3) : PROF.polypDraw }) },
+    // the maps of the other ROVs (and the polyp casts) go first, then the lead map
+    { name: 'shadow-extra', apply: on => S && S.setLoads(on ? { shadowExtra: 0, polypShadow: false } : { shadowExtra: PROF.shadowExtra || 0, polypShadow: !!PROF.polypShadow }) },
     { name: 'shadow', apply: on => S && S.setLoads({ shadow: on ? 0 : PROF.shadow }) },
     { name: 'pixels', apply: on => { prK = on ? 0.75 : 1; onResize(); } },
   ],

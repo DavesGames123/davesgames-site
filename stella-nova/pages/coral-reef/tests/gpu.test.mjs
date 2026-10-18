@@ -120,11 +120,60 @@ function runFrames(f, n = 6) {
   console.log(`exposure: dark frame ${e.toFixed(2)}, bright frame ${e2.toFixed(2)}`);
 }
 
+// ── shadows: the main lamp of each ROV has a map ───────────────────────────
+// The user (2026-10-17): "make sure that corals and lights from rov's cast
+// shadows". scene.js setLights gives lamp 0 of each vehicle a map, the
+// coral and the polyps cast with their own depth material (grow-in, focus
+// hide), and the governor drops the maps of the other ROVs first.
+{
+  const SH = await import('../shaders.js');
+  const { profileFor } = await import('../budget.js');
+  const f = fakeCanvas({ w: 800, h: 600 });
+  const S = createScene({ canvas: f.canvas, coarse: false, R: 30, maxParticles: 4096, profile: profileFor('desktop') });
+  S.resize();
+  // three vehicles: lamp 0 of each first, then the second lamp of vehicle 1
+  const mk = (veh, x) => { const L = new THREE.SpotLight(0xffffff, 420, 42, 0.44, 0.55, 2); L.position.set(x, 4, 0); L.target.position.set(x, 0, 0); L.userData.vehicle = veh; S.scene.add(L, L.target); return L; };
+  const L = [mk(1, 0), mk(2, 3), mk(3, -3), mk(1, 0.4)];
+  S.setLights(L, 3);
+  ok(L.slice(0, 3).every(l => l.castShadow) && !L[3].castShadow, 'shadow: the main lamp of each of 3 ROVs casts, the second lamp of ROV 1 does not', L.map(l => l.castShadow).join());
+  ok(L[0].shadow.mapSize.x === 2048 && L[1].shadow.mapSize.x === 1024 && L[2].shadow.mapSize.x === 1024, 'shadow: the lead map is profile.shadow, the others profile.shadowExtra', L.map(l => l.shadow.mapSize.x).join());
+  // one coral brick (fine, with a polyp), so a coral mesh and a polyp mesh exist
+  const P = new Float32Array([0, 0, 0, 0.1, 0, 0, 0, 0.1, 0]), N = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
+  S.applyBricks([{ sp: 'staghorn', lod: 0, key: 1, chunk: 'c0', positions: P, normals: N, gids: new Float32Array([0, 0, 0]), indices: new Uint16Array([0, 1, 2]), polyps: new Float32Array([0, 0, 0, 0, 0, 1, 0, 0.5]) }]);
+  S.applyBricks([{ sp: 'staghorn', lod: 1, key: 1, chunk: 'c0', positions: P.slice(), normals: N.slice(), gids: new Float32Array([0, 0, 0]), indices: new Uint16Array([0, 1, 2]), polyps: new Float32Array(0) }]);
+  S.flushChunks(100, 1e6, 0);
+  const meshes = [], polys = [];
+  S.coralRoot.traverse(o => { if (o.isMesh) (o.geometry.isInstancedBufferGeometry ? polys : meshes).push(o); });
+  ok(meshes.length === 2 && meshes.every(m => m.castShadow && m.customDepthMaterial && m.customDepthMaterial.vertexShader === SH.CORAL_DEPTH_VS), 'shadow: the coral meshes cast with the coral depth material (grow-in and focus hide)', `${meshes.length} meshes`);
+  ok(new Set(meshes.map(m => m.customDepthMaterial.uniforms.uCoarse.value)).size === 2, 'shadow: the fine and the coarse coral have their own depth material (uCoarse 0 and 1)');
+  ok(polys.length === 1 && polys[0].castShadow && polys[0].customDepthMaterial.vertexShader === SH.POLYP_DEPTH_VS, 'shadow: the polyps cast on desktop with the polyp depth material', `${polys.length} polyp meshes`);
+  ok(S.rockGroup.children.length === 0 || S.rockGroup.children.every(m => m.castShadow), 'shadow: the rock casts');
+  for (let i = 0; i < 3; i++) S.render(1 / 60, i * 16);
+  const on = S.U.uShadowOn.value;
+  ok(L.slice(0, 3).every(l => l.shadow.map) && on.x === 1 && on.y === 1 && on.z === 1 && on.w === 0, 'shadow: three made 3 maps and uShadowOn is 1, 1, 1, 0', `${on.x},${on.y},${on.z},${on.w}`);
+  ok([0, 1, 2].every(i => S.U['uShadow' + i].value === L[i].shadow.map.texture && S.U.uShadowM.value[i].equals(L[i].shadow.matrix)), 'shadow: uShadow0..2 and uShadowM[0..2] are the maps and matrices of the 3 main lamps');
+  ok(Math.abs(S.U.uShadowTexel.value.x - 1 / 2048) < 1e-9 && Math.abs(S.U.uShadowTexel.value.y - 1 / 1024) < 1e-9, 'shadow: uShadowTexel per lamp');
+  ok(SH.WATER.includes('R *= shadowAt(i, w, n);') && SH.VOL_FS.includes('R *= shadowTap(i, p);') && !/i == 0\) R \*= shadow/.test(SH.WATER + SH.VOL_FS), 'shadow: the surfaces and the volume shafts use the map of every spot, not only spot 0');
+  // the governor: the other ROVs lose their maps first, then the lead
+  S.setLoads({ shadowExtra: 0, polypShadow: false });
+  S.render(1 / 60, 64);
+  ok(L[0].castShadow && !L[1].castShadow && !L[2].castShadow && !L[1].shadow.map && on.x === 1 && on.y === 0 && on.z === 0 && !polys[0].castShadow, 'shadow: shadowExtra 0 frees the maps of the other ROVs and keeps the lead map', `${on.x},${on.y},${on.z}`);
+  S.setLoads({ shadow: 0 });
+  S.render(1 / 60, 80);
+  ok(!L[0].castShadow && !L[0].shadow.map && on.x === 0, 'shadow: shadow 0 frees the lead map too');
+  S.setLoads({ shadow: 2048, shadowExtra: 1024, polypShadow: true });
+  for (let i = 0; i < 2; i++) S.render(1 / 60, 96 + i * 16);
+  ok(L.slice(0, 3).every(l => l.castShadow && l.shadow.map) && on.y === 1 && polys[0].castShadow, 'shadow: the maps come back when the governor steps up');
+  const lowP = profileFor('phone-min');
+  ok(lowP.shadowExtra === 0 && profileFor('phone').shadowExtra > 0 && profileFor('phone').shadowExtra < profileFor('desktop').shadowExtra, 'shadow: phones get smaller maps; phone-min has only the lead map');
+  console.log(`shadow: maps ${L.map(l => l.shadow.mapSize.x + (l.castShadow ? '' : ' off')).join(', ')}; ${meshes.length} coral meshes and ${polys.length} polyp mesh with depth materials`);
+}
+
 // ── Safari WebGL2 rules (static checks of shaders.js, rock/material.js) ─────
 {
   const SH = await import('../shaders.js');
   const progs = [
-    ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
+    ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['coral-depth', SH.CORAL_DEPTH_VS, SH.DEPTH_FS, false], ['polyp-depth', SH.POLYP_DEPTH_VS, SH.DEPTH_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
     ['sand', SH.SURF_VS, SH.SAND_FS, false], ['snow', SH.SNOW_VS, SH.SNOW_FS, false], ['caustic', SH.CAUSTIC_VS, SH.CAUSTIC_FS, true],
     ['volume', SH.FULL_VS, SH.VOL_FS, true], ['composite', SH.FULL_VS, SH.COMP_FS, true], ['luminance', SH.FULL_VS, SH.LUM_FS, true],
   ];

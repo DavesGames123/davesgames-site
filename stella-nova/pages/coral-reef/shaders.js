@@ -14,8 +14,11 @@
 //    spots ...... up to 4 ROV spotlights (uSpotP / uSpotD / uSpotC): a
 //                 soft cone, 1 / (1 + k d^2) fall-off and the water
 //                 absorption on the path from the lamp (red goes first)
-//    shadow ..... the lead lamp (spot 0) has a shadow map (three.js
-//                 SpotLightShadow, RGBA depth packing): 3 x 3 PCF taps
+//    shadow ..... the main lamp of each ROV has a shadow map (three.js
+//                 SpotLightShadow, RGBA depth packing; uShadow0 .. 3,
+//                 uShadowM[i], uShadowOn[i]): 3 x 3 PCF taps. The coral
+//                 and polyp depth passes (CORAL_DEPTH_VS, POLYP_DEPTH_VS,
+//                 DEPTH_FS) move the vertices as the colour passes do
 //  Then the path to the eye: absorption, and in-scatter to a near-black
 //  blue fog. fadeAt() takes the plot to black between R and 1.3 R.
 //
@@ -27,8 +30,8 @@
 //
 //  VOLUME. VOL_FS marches each half-res pixel from the eye to the depth
 //  of the frame: in-scatter from each spot cone (Henyey-Greenstein phase,
-//  forward), with the lead shadow (light shafts through gaps in the
-//  rock), a turbid density, and faint shafts of downwell light that
+//  forward), with the shadow of each mapped lamp (one tap: light shafts
+//  through gaps in the rock and the coral), a turbid density, and faint shafts of downwell light that
 //  carry the caustic map down the water column. COMP_FS adds the volume
 //  to the frame (a 3 x 3 tent), tone-maps (ACES fit) and adds a vignette
 //  and a fine grain.
@@ -39,8 +42,13 @@
 //    water and lights ...... "export const WATER"
 //    surface light ......... "vec3 lightSurf"
 //    caustic map ........... "export const CAUSTIC_VS"
+//    shadow maps ........... "float shadowAt", "float shadowTap"
+//    coral vertex .......... "const CORAL_POS"
 //    coral surface ......... "export const CORAL_VS"
+//    coral shadow depth .... "export const CORAL_DEPTH_VS", "export const DEPTH_FS"
+//    polyp vertex .......... "const POLYP_POS"
 //    polyps ................ "export const POLYP_VS"
+//    polyp shadow depth .... "export const POLYP_DEPTH_VS"
 //    rock .................. "export const ROCK_FS"
 //    sand .................. "export const SAND_FS"
 //    marine snow ........... "export const SNOW_VS"
@@ -53,6 +61,9 @@ import { ROCK_GLSL } from './rock/material.js';
 
 export { SURFACE_Y };
 export const MAX_SPOTS = 4;
+// One shadow map per spot at most (scene.js setLights gives one to the
+// main lamp of each ROV). uShadowOn and uShadowTexel are vec4: 4 spots.
+const SHADOW_IDS = Array.from({ length: MAX_SPOTS }, (_, i) => i);
 const F1 = v => (Number.isInteger(v) ? v.toFixed(1) : String(v));
 
 // 3D value noise, Worley, the brain groove and bump mapping (coral detail).
@@ -125,14 +136,15 @@ float fbm2(vec2 p) {
 
 // Water, lights, caustics, shadow, fog. Needs NOISE2 before it.
 export const WATER = /* glsl */`
-uniform float uTime, uCaust, uR, uDown, uSpotN, uShadowOn, uShadowBias, uShadowTexel, uCaustScale;
+uniform float uTime, uCaust, uR, uDown, uSpotN, uShadowBias, uCaustScale;
+uniform vec4 uShadowOn, uShadowTexel;
 uniform vec3 uFogK, uFogCol, uSunXZ;
 uniform vec4 uCaustBox;
 uniform vec2 uCur;
 uniform vec4 uSpotP[${MAX_SPOTS}], uSpotD[${MAX_SPOTS}], uSpotC[${MAX_SPOTS}];
-uniform mat4 uShadowM;
+uniform mat4 uShadowM[${MAX_SPOTS}];
 uniform mediump sampler2D uCaustTex;
-uniform highp sampler2D uShadow;
+uniform highp sampler2D ${SHADOW_IDS.map(i => 'uShadow' + i).join(', ')};
 const float SURF_Y = ${F1(SURFACE_Y)};
 // 1 inside the plot, 0 past ${FADE_K} R (water.js fadeAt).
 float fadeAt(vec3 w) {
@@ -165,18 +177,37 @@ vec3 downwell(vec3 w, vec3 n) {
   return sky * (0.12 + 0.18 * (n.y * 0.5 + 0.5) + up * 0.9 * c * c);
 }
 float unpackD(vec4 v) { return dot(v, vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0)); }
-// The lead lamp shadow: 1 lit, 0 in shadow. 3 x 3 PCF.
-float shadowAt(vec3 w, vec3 n) {
-  if (uShadowOn < 0.5) return 1.0;
-  vec4 sc = uShadowM * vec4(w + n * 0.05, 1.0);
-  sc.xyz /= sc.w;
-  if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return 1.0;
+// The shadow of spot i (the main lamp of each ROV has a map): 1 lit, 0
+// in shadow. uShadowOn[i] 1: the map is there. GLSL ES 3.00 indexes a
+// sampler array only with a constant, so each map has its own sampler and
+// its own PCF function (pcf0 .. pcf3, tap0 .. tap3).
+bool shadowCoord(int i, vec3 w, vec3 n, out vec3 sc) {
+  vec4 h = uShadowM[i] * vec4(w + n * 0.05, 1.0);
+  sc = h.xyz / max(h.w, 1e-6);
+  return h.w > 0.0 && sc.x >= 0.0 && sc.x <= 1.0 && sc.y >= 0.0 && sc.y <= 1.0 && sc.z <= 1.0;
+}
+${SHADOW_IDS.map(i => `float pcf${i}(vec3 sc, float tx) {
   float s = 0.0;
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    vec2 o = vec2(float(i), float(j)) * uShadowTexel * 1.6;
-    s += step(sc.z + uShadowBias, unpackD(texture(uShadow, sc.xy + o)));
-  }
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) s += step(sc.z + uShadowBias, unpackD(textureLod(uShadow${i}, sc.xy + vec2(float(i), float(j)) * tx * 1.6, 0.0)));
   return s / 9.0;
+}
+float tap${i}(vec3 sc) { return step(sc.z + uShadowBias, unpackD(textureLod(uShadow${i}, sc.xy, 0.0))); }`).join('\n')}
+// 3 x 3 PCF, for the surfaces
+float shadowAt(int i, vec3 w, vec3 n) {
+  if (i > ${MAX_SPOTS - 1} || uShadowOn[i] < 0.5) return 1.0;
+  vec3 sc;
+  if (!shadowCoord(i, w, n, sc)) return 1.0;
+  float tx = uShadowTexel[i];
+  ${SHADOW_IDS.slice(0, -1).map(i => `if (i == ${i}) return pcf${i}(sc, tx);`).join('\n  ')}
+  return pcf${MAX_SPOTS - 1}(sc, tx);
+}
+// one tap, for the volume march (the jitter and the tent blur smooth it)
+float shadowTap(int i, vec3 w) {
+  if (i > ${MAX_SPOTS - 1} || uShadowOn[i] < 0.5) return 1.0;
+  vec3 sc;
+  if (!shadowCoord(i, w, vec3(0.0), sc)) return 1.0;
+  ${SHADOW_IDS.slice(0, -1).map(i => `if (i == ${i}) return tap${i}(sc);`).join('\n  ')}
+  return tap${MAX_SPOTS - 1}(sc);
 }
 // The light of spot i at w: radiance (after the water on its path) and
 // the unit vector to the lamp.
@@ -201,8 +232,8 @@ vec3 lightSurf(vec3 base, vec3 w, vec3 n, vec3 V, float wrap, float spec, float 
     if (float(i) >= uSpotN) break;
     vec3 L;
     vec3 R = spotRad(i, w, L);
-    if (i == 0) R *= shadowAt(w, n);
     if (max(R.r, max(R.g, R.b)) < 1e-5) continue;
+    R *= shadowAt(i, w, n);
     float ndl = dot(n, L);
     col += base * R * clamp((ndl + wrap) / (1.0 + wrap), 0.0, 1.0) * mix(1.0, ao, 0.5);
     vec3 H = normalize(L + V);
@@ -277,28 +308,42 @@ uniform highp sampler2D uPartA, uPartB;
 uniform float uPartW;
 ivec2 partCoord(float g) { float gg = max(g, 0.0); return ivec2(int(mod(gg, uPartW)), int(floor(gg / uPartW))); }`;
 
+// The coral vertex in the world: the grow-in by age (a young particle
+// shrinks along the normal) and the sway in the current. False: the coarse
+// mesh of a focus colony (B.y < 0) does not draw. CORAL_VS and the shadow
+// depth pass (CORAL_DEPTH_VS) use the same function, so the shadow follows
+// the surface that shows.
+const CORAL_POS = /* glsl */`
+bool coralWorld(float gid, out vec4 w, out vec4 A, out vec4 B, out float age, out float tip) {
+  ivec2 tc = partCoord(gid);
+  A = texelFetch(uPartA, tc, 0); B = texelFetch(uPartB, tc, 0);
+  w = vec4(0.0); age = 0.0; tip = 0.0;
+  if (uCoarse > 0.5 && B.y < 0.0) return false;
+  age = uTime - B.x;
+  float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
+  vec3 p = position - normal * abs(B.y) * (1.0 - g) * 0.85;
+  w = modelMatrix * vec4(p, 1.0);
+  float lvl = floor(B.z * 0.5);
+  tip = B.z - lvl * 2.0;
+  float amp = lvl / 4.0, h = B.w;
+  float ph = gid * 0.0137;
+  float wave = sin(uTime * 1.05 + ph - h * 1.1) + 0.35 * sin(uTime * 2.3 + ph * 1.7 - h * 1.7);
+  vec2 dir = normalize(uCur + vec2(0.0001)) * 0.8 + vec2(cos(ph * 6.0), sin(ph * 6.0)) * 0.3;
+  w.xz += dir * wave * amp * uSwayK * 0.04 * pow(max(h, 0.0), 1.5);
+  return true;
+}`;
+
 export const CORAL_VS = /* glsl */`
 ${PART}
 in float aGid;
 uniform float uSwayK, uCount, uMode, uCoarse;
 out vec3 vN, vW, vL, vNat;
 out float vT, vGlow, vTip;
+${CORAL_POS}
 void main() {
-  ivec2 tc = partCoord(aGid);
-  vec4 A = texelFetch(uPartA, tc, 0), B = texelFetch(uPartB, tc, 0);
-  // B.y < 0: the colony has its fine mesh (a focus colony), so its coarse
-  // mesh does not draw
-  if (uCoarse > 0.5 && B.y < 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
-  float age = uTime - B.x;
-  float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
-  vec3 p = position - normal * abs(B.y) * (1.0 - g) * 0.85;
-  vec4 w = modelMatrix * vec4(p, 1.0);
-  float lvl = floor(B.z * 0.5), tip = B.z - lvl * 2.0;
-  float amp = lvl / 4.0, h = B.w;
-  float ph = aGid * 0.0137;
-  float wave = sin(uTime * 1.05 + ph - h * 1.1) + 0.35 * sin(uTime * 2.3 + ph * 1.7 - h * 1.7);
-  vec2 dir = normalize(uCur + vec2(0.0001)) * 0.8 + vec2(cos(ph * 6.0), sin(ph * 6.0)) * 0.3;
-  w.xz += dir * wave * amp * uSwayK * 0.04 * pow(max(h, 0.0), 1.5);
+  vec4 w, A, B;
+  float age, tip;
+  if (!coralWorld(aGid, w, A, B, age, tip)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
   vW = w.xyz; vL = position;
   vN = normalize(mat3(modelMatrix) * normal);
   vNat = pow(A.rgb, vec3(2.2));
@@ -307,6 +352,33 @@ void main() {
   vTip = tip;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
+
+// The shadow depth of the coral (scene.js customDepthMaterial): the same
+// vertex as CORAL_VS, the depth packed to RGBA as three.js packDepthToRGBA
+// (RGBADepthPacking), so WATER unpackD reads it.
+export const CORAL_DEPTH_VS = /* glsl */`
+${PART}
+in float aGid;
+uniform float uSwayK, uCoarse;
+out vec2 vZW;
+${CORAL_POS}
+void main() {
+  vec4 w, A, B;
+  float age, tip;
+  if (!coralWorld(aGid, w, A, B, age, tip)) { vZW = vec2(1.0); gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec4 c = projectionMatrix * viewMatrix * w;
+  vZW = c.zw;
+  gl_Position = c;
+}`;
+export const DEPTH_FS = /* glsl */`
+in vec2 vZW;
+out vec4 oCol;
+vec4 packD(float v) {
+  vec4 r = vec4(fract(v * vec3(16777216.0, 65536.0, 256.0)), v);
+  r.yzw -= r.xyz * (1.0 / 256.0);
+  return r * (256.0 / 255.0);
+}
+void main() { oCol = packD(clamp(0.5 * vZW.x / vZW.y + 0.5, 0.0, 1.0)); }`;
 
 export const CORAL_FS = /* glsl */`
 ${NOISE2}
@@ -368,30 +440,26 @@ void main() {
 // ── polyps ──────────────────────────────────────────────────────────────────
 // Template attribute aT: x angle, y s along the tentacle (0..1), z side
 // (-1, 1; the cup ring radius), w kind (0 cup wall, 1 cup top, 2 tentacle).
-export const POLYP_VS = /* glsl */`
-${PART}
-in vec4 aT;
-in vec3 iPos, iNrm;
-in vec2 iData;
-uniform float uSize, uKeep, uSwayK, uCount, uMode, uExtend;
-out vec3 vW, vN, vNat;
-out float vS, vT, vKind, vGlow;
-void main() {
-  vKind = aT.w; vS = aT.y;
-  if (iData.y > uKeep) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+// The polyp vertex in the world (POLYP_VS and POLYP_DEPTH_VS). False: the
+// LOD keep (uKeep) drops this polyp.
+const POLYP_POS = /* glsl */`
+bool polypWorld(out vec4 w, out vec4 A, out float age, out vec3 nn, out vec3 t, out vec3 b, out vec2 d, out float e) {
+  w = vec4(0.0); A = vec4(0.0); age = 0.0; nn = vec3(0.0, 1.0, 0.0); t = vec3(1.0, 0.0, 0.0); b = vec3(0.0, 0.0, 1.0); d = vec2(1.0, 0.0); e = 0.0;
+  if (iData.y > uKeep) return false;
   ivec2 tc = partCoord(iData.x);
-  vec4 A = texelFetch(uPartA, tc, 0), B = texelFetch(uPartB, tc, 0);
-  float age = uTime - B.x;
+  A = texelFetch(uPartA, tc, 0);
+  vec4 B = texelFetch(uPartB, tc, 0);
+  age = uTime - B.x;
   float grow = clamp((age - 0.6) / 1.5, 0.0, 1.0);
-  vec3 nn = normalize(iNrm);
-  vec3 t = normalize(cross(nn, abs(nn.y) < 0.92 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
-  vec3 b = cross(nn, t);
+  nn = normalize(iNrm);
+  t = normalize(cross(nn, abs(nn.y) < 0.92 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+  b = cross(nn, t);
   float ph = iData.y * 71.0;
   float open = 0.5 + 0.5 * sin(uTime * 0.42 + ph) * 0.7 + 0.5 * sin(uTime * 0.17 + ph * 1.9) * 0.3;
-  float e = uExtend * (0.18 + 0.82 * smoothstep(0.2, 0.8, open)) * grow;
+  e = uExtend * (0.18 + 0.82 * smoothstep(0.2, 0.8, open)) * grow;
   vec3 lp;
   float a = aT.x;
-  vec2 d = vec2(cos(a), sin(a));
+  d = vec2(cos(a), sin(a));
   if (aT.w < 0.5) {
     lp = vec3(d.x * aT.z, aT.y * 0.5, d.y * aT.z);
   } else if (aT.w < 1.5) {
@@ -405,15 +473,51 @@ void main() {
   }
   float size = uSize * (0.75 + 0.5 * fract(ph)) * (0.25 + 0.75 * grow);
   vec3 off = (t * lp.x + nn * lp.y + b * lp.z) * size;
-  vec4 w = modelMatrix * vec4(iPos + off, 1.0);
+  w = modelMatrix * vec4(iPos + off, 1.0);
   float sw = aT.w > 1.5 ? aT.y * aT.y * e : 0.0;
   w.xz += (normalize(uCur + vec2(0.0001)) * (0.6 + 0.4 * sin(uTime * 1.3 + ph))) * sw * size * 0.9 * uSwayK;
+  return true;
+}`;
+export const POLYP_VS = /* glsl */`
+${PART}
+in vec4 aT;
+in vec3 iPos, iNrm;
+in vec2 iData;
+uniform float uSize, uKeep, uSwayK, uCount, uMode, uExtend;
+out vec3 vW, vN, vNat;
+out float vS, vT, vKind, vGlow;
+${POLYP_POS}
+void main() {
+  vKind = aT.w; vS = aT.y;
+  vec4 w, A;
+  vec3 nn, t, b;
+  vec2 d;
+  float age, e;
+  if (!polypWorld(w, A, age, nn, t, b, d, e)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vW = w.xyz;
   vN = normalize(mat3(modelMatrix) * (aT.w > 1.5 ? normalize(t * d.x + b * d.y + nn * 0.6) : (aT.w > 0.5 ? nn : t * d.x + b * d.y)));
   vNat = pow(A.rgb, vec3(2.2));
   vT = (uMode > 0.5 && uMode < 1.5) ? iData.x / max(1.0, uCount - 1.0) : A.a;
   vGlow = exp(-max(age, 0.0) / 2.0);
   gl_Position = projectionMatrix * viewMatrix * w;
+}`;
+export const POLYP_DEPTH_VS = /* glsl */`
+${PART}
+in vec4 aT;
+in vec3 iPos, iNrm;
+in vec2 iData;
+uniform float uSize, uKeep, uSwayK, uExtend;
+out vec2 vZW;
+${POLYP_POS}
+void main() {
+  vec4 w, A;
+  vec3 nn, t, b;
+  vec2 d;
+  float age, e;
+  if (!polypWorld(w, A, age, nn, t, b, d, e)) { vZW = vec2(1.0); gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec4 c = projectionMatrix * viewMatrix * w;
+  vZW = c.zw;
+  gl_Position = c;
 }`;
 
 export const POLYP_FS = /* glsl */`
@@ -622,7 +726,7 @@ void main() {
       vec3 L;
       vec3 R = spotRad(i, p, L);
       if (max(R.r, max(R.g, R.b)) < 1e-6) continue;
-      if (i == 0) R *= shadowAt(p, vec3(0.0));
+      R *= shadowTap(i, p);
       float c = dot(-L, -rd);                 // light goes from the lamp past p; c = 1 straight at the eye
       float g = 0.55, hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
       s += R * (0.08 + hg * 0.25);

@@ -10,15 +10,18 @@
 //    polyps ........ one instanced mesh per chunk (shaders.js POLYP_*)
 //    snow .......... marine snow round the eye, lit only in the beams
 //  The ROV package adds its vehicles to the scene. setLights() takes
-//  their SpotLights: the first one is the lead lamp, with a shadow map.
+//  their SpotLights: the main lamp of each ROV comes first and has a
+//  shadow map (lead: profile.shadow, others: profile.shadowExtra). The
+//  rock, the coral and (desktop) the polyps cast into them; the coral and
+//  polyps with a custom depth material (shaders.js CORAL_DEPTH_VS).
 //
 //  FRAME. Each frame (render):
 //    1. caustics .. the mesh-area pass fills the caustic map (water.js
 //                   waves, CAUSTIC_VS / CAUSTIC_FS), over the plot
 //    2. scene ..... into a float target with a depth texture (linear
-//                   light); three renders the lead shadow map first
-//    3. volume .... VOL_FS at half size: the lamp cones, the lead shadow
-//                   shafts and the downwell shafts, from the depth
+//                   light); three renders the lamp shadow maps first
+//    3. volume .... VOL_FS at half size: the lamp cones, the shadow
+//                   shafts of each mapped lamp and the downwell shafts
 //    4. frame ..... COMP_FS: scene + volume, ACES, vignette, grain, sRGB
 //    5. exposure .. every 12 frames LUM_FS fills a 32 x 32 log-luminance
 //                   target; gpu-safe.js exposureFrom sets uExposure
@@ -39,6 +42,7 @@
 //    lamps .................. "function setLights"
 //    rock and sand .......... "function setRock"
 //    coral chunks ........... "function applyBricks"
+//    shadow depth materials . "const coralDepth"
 //    chunk rebuild .......... "function rebuildChunk"
 //    polyp template ......... "function polypTemplate"
 //    particle textures ...... "function setParticles"
@@ -181,6 +185,10 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   } catch (e) { if (onNoGL) onNoGL(e); return null; }
   const LD = {
     shadow: profile ? profile.shadow : coarse ? 1024 : 2048,
+    // the maps of the main lamps of the other ROVs (0: none), and polyps
+    // in the shadow pass (many small instances: desktop only)
+    shadowExtra: profile ? profile.shadowExtra ?? 0 : coarse ? 0 : 1024,
+    polypShadow: profile ? !!profile.polypShadow : !coarse,
     volScale: profile ? profile.vol.scale : coarse ? 0.4 : 0.5, volSteps: profile ? profile.vol.steps : coarse ? 14 : 30,
     snow: profile ? profile.snow : coarse ? 1200 : 3000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
   };
@@ -219,13 +227,14 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     uSunXZ: { value: new THREE.Vector3() }, uCaustBox: { value: new THREE.Vector4() }, uCaustTex: { value: null }, uCaustScale: { value: 1 },
     uCur: { value: new THREE.Vector2(1, 0) },
     uSpotN: { value: 0 }, uSpotP: { value: [v4(), v4(), v4(), v4()] }, uSpotD: { value: [v4(), v4(), v4(), v4()] }, uSpotC: { value: [v4(), v4(), v4(), v4()] },
-    uShadow: { value: null }, uShadowM: { value: new THREE.Matrix4() }, uShadowOn: { value: 0 }, uShadowBias: { value: -0.0006 }, uShadowTexel: { value: 1 / 2048 },
+    uShadowM: { value: Array.from({ length: SH.MAX_SPOTS }, () => new THREE.Matrix4()) }, uShadowOn: { value: new THREE.Vector4() }, uShadowBias: { value: -0.0006 }, uShadowTexel: { value: new THREE.Vector4(1 / 2048, 1 / 2048, 1 / 2048, 1 / 2048) },
+    uShadow0: { value: null }, uShadow1: { value: null }, uShadow2: { value: null }, uShadow3: { value: null },
     uLut: { value: lutTex }, uMode: { value: 0 }, uCount: { value: 1 }, uBleach: { value: 0 }, uSwayK: { value: 1 },
     uPartA: { value: texA }, uPartB: { value: texB }, uPartW: { value: PART_W }, uDetail: { value: 1 }, uDetailK: { value: 14 }, uKeep: { value: 1 },
   };
   const waterU = () => {
     const o = {};
-    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
+    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
     return o;
   };
   const caus = makeCaustics(renderer, U, coarse, R, profile && profile.caustic);
@@ -295,7 +304,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     for (const m of list) {
       if (!m || !m.positions || !m.positions.length) continue;
       const mesh = new THREE.Mesh(geomOf(m), m.material === 'sand' ? sandMat : rockMat);
-      mesh.castShadow = true; mesh.userData.rock = true;
+      mesh.castShadow = true; mesh.receiveShadow = true; mesh.userData.rock = true;
       rockGroup.add(mesh);
     }
   }
@@ -314,6 +323,22 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     polypMats[id] = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: SH.POLYP_VS, fragmentShader: SH.POLYP_FS, side: THREE.DoubleSide,
       uniforms: Object.assign(coralU(), { uKeep: U.uKeep, uSize: { value: L.size }, uExtend: { value: L.extend }, uTint: { value: new THREE.Vector3(...L.tint) }, uFluor: { value: L.fluor } }),
+    });
+  }
+  // the shadow depth of the coral and the polyps: the same vertex motion
+  // (grow-in, the hidden coarse mesh of a focus colony, sway) as the colour
+  // pass, RGBA packed depth (shaders.js DEPTH_FS); three's default depth
+  // material would cast the full grown shape
+  const depthU = () => ({ uTime: U.uTime, uCur: U.uCur, uPartA: U.uPartA, uPartB: U.uPartB, uPartW: U.uPartW, uSwayK: U.uSwayK });
+  const coralDepth = [0, 1].map(c => new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_DEPTH_VS, fragmentShader: SH.DEPTH_FS, side: THREE.DoubleSide,
+    uniforms: Object.assign(depthU(), { uCoarse: { value: c } }),
+  }));
+  const polypDepth = {};
+  for (const id of Object.keys(SPECIES_CODE)) {
+    polypDepth[id] = new THREE.ShaderMaterial({
+      glslVersion: THREE.GLSL3, vertexShader: SH.POLYP_DEPTH_VS, fragmentShader: SH.DEPTH_FS, side: THREE.DoubleSide,
+      uniforms: Object.assign(depthU(), { uKeep: U.uKeep, uSize: polypMats[id].uniforms.uSize, uExtend: polypMats[id].uniforms.uExtend }),
     });
   }
   const tpl = polypTemplate();
@@ -385,7 +410,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     geo.computeBoundingSphere();
     if (geo.boundingSphere) geo.boundingSphere.radius += 0.1;
     if (ch.mesh) { ch.mesh.geometry.dispose(); ch.mesh.geometry = geo; }
-    else { ch.mesh = new THREE.Mesh(geo, (c.lod ? coarseMats : coralMats)[c.id]); ch.mesh.castShadow = true; c.group.add(ch.mesh); }
+    else { ch.mesh = new THREE.Mesh(geo, (c.lod ? coarseMats : coralMats)[c.id]); ch.mesh.castShadow = true; ch.mesh.receiveShadow = true; ch.mesh.customDepthMaterial = coralDepth[c.lod ? 1 : 0]; c.group.add(ch.mesh); }
     polypTotal -= ch.np; ch.np = npol; polypTotal += npol;
     if (ch.poly) ch.poly.geometry.dispose();
     if (npol) {
@@ -399,7 +424,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       pg.boundingSphere = geo.boundingSphere ? geo.boundingSphere.clone() : null;
       if (pg.boundingSphere) pg.boundingSphere.radius += 0.05;
       if (ch.poly) ch.poly.geometry = pg;
-      else { ch.poly = new THREE.Mesh(pg, polypMats[c.id]); c.group.add(ch.poly); }
+      else { ch.poly = new THREE.Mesh(pg, polypMats[c.id]); ch.poly.castShadow = LD.polypShadow; ch.poly.customDepthMaterial = polypDepth[c.id]; c.group.add(ch.poly); }
     } else if (ch.poly) { ch.poly.parent && ch.poly.parent.remove(ch.poly); ch.poly = null; }
   }
   function flushChunks(ms = 3, nowMs = 0, minGap = 180) {
@@ -450,21 +475,35 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   const snow = makeSnow(LD.snow); scene.add(snow);
 
   // ── lamps ─────────────────────────────────────────────────────────────────
-  let lamps = [];
-  // list: THREE.SpotLight objects (the ROV lamps). The first is the lead lamp.
-  function setLights(list) {
+  let lamps = [], mainN = 0;
+  // list: THREE.SpotLight objects (the ROV lamps), the main lamp of each
+  // ROV first (main.js buildROVs). mains: how many of the first lamps are
+  // main lamps (default: the first lamps of distinct light.userData.vehicle,
+  // at least 1). Lamp 0 (the lead) gets a map of LD.shadow, the other main
+  // lamps a map of LD.shadowExtra, the rest none. A lamp that loses its
+  // map frees it.
+  function dropMap(l) { if (l.shadow && l.shadow.map) { l.shadow.map.dispose(); l.shadow.map = null; } }
+  function setLights(list, mains) {
     lamps = (list || []).filter(l => l && l.isSpotLight).slice(0, SH.MAX_SPOTS);
-    const lead = lamps[0];
-    if (lead) {
-      lead.castShadow = LD.shadow > 0;
-      const sz = Math.max(256, LD.shadow || 512);
-      if (lead.shadow.mapSize.x !== sz) { lead.shadow.mapSize.set(sz, sz); if (lead.shadow.map) { lead.shadow.map.dispose(); lead.shadow.map = null; } }
-      lead.shadow.bias = 0;
-      U.uShadowTexel.value = 1 / sz;
+    if (mains === undefined) {
+      const seen = new Set(); mains = 0;
+      for (const l of lamps) { const v = l.userData ? l.userData.vehicle : undefined; if (v === undefined || seen.has(v)) break; seen.add(v); mains++; }
     }
-    for (const l of lamps.slice(1)) l.castShadow = false;
+    mainN = lamps.length ? Math.max(1, Math.min(lamps.length, mains)) : 0;
+    lamps.forEach((l, i) => {
+      const sz = i === 0 ? LD.shadow : i < mainN ? LD.shadowExtra : 0;
+      if (sz > 0) {
+        const s = Math.max(256, sz);
+        if (l.shadow.mapSize.x !== s) { l.shadow.mapSize.set(s, s); dropMap(l); }
+        l.shadow.bias = 0;
+        l.shadow.camera.near = 0.3;
+        l.castShadow = true;
+      } else { l.castShadow = false; dropMap(l); }
+    });
   }
   const P3 = new THREE.Vector3(), T3 = new THREE.Vector3();
+  const shadowTex = [U.uShadow0, U.uShadow1, U.uShadow2, U.uShadow3];
+  // -> true when a lamp casts but three has not made its map yet
   function updateLamps() {
     U.uSpotN.value = lamps.length;
     lamps.forEach((l, i) => {
@@ -476,10 +515,18 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
       U.uSpotD.value[i].set(T3.x, T3.y, T3.z, Math.cos(l.angle));
       U.uSpotC.value[i].set(l.color.r * k, l.color.g * k, l.color.b * k, Math.cos(l.angle * (1 - Math.max(0.05, l.penumbra))));
     });
-    const lead = lamps[0];
-    const map = lead && lead.castShadow && lead.shadow && lead.shadow.map;
-    if (map) { U.uShadow.value = map.texture; U.uShadowM.value.copy(lead.shadow.matrix); U.uShadowOn.value = 1; }
-    else U.uShadowOn.value = 0;
+    let wait = false;
+    for (let i = 0; i < SH.MAX_SPOTS; i++) {
+      const l = lamps[i], map = l && l.castShadow && l.shadow && l.shadow.map;
+      if (map) {
+        shadowTex[i].value = map.texture; U.uShadowM.value[i].copy(l.shadow.matrix);
+        U.uShadowOn.value.setComponent(i, 1); U.uShadowTexel.value.setComponent(i, 1 / l.shadow.mapSize.x);
+      } else {
+        U.uShadowOn.value.setComponent(i, 0); shadowTex[i].value = null;
+        if (l && l.castShadow) wait = true;
+      }
+    }
+    return wait;
   }
 
   // ── passes ────────────────────────────────────────────────────────────────
@@ -533,13 +580,20 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   function setPlot(r) { U.uR.value = r; caus.setPlot(r); }
 
   // The loads that the frame governor (budget.js frameGovernor) changes:
-  // { volScale, volSteps, polypDraw, shadow (map size, 0 off) }.
+  // { volScale, volSteps, polypDraw, shadow (the lead map size, 0 off),
+  // shadowExtra (the map size of the other main lamps, 0 off), polypShadow }.
   function setLoads(o = {}) {
     if (o.polypDraw !== undefined) polypBudget = Math.max(0, o.polypDraw);
     if (passes && o.volSteps !== undefined) passes.volU.uSteps.value = Math.max(4, Math.round(o.volSteps));
     if (passes && o.volScale !== undefined && o.volScale !== passes.scale) { passes.scale = o.volScale; resize(); }
-    if (o.shadow !== undefined && o.shadow !== LD.shadow) { LD.shadow = o.shadow; setLights(lamps); if (!o.shadow) U.uShadowOn.value = 0; }
+    let relight = false;
+    for (const k of ['shadow', 'shadowExtra']) if (o[k] !== undefined && o[k] !== LD[k]) { LD[k] = o[k]; relight = true; }
+    if (o.polypShadow !== undefined && !!o.polypShadow !== LD.polypShadow) {
+      LD.polypShadow = !!o.polypShadow;
+      for (const c of colonies.values()) for (const ch of c.chunks.values()) if (ch.poly) ch.poly.castShadow = LD.polypShadow;
+    }
     Object.assign(LD, o);
+    if (relight) { setLights(lamps, mainN); updateLamps(); }
   }
   const view = { ox: 0, oy: 0, tox: 0, toy: 0 };
   function resize() {
@@ -591,14 +645,14 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     if (opts.caustics && (!coarse || (frameN & 1) === 0)) caus.render(U.uTime.value);
     snow.visible = opts.snow;
     scene.updateMatrixWorld();
-    // the shadow matrix of this frame (the shadow pass of render() computes the same)
-    if (lamps[0] && lamps[0].castShadow) lamps[0].shadow.updateMatrices(lamps[0]);
-    updateLamps();
+    // the shadow matrices of this frame (the shadow pass of render() computes the same)
+    for (const l of lamps) if (l.castShadow) l.shadow.updateMatrices(l);
+    const wait = updateLamps();
     frameN++;
     if (!passes || !post.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     renderer.setRenderTarget(passes.rtScene);
     renderer.render(scene, camera);
-    if (U.uShadowOn.value < 0.5) updateLamps();            // the first shadow map is there now
+    if (wait) updateLamps();                               // the first shadow maps are there now
     const vu = passes.volU;
     if (opts.volume) {
       vu.uEye.value.setFromMatrixPosition(camera.matrixWorld);
@@ -623,7 +677,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     get sand() { return sandMesh; }, post,
     setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
-    get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; },
+    get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },
     PART_W, maxParticles: NP,
   };
 }

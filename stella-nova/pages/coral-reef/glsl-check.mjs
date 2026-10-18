@@ -60,7 +60,7 @@ export function toVulkan(src, stage, o = {}) {
   let text = body.join('\n');
   text = text.replace(/sampler2D\s+(\w+)/g, (m, n) => { sNames.add(n); return `texture2D ${n}_t, sampler ${n}_s`; });
   for (const n of sNames) {
-    text = text.replace(new RegExp(`\\b(texture|texelFetch)\\(\\s*${n}\\s*,`, 'g'), `$1(sampler2D(${n}_t, ${n}_s),`);
+    text = text.replace(new RegExp(`\\b(texture|textureLod|texelFetch)\\(\\s*${n}\\s*,`, 'g'), `$1(sampler2D(${n}_t, ${n}_s),`);
     text = text.replace(new RegExp(`\\b${n}\\b(?!_[ts])`, 'g'), `${n}_t, ${n}_s`);
   }
   if (o.instanced) text = text.replace(/\binstanceMatrix\b/g, 'mat4(iM0, iM1, iM2, iM3)');
