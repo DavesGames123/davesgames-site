@@ -34,6 +34,7 @@ import { createDetail } from './detail.js';
 import { createExplain } from './explain.js';
 import { mountGradientPicker } from '../../lib/growth-gradients.js';
 import { mountSheet } from '../../lib/sn-panel.js';
+import { installSaver } from './saver.js';
 
 export const PHONE_QUERY = '(max-width: 768px), (max-height: 500px) and (pointer: coarse)';
 const DEFAULT_EXAMPLE = 12;   // espresso
@@ -385,7 +386,8 @@ export async function boot() {
   relayout();
   runExample(DEFAULT_EXAMPLE);
   S.booted = true;
-  // SAVER SEAM: saver.js installs window.snSaver here (next commit).
+  // SAVER SEAM: window.snSaver (saver.js) borrows maps, draw and scenes.
+  installSaver(page, { doc, win });
   return page;
 }
 

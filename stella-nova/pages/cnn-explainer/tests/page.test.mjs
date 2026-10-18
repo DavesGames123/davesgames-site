@@ -2,7 +2,7 @@
 // Boots the page in jsdom at a desktop and a phone size, with a stub 2D
 // canvas context, and checks: no errors, the first prediction, every
 // example, the detail view of each layer type, the keyboard, hover tips,
-// colours and the explainer widgets.
+// colours, the explainer widgets, and the screensaver enter and exit.
 // Needs jsdom on NODE_PATH (or JSDOM_DIR); without it the test SKIPs and
 // exits 1, so a run without jsdom never passes as green.
 import fs from 'node:fs';
@@ -152,6 +152,31 @@ for (const size of [{ name: 'desktop 1280x800', width: 1280, height: 800, phone:
     doc.getElementById('creditsBtn').click();
     ok(!doc.getElementById('credits').hidden && doc.querySelectorAll('#creditsBody .cr-photos a').length === 20 && /MIT/.test(doc.getElementById('creditsBody').textContent), `${N}: credits list the photos and the MIT licence`);
     doc.getElementById('creditsClose').click();
+    // the screensaver
+    ok(win.snSaver && typeof win.snSaver.enter === 'function' && typeof win.snSaver.exit === 'function', `${N}: window.snSaver has enter and exit`);
+    const plates = [];
+    const res = win.snSaver.enter({ calm: 0.7, seed: 11, label: p => plates.push(p) });
+    ok(res && res.canvas && doc.body.contains(res.canvas), `${N}: the saver canvas is in the document`);
+    await wait(250);
+    const dbg = win.snSaver.debug();
+    ok(dbg && dbg.id === 'pipeline' && dbg.tau > 0, `${N}: the saver plays the first shot`, JSON.stringify(dbg));
+    ok(plates.length >= 1 && /^It sees/.test(plates[0].title) && plates[0].tex.length === 1, `${N}: the saver names the shot on the plate`, plates[0] && plates[0].title);
+    for (const id of ['conv', 'relu', 'pool', 'dense', 'pipeline']) {
+      for (const k of [0.1, 0.6, 0.95]) {
+        ok(win.snSaver.cut(id, k), `${N}: saver cut to ${id}`);
+        await wait(40);
+      }
+      const d = win.snSaver.debug();
+      ok(d.id === id && d.errs === 0 && d.frames > 0, `${N}: saver ${id} shot draws with no error`, JSON.stringify(d));
+    }
+    win.snSaver.exit();
+    ok(!doc.getElementById('snSaverCv') && !win.__cnnSaver, `${N}: the saver exits and removes its canvas`);
+    // a detail shot of the saver draws with no error (jump the clock)
+    const before = T.errors.length;
+    win.snSaver.enter({ calm: 0.2, seed: 3, label: () => {} });
+    await wait(60);
+    win.snSaver.exit();
+    ok(T.errors.length === before, `${N}: a second saver run has no error`);
     ok(T.errors.length === 0, `${N}: no errors`, T.errors.slice(0, 5).join(' | '));
   } catch (e) {
     ok(false, `${N}: test threw`, e.stack);

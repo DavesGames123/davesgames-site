@@ -1,8 +1,10 @@
 // CNN Explainer · tests/layout.test.mjs
 // The overview layouts (desktop columns, phone blocks), hit tests, the
-// receptive field sizes the explainer text quotes. No DOM.
+// receptive field sizes the explainer text quotes, the saver plan and the
+// saver framing in 16:9 and 9:16 bands. No DOM.
 import { layoutNet, hitTest, feeders, fieldMaps, GRID } from '../layout.js';
 import { receptiveField, ARCH } from '../net.js';
+import { shotPlan, fitNet } from '../saver.js';
 import { SCALES } from '../colour.js';
 
 let pass = 0, fail = 0;
@@ -35,6 +37,28 @@ ok(feeders(1, 4).length === 3 && feeders(3, 4).length === 10 && feeders(2, 4).jo
 ok(fieldMaps(2, 4, 1).join() === '4' && fieldMaps(3, 4, 1).length === 10 && fieldMaps(1, 4, 0).join() === '-1,0,1,2', 'fieldMaps');
 ok(GRID.length === ARCH.length, 'one grid size per layer');
 ok(SCALES.map(s => s.id).join() === 'map,layer,network', 'three colour scales');
+
+// saver plan: seeded, varied, every example before a repeat, cut lengths
+{
+  const a = shotPlan(7, 60, 0.7), b = shotPlan(7, 60, 0.7), c = shotPlan(8, 60, 0.7);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'shotPlan is seeded');
+  ok(JSON.stringify(a) !== JSON.stringify(c), 'shotPlan differs by seed');
+  const firstEx = []; for (const s of a) if (s.id === 'pipeline' && firstEx.length < 20) firstEx.push(s.ex);
+  ok(new Set(firstEx).size === 20, 'the first 20 photos are all different', firstEx.join(','));
+  ok(a.every(s => s.sec >= 6 && s.sec <= 13), 'every shot lasts 6 to 13 s');
+  let rep = 0; let last = ''; for (const s of a) { if (s.id !== 'pipeline') { if (s.id === last) rep++; last = s.id; } }
+  ok(rep === 0, 'no detail kind twice in a row');
+  ok(['conv', 'relu', 'pool', 'dense'].every(k => a.some(s => s.id === k)), 'every detail kind plays');
+  ok(a.every(s => s.id === 'pipeline' || ARCH[s.li].type === s.id), 'detail shots name a layer of their kind');
+}
+// saver framing: the network fits the clear band at 16:9 and 9:16
+for (const [name, band] of [['16:9', { x: 51, y: 190, w: 1178, h: 400 }], ['16:9 small', { x: 20, y: 120, w: 600, h: 230 }], ['9:16', { x: 18, y: 260, w: 414, h: 700 }], ['9:16 short', { x: 16, y: 200, w: 340, h: 380 }]]) {
+  const f = fitNet(band), L = f.L, W = L.w * f.k, H = (L.orient === 'h' ? band.h : L.h) * f.k;
+  ok(f.ox >= band.x - 0.5 && f.oy >= band.y - 0.5 && f.ox + W <= band.x + band.w + 0.5 && f.oy + H <= band.y + band.h + 0.5, `saver ${name}: network inside the band`, JSON.stringify({ ox: f.ox, oy: f.oy, W, H }));
+  const s = L.s * f.k;
+  ok(s >= 12, `saver ${name}: maps are ${s.toFixed(1)} px, large enough to read`);
+  ok(W >= band.w * 0.6 || H >= band.h * 0.6, `saver ${name}: network fills the band (${(W / band.w * 100).toFixed(0)}% x ${(H / band.h * 100).toFixed(0)}%)`);
+}
 
 console.log(`layout: ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;
