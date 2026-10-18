@@ -10,6 +10,9 @@
 //    winter   snow on the bare crown, slow
 //    summer   a mature crown in the wind
 //    heat     a young plant in the age (or resource, or light) heatmap
+//    meadow   the meadow round a mature tree in June, from eye height
+//             (meadowCamera): grass in flower, drifts of buttercups and
+//             daisies, falling petals, gusts
 //  shotPlan(shot) gives the clock window [t0, t1] and the rate (years per
 //  second) of a shot. The camera frames the sphere round the plants in the
 //  clear band of the label plate, calm and wide, for 16:9 and 9:16.
@@ -19,13 +22,14 @@
 //    clock window ....... "export function shotPlan"
 //    band maths ......... "export function bandFrame"
 //    camera distance .... "export function fitDistance"
+//    meadow camera ...... "export function meadowCamera"
 //    on-screen radius ... "export function projectedRadius"
 //    code for the plate . "export function codeExtract"
 // ============================================================================
 import { SPECIES, SPECIES_IDS } from './grow.js';
 
 export const SAVER_GRADIENTS = ['forest', 'viridis', 'inferno', 'magma', 'aurora', 'ember', 'turbo', 'spectral', 'plasma'];
-export const SHOT_KINDS = ['life', 'autumn', 'grove', 'spring', 'heat', 'winter', 'summer'];
+export const SHOT_KINDS = ['life', 'autumn', 'grove', 'spring', 'heat', 'winter', 'summer', 'meadow'];
 
 // Fisher-Yates with a seeded rnd.
 export function shuffle(a, rnd) {
@@ -34,7 +38,8 @@ export function shuffle(a, rnd) {
 }
 
 // n shots. The kinds come in a shuffled round, and so do the species; two
-// shots in a row never show the same species. Ferns and azaleas get the
+// shots in a row never show the same species, and an autumn shot never
+// shows an evergreen. Ferns and azaleas get the
 // short-life kinds (life, spring, summer, heat) only.
 export function makeShots(rnd, n = 12, calm = 0.7) {
   const out = [];
@@ -43,15 +48,14 @@ export function makeShots(rnd, n = 12, calm = 0.7) {
     if (!kinds.length) kinds = shuffle(SHOT_KINDS.slice(), rnd);
     const kind = kinds.shift();
     let sp = null;
-    for (let tries = 0; tries < 20 && !sp; tries++) {
-      if (!species.length) species = shuffle(SPECIES_IDS.slice(), rnd);
-      const c = species[0];
-      const prev = out.length ? out[out.length - 1].species : null;
-      const small = SPECIES[c].form !== 'tree';
-      if (c === prev || (small && (kind === 'autumn' || kind === 'winter' || kind === 'grove'))) { species.push(species.shift()); continue; }
-      sp = species.shift();
+    const prev = out.length ? out[out.length - 1].species : null;
+    const fits = c => c !== prev && (SPECIES[c].form === 'tree' || !(kind === 'autumn' || kind === 'winter' || kind === 'grove' || kind === 'meadow'))
+      && !(kind === 'autumn' && SPECIES[c].leaf.ever);   // an evergreen has no autumn colour
+    if (!species.some(fits)) species = species.concat(shuffle(SPECIES_IDS.slice(), rnd));   // a new round
+    for (let tries = 0; tries < species.length && !sp; tries++) {
+      if (fits(species[0])) sp = species.shift(); else species.push(species.shift());
     }
-    if (!sp) sp = 'oak';
+    if (!sp) sp = SPECIES_IDS.find(fits) || 'oak';
     const heat = ['age', 'vigour', 'light', 'flow'];
     const pick = rnd();
     const mode = kind === 'heat' ? heat[Math.floor(pick * heat.length)] : kind === 'life' && pick < 0.15 ? 'age' : 'natural';
@@ -82,6 +86,7 @@ export function shotPlan(shot) {
     case 'spring': { const Y = Math.max(1, Math.round(years * 0.6)); t0 = Y + 0.13; t1 = Y + 0.42; caption = 'Bud break, blossom and leaf flush'; break; }
     case 'winter': t0 = late + 0.9; t1 = late + 1.14; caption = 'Snow on the bare crown'; break;
     case 'summer': t0 = years - 1 + 0.42; t1 = years - 1 + 0.6; caption = 'A mature crown in the wind'; break;
+    case 'meadow': t0 = years - 1 + 0.36; t1 = years - 1 + 0.55; caption = 'The meadow in June: grass in flower, buttercups and daisies in drifts'; break;
     default: { const Y = Math.min(3, years - 2); t0 = Y + 0.2; t1 = Math.min(years - 1, 15) + 0.5; caption = 'The heatmap while it grows'; }
   }
   t1 = Math.max(t1, t0 + 0.05);
@@ -107,6 +112,20 @@ export function fitDistance(r, fovY, aspect, hFrac = 1, wFrac = 1, fill = 0.8) {
   const tv = Math.tan(fovY * Math.PI / 360);
   const t = Math.min(tv * hFrac * fill, tv * aspect * wFrac * fill);
   return r * Math.sqrt(1 + t * t) / t;
+}
+
+// The meadow shot: the camera stands at eye height (1.15 m over the
+// ground) in the grass, 2 crown radii from the plants, and aims at the
+// middle of the crown, so the meadow fills the lower frame and the tree
+// stands over it. With edge (the direction of the woodland edge, eco.js
+// params.edge) the camera stays on the open side and swings within 55
+// degrees of the line through the tree to the wood, so the wood is the
+// backdrop. s: { c, r } (the frame sphere), groundY(x, z).
+export function meadowCamera(s, d, az, groundY, edge = null) {
+  const dd = Math.max(6, Math.min(d * 0.8, s.r * 2));
+  const a = edge ? Math.atan2(-edge[0], -edge[1]) + Math.sin(az) * 0.95 : az;
+  const x = s.c[0] + Math.sin(a) * dd, z = s.c[2] + Math.cos(a) * dd;
+  return { pos: [x, groundY(x, z) + 1.15, z], target: [s.c[0], Math.max(1.2, s.c[1] * 0.55), s.c[2]] };
 }
 
 // The on-screen radius in px of a sphere of radius r at distance d, in a

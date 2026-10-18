@@ -59,7 +59,8 @@ import { buildEco, seedlings, litterSeason } from './eco.js';
 import { LOOK } from './look.js';
 import { ATLAS_CELLS } from './atlas.js';
 import { seasonOf, snowCover, smoothstep } from './season.js';
-import { fitDistance, bandFrame, makeShots, codeExtract, shotPlan } from './saver.js';
+import { fitDistance, bandFrame, makeShots, codeExtract, shotPlan, meadowCamera } from './saver.js';
+import { groundY } from './ground.js';
 import { createRender } from './render.js';
 import { createDiagram } from './diagram.js';
 import { PHONE_QUERY, occlusion as occlude, clearFractions, createGestures, dockClock, nextId, pixelRatioStep, ecoLimits } from './layout.js';
@@ -509,7 +510,8 @@ requestAnimationFrame(frame);
 // window.snSaver (protocol: lib/screensaver.js). enter() plays a seeded
 // shuffle of shots (saver.js makeShots and shotPlan): a whole life in a
 // fast time-lapse, a slow autumn, a spring, a winter, a grove that
-// competes for light, the age heatmap of a young tree. Each shot sows its
+// competes for light, the age heatmap of a young tree, the June meadow
+// from eye height (saver.js meadowCamera). Each shot sows its
 // own seed; a shot that needs a mature plant waits (on the last frame of
 // the previous shot) until the model has reached its first year. The
 // camera fits the plants in the clear band of the plate, aims a little
@@ -545,7 +547,9 @@ window.snSaver = {
           String.raw`Q = \max\!\Bigl(0,\ \frac{C - s + a}{C}\Bigr),\qquad s \mathrel{+}= a\,b^{-k}`],
         rules: [['λ', 'm2'], ['b', 'm3']],
         eq: ['v_m = v λQ_m / (λQ_m + (1 − λ)Q_l)', 'Q = (C − s + a) / C', 'r^n = Σ r_child^n'],
-        lines: [`${sp.latin}. Self-organising growth after Palubicki et al. 2009.`],
+        lines: shot.kind === 'meadow'
+          ? ['Grass tussocks in Thomas clusters, flowers in drifts by species, stones by a power law.', `${sp.latin}. Self-organising growth after Palubicki et al. 2009.`]
+          : [`${sp.latin}. Self-organising growth after Palubicki et al. 2009.`],
         code: CODE,
       });
     };
@@ -583,6 +587,11 @@ window.snSaver = {
       const s = frameTarget(), w = innerWidth, h = innerHeight, f = bandFrame(saver.band, w, h);
       const d = fitDistance(s.r, FOV, w / h, f.hFrac, f.wFrac, 0.8);
       az += shot.orbit * dt;
+      if (shot.kind === 'meadow') {   // eye height in the grass, the tree over it
+        const mc = meadowCamera(s, d, az, groundY, eco ? eco.params.edge : null);
+        R.controls.target.set(...mc.target); R.camera.position.set(...mc.pos);
+        return;
+      }
       const ce = Math.cos(shot.el);
       const ty = s.c[1] + s.r * 0.08;
       R.controls.target.set(s.c[0], ty, s.c[2]);

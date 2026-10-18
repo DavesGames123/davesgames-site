@@ -23,7 +23,7 @@ import { plantMesh } from './mesh.js';
 import { groundY, FLAT_R, inCutaway, GROUND_GLSL, setPads, relief, RELIEF_AMP, PAD_RISE } from './ground.js';
 import * as E from './eco.js';
 import { createRoots, packRoots } from './roots.js';
-import { makeShots, shotPlan, bandFrame, fitDistance, projectedRadius, codeExtract, SHOT_KINDS } from './saver.js';
+import { makeShots, shotPlan, bandFrame, fitDistance, projectedRadius, codeExtract, SHOT_KINDS, meadowCamera } from './saver.js';
 import { ATLAS_CELLS } from './atlas.js';
 import { LOOK, BARKS } from './look.js';
 import { rng } from '../../lib/dla-engine.js';
@@ -568,8 +568,20 @@ const eco7 = E.buildEco({ seed: 7, plants: OAK_PLANT });
   ok(JSON.stringify(a) !== JSON.stringify(c), 'shots: another seed gives another list');
   ok(a.every(s => s.dur >= 5 && s.dur <= 12), 'shots: 5 to 12 s each');
   ok(a.every((s, i) => i === 0 || s.species !== a[i - 1].species), 'shots: no species twice in a row');
-  ok(SHOT_KINDS.every(k => a.some(s => s.kind === k)), 'shots: every kind (life, autumn, grove, spring, heat, winter, summer)');
-  ok(a.filter(s => s.kind === 'autumn' || s.kind === 'winter' || s.kind === 'grove').every(s => SPECIES[s.species].form === 'tree'), 'shots: autumn, winter and grove shots show trees');
+  ok(SHOT_KINDS.every(k => a.some(s => s.kind === k)), 'shots: every kind (life, autumn, grove, spring, heat, winter, summer, meadow)');
+  ok(a.filter(s => s.kind === 'autumn' || s.kind === 'winter' || s.kind === 'grove' || s.kind === 'meadow').every(s => SPECIES[s.species].form === 'tree'), 'shots: autumn, winter, grove and meadow shots show trees');
+  const me = a.find(s => s.kind === 'meadow'), mp = shotPlan(me), ph0 = mp.t0 - Math.floor(mp.t0);
+  ok(ph0 > 0.33 && mp.t1 - Math.floor(mp.t0) < 0.6 && mp.t1 > Math.floor(mp.t0) + 0.5, 'a meadow shot shows late May to early July of a mature year');
+  const daisy = E.FORBS.find(f => f.id === 'daisy'), but = E.FORBS.find(f => f.id === 'buttercup');
+  ok(but.bloom[0] < mp.t1 - Math.floor(mp.t0) && daisy.bloom[0] < mp.t1 - Math.floor(mp.t0) && E.grassState(0.47, 0, 0)[2] > 0.9, 'the meadow shot holds the buttercup and daisy bloom and the grass in flower');
+  let inWood = 0, eye = true;
+  for (let i = 0; i < 40; i++) {
+    const mc = meadowCamera({ c: [0, 7, 0], r: 11 }, 40, i * 0.37, groundY, eco7.params.edge);
+    if (eco7.fields.wood(mc.pos[0], mc.pos[2]) > 0.01 || eco7.fields.woodShade(mc.pos[0], mc.pos[2]) > 0.3) inWood++;
+    const hh = mc.pos[1] - groundY(mc.pos[0], mc.pos[2]);
+    if (!(hh > 1 && hh < 1.3 && mc.target[1] > mc.pos[1] && Math.hypot(mc.pos[0], mc.pos[2]) > 15)) eye = false;
+  }
+  ok(eye && inWood === 0, 'the meadow camera stands at eye height in the open meadow, the wood behind the tree');
   for (const s of a) {
     const p = shotPlan(s), years = SPECIES[s.species].years;
     if (!(p.t0 >= 0 && p.t1 > p.t0 && p.t1 <= years && p.rate > 0 && p.rate * s.dur >= (p.t1 - p.t0) * 0.99)) { ok(false, `plan ${s.kind} ${s.species} ${JSON.stringify(p)}`); break; }
