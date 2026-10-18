@@ -196,6 +196,12 @@ export function buildVehicle(THREE, o = {}) {
   const tetherPoint = new THREE.Object3D(); tetherPoint.position.set(-0.75, yt + 0.95, 0); body.add(tetherPoint);
   add(new THREE.CylinderGeometry(0.035, 0.08, 0.36, seg(10)), M.orange, -0.75, yt + 0.72, 0);
   add(new THREE.CylinderGeometry(0.11, 0.11, 0.06, seg(12)), M.steel, -0.75, yt + 0.53, 0);
+  // lifting bail: a steel arch over the foam
+  {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) { const a = Math.PI * i / 8; pts.push([0.15 + 0 * a, yt + 0.62 + Math.sin(a) * 0.22, Math.cos(a) * 0.3]); }
+    for (let i = 0; i < 8; i++) tube(pts[i], pts[i + 1], 0.022, M.steel);
+  }
   // flasher mast
   tube([-0.95, yt + 0.5, -0.45], [-0.95, yt + 0.85, -0.45], 0.012, M.steel);
   // forward sonar
@@ -259,7 +265,7 @@ export function buildVehicle(THREE, o = {}) {
     add(new THREE.BoxGeometry(0.12, 0.03, 0.018), M.steel, 0.06, 0, 0, jawL);
     add(new THREE.BoxGeometry(0.12, 0.03, 0.018), M.steel, 0.06, 0, 0, jawR);
     // stowed pose: folded back under the front
-    up.rotation.z = -0.5; up.rotation.y = 0.35; elbow.rotation.z = 1.9; wrist.rotation.z = 0.4;
+    up.rotation.z = -0.22; up.rotation.y = 0.2; elbow.rotation.z = 2.55; wrist.rotation.z = -0.9;
     return { shoulder, up, elbow, wrist, jawL, jawR };
   }
   const arm = manipulator();
