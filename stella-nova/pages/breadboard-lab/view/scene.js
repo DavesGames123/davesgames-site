@@ -27,7 +27,8 @@
 //
 //  GREP MAP
 //    loadParts ............. dynamic import of the PARTS modules
-//    makeRenderer / lights . renderer, PMREM room, mat, shadows, bloom
+//    makeRenderer / lights . renderer, PMREM room, mat, shadows, bloom;
+//                            the numbers come from core/light.js
 //    resolver .............. material id → THREE material (presets + doc)
 //    buildBoardRec ......... board objects
 //    buildPartRec .......... part handles, pickable tags, damage carry-over
@@ -56,6 +57,7 @@ import { dataTexture, fallbackBoard, fallbackPart, fallbackWire, fallbackWirePat
 import { ndcFromClient, pickBench, pickPoints, projectPoint, rayFromCamera, rayPlaneY, insetViewOffset } from './picking.js';
 import { BOARD_H, BOARD_TYPES, boardHit, boardRect, holeWorld, partFrame, partPinsWorld, strips, parseHoleId, findBoard, stripOf } from '../core/space.js';
 import { lookupDef, probeDefaults } from '../core/doc.js';
+import { ENV, RIG, TONE, scaleEnvironment } from '../core/light.js';
 
 export const LEAD_COLORS = {
   red: '#d63b3b', black: '#2b2b2b',
@@ -106,7 +108,7 @@ export function createView(opts = {}) {
   // ── renderer, scene, camera ──────────────────────────────────────────────
   const renderer = opts.renderer || new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   if (THREE.ACESFilmicToneMapping !== undefined) renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = TONE.exposure;
   if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = quality === 'high';
   if (THREE.PCFSoftShadowMap !== undefined) renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -123,17 +125,18 @@ export function createView(opts = {}) {
   root.add(gBoards, gParts, gWires, gProbes, gGhost);
   scene.add(root);
 
-  const hemi = new THREE.HemisphereLight(0xdde6ff, 0x1b2422, 0.55);
-  const sun = new THREE.DirectionalLight(0xfff4e6, 2.1);
-  sun.position.set(-160, 420, 260);
+  // the light rig of core/light.js (the tests compute luminance from it)
+  const hemi = new THREE.HemisphereLight(RIG.hemi.sky, RIG.hemi.ground, RIG.hemi.intensity);
+  const sun = new THREE.DirectionalLight(RIG.sun.color, RIG.sun.intensity);
+  sun.position.set(...RIG.sun.position);
   sun.target.position.set(0, 0, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -360, right: 360, top: 300, bottom: -300, near: 50, far: 1200 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.4;
-  const fill = new THREE.DirectionalLight(0xbfd4ff, 0.45);
-  fill.position.set(260, 180, -220);
+  const fill = new THREE.DirectionalLight(RIG.fill.color, RIG.fill.intensity);
+  fill.position.set(...RIG.fill.position);
   scene.add(hemi, sun, sun.target, fill);
 
   // The anti-static mat: teal-grey with a faint 1-inch grid (procedural).
@@ -161,8 +164,10 @@ export function createView(opts = {}) {
     import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
       if (disposed) return;
       const pm = new THREE.PMREMGenerator(renderer);
-      envTex = pm.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+      const room = scaleEnvironment(new RoomEnvironment(renderer), ENV.scale);
+      envTex = pm.fromScene(room, 0.04).texture;
       pm.dispose();
+      room.dispose();
       scene.environment = envTex;
       requestRender();
     }).catch(() => {});

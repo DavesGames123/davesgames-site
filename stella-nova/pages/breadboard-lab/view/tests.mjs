@@ -19,6 +19,7 @@
 //    section('camera') ........ pose round trip, zoom anchor, tweens
 //    section('gestures') ...... tap, drag, long press, pinch, context
 //    section('scene') ......... view/scene.js in node with injected THREE
+//    section('light budget') .. luminance of the materials (test/light-tests)
 // ============================================================================
 import { createBus } from '../core/bus.js';
 import * as SP from '../core/space.js';
@@ -565,6 +566,11 @@ if (sceneTests.run) {
   section('scene');
   check('scene tests load', false, String(sceneTests.missing && sceneTests.missing.message));
 }
+
+// ── light budget ───────────────────────────────────────────────────────────
+const lightTests = await import('./test/light-tests.mjs').catch(e => ({ missing: e }));
+if (lightTests.run) await lightTests.run({ section, check, near });
+else { section('light budget'); check('light tests load', false, String(lightTests.missing && lightTests.missing.message)); }
 
 console.log(`\n${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
