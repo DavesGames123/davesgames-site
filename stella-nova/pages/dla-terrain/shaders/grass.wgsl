@@ -22,11 +22,14 @@
 //  fn biomeBase, so far blades match the ground), clump noise, season (the
 //  seasonGrass windows of GROUND), dry patches, tips lighter. Snow cover
 //  presses the blades flat and white. Wet blades go darker and glossy.
+//  TUFTS  blades lean out of tuft centres (TUFT m cells), so the sward
+//  reads as clumps, with a tint per tuft.
 //  WIND  The blade is a quadratic Bezier curve (after Jahrmann and Wimmer
-//  2017, "Responsive real-time grass rendering", ideas only, no code),
-//  with the tip pushed by G.wind times a gust wave that travels along the
-//  wind (the same field as props.wgsl vegGust), plus a per blade flutter.
-//  The length correction keeps the blade length.
+//  2017, "Responsive real-time grass rendering", ideas only, no code), an
+//  arch with the tip curled over, the tip pushed by G.wind times the gust
+//  noise field that travels downwind (the same field as props.wgsl
+//  vegGust), plus a slow small sway (CHILL). The length correction keeps
+//  the blade length. Soft sun shadow (common.wgsl sunShadowSoft).
 //
 //  GREP MAP
 //    grep -n 'fn gFrustum'    sphere against the view frustum
@@ -57,6 +60,7 @@ struct Blade { a: vec4f, b: vec4f, c: vec4f };
 @group(1) @binding(5) var sCloudSh: sampler;
 
 const SEG: u32 = 5u;
+const TUFT: f32 = 0.42;    // m: the tuft cell (blades lean out of its centre)
 
 fn ghash(x: u32) -> u32 {
   var v = x * 747796405u + 2891336453u;
@@ -211,13 +215,27 @@ fn bladeAt(gid: vec3u, L: u32) {
   let v = gfloat(h7);
   col *= mix(0.8, 1.25, v) * mix(0.9, 1.1, clump);
   col = mix(col, col * vec3f(1.25, 1.1, 0.7), step(0.93, v) * 0.6);   // odd dry blades
+  // TUFTS: blades group round tuft centres (a cell of TUFT m with a
+  // jittered centre); a blade faces out from its centre and leans more
+  // the farther out it stands, and each tuft has its own tint
+  let tc = floor(xz / TUFT);
+  let th = ghash2(vec2i(tc), 23u);
+  let tctr = (tc + vec2f(0.2, 0.2) + (vec2f(gfloat(th), gfloat(ghash(th))) * 0.6)) * TUFT;
+  let toOut = xz - tctr;
+  let od = length(toOut);
+  let outA = atan2(toOut.y, toOut.x);
+  let rnd = gfloat(ghash(h7));
+  let face = select(rnd * 6.2831853, outA + ((rnd - 0.5) * 0.9), od > 0.02);
+  let lean = 0.12 + (0.55 * smoothstep(0.0, TUFT * 0.6, od)) + ((gfloat(h5 ^ h6) - 0.5) * 0.25) + (snowC * 1.1);
+  col *= mix(0.86, 1.14, gfloat(ghash(th ^ 77u)));
+  col = mix(col, col * vec3f(1.08, 1.0, 0.82), step(0.8, gfloat(ghash(th ^ 91u))) * 0.5);
   let k = atomicAdd(&gargs[1], 1u);
   if (k >= u32(GP.grid.z)) { return; }
   var bl: Blade;
   let wmul = clamp(dist / GP.misc.z, 1.0, 8.0);
   bl.a = vec4f(xz.x, y - 0.03, xz.y, hgt * mix(0.25, 1.0, fade));
-  bl.b = vec4f(gfloat(ghash(h7)) * 6.2831853, (0.008 + 0.010 * gfloat(h6)) * GP.misc.x * wmul * mix(1.0, 1.6, gb.dryness),
-               (gfloat(h5 ^ h6) - 0.3) * 0.6 + snowC * 1.1, gfloat(h0 ^ h7));
+  bl.b = vec4f(face, (0.009 + 0.012 * gfloat(h6)) * GP.misc.x * wmul * mix(1.0, 1.6, gb.dryness),
+               lean, gfloat(h0 ^ h7));
   bl.c = vec4f(col, fade);
   blades[k] = bl;
 }
@@ -229,15 +247,25 @@ fn cs_final() {
 }
 
 // ---------------------------------------------------------------- draw --
+// the travelling gust field of props.wgsl vegGust (same noise, same
+// motion): patches of about 40 m that move downwind at about the wind speed
 fn grassGust(xz: vec2f, t: f32) -> f32 {
-  // the same travelling field as props.wgsl vegGust
   let w = G.wind.xy;
   let sp = max(length(w), 0.01);
   let dir = w / sp;
-  let a = dot(xz, dir) * 0.045 - t * (0.35 + sp * 0.06);
-  let b = dot(xz, vec2f(-dir.y, dir.x)) * 0.021;
-  let g = 0.5 + 0.5 * sin(a * 6.2831 + sin(b * 6.2831) * 1.7);
-  return mix(0.35, 1.0, g * g) * (0.6 + G.wind.z * 0.8);
+  let side = vec2f(-dir.y, dir.x);
+  let q = vec2f(dot(xz, dir) - (t * (1.5 + (sp * 0.8))), dot(xz, side)) / vec2f(38.0, 55.0);
+  let g = (gVNoise(q) * 0.65) + (gVNoise((q * 2.3) + vec2f(7.1, 3.7)) * 0.35);
+  return mix(0.3, 1.0, smoothstep(0.25, 0.85, g)) * (0.7 + (G.wind.z * 0.6));
+}
+// value noise on cm_hash12 (the props.wgsl vegNoise lattice)
+fn gVNoise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let u = f * f * (3.0 - (2.0 * f));
+  let a = cm_hash12(i); let b = cm_hash12(i + vec2f(1.0, 0.0));
+  let c = cm_hash12(i + vec2f(0.0, 1.0)); let d = cm_hash12(i + vec2f(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
 struct Curve { p0: vec3f, p1: vec3f, p2: vec3f, side: vec3f, face: vec3f };
@@ -250,16 +278,19 @@ fn bladeCurve(bl: Blade) -> Curve {
   c.side = vec3f(-sin(a), 0.0, cos(a));
   c.p0 = bl.a.xyz;
   let lean = bl.b.z;
+  // an arched blade: the mid point stands high, the tip curls over
   var tip = c.p0 + vec3f(0.0, h * cos(lean), 0.0) + c.face * (h * sin(lean));
-  var mid = c.p0 + vec3f(0.0, h * 0.62, 0.0) + c.face * (h * sin(lean) * 0.25);
+  var mid = c.p0 + vec3f(0.0, h * 0.72, 0.0) + c.face * (h * sin(lean) * 0.18);
   // wind: gusts push the tip downwind, a small flutter per blade
   let w = G.wind.xy;
   let speed = length(w);
   let dir = select(vec2f(1.0, 0.0), w / max(speed, 1e-3), speed > 1e-3);
   let g = grassGust(c.p0.xz, t);
   let ph = bl.b.w * 6.2831853;
-  let flutter = sin(t * (2.2 + bl.b.w * 1.5) + ph + dot(c.p0.xz, vec2f(0.7, 0.4))) * (0.06 + speed * 0.018);
-  let push = clamp(speed * 0.075 * g, 0.0, 1.25) + flutter;
+  // CHILL: a slow sway (0.5 to 0.9 Hz) of a few per cent, the gust does
+  // the rest as it travels across the field
+  let flutter = sin((t * 6.2831853 * (0.5 + (bl.b.w * 0.4))) + ph + dot(c.p0.xz, vec2f(0.7, 0.4))) * (0.025 + (speed * 0.008)) * g;
+  let push = clamp(speed * 0.065 * g, 0.0, 1.1) + flutter;
   let wv = vec3f(dir.x, 0.0, dir.y) * (push * h);
   tip += wv;
   mid += wv * 0.45;
@@ -359,7 +390,8 @@ fn fs_grass(o: GOut) -> @location(0) vec4f {
   let L = normalize(G.sunDir.xyz);
   let sunE = G.sunColor.rgb;   // radiance at ground (as GROUND and WATER)
   var sh = 1.0;
-  if (GP.misc.w > 0.5 && L.y > -0.05) { sh = sunShadow(o.wp, tn); }
+  // the soft shadow of the trees and rocks (PCSS, as the ground under it)
+  if ((GP.misc.w > 0.5) && (L.y > -0.05)) { sh = sunShadowSoft(o.wp, tn, o.pos.xy); }
   sh *= grassCloud(o.wp);
   sh *= smoothstep(-0.06, 0.05, L.y);
   // self shadow inside the sward: deep blades see less sun and sky. The

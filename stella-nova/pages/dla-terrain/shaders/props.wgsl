@@ -27,9 +27,10 @@
 //  them at start), the two nearest views blended, lit from the baked
 //  normals.
 //
-//  WIND  trunk bend by (height / tree height)^2 (vertex bend weight),
-//  a travelling gust wave along G.wind, and leaf flutter by the flutter
-//  weight (distance from the branch).
+//  WIND  (CHILL) a travelling gust noise field, a slow trunk sway, branch
+//  motion and a small leaf flutter (see fn windOffset). Leaf normals are
+//  bent out from the crown centre (soft canopy light, vegetation.js
+//  bendFoliageNormals). The foot of each plant and rock is darker (contact).
 //
 //  GREP MAP
 //    grep -n 'fn inFrustum'     sphere against the 4 side planes and near
@@ -293,15 +294,35 @@ fn rotY(a: f32) -> mat3x3f {
   let c = cos(a); let s = sin(a);
   return mat3x3f(vec3f(c, 0.0, -s), vec3f(0.0, 1.0, 0.0), vec3f(s, 0.0, c));
 }
-// the gust field 0..1 at a world xz (shared idea with grass.wgsl gust)
+// WIND (CHILL): three slow layers, no synced sine over the field.
+//  gusts   a 2 octave value noise field that travels downwind at about
+//          the wind speed (patches of about 40 m), so a gust crosses the
+//          stand tree by tree (vegGust; grass.wgsl gGust is the same field)
+//  trunk   bends with the mean wind x the local gust, plus a slow sway of
+//          0.1 to 0.3 Hz (taller trees slower) of a quarter of the bend
+//  branch  0.4 to 0.7 Hz, a few cm, by the flutter weight (branch tips)
+//  leaf    1.2 to 2 Hz, 1 to 2 cm, along the leaf normal
+// The sum stays under the wind margin of instanceBounds (and its CPU twin
+// vegetation.js instanceBounds): bend <= 0.098 speed bend min(h, 30),
+// branch + leaf <= flutter (0.085 + 0.032 speed).
+fn vegHash(p: vec2f) -> f32 { return cm_hash12(p); }
+fn vegNoise(p: vec2f) -> f32 {
+  let i = floor(p);
+  let f = p - i;
+  let u = f * f * (3.0 - (2.0 * f));
+  let a = vegHash(i); let b = vegHash(i + vec2f(1.0, 0.0));
+  let c = vegHash(i + vec2f(0.0, 1.0)); let d = vegHash(i + vec2f(1.0, 1.0));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
 fn vegGust(xz: vec2f, t: f32) -> f32 {
   let w = G.wind.xy;
   let sp = max(length(w), 0.01);
   let dir = w / sp;
-  let a = dot(xz, dir) * 0.045 - t * (0.35 + sp * 0.06);
-  let b = dot(xz, vec2f(-dir.y, dir.x)) * 0.021;
-  let g = 0.5 + 0.5 * sin(a * 6.2831 + sin(b * 6.2831) * 1.7);
-  return mix(0.35, 1.0, g * g) * (0.6 + G.wind.z * 0.8);
+  let side = vec2f(-dir.y, dir.x);
+  // along and across the wind, the field moves downwind
+  let q = vec2f(dot(xz, dir) - (t * (1.5 + (sp * 0.8))), dot(xz, side)) / vec2f(38.0, 55.0);
+  let g = (vegNoise(q) * 0.65) + (vegNoise((q * 2.3) + vec2f(7.1, 3.7)) * 0.35);
+  return mix(0.3, 1.0, smoothstep(0.25, 0.85, g)) * (0.7 + (G.wind.z * 0.6));
 }
 // local offset (world axes) for a vertex at height y (m, scaled) of a
 // plant of height h: bend weight wb, flutter weight wf.
@@ -311,15 +332,22 @@ fn windOffset(root: vec3f, lp: vec3f, h: f32, wb: f32, wf: f32, sp: Species, see
   let speed = length(w);
   let dir = select(vec2f(1.0, 0.0), w / max(speed, 1e-3), speed > 1e-3);
   let gust = vegGust(root.xz, t);
-  let push = speed * sp.b.x * gust;               // tip offset m
-  let sway = sin(t * (1.1 + seed * 0.6) + seed * 31.0) * (0.25 + 0.2 * G.wind.z);
-  let bendAmt = (push + push * sway) * wb * min(h, 30.0) * 0.06;
+  let push = speed * sp.b.x * gust;               // tip offset scale
+  // trunk: a slow sway round the gust bend (taller trees slower)
+  let fT = (0.1 + (0.2 * fract(seed * 7.7))) / sqrt(max(h, 1.0) / 8.0 + 0.5);
+  let sway = sin((t * 6.2831853 * fT) + (seed * 31.0)) * 0.25;
+  let bendAmt = (push * (1.0 + sway)) * wb * min(h, 30.0) * 0.06;
   var o = vec3f(dir.x, 0.0, dir.y) * bendAmt;
   o.y = -bendAmt * bendAmt / max(h, 1.0) * 0.5;   // keep the length
-  // flutter: leaves and twigs, fast and small
-  let ph = dot(root + lp, vec3f(1.7, 2.3, 1.9));
-  let fl = sin(t * 7.3 + ph) * 0.6 + sin(t * 11.1 + ph * 1.3) * 0.4;
-  o += nrm * (fl * wf * sp.b.y * (0.15 + speed * 0.05) * (0.5 + gust));
+  // branch: slow, a few cm, at the branch tips (flutter weight)
+  let ph = dot(root + lp, vec3f(0.37, 0.53, 0.41));
+  let fB = 0.4 + (0.3 * fract(seed * 3.1));
+  let br = sin((t * 6.2831853 * fB) + ph) * (0.05 + (0.02 * speed)) * gust;
+  o += vec3f(dir.x, 0.35, dir.y) * (br * wf * sp.b.y);
+  // leaf: a small flutter along the leaf normal
+  let fL = 1.2 + (0.8 * fract(ph * 0.17));
+  let fl = sin((t * 6.2831853 * fL) + (ph * 5.3));
+  o += nrm * (fl * wf * sp.b.y * (0.02 + (0.006 * speed)) * gust);
   return o;
 }
 
@@ -404,7 +432,8 @@ fn shadeVeg(alb: vec3f, n0: vec3f, wp: vec3f, leaf: bool, rough: f32, ao: f32, t
   var diff: f32;
   if (leaf) { diff = max((ndl + 0.45) / 1.45, 0.0); } else { diff = max(ndl, 0.0); }
   var col = alb / CM_PI * diff * sunE * sh;
-  col += vec3f(ggx(n, V, L, rough, 0.035)) * sunE * sh * specK * ao;
+  // specular occlusion: the cavity AO takes the highlight too (squared)
+  col += vec3f(ggx(n, V, L, rough, 0.035)) * sunE * sh * specK * (ao * ao);
   if (leaf) {
     // light through the leaf: strongest looking toward the sun
     // (thin leaves pass about as much light as they reflect, more yellow)
@@ -567,7 +596,9 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
       if (a <= 0.0) { discard; }
       if (nearK > 0.0) { if (sharp <= mix(0.5, thr, nearK)) { discard; } }
       else if (a < 0.5) { discard; }
-      if (!ff) { n = -n; }
+      // the leaf normals are bent out from the crown centre (vegetation.js
+      // bendFoliageNormals): both faces take the outward normal, so the
+      // crown shades as one soft volume, not as flat cards
       rough = 0.55;
     }
     alb = tx.rgb;
@@ -592,7 +623,14 @@ fn fs_mesh(o: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   rough = mix(rough, rough * 0.5, wet);
   let snow = G.weather2.y * smoothstep(0.2, 0.85, n.y) * select(1.0, 0.7, leaf);
   alb = mix(alb, vec3f(0.85, 0.88, 0.92), snow);
-  let ao = mix(1.0, o.ao, 0.85) * terrainAO(it.p.xz);
+  // contact: the foot of a trunk, a rock or a small plant gets less sky
+  // (the SSAO of render/ao.js adds the screen-space part)
+  let hgt = sp.a.x * it.p.w;
+  let yl = o.wp.y - it.p.y;
+  var foot = smoothstep(-0.05, 0.25 + (0.06 * min(hgt, 10.0)), yl);
+  if (leaf) { foot = mix(0.55, 1.0, smoothstep(0.0, max(0.5 * hgt, 0.15), yl)); }
+  else { foot = mix(0.45, 1.0, foot); }
+  let ao = mix(1.0, o.ao, 0.85) * terrainAO(it.p.xz) * foot;
   var col = shadeVeg(alb, n, o.wp, leaf, rough, ao, select(0.0, 1.0, leaf), select(1.0, 0.35, leaf), o.pos.xy);
   col = vegAerial(col, o.wp);
   return vec4f(col, 1.0);
@@ -781,8 +819,8 @@ fn fs_bake(o: BOut, @builtin(front_facing) ff: bool) -> BTarget {
   let tx = textureSample(tMat, sRep, o.uv, D.layer);
   let leaf = (D.flags & 1u) != 0u;
   if (leaf && tx.a < 0.5) { discard; }
-  var n = normalize(o.nrm);
-  if (leaf && n.z < 0.0) { n = -n; }
+  // bent leaf normals (outward from the crown): no flip
+  let n = normalize(o.nrm);
   var t: BTarget;
   t.albedo = vec4f(tx.rgb * mix(1.0, o.ao, 0.85), 1.0);
   t.normal = vec4f(n * 0.5 + 0.5, select(0.0, 1.0, leaf));

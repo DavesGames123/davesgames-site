@@ -7,9 +7,12 @@
 //              cascade 0, texel snap under camera moves and turns, a
 //              stable radius under small field of view changes, the bias
 //              and the packed CascadeInfo, the PCSS loop caps.
+//    PLANTS    bent foliage normals (outward, bark untouched), the bush
+//              pool (3D shrubs before card bushes), the wind margins and
+//              the calm frequencies of props.wgsl and grass.wgsl, tufts.
 //    AO        render/ao.js aoPlan (off on phones, Low and governor 2+),
 //              shaders/ao.wgsl constant loops and its fixed cost.
-//  grep -n targets: "── shadows", "── ao"
+//  grep -n targets: "── shadows", "── ao", "── plants"
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -19,6 +22,7 @@ import { packCascades, CASCADE_FLOATS } from '../gpu/globals.js';
 import { project } from '../gpu/mat.js';
 import { aoPlan, AO_MAX_PX, AO_RADIUS } from '../render/ao.js';
 import { effectUniforms, pomSteps, POM_NEAR, POM_MAX } from '../render/ground.js';
+import { bendFoliageNormals, loadAssetProtos } from '../render/vegetation.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0, passes = 0;
@@ -120,6 +124,56 @@ const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
   check('ground.wgsl caps the POM steps from U.fx.x', /min\(i32\(floor\(U\.fx\.x\)\), POM_MAX\)/.test(gw));
   const gj = readFileSync(join(DIR, 'render/ground.js'), 'utf8');
   check('the phone path is keyed on the profile id', /\/\^phone\/\.test\(gpu\.profileId/.test(gj) && /effectUniforms\(quality, phoneP/.test(gj));
+}
+
+// ── plants
+{
+  // a crown of 200 random cards (normals random) and a trunk
+  const VS = 12, mk = (kind, n, f) => { const v = new Float32Array(n * VS); for (let i = 0; i < n; i++) v.set(f(i), i * VS); return { kind, n, v }; };
+  let s = 7; const r = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const leaf = mk('leaf', 200, () => { const a = r() * 6.283, b = Math.acos(2 * r() - 1), rr = 3 * Math.cbrt(r()); const n = [r() - 0.5, r() - 0.5, r() - 0.5]; const l = Math.hypot(...n); return [Math.cos(a) * Math.sin(b) * rr, 8 + Math.cos(b) * rr, Math.sin(a) * Math.sin(b) * rr, n[0] / l, n[1] / l, n[2] / l, 0, 0, 0, 0, 1, 1]; });
+  const bark = mk('bark', 4, (i) => [0.2, i, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0]);
+  const barkBefore = Array.from(bark.v);
+  const res = bendFoliageNormals([[bark, leaf]]);
+  let out = 0, unit = true;
+  for (let i = 0; i < leaf.n; i++) {
+    const o = i * VS, p = [leaf.v[o] - res.crown.c[0], leaf.v[o + 1] - res.crown.c[1], leaf.v[o + 2] - res.crown.c[2]];
+    const pl = Math.hypot(...p) || 1, d = (p[0] * leaf.v[o + 3] + p[1] * leaf.v[o + 4] + p[2] * leaf.v[o + 5]) / pl;
+    if (d > 0.3) out++;
+    if (Math.abs(Math.hypot(leaf.v[o + 3], leaf.v[o + 4], leaf.v[o + 5]) - 1) > 1e-4) unit = false;
+  }
+  check('bent leaf normals point out of the crown', out >= 190 && unit, out + ' of 200 outward');
+  check('bark normals are not bent', Array.from(bark.v).every((x, i) => x === barkBefore[i]));
+  check('no leaves: no bend', bendFoliageNormals([[bark]]) === null);
+  // the bush pool: the 3D shrubs before the card bushes
+  const tri = { positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), uvs: new Float32Array(6), indices: [0, 1, 2], vertexCount: 3, material: { name: 'm', alphaMode: 'MASK', baseColor: { url: 'u.webp' } } };
+  const asset = (id, kind, h) => ({ id, kind, name: id, height: h, radius: 0.8, lods: [{ textures: [] }] });
+  const lib = { manifest: { assets: [asset('nobiax_bushes_a', 'bush', 1.5), asset('nobiax_bushes_b', 'bush', 1.3), asset('shrub_02_a', 'bush', 1.6), asset('shrub_02_b', 'bush', 1.5)] },
+    loadAsset: async () => ({ scene: { meshes: [tri] } }), url: (x) => x };
+  const sets = await loadAssetProtos(lib, 64, () => {});
+  const ids = (sets.bush || []).map((x) => x.id);
+  check('bush species takes the 3D shrubs, not the card bushes', ids.length === 2 && ids.every((x) => x.startsWith('shrub_02')), ids.join(' '));
+  const lib2 = { ...lib, manifest: { assets: [asset('nobiax_bushes_a', 'bush', 1.5)] } };
+  check('the card bushes stay when nothing else fits', ((await loadAssetProtos(lib2, 64, () => {})).bush || []).length === 1);
+  // wind: the props.wgsl offsets stay inside the wind margin of the bounds
+  const pw = readFileSync(join(DIR, 'shaders/props.wgsl'), 'utf8'), gw = readFileSync(join(DIR, 'shaders/grass.wgsl'), 'utf8');
+  check('props wind keeps the documented coefficients', /let sway = sin\(\(t \* 6\.2831853 \* fT\) \+ \(seed \* 31\.0\)\) \* 0\.25;/.test(pw)
+    && /\(0\.05 \+ \(0\.02 \* speed\)\) \* gust/.test(pw) && /\(0\.02 \+ \(0\.006 \* speed\)\) \* gust/.test(pw) && /\(0\.7 \+ \(G\.wind\.z \* 0\.6\)\)/.test(pw));
+  let worst = 0;
+  for (const speed of [0, 2, 6, 12, 25]) {
+    const gustMax = 1.0 * (0.7 + 0.6);
+    const bend = speed * gustMax * 1.25 * 0.06;                         // x bend x min(h, 30)
+    const tip = Math.hypot(1, 0.35) * (0.05 + 0.02 * speed) * gustMax + (0.02 + 0.006 * speed) * gustMax;   // x flutter
+    worst = Math.max(worst, bend / (0.122 * Math.max(speed, 1e-6)) * (speed > 0 ? 1 : 0), tip / (1.9 * (0.15 + 0.05 * speed)));
+  }
+  check('wind offsets stay inside the bounds margin (no cull pop)', worst < 1, 'worst ' + worst.toFixed(2) + ' of the margin');
+  // CHILL: the highest frequencies (Hz) of each layer
+  const hz = (re, src) => { const m = src.match(re); return m ? +m[1] + +m[2] : NaN; };
+  const fT = hz(/let fT = \(([\d.]+) \+ \(([\d.]+) \* fract/, pw), fB = hz(/let fB = ([\d.]+) \+ \(([\d.]+) \* fract/, pw), fL = hz(/let fL = ([\d.]+) \+ \(([\d.]+) \* fract/, pw);
+  const fG = hz(/t \* 6\.2831853 \* \(([\d.]+) \+ \(bl\.b\.w \* ([\d.]+)\)\)/, gw);
+  check('calm motion: trunk <= 0.35 Hz, branch <= 0.8 Hz, leaf <= 2 Hz, grass <= 1 Hz', fT <= 0.35 && fB <= 0.8 && fL <= 2 && fG <= 1, `trunk ${fT}, branch ${fB}, leaf ${fL}, grass ${fG}`);
+  check('gusts travel (noise field moved downwind), grass and trees share it', /fn vegGust/.test(pw) && /fn grassGust/.test(gw) && /t \* \(1\.5 \+ \(sp \* 0\.8\)\)/.test(pw) && /t \* \(1\.5 \+ \(sp \* 0\.8\)\)/.test(gw));
+  check('grass blades lean out of tufts and take the soft shadow', /const TUFT: f32/.test(gw) && /outA/.test(gw) && /sunShadowSoft\(o\.wp, tn, o\.pos\.xy\)/.test(gw));
 }
 
 console.log(`nearfield: ${passes} passed, ${fails} failed`);

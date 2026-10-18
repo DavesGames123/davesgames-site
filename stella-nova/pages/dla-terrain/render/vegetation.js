@@ -923,6 +923,10 @@ const PROTO_WORDS = {
   pebble: ['pebble', 'stone', 'rock'], reed: ['reed', 'cattail', 'rush'], rock: ['rock', 'stone', 'boulder'], boulder: ['boulder', 'rock'],
   log: ['log', 'trunk', 'branches'], stump: ['stump'],
 };
+// assets that fit a species by kind and words but read badly up close:
+// the Nobiax bushes are a few crossed cards (flat sprite blobs at eye
+// level), so the 3D Poly Haven shrubs take the bush species when present
+const PROTO_SKIP = { bush: ['nobiax_bushes'] };
 // asset kinds that can stand in for a species besides its own kind
 const KIND_ALSO = { cactus: ['tree', 'succulent'], dryshrub: ['bush'], deadtree: ['tree'] };
 const VARIANTS = (key) => (KIND_OF[key] === 'tree' ? 3 : ['rock', 'boulder', 'pebble'].includes(key) ? 9 : 6);
@@ -950,7 +954,9 @@ export async function loadAssetProtos(lib, texSize, log, accept = null, o = {}) 
     const fits = assets.filter((a) => kindOk(a) && a.lods?.length && (words.some((w) => (String(a.sub || '') + ' ' + a.name + ' ' + a.id).toLowerCase().includes(w)) || (sp.kind !== 'tree' && sp.kind !== 'bush' && a.kind === sp.kind)));
     // size bands: small stones are pebbles, big rocks are boulders
     const band = SIZE_BAND[sp.key];
-    const sized = band ? fits.filter((a) => (a.height ?? 1) >= band[0] && (a.height ?? 1) <= band[1]) : fits.slice();
+    let sized = band ? fits.filter((a) => (a.height ?? 1) >= band[0] && (a.height ?? 1) <= band[1]) : fits.slice();
+    const skip = PROTO_SKIP[sp.key];
+    if (skip) { const kept = sized.filter((a) => !skip.some((w) => String(a.id).includes(w))); if (kept.length) sized = kept; }
     if (!sized.length) continue;
     fits.length = 0; fits.push(...sized);
     const list = [];
@@ -1002,6 +1008,43 @@ export async function loadAssetProtos(lib, texSize, log, accept = null, o = {}) 
 
 // ------------------------------------------------------------ library
 // prototypes -> one VB/IB, species table, lists, draw slots.
+// Bent foliage normals (soft canopy light): each leaf vertex normal turns
+// toward the outward normal of the crown ellipsoid (the box of the LOD0
+// leaf vertices), by k. Flat cards then shade as one round crown and both
+// faces of a card take the same outward normal (props.wgsl fs_mesh does
+// not flip it). -> { leafVerts, crown: { c, r } } or null with no leaves.
+export const BEND_K = 0.7;
+export function bendFoliageNormals(lods, k = BEND_K) {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  let any = 0;
+  for (const part of lods[0] || []) if (part.kind === 'leaf') for (let i = 0; i < part.n; i++) {
+    for (let a = 0; a < 3; a++) { const v = part.v[i * VSTRIDE + a]; lo[a] = Math.min(lo[a], v); hi[a] = Math.max(hi[a], v); }
+    any++;
+  }
+  if (!any) return null;
+  const c = [0, 1, 2].map((a) => (lo[a] + hi[a]) / 2);
+  const r = [0, 1, 2].map((a) => Math.max((hi[a] - lo[a]) / 2, 0.08));
+  // a round crown in plan: the x and z radii are one
+  r[0] = r[2] = Math.max(r[0], r[2]);
+  let leafVerts = 0;
+  for (const parts of lods) for (const part of parts) {
+    if (part.kind !== 'leaf') continue;
+    const v = part.v;
+    for (let i = 0; i < part.n; i++) {
+      const o = i * VSTRIDE;
+      // ellipsoid normal: (p - c) / r^2
+      let ex = (v[o] - c[0]) / (r[0] * r[0]), ey = (v[o + 1] - c[1]) / (r[1] * r[1]), ez = (v[o + 2] - c[2]) / (r[2] * r[2]);
+      let el = Math.hypot(ex, ey, ez);
+      if (el < 1e-6) { ex = 0; ey = 1; ez = 0; el = 1; }
+      const nx = v[o + 3] * (1 - k) + (ex / el) * k, ny = v[o + 4] * (1 - k) + (ey / el) * k, nz = v[o + 5] * (1 - k) + (ez / el) * k;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      v[o + 3] = nx / nl; v[o + 4] = ny / nl; v[o + 5] = nz / nl;
+      leafVerts++;
+    }
+  }
+  return { leafVerts, crown: { c, r } };
+}
+
 function buildLibrary(protoSets, texNames) {
   const protos = [];             // GPU prototypes
   const speciesProtos = [];      // scatter species index -> [proto ids]
@@ -1016,6 +1059,9 @@ function buildLibrary(protoSets, texNames) {
     }
     speciesProtos.push(ids);
   });
+  // soft canopy: bend the leaf normals once per prototype (a library
+  // rebuild shares the part arrays, so mark them)
+  for (const p of protos) if (!p.lods._bent) { bendFoliageNormals(p.lods); p.lods._bent = true; }
   let nv = 0, ni = 0;
   for (const p of protos) for (const parts of p.lods) for (const part of parts) { nv += part.n; ni += part.i.length; }
   // impostor quads, 4 vertices each
