@@ -104,7 +104,11 @@ say(D.rov && D.rov.visible && D.hidden !== false, 'one ROV is in view, the other
 if (D.rov && D.rov.cam && D.rov.target && D.pose) {
   const dt = len(sub(D.rov.target, D.pose.c)), a = ang(sub(D.rov.target, D.rov.cam), sub(D.pose.c, D.rov.cam)) * 180 / Math.PI;
   say(a < (D.rov.fov || 60) / 2, 'the ROV camera looks at the colony', `angle ${a.toFixed(1)} deg, target ${dt.toFixed(2)} m from the colony`);
-  say(len(sub(D.rov.cam, D.pose.c)) < 10, 'the ROV is near the colony (it starts beside the site)', len(sub(D.rov.cam, D.pose.c)).toFixed(1));
+  // near: the ROV inspects from between near = 1.6 r + 1.6 m and far =
+  // 1.6 near + 1.5 m of a colony of radius r (rov/pilot.js), so a tall
+  // colony (one trunk, branches up to its full size) sets the limit past 10 m
+  const near = Math.max(10, Math.max(1.6 * (D.pose.r || 0) + 1.6, 2.2) * 1.6 + 1.5);
+  say(len(sub(D.rov.cam, D.pose.c)) < near, 'the ROV is near the colony (it starts beside the site)', `${len(sub(D.rov.cam, D.pose.c)).toFixed(1)} m, limit ${near.toFixed(1)} m (colony radius ${(D.pose.r || 0).toFixed(2)} m)`);
   info(`rov: camera ${len(sub(D.rov.cam, D.pose.c)).toFixed(1)} m from the colony, angle ${a.toFixed(1)} deg`);
 }
 const f = $('feed');

@@ -9,6 +9,15 @@
 //    root .......... one root per colony: every particle's parent chain
 //                    ends at the seed of its colony (single colonies of
 //                    each species and a populated reef on the real rock)
+//    apex .......... the tip share: new particles whose parent was a tip
+//                    or the particle under a tip (subtree height <= 1 at
+//                    the join), over 0.94 for the branching species (the
+//                    old code: 0.83 to 0.93)
+//    continuity .... each particle is at most 1.05 spacings from its
+//                    parent (the cones touch: no loose groups)
+//    fan net ....... the sea fan joins its own branches (bridges in its
+//                    plane, at most net x spacing long), and its particles
+//                    stay in its plane in every height decile
 // ============================================================================
 import { createRock } from '../rock/index.js';
 import { createReef, SPECIES, SPECIES_IDS } from '../reef.js';
@@ -54,6 +63,54 @@ for (const id of SPECIES_IDS) {
   single[id] = { R, c };
   const r = rootsOf(R, c);
   ok(r.roots === 1 && r.orphan === 0, `root: a ${id} colony grows from one root`, `${c.count} particles, ${r.roots} roots, ${r.orphan} not on the seed chain`);
+}
+
+// The share of joins whose parent had a subtree height <= 1 (a tip, or
+// the particle under a tip) at the time of the join. Particle ids are in
+// join order, so a replay gives the heights at each join.
+function tipShare(R, c) {
+  const H = new Map(); let n = 0, apical = 0;
+  for (const g of c.ids) {
+    const p = R.parent[g]; if (p < 0) continue;
+    n++; if ((H.get(p) || 0) <= 1) apical++;
+    for (let a = p, h = 1; a >= 0 && (H.get(a) || 0) < h; a = R.parent[a], h++) H.set(a, h);
+  }
+  return apical / Math.max(1, n);
+}
+
+// ── apex, continuity ────────────────────────────────────────────────────────
+const BRANCHING = ['staghorn', 'fan', 'table', 'finger'];
+for (const id of SPECIES_IDS) {
+  const { R, c } = single[id];
+  if (BRANCHING.includes(id)) {
+    const t = tipShare(R, c);
+    ok(t > 0.94, `apex: a ${id} colony grows at its tips`, `tip share ${f3(t)}, ${R.forks ?? '-'} forks in ${c.count} particles`);
+  }
+  const sp = R.params[id].particleSpacing;
+  let worst = 0;
+  for (const g of c.ids) {
+    const p = R.parent[g]; if (p < 0) continue;
+    worst = Math.max(worst, Math.hypot(R.px[g] - R.px[p], R.py[g] - R.py[p], R.pz[g] - R.pz[p]) / sp);
+  }
+  ok(worst <= 1.05, `continuity: every ${id} particle touches its parent`, `largest gap ${f3(worst)} spacings`);
+}
+
+// ── fan net and plane ───────────────────────────────────────────────────────
+{
+  const { R, c } = single.fan, f = c.plane, sp = R.params.fan.particleSpacing, net = (SPECIES.fan.apex || {}).net || 0;
+  const off = g => (R.px[g] - c.base[0]) * f[0] + (R.pz[g] - c.base[2]) * f[1];
+  let nb = 0, longest = 0, outPlane = 0;
+  for (const [g, j] of R.bridges) {
+    if (R.col[g] !== c.k || R.col[j] !== c.k) continue;
+    nb++;
+    longest = Math.max(longest, Math.hypot(R.px[g] - R.px[j], R.py[g] - R.py[j], R.pz[g] - R.pz[j]) / sp);
+    outPlane = Math.max(outPlane, Math.abs(off(g)), Math.abs(off(j)));
+  }
+  ok(nb > 0.05 * c.count && longest <= net + 1e-6 && outPlane < 1e-4, 'fan net: the sea fan joins its near branches in its plane (a net)', `${nb} bridges in ${c.count} particles, longest ${f3(longest)} spacings (limit ${net}), ${f3(outPlane)} m off the plane`);
+  let H = 0; for (const g of c.ids) H = Math.max(H, R.py[g] - c.base[1]);
+  const dec = Array.from({ length: 10 }, () => [0, 0]);
+  for (const g of c.ids) { const k = Math.max(0, Math.min(9, Math.floor(10 * (R.py[g] - c.base[1]) / H))); dec[k][0] = Math.max(dec[k][0], Math.abs(off(g))); dec[k][1]++; }
+  ok(dec.every(d => d[0] < 0.005), 'fan net: the fan particles stay in its plane up to the top', `largest offset by height decile (mm): ${dec.map(d => (d[0] * 1000).toFixed(1)).join(' ')}; top decile ${dec[9][1]} particles`);
 }
 
 // ── root: a reef on the real rock ───────────────────────────────────────────

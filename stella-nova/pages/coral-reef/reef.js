@@ -39,9 +39,18 @@
 //  count of the old 1 to 4 m ones. More colonies (34 to 96 by quality) in
 //  larger patches (7 m) meet and fuse into a reef framework.
 //
+//  APEX. The branching species (staghorn, fan, table, finger) grow at
+//  their tips: a walker near the coral feeds the nearest live tip, and
+//  the new particle continues that branch; sometimes a particle under a
+//  tip forks at the species angle (grep -n 'apical growth'). So branches
+//  extend and fork further and further out; they do not get random side
+//  stubs. A sea fan feeds through its plane (the current carries the food
+//  across it) and joins its own near branches (bridges), so it grows a
+//  flat net. The brain coral grows as one dome from its seed.
+//
 //  STOP. A colony stops at its cap, at its soft size outline, when it
 //  gets no join in 6000 walkers (shaded out), or when its join rate past
-//  half its cap falls under 6 % (its outline is full).
+//  60 % of its cap falls under 0.3 x its best rate (its outline is full).
 //
 //  API (SCENE and the worker build against this header)
 //    const R = createReef({ rock, seed, quality: 'desktop'|'mid'|'phone',
@@ -75,11 +84,13 @@
 //                      walkers, walks, lost, fusions, overgrowths }
 //
 //  SPECIES (grep -n 'export const SPECIES')
-//    staghorn ... tips favoured: joins on busy or lower particles refused
-//    fan ........ every new particle is put in the plane across the current
-//    table ...... a short stalk, then only horizontal joins: a flat plate
+//    staghorn ... apex: long round branches, forks at 55 degrees (antlers)
+//    fan ........ apex in the plane across the current, side branches and
+//                 self bridges: a flat net (Gorgonia)
+//    table ...... apex: a short stalk, a whorl at its top, then horizontal
+//                 branches that fork: a flat plate
 //    boulder .... (brain coral) high stubbornness and a dome clamp: compact
-//    finger ..... low stickiness: thick soft lobes
+//    finger ..... apex: short thick fingers that fork at 40 degrees
 //
 //  grep -n targets
 //    quality budgets ........... "export const QUALITY"
@@ -89,6 +100,7 @@
 //    the reef object ........... "export function createReef"
 //    one walker ................ "function walkOne"
 //    spawn above the colonies .. "function spawn"
+//    apical growth ............. "function apexPick", "function apexPlace"
 //    contacts (fuse, overgrow) . "function contact"
 //    colony seeds .............. "function populate"
 //    single colony mode ........ "function growColony"
@@ -120,35 +132,36 @@ export const QUALITY = {
 // colony of a size (cap = fill x (size / spacing)^dim). r0, thick: the
 // particle radius for the page data (polypRadius). tpp: coral triangles
 // per particle (measured), for the triangle budget. base, tip: natural
-// colours (linear 0..1). sway: soft corals move with the water.
+// colours (linear 0..1). sway: soft corals move with the water. apex:
+// the tip growth (axis: the share of the branch direction in a new
+// particle, up: a pull up, split: the fork chance near a tip, side: the
+// fork chance on an old branch, every: hops between forks, angle and
+// sideAngle: fork angles (degrees), kids, rootKids, whorl: children per
+// particle, planar: in the colony plane, net: self-bridge reach in
+// spacings).
 export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
     params: { particleSpacing: 0.04, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 0, stickiness: 0.9 },
-    size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 2.6, r0: 0.013, thick: 0.17, sway: 0,
+    size: [3.5, 9.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 2.2, r0: 0.013, thick: 0.17, sway: 0,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
+    apex: { axis: 0.85, up: 0.06, split: 0.35, side: 0.2, every: 3, angle: 50, kids: 2, rootKids: 3 },
     hooks: {
-      // Tips favoured: a busy particle, or a walker from the side or below,
-      // rarely sticks.
-      shouldJoin(R, p, parent) {
-        if (!R.dlafJoin(parent)) return false;
-        const up = p[1] - R.m.pos[parent * 3 + 1];
-        if (R.kids[parent] >= 1 && R.random() > (R.kids[parent] >= 2 ? 0.04 : 0.22)) return false;
-        if (up < 0.3 * R.spU(parent) && R.random() > 0.2) return false;
-        return true;
-      },
+      // The tips grow (apex, in createReef): long round branches that
+      // fork at wide angles and spread out, as antlers.
+      shouldJoin(R, p, parent) { return R.dlafJoin(parent); },
     },
   },
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
     params: { particleSpacing: 0.022, attractionDistance: 0.03, minMoveDistance: 0.016, stubbornness: 0, stickiness: 0.75 },
-    size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 2.3, r0: 0.006, thick: 0.1, sway: 1,
+    size: [2.4, 5.5], tall: 1, tpp: 72, dim: 1.55, fill: 3.2, r0: 0.006, thick: 0.1, sway: 1,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
+    apex: { axis: 0.75, up: 0.3, split: 0.3, side: 0.35, every: 3, angle: 24, sideAngle: 75, kids: 2, rootKids: 2, planar: true, net: 3 },
     hooks: {
       // The new particle goes into the vertical plane of the fan, across the
       // current, so the fan grows flat and wide; a join from below is rare.
       placeParticle(R, p, parent, out) {
-        R.m.lerpFrom(parent, p, R.spU(parent), out);
         const c = R.colonies[R.col[parent]], f = c.plane, U = R.U;
         const d = (out[0] - c.base[0] / U) * f[0] + (out[2] - c.base[2] / U) * f[1];
         out[0] -= f[0] * d; out[2] -= f[1] * d;
@@ -160,8 +173,9 @@ export const SPECIES = {
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
     params: { particleSpacing: 0.045, attractionDistance: 0.065, minMoveDistance: 0.03, stubbornness: 1, stickiness: 0.9 },
-    size: [3.0, 8.5], tall: 0.4, tpp: 25, dim: 1.6, fill: 7, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3,
+    size: [3.0, 8.0], tall: 0.4, tpp: 25, dim: 1.6, fill: 3.6, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
+    apex: { axis: 0.8, up: 0, split: 0.35, side: 0.1, every: 3, angle: 32, kids: 2, rootKids: 1, whorl: 7 },
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
       shouldJoin(R, p, parent) {
@@ -172,7 +186,6 @@ export const SPECIES = {
         return dh > 2.5 * Math.abs(dy) || R.random() < 0.03;
       },
       placeParticle(R, p, parent, out) {
-        R.m.lerpFrom(parent, p, R.spU(parent), out);
         if (R.m.depth[parent] >= R.stalkOf(parent)) {
           const y0 = R.m.pos[parent * 3 + 1];
           out[1] = y0 + (out[1] - y0) * 0.12;
@@ -190,7 +203,6 @@ export const SPECIES = {
       // Accretive growth: the tissue lays each new particle on the surface
       // of a compact dome of this many particles, so the colony stays a dome.
       placeParticle(R, p, parent, out) {
-        R.m.lerpFrom(parent, p, R.spU(parent), out);
         const c = R.colonies[R.col[parent]], U = R.U, s = R.spU(parent);
         const dome = s / 0.9 * (Math.cbrt(3 * c.count / (TAU * c.sp.density)) + 0.3);
         const bx = c.base[0] / U, by = c.base[1] / U, bz = c.base[2] / U;
@@ -202,9 +214,10 @@ export const SPECIES = {
   },
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
-    params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 3, stickiness: 0.2 },
-    size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.1, r0: 0.02, thick: 0.15, sway: 0.6,
+    params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 1, stickiness: 0.5 },
+    size: [1.8, 4.5], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.4, r0: 0.02, thick: 0.15, sway: 0.6,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
+    apex: { axis: 0.75, up: 0.1, split: 0.5, side: 0.35, every: 2, angle: 38, kids: 2, rootKids: 4 },
     hooks: {
       // dlaf ShouldJoin with a low stickiness: the walkers creep into the
       // gaps before they stick, so the lobes stay thick and soft.
@@ -359,9 +372,11 @@ export function createReef(opts = {}) {
     px: new Float32Array(capTotal), py: new Float32Array(capTotal), pz: new Float32Array(capTotal),
     col: new Uint16Array(capTotal), loc: new Int32Array(capTotal), parent: new Int32Array(capTotal),
     birth: new Float32Array(capTotal), gy: new Float32Array(capTotal), kids: new Uint8Array(capTotal),
+    child: new Int32Array(capTotal), sib: new Int32Array(capTotal), dead: new Uint8Array(capTotal),
+    forks: 0, tipJoins: 0, nets: 0,
     m: null, random: null,
     addColony, populate, loadPreset, growColony, setRate, step, growAll, reset, setCurrent, setParams, done, progress,
-    dlafJoin, spU, stalkOf, walkOne, rockDist: rockD,
+    dlafJoin, spU, stalkOf, walkOne, apexPick, rockDist: rockD,
     get bleach() { return bleachLevel(env.temp); },
   };
   let random = rng(R.seed);
@@ -379,6 +394,8 @@ export function createReef(opts = {}) {
         R.px[i] = x; R.py[i] = y; R.pz[i] = z;
         R.col[i] = k; R.loc[i] = c.count; R.parent[i] = par; R.birth[i] = R.now; R.gy[i] = c.base[1]; R.kids[i] = 0;
         if (par >= 0 && R.kids[par] < 255) R.kids[par]++;
+        R.child[i] = -1; R.dead[i] = 0; R.sib[i] = -1;
+        if (par >= 0) { R.sib[i] = R.child[par]; R.child[par] = i; }
         c.ids.push(i); c.count++; c.lastTry = c.tries;
         if (y > c.top) c.top = y;
         const e = Math.hypot(x - c.base[0], z - c.base[2]); if (e > c.ext) c.ext = e;
@@ -398,6 +415,117 @@ export function createReef(opts = {}) {
     return random() <= p.stickiness;
   }
 
+  // ── apical growth ──
+  // The user said (2026-10-18): "real coral start with one root and branch
+  // futher and further out". A walker that comes near the coral of a
+  // branching species (sp.apex) feeds a branch TIP: the nearest live tip
+  // (a particle with no child) near the walker gets the new particle, and
+  // the new particle continues the branch (most of the parent direction,
+  // some of the walker direction, a little up). Sometimes (apex.split) a
+  // particle just under a tip forks instead: a new branch at apex.angle
+  // to the old one, on the side of the walker. A fork needs apex.every
+  // hops of plain branch above and below it, so branches fork at
+  // intervals, not at every particle. Where no tip is near, an old branch
+  // side forks seldom (apex.side) and the walker otherwise goes on. So
+  // branches extend and fork; they do not thicken with random stubs.
+  // The DLA walk still picks WHICH tip grows (the snow reaches the open
+  // tips first), as in dlaf.
+  // apex: axis, up, split, side, every (hops), angle (deg), kids (max
+  // per particle), rootKids (max at the seed), whorl (table: the kids at
+  // the top of the stalk), planar (fan: in the plane of the colony).
+  const BQ = new Int32Array(96), BD = new Int8Array(96);
+  let apexFork = false, apexSide = false;
+  const LEAN = 0.3;
+  function kidsMax(c, i) {
+    const ap = c.sp.apex;
+    if (R.parent[i] < 0) return ap.rootKids;
+    if (ap.whorl && R.m.depth[i] === c.stalk) return ap.whorl;
+    if (ap.whorl && R.m.depth[i] < c.stalk) return 1;
+    return ap.kids;
+  }
+  // i can take one more child as a fork: room for a kid, and no fork in
+  // apex.every hops above it or (along its one child) below it
+  function forkable(c, i) {
+    const ap = c.sp.apex, kn = R.kids[i];
+    if (kn < 1 || kn >= kidsMax(c, i)) return false;
+    if (R.parent[i] < 0 || (ap.whorl && R.m.depth[i] === c.stalk)) return true;
+    let a = i;
+    for (let h = 0; h < ap.every; h++) { a = R.parent[a]; if (a < 0 || R.kids[a] >= 2) return false; }
+    if (kn >= 2) return false;
+    a = R.child[i];
+    for (let h = 0; h < ap.every - 1 && a >= 0; h++) { if (R.kids[a] >= 2) return false; a = R.child[a]; }
+    return true;
+  }
+  // The particle that gets the walker at P, caught by particle par of
+  // colony c: a live tip (apexFork false) or a fork (apexFork true), or -1.
+  function apexPick(c, par, P) {
+    const ap = c.sp.apex, pos = R.m.pos, pr = params[c.id];
+    const reach = pr.attractionDistance / U + 1.5 * pr.particleSpacing / U, r2 = reach * reach;
+    let top = par;
+    for (let u = 0; u < 2 && R.parent[top] >= 0; u++) top = R.parent[top];
+    let h = 0, t = 1, tip = -1, tipD = r2, fk = -1, fkD = r2, deadNear = false;
+    BQ[0] = top; BD[0] = 0;
+    while (h < t) {
+      const i = BQ[h], dep = BD[h]; h++;
+      const dx = pos[i * 3] - P[0], dy = pos[i * 3 + 1] - P[1], dz = pos[i * 3 + 2] - P[2], d2 = dx * dx + dy * dy + dz * dz;
+      if (R.kids[i] === 0) { if (R.dead[i]) { if (d2 < r2) deadNear = true; } else if (d2 < tipD) { tipD = d2; tip = i; } }
+      else if (d2 < fkD && forkable(c, i)) { fkD = d2; fk = i; }
+      if (dep >= 7) continue;
+      for (let k = R.child[i]; k >= 0 && t < BQ.length; k = R.sib[k]) { BQ[t] = k; BD[t] = dep + 1; t++; }
+    }
+    // a tip at the outline (dead) does not go on: the crown then fills in
+    // with forks at the split rate, so a colony at its size grows denser
+    if (fk >= 0 && random() < (tip >= 0 || deadNear ? ap.split : ap.side)) { apexFork = true; apexSide = tip < 0 && !deadNear; return fk; }
+    apexFork = false;
+    return tip;
+  }
+  // The new particle of target t (model units into out): a tip goes on
+  // along its branch; a fork turns apex.angle off the branch axis, away
+  // from the child that t has.
+  const AX = [0, 0, 0], WV = [0, 0, 0], LV = [0, 0, 0];
+  function apexPlace(c, t, fork, P, out) {
+    const ap = c.sp.apex, pos = R.m.pos, s = spU(t), pl = ap.planar ? c.plane : null;
+    const flat = v => { if (pl) { const q = v[0] * pl[0] + v[2] * pl[1]; v[0] -= pl[0] * q; v[2] -= pl[1] * q; } };
+    const unit = v => { const l = Math.hypot(v[0], v[1], v[2]); if (l > 1e-9) { v[0] /= l; v[1] /= l; v[2] /= l; } return l; };
+    const p = R.parent[t];
+    if (p >= 0) { AX[0] = pos[t * 3] - pos[p * 3]; AX[1] = pos[t * 3 + 1] - pos[p * 3 + 1]; AX[2] = pos[t * 3 + 2] - pos[p * 3 + 2]; }
+    else { AX[0] = c.normal[0]; AX[1] = c.normal[1] + 1; AX[2] = c.normal[2]; }
+    if (ap.whorl && R.m.depth[t] < c.stalk) { AX[0] = 0; AX[1] = 1; AX[2] = 0; }
+    flat(AX); if (unit(AX) < 1e-9) { AX[0] = 0; AX[1] = 1; AX[2] = 0; }
+    WV[0] = P[0] - pos[t * 3]; WV[1] = P[1] - pos[t * 3 + 1]; WV[2] = P[2] - pos[t * 3 + 2];
+    flat(WV); unit(WV);
+    let dx, dy, dz;
+    if (!fork) {
+      const k = ap.whorl && R.m.depth[t] < c.stalk ? 1 : ap.axis;
+      dx = AX[0] * k + WV[0] * (1 - k); dy = AX[1] * k + WV[1] * (1 - k) + ap.up; dz = AX[2] * k + WV[2] * (1 - k);
+      // after a contact: a lean away from the neighbour colonies
+      if (c.away && !pl) { dx += c.away[0] * LEAN; dz += c.away[1] * LEAN; }
+    } else {
+      // the side: the walker direction off the axis, turned away from the
+      // child that t has (so the two branches spread)
+      const w = WV[0] * AX[0] + WV[1] * AX[1] + WV[2] * AX[2];
+      LV[0] = WV[0] - AX[0] * w; LV[1] = WV[1] - AX[1] * w; LV[2] = WV[2] - AX[2] * w;
+      const k0 = R.child[t];
+      if (k0 >= 0) {
+        let ex = pos[k0 * 3] - pos[t * 3], ey = pos[k0 * 3 + 1] - pos[t * 3 + 1], ez = pos[k0 * 3 + 2] - pos[t * 3 + 2];
+        const e = ex * AX[0] + ey * AX[1] + ez * AX[2]; ex -= AX[0] * e; ey -= AX[1] * e; ez -= AX[2] * e;
+        const el = Math.hypot(ex, ey, ez);
+        if (el > 1e-6) { ex /= el; ey /= el; ez /= el; const q = LV[0] * ex + LV[1] * ey + LV[2] * ez; if (q > -0.3) { LV[0] -= ex * (q + 0.6); LV[1] -= ey * (q + 0.6); LV[2] -= ez * (q + 0.6); } }
+      }
+      flat(LV);
+      if (unit(LV) < 1e-6) {
+        // no side from the walker: any direction across the axis
+        if (pl) { LV[0] = -pl[1]; LV[1] = 0; LV[2] = pl[0]; } else { LV[0] = AX[1]; LV[1] = -AX[0]; LV[2] = 0; if (unit(LV) < 1e-6) { LV[0] = 1; LV[1] = 0; LV[2] = 0; } }
+        if (random() < 0.5) { LV[0] = -LV[0]; LV[1] = -LV[1]; LV[2] = -LV[2]; }
+      }
+      const a = (ap.whorl && R.m.depth[t] === c.stalk ? 84 : apexSide && ap.sideAngle ? ap.sideAngle : ap.angle) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+      dx = AX[0] * ca + LV[0] * sa; dy = AX[1] * ca + LV[1] * sa + ap.up * 0.5; dz = AX[2] * ca + LV[2] * sa;
+    }
+    const l = Math.hypot(dx, dy, dz) || 1;
+    out[0] = pos[t * 3] + dx / l * s; out[1] = pos[t * 3 + 1] + dy / l * s; out[2] = pos[t * 3 + 2] + dz / l * s;
+    return out;
+  }
+
   // ── contacts: a coarse grid of particle ids (cell 0.12 m) ──
   const CC = 0.25;
   let cgrid = new Map();
@@ -410,14 +538,44 @@ export function createReef(opts = {}) {
   // A new particle i near a particle of another colony: the two touch.
   // Same species: they fuse (one surface in the shared species SDF).
   // Other species: the colony of i overgrows the other one.
+  // A sea fan (apex.net) also joins itself: a new particle next to another
+  // branch of its own colony (in 1.25 spacings, and more than 2 x 8 hops
+  // away along the branches) fuses with it (a bridge) and that tip stops.
+  // So the fan grows a net with closed meshes, as a Gorgonia, not a loose
+  // bush.
+  const NEAR = [];
+  function lean(c, o) {
+    let x = c.base[0] - o.base[0], z = c.base[2] - o.base[2];
+    const l = Math.hypot(x, z); if (l < 1e-6) return;
+    x = x / l + (c.away ? c.away[0] : 0); z = z / l + (c.away ? c.away[1] : 0);
+    const m = Math.hypot(x, z) || 1;
+    c.away = [x / m, z / m];
+  }
+  function nearInTree(i, j, hops) {
+    NEAR.length = 0;
+    for (let a = i, h = 0; a >= 0 && h <= hops; a = R.parent[a], h++) NEAR.push(a);
+    for (let a = j, h = 0; a >= 0 && h <= hops; a = R.parent[a], h++) if (NEAR.includes(a)) return true;
+    return false;
+  }
   function contact(i) {
     const k = R.col[i], c = R.colonies[k];
     const lim = 1.6 * params[c.id].particleSpacing + 0.01, l2 = lim * lim;
+    const net = c.sp.apex && c.sp.apex.net, ln = net * params[c.id].particleSpacing, n2 = ln * ln;
+    let self = !net;
+    // one rung per 4 hops of a branch: no bridge on the 3 nearest ancestors
+    if (net) for (let a = R.parent[i], h = 0; a >= 0 && h < 3; a = R.parent[a], h++) if (R.bridges.has(a)) { self = true; break; }
     const cx = Math.floor(R.px[i] / CC), cy = Math.floor(R.py[i] / CC), cz = Math.floor(R.pz[i] / CC);
     for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const a = cgrid.get(ckey(cx + dx, cy + dy, cz + dz)); if (!a) continue;
       for (const j of a) {
-        const kj = R.col[j]; if (kj === k) continue;
+        const kj = R.col[j];
+        if (kj === k) {
+          if (self || j === i) continue;
+          const ex = R.px[j] - R.px[i], ey = R.py[j] - R.py[i], ez = R.pz[j] - R.pz[i];
+          if (ex * ex + ey * ey + ez * ez > n2 || nearInTree(i, j, 8)) continue;
+          R.bridges.set(i, j); R.nets++; self = true;
+          continue;
+        }
         const ex = R.px[j] - R.px[i], ey = R.py[j] - R.py[i], ez = R.pz[j] - R.pz[i];
         if (ex * ex + ey * ey + ez * ez > l2) continue;
         const a0 = Math.min(k, kj), b0 = Math.max(k, kj), key = a0 + ',' + b0;
@@ -431,6 +589,11 @@ export function createReef(opts = {}) {
         // bridge), so the two surfaces join (the spacing is larger than
         // the branch radius, so the cones alone seldom touch)
         if (t.kind === 'fuse' && t.n <= 80) R.bridges.set(i, j);
+        // the branch tip met a neighbour colony: the space is taken, so
+        // that tip stops (the colonies compete for the gap), and both
+        // colonies lean their new growth away from each other (c.away)
+        if (c.sp.apex) R.dead[i] = 1;
+        if (t.n === 1) { lean(c, R.colonies[kj]); lean(R.colonies[kj], c); }
         return;
       }
     }
@@ -597,7 +760,7 @@ export function createReef(opts = {}) {
   // neighbours share the snow over the gap between them, they do not get
   // twice as much. The walker is free: it can land on any colony.
   let spawnTop = 0, spawnX = 0, spawnZ = 0, spawnR = 0, spawnC = null, wFall = 0.85, wPlane = null;
-  const FALL = 0.85, LIFT = 0.08, LIFT0 = 0;
+  const FALL = 0.85, LIFT = 0.08, LIFT0 = 0, AIM = 0.4;
   // the snow disc of a colony: its extent plus a few attraction distances,
   // so that a young colony (one seed) still catches some snow
   // plus the lift (the height the snow falls before it reaches the colony
@@ -616,19 +779,43 @@ export function createReef(opts = {}) {
       const a0 = params[c.id].attractionDistance;
       wFall = FALL; wPlane = null;
       if (c.id === 'fan') {
-        // a sea fan feeds from the water that the current carries through
-        // its plane: the walkers start on a half circle in the fan plane
-        // and drift in it with a small fall (as the fans of the old page)
+        // a sea fan feeds from the water that the current carries THROUGH
+        // its plane (the fan stands across the current), so the food comes
+        // to every part of the fan, not only to the outer tips: a walker
+        // starts at a uniform point of a half disc in the fan plane (the fan
+        // and a margin round it) and walks in the plane with a small fall.
+        // So the holes of the net fill with side branches, as on a
+        // Gorgonia, and the top does not get sparse
         spawnC = c; c.tries++;
         const f = c.plane, Rf = Math.max(c.top - c.base[1], c.ext) + 3 * a0 + 0.04 * c.size * Math.min(1, c.count / 300);
-        const t = (random() - 0.5) * 0.9 * Math.PI, j = (random() - 0.5) * 2 * a0;
-        const x = c.base[0] - f[1] * Math.sin(t) * Rf + f[0] * j, z = c.base[2] + f[0] * Math.sin(t) * Rf + f[1] * j;
+        const t = (random() - 0.5) * 0.9 * Math.PI, rr = Rf * Math.sqrt(random()), j = (random() - 0.5) * 2 * a0;
+        const x = c.base[0] - f[1] * Math.sin(t) * rr + f[0] * j, z = c.base[2] + f[0] * Math.sin(t) * rr + f[1] * j;
         spawnX = c.base[0]; spawnZ = c.base[2]; spawnTop = c.base[1] + Rf + 0.3; spawnR = Rf + 0.6;
         wFall = 0.25; wPlane = f;
-        out[0] = x / U; out[1] = (c.base[1] + Math.cos(t) * Rf) / U; out[2] = z / U;
+        out[0] = x / U; out[1] = (c.base[1] + Math.cos(t) * rr) / U; out[2] = z / U;
         return out;
       }
-      const D = c.disc, a = random() * TAU, rr = D[2] * Math.sqrt(random());
+      const D = c.disc;
+      if (c.sp.apex && c.count > 24 && random() < AIM) {
+        // snow near the growing front: over one of the last particles of
+        // the colony (most are at or near a tip), upstream by the drift of
+        // its fall. A branching colony is mostly open water, so snow from
+        // the whole disc mostly falls through to the rock; this half of
+        // the snow is the part that reaches the branches.
+        // (a few tries for a particle that is not a stopped tip: the snow
+        // over a tip that met a neighbour goes to the live front)
+        let g = -1;
+        for (let q = 0; q < 4 && (g < 0 || R.dead[g]); q++) g = c.ids[c.count - 1 - Math.floor(random() * random() * Math.min(c.count, 400))];
+        const pr = params[c.id], h = 4 * pr.attractionDistance + 2 * pr.particleSpacing, ra = 3 * pr.attractionDistance + 2 * pr.particleSpacing;
+        const a = random() * TAU, rr = ra * Math.sqrt(random()), kx = env.strength * 0.8 / FALL * h;
+        spawnC = c; c.tries++;
+        const x = R.px[g] + Math.cos(a) * rr - env.cur[0] * kx, z = R.pz[g] + Math.sin(a) * rr - env.cur[1] * kx;
+        spawnX = D[0]; spawnZ = D[1]; spawnTop = Math.max(D[3], R.py[g] + h);
+        spawnR = D[2] + 0.3 + 0.2 * c.size + env.strength * D[4];
+        out[0] = x / U; out[1] = (R.py[g] + h) / U; out[2] = z / U;
+        return out;
+      }
+      const a = random() * TAU, rr = D[2] * Math.sqrt(random());
       const x = D[0] + Math.cos(a) * rr, z = D[1] + Math.sin(a) * rr;
       let k = 0, y = D[3];
       for (const d of live) {
@@ -650,12 +837,16 @@ export function createReef(opts = {}) {
   // radius of size / 2, from 0.2 x size x sp.tall under the base to
   // size x sp.tall over it (a round outline, not a cut).
   // Near the outline the joins thin out (a soft, ragged edge, not a rim).
+  // fitHard: the last false of fits() was a hard limit (the outline, the
+  // plot, the rock), not the random thin-out of the soft edge.
+  let fitHard = false;
   function fits(c, x, y, z) {
     const H = c.size * c.sp.tall, h = 0.5 * c.size;
     const dx = x - c.base[0], dy = y - c.base[1] - 0.4 * H, dz = z - c.base[2];
     const e = (dx * dx + dz * dz) / (h * h) + (dy * dy) / (0.36 * H * H);
+    fitHard = true;
     if (e > 1) return false;
-    if (e > 0.6 && random() > Math.pow((1 - e) / 0.4, 1.5)) return false;
+    if (e > 0.6 && random() > Math.pow((1 - e) / 0.4, 1.5)) { fitHard = false; return false; }
     if (x * x + z * z > radius * radius) return false;
     const s = params[c.id].particleSpacing;
     return rockM(x, y, z) > s * 0.25 && y > sandAt(x, z) + s * 0.25;
@@ -683,6 +874,7 @@ export function createReef(opts = {}) {
     const minMoveU = 0.6 * Math.min(params[spawnC.id].minMoveDistance, 0.03 * spawnC.sp.scale) / U;
     const AgU = maxAttrU;
     const drift = env.strength * 0.8;
+    let miss = 0;
     for (let steps = 0; steps < 3000; steps++) {
       const n = m.nearest(P);
       const par = n.id;
@@ -693,13 +885,25 @@ export function createReef(opts = {}) {
         if (d < A) {
           if (c.full || c.count >= c.cap) { R.lost++; return -1; }      // a full colony is a sink
           const sp = c.sp, h = sp.hooks;
-          if (!(h.shouldJoin ? h.shouldJoin(R, P, par) : dlafJoin(par))) {
+          // apical species: the walker feeds a tip or a fork near it (apexPick)
+          const tg = sp.apex ? apexPick(c, par, P) : par, fork = sp.apex ? apexFork : false;
+          // no tip and no fork near: the walker goes on (it can still find
+          // a tip); the third time the old tissue takes the food, no growth
+          if (tg < 0 && ++miss > 2) { R.lost++; return -1; }
+          if (tg < 0 || !(h.shouldJoin ? h.shouldJoin(R, P, tg) : dlafJoin(tg))) {
             m.lerpFrom(par, P, A + pr.minMoveDistance / U, P);
             continue;
           }
-          if (h.placeParticle) h.placeParticle(R, P, par, QP); else m.lerpFrom(par, P, pr.particleSpacing / U, QP);
-          if (!outOfRock(QP, pr.particleSpacing * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) { R.lost++; return -1; }
-          return m.add(QP, par);
+          if (sp.apex) apexPlace(c, tg, fork, P, QP); else m.lerpFrom(tg, P, pr.particleSpacing / U, QP);
+          if (h.placeParticle) h.placeParticle(R, P, tg, QP);
+          fitHard = true;
+          if (!outOfRock(QP, pr.particleSpacing * 0.3) || !fits(c, QP[0] * U, QP[1] * U, QP[2] * U)) {
+            // a tip that cannot go on (rock, outline, plot) stops for good
+            if (sp.apex && !fork && fitHard) R.dead[tg] = 1;
+            R.lost++; return -1;
+          }
+          if (fork) R.forks++; else if (R.kids[tg] === 0) R.tipJoins++;
+          return m.add(QP, tg);
         }
       }
       const x = P[0] * U, y = P[1] * U, z = P[2] * U;
@@ -759,17 +963,21 @@ export function createReef(opts = {}) {
     return k;
   }
   // A colony that gets no join in STARVE walkers of its own disc stops: it
-  // is shaded out, or overgrown by its neighbours. A colony past half its
-  // cap whose join rate over the last WIN walkers is under SLOW stops too:
-  // it has filled its outline, and more snow on it is mostly lost.
-  const STARVE = 6000, WIN = 1500, SLOW = 0.06;
+  // is shaded out, or overgrown by its neighbours. A colony past 60 % of its
+  // cap whose join rate over the last WIN walkers is under SLOW x its best
+  // rate (c.peak, per WIN walkers) stops too: it has filled its outline,
+  // and more snow on it is mostly lost. (A branching colony feeds only at
+  // its tips, so its join rate is low from the start: the test is against
+  // its own best rate, not a fixed rate.)
+  const STARVE = 6000, WIN = 1500, SLOW = 0.3;
   function starve() {
     for (const c of R.colonies) {
       if (c.full) continue;
       if (c.tries - c.lastTry > STARVE) { c.full = true; c.starved = true; liveAt = -1; continue; }
       if (c.tries - c.winT >= WIN) {
         const rate = (c.count - c.winN) / (c.tries - c.winT);
-        if (rate < SLOW && c.count >= 0.5 * c.cap) { c.full = true; c.filled = true; liveAt = -1; continue; }
+        if (c.count >= 0.6 * c.cap && rate < Math.max(0.004, SLOW * (c.peak || 0))) { c.full = true; c.filled = true; liveAt = -1; continue; }
+        if (rate > (c.peak || 0)) c.peak = rate;
         c.winT = c.tries; c.winN = c.count;
       }
     }
@@ -798,7 +1006,7 @@ export function createReef(opts = {}) {
   function reset(seed) {
     if (seed !== undefined) R.seed = seed;
     random = rng(R.seed);
-    R.colonies = []; R.contacts = new Map(); R.bridges = new Map(); R.count = 0; R.joined = 0; R.walks = 0; R.walkers = 0; R.lost = 0;
+    R.colonies = []; R.contacts = new Map(); R.bridges = new Map(); R.count = 0; R.joined = 0; R.walks = 0; R.walkers = 0; R.lost = 0; R.forks = 0; R.tipJoins = 0; R.nets = 0;
     R.allowance = 0; R.single = false; R.preset = null;
     cgrid = new Map(); live = []; liveAt = -1;
     makeModel();
@@ -835,19 +1043,25 @@ export function chooseFocus(colonies, points, budgetTris, maxN = Infinity) {
 // A held colony stays while its distance is under max(keepK x dIn, dIn +
 // keepAdd), or for holdMs after it came in, and while the held set fits
 // over x the budget (the nearest first). Then the nearest new colonies
-// come in while the budget allows. Returns the focus list (k).
-export const FOCUS_HOLD = { keepK: 1.5, keepAdd: 3, holdMs: 8000, over: 1.25 };
+// come in while the budget allows. Last, a held colony that the distance
+// rule lets go, but that is small (under small x the budget), stays while
+// the set fits over x the budget: a small colony at the edge of the
+// budget does not go out and in again as the cameras move (each change
+// meshes its fine field again). It never keeps a nearer new colony out.
+// Returns the focus list (k).
+export const FOCUS_HOLD = { keepK: 1.5, keepAdd: 3, holdMs: 8000, over: 1.25, small: 0.08 };
 export function holdFocus(colonies, points, budgetTris, held, nowMs, o = FOCUS_HOLD) {
   if (!points || !points.length) return [...held.keys()];
   const dist = c => { let d = Infinity; for (const p of points) d = Math.min(d, Math.hypot(c.base[0] - p[0], c.base[1] - p[1], c.base[2] - p[2]) - c.size * 0.5); return d; };
   const est = c => Math.max(c.count || 0, (c.cap || 0) * 0.6) * SPECIES[c.id].tpp;
   const byK = new Map();
   for (const c of colonies) if (c) byK.set(c.k, c);
-  const keep = [];
+  const keep = [], spare = [];
   for (const [k, h] of held) {
     const c = byK.get(k); if (!c) continue;
     const d = dist(c);
     if (d <= Math.max(o.keepK * h.dIn, h.dIn + o.keepAdd) || nowMs - h.at < o.holdMs) keep.push({ c, d, h });
+    else if (est(c) < (o.small || 0) * budgetTris) spare.push({ c, d, h });
   }
   keep.sort((a, b) => a.d - b.d);
   const out = new Map();
@@ -858,12 +1072,19 @@ export function holdFocus(colonies, points, budgetTris, held, nowMs, o = FOCUS_H
     out.set(e.c.k, e.h); t += s;
   }
   const cand = [];
-  for (const c of byK.values()) if (!out.has(c.k)) cand.push({ c, d: dist(c) });
+  const spareK = new Set(spare.map(e => e.c.k));
+  for (const c of byK.values()) if (!out.has(c.k) && !spareK.has(c.k)) cand.push({ c, d: dist(c) });
   cand.sort((a, b) => a.d - b.d);
   for (const e of cand) {
     const s = est(e.c);
     if (out.size && t + s > budgetTris) break;
     out.set(e.c.k, { at: nowMs, dIn: Math.max(0, e.d) }); t += s;
+  }
+  spare.sort((a, b) => a.d - b.d);
+  for (const e of spare) {
+    const s = est(e.c);
+    if (t + s > budgetTris * o.over) break;
+    out.set(e.c.k, e.h); t += s;
   }
   held.clear();
   for (const [k, h] of out) held.set(k, h);
