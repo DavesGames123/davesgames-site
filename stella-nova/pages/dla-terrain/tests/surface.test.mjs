@@ -16,6 +16,7 @@ import { tmpdir, homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import {
   simulateSurface, packSurface, surfRes, windOf, dune, snowAmount, drainLine, cellJitter, DXS, DZS,
+  rockFrame, jointFrame, strataParams,
 } from '../render/surface-sim.js';
 import { generateTerrain, PRESETS } from '../../../lib/dla-terrain.js';
 
@@ -174,6 +175,35 @@ function synth(n, ws, hf, opts = {}) {
     if (x > 40 && x < 250) { wL += s.fields.drift[j * m + i]; cL++; }
   }
   ok(wL / cL > wW / cW + 0.15, `drift: lee side ${(wL / cL).toFixed(2)} > windward side ${(wW / cW).toFixed(2)}`);
+}
+
+// ---- the joint frame follows the strata (ground.wgsl fn rockSet)
+{
+  const m = 96, ws = 12000;
+  const sp = strataParams({ heightScale: 1300, strataLayers: 9, strata: 0.85 });
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  let worst = 0, worstOrth = 0;
+  for (const deg of [0, 37, 90, 151, 222, 300]) {
+    // a tilted warp field: the beds dip toward the warp gradient (deg)
+    const a = deg * Math.PI / 180, st = new Float32Array(m * m);
+    for (let z = 0; z < m; z++) for (let x = 0; x < m; x++) st[z * m + x] = 0.5 + 0.0012 * (x * Math.cos(a) + z * Math.sin(a)) + 0.0002 * Math.sin(x * 0.7 + z * 1.3);
+    const f = rockFrame(st, m, ws, sp, 1);
+    worst = Math.max(worst, Math.acos(Math.min(1, f.dir[0] * Math.cos(a) + f.dir[1] * Math.sin(a))) * 180 / Math.PI);
+    // the bedding normal of that dip, and the three set normals
+    const k = 6 / ((sp[2] * 2) / sp[1]), g = 0.0012 * k / (ws / m);
+    const nb = [g * Math.cos(a), 1, g * Math.sin(a)], l = Math.hypot(...nb);
+    const j = jointFrame(nb.map((v) => v / l), f.dir);
+    worstOrth = Math.max(worstOrth, Math.abs(dot3(j.j0, j.j1)), Math.abs(dot3(j.j0, j.j2)), Math.abs(dot3(j.j1, j.j2)));
+  }
+  ok(worst < 1.0, `rockFrame: set 1 follows the dip direction of the strata (worst ${worst.toFixed(2)} deg over 6 azimuths)`);
+  ok(worstOrth < 1e-6, `jointFrame: bedding, dip and strike joints are orthogonal (worst |cos| ${worstOrth.toExponential(1)})`);
+  const flat = rockFrame(new Float32Array(m * m).fill(0.5), m, ws, sp, 7);
+  ok(Math.abs(Math.hypot(...flat.dir) - 1) < 1e-6 && flat.dip === 0, 'rockFrame: flat strata give a unit seed direction and no dip');
+  const thin = rockFrame(new Float32Array(m * m).fill(0.5), m, ws, strataParams({ strata: 0 }), 7);
+  ok(thin.H0 < flat.H0 && thin.stepK < flat.stepK, 'rockFrame: strongly bedded rock has thicker beds and stronger stairs than massive rock');
+  const lib = await generateTerrain({ ...PRESETS.canyonlands.opts, n: 64, seed: 3 });
+  const s = await simulateSurface(lib, { res: 64 });
+  ok(s.rock && Math.abs(Math.hypot(...s.rock.dir) - 1) < 1e-6 && s.rock.dip >= 0 && s.rock.dip < 10, `simulateSurface returns the joint frame (canyonlands: dip ${s.rock.dip.toFixed(2)} deg)`);
 }
 
 // ---- WGSL twins and naga

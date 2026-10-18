@@ -49,7 +49,8 @@
 //  "export async function simulateSurface", "function d8", "function scree",
 //  "function windExposure", "export function packSurface",
 //  "export function dune", "export function snowAmount",
-//  "export function drainLine", "export function strataParams"
+//  "export function drainLine", "export function strataParams",
+//  "export function rockFrame", "export function jointFrame"
 // ============================================================================
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -478,6 +479,7 @@ export async function simulateSurface(t, opts = {}) {
   for (let i = 0; i < N; i++) { if (screeF[i] > 0.4) nScree++; if (regolith[i] < 0.2) nRock++; if (playa[i] > 0.5) nPlaya++; if (cornice[i] > 0.5) nCorn++; }
   return {
     m, worldSize: ws, data, fields, wind, strata: strataParams(o), glacier,
+    rock: rockFrame(strata, m, ws, strataParams(o), seed),
     stats: { scree: nScree / N, bedrock: nRock / N, playa: nPlaya / N, cornice: nCorn / N },
   };
 }
@@ -495,6 +497,57 @@ export function packSurface(f, m) {
     out[o3] = f.dir[i] * 28; out[o3 + 1] = q((f.logA[i] + 2.5) / 5); out[o3 + 2] = q(f.coarse[i]); out[o3 + 3] = q(f.erosion[i]);
   }
   return out;
+}
+
+// ---------------------------------------------------- the joint frame --
+// The rock joints of ground.wgsl fn rockSet follow the strata. The beds
+// are the planes of equal bedding coordinate bc = y + k (warp - 0.5)
+// (k = 6 / phase per metre, the strata warp field in metres), so a bed
+// dips toward the gradient of the warp. The regional dip direction is the
+// mean of that gradient; set 1 (dip joints) has it as its normal, set 2
+// (strike joints) is normal to set 1. Flat strata (a mean gradient under
+// 1e-4) take the axis of the largest gradient variance; a field with no
+// gradient, an angle from the seed. H0: bed spacing m (thicker beds in
+// strongly bedded rock); stepK: stair strength.
+// -> { dir: [x, z] unit, dip: deg, H0, stepK }
+export function rockFrame(strata, m, ws, sp, seed = 1) {
+  const [, hspan, layers, str] = sp;
+  const A = (layers * 2) / Math.max(hspan, 1);
+  const k = 6 / A, dx = ws / m;
+  let gx = 0, gz = 0, sxx = 0, szz = 0, sxz = 0, cnt = 0;
+  const step = Math.max(1, Math.floor(m / 128));
+  for (let z = 1; z < m - 1; z += step) {
+    for (let x = 1; x < m - 1; x += step) {
+      const i = z * m + x;
+      const ax = ((strata[i + 1] - strata[i - 1]) * k) / (2 * dx);
+      const az = ((strata[i + m] - strata[i - m]) * k) / (2 * dx);
+      gx += ax; gz += az; sxx += ax * ax; szz += az * az; sxz += ax * az; cnt++;
+    }
+  }
+  cnt = Math.max(cnt, 1);
+  gx /= cnt; gz /= cnt;
+  const mag = Math.hypot(gx, gz);
+  let a;
+  if (mag > 1e-4) a = Math.atan2(gz, gx);
+  else if (sxx + szz > 1e-12) a = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+  else a = (((seed >>> 0) * 2654435761) % 6283) / 1000;
+  const r9 = (v) => Math.round(v * 1e9) / 1e9;
+  const s = clamp(str || 0, 0, 1);
+  return { dir: [r9(Math.cos(a)), r9(Math.sin(a))], dip: Math.atan(mag) * 180 / Math.PI, H0: 1.2 + (1.2 * s), stepK: 0.8 + (0.5 * s) };
+}
+
+// The three set normals at a point with the bedding normal nb (unit):
+// set 0 = nb, set 1 = the dip direction d (xz) made normal to nb, set 2 =
+// nb x set 1. The shader uses vertical joints and nb = +y (the strata dip
+// under 1 degree in LIB worlds); this is the exact frame for a test.
+export function jointFrame(nb, d) {
+  const d3 = [d[0], 0, d[1]];
+  const dn = d3[0] * nb[0] + d3[1] * nb[1] + d3[2] * nb[2];
+  let j1 = [d3[0] - dn * nb[0], d3[1] - dn * nb[1], d3[2] - dn * nb[2]];
+  const l1 = Math.hypot(j1[0], j1[1], j1[2]) || 1;
+  j1 = j1.map((v) => v / l1);
+  const j2 = [nb[1] * j1[2] - nb[2] * j1[1], nb[2] * j1[0] - nb[0] * j1[2], nb[0] * j1[1] - nb[1] * j1[0]];
+  return { j0: nb.slice(), j1, j2 };
 }
 
 // ------------------------------------------------- shader twins (tests) --
