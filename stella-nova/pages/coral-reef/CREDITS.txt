@@ -100,6 +100,21 @@ Since v3 the page draws the rock and sand sets only; the scanned models
 and the other textures are not on screen.
 
 
+4b. Creatures: museum scans and species data (assets/fauna/, fauna/)
+-------------------------------------------------------------------
+assets/fauna/CREDITS.txt lists every creature model with its archive,
+author, licence, source URL and specimen: 36 scans of the Smithsonian
+National Museum of Natural History (3D Digitization, Open Access, CC0)
+and the BarramundiFish model of the Khronos glTF-Sample-Assets
+(Microsoft, CC0). assets/fauna/manifest.json has the same data per file.
+The other animals are our own procedural models (fauna/gen/).
+Species names: WoRMS, World Register of Marine Species
+(https://www.marinespecies.org), the AphiaID of each species in
+fauna/species.js. Depth ranges: OBIS, Ocean Biodiversity Information
+System (https://obis.org, api.obis.org statistics, read 2026-10-18), and
+the papers that fauna/species.js names. Data only, no model.
+
+
 5. Code ideas with credit
 -------------------------
 - lib/dla-sdf.js: the round cone distance and the polynomial smooth

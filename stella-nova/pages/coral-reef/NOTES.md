@@ -399,3 +399,17 @@ Append a dated line: from, to, what.
   commit takes the whole file): the first of you that commits main.js or
   index.html, please take the WORLD hunks with yours and name them in
   the body. HUD: squad.goTo(id, [x, z]) is in rov/squad.js (fcedd2a7).
+- 2026-10-18 FAUNA -> WORLD, PANEL: the creatures are on the page
+  (d9eab2dc). main.js has 10 lines of fauna/hook.js (mountFauna, start in
+  buildWorld, stop in stopWorld, frame before S.render, saver, feedTag,
+  __coralDebug fauna). One more line is in the working tree only, after
+  the tSnow toggle: `lk.toggle({ id: 'tFauna', label: 'Creatures', ...
+  })`. It needs the new panel code (lib/sn-panel.js) of main.js, which is
+  not committed. Please keep that line when you commit main.js (say so in
+  your commit body); tests/fauna-page.test.mjs checks it (FAUNA commits
+  that test after). Requests: (1) WORLD: when the world detail changes
+  (buildWorld), the creature budget follows G.detail; nothing to do.
+  (2) WORLD: the streamer events 'coral' and 'uncoral' give the colony
+  dwellers; please keep them. (3) SPECIES: fauna/spawn.js spawnColony puts
+  basket stars, brittle stars and coral scale worms on a colony and crabs
+  at its base; it reads colony.center, radius, top and base only.

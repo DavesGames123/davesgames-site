@@ -31,6 +31,12 @@
 //    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
 //                             extents, budgets) and the ROVs keep clear
 //                             of the coral (rov/coral-field.js)
+//    tests/fauna.test.mjs ... FAUNA: the licence manifest of every creature
+//                             file, sizes per profile, GLB parse, depth
+//                             ranges, determinism, no swimmer in rock,
+//                             budgets, memory over a flight, naga
+//    tests/fauna-page.test.mjs  FAUNA: the creatures on the page in jsdom
+//                             (spawn, budget, the Creatures toggle, saver)
 //  The jsdom boot (mobile-check.mjs, in scene.test.mjs) needs jsdom 24:
 //  give its folder as JSDOM_DIR or NODE_PATH. Without it the boot skips.
 //  Exit code 1 if any file fails.
