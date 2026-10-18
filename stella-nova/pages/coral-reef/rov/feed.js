@@ -3,11 +3,13 @@
 // ----------------------------------------------------------------------------
 //  Two kinds of feed, one panel (hud.js). setMode(id) changes the kind:
 //
-//  LIVE ('live', the page default). The ROV camera at 15 to 30 fps (o.fps,
-//  by profile) at a small size (o.size, for example 320 x 240), with an
+//  LIVE ('live', the page default). The ROV camera at 10 to 30 fps (o.fps or
+//  o.size.fps, by profile) at a small size (o.size, for example 320 x 256
+//  on a desktop, 224 x 180 on a phone; budget.js PROF.feed), with an
 //  analog video look that has some SSTV flavour: scanlines, mild noise, a
 //  rolling sync bar, chroma bleed, a little slant, line jitter, rare
-//  streaks and a vertical roll when the vehicle changes. All on the GPU,
+//  streaks (about 1 a second, more in a glitch burst) and a vertical roll
+//  when the vehicle changes. All on the GPU,
 //  with no read back:
 //    1. the scene from the vehicle camera into rtLive (half float, with
 //       mipmaps). The shadow maps are not drawn again (the main frame
@@ -130,7 +132,7 @@ export const ANALOG_FS = [
   '  float e = (db - 0.03) / 0.006; col += 0.05 * exp(-e * e);',
   '  float n = h1(vUv * res + vec2(time * 61.7, seed)) - 0.5, nc = h1(vUv.yx * res.yx + time * 13.1) - 0.5;',
   '  col += n * noise * 0.5 + vec3(nc, -0.5 * nc, 0.3 * nc) * noise * 0.25;',
-  '  float streak = step(0.9985 - noise * 0.004, h1(vec2(line, fr * 1.7 + seed)));',
+  '  float streak = step(0.99985 - max(noise - 0.3, 0.0) * 0.01, h1(vec2(line, fr * 1.7 + seed)));',
   '  col = mix(col, vec3(0.9), streak * 0.5 * h1(vec2(floor(vUv.x * res.x / 8.0), line)));',
   '  vec2 q = vUv - 0.5; col *= 1.0 - 0.7 * dot(q, q);',
   '  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);',
@@ -196,7 +198,7 @@ export function analogFrame(src, w, h, o = {}) {
       const y0 = 0.299 * C[0][0] + 0.587 * C[1][0] + 0.114 * C[2][0];
       const cs = C.map(a => (a[0] + a[1] + a[2] + a[3]) / 4), ys = 0.299 * cs[0] + 0.587 * cs[1] + 0.114 * cs[2];
       const n = h1(vx * w + t * 61.7, vy * h + seed) - 0.5, nc = h1(vy * h + t * 13.1, vx * w + t * 13.1) - 0.5;
-      const streak = h1(line, fr * 1.7 + seed) > 0.9985 - noise * 0.004 ? 0.5 * h1(Math.floor(vx * w / 8), line) : 0;
+      const streak = h1(line, fr * 1.7 + seed) > 0.99985 - Math.max(noise - 0.3, 0) * 0.01 ? 0.5 * h1(Math.floor(vx * w / 8), line) : 0;
       const q = (vx - 0.5) ** 2 + (vy - 0.5) ** 2, vig = 1 - 0.7 * q;
       const sl = o.rows ? 1 - clamp(o.rows - 1, 0, 1) * 0.3 * (1 - (0.5 + 0.5 * Math.cos(2 * Math.PI * vy * h))) : 1;
       const nk = [nc, -0.5 * nc, 0.3 * nc], j = (Y * w + X) * 4;
@@ -255,7 +257,8 @@ function makeCanvas(doc, w, h) {
 const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 // o: renderer, scene, getVehicle(id) -> vehicle, vehicle (id), mode
-// ('live' | 'r8' | 'r36' | 'm1'; default 'r36'), fps and size (live),
+// ('live' | 'r8' | 'r36' | 'm1'; default 'r36'), size ([w, h] or { w, h,
+// fps }, budget.js PROF.feed) and fps (live),
 // budgetMs, speed, hold, seed, noise, canvas, document, dpr, worker
 // (default true), source(vehicle), info(vehicle) -> { depth, heading, time }
 export function createFeed(THREE, o = {}) {
@@ -275,11 +278,16 @@ export function createFeed(THREE, o = {}) {
   }
   makePic();
   const R = o.renderer || null, RW = 320, RH = 256;
-  const LW = (o.size && o.size[0]) || 320, LH = (o.size && o.size[1]) || 240;
+  // o.size: [w, h] or { w, h, fps } (budget.js PROF.feed)
+  const sz = o.size || null, LW = Math.round((sz && (sz.w ?? sz[0])) || 320), LH = Math.round((sz && (sz.h ?? sz[1])) || 240);
+  const FPS = o.fps || (sz && sz.fps) || 30;
   let rt = null, rt8 = null, buf = null, post = null;
-  if (R && THREE) {
-    const ext = R.extensions;
-    const half = !!(R.capabilities && R.capabilities.isWebGL2 && ext && (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float')));
+  const ext = R && R.extensions;
+  const half = !!(R && R.capabilities && R.capabilities.isWebGL2 && ext && (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float')));
+  const quadCam = THREE && R ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) : null;
+  // the SSTV targets, on the first SSTV capture (live mode does not need them)
+  function makeSstv() {
+    if (rt || !R || !THREE) return;
     rt = new THREE.WebGLRenderTarget(RW, RH, { type: half ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true });
     rt8 = new THREE.WebGLRenderTarget(RW, RH, { type: THREE.UnsignedByteType, depthBuffer: false });
     buf = new Uint8Array(RW * RH * 4);
@@ -290,13 +298,13 @@ export function createFeed(THREE, o = {}) {
     });
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat); quad.frustumCulled = false;
     const sc = new THREE.Scene(); sc.add(quad);
-    post = { mat, quad, sc, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), half };
+    post = { mat, quad, sc, cam: quadCam };
   }
   // ── live: render targets and passes (made on first use) ────────────────────
   let L = null;
   function makeLive() {
     if (L || !R || !THREE) return L;
-    const half = post.half, T = THREE;
+    const T = THREE;
     const rtLive = new T.WebGLRenderTarget(LW, LH, { type: half ? T.HalfFloatType : T.UnsignedByteType, depthBuffer: true, generateMipmaps: true, minFilter: T.LinearMipmapLinearFilter, magFilter: T.LinearFilter });
     const g1 = () => new T.WebGLRenderTarget(1, 1, { type: T.UnsignedByteType, depthBuffer: false, minFilter: T.NearestFilter, magFilter: T.NearestFilter });
     const agcA = g1(), agcB = g1();
@@ -314,7 +322,7 @@ export function createFeed(THREE, o = {}) {
     // the first AGC value: a gain of 8
     return L;
   }
-  const rate = liveRate({ fps: o.fps || 30, min: o.minFps || 10, budgetMs: o.budgetMs ?? 3, adapt: o.adapt });
+  const rate = liveRate({ fps: FPS, min: o.minFps || Math.min(10, FPS), budgetMs: o.budgetMs ?? 3, adapt: o.adapt });
   let active = true, liveT = 0, roll = 0, liveFrames = 0, fpsWin = [], livePic = null;
   const lr = { R: (o.seed ?? 1) * 9301 + 49297, slant: 0.012, bar: 0.2, glitch: 0, snr: 34 };
   const rnd = () => { lr.R = (lr.R * 16807) % 2147483647; return lr.R / 2147483647; };
@@ -340,6 +348,7 @@ export function createFeed(THREE, o = {}) {
 
   function capture(v) {
     const m = link.mode;
+    if (R && v && v.camera) makeSstv();
     if (rt && v && v.camera) {
       const prev = R.getRenderTarget();
       v.camera.aspect = RW / RH; v.camera.updateProjectionMatrix();
@@ -397,11 +406,11 @@ export function createFeed(THREE, o = {}) {
       // AGC: B = mix(A, want); then swap so that prev is the newest
       L.agc.m.uniforms.prev.value = L.agcA.texture;
       L.agc.m.uniforms.rate.value = L.ready ? 1 - Math.exp(-Math.max(dt, 1 / 60) * 2.5) : 1;
-      R.setRenderTarget(L.agcB); R.render(L.agc.s, post.cam);
+      R.setRenderTarget(L.agcB); R.render(L.agc.s, quadCam);
       const U = L.ana.m.uniforms;
       U.agc.value = L.agcB.texture; U.time.value = p.time; U.seed.value = p.seed; U.noise.value = p.noise;
       U.slant.value = p.slant; U.bar.value = p.bar; U.roll.value = p.roll;
-      R.setRenderTarget(L.rtOut); R.render(L.ana.s, post.cam);
+      R.setRenderTarget(L.rtOut); R.render(L.ana.s, quadCam);
       const t = L.agcA; L.agcA = L.agcB; L.agcB = t;
       R.setRenderTarget(prev);
       if (o.afterCapture) o.afterCapture(v);
@@ -425,7 +434,7 @@ export function createFeed(THREE, o = {}) {
     R.setViewport(x, y, w, h); R.setScissor(x, y, w, h); R.setScissorTest(true);
     const U = L.blit.m.uniforms;
     U.opacity.value = opacity; U.pxPerRow.value = h * pr / LH;
-    R.render(L.blit.s, post.cam);
+    R.render(L.blit.s, quadCam);
     R.setScissorTest(st); R.setScissor(sc); R.setViewport(vp); R.autoClear = ac; R.setRenderTarget(prev);
     return true;
   }
@@ -499,7 +508,7 @@ export function createFeed(THREE, o = {}) {
     lastFields() { return last; },
     dispose() {
       if (worker) worker.terminate(); worker = null;
-      if (rt) { rt.dispose(); rt8.dispose(); post.mat.dispose(); post.quad.geometry.dispose(); }
+      if (rt) { rt.dispose(); rt8.dispose(); post.mat.dispose(); post.quad.geometry.dispose(); rt = null; }
       if (L) { for (const t of [L.rtLive, L.agcA, L.agcB, L.rtOut]) t.dispose(); for (const p of [L.agc, L.ana, L.blit]) { p.m.dispose(); p.q.geometry.dispose(); } L = null; }
     },
   };
