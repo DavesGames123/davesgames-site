@@ -34,6 +34,10 @@
                  mode and menu. Menu opens #panel as a bottom sheet
                  (portrait) or a drawer (landscape). #feed is a small card
                  above the dock at the right: a tap makes it large.
+     camera .... #camBar: Orbit, Swim, Follow ROV and Tours (camera.js,
+                 input.js); #tourList the tour menu. On #feed, #feedCycle
+                 (a tap) shows the next ROV, a long press or #feedSize
+                 (the corner button) makes the card large.
                  shell.js binds the dock, the sheet, the feed card and the
                  explainer; layout.js has the layout logic (no DOM)
 
@@ -69,9 +73,17 @@
   <div><span>Particles / s</span><b id="rRate">0</b></div>
   <div id="rState" class="state"></div>
 </div>
-<div id="hint">Drag to orbit · pinch or scroll to zoom · double tap to re-frame · Plant mode, then tap the rock to plant a colony</div>
+<div id="hint">Drag to turn round the rock · pinch or scroll to zoom to it · double tap to fly there · Swim (F) to go through the canyons · Plant mode, then tap the rock to plant a colony</div>
+<div id="camBar" role="toolbar" aria-label="Camera">
+  <button type="button" data-cam="orbit" class="on" aria-pressed="true" title="Orbit: drag to turn round the rock, scroll to zoom to the cursor, double click to fly there"><i>⟲</i><span>Orbit</span></button>
+  <button type="button" data-cam="swim" aria-pressed="false" title="Swim (F): WASD to move, E and Q up and down, Shift fast, click to look with the mouse"><i>≈</i><span>Swim</span></button>
+  <button type="button" data-cam="follow" aria-pressed="false" title="Follow an ROV (G): drag to look round it; a second tap takes the next ROV"><i>◎</i><span id="camFollowLbl">Follow ROV</span></button>
+  <button type="button" data-cam="tour" aria-pressed="false" aria-expanded="false" aria-controls="tourList" title="Guided tours through the canyons and under the arches"><i>➶</i><span>Tours</span></button>
+</div>
+<div id="tourList" hidden role="menu" aria-label="Tours"></div>
 <div id="feed" hidden>
-  <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false"></button>
+  <button id="feedCycle" type="button" aria-label="Show the next ROV camera (hold to make the card larger)"></button>
+  <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false">⤢</button>
   <div id="feedSlot"></div>
 </div>
 <div id="tapMark" aria-hidden="true"></div>
@@ -85,7 +97,7 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
   <h1 class="ptitle">Coral reef growth</h1>
-  <p class="lede">An ROV dive in dark water. Marine snow falls and drifts with the current. A flake that touches a coral sticks: the tips meet the snow first, so the tips grow. Neighbour colonies compete for the same snow and fuse where they meet. The ROV camera comes up over a slow-scan TV link.</p>
+  <p class="lede">An ROV dive in dark water. Marine snow falls and drifts with the current. A flake that touches a coral sticks: the tips meet the snow first, so the tips grow. Neighbour colonies compete for the same snow and fuse where they meet. You can swim through the reef yourself; the ROV camera comes up as live video or over a slow-scan TV link.</p>
 
   <section class="grp" data-grp="reef">
     <div class="sec-label">Reef</div>
@@ -109,7 +121,9 @@
     <div class="chips" id="quality"></div>
     <div class="sec-label sub">ROVs</div>
     <div class="chips" id="rovCount"></div>
-    <div class="sec-label sub">Camera feed (SSTV mode)</div>
+    <div class="sec-label sub">Camera feed</div>
+    <div class="chips" id="feedMode"></div>
+    <div class="sec-label sub">Slow-scan mode</div>
     <div class="chips" id="sstvMode"></div>
     <p class="note">The lead ROV camera goes over a simulated slow-scan TV radio link, so the picture comes in line by line, with noise and a little slant.</p>
   </section>

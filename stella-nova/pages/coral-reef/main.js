@@ -23,7 +23,17 @@
 //  PHONE. shell.js binds the dock, the sheet, the explainer and the feed
 //  card. layout.js (no DOM) has the breakpoints, the tap test, the sheet
 //  snap and the pixel ratio cap. A tap plants a colony on the rock only in
-//  plant mode. A double tap out of plant mode re-frames the reef.
+//  plant mode. A double tap out of plant mode flies the camera there.
+//
+//  CAMERA. The main view is always the user's own camera: camera.js
+//  (orbit round the rock under the pointer, zoom to the cursor, grab pan,
+//  fly to a point; swim with collision; tours through the canyons and
+//  under the arches; a chase camera behind one ROV; the saver goals) and
+//  input.js (pointer, touch, wheel, keys, pointer lock, the swim stick).
+//  #camBar picks the mode. scene.js still makes OrbitControls; main.js
+//  turns them off. The ROV feed card (rov/feed.js) is live video by
+//  default: presentFeed() draws it into the canvas at the card after the
+//  main render; a tap on the card shows the next ROV.
 //
 //  PROFILE. budget.js picks a device profile (desktop, laptop-low, phone,
 //  phone-min; ?profile= in the URL overrides it, and a context loss
@@ -48,6 +58,8 @@
 //    grep -n 'function onCoral'       the worker messages
 //    grep -n 'function syncCoral'     new particles to the mesher and the GPU
 //    grep -n 'function buildROVs'     the vehicles, lamps and the feed card
+//    grep -n 'function presentFeed'   the live feed into the canvas at the card
+//    grep -n 'function camUI'         the camera bar, the tours, the feed card taps
 //    grep -n 'function refresh'       radii, natural colours and t
 //    grep -n 'function setMode'       colour by
 //    grep -n 'function clearArea'     the parts of the canvas under overlays
@@ -69,6 +81,8 @@ import { PARAM_INFO } from '../../lib/dla-engine.js';
 import { mountDiagram } from './diagram.js';
 import { PHONE_QUERY, clearFromRects, tapGesture, pixelRatio, nextPreset } from './layout.js';
 import { mountShell } from './shell.js';
+import { createExploreCamera } from './camera.js';
+import { createInput } from './input.js';
 import { PROFILES, PROFILE_ORDER, detectProfile, pageEnv, profileFor, reefBudget, rockWorkers, clampQuality, pixelRatioFor, lostPolicy, frameGovernor } from './budget.js';
 import { mountErrorBox, installErrorHandlers } from './crash.js';
 import { createCoralLink } from './coral-link.js';
@@ -102,6 +116,7 @@ const G = {
   playing: true, speed: 1, dir: 20, cur: 0.5, nutrient: 1, temp: 27,
   caust: 0.7, beam: true, snow: true, feed: true, orbit: false, polyps: true, detail: !COARSE,
   plant: 'staghorn', spSel: 'staghorn', plantMode: !COARSE,
+  feedMode: 'live',                         // 'live' | 'r8' | 'sstv' (then G.sstv)
 };
 let shell = null;
 let saverOn = false, saver = null;
@@ -132,6 +147,10 @@ function onContextLost() {
   }
 }
 const nowMs = () => performance.now() - T0;
+// The explore camera (camera.js). OrbitControls of scene.js stay off.
+const cam = S ? createExploreCamera({ R: G.R, fov: S.camera.fov, eye: S.camera.position.toArray(), look: S.controls.target.toArray() }) : null;
+if (S) { S.controls.enabled = false; S.controls.autoRotate = false; }
+let input = null, camRock = null;
 
 let rock = null, coral = null, rovs = null;
 let radBuf = new Float32Array(1), tBuf = new Float32Array(1), natBuf = new Float32Array(3);
@@ -309,11 +328,41 @@ function buildROVs() {
   S.setLights([...first, ...rest]);
   const slot = $('feedSlot');
   if (slot && rovs.feed && rovs.feed.canvas) { slot.innerHTML = ''; slot.appendChild(rovs.feed.canvas); }
+  applyFeedMode();
   showFeed();
 }
 function showFeed() {
   const f = $('feed'); if (!f) return;
   f.hidden = !(G.feed && rovs && rovs.feed && rovs.feed.canvas);
+  feedT = 0;
+}
+const feedModeId = () => (G.feedMode === 'sstv' ? G.sstv : G.feedMode);
+function applyFeedMode() {
+  document.querySelectorAll('#feedMode button').forEach(b => b.classList.toggle('on', b.dataset.id === G.feedMode));
+  if (rovs && rovs.feed && rovs.feed.setMode) rovs.feed.setMode(feedModeId());
+  feedT = 0;
+}
+// The live feed into the canvas at the picture box of the card, after the
+// main render (rov/feed.js present). The card rect and opacity are read
+// every 10 frames; a hidden card stops the live renders.
+let feedRect = null, feedOp = 0, feedT = 0;
+function presentFeed() {
+  const fd = rovs && rovs.feed;
+  if (!fd || !fd.present) return;
+  if ((feedT++ % 10) === 0) {
+    const f = $('feed'), c = fd.canvas;
+    const vis = !!(G.feed && f && !f.hidden && c && c.isConnected);
+    feedRect = null; feedOp = 0;
+    if (vis) {
+      feedOp = parseFloat(getComputedStyle(f).opacity);
+      if (!(feedOp >= 0)) feedOp = 1;
+      const r = c.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+      feedRect = fd.pictureRect({ x: r.left - cr.left, y: r.top - cr.top, w: r.width, h: r.height });
+    }
+    fd.setActive(vis && feedOp > 0.01);
+    if (f) f.classList.toggle('live', !!fd.live);
+  }
+  if (fd.live && feedRect) fd.present(feedRect, feedOp);
 }
 
 // New particles (synced..count): to the mesher, and into the data
@@ -431,35 +480,20 @@ function fitCamera(dist) {
   if (!S) return;
   const f = fitNow();
   S.view.tox = f.ox; S.view.toy = f.oy;
-  if (dist && !saverOn) {
-    const c = S.controls, cam = S.camera;
+  // re-frame the orbit (not a swim, tour or chase of the user)
+  if (dist && !saverOn && cam && cam.mode === 'orbit') {
     const top = rock && rock.bounds ? rock.bounds.max[1] : 6;
     center.y = Math.max(0, top * 0.3);
-    c.target.set(center.x, center.y, center.z);
-    const d = cam.position.clone().sub(c.target); if (d.lengthSq() < 1) d.set(1, 0.6, 1);
-    d.normalize().multiplyScalar(Math.min(c.maxDistance, f.dist * 0.72));
-    cam.position.copy(c.target).add(d);
-    c.update();
+    cam.frame({ target: [center.x, center.y, center.z], dist: Math.min(90, f.dist * 0.72) });
   }
 }
 
-// ── tap to plant, double tap to re-frame ───────────────────────────────────
-const downs = new Map(); let tap = null, lastTap = null;
-function onDown(e) {
-  downs.set(e.pointerId, true);
-  tap = downs.size === 1 && e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
-  hideHint();
-}
-function onUp(e) {
-  downs.delete(e.pointerId);
-  if (!tap || tap.id !== e.pointerId || saverOn) return;
-  const up = { x: e.clientX, y: e.clientY, t: performance.now() };
-  const g = tapGesture(tap, up, lastTap);
-  tap = null;
-  if (g === 'drag') return;
-  lastTap = g === 'double' ? null : up;
-  if (G.plantMode) { if (g === 'tap') plantAt(e.clientX, e.clientY); }
-  else if (g === 'double') { fitCamera(true); tapFeedback(e.clientX, e.clientY, true, ''); }
+// ── tap to plant, double tap to fly there ──────────────────────────────────
+// input.js finds the taps (and flies the camera on a double tap).
+function onTap(x, y, kind) {
+  if (saverOn) return;
+  if (G.plantMode) { if (kind === 'tap') plantAt(x, y); }
+  else if (kind === 'double') tapFeedback(x, y, true, '');
 }
 let ray = null;
 function plantAt(cx, cy) {
@@ -560,7 +594,8 @@ function buildUI() {
   // a reef larger than the profile allows is off (budget.js reefMax)
   $('quality').querySelectorAll('button').forEach(b => { if (clampQuality(PROF, b.dataset.id) !== b.dataset.id) { b.disabled = true; b.title = 'Too large for this device'; } });
   chips($('rovCount'), [2, 3].map(n => ({ id: n, label: `${n} ROVs` })), G.rovs, n => { G.rovs = +n; buildROVs(); });
-  chips($('sstvMode'), [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }], G.sstv, id => { G.sstv = id; if (rovs && rovs.feed && rovs.feed.setMode) rovs.feed.setMode(id); });
+  chips($('feedMode'), [{ id: 'live', label: 'Live video' }, { id: 'r8', label: 'SSTV fast (Robot 8 B&W)' }, { id: 'sstv', label: 'SSTV slow-scan' }], G.feedMode, id => { G.feedMode = id; applyFeedMode(); });
+  chips($('sstvMode'), [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }], G.sstv, id => { G.sstv = id; G.feedMode = 'sstv'; applyFeedMode(); });
   mountGradientPicker($('gradPick'), { value: G.gradient, reversed: G.rev, onChange: (id, rev) => setGradient(id, rev) });
   buildSpeciesParams();
   $('spReset').addEventListener('click', () => {
@@ -586,7 +621,7 @@ function buildUI() {
   tog('tBeam', 'beam', v => { if (S) S.opts.volume = v; });
   tog('tSnow', 'snow', v => { if (S) S.opts.snow = v; });
   tog('tFeed', 'feed', showFeed);
-  tog('tOrbit', 'orbit', v => { if (S) S.controls.autoRotate = v; });
+  tog('tOrbit', 'orbit', v => { if (cam) cam.setAutoRotate(v); });
   tog('tPolyps', 'polyps', v => { if (S) S.setPolypsVisible(v); });
   tog('tDetail', 'detail', v => { if (S) S.U.uDetail.value = v ? 1 : 0; });
 
@@ -609,15 +644,81 @@ function buildUI() {
         requestAnimationFrame(() => diag.start());
       },
       open: () => { fitTick = 0; },
+      feed: () => { feedT = 0; },
     },
   });
   setPlaying(G.playing);
 
-  canvas.addEventListener('pointerdown', onDown);
-  canvas.addEventListener('pointerup', onUp);
-  canvas.addEventListener('pointercancel', e => { downs.delete(e.pointerId); tap = null; });
+  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap, onMode: camUI, flyOk: () => !G.plantMode });
+  bindCamBar();
   setTimeout(hideHint, 9000);
 }
+
+// ── the camera bar, the tours and the feed card taps ──────────────────────
+function camUI() {
+  const m = cam ? cam.mode : 'orbit', open = !$('tourList').hidden;
+  document.querySelectorAll('#camBar button').forEach(b => {
+    const on = b.dataset.cam === 'tour' ? open || m === 'tour' : b.dataset.cam === m;
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+    if (b.dataset.cam === 'tour') b.setAttribute('aria-expanded', String(open));
+  });
+  const fl = $('camFollowLbl'); if (fl) fl.textContent = m === 'follow' && cam ? `ROV ${cam.followId}` : 'Follow ROV';
+  const cur = cam && m === 'tour' && cam.tour.T ? cam.tour.T.id : null;
+  document.querySelectorAll('#tourList button').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
+}
+function buildTourUI() {
+  const box = $('tourList'); if (!box || !cam) return;
+  box.innerHTML = '';
+  for (const t of cam.tourList()) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.id = t.id; b.setAttribute('role', 'menuitem'); b.textContent = t.label;
+    b.addEventListener('click', () => {
+      const T = cam.startTour(t.id);
+      flash(T ? `${T.label}: a drag, a key or the wheel takes over.` : `${t.label}: no free path for the camera.`);
+      box.hidden = true; camUI();
+    });
+    box.appendChild(b);
+  }
+  const p = document.createElement('p'); p.textContent = box.children.length ? 'The camera flies the path. A drag, a key or the wheel takes over.' : 'This rock has no canyon or arch.'; box.appendChild(p);
+}
+function bindCamBar() {
+  document.querySelectorAll('#camBar button').forEach(b => b.addEventListener('click', () => {
+    if (!cam) return;
+    const want = b.dataset.cam;
+    if (want !== 'tour') $('tourList').hidden = true;
+    if (want === 'orbit') { if (cam.mode === 'orbit') fitCamera(true); else cam.setMode('orbit'); }
+    else if (want === 'swim') {
+      cam.setMode('swim');
+      flash(COARSE ? 'Swim: the left side moves, a drag on the right looks.' : 'Swim: WASD to move, E and Q up and down, Shift fast. Click to look with the mouse, Esc frees it.');
+    } else if (want === 'follow') {
+      const V = rovs ? rovs.vehicles : [];
+      if (!V.length) { flash('The ROVs are not in the water yet.'); return; }
+      const i = cam.mode === 'follow' ? (V.findIndex(v => v.id === cam.followId) + 1) % V.length : Math.max(0, V.findIndex(v => v.id === (rovs.feed ? rovs.feed.vehicle : 1)));
+      cam.follow(V[i].id);
+      flash(`Following ROV ${V[i].id}: drag to look round it.`);
+    } else if (want === 'tour') { $('tourList').hidden = !$('tourList').hidden; }
+    camUI();
+  }));
+  // the feed card: a tap shows the next ROV, a long press makes it large
+  const fc = $('feedCycle');
+  if (fc) {
+    let hold = 0, long = false;
+    fc.addEventListener('pointerdown', () => { long = false; clearTimeout(hold); hold = setTimeout(() => { long = true; const s = $('feedSize'); if (s) s.click(); }, 550); });
+    const end = () => clearTimeout(hold);
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fc.addEventListener(ev, end);
+    fc.addEventListener('contextmenu', e => e.preventDefault());
+    fc.addEventListener('click', () => {
+      if (long) { long = false; return; }
+      if (!rovs || !rovs.feed || !rovs.vehicles.length) return;
+      const V = rovs.vehicles, v = V[(V.findIndex(x => x.id === rovs.feed.vehicle) + 1) % V.length];
+      rovs.feed.setVehicle(v.id);
+      flash(`Camera feed: ROV ${v.id}`);
+    });
+  }
+  camUI();
+}
+// The chase camera reads the vehicle pose (pilot yaw: from +x to +z).
+const camCtx = { getVehicle: id => { const v = rovs && rovs.vehicles.find(x => x.id === id); return v ? { pos: v.group.position.toArray(), yaw: v.pilot ? v.pilot.state.yaw : -v.group.rotation.y } : null; } };
+let camShown = 'orbit';
 
 // ── readout ─────────────────────────────────────────────────────────────────
 let rate = 0, lastCount = 0, readT = 0;
@@ -677,11 +778,18 @@ function frame(t) {
   S.U.uTime.value = now / 1000;
   S.U.uCount.value = coral ? Math.max(1, coral.reef.count) : 1;
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
-  if (!saverOn) {
-    if ((fitTick++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
-    S.controls.update();
+  if (!saverOn && (fitTick++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
+  if (cam) {
+    if (rock && camRock !== rock) { camRock = rock; cam.setRock(rock, G.R); buildTourUI(); }
+    if (!saverOn && input) input.take(dt);
+    const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
+    cam.setProjection({ fov: S.camera.fov, aspect: w / h, shift: [2 * S.view.ox / w, -2 * S.view.oy / h] });
+    cam.update(dt, camCtx);
+    cam.apply(S.camera);
+    if (cam.mode !== camShown) { camShown = cam.mode; camUI(); }
   }
   S.render(dt, now);
+  presentFeed();
 }
 
 function onResize() {
@@ -728,7 +836,7 @@ window.snSaver = {
     const seed = (o.seed >>> 0) || 1;
     const dives = divePlan(seed, { n: 12, species: SPECIES_IDS, calm, seconds: o.seconds });
     const saved = { mode: G.mode, gradient: G.gradient, rev: G.rev, dir: G.dir, cur: G.cur, temp: G.temp, preset: G.preset, playing: G.playing, speed: G.speed, nutrient: G.nutrient, feed: G.feed };
-    S.controls.enabled = false; S.controls.autoRotate = false;
+    if (cam) { cam.setMode('saver'); $('tourList').hidden = true; }
     setPlaying(true);
     const st = { i: -1, dive: null, t: 0, colony: null, fading: false, bandFn: null, bandT: 0, labT: 0, pos: null, tgt: null, shotI: -1, cut: true };
     saver = { band: null, card: null, gov: null, tick, st, saved, obs: 0, obsN: 0, obsH: 0, hRate: 0 };
@@ -845,12 +953,9 @@ window.snSaver = {
       const P = shotPose(shot, u, st.t - shot.t0, { c: b.center, r: Math.max(0.25, b.radius), front, rov: rp }, fit);
       const pos = clearPath(rock && rock.sdf, P.tgt, P.pos, 0.5);
       if (i !== st.shotI) { st.shotI = i; st.cut = true; }
-      const e = st.cut ? 1 : 1 - Math.exp(-dt * 1.5);
+      // the springs of camera.js take the camera to the shot; a cut snaps
+      if (cam) cam.saverGoal(pos, P.tgt, st.cut);
       st.cut = false;
-      if (!st.pos || e === 1) { st.pos = pos.slice(); st.tgt = P.tgt.slice(); }
-      for (let q = 0; q < 3; q++) { st.pos[q] += (pos[q] - st.pos[q]) * e; st.tgt[q] += (P.tgt[q] - st.tgt[q]) * e; }
-      S.camera.position.set(st.pos[0], st.pos[1], st.pos[2]);
-      S.camera.lookAt(st.tgt[0], st.tgt[1], st.tgt[2]);
     }
 
     next();
@@ -863,7 +968,7 @@ window.snSaver = {
     canvas.style.opacity = '';
     const f = $('feed'); if (f) f.removeAttribute('style');
     const sv = saver && saver.saved; saver = null;
-    if (S) { S.controls.enabled = true; S.controls.autoRotate = G.orbit; }
+    if (cam) { cam.setMode('orbit'); cam.setAutoRotate(G.orbit); camUI(); }
     if (rovs) {
       rovs.focusOn(null, 'survey');
       rovs.vehicles.forEach(v => { v.group.visible = true; for (const l of v.lights) l.visible = true; });

@@ -7,6 +7,7 @@
    right under the readout, the SSTV feed card (#feed) at the lower right,
    and the explainer is a drawer at the right.
      grep -n 'FEED'       the camera feed card (phone: small, a tap makes it large)
+     grep -n 'CAMERA'     the camera bar and the tour menu (camera.js, input.js)
 
    PHONE (max-width 768px, or a short landscape touch screen): the pattern
    of pages/wave-membrane. A dock at the base holds preset, grow or pause,
@@ -121,9 +122,26 @@ html:not(.in-frame) #read{top:58px}
 /* FEED: the SSTV camera card of the lead ROV (rov/ draws the canvas). */
 #feed{position:fixed;right:14px;bottom:14px;z-index:24;width:352px;max-width:calc(100vw - 28px);border:1px solid var(--line-b);border-radius:8px;overflow:hidden;background:#000;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
 #feedSlot canvas{display:block;width:100%;height:auto;image-rendering:auto}
-#feedSize{position:absolute;inset:0;z-index:2;width:100%;height:100%;border:0;background:transparent;cursor:zoom-in;padding:0}
+#feedCycle{position:absolute;inset:0;z-index:1;width:100%;height:100%;border:0;background:transparent;cursor:pointer;padding:0}
+#feedSize{position:absolute;top:0;right:0;z-index:2;width:28px;height:28px;border:0;border-radius:0 0 0 6px;background:rgba(5,9,11,0.55);color:var(--ink);font-size:0.9rem;line-height:1;cursor:zoom-in;padding:0}
 #feed.big #feedSize{cursor:zoom-out}
 #feed.big{width:min(704px,calc(100vw - 28px))}
+#feed.live{background:transparent}
+#feed.live #feedSlot canvas{background:transparent}
+
+/* CAMERA: the camera bar (camera.js, input.js) and the tour menu. */
+#camBar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:26;display:flex;gap:4px;padding:4px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:10px}
+html:not(.in-frame) #camBar{top:58px}
+#camBar button{display:flex;align-items:center;gap:6px;min-height:32px;padding:4px 10px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--dim);font-size:0.76rem;cursor:pointer}
+#camBar button i{font-style:normal;font-size:0.95rem;color:var(--ink)}
+#camBar button.on{background:rgba(127,224,207,0.14);border-color:var(--line-b);color:var(--ink)}
+#tourList{position:fixed;top:100px;left:50%;transform:translateX(-50%);z-index:27;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;width:min(340px,calc(100vw - 24px));padding:8px;background:rgba(3,18,27,0.94);border:1px solid var(--line-b);border-radius:10px}
+html.in-frame #tourList{top:56px}
+#tourList button{min-height:32px;padding:4px 10px;border:1px solid var(--line-b);border-radius:7px;background:rgba(6,32,44,0.8);color:var(--ink);font-size:0.76rem;cursor:pointer}
+#tourList button.on{border-color:var(--accent);color:var(--accent)}
+#tourList p{width:100%;margin:2px 0 0;color:var(--dim);font-size:0.72rem;text-align:center}
+@media (pointer:coarse){#camBar button,#tourList button{min-height:44px;min-width:44px}#feedSize{width:44px;height:44px;font-size:1.1rem}}
+html.sn-saver #camBar,html.sn-saver #tourList,html.sn-saver #feedCycle{display:none!important}
 
 /* PLANT mode: a crosshair, and a ring where a tap lands (ok or not). */
 body.planting #view{cursor:crosshair}
@@ -191,6 +209,10 @@ body.planting #view{cursor:crosshair}
   #read div:nth-child(4),#read div:nth-child(5){display:none}
   #legend{right:auto;left:8px;top:auto;bottom:calc(var(--dock-h) + 8px);padding:6px 9px}
   #feed{right:8px;bottom:calc(var(--dock-h) + 8px);width:150px;border-radius:10px}
+  #camBar,html:not(.in-frame) #camBar{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(8px + env(safe-area-inset-left));transform:none;flex-direction:column;padding:3px}
+  #camBar button{flex-direction:column;gap:0;padding:2px 4px;font-size:0.6875rem;min-width:52px}
+  #tourList,html.in-frame #tourList{top:auto;bottom:calc(var(--dock-h) + 8px);left:calc(70px + env(safe-area-inset-left));right:8px;transform:none;width:auto;max-height:50vh;overflow:auto}
+  body:not(.panel-closed) #camBar,body:not(.panel-closed) #tourList{opacity:0;pointer-events:none}
   #feed.big{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}
   body:not(.panel-closed) #feed{opacity:0;pointer-events:none}
   #lgBar{width:110px;height:8px}
