@@ -284,13 +284,15 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   }
 
   // ── corals ────────────────────────────────────────────────────────────────
-  const coralMats = {}, polypMats = {};
+  const coralMats = {}, coarseMats = {}, polypMats = {};
   const coralU = () => Object.assign(waterU(), { uPartA: U.uPartA, uPartB: U.uPartB, uPartW: U.uPartW, uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK });
   for (const id of Object.keys(SPECIES_CODE)) {
     coralMats[id] = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_VS, fragmentShader: SH.CORAL_FS, side: THREE.DoubleSide,
-      uniforms: Object.assign(coralU(), { uDetail: U.uDetail, uDetailK: U.uDetailK, uSpecies: { value: SPECIES_CODE[id] } }),
+      uniforms: Object.assign(coralU(), { uDetail: U.uDetail, uDetailK: U.uDetailK, uSpecies: { value: SPECIES_CODE[id] }, uCoarse: { value: 0 } }),
     });
+    coarseMats[id] = coralMats[id].clone();
+    Object.assign(coarseMats[id].uniforms, coralU(), { uDetail: U.uDetail, uDetailK: U.uDetailK, uSpecies: { value: SPECIES_CODE[id] }, uCoarse: { value: 1 } });
     const L = POLYP_LOOK[id];
     polypMats[id] = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: SH.POLYP_VS, fragmentShader: SH.POLYP_FS, side: THREE.DoubleSide,
@@ -329,9 +331,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // A brick of the world-frame mesher (k -1) goes to the group of its
   // species (sp) at the origin; an older brick to the group of colony k.
   function groupFor(r) {
-    const key = r.k >= 0 ? r.k : `sp:${r.sp}`;
+    const key = r.sp ? `${r.sp}|${r.lod || 0}` : r.k;
     let c = colonies.get(key);
-    if (!c && r.k < 0 && r.sp) c = addColonyGroup(key, r.sp, [0, 0, 0]);
+    if (!c && r.sp) { c = addColonyGroup(key, r.sp, [0, 0, 0]); c.lod = r.lod || 0; }
     return c;
   }
   function applyBricks(list) {
@@ -366,7 +368,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     geo.computeBoundingSphere();
     if (geo.boundingSphere) geo.boundingSphere.radius += 0.1;
     if (ch.mesh) { ch.mesh.geometry.dispose(); ch.mesh.geometry = geo; }
-    else { ch.mesh = new THREE.Mesh(geo, coralMats[c.id]); ch.mesh.castShadow = true; c.group.add(ch.mesh); }
+    else { ch.mesh = new THREE.Mesh(geo, (c.lod ? coarseMats : coralMats)[c.id]); ch.mesh.castShadow = true; c.group.add(ch.mesh); }
     polypTotal -= ch.np; ch.np = npol; polypTotal += npol;
     if (ch.poly) ch.poly.geometry.dispose();
     if (npol) {
@@ -495,6 +497,10 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     };
   }
 
+  // Polyp radius per species (coral-sdf.js SHAPES[id].polyp.size, metres).
+  function setPolypSizes(shapes) {
+    for (const id of Object.keys(polypMats)) { const z = shapes && shapes[id] && shapes[id].polyp && shapes[id].polyp.size; if (z) polypMats[id].uniforms.uSize.value = z; }
+  }
   function setLut(bytes) { lutData.set(bytes); lutTex.needsUpdate = true; }
   function setPlot(r) { U.uR.value = r; caus.setPlot(r); }
 
@@ -549,7 +555,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   return {
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
     get sand() { return sandMesh; },
-    setRock, addRockMeshes, setPlot, setLights, setLut, resize, render,
+    setRock, addRockMeshes, setPlot, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; },
     PART_W, maxParticles: NP,

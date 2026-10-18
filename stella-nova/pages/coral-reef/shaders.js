@@ -267,7 +267,8 @@ void main() {
 
 // ── coral ───────────────────────────────────────────────────────────────────
 //  uPartA (rgba) = natural r g b, colour t
-//  uPartB (rgba) = birth s, radius, sway level * 2 + tip, height over base
+//  uPartB (rgba) = birth s, radius (negative: a focus colony), sway level
+//                  * 2 + tip, height over base
 export const PART = /* glsl */`
 uniform float uTime;
 uniform vec2 uCur;
@@ -278,15 +279,18 @@ ivec2 partCoord(float g) { float gg = max(g, 0.0); return ivec2(int(mod(gg, uPar
 export const CORAL_VS = /* glsl */`
 ${PART}
 in float aGid;
-uniform float uSwayK, uCount, uMode;
+uniform float uSwayK, uCount, uMode, uCoarse;
 out vec3 vN, vW, vL, vNat;
 out float vT, vGlow, vTip;
 void main() {
   ivec2 tc = partCoord(aGid);
   vec4 A = texelFetch(uPartA, tc, 0), B = texelFetch(uPartB, tc, 0);
+  // B.y < 0: the colony has its fine mesh (a focus colony), so its coarse
+  // mesh does not draw
+  if (uCoarse > 0.5 && B.y < 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
   float age = uTime - B.x;
   float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
-  vec3 p = position - normal * B.y * (1.0 - g) * 0.85;
+  vec3 p = position - normal * abs(B.y) * (1.0 - g) * 0.85;
   vec4 w = modelMatrix * vec4(p, 1.0);
   float lvl = floor(B.z * 0.5), tip = B.z - lvl * 2.0;
   float amp = lvl / 4.0, h = B.w;
