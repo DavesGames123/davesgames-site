@@ -9,6 +9,8 @@
 //   terrain     terrain on and off, determinism, coast and river from the
 //               terrain, no lot in water, road grades, the terrain phase,
 //               the 3D ground and city bases, the 2D underlay, exports
+//   layout      layout.js: phone modes and media queries, framing, sheet grip,
+//               pinch, pan clamp, double tap, scrub, pixel ratio, progress
 //   page module main.js with DOM stubs (terrain on: the page default)
 
 import { generate, fieldSampler, SIZES } from './gen.js';
@@ -581,6 +583,57 @@ section('terrain');
 }
 
 // ─── page module with DOM stubs ────────────────────────────────────────────
+section('layout (layout.js: phone modes, framing, gestures; no DOM)');
+{
+  const L = await import('./layout.js');
+  const VIEWPORTS = [[360, 740, true, 'sheet'], [390, 844, true, 'sheet'], [430, 932, true, 'sheet'], [768, 1024, true, 'sheet'], [844, 390, true, 'drawer'], [1280, 800, false, 'desk'], [1024, 768, true, 'desk']];
+  check('layoutMode gives the planned layout at each viewport', VIEWPORTS.every(([w, h, c, m]) => L.layoutMode(w, h, c) === m), VIEWPORTS.map(([w, h, c]) => `${w}x${h} ${L.layoutMode(w, h, c)}`).join(', '));
+  let agree = true, bad = '';
+  for (let w = 300; w <= 1400; w += 37) for (let h = 300; h <= 1100; h += 41) for (const c of [false, true]) {
+    const m = L.layoutMode(w, h, c), env = { w, h, coarse: c };
+    if (L.mediaMatches(L.PHONE_Q, env) !== (m !== 'desk') || L.mediaMatches(L.LAND_Q, env) !== (m === 'drawer')) { agree = false; bad = `${w}x${h} ${c}`; }
+  }
+  check('PHONE_Q and LAND_Q (the CSS queries) agree with layoutMode on a grid of sizes', agree, bad);
+  const D = L.DOCK;
+  check('the dock fits 360 px: four 48 px buttons, a two-target view switch, gaps and pads', 4 * D.button + 2 * D.target + 5 * D.gap + 2 * D.pad <= 360 && D.target >= 44);
+  // portrait sheet: head 120 px, half sheet + dock from 400 px down
+  const occ = L.occlusion(390, 844, [{ left: 0, top: 0, right: 390, bottom: 120 }, { left: 0, top: 440, right: 390, bottom: 780 }, { left: 0, top: 780, right: 390, bottom: 844 }, { left: 300, top: 300, right: 380, bottom: 340 }]);
+  check('occlusion: head on the top, sheet and dock on the base, a small box is ignored', occ.t === 120 && occ.b === 404 && occ.l === 0 && occ.r === 0, JSON.stringify(occ));
+  const occL = L.occlusion(844, 390, [{ left: 450, top: 0, right: 844, bottom: 390 }, { left: 0, top: 326, right: 440, bottom: 390 }]);
+  check('occlusion: a landscape drawer covers the right side', occL.r === 394 && occL.b === 64 && occL.l === 0, JSON.stringify(occL));
+  const occBig = L.occlusion(400, 800, [{ left: 0, top: 0, right: 400, bottom: 300 }, { left: 0, top: 300, right: 400, bottom: 800 }]);
+  check('occlusion keeps 30% of the height clear', 800 - occBig.t - occBig.b >= 0.3 * 800 - 1e-6, JSON.stringify(occBig));
+  const v = L.fitClear(960, 640, 390, 844, occ, 6);
+  const inClear = v.ox >= 6 - 1e-6 && v.ox + 960 * v.s <= 390 - 6 + 1e-6 && v.oy >= occ.t + 6 - 1e-6 && v.oy + 640 * v.s <= 844 - occ.b - 6 + 1e-6;
+  check('fitClear puts the town in the clear area above the sheet', inClear, `s ${v.s.toFixed(3)}, y ${v.oy.toFixed(0)}..${(v.oy + 640 * v.s).toFixed(0)}`);
+  const vl = L.fitClear(960, 640, 844, 390, occL, 6);
+  check('fitClear puts the town left of the landscape drawer', vl.ox + 960 * vl.s <= 844 - occL.r - 6 + 1e-6 && vl.oy + 640 * vl.s <= 390 - 64 - 6 + 1e-6);
+  const o3 = L.offsets3D(390, 844, occ);
+  check('offsets3D moves the 3D view up into the clear area (and left for a right drawer)', o3.y > 0 && Math.abs(o3.y - (404 - 120) / 844) < 1e-9 && o3.x === 0 && L.offsets3D(844, 390, occL).x < 0);
+  const S = L.sheetSnap;
+  check('sheetSnap: open gives half, a tap toggles half and full, a drag down steps to closed',
+    S('closed', 0) === 'half' && S('half', 2) === 'full' && S('full', 0) === 'half' && S('half', -80) === 'full' && S('full', 90) === 'half' && S('half', 90) === 'closed' && S('half', 20) === 'half');
+  const p0 = { s: 1, ox: 0, oy: 0 }, mid = { x: 100, y: 100 };
+  const p1 = L.pinchStep(p0, { mid, d: 100 }, { mid, d: 200 });
+  check('pinchStep zooms about the mid point (the point under the fingers stays)', Math.abs(p1.s - 2) < 1e-9 && Math.abs((100 - p1.ox) / p1.s - 100) < 1e-9 && Math.abs((100 - p1.oy) / p1.s - 100) < 1e-9);
+  const p2 = L.pinchStep(p0, { mid, d: 100 }, { mid: { x: 130, y: 90 }, d: 100 });
+  check('pinchStep pans with the mid point at a fixed distance', p2.s === 1 && p2.ox === 30 && p2.oy === -10);
+  check('pinchStep clamps the zoom', L.pinchStep(p0, { mid, d: 1 }, { mid, d: 1e5 }).s === 40 && L.pinchStep(p0, { mid, d: 1e5 }, { mid, d: 1 }).s === 0.05);
+  const cp = L.clampPan({ s: 0.4, ox: -5000, oy: 9000 }, 960, 640, 390, 844);
+  check('clampPan keeps 80 px of the map in the window', cp.ox + 960 * 0.4 >= 80 - 1e-9 && cp.oy <= 844 - 80 + 1e-9);
+  check('isDoubleTap: two near taps in 320 ms', L.isDoubleTap({ t: 0, x: 10, y: 10 }, { t: 250, x: 20, y: 18 }) && !L.isDoubleTap({ t: 0, x: 10, y: 10 }, { t: 400, x: 10, y: 10 }) && !L.isDoubleTap({ t: 0, x: 0, y: 0 }, { t: 100, x: 60, y: 0 }) && !L.isDoubleTap(null, { t: 1, x: 0, y: 0 }));
+  check('scrubTime maps the bar to the time and clamps it', L.scrubTime(150, 50, 200, 40) === 20 && L.scrubTime(0, 50, 200, 40) === 0 && L.scrubTime(999, 50, 200, 40) === 40);
+  check('dprFor caps the 3D view at 1.5 on a phone and 2 elsewhere', L.dprFor(3, true, '3d') === 1.5 && L.dprFor(3, false, '3d') === 2 && L.dprFor(3, true, '2d') === 2 && L.dprFor(1, true, '3d') === 1);
+  check('citySizeFor: a town on a phone', L.citySizeFor(true, 'city') === 'town' && L.citySizeFor(false, 'city') === 'city');
+  const ks = L.STAGES.map((s) => s[0]);
+  let mono = true, prev = -1;
+  for (const k of ks) for (const sub of [0, 0.5, 1]) { const f = L.progressShare(k, sub); if (f < prev - 1e-9) mono = false; prev = f; }
+  check('progressShare grows through the stages from 0 to 1', mono && L.progressShare('terrain', 0) === 0 && L.progressShare('done') === 1);
+  check('progressShare with no terrain starts the bar at the tensor field', L.progressShare('field', 0, false) === 0 && L.progressShare('lots', 0, false) > 0.8 && L.progressShare('terrain', 0.5, false) === 0);
+  const A = L.accordionToggle;
+  check('accordionToggle: one section at a time on a phone, many on a desktop', JSON.stringify(A(['city'], 'terrain', true)) === '["terrain"]' && JSON.stringify(A(['city'], 'terrain', false)) === '["city","terrain"]' && JSON.stringify(A(['city', 'terrain'], 'city', true)) === '["terrain"]');
+}
+
 section('page module (DOM stubs, no browser)');
 {
   const rec = { draws: 0 };
