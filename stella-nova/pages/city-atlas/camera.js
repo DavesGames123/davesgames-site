@@ -12,6 +12,8 @@
 // grep: function perspectiveRev  function lookAt  function mul  function invert
 //       function orbitEye  function viewProj  function project
 
+import { tiltEye } from '../../lib/tilt.js';
+
 export function perspectiveRev(fovY, aspect, near) {
   const f = 1 / Math.tan(fovY / 2);
   const m = new Float32Array(16);
@@ -93,7 +95,7 @@ export function orbitEye(cam) {
 // offsetY shifts the image up by that many NDC units (2 = one screen
 // height), so the target can sit in a band that is not the screen centre.
 export function viewProj(cam, aspect, fovY = 0.75, offsetY = 0) {
-  const eye = orbitEye(cam);
+  const eye = tiltEye(orbitEye(cam), cam.target, [0, 0, 1]); // lib/tilt.js
   const near = Math.max(1, cam.dist * 0.002);
   const vp = mul(perspectiveRev(fovY, aspect, near), lookAt(eye, cam.target, [0, 0, 1]));
   if (offsetY) for (let c = 0; c < 4; c++) vp[c * 4 + 1] += offsetY * vp[c * 4 + 3];

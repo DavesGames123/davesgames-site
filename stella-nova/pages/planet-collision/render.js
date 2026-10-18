@@ -88,6 +88,7 @@
 //    classes on the CPU ... "export function classify"
 // ============================================================================
 import { MATERIALS, MAT_LIST, UNIT } from './data.js';
+import { tiltEye } from '../../lib/tilt.js';
 import { ETA_H } from './build.js';
 import { blackbodyLUT, BB_N, PHASE, SMOKE, vapourCap, EXPOSE } from './optics.js';
 
@@ -506,6 +507,7 @@ export class Renderer {
   }
   render(f) {
     if (!this.sim || !this.W) return;
+    { const te = tiltEye(f.eye, f.target, f.up || [0, 0, 1]); if (te !== f.eye) f = { ...f, eye: te }; } // lib/tilt.js
     const dev = this.dev, n = this.sim.n, enc = dev.createCommandEncoder({ label: 'pc frame' });
     const rebuild = this._volBox(f);
     const smRebuild = this._smokeBox(f);

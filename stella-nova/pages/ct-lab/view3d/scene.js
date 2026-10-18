@@ -7,6 +7,8 @@
 //   rayBox, pickSlice, smooth3, toHalf, halfToFloat, volumeStats, TF_PRESETS, buildLut
 //   gantryLayout, buildMeshes, buildGlass, coneLines, sampleRays, VERT_FLOATS, LINE_FLOATS
 
+import { tiltEye } from '../../../lib/tilt.js';
+
 export const VERT_FLOATS = 14; // pos3 normal3 color4 uv2 texMix rot
 export const LINE_FLOATS = 12; // a3 b3 color4 width rot
 
@@ -67,7 +69,7 @@ export function orbitEye(cam) {
 
 // View, projection (with an NDC offset) and their product and inverse.
 export function cameraMatrices(cam, aspect) {
-  const eye = orbitEye(cam);
+  const eye = tiltEye(orbitEye(cam), cam.target ?? [0, 0, 0], [0, 1, 0]); // lib/tilt.js
   const view = lookAt(eye, cam.target ?? [0, 0, 0], [0, 1, 0]);
   const proj = perspective(cam.fov ?? 0.6, aspect, Math.max(0.01, cam.dist * 0.05), cam.dist * 8 + 20);
   const off = cam.offset ?? [0, 0];

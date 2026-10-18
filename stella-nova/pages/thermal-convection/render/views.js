@@ -464,7 +464,7 @@ export async function createViews(device, format, sim, { loadText } = {}) {
         const c = state.cam ? clampCam(state.cam) : null;
         const fitted = fitBlock({ Lx: d.Lx, Ly: d.Ly, Lz: state.zScale }, aspect, c ? { yaw: c.yaw, pitch: c.pitch } : {});
         const use = c && state.cam && Number.isFinite(state.cam.dist) ? { ...fitted, ...c, target: state.cam.target || fitted.target } : fitted;
-        cam = orbitCam({ ...use, aspect });
+        cam = orbitCam({ ...use, aspect, tilt: true });
         views.lastCam = cam;
         geo = blockGeometry(cutBlock(seg, cam.eye, d.Lx, d.Ly), cam.eye, state.zScale);
         if (geo.nv) device.queue.writeBuffer(blockVB, 0, geo.tris.subarray(0, Math.min(geo.tris.length, MAX_BLOCK_VERTS * 4)));

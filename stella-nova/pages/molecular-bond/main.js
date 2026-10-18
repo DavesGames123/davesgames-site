@@ -43,6 +43,7 @@
 //      saver plate .......... "function saverPlate"  opts.label: bond, LCAO, R and E live
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
+import { tiltEye } from '../../lib/tilt.js'; // phone tilt parallax on the orbit view
 // Fetch both WGSL programs before any GPU setup, so init stays synchronous.
 const SH = await loadShaders(import.meta.url, [
   'shaders/render.wgsl',
@@ -179,7 +180,7 @@ class OrbitCam{constructor(c){this.theta=.3;this.phi=.5;this.radius=16;this.targ
   c.addEventListener('wheel',function(e){s.radius=Math.max(2,Math.min(120,s.radius+e.deltaY*.03));e.preventDefault()},{passive:false})}
   update(a){var ct=Math.cos(this.theta),st=Math.sin(this.theta),cp=Math.cos(this.phi),sp=Math.sin(this.phi);
     var e=[this.target[0]+this.radius*ct*sp,this.target[1]+this.radius*st,this.target[2]+this.radius*ct*cp];
-    M4.lookAt(this.view,e,this.target,[0,1,0]);M4.perspective(this.proj,Math.PI/3,a,.1,500)}}
+    M4.lookAt(this.view,tiltEye(e,this.target,[0,1,0]),this.target,[0,1,0]);M4.perspective(this.proj,Math.PI/3,a,.1,500)}}
 
 /* ═══ OVERLAY ═══ */
 // The 2D overlay canvas draws bond lines and labels on top of the GPU render.

@@ -26,6 +26,8 @@
 //      getState/setState . plain JSON for save and restore
 // ============================================================================
 
+import { tilt, tiltEye } from '../../lib/tilt.js';
+
 // ------------------------------------------------------------ mat4 helpers
 export function m4ident() { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; }
 
@@ -123,6 +125,7 @@ export function createOrbitCamera(canvas, opts = {}) {
   let vYaw = 0, vPitch = 0, vPanX = 0, vPanY = 0;
   let anim = null;      // {from, to, t, dur}
   let dirty = true;
+  let tiltKey = '';
 
   function poke() { dirty = true; for (const fn of subs) { try { fn(); } catch (e) { console.error(e); } } }
   function onChange(fn) { subs.add(fn); return () => subs.delete(fn); }
@@ -192,14 +195,17 @@ export function createOrbitCamera(canvas, opts = {}) {
     cam.pitch = clamp(cam.pitch, -1.55, 1.55);
     cam.dist = clamp(cam.dist, 0.4, 60);
     if (aspect && aspect !== cam.aspect) { cam.aspect = aspect; dirty = true; }
-    if (moving || dirty) {
+    // lib/tilt.js: the phone tilt offset turns only the view matrices.
+    const to = tilt ? tilt.get() : null, tk = to ? to.yaw + ',' + to.pitch : '';
+    if (moving || dirty || tk !== tiltKey) {
+      tiltKey = tk;
       const cp = Math.cos(cam.pitch);
       cam.eye = [
         cam.target[0] + cam.dist * cp * Math.sin(cam.yaw),
         cam.target[1] + cam.dist * Math.sin(cam.pitch),
         cam.target[2] + cam.dist * cp * Math.cos(cam.yaw),
       ];
-      lookAt(cam.eye, cam.target, [0, 1, 0], cam.view);
+      lookAt(tiltEye(cam.eye, cam.target, [0, 1, 0]), cam.target, [0, 1, 0], cam.view);
       cam.near = Math.max(0.01, cam.dist * 0.02);
       cam.far = cam.dist * 40 + 20;
       perspective((cam.fov * Math.PI) / 180, cam.aspect, cam.near, cam.far, cam.proj);

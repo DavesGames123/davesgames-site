@@ -84,6 +84,7 @@ import { safeEnvBindings } from './viewport/environment.js';
 import { defaultSet, setMaps, snapshot, destroySet } from './viewport/material.js';
 import { destroyTargets } from './viewport/targets.js';
 import { requestRender } from './viewport/render.js';
+import { tilt } from '../../lib/tilt.js';
 import { buildHud, syncHud, placeDivider, updateStats } from './viewport/hud.js';
 import { PREF_VIEW_KEYS, readPrefs, savePrefsSoon } from './viewport/prefs.js';
 import { api } from './viewport/api.js';
@@ -132,6 +133,7 @@ export async function init(ctx) {
   cam.frame(1, !!prefs.camera, true);
   cam.autoRotate = !!state.view.autoRotate;
   cam.onChange(() => { requestRender(); savePrefsSoon(); });
+  if (tilt) tilt.subscribe(() => requestRender()); // lib/tilt.js: draw while the tilt moves
 
   bind({ gctx: gpu.configureCanvas(canvas) });
   resize();

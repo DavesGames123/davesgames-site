@@ -30,6 +30,8 @@
 // grep: function createEngine3D  function perspective  function lookAt
 //       function mul4  function inv4  setShape(  setFlow(  reset(  frame(  destroy(
 
+import { tiltEye } from '../../lib/tilt.js';
+
 const FIX = 1048576;
 const TRAIL_SPACING = 2;   // cells between trail points (see trailStep)
 
@@ -284,10 +286,13 @@ export async function createEngine3D(device, code, opts) {
       simU[8] = stepCount;
       writeSim();
 
-      const { vp, ivp } = engine.matrices(f.camera, w, h);
+      // lib/tilt.js: the phone tilt parallax turns the eye of this frame only.
+      const te = tiltEye(f.camera.eye, f.camera.target, [0, 1, 0]);
+      const fc = te === f.camera.eye ? f.camera : { ...f.camera, eye: te };
+      const { vp, ivp } = engine.matrices(fc, w, h);
       cam.set(vp, 0);
       cam.set(ivp, 16);
-      cam.set([...f.camera.eye, 1], 32);
+      cam.set([...fc.eye, 1], 32);
       cam.set([w, h, f.lineW, f.lineAlpha], 36);
       cam.set([nx, ny, nz, flow.U], 40);
       cam.set(f.slice, 44);

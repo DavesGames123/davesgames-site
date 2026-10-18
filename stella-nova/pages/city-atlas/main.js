@@ -20,6 +20,7 @@
 
 import { project } from './camera.js';
 import { LIGHTS, lightFor } from './renderer.js';
+import { tilt } from '../../lib/tilt.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -1000,6 +1001,8 @@ function governor(t) {
 // change calls invalidate(n) for n more frames.
 let dirtyFrames = 0;
 function invalidate(n = 2) { dirtyFrames = Math.max(dirtyFrames, n); }
+// lib/tilt.js: the phone tilt parallax moves the view, so draw while it moves.
+if (tilt) tilt.subscribe(() => invalidate(2));
 function animating(t) {
   if (saver || camGoal || dirtyFrames > 0) return true;
   if (renderer?.info.shadowPending) return true;

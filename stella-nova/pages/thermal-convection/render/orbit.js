@@ -5,7 +5,8 @@
 //  views pass dims.Lz = zScale). Matrices are Float32Array(16), column-major,
 //  right-handed view, WebGPU clip depth 0..1.
 //
-//  orbitCam({ yaw, pitch, dist, target, fovY = 0.6, aspect = 1, near, far })
+//  orbitCam({ yaw, pitch, dist, target, fovY = 0.6, aspect = 1, near, far, tilt })
+//    tilt: true adds the phone tilt offset of lib/tilt.js (render cam only).
 //    -> { view, proj, viewProj, eye, yaw, pitch, dist, target, fovY, aspect }
 //    eye = target + dist (cos p cos y, cos p sin y, sin p).
 //  fitBlock(dims, aspect, { yaw, pitch, fovY, margin }) -> cam state
@@ -24,6 +25,8 @@
 //  "export function perspective", "export function mul4", "export function clampCam",
 //  "export function refitCam"
 // ============================================================================
+
+import { tiltEye } from '../../../lib/tilt.js';
 
 export const BLOCK_YAW = -2.25;
 export const BLOCK_PITCH = 0.56;
@@ -73,9 +76,10 @@ export function clampCam(cam) {
   };
 }
 
-export function orbitCam({ yaw = BLOCK_YAW, pitch = BLOCK_PITCH, dist = 8, target = [2, 2, 0.5], fovY = BLOCK_FOV, aspect = 1, near, far } = {}) {
+export function orbitCam({ yaw = BLOCK_YAW, pitch = BLOCK_PITCH, dist = 8, target = [2, 2, 0.5], fovY = BLOCK_FOV, aspect = 1, near, far, tilt = false } = {}) {
   const cp = Math.cos(pitch);
-  const eye = [target[0] + dist * cp * Math.cos(yaw), target[1] + dist * cp * Math.sin(yaw), target[2] + dist * Math.sin(pitch)];
+  const eye0 = [target[0] + dist * cp * Math.cos(yaw), target[1] + dist * cp * Math.sin(yaw), target[2] + dist * Math.sin(pitch)];
+  const eye = tilt ? tiltEye(eye0, target, [0, 0, 1]) : eye0; // lib/tilt.js: phone tilt parallax
   const n = near ?? Math.max(0.01, dist * 0.05);
   const f = far ?? (dist * 4 + 10);
   const view = lookAt(eye, target);

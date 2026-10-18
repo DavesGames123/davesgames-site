@@ -9,7 +9,7 @@
 //
 //  camState(lat, lon, alt, tilt, heading)  a camera object
 //  eyeFrame(cam) -> { eye, target, up }  globe-space vectors
-//  viewProj(cam, w, h, fovY) -> { view, proj, viewProj, invViewProj, eye,
+//  viewProj(cam, w, h, fovY, phoneTilt) -> { view, proj, viewProj, invViewProj, eye,
 //                     w, h, fovY, near, far }   Float32Array(16) matrices,
 //                     column-major, WebGPU clip depth 0..1. w, h in CSS px
 //                     (project and pick read them); only the aspect matters
@@ -26,6 +26,7 @@
 //  "export const FOV_Y"
 // ============================================================================
 import { latLonToXYZ, xyzToLatLon } from './astro.js';
+import { tiltEye } from '../../lib/tilt.js';
 
 export const FOV_Y = 30 * Math.PI / 180;
 export const ALT_MIN = 0.012, ALT_MAX = 6;
@@ -110,8 +111,9 @@ export function perspective(fovY, aspect, near, far) {
   return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, far * nf, -1, 0, 0, near * far * nf, 0]);
 }
 
-export function viewProj(cam, w = 1, h = 1, fovY = FOV_Y) {
-  const { eye, target, up } = eyeFrame(cam);
+export function viewProj(cam, w = 1, h = 1, fovY = FOV_Y, phoneTilt = false) {
+  const f = eyeFrame(cam), { target, up } = f;
+  const eye = phoneTilt ? tiltEye(f.eye, target, up) : f.eye; // lib/tilt.js: render view only
   const D = Math.hypot(eye[0], eye[1], eye[2]);
   // near: half the gap to the highest overlay shell; far: the horizon plus
   // the atmosphere top seen past it (nothing behind the horizon is visible)

@@ -153,7 +153,7 @@ export async function createCore(canvas, opts = {}) {
       const now = performance.now();
       const dt = lastNow ? Math.min(0.25, (now - lastNow) / 1000) : 0;
       lastNow = now;
-      const m = viewProj(cam, cssW, cssH, core.fovY);
+      const m = viewProj(cam, cssW, cssH, core.fovY, true); // true: phone tilt (lib/tilt.js)
       const focus = app.focus && Number.isFinite(app.focus.lat) && Number.isFinite(app.focus.lon) ? app.focus : cam;
       const frame = {
         cam, m, sun: frameSun(app, cam), t: app.t || Date.now(), now: Date.now(), time: (now - t0) / 1000, dt,

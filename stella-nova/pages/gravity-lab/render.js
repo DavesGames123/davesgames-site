@@ -37,6 +37,8 @@
 //    projection .......... "project("
 // ============================================================================
 
+import { tiltEye } from '../../lib/tilt.js';
+
 const HDR = 'rgba16float';
 const DEPTH = 'depth32float';
 const LEVELS = 5;
@@ -199,13 +201,14 @@ export class Renderer {
   //      minPtPx, flashT, colorMode, gain, speedScale, skyGain, vref, dpr }
   writeCam(c) {
     const W = this.W, H = this.H, a = this.cam;
-    const P = M4.persp(c.fovy, W / H, c.near, c.shiftY || 0), V = M4.lookAt(c.eye, c.target, c.up || [0, 0, 1]);
+    const eye = tiltEye(c.eye, c.target, c.up || [0, 0, 1]); // lib/tilt.js: phone tilt parallax
+    const P = M4.persp(c.fovy, W / H, c.near, c.shiftY || 0), V = M4.lookAt(eye, c.target, c.up || [0, 0, 1]);
     this.vp = M4.mul(P, V.m); this.basis = V;
     a.set(this.vp, 0);
     const focal = 0.5 * H / Math.tan(c.fovy / 2);
     this.focal = focal;
     const put = (o, v, w) => { a[o] = v[0]; a[o + 1] = v[1]; a[o + 2] = v[2]; a[o + 3] = w; };
-    put(16, c.eye, c.t || 0);
+    put(16, eye, c.t || 0);
     put(20, V.r, focal);
     put(24, V.u, c.dpr || 1);
     put(28, V.f, 1);
