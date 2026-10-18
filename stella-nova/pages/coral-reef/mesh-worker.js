@@ -42,15 +42,24 @@
 //    { type: 'params', id, p }       dlaf parameters of a species (metres)
 //    { type: 'plant', id, site }     one more colony at a rock site
 //    { type: 'view', points, budget? }   view points (camera, ROVs): the
-//        nearest colonies get the fine mesh, in the fine triangle budget
+//        nearest colonies get the fine mesh, in the fine triangle budget,
+//        with hysteresis (reef.js holdFocus): a focus colony keeps its
+//        fine mesh while the view stays within 1.5 x its entry distance
+//        (+ 3 m), and for 8 s at least
 //    { type: 'focus', ks }           the fine-mesh colonies, by hand
 //    { type: 'budget', growMs, meshMs, maxPost }
 //  Messages out:
 //    { type: 'ready', gen, rockMs, quality, budget }
 //    { type: 'colonies', gen, list: [colonyInfo + count] }
 //    { type: 'particles', gen, from, data }   PARTICLE_FLOATS per particle
-//    { type: 'bricks', gen, list: [{ sp, lod, key, chunk, cell, positions,
-//        normals, gids, indices, polyps, tris }] }   (typed arrays transferred)
+//    { type: 'bricks', gen, list: [{ sp, lod, k, field, key, chunk, cell,
+//        positions, normals, gids, indices, polyps, tris }] }   (typed arrays
+//        transferred; k: the colony of a fine brick, -1 for a coarse one)
+//    { type: 'fine', gen, list: [{ k, state: 'complete' | 'drop' }] }
+//        after the bricks of the same tick. complete: the fine mesh of
+//        colony k is all out (show it, then hide the coarse mesh of k).
+//        drop: the fine field of k is gone (show the coarse mesh of k,
+//        then remove its fine group; no brick removals come for it)
 //    { type: 'progress', gen, count, target, fraction, done, live, fusions,
 //        overgrowths, tris, trisFine, trisCoarse, polyps, focus, dirty,
 //        growMs, meshMs, rate }
@@ -62,25 +71,29 @@
 //    the runner ........... "export function createReefRunner"
 //    one tick ............. "function tick"
 //    focus from view ...... "function viewFocus"
+//    fine-field events .... "function postEvents"
 // ============================================================================
-import { createReef, packParticles, colonyInfo, chooseFocus, QUALITY } from './reef.js';
+import { createReef, packParticles, colonyInfo, holdFocus, QUALITY } from './reef.js';
 import { createCoralMesher } from './coral-sdf.js';
 
 // post(msg, transfer) sends a message. makeRock(opts) -> rock (tests give
-// a stub; the worker imports rock/index.js on demand).
-export function createReefRunner({ post, makeRock, timers } = {}) {
+// a stub; the worker imports rock/index.js on demand). timers { set, clear }
+// and clock() -> ms: tests drive the ticks with a fake clock.
+export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}) {
   const T = timers || { set: (f, ms) => setTimeout(f, ms), clear: id => clearTimeout(id) };
-  const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+  const clock = clockFn || (typeof performance !== 'undefined' ? () => performance.now() : () => Date.now());
   let rock = null, R = null, M = null, gen = 0, timer = 0, playing = true;
   let growMs = 9, meshMs = 9, maxPost = 4000, sent = 0, fed = 0, idleSent = false;
   let lastT = 0, progAt = 0, viewPts = null, viewBudget = 0, viewAt = 0, cfg = {};
+  // held: the focus colonies with their entry time and distance (holdFocus)
+  let held = new Map();
   // parked: the main reef while the saver grows its colony (single), or null
   let parked = null, reefOpts = null;
   const T0 = clock();
 
   function newMesher() {
     M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false });
-    sent = 0; fed = 0;
+    sent = 0; fed = 0; held = new Map();
   }
   function sendColonies() {
     post({ type: 'colonies', gen, list: R.colonies.map(c => Object.assign(colonyInfo(c), { count: c.count })) });
@@ -157,14 +170,23 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
 
   // The nearest colonies to the view points get the fine mesh, while the
   // estimated fine triangles stay in the budget (default 0.7 x Q.tris; the
-  // coarse mesh of all colonies takes the rest).
+  // coarse mesh of all colonies takes the rest). holdFocus keeps a focus
+  // colony while the view stays near it (hysteresis, a hold time), so the
+  // focus does not churn while the camera moves (no fine mesh is made
+  // again for a colony that stays in the focus).
   function viewFocus(force) {
     if (!R || !M || !M.lod || !viewPts || R.single) return;
     const t = clock();
     if (!force && t - viewAt < 500) return;
     viewAt = t;
-    const ks = chooseFocus(R.colonies, viewPts, viewBudget || R.Q.tris * 0.7);
+    const ks = holdFocus(R.colonies, viewPts, viewBudget || R.Q.tris * 0.7, held, t);
     M.setFocus(ks);
+  }
+  // fine-field events after the bricks: 'complete' (the page shows the
+  // fine mesh and hides the coarse one), 'drop' (the coarse one shows)
+  function postEvents() {
+    const ev = M.takeEvents();
+    if (ev.length) post({ type: 'fine', gen, list: ev });
   }
 
   function tick() {
@@ -198,6 +220,7 @@ export function createReefRunner({ post, makeRock, timers } = {}) {
       for (const r of out) tr.push(r.positions.buffer, r.normals.buffer, r.gids.buffer, r.indices.buffer, r.polyps.buffer);
       post({ type: 'bricks', gen, list: out }, tr);
     }
+    postEvents();
     const mms = clock() - m0;
     const busy = (playing && !R.done()) || fed < R.count || sent < R.count || M.dirty() > 0;
     if (t - progAt > 250 || !busy) {

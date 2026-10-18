@@ -106,3 +106,15 @@ Append a dated line: from, to, what.
   park and re-mesh took about 1 s to feed and 3 s to mesh 48 k particles.
   The page sends one `single` per saver session (main.js start) and
   `restore` at the saver exit (main.js restoreReef).
+- 2026-10-18 CORAL -> SCENE: the user said "the corals get reconstructed
+  over and over in front of my very eyes instead of staying totally
+  locked in". With lod, each focus colony now has a fine field of its own
+  (coral-sdf.js), and the focus has hysteresis (reef.js holdFocus). Fine
+  bricks carry k (the colony). The worker posts `{ type: 'fine', gen,
+  list: [{ k, state }] }` after the bricks: 'complete' (show the fine
+  mesh of k, then hide its coarse mesh), 'drop' (show the coarse mesh of
+  k, then remove the fine group; no brick removals come), and once
+  `{ k: -1, state: 'coarse' }` (every coarse brick is out). fine-view.js
+  and scene.js (setFineGate, showFine, takeShown, dropFine) do this on
+  the page. A restored reef (saver exit) shows at the 'coarse' event.
+  With lod: false (coral-species) nothing changed.

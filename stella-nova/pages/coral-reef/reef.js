@@ -53,6 +53,8 @@
 //                        the worker messages (colour.js reads either one)
 //    chooseFocus(colonies, points, budgetTris)  the colonies for the fine
 //                        mesh (coral-sdf.js setFocus), nearest first
+//    holdFocus(colonies, points, budgetTris, held, nowMs)  the same with
+//                        hysteresis and a hold time (the reef worker)
 //    R.progress() -> { count, target, limit, colonies, live, fraction, done,
 //                      walkers, walks, lost, fusions, overgrowths }
 //
@@ -78,6 +80,7 @@
 //    main-thread mirror ........ "export function createReefMirror"
 //    shape measures (tests) .... "export function shapeOf"
 //    hook source (saver code) .. "export function speciesHook"
+//    focus with hysteresis ..... "export function holdFocus"
 // ============================================================================
 import { createModel, rng, randomInUnitSphere } from '../../lib/dla-engine.js';
 
@@ -816,6 +819,47 @@ export function chooseFocus(colonies, points, budgetTris, maxN = Infinity) {
     out.push(c.k); t += est;
   }
   return out;
+}
+
+// The focus with hysteresis (the reef worker uses it, so a grown reef does
+// not change its fine meshes while the camera moves a little). held: Map
+// k -> { at (ms), dIn (m) }, the colonies in the focus, changed in place.
+// A held colony stays while its distance is under max(keepK x dIn, dIn +
+// keepAdd), or for holdMs after it came in, and while the held set fits
+// over x the budget (the nearest first). Then the nearest new colonies
+// come in while the budget allows. Returns the focus list (k).
+export const FOCUS_HOLD = { keepK: 1.5, keepAdd: 3, holdMs: 8000, over: 1.25 };
+export function holdFocus(colonies, points, budgetTris, held, nowMs, o = FOCUS_HOLD) {
+  if (!points || !points.length) return [...held.keys()];
+  const dist = c => { let d = Infinity; for (const p of points) d = Math.min(d, Math.hypot(c.base[0] - p[0], c.base[1] - p[1], c.base[2] - p[2]) - c.size * 0.5); return d; };
+  const est = c => Math.max(c.count || 0, (c.cap || 0) * 0.6) * SPECIES[c.id].tpp;
+  const byK = new Map();
+  for (const c of colonies) if (c) byK.set(c.k, c);
+  const keep = [];
+  for (const [k, h] of held) {
+    const c = byK.get(k); if (!c) continue;
+    const d = dist(c);
+    if (d <= Math.max(o.keepK * h.dIn, h.dIn + o.keepAdd) || nowMs - h.at < o.holdMs) keep.push({ c, d, h });
+  }
+  keep.sort((a, b) => a.d - b.d);
+  const out = new Map();
+  let t = 0;
+  for (const e of keep) {
+    const s = est(e.c);
+    if (out.size && t + s > budgetTris * o.over) break;
+    out.set(e.c.k, e.h); t += s;
+  }
+  const cand = [];
+  for (const c of byK.values()) if (!out.has(c.k)) cand.push({ c, d: dist(c) });
+  cand.sort((a, b) => a.d - b.d);
+  for (const e of cand) {
+    const s = est(e.c);
+    if (out.size && t + s > budgetTris) break;
+    out.set(e.c.k, { at: nowMs, dIn: Math.max(0, e.d) }); t += s;
+  }
+  held.clear();
+  for (const [k, h] of out) held.set(k, h);
+  return [...out.keys()];
 }
 
 // ── main-thread mirror ──────────────────────────────────────────────────────

@@ -61,6 +61,7 @@
 //    grep -n 'function makeCoral'     the coral driver (the reef worker protocol)
 //    grep -n 'function onCoral'       the worker messages
 //    grep -n 'function syncCoral'     new particles to the mesher and the GPU
+//    grep -n 'const fineView'         fine or coarse mesh per colony (fine-view.js)
 //    grep -n 'function buildROVs'     the vehicles, lamps and the feed card
 //    grep -n 'function presentFeed'   the live feed into the canvas at the card
 //    grep -n 'function camUI'         the camera bar, the tours, the feed card taps
@@ -92,6 +93,7 @@ import { createInput } from './input.js';
 import { PROFILES, PROFILE_ORDER, detectProfile, pageEnv, profileFor, reefBudget, rockWorkers, clampQuality, pixelRatioFor, lostPolicy, frameGovernor } from './budget.js';
 import { mountErrorBox, installErrorHandlers } from './crash.js';
 import { createCoralLink } from './coral-link.js';
+import { createFineView } from './fine-view.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia(PHONE_QUERY);
@@ -134,6 +136,8 @@ const S = createScene({
   onNoGL: () => { $('nogl').hidden = false; },
   onShaderError: text => box.show({ title: 'A shader did not compile on this GPU', text: `${text}\n\nPlease report this text (the Copy button).` }),
 });
+// a fine colony mesh shows only when it is complete (scene.js fineGroups)
+if (S) S.setFineGate(true);
 // WebGL context loss: one reload at one profile lower, then stop
 let lostNow = false;
 if (S) canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); onContextLost(); }, false);
@@ -215,7 +219,11 @@ function makeCoral(rk, quality, seed) {
 }
 // A new reef in the worker (reset, single): newer messages only.
 function coralNewGen(m) { if (!coral) return; coral.want = Math.max(coral.want, coral.gen + 1); coral.post(m); }
-const brickCols = new Map(), focusN = new Map();
+// fineView: the colonies whose fine mesh shows (their coarse mesh hides:
+// a negative radius in the data texture). fine-view.js keeps one full
+// mesh on screen for each colony (the worker 'fine' events and scene.js
+// showFine / takeShown / dropFine).
+const fineView = createFineView({ scene: S, reef: () => coral && coral.reef, now: () => nowMs() });
 let focusDirty = false;
 function onCoral(D, m) {
   if (D !== coral) return;
@@ -225,9 +233,13 @@ function onCoral(D, m) {
   if (m.gen < D.want) return;
   if (m.gen !== D.gen) {
     D.gen = m.gen;
-    D.reef.reset(); D.colTop = []; D.colExt = []; brickCols.clear(); focusN.clear();
+    D.reef.reset(); D.colTop = []; D.colExt = []; fineView.reset();
     synced = 0; hMax = 0; refreshAt = 0;
     if (S) S.clearColonies();
+    // a restored reef (the saver exit) shows in one frame when every
+    // coarse brick is there (the 'coarse' event), not brick by brick
+    if (S) S.coralRoot.visible = !D.restoring;   // (a reset or an init shows its growth)
+    D.hideAt = nowMs();
   }
   if (m.type === 'colonies') {
     D.reef.setColonies(m.list);
@@ -240,28 +252,14 @@ function onCoral(D, m) {
     if (D.reef.addParticles(m.from, m.data)) { syncCoral(); dirty = true; }
   } else if (m.type === 'bricks') {
     if (S) S.applyBricks(m.list);
-    trackFocus(m.list);
+  } else if (m.type === 'fine') {
+    fineView.onFine(m.list);
+    if (m.list.some(e => e.state === 'coarse')) showCoral(D);
   } else if (m.type === 'progress') {
     D.prog = m;
   }
 }
-// The fine (lod 0) bricks tell which colonies have the fine mesh: their
-// coarse mesh hides (a negative radius in the data texture).
-function trackFocus(list) {
-  if (!coral) return;
-  const col = coral.reef.col;
-  for (const r of list) {
-    if ((r.lod || 0) !== 0) continue;
-    const key = `${r.sp}|${r.key}`, old = brickCols.get(key);
-    if (old) for (const k of old) { const n = (focusN.get(k) || 1) - 1; if (n) focusN.set(k, n); else { focusN.delete(k); focusDirty = true; } }
-    if (!r.indices || !r.indices.length) { brickCols.delete(key); continue; }
-    const set = new Set();
-    for (let i = 0; i < r.gids.length; i += 7) { const g = r.gids[i]; if (g >= 0 && g < coral.reef.count) set.add(col[g]); }
-    for (const k of set) { if (!focusN.has(k)) focusDirty = true; focusN.set(k, (focusN.get(k) || 0) + 1); }
-    brickCols.set(key, set);
-  }
-  if (focusDirty) dirty = true;
-}
+function showCoral(D) { D.restoring = false; if (S) S.coralRoot.visible = true; }
 function sizeBuffers(n) {
   if (radBuf.length >= n) return;
   let c = Math.max(1024, radBuf.length); while (c < n) c *= 2;
@@ -320,6 +318,7 @@ function loadPreset(pid = G.preset, seed = G.seed, fit = false) {
   presetUI();
   if (!coral) return;
   // colonies: the profile count (the init of a saver start asked for 1)
+  coral.restoring = false;
   coralNewGen({ type: 'reset', seed, preset: pid, colonies: coral.budget ? coral.budget.colonies : undefined });
   coral.mainReal = true; coral.parked = false;
   if (fit) fitCamera(true);
@@ -333,6 +332,7 @@ function restoreReef(pid = G.preset) {
   if (!coral) return;
   if (coral.parked && coral.mainReal) {
     coral.parked = false;
+    coral.restoring = true;           // onCoral: the reef shows when its coarse mesh is all there
     coralNewGen({ type: 'restore', seed: G.seed, preset: pid, colonies: coral.budget ? coral.budget.colonies : undefined });
   } else if (!coral.mainReal) loadPreset(pid, G.seed);
   else coral.parked = false;
@@ -437,7 +437,7 @@ function writeParticles(from, to, F) {
     A[o] = natBuf[g * 3]; A[o + 1] = natBuf[g * 3 + 1]; A[o + 2] = natBuf[g * 3 + 2]; A[o + 3] = tBuf[g];
     const tip = F && F.sub ? Math.max(0, Math.min(0.999, 1 - Math.log2(F.sub[g]) / 5)) : 0.999;
     // the birth is in the worker clock: coral.off moves it to the page clock
-    B[o] = (reef.birth[g] + coral.off) / 1000; B[o + 1] = focusN.has(k) ? -radBuf[g] : radBuf[g]; B[o + 2] = (c ? SWAY(c.id) : 0) * 2 + tip; B[o + 3] = reef.py[g] - reef.gy[g];
+    B[o] = (reef.birth[g] + coral.off) / 1000; B[o + 1] = fineView.has(k) ? -radBuf[g] : radBuf[g]; B[o + 2] = (c ? SWAY(c.id) : 0) * 2 + tip; B[o + 3] = reef.py[g] - reef.gy[g];
   });
 }
 function refresh() {
@@ -816,7 +816,8 @@ function frame(t) {
     if (dirty && now > refreshAt) { refresh(); refreshAt = now + (reef.count > 40000 ? 1200 : reef.count > 10000 ? 700 : 350); }
     if ((viewT += dt) > 0.4 && S) { viewT = 0; sendView(); }
   }
-  if (S) S.flushChunks(COARSE ? 2.5 : 3.5, now);
+  if (S) { S.flushChunks(COARSE ? 2.5 : 3.5, now); fineView.afterFlush(); }
+  if (coral && coral.restoring && now - (coral.hideAt || now) > 12000) showCoral(coral);   // no 'coarse' event: show anyway
   if (saverOn && saver) saver.tick(dt, now);
   if (rovs) { try { rovs.update(dt, now / 1000); } catch (e) { console.error('coral-reef: ROV update', e); rovs = null; } }
   readout(dt);
@@ -858,7 +859,8 @@ function youngestAge(n = Infinity) {
 window.__coralDebug = () => ({
   profile: PROFILE_ID, worldReady, lostNow, cam: cam ? { mode: cam.mode, followId: cam.followId, choice: camChoice } : null,
   camOn: [...document.querySelectorAll('#camBar button.on')].map(b => b.dataset.cam), quality: G.quality, rockQuality: rock ? rock.quality : null, rovs: rovs ? rovs.vehicles.length : 0,
-  coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget, gen: coral.gen, parked: coral.parked, mainReal: coral.mainReal, ageMin: youngestAge() } : null, youngest: n => youngestAge(n),
+  coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget, gen: coral.gen, parked: coral.parked, mainReal: coral.mainReal, ageMin: youngestAge(), restoring: !!coral.restoring, fine: fineView.shown.size } : null, youngest: n => youngestAge(n),
+  coralShown: S ? S.coralRoot.visible : null,
   post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
 });
 // ── start ───────────────────────────────────────────────────────────────────

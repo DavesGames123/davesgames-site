@@ -6,7 +6,9 @@
 //    rock .......... the ROCK meshes (rock/index.js), triplanar CC0 stone
 //    sand .......... the ROCK sand floor in the hollows
 //    corals ........ the SDF meshes of the CORAL mesher: one group per
-//                    colony at its base, one mesh per chunk of bricks
+//                    species and lod (coarse), one group per fine colony
+//                    (lod 0, k >= 0), one mesh per chunk of bricks. A
+//                    chunk rebuild swaps the geometry of its mesh in place.
 //    polyps ........ one instanced mesh per chunk (shaders.js POLYP_*)
 //    snow .......... marine snow round the eye, lit only in the beams
 //  The ROV package adds its vehicles to the scene. setLights() takes
@@ -44,6 +46,7 @@
 //    coral chunks ........... "function applyBricks"
 //    shadow depth materials . "const coralDepth"
 //    chunk rebuild .......... "function rebuildChunk"
+//    fine groups (gate) ..... "const fineGroups"
 //    polyp template ......... "function polypTemplate"
 //    particle textures ...... "function setParticles"
 //    snow ................... "function makeSnow"
@@ -352,11 +355,41 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   let polypTotal = 0;
   let polypBudget = LD.polypDraw;
 
+  // Fine groups: one group per fine colony (bricks with k >= 0 and lod 0).
+  // With the gate on (setFineGate), a new fine group is hidden until
+  // showFine(k): the next flushChunks then builds all its dirty chunks and
+  // shows it in one frame (takeShown() lists it, so the page hides the
+  // coarse mesh of k then). dropFine(k) takes the group out of the map at
+  // once (new bricks of k go to a new group) and removes it after one more
+  // render, so the coarse mesh (shown first by the page) is there before
+  // the fine one goes. No frame shows a colony with neither mesh.
+  const fineGroups = new Map(), dying = [], shownQ = [];
+  let fineGate = false;
   function clearColonies() {
     for (const c of colonies.values()) for (const ch of c.chunks.values()) disposeChunk(ch);
-    colonies.clear(); dirtyChunks.clear(); polypTotal = 0;
+    for (const c of dying) for (const ch of c.chunks.values()) disposeChunk(ch);
+    colonies.clear(); dirtyChunks.clear(); polypTotal = 0; fineGroups.clear(); dying.length = 0; shownQ.length = 0;
     for (const g of coralRoot.children.slice()) coralRoot.remove(g);
   }
+  function setFineGate(on) { fineGate = !!on; }
+  function showFine(k) { const c = fineGroups.get(k); if (c && !c.shown) c.want = true; return !!c; }
+  function dropFine(k) {
+    const c = fineGroups.get(k); if (!c) return false;
+    fineGroups.delete(k); colonies.delete(c.key);
+    for (const ch of c.chunks.values()) dirtyChunks.delete(ch);
+    c.dieAt = frameN; dying.push(c);
+    return true;
+  }
+  function reapDying() {
+    for (let i = dying.length - 1; i >= 0; i--) {
+      const c = dying[i]; if (frameN <= c.dieAt) continue;
+      for (const ch of c.chunks.values()) disposeChunk(ch);
+      c.group.parent && c.group.parent.remove(c.group);
+      dying.splice(i, 1);
+    }
+  }
+  function takeShown() { return shownQ.splice(0, shownQ.length); }
+  function fineState(k) { const c = fineGroups.get(k); return c ? { shown: !!c.shown, want: !!c.want, chunks: c.chunks.size, dirty: [...c.chunks.values()].filter(ch => dirtyChunks.has(ch)).length } : null; }
   function addColonyGroup(k, id, base) {
     const group = new THREE.Group(); group.position.set(base[0], base[1], base[2]);
     coralRoot.add(group);
@@ -373,9 +406,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // A brick of the world-frame mesher (k -1) goes to the group of its
   // species (sp) at the origin; an older brick to the group of colony k.
   function groupFor(r) {
-    const key = r.sp ? `${r.sp}|${r.lod || 0}` : r.k;
+    const fine = r.sp && !(r.lod || 0) && r.k >= 0;
+    const key = r.sp ? (fine ? `${r.sp}|0|${r.k}` : `${r.sp}|${r.lod || 0}`) : r.k;
     let c = colonies.get(key);
-    if (!c && r.sp) { c = addColonyGroup(key, r.sp, [0, 0, 0]); c.lod = r.lod || 0; }
+    if (!c && r.sp) {
+      c = addColonyGroup(key, r.sp, [0, 0, 0]); c.lod = r.lod || 0; c.key = key;
+      if (fine) { c.fineK = r.k; c.shown = !fineGate; c.want = false; c.group.visible = c.shown; fineGroups.set(r.k, c); }
+    }
     return c;
   }
   function applyBricks(list) {
@@ -428,9 +465,16 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     } else if (ch.poly) { ch.poly.parent && ch.poly.parent.remove(ch.poly); ch.poly = null; }
   }
   function flushChunks(ms = 3, nowMs = 0, minGap = 180) {
+    // fine groups that may show now: all their chunks, then visible
+    for (const c of fineGroups.values()) {
+      if (!c.want || c.shown) continue;
+      for (const ch of [...c.chunks.values()]) if (dirtyChunks.has(ch)) { dirtyChunks.delete(ch); ch.at = nowMs; rebuildChunk(ch); }
+      c.want = false; c.shown = true; c.group.visible = true; shownQ.push(c.fineK);
+    }
     const t0 = performance.now();
     for (const ch of dirtyChunks) {
-      if (nowMs - ch.at < minGap) continue;
+      // a hidden fine group builds with no gap (it shows when complete)
+      if (nowMs - ch.at < minGap && ch.col.shown !== false) continue;
       dirtyChunks.delete(ch);
       ch.at = nowMs;
       rebuildChunk(ch);
@@ -635,6 +679,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   }
   // cam: the camera to draw with (the main camera, or a saver camera).
   function render(dt, nowMs = performance.now()) {
+    if (dying.length) reapDying();
     const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
     const k = 1 - Math.exp(-dt * 6);
     view.ox += (view.tox - view.ox) * k; view.oy += (view.toy - view.oy) * k;
@@ -677,6 +722,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     get sand() { return sandMesh; }, post,
     setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
+    setFineGate, showFine, dropFine, takeShown, fineState, get fineGroups() { return fineGroups; }, get dyingGroups() { return dying.length; },
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },
     PART_W, maxParticles: NP,
   };

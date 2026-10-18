@@ -19,6 +19,9 @@
 //    tests/follow.test.mjs .. SCENE: the camera follows an ROV by default
 //    tests/grow-once.test.mjs  SCENE, CORAL: the saver grows one colony once, the
 //                             exit restores the grown reef (worker park, restore)
+//    tests/lock.test.mjs .... CORAL, SCENE: a grown reef stays locked in while
+//                             the cameras move (no fine mesh made again, one
+//                             full mesh per colony in each frame)
 //  The jsdom boot (mobile-check.mjs, in scene.test.mjs) needs jsdom 24:
 //  give its folder as JSDOM_DIR or NODE_PATH. Without it the boot skips.
 //  Exit code 1 if any file fails.

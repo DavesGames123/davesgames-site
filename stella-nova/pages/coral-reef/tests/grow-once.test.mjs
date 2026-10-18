@@ -11,7 +11,8 @@
 //                ONE 'single'; the later dives keep that colony (no second
 //                'single', the same worker gen, the count goes on)
 //    exit ...... the main reef comes back at once, already grown, with
-//                old births (no grow-in replay)
+//                old births (no grow-in replay); the corals show in one
+//                frame when every coarse brick is out (no brick-by-brick)
 //  Without jsdom the page part skips; the worker part always runs.
 // ============================================================================
 import { createRock } from '../rock/index.js';
@@ -109,6 +110,11 @@ else {
   const c1 = dbg().coral;
   ok(c1.count >= n0 && c1.colonies === cols0, 'page: at the exit the main reef comes back at once, already grown', `${c1.count} particles (${n0} at enter), ${c1.colonies} colonies (${cols0}) in ${Date.now() - tExit} ms`);
   ok(c1.gen === gen1 + 1 && !c1.parked, 'page: the exit is one restore (gen + 1), not a reset');
+  // the restored reef is not built brick by brick in view: the corals show
+  // in one frame when the worker says that every coarse brick is out
+  const hid = dbg().coralShown === false || dbg().coral.restoring === false;
+  const shown = await until(() => dbg().coralShown && !dbg().coral.restoring, 30000);
+  ok(hid && shown, 'page: the restored reef shows at once when its coarse mesh is all there (the coarse event)', `shown ${Date.now() - tExit} ms after the exit`);
   // the particles of the reef before the saver: old; only new growth is young
   const age = dbg().youngest ? dbg().youngest(n0) : null;
   ok(age !== null && age > 2, 'page: the restored particles keep their old births (no grow-in replay)', `the youngest of the first ${n0}: ${age && age.toFixed(1)} s`);

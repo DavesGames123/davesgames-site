@@ -30,12 +30,26 @@
 //  page can cull polyps by distance (LOD): draw a polyp when rand < keep(d).
 //  SHAPES[id].polyp.size is the polyp radius (m) for the page template.
 //
-//  LOD. Each species has two fields: a fine one (the SHAPES cell) that
-//  holds only the FOCUS colonies (the nearest to the cameras, set by
-//  setFocus) and a coarse one (LOD_K x the cell, thin parts made half a
-//  coarse cell thick) that holds every colony. So the fine triangles stay
-//  in the budget, and far colonies cost little. Polyps are only on the
-//  fine bricks. A focus change refills the fine field of that species.
+//  LOD. Each species has one coarse field (LOD_K x the cell, thin parts
+//  made half a coarse cell thick) that holds every colony. Each FOCUS
+//  colony (the nearest to the cameras, set by setFocus) has a fine field
+//  of its own (the SHAPES cell, origin at the colony base). So the fine
+//  triangles stay in the budget, and far colonies cost little. Polyps are
+//  only on the fine bricks. A focus change touches only the fine field of
+//  the colony that changed: a new focus colony gets a new field, a colony
+//  that leaves the focus loses its field. The fine bricks of the other
+//  colonies are not meshed again (the user said: "the corals get
+//  reconstructed over and over in front of my very eyes instead of
+//  staying totally locked in"). Fine-field events (M.takeEvents()):
+//    { k, state: 'complete' }  every brick that the field had when it was
+//                              made is meshed and out: the page can show
+//                              the fine mesh and hide the coarse one
+//    { k, state: 'drop' }      the field is gone: the page shows the
+//                              coarse mesh, then removes the fine one
+//    { k: -1, state: 'coarse' } (once) every coarse field is meshed
+//  (no brick removals are sent for a dropped field). Two colonies of one
+//  species fuse in the coarse field; their fine fields overlap. With
+//  lod: false there is one fine field per species (all colonies fuse).
 //
 //  USE (the reef worker, node tests, thumbnails)
 //    const M = createCoralMesher({ polyps, fine, radius, lod = true });
@@ -45,12 +59,14 @@
 //    M.fields: Map field key -> { id, lev, cell, origin, tree, SM (cone
 //              ends, field frame), localOf (global id -> field id), ... }
 //    M.setFocus([k, ...])                          // the fine-mesh colonies
-//    const out = M.update(ms);   // [{ sp, lod, field, k: -1, key, chunk, bx, by, bz,
+//    M.takeEvents() -> [{ k, state: 'complete' | 'drop' }] (fine fields)
+//    const out = M.update(ms);   // [{ sp, lod, field, k, key, chunk, bx, by, bz,
 //                                //    cell, positions, normals, gids, indices,
 //                                //    polyps, tris }]
 //    M.meshAll(lev?) -> all brick results now (tests, thumbnails)
 //    M.stats() -> { colonies, particles, bricks, tris, trisFine, trisCoarse,
-//                   polyps, dirty, focus }
+//                   polyps, dirty, focus, fineDone }
+//  k of a result: the colony of a per-colony fine field, else -1.
 //
 //  A result with no indices means "remove this brick". A brick is unique
 //  by sp + lod + key (field: 'staghorn|0', 'staghorn|1', 'fan|0|12', ...;
@@ -68,6 +84,7 @@
 //    smooth branch points ... "function smoothPoint"
 //    the coarse field ....... "function makeField"
 //    focus change ........... "function setFocus"
+//    fine-field events ...... "function takeEvents"
 // ============================================================================
 import { createSdf, pipeRadius, smin } from '../../lib/dla-sdf.js';
 
@@ -277,18 +294,21 @@ export function createCoralMesher(opts = {}) {
   let cap = 4096, n = 0;
   let PX = new Float64Array(cap * 3), PAR = new Int32Array(cap), PCOL = new Int32Array(cap);
   let turn = 0;
-  const removals = [];             // results that remove bricks (focus changes)
   let tris = [0, 0], polypN = 0, ownN = 0;
 
   // The key of the fine field of a colony: one per species, or one per
   // colony for a species with own: true (sea fans: they do not fuse, and a
   // field with its origin at the colony base can have a cell finer than
   // the plot-wide limit minCell).
-  function fineKey(c) { return (SHAPES[c.id] || SHAPES.staghorn).own ? `${c.id}|0|${c.k}` : `${c.id}|0`; }
+  // With lod, every colony has its own fine field (a focus change then
+  // touches one colony only).
+  function ownFine(id) { return useLod || !!(SHAPES[id] || SHAPES.staghorn).own; }
+  function fineKey(c) { return ownFine(c.id) ? `${c.id}|0|${c.k}` : `${c.id}|0`; }
+  const events = [];               // fine-field events: { k, state }
 
   function makeField(id, lev, c) {
     const sh0 = SHAPES[id] || SHAPES.staghorn;
-    const own = lev === 0 && sh0.own && c;
+    const own = lev === 0 && ownFine(id) && c;
     const key = own ? fineKey(c) : id + '|' + lev;
     let F = fields.get(key);
     if (F) return F;
@@ -311,7 +331,7 @@ export function createCoralMesher(opts = {}) {
     // brick keys of own fields are offset so that they are unique over all
     // fields (lib keys are under 2^30)
     const keyBase = own ? (++ownN) * 1073741824 : 0;
-    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O, keyBase,
+    F = { key, id, lev, sh, cell, cols, n: 0, cap: 1024, live: new Map(), origin: O, keyBase, colK: own ? c.k : -1, wait: null,
       X: new Float64Array(3 * 1024), Y: new Float64Array(1024), SM: new Float64Array(3 * 1024), DIR: new Float64Array(3 * 1024),
       depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
     F.tree = createTree({
@@ -399,32 +419,39 @@ export function createCoralMesher(opts = {}) {
     return true;
   }
 
-  // The fine field of each species holds only the focus colonies. A
-  // change of focus refills each fine field whose colonies changed: its
-  // old bricks are removed (empty results), then the particles of its
-  // focus colonies are added again in global order.
+  // The focus colonies get a fine field of their own. A colony that comes
+  // into the focus: a new field with all its particles; F.wait is true
+  // until the field has no brick to recompute or mesh (the radius
+  // recomputes make more bricks and mesh some bricks two times, so the
+  // first pass over the bricks is not the end). A colony that leaves the
+  // focus: its field goes, with one 'drop' event and no brick removals.
+  // The fields of the other colonies do not change. With lod false: no-op.
   function setFocus(ks) {
     if (!useLod) return false;
     const want = new Set(ks);
-    const changed = new Set();
-    for (const c of cols.values()) { const f = want.has(c.k); if (f !== c.focus) { c.focus = f; changed.add(fineKey(c)); } }
-    for (const key of changed) {
-      const old = fields.get(key);
+    let changed = 0;
+    for (const c of cols.values()) {
+      const f = want.has(c.k); if (f === c.focus) continue;
+      c.focus = f; changed++;
+      const key = fineKey(c), old = fields.get(key);
       if (old) {
-        for (const [bk, b] of old.live) {
-          tris[0] -= b[0]; polypN -= b[1];
-          removals.push({ sp: old.id, lod: 0, k: -1, key: bk, field: key, chunk: b[2], cell: old.cell, positions: new Float32Array(0), normals: new Float32Array(0), gids: new Float32Array(0), indices: new Uint16Array(0), polyps: new Float32Array(0), tris: 0 });
-        }
+        for (const b of old.live.values()) { tris[0] -= b[0]; polypN -= b[1]; }
         fields.delete(key);
       }
-      const members = [...cols.values()].filter(c => c.focus && fineKey(c) === key);
-      if (!members.length) continue;
-      const F = makeField(members[0].id, 0, members[0]);
-      const inF = new Set(members.map(c => c.k));
-      for (let g = 0; g < n; g++) if (inF.has(PCOL[g])) addTo(F, g, PAR[g], PX[g * 3], PX[g * 3 + 1], PX[g * 3 + 2], PCOL[g]);
+      if (!f) { if (old) events.push({ k: c.k, state: 'drop' }); continue; }
+      const F = makeField(c.id, 0, c);
+      for (let g = 0; g < n; g++) if (PCOL[g] === c.k) addTo(F, g, PAR[g], PX[g * 3], PX[g * 3 + 1], PX[g * 3 + 2], c.k);
+      F.wait = true;
+      checkDone(F);
     }
-    return changed.size > 0;
+    return changed > 0;
   }
+  function checkDone(F) {
+    if (!F.wait || F.tree.sdf.dirtyCount) return;
+    F.wait = null;
+    events.push({ k: F.colK, state: 'complete' });
+  }
+  function takeEvents() { return events.splice(0, events.length); }
   function focus() { const out = []; for (const c of cols.values()) if (c.focus) out.push(c.k); return out; }
 
   function result(F, m) {
@@ -444,43 +471,61 @@ export function createCoralMesher(opts = {}) {
     const chunk = chunkKey(m.bx, m.by, m.bz, F.cell, O);
     const bkey = m.key + F.keyBase;
     const old = F.live.get(bkey);
+    if (!nt && !old) return null;          // an empty brick that never showed: nothing to send
     if (old) { tris[F.lev] -= old[0]; polypN -= old[1]; }
     if (nt) { F.live.set(bkey, [nt, polyps.length / 8, chunk]); tris[F.lev] += nt; polypN += polyps.length / 8; } else F.live.delete(bkey);
-    return { sp: F.id, lod: F.lev, k: -1, key: bkey, field: F.key, chunk, bx: m.bx, by: m.by, bz: m.bz, cell: F.cell,
+    return { sp: F.id, lod: F.lev, k: F.colK, key: bkey, field: F.key, chunk, bx: m.bx, by: m.by, bz: m.bz, cell: F.cell,
       positions: m.positions, normals: m.normals, gids, indices: m.indices, polyps, tris: nt };
   }
 
-  // Removals first, then mesh dirty bricks of all fields for about ms, in
-  // turn (the coarse fields first in each round, so the whole reef shows).
+  // Mesh dirty bricks of all fields for about ms: the coarse fields first
+  // (so the whole reef shows), then the fine fields that wait to show,
+  // then the other fine fields in turn. The first time that every coarse
+  // field has nothing to mesh, an event { k: -1, state: 'coarse' } goes
+  // out (the page shows a restored reef at once, not brick by brick).
+  let coarseDone = false;
   function update(ms = 8, out = []) {
     const t0 = now();
-    while (removals.length) out.push(removals.shift());
-    const list = [...fields.values()].sort((a, b) => b.lev - a.lev);
+    // the coarse fields first, then the fine fields that wait to show,
+    // then the rest (in turn)
+    const first = [], rest = [];
+    for (const F of fields.values()) (F.lev === 1 ? first : rest).push(F);
+    for (const F of rest) if (F.wait) first.push(F);
+    const live = rest.filter(F => !F.wait);
+    const list = first.concat(live.map((_, q) => live[(turn + q) % live.length]));
     if (!list.length) return out;
     for (let q = 0; q < list.length; q++) {
-      const F = list[(turn + q) % list.length];
-      if (!F.tree.sdf.dirtyCount) continue;
+      const F = list[q];
+      if (!F.tree.sdf.dirtyCount) { if (F.wait) checkDone(F); continue; }
       const left = ms - (now() - t0);
       if (left <= 0) break;
       const share = Math.max(1, left / Math.max(1, list.length - q));
-      for (const m of F.tree.update(share)) out.push(result(F, m));
+      for (const m of F.tree.update(share)) { const r = result(F, m); if (r) out.push(r); }
+      if (F.wait) checkDone(F);
     }
     turn++;
+    if (!coarseDone && useLod && n > 0) {
+      let busy = false;
+      for (const F of first) if (F.lev === 1 && F.tree.sdf.dirtyCount) { busy = true; break; }
+      if (!busy) { coarseDone = true; events.push({ k: -1, state: 'coarse' }); }
+    }
     return out;
   }
 
   // Every brick now. lev: 0 fine, 1 coarse, undefined both.
   function meshAll(lev) {
     const out = [];
-    while (removals.length) removals.shift();
-    for (const F of fields.values()) if (lev === undefined || F.lev === lev) for (const m of F.tree.sdf.meshAll()) out.push(result(F, m));
+    for (const F of fields.values()) if (lev === undefined || F.lev === lev) {
+      for (const m of F.tree.sdf.meshAll()) { const r = result(F, m); if (r) out.push(r); }
+      if (F.wait) checkDone(F);
+    }
     return out;
   }
 
-  function dirty() { let d = removals.length; for (const F of fields.values()) d += F.tree.sdf.dirtyCount; return d; }
+  function dirty() { let d = 0; for (const F of fields.values()) d += F.tree.sdf.dirtyCount; return d; }
 
   return {
-    addColony, add, update, meshAll, dirty, setFocus, focus, cols, fields, lod: useLod,
+    addColony, add, update, meshAll, dirty, setFocus, focus, takeEvents, cols, fields, lod: useLod,
     // the cone radius of global particle g in the fine (or coarse) field
     radius(g) {
       const c = cols.get(PCOL[g]); if (!c) return 0;
@@ -490,7 +535,9 @@ export function createCoralMesher(opts = {}) {
     stats() {
       let b = 0;
       for (const F of fields.values()) b += F.tree.sdf.stats.bricks;
-      return { colonies: cols.size, particles: n, bricks: b, tris: tris[0] + tris[1], trisFine: tris[0], trisCoarse: tris[1], polyps: polypN, dirty: dirty(), focus: focus().length };
+      let done = 0;
+      for (const F of fields.values()) if (F.lev === 0 && F.colK >= 0 && !F.wait) done++;
+      return { colonies: cols.size, particles: n, bricks: b, tris: tris[0] + tris[1], trisFine: tris[0], trisCoarse: tris[1], polyps: polypN, dirty: dirty(), focus: focus().length, fineDone: done };
     },
   };
 }

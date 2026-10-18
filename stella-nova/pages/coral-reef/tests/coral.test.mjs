@@ -17,7 +17,7 @@
 //    rock .......... no particle centre in the rock (rock.sdf > 0) or sand
 //    determinism ... same seed, same reef, for any time budget
 //    lod ........... the coarse mesh is much smaller; a focus change
-//                    removes and adds fine bricks
+//                    makes or drops the fine field of that colony only
 //    worker ........ the reef worker messages (createReefRunner)
 //    colour ........ every colour mode on the page mirror
 //    timings ....... growth and mesh rates, the desktop projection
@@ -369,9 +369,11 @@ let rockReef;
   let out = M.update(1e9);
   const st1 = M.stats();
   ok(st1.trisFine > 0.9 * fine && out.some(r => r.lod === 0 && r.polyps.length), 'lod: a focus colony gets the fine mesh with polyps', `${st1.trisFine} fine tris`);
+  M.takeEvents();
   M.setFocus([]);
   out = M.update(1e9);
-  ok(out.filter(r => r.lod === 0).every(r => r.indices.length === 0) && M.stats().trisFine === 0, 'lod: dropping the focus removes the fine bricks', `${out.length} removals`);
+  const ev = M.takeEvents();
+  ok(out.filter(r => r.lod === 0).length === 0 && M.stats().trisFine === 0 && ev.some(e => e.k === 0 && e.state === 'drop'), 'lod: dropping the focus drops the fine field of the colony (one drop event, no brick removals)', JSON.stringify(ev));
   const ks = chooseFocus(rockReef.R.colonies, [rockReef.R.colonies[0].base], 300000);
   ok(ks[0] === 0 && ks.length >= 1, 'lod: chooseFocus starts at the nearest colony and keeps the budget', `${ks.length} colonies`);
 }
