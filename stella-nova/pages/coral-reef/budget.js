@@ -17,7 +17,8 @@
 //                  rock: rock quality; rockWorkers: at most this many rock
 //                  module workers. shadow: the lead lamp map size (0 off).
 //                  shadowExtra: the map size of the main lamp of each
-//                  other ROV (0: only the lead lamp has a map; phone-min).
+//                  other ROV (0: only the lead lamp has a map; phones: one
+//                  shadow map, CONTRACT-V4.md).
 //                  polypShadow: the polyps cast into the maps (desktop).
 //                  vol: { scale, steps } the volume pass. dprCap and maxPx:
 //                  the pixel ratio cap and the drawing buffer pixel cap.
@@ -84,7 +85,7 @@ export const PROFILES = {
   },
   phone: {
     id: 'phone', label: 'Phone', budgetMB: 250, reef: 'phone', reefMax: 'phone',
-    cap: { particles: 25000, tris: 500000, polyps: 0.45 }, rock: 'low', rockWorkers: 2, shadow: 1024, shadowExtra: 512, polypShadow: false, vol: { scale: 0.35, steps: 14 },
+    cap: { particles: 25000, tris: 500000, polyps: 0.45 }, rock: 'low', rockWorkers: 2, shadow: 1024, shadowExtra: 0, polypShadow: false, vol: { scale: 0.35, steps: 14 },
     dprCap: 1.5, maxPx: 1.3e6, caustic: { res: 512, grid: 200 }, snow: 1200, polypDraw: 30000,
     rovs: 2, feed: { w: 224, h: 180, fps: 15 }, stagger: { rovMs: 800, reefMs: 2500 }, frameMs: 1000 / 30,
   },

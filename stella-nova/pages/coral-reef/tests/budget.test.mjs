@@ -5,10 +5,14 @@
 //  a laptop), the memory model per profile under its budget (desktop
 //  700 MB GPU, phone 250 MB), the model of the page before the profiles
 //  (printed: the before and after per profile), the context loss policy
-//  and the frame governor.
+//  and the frame governor. The world budgets (v4, world/stream.js
+//  WORLD_BUDGET): smaller rings, fewer colonies and workers, one shadow
+//  map on phones, and the world GPU bytes (worldEstimate) under the
+//  budget of each profile.
 // ============================================================================
 import { PROFILES, PROFILE_ORDER, REEF_Q, MB, detectProfile, profileFor, stepDown, estimate, lostPolicy, frameGovernor, reefBudget, rockWorkers, clampQuality, pixelRatioFor } from '../budget.js';
 import { QUALITY } from '../reef.js';
+import { WORLD_BUDGET, worldEstimate } from '../world/stream.js';
 
 let pass = 0, fail = 0;
 function ok(cond, name, info = '') { if (cond) pass++; else { fail++; console.log(`FAIL ${name}${info !== '' ? ' ' + info : ''}`); } }
@@ -119,6 +123,25 @@ const BEFORE = {
   for (let i = 0; i < 200; i++) g2.tick(16); g2.tick(5000);
   ok(g2.level === 0, 'governor: one long frame (a tab that comes back) is not slow');
   console.log('governor: ' + log.join(' '));
+}
+
+// ── the world budgets (v4) ───────────────────────────────────────────────────
+{
+  const ids = PROFILE_ORDER, B = ids.map(id => WORLD_BUDGET[id]);
+  ok(B.every(Boolean), 'world: every profile has a world budget', ids.filter(id => !WORLD_BUDGET[id]).join());
+  const down = (f) => B.every((b, i) => i === 0 || f(b) <= f(B[i - 1]));
+  ok(down(b => b.rings[b.rings.length - 1]) && down(b => b.coralR) && down(b => b.coral.colonies) && down(b => b.coral.particles) && down(b => b.fineTris) && down(b => b.workers) && down(b => b.maxCoral), 'world: rings, coral reach, colonies, particles, fine triangles, workers and coral chunks go down from desktop to phone-min');
+  ok(WORLD_BUDGET.phone.rings.length === 2 && WORLD_BUDGET['phone-min'].rings.length === 2 && WORLD_BUDGET.desktop.rings.length === 3, 'world: phones have no far LOD ring (the fog hides it)');
+  ok(WORLD_BUDGET.phone.workers <= 2 && WORLD_BUDGET['phone-min'].workers === 1, 'world: phones start at most 2 workers');
+  ok(['phone', 'phone-min'].every(id => profileFor(id).shadowExtra === 0 && profileFor(id).shadow > 0), 'world: phones have one shadow map (the lead lamp)');
+  for (const id of ids) {
+    const e = worldEstimate(WORLD_BUDGET[id]), est = estimate(profileFor(id), { cssW: id.startsWith('phone') ? 390 : 1440, cssH: id.startsWith('phone') ? 844 : 900, dpr: 2 });
+    // the world replaces the plot rock, reef and coral parts of the old model
+    const frame = est.gpu.canvas + est.gpu.sceneTarget + est.gpu.volTarget + est.gpu.caustics + est.gpu.shadow + est.gpu.textures + est.gpu.snow + est.gpu.feed + est.gpu.rovs;
+    const tot = frame + e.total;
+    ok(tot < est.budget * 0.8, `world: ${id}: the world and the frame fit the GPU budget`, `world ${(e.total / MB).toFixed(0)} MB (rock ${(e.rock / MB).toFixed(0)}, coral ${(e.coral / MB).toFixed(0)}, fine ${(e.fine / MB).toFixed(0)}, data ${(e.data / MB).toFixed(1)}) + frame ${(frame / MB).toFixed(0)} MB < ${(0.8 * est.budget / MB).toFixed(0)} MB`);
+    console.log(`     ${id}: world ${(e.total / MB).toFixed(0)} MB in about ${e.chunks.toFixed(0)} rock chunks, frame ${(frame / MB).toFixed(0)} MB, budget ${(est.budget / MB).toFixed(0)} MB`);
+  }
 }
 
 console.log(`budget: ${pass} passed, ${fail} failed`);

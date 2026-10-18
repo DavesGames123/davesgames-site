@@ -167,7 +167,7 @@ if (arg === 'phone') {
   const D = P.win.__coralDebug();
   say(D.profile === 'phone', 'coarse 390 x 844 boots with the phone profile', D.profile);
   say(ready && D.rovs === 2 && D.stream && D.stream.rock > 0, 'phone: the world and 2 ROVs', JSON.stringify({ rovs: D.rovs, rock: D.stream && D.stream.rock }));
-  say(D.loads && D.loads.shadow === 1024 && D.loads.shadowExtra === 512 && D.loads.volScale === 0.35 && D.loads.polypDraw === 30000, 'phone: the scene loads come from the profile', JSON.stringify(D.loads));
+  say(D.loads && D.loads.shadow === 1024 && D.loads.shadowExtra === 0 && D.loads.volScale === 0.35 && D.loads.polypDraw === 30000, 'phone: the scene loads come from the profile (one shadow map)', JSON.stringify(D.loads));
   const pr = P.fake.canvas.width / 390;
   say(pr <= 1.5 + 1e-6, 'phone: the pixel ratio is at most 1.5', pr);
   const q = [...P.doc.querySelectorAll('#quality button')];

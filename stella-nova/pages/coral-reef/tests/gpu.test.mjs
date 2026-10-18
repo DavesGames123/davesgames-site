@@ -165,7 +165,7 @@ function runFrames(f, n = 6) {
   for (let i = 0; i < 2; i++) S.render(1 / 60, 96 + i * 16);
   ok(L.slice(0, 3).every(l => l.castShadow && l.shadow.map) && on.y === 1 && polys[0].castShadow, 'shadow: the maps come back when the governor steps up');
   const lowP = profileFor('phone-min');
-  ok(lowP.shadowExtra === 0 && profileFor('phone').shadowExtra > 0 && profileFor('phone').shadowExtra < profileFor('desktop').shadowExtra, 'shadow: phones get smaller maps; phone-min has only the lead map');
+  ok(lowP.shadowExtra === 0 && profileFor('phone').shadowExtra === 0 && profileFor('laptop-low').shadowExtra < profileFor('desktop').shadowExtra, 'shadow: phones have only the lead map (one shadow map); a laptop gets smaller maps');
   console.log(`shadow: maps ${L.map(l => l.shadow.mapSize.x + (l.castShadow ? '' : ' off')).join(', ')}; ${meshes.length} coral meshes and ${polys.length} polyp mesh with depth materials`);
 }
 
