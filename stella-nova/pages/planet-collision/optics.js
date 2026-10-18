@@ -110,7 +110,7 @@ export const SMOKE = {
   // vapourCap: T0 at contact -> T1, e-fold capH hours. T1 is about the
   // photosphere of a silicate vapour cloud (2300 K, Lock and Stewart 2017)
   capT0: 5200, capT1: 2200, capH: 1.0,
-  dustShed: 0.35,               // the share of a debris particle drawn as dust
+  dustShed: 0.15,               // the share of a debris particle drawn as dust
 };
 // the highest drawn gas temperature, hours h after contact (h < 0: before)
 export function vapourCap(h, s = SMOKE) { return s.capT1 + (s.capT0 - s.capT1) * Math.exp(-Math.max(h, 0) / s.capH); }

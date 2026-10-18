@@ -124,8 +124,9 @@ export const VOL_K = 1.8, VOL_ISO = 1.1;
 export const DROPS_MAX = 16, DROP_K = 0.13;
 // the smoke optics in code units: extinction per unit of gas and dust
 // density (code mass per code volume), the emission gain, the detail
-// cycles across the smoke cube, the flow period of the detail (code time)
-export const SMOKE_K = { gas: 500, dust: 400, emit: 1.0, cycles: 9, flowT: 0.25 };
+// cycles per target radius (the billows keep their size as the camera
+// pulls out), the flow period of the detail (code time)
+export const SMOKE_K = { gas: 500, dust: 400, emit: 1.0, cycles: 2, flowT: 0.25 };
 
 // ── 4x4 matrices, column-major (a copy of roche-limit render.js M4) ───────
 export const M4 = {
@@ -483,7 +484,8 @@ export class Renderer {
     d.set(sb ? [sb.o[0], sb.o[1], sb.o[2], sb.cell] : [0, 0, 0, 0], 144);
     d.set([sb ? sb.G : 0, sm.steps || 56, sm.light || 20, this.frameNo % 1024], 148);
     const vk = (f.vapK ?? 1.5) / 1.5;
-    d.set([SMOKE_K.gas * vk, SMOKE_K.dust * vk, (f.vapGlow ?? 1) * SMOKE_K.emit, sb ? SMOKE_K.cycles / (sb.cell * sb.G) : 1], 152);
+    const R0 = lk.bodies && lk.bodies[0] ? lk.bodies[0].R : 1;
+    d.set([SMOKE_K.gas * vk, SMOKE_K.dust * vk, (f.vapGlow ?? 1) * SMOKE_K.emit, SMOKE_K.cycles / R0], 152);
     d.set([SMOKE.boilLo, SMOKE.boilHi, SMOKE.rhoLo, SMOKE.rhoHi], 156);
     d.set([SMOKE.condLo, SMOKE.condHi, vapourCap(f.coolH ?? -1), SMOKE.dustShed], 160);
     const flow = f.simT != null ? f.simT / SMOKE_K.flowT : (f.time || 0) * 0.08;

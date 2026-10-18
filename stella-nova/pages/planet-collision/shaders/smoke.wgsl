@@ -458,7 +458,8 @@ fn fs_smokeMarch(in: MV2) -> MOut2 {
     // emission: the absorbed share radiates at the drawn temperatures
     // fine dust radiates its heat in seconds: it glows far less than the gas
     // thin hot vapour is not a black body in the visible: 0.5 of one
-    let em = (1.0 - alb) * (0.5 * glow(m.z * 1000.0) * (1.0 - dustShare) + 0.3 * glow(m.w * 1000.0) * dustShare) * U0.smoke2.z;
+    // the billows' cores are hotter than their edges (like flame)
+    let em = (1.0 - alb) * (0.4 * glow(m.z * 1000.0) * (1.0 - dustShare) + 0.3 * glow(m.w * 1000.0) * dustShare) * U0.smoke2.z * mix(0.35, 1.4, det);
     let S = scat + em;
     let stepL = dt * dl;
     let ex = exp(-sg2 * stepL);

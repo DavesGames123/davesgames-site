@@ -289,7 +289,7 @@ constant (wall time from `f.time`). `f.exposure` multiplies it;
 Smoke (smoke.wgsl, optics.js `smokeWeights`): each particle has a gas
 share (the vapour weight xv from `xvLo` 0.05 to `xvHi` 0.5, or hot,
 expanded rock: T 2600-4200 K and rho under 0.6 rho0) and a dust share
-(free debris sheds 0.35 of its mass as fine dust; gas under 2400-1800 K
+(free debris sheds 0.15 of its mass as fine dust; gas under 2400-1800 K
 condenses to dust). The drawn gas temperature is the particle T capped
 by 2200 K + 3000 K exp(-coolH / 1 h) (2200 K: about the photosphere of a
 silicate vapour cloud). The shares go into a 80^3 volume (phones 48^3)

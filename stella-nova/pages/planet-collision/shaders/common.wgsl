@@ -74,7 +74,7 @@ struct U {
   vol1: vec4f,              // x cells per side G, y iso level, z kernel radius over spacing0, w -
   smoke0: vec4f,            // the smoke volume: origin xyz (world, cell 0), w cell size (0 = off)
   smoke1: vec4f,            // x cells per side, y march steps, z light steps, w frame number (jitter)
-  smoke2: vec4f,            // x extinction per unit gas density, y per unit dust density, z emission gain, w detail cycles per world unit
+  smoke2: vec4f,            // x extinction per unit gas density, y per unit dust density, z emission gain, w detail cycles per world unit (2 per target radius)
   smoke3: vec4f,            // optics.js SMOKE: boilLo, boilHi (K), rhoLo, rhoHi (rho / rho0)
   smoke4: vec4f,            // condLo, condHi (K), the vapour cap now (K), dustShed
   smoke5: vec4f,            // optics.js PHASE g1, g2, w; flow phase (runs 0..1 and on)
