@@ -123,6 +123,22 @@ export function cloudLayer(terrain, wx) {
   return { base, top: base + thick, anvil: base + 9500 };
 }
 
+// The floor of cloud cover from the air mass: scattered stratocumulus and
+// altocumulus where the model has made no cloud yet (shaders/clouds.wgsl
+// cl_wx). Without it, a fair sky before the cumulus grow was empty.
+export function coverFloor(wx) {
+  const air = clamp(wx.coverAir ?? wx.cover ?? 0, 0, 1);
+  return clamp(0.6 * air, 0, 0.6);
+}
+// View steps of the cloud march (clouds.wgsl CL_STEPS_MAX caps them).
+export const CLOUD_STEPS_MAX = 128;
+export function cloudSteps(q, profile) {
+  const n = Math.round(48 + 48 * clamp(q, 0, 1));
+  // a phone profile (gpu/budget.js gives it a cloudK) marches fewer steps
+  const cap = profile && profile.cloudK ? (profile.cloudK < 0.3 ? 40 : 56) : CLOUD_STEPS_MAX;
+  return Math.min(n, cap, CLOUD_STEPS_MAX);
+}
+
 const DRAW_SKIP = [6, 7, 9, 16];
 function makeLayouts(device, gpu) {
   const tex = (b, extra = {}) => ({ binding: b, visibility: ALL, texture: { sampleType: 'float', ...extra } });
@@ -419,8 +435,7 @@ export async function createSky(gpu) {
     const ph = precipPhases(st, wv, rdt, 32, 26);
     put(SKYU.anim2, ph.rainOff[0], ph.rainOff[1], ph.snowOff[0], ph.snowOff[1]);
     put(SKYU.anim3, ph.rainA, ph.rainB, ph.snowA, ph.snowB);
-    const steps = Math.round(40 + 56 * clamp(st.q ?? q, 0, 1));
-    put(SKYU.cloud2, wx.cover > 0.85 ? 0.8 : 1.0, 1.0, cl.anvil, steps);
+    put(SKYU.cloud2, coverFloor(wx), 1.0, cl.anvil, cloudSteps(st.q ?? q, gpu.profile));
     // the bolt: at the stroke's cell (x, z) or a bearing and a distance
     const flash = g[GLOBALS.weather + 3];
     const b = s.bolt;

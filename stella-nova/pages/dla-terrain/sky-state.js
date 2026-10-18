@@ -688,6 +688,9 @@ export function createSky(opts = {}) {
       // model values there (cloud, rain, snow, storms, fog, wind)
       const wx = br ? airMassAt(br.a, drv.gT, cam[0], cam[2]) : presetVec(id);
       let storm = 0, windVec = null, valleyFog = 0, light = null;
+      // the cover of the air mass (the preset folded with the fronts): the
+      // clouds take a floor of scattered cloud from it (render/sky.js)
+      wx.coverAir = wx.cover;
       if (have) {
         wx.cover = L[0];
         wx.cumulus = L[1];
