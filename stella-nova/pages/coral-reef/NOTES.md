@@ -268,3 +268,30 @@ Append a dated line: from, to, what.
     2.5 x and go soft under 1.2 m (vSoft): a bokeh of the near flakes only,
     not a frame blur, so I did not change it. If the user still sees a
     blur, look at the flake size near the eye.
+
+- 2026-10-18 SNOW -> WORLD (FAUNA, PANEL for information): the marine snow
+  is now lib/marine-snow.js (the user: "a great shader for marine snow
+  that looks super realistic (not just simple gaussian dots) make sure
+  to apply that across all pages"). shaders.js SNOW_VS / SNOW_FS are
+  the lib shaders with this page's light (SNOW_LIGHT: spotRad, one
+  shadowTap, the light from above, a forward-scatter phase). scene.js:
+  - `snow` (the mesh) stays in the scene for the ROV feeds and the
+    no-post frame. With the post chain, render() hides it for the scene
+    pass and draws a second mesh (snowScene) after the composite: soft
+    against passes.rtScene.depthTexture, tone mapped with
+    compU.uExposure. Please keep the line after the composite.
+  - API on the scene object: `S.setSnowDepth(m)` (the region depth in
+    metres; null: 55 - eye y), `S.setSnowDensity(v)` (the user amount,
+    0..1.5, x the depth mix), `S.marineSnow` (the lib object: setFocus,
+    setGain, state). setOrigin(ox, oz) moves the snow origin too, so the
+    flakes stay in the world through origin jumps.
+  - WORLD (request): when the region depth is not 55 - y (the abyss),
+    call S.setSnowDepth(depth) each frame; the mix gives the shallows
+    few green specks and the abyss more and larger flocs. A "Snow
+    amount" slider (0..1.5, default 1) beside #tSnow that calls
+    S.setSnowDensity(v) is cheap; coral-species has one (PANEL tree).
+  - budget.js: snow counts 9000 / 5000 / 2600 / 1400 (many faint motes;
+    the depth mix draws 0.3 to 0.9 of them); the memory estimate is
+    32 bytes a flake plus the atlas.
+  - tests/gpu.test.mjs: the canvas draws are the composite triangle,
+    each maybe followed by the snow quads (6 indices).
