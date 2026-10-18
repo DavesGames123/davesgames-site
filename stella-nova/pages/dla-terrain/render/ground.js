@@ -68,6 +68,12 @@
 //  The grid is min(n, 1024), 512 on Low and phones (4 MB). setSurface(on)
 //  and surfaceReady() are for tests and debug views 7 to 9.
 //
+//  AO  render/ao.js (screen-space ambient occlusion at half size) runs
+//  from this module's volumetricPrep and drawVolumetric hooks, so it
+//  darkens the contacts of every opaque surface (the foot of a trunk, a
+//  rock in the grass) before SKY's haze. A failed AO create leaves the
+//  ground as it was (no hooks).
+//
 //  grep -n targets: "export function lodConfig", "export function buildMinMax",
 //  "export function fitLapse", "export function farRingParams",
 //  "export function farRingMesh", "function buildRing",
@@ -81,6 +87,7 @@
 // ============================================================================
 
 import { simulateSurface, surfRes, SURF_LAYERS } from './surface-sim.js';
+import { createAO } from './ao.js';
 
 const INST_FLOATS = 8;          // a: x0, z0, size, N; b: morph start, morph end, level, 0
 const MAX_INST = 6144;
@@ -945,6 +952,8 @@ export async function createGround(gpu) {
     return ok;
   }
   let texturesReady = loadAssetTextures().catch((e) => { console.warn('ground: textures', e.message); return 0; });
+  let ao = null;
+  try { ao = await createAO(gpu); } catch (e) { console.warn('ground: ao', e.message); ao = null; }
 
   return {
     name: 'ground',
@@ -953,6 +962,11 @@ export async function createGround(gpu) {
     update,
     drawOpaque,
     drawShadow,
+    // render/ao.js after the water pass, applied before SKY's haze
+    volumetricPrep: ao ? (enc, frame, ctx) => { if (terrain) ao.prep(enc, frame, ctx); } : undefined,
+    drawVolumetric: ao ? (pass, frame, ctx) => ao.draw(pass, frame, ctx) : undefined,
+    aoStats: () => (ao ? ao.stats() : null),
+    setAO(on) { if (ao) ao.setEnabled(on); },
     get texturesReady() { return texturesReady; },
     // load the ground sets again (after gpu.groundImageLoader is set)
     reloadTextures() { texturesReady = loadAssetTextures().catch((e) => { console.warn('ground: textures', e.message); return 0; }); return texturesReady; },
@@ -975,6 +989,7 @@ export async function createGround(gpu) {
       if (ring) { ring.vbuf.destroy(); ring.ibuf.destroy(); }
       for (const k of Object.keys(idxBufs)) idxBufs[k].buf.destroy();
       texAlb.destroy(); texNrm.destroy(); texOrm.destroy(); litTex.destroy(); surfTex.destroy();
+      if (ao) ao.dispose();
       surfJob++;
       if (surfWorker) { surfWorker.terminate(); surfWorker = null; }
     },

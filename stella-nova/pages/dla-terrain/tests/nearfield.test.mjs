@@ -7,7 +7,9 @@
 //              cascade 0, texel snap under camera moves and turns, a
 //              stable radius under small field of view changes, the bias
 //              and the packed CascadeInfo, the PCSS loop caps.
-//  grep -n targets: "── shadows"
+//    AO        render/ao.js aoPlan (off on phones, Low and governor 2+),
+//              shaders/ao.wgsl constant loops and its fixed cost.
+//  grep -n targets: "── shadows", "── ao"
 // ============================================================================
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -15,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { nearSplits, computeCascades, stableRadius, FIRST_SPLIT, ONE_CASCADE } from '../gpu/shadows.js';
 import { packCascades, CASCADE_FLOATS } from '../gpu/globals.js';
 import { project } from '../gpu/mat.js';
+import { aoPlan, AO_MAX_PX, AO_RADIUS } from '../render/ao.js';
 
 const DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fails = 0, passes = 0;
@@ -83,6 +86,23 @@ const norm = (a) => { const l = Math.hypot(...a); return a.map((v) => v / l); };
   check('PCSS early-out when no blocker', /if \(bN < 0\.5\) \{ return 1\.0; \}/.test(soft));
   const g = readFileSync(join(DIR, 'shaders/ground.wgsl'), 'utf8'), p = readFileSync(join(DIR, 'shaders/props.wgsl'), 'utf8');
   check('ground and plants use the soft shadow', /sunShadowSoft\(pW, nGeo/.test(g) && /sunShadowSoft\(wp, n, fc\)/.test(p));
+}
+
+// ── ao
+{
+  const desk = { id: 'desktop', taa: null };
+  check('AO on at High on a desktop', aoPlan({ quality: 0.75, govLevel: 0 }, desk).on);
+  check('AO off at Low (no TAA to resolve the noise)', !aoPlan({ quality: 0.25 }, desk).on);
+  check('AO off on a phone profile', !aoPlan({ quality: 1 }, { id: 'phone', taa: false }).on && !aoPlan({ quality: 1 }, { id: 'phone-min', taa: false }).on);
+  check('AO off at governor level 2 and up', !aoPlan({ quality: 1, govLevel: 2 }, desk).on && aoPlan({ quality: 1, govLevel: 1 }, desk).on);
+  const plan = aoPlan({ quality: 1 }, desk);
+  check('AO radius and screen reach are fixed (no zoom term)', plan.radius === AO_RADIUS && plan.maxPx === AO_MAX_PX && AO_MAX_PX <= 64);
+  const w = readFileSync(join(DIR, 'shaders/ao.wgsl'), 'utf8');
+  const dirs = +(w.match(/const AO_DIRS: i32 = (\d+);/) || [])[1], steps = +(w.match(/const AO_STEPS: i32 = (\d+);/) || [])[1];
+  check('AO loops have constant bounds', /k < AO_DIRS/.test(w) && /j < AO_STEPS/.test(w) && /side < 2/.test(w) && /i = -4; i <= 4/.test(w) && /k < 4; k\+\+/.test(w));
+  check('AO costs at most 24 depth loads a half-size pixel', dirs * 2 * steps + 5 <= 24, (dirs * 2 * steps + 5) + ' loads');
+  const gj = readFileSync(join(DIR, 'render/ground.js'), 'utf8');
+  check('ground runs the AO in the volumetric hooks', /volumetricPrep: ao \?/.test(gj) && /drawVolumetric: ao \?/.test(gj));
 }
 
 console.log(`nearfield: ${passes} passed, ${fails} failed`);
