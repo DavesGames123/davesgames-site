@@ -11,6 +11,7 @@ import { legendItems, LEGEND_NOTE, STYLE_INFO } from '../diagram/legend.js';
 import { boxesOverlap } from '../diagram/geom.js';
 import { parseStub, FIXTURES, fixtureSteps } from '../diagram/fixtures.js';
 import { createDiagram } from '../diagram/index.js';
+import { sceneBounds, fitViewBox, unionBounds, FIT } from '../diagram/fit.js';
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -185,7 +186,7 @@ const all = el => [el, ...el.children.flatMap(all)];
   d.show(expr, { animate: false });
   const svg = host.children[0];
   const n0 = all(svg).length;
-  check('createDiagram draws into an owned svg', svg.tagName === 'svg' && n0 > 10 && /^0 0 /.test(svg.attrs.viewBox));
+  check('createDiagram draws into an owned svg', svg.tagName === 'svg' && n0 > 10 && svg.attrs.viewBox.split(' ').map(Number).every(Number.isFinite));
   d.setStyle('birdtrack');
   check('birdtrack style draws arrows', d.scene() && all(svg).filter(e => e.tagName === 'path' && e.attrs.d && e.attrs.fill && e.attrs.fill !== 'none' && e.attrs.stroke === 'none').length >= 2);
   d.setStyle('network');
@@ -210,6 +211,53 @@ const all = el => [el, ...el.children.flatMap(all)];
   check('legend mounts as a Penrose diagram legend with no Feynman note', /Penrose diagram/.test(leg.innerHTML) && !/Feynman/.test(leg.innerHTML) && /<svg/.test(leg.innerHTML));
   d.dispose();
   check('dispose removes the svg', host.children.length === 0);
+}
+
+// ---------------------------------------------------------------- fit
+// The viewBox fits the drawn content: centred, padded, with the host
+// aspect, and at most FIT.maxScale px per layout unit.
+{
+  const hosts = [[300, 700], [900, 300], [600, 600], [360, 420], [1200, 900]];
+  let nb = 0, bad = [];
+  for (const fx of FIXTURES) for (const style of STYLES) {
+    const sc = layoutExpr(parseStub(fx.tex), { style, maxWidth: 900 });
+    const b = sceneBounds(sc);
+    if (!b) { bad.push(fx.id + ' no bounds'); continue; }
+    nb++;
+    // the content box sits inside the scene box, give or take the labels
+    if (b.x0 < -40 || b.y0 < -40 || b.x1 > sc.width + 40 || b.y1 > sc.height + 40) bad.push(`${fx.id}/${style} bounds outside the scene`);
+    for (const [w, h] of hosts) {
+      const [x, y, vw, vh] = fitViewBox(b, w, h);
+      const s = Math.min(w / vw, h / vh);
+      if (Math.abs(vw / vh - w / h) > 1e-6) bad.push(`${fx.id} ${w}x${h} aspect`);
+      if (x > b.x0 - FIT.pad + 1e-6 || y > b.y0 - FIT.pad + 1e-6 || x + vw < b.x1 + FIT.pad - 1e-6 || y + vh < b.y1 + FIT.pad - 1e-6) bad.push(`${fx.id} ${w}x${h} clips`);
+      if (Math.abs(x + vw / 2 - (b.x0 + b.x1) / 2) > 1e-6 || Math.abs(y + vh / 2 - (b.y0 + b.y1) / 2) > 1e-6) bad.push(`${fx.id} ${w}x${h} not centred`);
+      if (s > FIT.maxScale + 1e-9) bad.push(`${fx.id} ${w}x${h} scale ${s}`);
+      // it fills the host on one axis, unless the scale cap holds it
+      const fillW = (b.x1 - b.x0 + 2 * FIT.pad) * s / w, fillH = (b.y1 - b.y0 + 2 * FIT.pad) * s / h;
+      if (s < FIT.maxScale - 1e-9 && Math.max(fillW, fillH) < 0.999) bad.push(`${fx.id} ${w}x${h} does not fill`);
+    }
+  }
+  check(`fit: ${nb} fixture scenes fit, centre and fill 5 host shapes`, nb >= 40 && !bad.length);
+  if (bad.length) console.log('   ' + bad.slice(0, 8).join('\n   '));
+  check('fit: no host size gives the padded box', JSON.stringify(fitViewBox({ x0: 0, y0: 0, x1: 100, y1: 50 }, 0, 0)) === JSON.stringify([-FIT.pad, -FIT.pad, 100 + 2 * FIT.pad, 50 + 2 * FIT.pad]));
+  check('fit: unionBounds is null-safe', unionBounds(null, null) === null && unionBounds({ x0: 0, y0: 0, x1: 1, y1: 1 }, { x0: -1, y0: 2, x1: 3, y1: 4 }).x0 === -1);
+
+  // A live diagram in a tall host: the viewBox has the host aspect, and it
+  // holds still while a step plays.
+  const host = new El('div', doc);
+  host.clientWidth = 400; host.clientHeight = 900;
+  const d = createDiagram(host, { maxWidth: 900 });
+  d.show(parseStub(FIXTURES[0].tex), { animate: false });
+  const vb = d.viewBox();
+  check('fit: a tall host gets a tall viewBox', vb && Math.abs(vb[2] / vb[3] - 400 / 900) < 1e-6);
+  const st = steps.find(x => x.before && x.after);
+  const vbs = [0, 0.3, 0.7, 0.99].map(t => { d.play(st, t); return d.viewBox().map(v => v.toFixed(3)).join(' '); });
+  check('fit: the viewBox holds still during a step', new Set(vbs).size === 1);
+  host.clientWidth = 900; host.clientHeight = 300; d.resize();
+  const vb2 = d.viewBox();
+  check('fit: resize fits the new host aspect', Math.abs(vb2[2] / vb2[3] - 3) < 1e-6);
+  d.dispose();
 }
 
 // ---------------------------------------------------------------- legend

@@ -17,7 +17,10 @@
 //      pickIndex(sym | null)            highlight one index (legs + labels)
 //      dispose()
 //      -- extras --
-//      resize()                         re-wrap rows for a new host width
+//      resize()                         re-wrap rows for a new host width,
+//                                       and fit the viewBox to the host
+//      viewBox() / bounds()             the fitted viewBox [x, y, w, h] and
+//                                       the content box (fit.js)
 //      legend(el)                       write the legend panel for the style
 //      svgString()                      the current frame as an SVG document
 //      scene()                          the current scene (items, crossings)
@@ -43,6 +46,8 @@
 //                       expand, cancelled terms fade
 //      render.js ...... scene -> SVG primitives, SVG string, live DOM diff
 //      legend.js ...... legend panel per style and its note
+//      fit.js ......... content bounds and the viewBox fit (centred, padded,
+//                       host aspect, at most opts.maxScale px per unit)
 //      geom.js ........ curves, resampling, crossing count
 //      text.js ........ TeX names to Unicode, coefficients, einsum strings
 //      colors.js ...... stand-in index colours, theme inks
@@ -58,8 +63,10 @@ import { stepFrame, ease } from './transition.js';
 import { scenePrims, toSvgString, applyPrims } from './render.js';
 import { mountLegend, legendItems, LEGEND_NOTE, STYLE_INFO } from './legend.js';
 import { fallbackIndexColor } from './colors.js';
+import { sceneBounds, unionBounds, fitViewBox, viewBoxString } from './fit.js';
 
 export { layoutExpr, STYLES, stepFrame, toSvgString, scenePrims, legendItems, mountLegend, LEGEND_NOTE, STYLE_INFO };
+export { sceneBounds, unionBounds, fitViewBox } from './fit.js';
 
 let paletteColor = null;
 const paletteReady = import('../palette.js')
@@ -109,10 +116,27 @@ export function createDiagram(svgHost, opts = {}) {
     return per.get(k);
   }
 
-  function draw(scene) {
+  // The viewBox fits the drawn content (fit.js), centred, with the aspect
+  // of the host. box: the content box to fit; a step passes the union of
+  // its two scenes, so the zoom holds still during the step.
+  const boundsCache = new WeakMap();
+  function boundsOf(scene) {
+    if (!scene) return null;
+    if (!boundsCache.has(scene)) boundsCache.set(scene, sceneBounds(scene));
+    return boundsCache.get(scene);
+  }
+  let lastBox = null, lastVB = null;
+  function hostSize() {
+    const el = owned ? svgHost : svg;
+    return [el.clientWidth || svg.clientWidth || 0, el.clientHeight || svg.clientHeight || 0];
+  }
+  function draw(scene, box) {
     current = scene;
     applyPrims(svg, scenePrims(scene, { style, theme: opts.theme, pick }), cache);
-    svg.setAttribute('viewBox', `0 0 ${Math.max(1, scene.width).toFixed(1)} ${Math.max(1, scene.height).toFixed(1)}`);
+    lastBox = box || boundsOf(scene) || { x0: 0, y0: 0, x1: Math.max(1, scene.width), y1: Math.max(1, scene.height) };
+    const [w, h] = hostSize();
+    lastVB = fitViewBox(lastBox, w, h, { maxScale: opts.maxScale });
+    svg.setAttribute('viewBox', viewBoxString(lastVB));
   }
 
   function stop() { if (raf) { caf(raf); raf = 0; } }
@@ -121,9 +145,10 @@ export function createDiagram(svgHost, opts = {}) {
     stop();
     if (!current || !raff || animateMs <= 0) { draw(target); return; }
     const from = current, t0 = now();
+    const box = unionBounds(boundsOf(from), boundsOf(target));
     const tick = () => {
       const t = Math.min(1, (now() - t0) / animateMs);
-      draw(t >= 1 ? target : stepFrame(null, from, target, t));
+      draw(t >= 1 ? target : stepFrame(null, from, target, t), t >= 1 ? null : box);
       raf = t < 1 ? raff(tick) : 0;
     };
     raf = raff(tick);
@@ -143,7 +168,7 @@ export function createDiagram(svgHost, opts = {}) {
     lastPlay = { step, t: tt };
     expr = tt >= 1 ? step.after : step.before;
     const A = layout(step.before), B = layout(step.after);
-    draw(stepFrame(step, A, B, tt));
+    draw(stepFrame(step, A, B, tt), unionBounds(boundsOf(A), boundsOf(B)));
   }
 
   function redraw(animate) {
@@ -201,7 +226,13 @@ export function createDiagram(svgHost, opts = {}) {
   });
 
   function resize() {
-    if (Math.abs(maxWidth() - lastMaxW) > 1) redraw(false);
+    if (Math.abs(maxWidth() - lastMaxW) > 1) { redraw(false); return; }
+    // same row wrap: only the host aspect changed, so fit the viewBox again
+    if (current && lastBox) {
+      const [w, h] = hostSize();
+      lastVB = fitViewBox(lastBox, w, h, { maxScale: opts.maxScale });
+      svg.setAttribute('viewBox', viewBoxString(lastVB));
+    }
   }
 
   function dispose() {
@@ -221,6 +252,8 @@ export function createDiagram(svgHost, opts = {}) {
     legend: el => mountLegend(el, style, { indexColor: color, theme: opts.theme }),
     svgString: () => (current ? toSvgString(current, { style, theme: opts.theme, pick }) : ''),
     scene: () => current,
+    viewBox: () => (lastVB ? lastVB.slice() : null),
+    bounds: () => (lastBox ? { ...lastBox } : null),
     get style() { return style; },
     ease,
   };
