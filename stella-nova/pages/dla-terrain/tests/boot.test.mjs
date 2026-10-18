@@ -128,12 +128,12 @@ win.HTMLCanvasElement.prototype.getContext = function (type) {
   return mock();
 };
 // the fake worker: one DLA snapshot of a small tree, then nothing
-let genMsgs = 0;
+let genMsgs = 0, lastGenOpts = null;
 G.Worker = class {
   constructor() { this.onmessage = null; }
   postMessage(m) {
     if (!m || m.type !== 'generate') return;
-    genMsgs++;
+    genMsgs++; lastGenOpts = m.opts;
     const n = 32, height = new Float32Array(n * n).map((_, i) => (i % 7) * 3);
     setTimeout(() => this.onmessage && this.onmessage({ data: { type: 'progress', id: m.id, stage: 'dla', label: 'Growing DLA ridges, level 1 of 4', frac: 0.05, stageFrac: 0.2, snapshot: { n, height, worldSize: 16000, seaLevel: 0, dla: { pos: new Float32Array([0, 0, 100, 0]), parent: new Int32Array([-1, 0]), count: 2 } } } }), 5);
   }
@@ -200,6 +200,16 @@ if (app && app.fg) {
   ok(held.length > 0 || release, 'asset fetches are still held after the modules plugged in (no create waits on them)', String(held.length));
   ok(!ll.hidden, 'the load line stays while the assets are held', ll.textContent);
   release = true; held.splice(0).forEach(r => r());
+  // PHONE requests: the grid cap, TAA off and the quality note on a phone profile
+  const g = app.gpu, saved = { profile: g.profile, profileId: g.profileId };
+  g.profile = { ...(g.profile || {}), maxN: 512, taa: false, label: 'Phone' }; g.profileId = 'phone';
+  app.opts.n = 2048; app.generate();
+  ok(lastGenOpts && lastGenOpts.n === 512, 'a phone profile caps the grid n at gpu.profile.maxN', lastGenOpts && String(lastGenOpts.n));
+  app.setQuality(3);
+  const nt = win.document.getElementById('notice');
+  ok(nt && !nt.hidden && /Phone quality: Phone caps the sizes/.test(nt.textContent), 'High or Ultra on a phone shows the Phone quality note', nt && nt.textContent);
+  ok(app.post && app.post.settings.taa === false, 'TAA stays off on a phone profile', app.post && String(app.post.settings.taa));
+  g.profile = saved.profile; g.profileId = saved.profileId;
   await pump(5);
   ok(!errors.some(e => /^raf:/.test(e)), 'no frame threw', errors.filter(e => /^raf:/.test(e)).slice(0, 2).join(' | '));
 }

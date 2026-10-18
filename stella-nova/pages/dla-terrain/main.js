@@ -84,6 +84,7 @@
 //  "── BUILD", "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
+import { detectProfile, pageEnv, PROFILES } from './gpu/budget.js';
 import { createTerrainGPU } from './gpu/terrain-gpu.js';
 import { createShadowMaps, computeCascades } from './gpu/shadows.js';
 import { createFrameGraph } from './gpu/frame.js';
@@ -133,6 +134,17 @@ const app = {
   buildMode: Q.get('build') === '1' || (Q.get('build') !== '0' && loadFlag('dla-terrain-build')),
 };
 function loadFlag(k) { try { return localStorage.getItem(k) === '1'; } catch { return false; } }
+// the grid cap of the device profile (gpu/budget.js): 512 on a phone, 256
+// on a low-memory phone; before the device exists, the detected profile
+let profile0 = null;
+let firstTerrainDone = null;
+const firstTerrain = new Promise(r => { firstTerrainDone = r; });
+function maxN() {
+  if (gpu && gpu.profile && gpu.profile.maxN) return gpu.profile.maxN;
+  if (!profile0) { try { const id = Q.get('gpu') && PROFILES[Q.get('gpu')] ? Q.get('gpu') : detectProfile(pageEnv()); profile0 = PROFILES[id] || PROFILES.desktop; } catch { profile0 = PROFILES.desktop; } }
+  return profile0.maxN || 2048;
+}
+function capN(o) { const m = Math.min(maxN(), coarse ? 1024 : 4096); if (o && +o.n > m) o.n = m; return o; }
 function loadLocks() {
   try { const a = JSON.parse(localStorage.getItem('dla-terrain-locks') || '[]'); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
 }
@@ -197,7 +209,7 @@ app.applyPreset = id => {
   if (!p) return;
   app.preset = id;
   const seed = app.opts.seed;
-  app.opts = { ...app.lib.defaults(), ...p.opts, seed, ...(coarse ? { n: Math.min(p.opts.n || 1024, 1024) } : {}) };
+  app.opts = capN({ ...app.lib.defaults(), ...p.opts, seed });
   ui.syncOptions();
   app.generate();
   writeHash(true);
@@ -254,7 +266,11 @@ app.setWeather = (id, reset) => {
 };
 app.setWxOver = (k, v) => { app.wxOver[k] = v; };
 app.clearWxOver = () => { app.wxOver = {}; };
-app.setQuality = i => { app.qualityIndex = i; applyQuality(); ui.syncView(); };
+app.setQuality = i => { app.qualityIndex = i; applyQuality(); ui.syncView(); phoneQualityNote(); };
+// a phone profile caps the sizes: say so when High or Ultra is picked
+function phoneQualityNote() {
+  if (gpu && gpu.profileId && gpu.profileId !== 'desktop' && app.qualityIndex >= 2) ui.notice(`Phone quality: ${gpu.profile.label} caps the sizes on this device`);
+}
 app.setLayer = (k, on) => { app.layers[k] = on; ui.syncView(); };
 app.setLook = (k, v) => {
   app.look[k] = v;
@@ -301,7 +317,7 @@ function applyQuality() {
   gpu.qualityIndex = app.qualityIndex; gpu.qualityPreset = qp; gpu.quality = qp.q;
   gpu.shadowSize = Math.min(qp.shadow, gpu.device.limits.maxTextureDimension2D); gpu.shadowCascades = qp.cascades;
   sh.resize(gpu.shadowSize, gpu.shadowCascades);
-  post.settings.taa = qp.taa; post.resetHistory();
+  post.settings.taa = qp.taa && gpu.profile?.taa !== false; post.resetHistory();
   fg.maxScale = qp.scale; fg.setScale(qp.scale);
   for (const m of fg.modules) if (m.setQuality) try { m.setQuality(qp.q); } catch (e) { console.warn(e); }
   resize();   // the pixel ratio cap follows the quality
@@ -325,7 +341,7 @@ function initialOptions() {
   const fromHash = decodeHash(location.hash, lib);
   if (fromHash) {
     applyWorld({ ...worldNow(), ...fromHash }, { push: false, generate: false, hash: location.hash });
-    if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+    capN(app.opts);
     app.opening = !fromHash.cam;
     return;
   }
@@ -337,7 +353,7 @@ function initialOptions() {
     if (first) { app.preset = first; Object.assign(app.opts, lib.PRESETS[first].opts); }
   }
   if (Q.get('seed')) app.opts.seed = Math.max(1, Math.round(+Q.get('seed')) || 1);
-  if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+  capN(app.opts);
   // a phone opens on a 512 grid at Low quality, so the first view comes fast
   if (coarse && !Q.has('q') && app.opts.n > 512) app.opts.n = 512;
 }
@@ -389,7 +405,8 @@ async function bootGPU() {
   sh = createShadowMaps(gpu);
   gpu.shadows = sh;
   post = await createPost(gpu);
-  post.settings.taa = QUALITY[app.qualityIndex].taa;
+  app.post = post;   // for the console and the tests
+  post.settings.taa = QUALITY[app.qualityIndex].taa && gpu.profile?.taa !== false;
   post.settings.ev = app.look.ev; post.settings.bloom = app.look.bloom;
   fg = createFrameGraph(gpu, { terrain: tg, post, shadows: sh });
   app.fg = fg;
@@ -422,6 +439,14 @@ async function loadModules() {
     try {
       const gate = window.__dlaTerrainGate;
       if (typeof gate === 'function') await gate(d.role);
+      // a phone: the plants start after the first finished terrain plus
+      // the profile delay, so nothing heavy loads before the first frames
+      const delay = g.profile && g.profile.startDelayMs;
+      if (d.role === 'vegetation' && delay > 0) {
+        await firstTerrain;
+        await new Promise(r => setTimeout(r, delay));
+        if (gpu !== g) return;
+      }
       const m = await import(d.url);
       const f = m[d.fn] || Object.values(m).find(v => typeof v === 'function' && /^create/.test(v.name));
       if (!f) throw new Error('no ' + d.fn);
@@ -528,7 +553,7 @@ function setTerrainAll(view) {
 // ── GENERATE ────────────────────────────────────────────────────────────
 app.generate = () => {
   const id = ++genId;
-  const o = { ...app.opts };
+  const o = capN({ ...app.opts });
   const ws = o.worldSize || (o.worldKm ? o.worldKm * 1000 : 16000);
   const n = +(o.n || o.size || 1024);
   const firstOrNewSize = !app.gen || Math.abs((app.gen.ws || 0) - ws) > 1;
@@ -578,6 +603,7 @@ function onWorker(m) {
     const t = m.terrain;
     app.terrain = t;
     player.finish(t);
+    firstTerrainDone();
     app.gen.running = false;
     app.drones = { ridge: 0, river: 0 };
     if (player.active) {
@@ -749,7 +775,7 @@ function statusLine(st) {
   const stage = app.gen && app.gen.running ? ' · ' + (app.gen.label || app.gen.stage || '') : '';
   ui.status(
     `${fps.toFixed(0)} fps · ${fg.w}×${fg.h} · ${(t.worldSize / 1000).toFixed(0)} km · ${t.n}² · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m${stage}`,
-    `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
+    `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${fg.level ? ' · level ' + fg.level : ''}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
     `${fps.toFixed(0)} fps · ${(t.worldSize / 1000).toFixed(0)} km · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m · ${app.camMode}`,
   );
   if (frameNo % 30 === 0) ui.syncSky(wxFromGlobals(G));
@@ -831,7 +857,7 @@ function startShot(i) {
     const ids = Object.keys(app.lib.PRESETS);
     const pid = ids[Math.floor(shot.preset * ids.length) % ids.length];
     app.preset = pid;
-    app.opts = { ...app.lib.defaults(), ...app.lib.PRESETS[pid].opts, seed: shot.seed, n: coarse ? 512 : 1024 };
+    app.opts = { ...app.lib.defaults(), ...app.lib.PRESETS[pid].opts, seed: shot.seed, n: Math.min(maxN(), coarse ? 512 : 1024) };
     app.generate();
     player.start({ saver: true, speed: shot.speed, yaw0: shot.yaw0 });
     r0.yawRate = 0; r0.buildEnd = 0;
@@ -845,7 +871,7 @@ function startShot(i) {
     const ids = Object.keys(app.lib.PRESETS);
     const pid = ids[Math.floor(r() * ids.length)];
     app.preset = pid;
-    app.opts = { ...app.lib.defaults(), ...app.lib.PRESETS[pid].opts, seed: shot.seed, n: coarse ? 512 : 1024 };
+    app.opts = { ...app.lib.defaults(), ...app.lib.PRESETS[pid].opts, seed: shot.seed, n: Math.min(maxN(), coarse ? 512 : 1024) };
     app.generate();
   }
   const fr = framing(innerWidth, innerHeight, null);
@@ -1005,7 +1031,7 @@ function applyCam(c) {
 function applyWorld(w, o = {}) {
   const regen = o.generate !== false && JSON.stringify(w.opts) !== app.genOpts;
   app.opts = { ...w.opts }; app.preset = w.preset ?? null;
-  if (coarse && app.opts.n > 1024) app.opts.n = 1024;
+  capN(app.opts);
   app.tod = w.tod; app.playing = w.playing !== false; app.season = w.season;
   app.veg = { ...VEG0, ...(w.veg || {}) }; app.water = { ...WATER0, ...(w.water || {}) };
   app.wxOver = {};
@@ -1045,12 +1071,20 @@ async function onLost(info) {
   console.warn('dla-terrain: device lost', info.message);
   if (++losses > 3) { ui.notice('The GPU stopped too often; reload the page'); return; }
   gpu = null;
+  // the modules of the lost device go (their buffers are dead)
+  const old = fg ? fg.modules.slice() : [];
+  for (const m of old) if (m.dispose) try { m.dispose(); } catch { /* lost device */ }
+  if (fg) fg.modules = [];
   try {
     await bootGPU();
     if (app.terrain) setTerrainAll(tg.finish(app.terrain));
     loadModules();
     ui.toast('The GPU restarted');
-  } catch (e) { console.warn(e); }
+  } catch (e) {
+    // gpu/device.js restarts one time, one profile lower; then it throws
+    console.warn(e);
+    ui.notice('The GPU stopped two times; reload the page');
+  }
 }
 
 // ── start ──
@@ -1081,6 +1115,7 @@ async function main() {
   try {
     await bootGPU();
     gpuOk = true;
+    if (Q.has('q')) phoneQualityNote();
   } catch (e) {
     console.warn('dla-terrain: no WebGPU', e);
     $('nogpu').hidden = false;
