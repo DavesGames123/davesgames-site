@@ -187,7 +187,9 @@ export async function createWeather(gpu, shared) {
   const boltBuffer = device.createBuffer({ label: 'bolt segs', size: MAX_BOLT_SEGS * 32, usage: BU.STORAGE | BU.COPY_DST });
 
   let q = gpu.quality ?? 1;
-  let grid = gridFor(q);
+  // a phone profile (gpu/budget.js) caps the grid: 64 x 36 x 32 on a phone
+  const capGrid = (g) => (gpu.profile && gpu.profile.froxel ? g.map((v, i) => Math.min(v, gpu.profile.froxel[i])) : g);
+  let grid = capGrid(gridFor(q));
   let vt = null, stamp = 0;
   function makeVolumes() {
     if (vt) for (const t of vt.all) t.destroy();
@@ -245,7 +247,7 @@ export async function createWeather(gpu, shared) {
   return {
     get grid() { return grid; },
     setTerrain(t) { bolts.terrain = t; },
-    setQuality(qq) { q = qq; const g2 = gridFor(q); if (g2.join() !== grid.join()) { grid = g2; makeVolumes(); } },
+    setQuality(qq) { q = qq; const g2 = capGrid(gridFor(q)); if (g2.join() !== grid.join()) { grid = g2; makeVolumes(); } },
     resize(w, h, qq) { if (qq !== undefined) this.setQuality(qq); },
 
     counts(wx, qq, frame) {
