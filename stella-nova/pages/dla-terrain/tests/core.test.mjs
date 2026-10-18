@@ -16,7 +16,7 @@ import { GLOBALS, GLOBALS_FLOATS, packGlobals, CASCADE_FLOATS, SHADOWPASS_FLOATS
 import { perspectiveRZ, orthoRZ, lookAt, mul, invert, project, xform } from '../gpu/mat.js';
 import { cascadeSplits, computeCascades, lightBasis } from '../gpu/shadows.js';
 import { sampleHeight, packAux, biomeRows } from '../gpu/terrain-gpu.js';
-import { scaleStep } from '../gpu/frame.js';
+import { createGovernor, governorStep } from '../gpu/governor.js';
 import { createCamera, dronePath, bandShift, CLEAR } from '../camera.js';
 import { buildShotPlan, framing, subjectScreenY, shotLabel, extractFn, SHOT_CODE, SHOT_KINDS, shotTod } from '../saver.js';
 import { groupOptions, GROUP_ORDER, mapPixels, todRate, fmtValue, STAGES } from '../ui.js';
@@ -262,12 +262,12 @@ if (existsSync(here('sky-state.js'))) {
   const j = Array.from({ length: 8 }, (_, i) => jitterAt(i));
   ok(j.every(([x, y]) => Math.abs(x) <= 0.5 && Math.abs(y) <= 0.5) && new Set(j.map(v => v.join())).size === 8, 'TAA jitter: 8 distinct offsets in the pixel');
   ok(near(halton(1, 2), 0.5) && near(halton(2, 3), 2 / 3), 'Halton sequence');
-  const s = { scale: 1, over: 0, under: 0 };
+  const s = createGovernor(1, 0), cfg = { budget: 1000 / 60, maxScale: 1, floor: 0.75 };
   let ch = false;
-  for (let i = 0; i < 80; i++) ch = scaleStep(s, 30, 1000 / 60, 1) || ch;
-  ok(ch && s.scale < 1, 'dynamic resolution drops when frames are slow');
+  for (let i = 0; i < 80; i++) ch = !!governorStep(s, { ms: 30 }, cfg) || ch;
+  ok(ch && s.scale < 1 && s.scale >= 0.75, 'dynamic resolution drops when frames are slow (not under the 0.75 floor)', String(s.scale));
   const before = s.scale;
-  for (let i = 0; i < 1200; i++) scaleStep(s, 6, 1000 / 60, 1);
+  for (let i = 0; i < 1200; i++) governorStep(s, { ms: 6 }, cfg);
   ok(s.scale > before && s.scale <= 1, 'dynamic resolution climbs back when frames are fast');
 }
 

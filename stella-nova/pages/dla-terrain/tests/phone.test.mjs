@@ -16,8 +16,9 @@
 //                  out-of-memory error steps the profile and calls onPressure
 //   gpu/shadows.js the shadow map has one layer per cascade, capped by the
 //                  profile
-//   gpu/frame.js   featureStep: 2 s of slow frames at the scale floor take
-//                  the level up, 8 s of fast frames take it down
+//   gpu/governor.js governorStep: 2 s of slow frames at the scale floor
+//                  (0.5 on a phone) take the level up, fast frames take it
+//                  down step by step
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -120,7 +121,7 @@ Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
 globalThis.innerWidth = 1440; globalThis.innerHeight = 900;
 const { createGPU, recovery, phoneLimits, NEED } = await import('../gpu/device.js');
 const { createShadowMaps } = await import('../gpu/shadows.js');
-const { featureStep, scaleStep } = await import('../gpu/frame.js');
+const { createGovernor, governorStep } = await import('../gpu/governor.js');
 const tick = () => new Promise(r => setTimeout(r, 0));
 {
   const g = await createGPU(null, { qualityIndex: 0, coarse: true });
@@ -172,18 +173,19 @@ const tick = () => new Promise(r => setTimeout(r, 0));
 
 // ── governor
 {
-  const st = { level: 0, slow: 0, fast: 0 };
-  let ups = 0;
-  for (let i = 0; i < 70; i++) ups += Math.max(0, featureStep(st, 50, 33.3, true));   // 3.5 s at 20 fps
-  ok(st.level === 1 && ups === 1, '3.5 s of 50 ms frames at the scale floor: level 1', JSON.stringify(st));
-  const st2 = { level: 0, slow: 0, fast: 0 };
-  for (let i = 0; i < 200; i++) featureStep(st2, 50, 33.3, false);
-  ok(st2.level === 0, 'slow frames above the scale floor do not change the level');
-  for (let i = 0; i < 600; i++) featureStep(st, 15, 33.3, false);   // 9 s at 66 fps
-  ok(st.level === 0, '9 s of fast frames: level back to 0', JSON.stringify(st));
-  const ss = { scale: 0.6, over: 0, under: 0 };
-  for (let i = 0; i < 100; i++) scaleStep(ss, 50, 33.3, 0.6);
-  ok(ss.scale === 0.5, 'scaleStep stops at 0.5', String(ss.scale));
+  const cfg = { budget: 33.3, maxScale: 0.6, floor: 0.5 };
+  const st = createGovernor(0.5, 0);
+  let downs = 0;
+  for (let i = 0; i < 70; i++) { const r = governorStep(st, { ms: 50 }, cfg); if (r && r.what === 'level') downs++; }   // 3.5 s at 20 fps
+  ok(st.level === 1 && downs === 1, '3.5 s of 50 ms frames at the scale floor: level 1', `level ${st.level}`);
+  const st2 = createGovernor(0.6, 0);
+  for (let i = 0; i < 20; i++) governorStep(st2, { ms: 50 }, cfg);   // 1 s: a scale step only
+  ok(st2.level === 0 && st2.scale === 0.5, 'slow frames above the scale floor lower the scale, not the level', `scale ${st2.scale} level ${st2.level}`);
+  for (let i = 0; i < 600; i++) governorStep(st, { ms: 15 }, cfg);   // 9 s at 66 fps
+  ok(st.level === 0, '9 s of fast frames: level back to 0', `level ${st.level}`);
+  const ss = createGovernor(0.6, 0);
+  for (let i = 0; i < 100; i++) governorStep(ss, { ms: 50 }, cfg);
+  ok(ss.scale === 0.5, 'the slow-frame path stops the scale at the phone floor 0.5', String(ss.scale));
 }
 
 // ── Deno: no leak across 10 regenerations (opt-in)

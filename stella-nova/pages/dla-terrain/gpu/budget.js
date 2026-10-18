@@ -36,8 +36,12 @@
 //              shadow cascades, budgetMB 1300, 1 frame in flight, HEAVY
 //              at 50 ms, and an idle gap after each heavy frame (dutyIdle).
 //    safe      the start after a crash (the guard below): pxCap 2 Mpx,
-//              nearPxCap 1 Mpx, 1024 x 2 cascades, govMin 1 (no POM, no
-//              vertex relief), screen shafts, smaller impostors.
+//              nearPxCap 1 Mpx, 1024 x 2 cascades, govForce pom and
+//              cascade1 (no POM, no vertex relief, 1 cascade at every
+//              governor level), screen shafts, smaller impostors.
+//  scaleFloor  the soft floor of the render scale (gpu/governor.js): the
+//              slow-frame path does not go under it, only heavy frames do.
+//              0.75 on desktop, safari and safe, 0.5 on phones.
 //  pixelCap(profile, view) -> { outW, outH, w, h, near } the swap chain size
 //              and the render size (the caps of the profile, the quality
 //              pixel ratio, the 8.3 Mpx desktop cap)
@@ -77,7 +81,7 @@ const Q = [
 
 export const PROFILES = {
   desktop: {
-    id: 'desktop', label: 'Desktop', budgetMB: 1200, raiseLimits: true, budgetMs: 1000 / 58,
+    id: 'desktop', label: 'Desktop', budgetMB: 1200, raiseLimits: true, budgetMs: 1000 / 58, scaleFloor: 0.75,
     dprCap: null, maxN: 2048, shadowSize: null, cascades: null, taa: null,
     froxel: null, cloudK: null, cloudNoise: null, groundRes: null, groundLayers: null,
     veg: null, startDelayMs: 0,
@@ -85,7 +89,7 @@ export const PROFILES = {
     shafts: 'volume',
   },
   phone: {
-    id: 'phone', label: 'Phone', budgetMB: 280, raiseLimits: false, budgetMs: 1000 / 30,
+    id: 'phone', label: 'Phone', budgetMB: 280, raiseLimits: false, budgetMs: 1000 / 30, scaleFloor: 0.5,
     dprCap: 1.5, maxN: 512, shadowSize: 1024, cascades: 2, taa: false,
     froxel: [64, 36, 32], cloudK: 0.34, cloudNoise: { base: 64, detail: 32, n2d: 256, shadow: 256 },
     groundRes: 256, groundLayers: 8,
@@ -107,17 +111,17 @@ export const PROFILES = {
     dprCap: 2, pxCap: 3.5e6, nearPxCap: 1.6e6, maxN: 2048, shadowSize: 2048, cascades: 3, taa: null,
     froxel: null, cloudK: null, cloudNoise: null, groundRes: null, groundLayers: null,
     veg: null, startDelayMs: 0, shafts: 'volume',
-    maxInFlight: 1, heavyMs: 50, dutyIdle: 0.5, govMin: 0, memGuard: true,
+    maxInFlight: 1, heavyMs: 50, dutyIdle: 0.5, govMin: 0, memGuard: true, scaleFloor: 0.75,
   },
   safe: {
     id: 'safe', label: 'Safe (after a crash)', budgetMB: 700, raiseLimits: true, budgetMs: 1000 / 40,
     dprCap: 1.5, pxCap: 2.0e6, nearPxCap: 1.0e6, maxN: 1024, shadowSize: 1024, cascades: 2, taa: null,
     froxel: [96, 54, 32], cloudK: 0.34, cloudNoise: null, groundRes: null, groundLayers: null,
     veg: { impFrame: 128 }, startDelayMs: 1500, shafts: 'screen',
-    maxInFlight: 1, heavyMs: 40, dutyIdle: 1, govMin: 1, memGuard: true,
+    maxInFlight: 1, heavyMs: 40, dutyIdle: 1, govMin: 0, govForce: ['pom', 'cascade1'], memGuard: true, scaleFloor: 0.75,
   },
   'phone-min': {
-    id: 'phone-min', label: 'Phone (low memory)', budgetMB: 180, raiseLimits: false, budgetMs: 1000 / 30,
+    id: 'phone-min', label: 'Phone (low memory)', budgetMB: 180, raiseLimits: false, budgetMs: 1000 / 30, scaleFloor: 0.5,
     dprCap: 1, maxN: 256, shadowSize: 1024, cascades: 1, taa: false,
     froxel: [48, 27, 24], cloudK: 0.25, cloudNoise: { base: 48, detail: 24, n2d: 256, shadow: 256 },
     groundRes: 256, groundLayers: 6,

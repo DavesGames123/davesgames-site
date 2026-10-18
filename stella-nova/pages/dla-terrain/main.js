@@ -92,7 +92,7 @@
 //  skips the module updates and the queue writes too; their dt adds up.
 //
 //  grep -n targets: "── APP", "── BOOT", "── GUARD", "── MODULES", "── GENERATE",
-//  "── BUILD", "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
+//  "── BUILD", "── LOOP", "── LOADING", "function plugModule", "function govStatus", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
 import { detectProfile, pageEnv, PROFILES, guardRead, guardMark, guardClean, guardProfile } from './gpu/budget.js';
@@ -360,6 +360,8 @@ function applyQuality() {
   gpu.shadowSize = Math.min(qp.shadow, gpu.device.limits.maxTextureDimension2D); gpu.shadowCascades = qp.cascades;
   sh.resize(gpu.shadowSize, gpu.shadowCascades);
   post.settings.taa = qp.taa && gpu.profile?.taa !== false; post.resetHistory();
+  // the governor takes the new shadow size, cascades and TAA as its base
+  fg.rebase();
   fg.maxScale = qp.scale; fg.setScale(qp.scale);
   for (const m of fg.modules) if (m.setQuality) try { m.setQuality(qp.q); } catch (e) { console.warn(e); }
   resize();   // the pixel ratio cap follows the quality
@@ -702,6 +704,7 @@ function frameGlobals(m, st, dt) {
     sky: app.skyLib ? {} : st, exposure: post ? post.exposure : 1,
     terrain: t ? { worldSize: t.worldSize, heightScale: t.heightScale, seaLevel: t.seaLevel, n: t.n, minH: t.minH, maxH: t.maxH } : {},
     width: fg.w, height: fg.h, frame: frameNo, dt, quality: gpu.quality, coarse,
+    taa: !(post && post.settings.taa === false),
   });
   if (app.skyLib) app.skyLib.writeSkyGlobals(G, st);
   applyWxOver(G, app.wxOver);
@@ -797,11 +800,14 @@ function loop(now) {
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
-    // SKY's light shafts (render/weather.js shaftPlan) and the governor level
-    shafts: { mode: app.look.shafts, k: app.look.shaftK }, govLevel: fg.level,
+    // SKY's light shafts (render/weather.js shaftPlan); fg.prepare below
+    // puts the governor plan on top (govLevel, ao, shafts, layers, taa, gov)
+    shafts: { mode: app.look.shafts, k: app.look.shaftK },
     // the vegetation scatter time per frame (ms): less on Low and phones
     budgetMs: coarse || app.qualityIndex === 0 ? 1.5 : app.qualityIndex === 1 ? 2.2 : 3,
   };
+  // GOVERNOR: the plan of the level, before the module updates read it
+  fg.prepare(frame);
   for (const md of fg.active()) if (md.update) {
     try { md.update(frame); } catch (e) { console.warn(`dla-terrain: ${md.role} update failed`, e); md.failed = true; ui.notice(`${md.label || md.role}: update failed`); }
   }
@@ -834,12 +840,18 @@ function viewShift(dt) {
   return [occ.sx, occ.sy];
 }
 
+// GOVERNOR STATUS: what the governor has lowered, in words (gpu/governor.js
+// describe), not only the level number
+function govStatus() {
+  const s = fg.govText ? fg.govText() : (fg.level ? 'level ' + fg.level : '');
+  return s ? ' · ' + s : '';
+}
 function statusLine(st) {
   const t = tg;
   const stage = app.gen && app.gen.running ? ' · ' + (app.gen.label || app.gen.stage || '') : '';
   ui.status(
     `${fps.toFixed(0)} fps · ${fg.w}×${fg.h} · ${(t.worldSize / 1000).toFixed(0)} km · ${t.n}² · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m${stage}`,
-    `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${fg.level ? ' · level ' + fg.level : ''}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
+    `${ui.todText(app.tod)} · ${(st && (st.label || st.weather)) || app.weatherId} · ${app.camMode}${govStatus()}${app.libKind === 'stub' ? ' · stub terrain' : ''}`,
     `${fps.toFixed(0)} fps · ${(t.worldSize / 1000).toFixed(0)} km · peak ${Math.round(t.maxH - Math.max(0, t.seaLevel))} m · ${app.camMode}`,
   );
   if (frameNo % 30 === 0) ui.syncSky(wxFromGlobals(G));

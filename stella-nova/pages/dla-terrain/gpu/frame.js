@@ -28,18 +28,25 @@
 //                 ctx.sceneDepthView = the copy before water. Group 2 too.
 //    7 post       render/post.js: TAA, exposure, bloom, AgX, to the swap chain
 //
-//  DYNAMIC RESOLUTION: fg.scale starts at the quality scale. fg.tick(ms)
-//  takes the frame time; over budget for 1 s lowers the scale by 0.1, under
-//  70% of budget for 3 s raises it by 0.05 (never over the preset).
-//
-//  GOVERNOR (phones, gpu/budget.js): fg.budgetMs is the profile budget (a
-//  phone: 33 ms). When the scale is at its floor and the frames stay slow
-//  for 2 s, featureStep takes fg.level one step up: 1 one shadow cascade,
-//  2 TAA off, 3 no shadow casters, 4 no grass, 5 no clouds. Fast frames for
-//  8 s take it one step down. fg.render skips the frame while
-//  document.visibilityState is "hidden"; fg.tick drops a frame time over 250 ms (a stall
-//  or a return from a hidden tab). An out-of-memory error (gpu.onPressure)
-//  lowers the pixel ratio and the scale and sets the level to 2 or more.
+//  GOVERNOR (gpu/governor.js has the ladder, the rules and the numbers).
+//  One state (fg.gov, also fg.dyn) holds the render scale and the level.
+//  fg.tick(ms) gives it the frame time and fg.gpuMs. Slow frames lower the
+//  scale to the soft floor (profile scaleFloor: 0.75 desktop and Safari,
+//  0.5 phones), then take ladder rungs (1 screen shafts, 2 no POM, 3 no
+//  AO, 4 no grass, 5 half shadow maps, 6 2 cascades, 7 1 cascade). GPU
+//  headroom (or calm frames) steps back up in the reverse order, with a
+//  probe and a backoff. Level 8 (emergency: no shadow casters, clouds,
+//  shafts or TAA) comes only from heavy frames. fg.prepare(frame) puts the
+//  plan on the frame object before the module updates (main.js):
+//  frame.govLevel (the old level numbers the modules read: 1 = no POM,
+//  5 = emergency), frame.ao, frame.shafts.mode, frame.layers.grass and
+//  .clouds, frame.taa, frame.gov = { level, keys, cloudK, text }.
+//  fg.govText() is the status line text. fg.rebase() after a quality
+//  change takes the new shadow size, cascades and TAA as the base.
+//  fg.render skips the frame while document.visibilityState is "hidden";
+//  fg.tick drops a frame time over 250 ms (a stall or a return from a
+//  hidden tab). An out-of-memory error (gpu.onPressure) lowers the pixel
+//  ratio and the scale and keeps the level at RELIEF_LEVEL or more.
 //
 //  HANG GUARD (2026-10-17: a full zoom on the ground took the whole computer
 //  down). The GPU queue holds at most MAX_IN_FLIGHT frames: fg.render skips
@@ -50,8 +57,9 @@
 //  (floor HEAVY_FLOOR), and at the floor the governor level goes up one
 //  step. The scale step and the governor also take fg.gpuMs, so a frame
 //  over 250 ms (which tick drops as a stall of the page) still counts
-//  when the GPU itself was slow. Level 1 and up also turns off the close-up
-//  rock effects of GROUND (POM and vertex relief, frame.govLevel).
+//  when the GPU itself was slow. A heavy frame also stops the step up of
+//  the governor at once (governorHeavy: a pause, and a step up just
+//  before it counts as a failed probe).
 //
 //  SAFARI GUARD (2026-10-18: the user still saw the computer go down at
 //  full zoom, in Safari on a Mac). The profile (gpu/budget.js) now sets:
@@ -72,7 +80,8 @@
 //                 budget, relieve() lowers the pixel ratio, the scale and
 //                 the level (at most once per 3 s, and not again when
 //                 nothing is left to lower)
-//    govMin       the lowest governor level (safe: 1, no POM)
+//    govForce     rungs on at every level (safe: pom, cascade1)
+//    scaleFloor   the soft floor of the render scale (gpu/governor.js)
 //  A frame that is not done after STUCK_MS frees its slot and counts as a
 //  heavy frame of that length (fg.stuck), so a lost promise does not stop
 //  the page and a stuck GPU takes the lowest settings.
@@ -80,37 +89,15 @@
 //  the module updates and the queue writes of that frame.
 //
 //  grep -n targets: "export function createFrameGraph", "function targets",
+//  "fg.prepare", "function applyFeatures", "fg.govText",
 //  "fg.ready", "fg.setNear", "function relieve", "STUCK_MS", "NEAR_IN",
 //  "export function heavyStep", "MAX_IN_FLIGHT", "fg.inFlight",
-//  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "export function scaleStep",
-//  "export function featureStep", "fg.level"
+//  "── 2 shadow", "── 3 opaque", "── 5 water", "── 6 volumetric", "── 7 post",
+//  "fg.tick", "fg.level"
 // ============================================================================
 
-export function scaleStep(state, ms, budget, max) {
-  // state = { scale, over, under } (s of time over / under budget)
-  const dt = Math.min(ms, 100) / 1000;
-  if (ms > budget * 1.08) { state.over += dt; state.under = 0; }
-  else if (ms < budget * 0.7) { state.under += dt; state.over = 0; }
-  else { state.over = Math.max(0, state.over - dt); state.under = 0; }
-  let changed = false;
-  if (state.over > 1 && state.scale > 0.5) { state.scale = Math.max(0.5, +(state.scale - 0.1).toFixed(2)); state.over = 0; changed = true; }
-  if (state.under > 3 && state.scale < max) { state.scale = Math.min(max, +(state.scale + 0.05).toFixed(2)); state.under = 0; changed = true; }
-  return changed;
-}
-
-// state = { level, slow, fast } (s); atFloor: the scale is at its floor.
-// Returns -1, 0 or +1 (the change of level).
-export const MAX_LEVEL = 5;
-export function featureStep(state, ms, budget, atFloor) {
-  const dt = Math.min(ms, 100) / 1000;
-  if (ms > budget * 1.08 && atFloor) { state.slow += dt; state.fast = 0; }
-  else if (ms < budget * 0.6) { state.fast += dt; state.slow = 0; }
-  else { state.slow = Math.max(0, state.slow - dt); state.fast = 0; }
-  if (state.slow > 2 && state.level < MAX_LEVEL) { state.level++; state.slow = 0; return 1; }
-  if (state.fast > 8 && state.level > 0) { state.level--; state.fast = 0; return -1; }
-  return 0;
-}
-
+import { createGovernor, governorStep, governorHeavy, featuresOf, planOf, describe, MAX_LEVEL, STEADY_MAX, RELIEF_LEVEL } from './governor.js';
+export { MAX_LEVEL, STEADY_MAX, RELIEF_LEVEL };
 import { pixelCap, MB } from './budget.js';
 
 // SAFARI GUARD constants (see the header)
@@ -153,12 +140,14 @@ export function heavyStep(state, gpuMs, floor = HEAVY_FLOOR, heavyMs = HEAVY_MS)
 
 export function createFrameGraph(gpu, parts) {
   const device = gpu.device, U = GPUTextureUsage;
+  // GOVERNOR: one state for the scale and the level (fg.dyn = fg.gov)
+  const gv = createGovernor(gpu.qualityPreset.scale, 0);
   const fg = {
     modules: [], fallbacks: {}, scale: gpu.qualityPreset.scale, maxScale: gpu.qualityPreset.scale,
     cssW: 1, cssH: 1, dpr: 1, outW: 1, outH: 1, w: 1, h: 1, key: 0, T: null,
-    dyn: { scale: gpu.qualityPreset.scale, over: 0, under: 0 }, dynamic: true,
+    dyn: gv, gov: gv, dynamic: true,
     budgetMs: (gpu.profile && gpu.profile.budgetMs) || 1000 / 58, stats: { passes: 0 },
-    level: 0, gov: { level: 0, slow: 0, fast: 0 }, minScale: 0.5, pressure: 0, skipped: 0,
+    level: 0, pressure: 0, skipped: 0, nearCapped: false,
     // HANG GUARD: frames on the GPU queue, the GPU time of the last done one
     inFlight: 0, maxInFlight: MAX_IN_FLIGHT, gpuMs: 0, stalls: 0, heavy: 0,
     hv: { scale: 1, level: 0, cool: 0 },
@@ -171,6 +160,11 @@ export function createFrameGraph(gpu, parts) {
 
   // the render size: budget.js pixelCap of the swap chain size
   const renderSize = () => pixelCap(P(), { cssW: fg.cssW, cssH: fg.cssH, dpr: fg.dpr, qualityIndex: gpu.qualityIndex, scale: fg.scale, near: fg.near, pressure: fg.pressure });
+  // the soft scale floor of the slow-frame path (a heavy frame goes under it)
+  const floorOf = () => Math.min(P().scaleFloor ?? (/^phone/.test(gpu.profileId || P().id || '') ? 0.5 : 0.75), fg.maxScale);
+  // the lowest level: after a memory relief the shadow memory stays down
+  const levelFloor = () => Math.max(P().govMin | 0, fg.pressure ? RELIEF_LEVEL : 0);
+
 
   function targets() {
     const rs = renderSize();
@@ -192,6 +186,8 @@ export function createFrameGraph(gpu, parts) {
     fg.key++;
     const ctx = fg.ctx();
     for (const m of fg.active()) if (m.resize) try { m.resize(w, h, ctx); } catch (e) { console.warn(m.name, e); }
+    // the near-ground cap is on when it made the render smaller (status line)
+    fg.nearCapped = !!rs.near && w * h + 2 * (w + h) < Math.round(rs.outW * fg.scale) * Math.round(rs.outH * fg.scale);
     parts.post.resize(w, h, fg.outW, fg.outH);
     return true;
   }
@@ -235,19 +231,20 @@ export function createFrameGraph(gpu, parts) {
     return P().nearPxCap ? targets() : false;
   };
   // too much GPU memory or a stuck GPU: the pixel ratio 1, the scale under
-  // 0.75, level 2 (one cascade, no TAA); at most one time per 3 s
+  // 0.75, RELIEF_LEVEL (half shadow maps and the rungs before it) as the
+  // floor of the level from now on; at most one time per 3 s
   function relieve(why) {
     const t = now();
     if (t - fg.lastRelief < 3000) return false;
     // nothing left to lower (the modules keep what they made): no loop
-    if (fg.pressure && fg.maxScale <= 0.75 && fg.level >= 2) return false;
+    if (fg.pressure && fg.maxScale <= 0.75 && fg.level >= RELIEF_LEVEL) return false;
     fg.lastRelief = t; fg.relieved++;
     console.warn('dla-terrain: GPU relief (' + why + ')');
     fg.pressure++;
     fg.maxScale = Math.min(fg.maxScale, 0.75);
-    fg.dyn.scale = Math.min(fg.dyn.scale, fg.maxScale);
-    fg.scale = fg.dyn.scale;
-    setLevel(Math.max(fg.level, 2));
+    gv.scale = Math.min(gv.scale, fg.maxScale);
+    fg.scale = gv.scale;
+    setLevel(Math.max(fg.level, RELIEF_LEVEL));
     fg.resize(fg.cssW, fg.cssH, fg.dpr);
     return true;
   }
@@ -267,51 +264,98 @@ export function createFrameGraph(gpu, parts) {
     if (t < fg.readyAt) return false;
     return true;
   };
-  fg.setScale = s => { fg.scale = Math.max(0.4, Math.min(1, s)); fg.dyn.scale = fg.scale; targets(); };
+  fg.setScale = s => { fg.scale = Math.max(0.4, Math.min(1, s)); gv.scale = fg.scale; targets(); };
   fg.tick = ms => {
     if (!fg.dynamic) return;
     // a CPU gap over 250 ms is a stall of the page (a hidden tab, a GC),
     // but a GPU time over 250 ms is a real slow frame: it counts
     const g = fg.gpuMs > 0 ? fg.gpuMs : 0;
     if (ms > 250) ms = g > 250 ? g : 0;
-    else ms = Math.max(ms, g);
     if (!(ms > 0)) return;
-    if (scaleStep(fg.dyn, ms, fg.budgetMs, fg.maxScale)) { fg.scale = fg.dyn.scale; targets(); }
-    const d = featureStep(fg.gov, ms, fg.budgetMs, fg.dyn.scale <= fg.minScale + 1e-6);
-    if (d) setLevel(fg.gov.level);
+    const r = governorStep(gv, { ms, gpuMs: g }, { budget: fg.budgetMs, maxScale: fg.maxScale, floor: floorOf(), minLevel: levelFloor(), maxLevel: STEADY_MAX });
+    if (!r) return;
+    if (r.what === 'scale') { fg.scale = gv.scale; targets(); }
+    else setLevel(gv.level);
   };
-  // the features that a level turns off (see GOVERNOR)
-  let taaUser = null, cascUser = null;
+  // the features of the level (gpu/governor.js planOf). base: the shadow
+  // size, the cascades and TAA of the quality preset (and the user), taken
+  // when the first rung goes on and given back when the last goes off
+  let base = null;
+  const baseOf = () => {
+    if (!base) {
+      const sh = parts.shadows || {};
+      base = { size: sh.size || 2048, count: sh.count || 1, taa: !(parts.post && parts.post.settings && parts.post.settings.taa === false) };
+    }
+    return base;
+  };
+  fg.plan = planOf(featuresOf(0), { taa: true, size: 2048, count: 4 });
+  fg.feats = featuresOf(0);
+  fg.govInfo = { level: 0, keys: [], cloudK: 1, text: '' };
+  function applyFeatures() {
+    const f = featuresOf(fg.level, P().govForce);
+    if (!f.size && !base) { fg.feats = f; fg.plan = planOf(f, baseOf()); base = null; }
+    else {
+      const b = baseOf(), pl = planOf(f, b);
+      const sh = parts.shadows;
+      if (sh && sh.resize && (sh.size !== pl.shadowSize || sh.count !== pl.cascades)) sh.resize(pl.shadowSize, pl.cascades);
+      if (parts.post && parts.post.settings) parts.post.settings.taa = pl.taa;
+      fg.feats = f; fg.plan = pl;
+      // back at full: forget the base (the preset values are in place)
+      if (!f.size) base = null;
+    }
+    fg.govInfo = { level: fg.level, keys: [...fg.feats], cloudK: fg.plan.cloudK, text: fg.govText() };
+  }
   function setLevel(l) {
-    fg.level = fg.gov.level = Math.max(P().govMin | 0, Math.min(MAX_LEVEL, l));
-    const sh = parts.shadows;
-    if (sh && sh.resize) {
-      if (fg.level >= 1) { if (cascUser === null) cascUser = sh.count; sh.resize(sh.size, 1); }
-      else if (cascUser !== null) { sh.resize(sh.size, cascUser); cascUser = null; }
-    }
-    if (parts.post && parts.post.settings) {
-      if (fg.level >= 2) { if (taaUser === null) taaUser = parts.post.settings.taa; parts.post.settings.taa = false; }
-      else if (taaUser !== null) { parts.post.settings.taa = taaUser; taaUser = null; }
-    }
+    fg.level = gv.level = Math.max(levelFloor(), Math.min(MAX_LEVEL, l | 0));
+    applyFeatures();
   }
   fg.setLevel = setLevel;
+  // main.js after a quality change: the new preset values are the base
+  fg.rebase = () => { base = null; applyFeatures(); };
+  // the status line: what is lower than the preset ('' when nothing)
+  fg.govText = () => describe({ scale: fg.scale, maxScale: fg.maxScale, level: fg.level, force: P().govForce, nearCap: fg.near && fg.nearCapped });
+  // the plan on the frame object (main.js calls it before the module
+  // updates; fg.render calls it again, it is idempotent)
+  fg.prepare = frame => {
+    const pl = fg.plan;
+    frame.govLevel = pl.compatLevel;
+    frame.gov = fg.govInfo;
+    frame.taa = !(parts.post && parts.post.settings && parts.post.settings.taa === false);
+    if (!pl.ao) frame.ao = false;
+    if (pl.shafts) {
+      const s0 = frame.shafts || {};
+      if (s0.mode !== 'off' && s0.mode !== pl.shafts) frame.shafts = { ...s0, mode: pl.shafts };
+    }
+    if (!pl.grass || !pl.clouds) {
+      const ly = frame.layers || {};
+      if ((!pl.grass && ly.grass !== false) || (!pl.clouds && ly.clouds !== false)) {
+        frame.layers = { ...ly, ...(pl.grass ? {} : { grass: false }), ...(pl.clouds ? {} : { clouds: false }) };
+      }
+    }
+    return frame;
+  };
   // HANG GUARD: the GPU time of each done frame
   fg.onGpuTime = ms => {
     fg.gpuMs = ms;
     if (!fg.dynamic) return;
-    fg.hv.scale = fg.dyn.scale; fg.hv.level = fg.gov.level;
-    const r = heavyStep(fg.hv, ms, Math.min(HEAVY_FLOOR, fg.minScale), P().heavyMs || HEAVY_MS);
+    const heavyMs = P().heavyMs || HEAVY_MS;
+    // a heavy frame stops the step up at once (and pauses it)
+    if (ms > heavyMs) governorHeavy(gv);
+    fg.hv.scale = gv.scale; fg.hv.level = gv.level;
+    const r = heavyStep(fg.hv, ms, HEAVY_FLOOR, heavyMs);
     if (!r.changed) return;
     fg.heavy++;
     console.warn(`dla-terrain: heavy GPU frame ${ms.toFixed(0)} ms: scale ${r.scale}, level ${r.level}`);
-    if (r.scale !== fg.dyn.scale) { fg.dyn.scale = fg.scale = r.scale; fg.dyn.over = 0; fg.dyn.under = 0; targets(); }
-    if (r.level !== fg.gov.level) { fg.gov.slow = 0; fg.gov.fast = 0; setLevel(r.level); }
+    gv.over = 0; gv.head = 0; gv.calm = 0;
+    if (r.scale !== gv.scale) { gv.scale = fg.scale = r.scale; targets(); }
+    if (r.level !== gv.level) setLevel(r.level);
   };
   // out of memory (gpu/device.js): smaller targets now, then the profile
   // caps apply to what the modules make next
   if (gpu.onPressure) gpu.onPressure(() => { fg.lastRelief = -1e9; relieve('out of memory'); });
-  // the lowest level of the profile (safe: 1) from the first frame
-  if (P().govMin) setLevel(P().govMin);
+  // the forced rungs of the profile (safe: no POM, 1 cascade) from the
+  // first frame
+  setLevel(P().govMin | 0);
 
   const guard = (m, what, f) => {
     try { f(); } catch (e) {
@@ -330,11 +374,10 @@ export function createFrameGraph(gpu, parts) {
     // SAFARI GUARD: the GPU bytes under the profile budget
     if (gpu.mem && P().memGuard && P().budgetMB && (fg.stats.frames = (fg.stats.frames || 0) + 1) % MEM_CHECK === 0
       && gpu.mem.live > P().budgetMB * MB) { fg.memOver++; relieve(`GPU memory ${(gpu.mem.live / MB).toFixed(0)} MB over ${P().budgetMB} MB`); }
-    frame.govLevel = fg.level;
+    fg.prepare(frame);
     frame.near = fg.near;   // SAFARI GUARD: the eye near the ground (modules may do less)
     const T = fg.T, sh = parts.shadows;
     const mods = fg.active();
-    if (fg.level >= 4) frame.layers = { ...(frame.layers || {}), grass: false, ...(fg.level >= 5 ? { clouds: false } : {}) };
     frame.shadowBindGroup = sh.sampleBindGroup;
     frame.shadowInfo = sh.info;
     const enc = device.createCommandEncoder({ label: 'frame' });
@@ -343,7 +386,8 @@ export function createFrameGraph(gpu, parts) {
     parts.terrain.compute(enc, frame.dt);
     for (const m of mods) if (m.compute) guard(m, 'compute', () => m.compute(enc, frame));
     // ── 2 shadow
-    const casters = fg.level >= 3 ? [] : mods.filter(m => m.drawShadow);
+    // the casters go last: only the emergency level takes them away
+    const casters = fg.plan.casters ? mods.filter(m => m.drawShadow) : [];
     if (sh.info && casters.length) {
       for (let c = 0; c < sh.info.count; c++) {
         const pass = enc.beginRenderPass({

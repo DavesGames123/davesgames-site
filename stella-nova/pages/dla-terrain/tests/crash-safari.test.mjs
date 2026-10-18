@@ -308,9 +308,11 @@ async function zoomRun(profileId, opt = {}) {
 {
   const F = fakeGPU('safe', { msPerMpx: 1 });
   F.fg.resize(1280, 800, 1);
-  ok(F.fg.level === 1 && F.shadows.count === 1, 'safe: the governor starts at level 1 (no POM, one cascade)', `level ${F.fg.level}`);
+  const fr0 = F.fg.prepare({});
+  ok(fr0.govLevel === 1 && F.shadows.count === 1 && F.fg.feats.has('pom') && F.fg.feats.has('cascade1'), 'safe: no POM and one cascade from the first frame (govForce)', `govLevel ${fr0.govLevel} count ${F.shadows.count}`);
   F.fg.setLevel(0);
-  ok(F.fg.level === 1, 'safe: the level does not go under govMin');
+  const fr1 = F.fg.prepare({});
+  ok(fr1.govLevel === 1 && F.shadows.count === 1, 'safe: level 0 keeps the forced rungs (no POM, one cascade)');
 }
 
 // ── G the real page (jsdom)
