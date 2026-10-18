@@ -29,14 +29,17 @@
 //  MOON  a sphere lit by the real sun direction: the phase follows from the
 //    geometry. Maria from noise, earthshine on the dark part.
 //  CLOUD LAYER and CLOUD SHADOW  cloud heights (sk_cloudBase, sk_cloudTop)
-//    and cloudShadow(p) live here so that every SKY shader agrees. Other
+//    and cloudShadow(p) live here so that every SKY shader agrees.
+//  WEATHER MODEL  wx_tile(xz, t) reads the 2D atmosphere of
+//    weather-model.js (cloud cover, type, base and top, rain, storms, fog)
+//    from tWx, blended in time between two snapshots. Other
 //    packages: see "fn cloudShadow" and NOTES.md.
 //
 //  grep -n targets
 //    "struct SkyU", "fn sk_medium", "fn sk_transmittance", "fn sk_multi",
 //    "fn sk_skyViewUV", "fn sk_sunRadiance", "fn sk_hash3", "fn sk_fbm",
 //    "fn sk_starLayer", "fn sk_milkyWay", "fn sk_moon", "fn sk_sunDisc",
-//    "fn cloudShadow", "fn sk_layerT", "@@SKY-ENTRY", "fn csTrans",
+//    "fn cloudShadow", "fn wx_tile", "@@SKY-ENTRY", "fn csTrans",
 //    "fn csMulti", "fn csSkyView", "fn skyRadiance", "fn fsSky"
 // ============================================================================
 
@@ -60,6 +63,13 @@ struct SkyU {
   counts: vec4f,    // x rain streaks, y splashes, z snow flakes, w bolt segments
   precip: vec4f,    // x rain box radius m, y snow box radius m, z streak exposure s, w valley fog density per m
   prevCam: vec4f,   // xyz camera last frame, w resolution scale of the cloud target
+  wx0: vec4f,       // weather model: x domain origin (x and z) m, y domain size m, z blend a -> b, w grid n
+  wx1: vec4f,       // x lowest cloud base m, y highest cloud top m (the slab of the domain), zw upper wind unit vector
+  anim0: vec4f,     // xy cloud motion of this frame m (reprojection), z shape evolution m, w detail evolution m
+  anim1: vec4f,     // xy haze drift m (mod 1400), z splash count max, w spare
+  anim2: vec4f,     // xy rain box drift m (mod 2R), zw snow box drift m (mod 2R)
+  anim3: vec4f,     // rain fall phases a b, snow fall phases a b (render/weather.js precipPhases)
+  anim4: vec4f,     // x splash time s, y flutter time s, z rain count max, w snow count max
 }
 
 @group(1) @binding(0) var<uniform> S: SkyU;
@@ -72,6 +82,8 @@ struct SkyU {
 @group(1) @binding(7) var tNoiseDetail: texture_3d<f32>;
 @group(1) @binding(8) var sRepeat: sampler;
 @group(1) @binding(9) var tNoise2D: texture_2d<f32>;
+// the weather model (weather-model.js): 6 tiles of n x n stacked in y
+@group(1) @binding(16) var tWx: texture_2d<f32>;
 
 const SK_PI: f32 = 3.14159265;
 
@@ -321,6 +333,20 @@ fn cloudShadow(p: vec3f) -> f32 {
   return mix(1.0, T, lit);
 }
 
+// ── the weather model ────────────────────────────────────────────────────────
+// Tile t (0 A, 1 B, 2 C) at world xz, blended from snapshot a to b.
+//   A: cover, type (0 deck .. 1 towers), top m, precipitation 0..1
+//   B: storm 0..1, valley fog 0..1, base m, cirrus 0..1
+//   C: fog top m, low wind x, low wind z, freezing level m
+fn wx_tile(xz: vec2f, t: f32) -> vec4f {
+  let n = S.wx0.w;
+  var uv = (xz - vec2f(S.wx0.x)) / S.wx0.y;
+  uv = clamp(uv, vec2f(0.5 / n), vec2f(1.0 - 0.5 / n));
+  let a = textureSampleLevel(tWx, sClamp, vec2f(uv.x, (t + uv.y) / 6.0), 0.0);
+  let b = textureSampleLevel(tWx, sClamp, vec2f(uv.x, (t + 3.0 + uv.y) / 6.0), 0.0);
+  return mix(a, b, S.wx0.z);
+}
+
 // @@SKY-ENTRY  (render/sky.js cuts the library at this line)
 
 @group(3) @binding(0) var outLut: texture_storage_2d<rgba16float, write>;
@@ -546,7 +572,7 @@ fn sk_sunDisc(d: vec3f, s: vec3f) -> vec3f {
   e = normalize(e);
   let nn = cross(e, s);
   let q = normalize(e * (dot(d, e) / r) + nn * (dot(d, nn) / r) + s * mu);
-  let w = sk_worley(q * 14.0 + vec3f(G.camPos.w * 0.004));
+  let w = sk_worley(q * 14.0 + vec3f(S.misc.z * 0.004));
   let gran = sk_ss(0.0, 0.5, w.y - w.x);
   let edge = sk_ss(1.0, 0.92, x);
   return vec3f(1.0, 0.96, 0.9) * limb * (0.9 + 0.1 * gran) * edge * 900.0;

@@ -18,17 +18,21 @@
 //    csCloudShadow  512^2: sun transmittance through the layer, read by
 //                   cloudShadow(p) in sky.wgsl (ground, water, haze, grass)
 //    csClouds       the raymarch: cumulus / stratus by the cumulus mix,
-//                   storm towers with anvils, cirrus at 8.5 km. Light
+//                   storm towers with anvils, cirrus at 8.5 km. Cover,
+//                   type, base, top and storms of each place come from
+//                   the weather model (wx_tile, weather-model.js). Light
 //                   march of 6 cone steps to the sun (or the moon),
 //                   dual-lobe HG with a silver lining lobe, powder,
 //                   3 octave multiple scattering (Wrenninge 2013),
 //                   lightning glow round the bolt, aerial perspective.
 //                   Out: rgba (in-scatter, transmittance), depth (front
 //                   distance, mean distance).
-//    csCloudResolve temporal reprojection with G.prevViewProj and a 3x3
-//                   neighbourhood clamp, into the history.
+//    csCloudResolve temporal reprojection with G.prevViewProj and the
+//                   cloud motion of the frame (S.anim0.xy), variance
+//                   clipping in the 3x3 neighbourhood, into the history.
 //  COMPOSITE (draw, in drawVolumetric)
-//    fsCloudComp    bilinear up-sample, hidden behind nearer terrain,
+//    fsCloudComp    depth-aware up-sample (each of the 4 texels hidden
+//                   or not by the full-resolution depth), behind terrain,
 //                   premultiplied (blend one, one-minus-src-alpha).
 //
 //  grep -n targets: "fn cl_worleyCells", "fn cl_perlin", "fn csNoiseBase",
@@ -192,21 +196,39 @@ const CL_SIGMA: f32 = 0.045;       // extinction 1/m at density 1
 
 struct ClLayer { h0: f32, h1: f32 }
 
+// The slab that holds every cloud of the model domain (render/sky.js
+// takes the lowest base and the highest top of the two snapshots).
 fn cl_layer() -> ClLayer {
   var l: ClLayer;
-  l.h0 = S.cloud0.x;
-  l.h1 = mix(S.cloud0.y, S.cloud2.z, S.cloud1.x * S.cloud1.x);
+  l.h0 = S.wx1.x;
+  l.h1 = S.wx1.y;
   return l;
 }
 
-// The weather map at world xz: x local coverage 0..1, y cloud type
-// (0 stratus and stratocumulus decks .. 1 towering cumulus), z base lift m
-// (the bases of separate cloud fields differ), w the dome 0..1 (the top).
-// Three scales: weather systems of about 90 km (decks and wide clear
-// gaps), the 17 km map, and cells of about 4 km (the clusters of a
-// cumulus field). The cumulus mix sets the grain: cumulus gather in cells,
-// stratus spread in broad sheets.
-fn cl_coverage(xz: vec2f) -> vec4f {
+// The model at world xz (weather-model.js through wx_tile): cover, type,
+// base, top and storm of this place, not one number for the sky.
+struct ClWx { cover: f32, kind: f32, top: f32, storm: f32, base: f32 }
+fn cl_wx(xz: vec2f) -> ClWx {
+  let a = wx_tile(xz, 0.0);
+  let b = wx_tile(xz, 1.0);
+  var w: ClWx;
+  w.cover = clamp(a.x, 0.0, 1.0);
+  w.kind = clamp(a.y, 0.0, 1.0);
+  w.top = a.z;
+  w.storm = clamp(b.x, 0.0, 1.0);
+  w.base = b.z;
+  return w;
+}
+
+// The cloud field at world xz for the model values w: x local coverage
+// 0..1, y cloud type (0 stratus and stratocumulus decks .. 1 towering
+// cumulus), z base lift m (the bases of separate cloud fields differ), w
+// the dome 0..1 (the top). The model gives the cover of each place (about
+// 0.6 km cells); three scales of noise give the shapes inside it: weather
+// systems of about 90 km, the 17 km map, and cells of about 4 km (the
+// clusters of a cumulus field). The type sets the grain: cumulus gather
+// in cells, stratus spread in broad sheets.
+fn cl_coverage(xz: vec2f, w: ClWx) -> vec4f {
   let q = (xz + S.cloud1.zw) / CL_MAP_M;
   let m = textureSampleLevel(tNoise2D, sRepeat, q, 0.0);
   let big = textureSampleLevel(tNoise2D, sRepeat, q * 0.19 + vec2f(0.31, 0.77), 0.0);
@@ -215,18 +237,18 @@ fn cl_coverage(xz: vec2f) -> vec4f {
   let nb = clamp((big.r - 0.36) / 0.44, 0.0, 1.0);
   let nm = clamp((m.r - 0.36) / 0.44, 0.0, 1.0);
   let ns = clamp((sm.r - 0.36) / 0.44, 0.0, 1.0);
-  let cover = S.cloud0.z;
-  let cum = clamp(S.cloud0.w + (m.g - 0.5) * 0.7 + (big.a - 0.5) * 0.4, 0.0, 1.0);
+  let cover = w.cover;
+  let cum = clamp(w.kind + (m.g - 0.5) * 0.3, 0.0, 1.0);
   let grain = mix(0.12, 0.42, cum);
-  let field = nb * 0.42 + nm * (0.58 - grain) + ns * grain;
+  // the model already has the large scale: the noise only shapes it
+  let field = nb * 0.25 + nm * (0.75 - grain) + ns * grain;
   // cover 0 -> no cloud, 1 -> all cloud; the threshold moves through the field
   let lo = 1.0 - cover * 1.15 - 0.05;
   let c = sk_ss(lo, lo + mix(0.3, 0.15, cum), field) * sk_ss(0.0, 0.06, cover);
-  let lift = clamp((big.g - 0.3) / 0.55, 0.0, 1.0) * 450.0 * (1.0 - S.cloud1.x);
-  // a full deck keeps some texture: the shape noise always cuts a little
+  let lift = clamp((big.g - 0.3) / 0.55, 0.0, 1.0) * 300.0 * (1.0 - w.storm) * (1.0 - cum * 0.6);
   // the dome: a wider ramp of the same field. The top of a cumulus follows
   // it, so a cloud is low at its edge and tall at its core (a dome, not a
-  // pillar with walls).
+  // pillar with walls). A full deck keeps some texture.
   let dome = sk_ss(lo - 0.05, lo + 0.45, field);
   return vec4f(min(c, 0.9 + 0.08 * field), cum, lift, dome);
 }
@@ -242,24 +264,27 @@ fn cl_baseOffset(xz: vec2f) -> f32 {
 fn cl_density(p: vec3f, full: bool) -> f32 {
   let L = cl_layer();
   let h = sk_layerH(p);
-  let thick = max(L.h1 - L.h0, 1.0);
   if (h <= L.h0 || h >= L.h1) { return 0.0; }
-  let cv = cl_coverage(p.xz);
+  let w = cl_wx(p.xz);
+  if (w.cover < 0.01) { return 0.0; }
+  let cv = cl_coverage(p.xz, w);
   var cov = cv.x;
   if (cov < 0.01) { return 0.0; }
   let tq = cv.y;
-  let storm = S.cloud1.x;
-  // separate fields sit at separate heights
-  var hf = (h - L.h0 - cv.z) / max(thick - cv.z, 1.0);
-  if (hf <= 0.0) { return 0.0; }
+  let storm = w.storm;
+  // the layer of this place: the model's base and top
+  let b0 = w.base + cv.z;
+  let thick = max(w.top - b0, 150.0);
+  var hf = (h - b0) / thick;
+  if (hf <= 0.0 || hf >= 1.0) { return 0.0; }
   // the ragged base of the decks; cumulus keep a flat base
-  let off = max(cl_baseOffset(p.xz), 0.0) * (0.35 + 0.65 * S.cloud0.z) * mix(1.0, 0.3, tq) * (1.0 - 0.75 * storm * sk_ss(0.5, 0.9, hf));
+  let off = max(cl_baseOffset(p.xz), 0.0) * (0.35 + 0.65 * w.cover) * mix(1.0, 0.3, tq) * (1.0 - 0.75 * storm * sk_ss(0.5, 0.9, hf));
   hf = (hf - off) / max(1.0 - off, 0.05);
   if (hf <= 0.0) { return 0.0; }
-  // the vertical profile by type. A deck: a thin layer at the base. A
+  // the vertical profile by type. A deck: a layer with a soft top. A
   // cumulus: a flat base and a round top; the top grows in the cores of
   // the clusters (dense cover), so a field has small and tall clouds.
-  let topF = mix(0.3, 0.97, tq * tq) * mix(0.18, 1.0, cv.w * cv.w);
+  let topF = mix(0.85, 1.0, tq) * mix(mix(0.6, 0.25, tq), 1.0, cv.w * cv.w);
   var grad = sk_ss(0.0, mix(0.12, 0.06, tq), hf) * (1.0 - sk_ss(topF * mix(0.55, 0.7, tq), topF, hf));
   if (storm > 0.01) {
     // cumulonimbus: a tall tower, the anvil spreads at the top
@@ -269,8 +294,8 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
     grad = mix(grad, tower * (0.6 + 0.4 * anvil), storm * sk_ss(0.4, 0.8, cov));
   }
   if (grad <= 0.0) { return 0.0; }
-  // base shape
-  let sp = (p + vec3f(S.cloud1.z, 0.0, S.cloud1.w) * 0.2 + vec3f(0.0, -G.camPos.w * 0.6, 0.0)) / CL_SHAPE_M;
+  // base shape: moves with the cloud field (S.cloud1.zw), evolves upward
+  let sp = (p + vec3f(S.cloud1.z, -S.anim0.z, S.cloud1.w)) / CL_SHAPE_M;
   let n = textureSampleLevel(tNoiseBase, sRepeat, sp, 0.0);
   let fbm = n.g * 0.625 + n.b * 0.25 + n.a * 0.125;
   // the Perlin-Worley cut by the Worley FBM: billows of 300 .. 900 m;
@@ -279,15 +304,16 @@ fn cl_density(p: vec3f, full: bool) -> f32 {
   var d = clamp(sk_remap(shape * grad, 1.0 - cov, 1.0, 0.0, 1.0), 0.0, 1.0) * sqrt(cov);
   if (d <= 0.0) { return 0.0; }
   if (full) {
-    // detail: wispy at the base, billows at the top; drifts faster than the shape
-    let dp = (p + vec3f(S.cloud1.z, G.camPos.w * 2.0, S.cloud1.w) * 0.5) / CL_DETAIL_M;
+    // detail: wispy at the base, billows at the top
+    let dp = (p + vec3f(S.cloud1.z, S.anim0.w, S.cloud1.w)) / CL_DETAIL_M;
     let dn = textureSampleLevel(tNoiseDetail, sRepeat, dp, 0.0);
     let df = dn.r * 0.625 + dn.g * 0.25 + dn.b * 0.125;
     let m = mix(df, 1.0 - df, clamp(hf * 5.0, 0.0, 1.0));
     d = clamp(sk_remap(d, m * 0.68 * S.cloud2.y, 1.0, 0.0, 1.0), 0.0, 1.0);
   }
-  // more mass in the core, softer near the base
-  return d * sk_ss(0.0, 0.12, hf) * (0.45 + 0.55 * sk_ss(0.0, 0.45, hf)) * 2.2 * S.cloud2.x;
+  // more mass in the core, softer near the base; thin decks are lighter
+  let gain = select(1.0, 0.8, w.cover > 0.85);
+  return d * sk_ss(0.0, 0.12, hf) * (0.45 + 0.55 * sk_ss(0.0, 0.45, hf)) * 2.2 * gain;
 }
 
 // The light source of the clouds: the sun by day, the moon by night.
@@ -359,24 +385,29 @@ fn cl_scatter(p: vec3f, d: f32, cosT: f32, ld: vec3f, lrad: vec3f, hf: f32, step
 
 // The thin cirrus deck at 8.5 km (alpha, colour).
 fn cl_cirrus(ro: vec3f, rd: vec3f, cosT: f32) -> vec4f {
-  if (S.cloud1.y < 0.01) { return vec4f(0.0); }
   let hit = sk_layerHit(ro, rd, 8500.0);
   var t = hit.y;
   if (sk_layerH(ro) > 8500.0) { t = hit.x; }
   if (t <= 0.0 || t > 160000.0) { return vec4f(0.0); }
   let p = ro + rd * t;
-  // streaks along the wind: stretch the map along the wind direction
-  let w = normalize(G.wind.xy + vec2f(1e-3, 0.0));
+  // the cirrus of this place (the air mass, anvils blown off storms, the
+  // cirrus ahead of a front) from the model
+  let ciL = clamp(wx_tile(p.xz, 1.0).w, 0.0, 1.0);
+  if (ciL < 0.01) { return vec4f(0.0); }
+  // streaks along the upper wind (S.wx1.zw, a unit vector that turns only
+  // slowly, so far streaks do not swing round the world origin)
+  let w = normalize(S.wx1.zw + vec2f(1e-4, 0.0));
   let rot = mat2x2f(w.x, -w.y, w.y, w.x);
   let q = rot * (p.xz + S.cloud1.zw * 1.6);
   let uv = vec2f(q.x / 52000.0, q.y / 9000.0);
   let n = textureSampleLevel(tNoise2D, sRepeat, uv, 0.0).b;
   let n2 = textureSampleLevel(tNoise2D, sRepeat, uv * 3.1 + vec2f(0.4, 0.1), 0.0).b;
   // patches of cirrus, not a sheet: a large mask over the streaks
-  let mask = sk_ss(0.35, 0.75, textureSampleLevel(tNoise2D, sRepeat, p.xz / 140000.0 + vec2f(0.17, 0.53), 0.0).a + 0.25 * S.cloud1.y);
-  let streak = sk_ss(0.62 - 0.2 * S.cloud1.y, 0.98, n * 0.6 + n2 * 0.4) * S.cloud1.y * 0.8 * mask;
-  // cirrostratus: a thin milky veil ahead of a front (high cirrus, much cover)
-  let veil = S.cloud1.y * sk_ss(0.45, 0.9, S.cloud0.z) * (0.1 + 0.12 * n2) * (0.6 + 0.4 * mask);
+  let mask = sk_ss(0.35, 0.75, textureSampleLevel(tNoise2D, sRepeat, p.xz / 140000.0 + vec2f(0.17, 0.53), 0.0).a + 0.25 * ciL);
+  let streak = sk_ss(0.62 - 0.2 * ciL, 0.98, n * 0.6 + n2 * 0.4) * ciL * 0.8 * mask;
+  // cirrostratus: a thin milky veil where the cirrus is thick (ahead of a
+  // front, over anvils)
+  let veil = sk_ss(0.5, 1.0, ciL) * (0.1 + 0.12 * n2) * (0.6 + 0.4 * mask);
   let a = clamp(max(streak, veil), 0.0, 0.55);
   if (a <= 0.0) { return vec4f(0.0); }
   let li = cl_light(p);
@@ -505,30 +536,48 @@ fn csCloudResolve(@builtin(global_invocation_id) id: vec3u) {
   if (id.x >= sz.x || id.y >= sz.y) { return; }
   let ij = vec2i(id.xy);
   let cur = textureLoad(inCloud, ij, 0);
+  // the 3 x 3 neighbourhood of this frame: mean and spread (variance
+  // clipping, Salvi 2016) and the range; the history is clipped to the
+  // mean +- 1.25 sigma inside the range, so it keeps the cloud shape and
+  // drops what moved or changed, with less flicker than a min-max clamp
   var lo = cur;
   var hi = cur;
+  var m1 = vec4f(0.0);
+  var m2 = vec4f(0.0);
   for (var y = -1; y <= 1; y++) {
     for (var x = -1; x <= 1; x++) {
       let q = clamp(ij + vec2i(x, y), vec2i(0), vec2i(sz) - vec2i(1));
       let v = textureLoad(inCloud, q, 0);
       lo = min(lo, v);
       hi = max(hi, v);
+      m1 += v;
+      m2 += v * v;
     }
   }
+  m1 = m1 / 9.0;
+  let sig = sqrt(max(m2 / 9.0 - m1 * m1, vec4f(0.0)));
+  let blo = max(lo, m1 - 1.25 * sig);
+  let bhi = min(hi, m1 + 1.25 * sig);
   let uv = (vec2f(id.xy) + 0.5) / vec2f(sz);
   let z = textureLoad(inCloudZ, ij, 0).y;
   let dist = min(z, 60000.0);
+  // the motion vector: the camera moved, and the clouds moved with the
+  // wind by S.anim0.xy this frame (sky or far points: the camera only)
   let wp = G.camPos.xyz + viewRay(uv) * dist;
-  let pc = G.prevViewProj * vec4f(wp, 1.0);
+  let cloudy = select(0.0, 1.0, z < 9.0e5);
+  let wpPrev = wp - vec3f(S.anim0.x, 0.0, S.anim0.y) * cloudy;
+  let pc = G.prevViewProj * vec4f(wpPrev, 1.0);
   var outv = cur;
   if (pc.w > 0.0 && S.vol2.w > 0.0) {
     let puv = vec2f(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
     if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0))) {
       let hs = textureSampleLevel(histCloud, sClamp, puv, 0.0);
-      let hc = clamp(hs, lo, hi);
-      // keep more history when the camera is still
+      let hc = clamp(hs, blo, bhi);
+      // keep more history when the camera is still; take more of this
+      // frame where the history was clipped hard (a change, not noise)
       let moved = length(G.camPos.xyz - S.prevCam.xyz);
-      let k = mix(0.12, 0.35, sk_ss(0.5, 20.0, moved));
+      let clip = clamp(length(hs - hc) * 4.0, 0.0, 1.0);
+      let k = mix(mix(0.08, 0.3, sk_ss(0.5, 20.0, moved)), 0.5, clip);
       outv = mix(hc, cur, k);
     }
   }
@@ -554,16 +603,30 @@ fn vsCloudComp(@builtin(vertex_index) vi: u32) -> ClVOut {
 
 @fragment
 fn fsCloudComp(i: ClVOut) -> @location(0) vec4f {
-  let c = textureSampleLevel(tAccum, sClamp, i.uv, 0.0);
-  if (c.a > 0.999) { discard; }
-  let zc = textureSampleLevel(tAccumZ, sClamp, i.uv, 0.0).x;
+  // depth-aware up-sampling: the 4 cloud texels round this pixel, each
+  // hidden or not by this pixel's own (full resolution) scene depth, so
+  // the edge where a ridge cuts a cloud follows the ridge and not the
+  // texel grid of the half-size cloud target (that gave stair steps)
+  let csz = vec2f(textureDimensions(tAccum));
+  let fp = i.uv * csz - 0.5;
+  let b0 = floor(fp);
+  let f = fp - b0;
   let dz = textureLoad(tSceneDepth, vec2i(i.pos.xy), 0);
-  var w = 1.0;
-  if (dz > 0.0) {
-    let wp = worldFromDepth(i.uv, dz);
-    let ds = length(wp - G.camPos.xyz);
-    w = sk_ss(-200.0, 400.0, ds - zc);
+  var ds = 1.0e7;
+  if (dz > 0.0) { ds = length(worldFromDepth(i.uv, dz) - G.camPos.xyz); }
+  var acc = vec4f(0.0);
+  var wsum = 0.0;
+  for (var k = 0; k < 4; k++) {
+    let o = vec2f(f32(k & 1), f32(k >> 1));
+    let q = clamp(vec2i(b0 + o), vec2i(0), vec2i(csz) - vec2i(1));
+    let wb = mix(1.0 - f.x, f.x, o.x) * mix(1.0 - f.y, f.y, o.y);
+    let c = textureLoad(tAccum, q, 0);
+    let zc = textureLoad(tAccumZ, q, 0).x;
+    // a = 1 - transmittance: how much cloud this texel has
+    let vis = select(1.0, sk_ss(-200.0, 400.0, ds - zc), dz > 0.0);
+    acc += vec4f(c.rgb, 1.0 - c.a) * (wb * vis);
+    wsum += wb;
   }
-  if (w <= 0.0) { discard; }
-  return vec4f(c.rgb * w, (1.0 - c.a) * w);
+  if (acc.a <= 0.001) { discard; }
+  return acc / max(wsum, 1e-4);
 }

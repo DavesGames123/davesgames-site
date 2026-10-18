@@ -13,7 +13,9 @@
 //                   CORE's cascaded shadow map (sunShadow, group 2) and
 //                   the cloud shadow (shafts through cloud gaps), the
 //                   multiple-scattering LUT, sky ambient, the moon, the
-//                   lightning flash. Jittered in depth each frame and
+//                   lightning flash. The valley fog (its density and its
+//                   top) and the rain and snow shafts under the cloud bases
+//                   come from the weather model (wx_tile). Jittered in depth each frame and
 //                   blended with the reprojected last frame (G.prevViewProj).
 //    csFroxIntegrate  front to back, energy conserving (Hillaire 2015,
 //                   "Physically based and unified volumetric rendering in
@@ -33,7 +35,11 @@
 //    instances [0, rain) are streaks, [rain, rain + splash) are splash
 //    rings on terrainHeight, the rest are snow flakes. Each lives in a box
 //    round the camera that wraps in world space, so the drops do not swim
-//    with the camera. Streak length = speed x exposure (motion blur), at
+//    with the camera. Their drift and fall come from phases that
+//    render/weather.js precipPhases works out in double precision (no
+//    wind x time and no speed x time in f32, which made the rain judder
+//    and sweep as the gusts changed). Drop k of each kind shows when the
+//    amount is over k / max, so drops come and go one by one. Streak length = speed x exposure (motion blur), at
 //    least one pixel wide, with the alpha scaled to keep the energy.
 //  LIGHTNING  vsBolt / fsBolt draw the segments of the bolt that
 //    render/weather.js grows with lib/dla-engine.js (a DLA bolt). Each
@@ -65,9 +71,9 @@ fn vol_medium(p: vec3f) -> VolMedium {
   m.sM = S.mieS.x * 0.001 * exp(-hKm / S.mieS.w);
   let gnd = terrainHeight(p.xz);
   let hG = max(p.y - gnd, 0.0);
-  // noise banks that drift with the wind
-  let wind = vec3f(G.wind.x, 0.0, G.wind.y) * G.camPos.w;
-  let n1 = textureSampleLevel(tNoiseBase, sRepeat, (p - wind) / 1400.0, 0.0);
+  // noise banks that drift with the wind (S.anim1.xy: the drift summed
+  // frame by frame in render/sky.js, never wind x time)
+  let n1 = textureSampleLevel(tNoiseBase, sRepeat, (p - vec3f(S.anim1.x, 0.0, S.anim1.y)) / 1400.0, 0.0);
   // no detail tile here: its 32-texel cells read as a dotted grid of
   // circles over the fog sea in far aerial views, even large and weak
   let bank = clamp(n1.r * 1.3 - 0.25, 0.0, 1.5);
@@ -77,12 +83,31 @@ fn vol_medium(p: vec3f) -> VolMedium {
   // land stay readable through it, and a far view is not one grey wall
   let deep = min(S.vol1.z, HAZE_DEEP_MAX);
   let haze = ((S.vol1.z * 0.45 * exp(-hG / 140.0)) + (deep * 0.55 * exp(-hSea / 1700.0))) * (0.55 + 0.6 * bank);
-  // valley fog: a lake of fog under the fog top, ragged top edge
-  let top = S.vol0.w + (n1.g - 0.5) * 80.0 + (n1.b - 0.5) * 25.0;
-  let valley = S.precip.w * S.vol0.z * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
-  // rain and snow under the cloud base
-  let below = sk_ss(S.cloud0.x + 200.0, S.cloud0.x - 300.0, p.y);
-  let precip = (S.vol1.x * 1.2e-4 + S.vol1.y * 3.5e-4) * below;
+  // the weather model here: A cover, type, top, precip; B storm, fog,
+  // base, cirrus; C fog top, wind, freezing level
+  let wa = wx_tile(p.xz, 0.0);
+  let wb = wx_tile(p.xz, 1.0);
+  let wc = wx_tile(p.xz, 2.0);
+  // valley fog: a lake of fog under the model's fog top, which forms on
+  // clear calm nights in low ground and burns off after sunrise
+  let top = wc.x + (n1.g - 0.5) * 80.0 + (n1.b - 0.5) * 25.0;
+  let valley = S.precip.w * sk_ss(0.0, 0.5, wb.y) * sk_ss(top + 20.0, top - 60.0, p.y) * (0.5 + 0.8 * bank) * sk_ss(-2.0, 6.0, hG);
+  // rain shafts under the cloud base of this place: grey curtains that
+  // read from far away. In broken, dry air (low cover) the rain dries
+  // as it falls: the shaft fades toward the ground (virga). Snow above
+  // the freezing level is denser and whiter.
+  let pr = clamp(wa.w, 0.0, 1.0);
+  var precip = 0.0;
+  if (pr > 0.002) {
+    let base = wb.z;
+    let below = sk_ss(base + 150.0, base - 250.0, p.y);
+    let fall = clamp((p.y - gnd) / max(base - gnd, 50.0), 0.0, 1.0);
+    let dry = 1.0 - sk_ss(0.35, 0.9, wa.x);
+    let virga = mix(1.0, fall * fall, dry * 0.9);
+    let snowy = sk_ss(wc.w - 120.0, wc.w + 120.0, p.y);
+    let curtain = 0.55 + 0.9 * n1.g;
+    precip = pr * mix(1.1e-4, 3.0e-4, snowy) * (1.0 + 0.8 * clamp(wb.x, 0.0, 1.0)) * below * virga * curtain;
+  }
   m.sF = haze + valley + precip;
   m.ext = dot(m.sR, vec3f(0.2126, 0.7152, 0.0722)) + m.sM * 1.11 + m.sF;
   return m;
@@ -298,9 +323,6 @@ fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
   o.col = vec4f(0.0);
   let corner = array<vec2f, 6>(vec2f(-1.0, 0.0), vec2f(1.0, 0.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0));
   let c = corner[vi];
-  let h = vol_h3(ii);
-  let h2 = vol_h3(ii + 1000003u);
-  let t = G.camPos.w;
   let cam = G.camPos.xyz;
   let nRain = u32(S.counts.x);
   let nSplash = u32(S.counts.y);
@@ -312,15 +334,26 @@ fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
 
   if (ii < nRain) {
     o.kind = 0u;
+    // drop k of the rain list: the same drop whatever the other counts
+    let k = ii;
+    let h = vol_h3(k);
+    let h2 = vol_h3(k + 1000003u);
+    // drop k shows when the rain is over k / max: drops come and go one
+    // by one as the rain changes, no pop
+    let thr = f32(k) / max(S.anim4.z, 1.0);
+    let vis = sk_ss(thr, thr + 0.06, S.vol1.x);
+    if (vis <= 0.0) { return o; }
     let R = S.precip.x;
-    let speed = 8.5 + 2.0 * h2.x;
-    let vel = vec3f(wv.x * 0.9, -speed, wv.z * 0.9);
     let span = 2.0 * R;
-    // world anchored: drift with the wind, fall, wrap round the camera
-    let base = h.xz * span * 8.0 + vec2f(vel.x, vel.z) * t;
+    // 8 speed classes, so the fall phase comes from S.anim3 exactly
+    // (render/weather.js precipPhases): no speed x large time here
+    let cls = f32(k % 8u);
+    let speed = 8.5 + 0.25 * cls;
+    let vel = vec3f(wv.x * 0.9, -speed, wv.z * 0.9);
+    // world anchored: drift with the wind (S.anim2.xy), fall, wrap round the camera
+    let base = h.xz * span * 8.0 + S.anim2.xy;
     let xz = vol_wrap(base, cam.xz, R);
-    let yy = h.y * span - speed * t;
-    let y = cam.y + (fract((yy - cam.y) / span + 0.5) - 0.5) * span;
+    let y = cam.y + (fract(h.y - S.anim3.x - cls * S.anim3.y - cam.y / span + 0.5) - 0.5) * span;
     let p = vec3f(xz.x, y, xz.y);
     if (y < terrainHeight(xz)) { return o; }
     let tail = p - vel * S.precip.z;
@@ -349,16 +382,22 @@ fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
     let fade = sk_ss(0.4, 1.5, dist) * sk_ss(R, R * 0.6, length(p - cam));
     let fwd = pow(max(dot(normalize(vel), -G.sunDir.xyz) * 0.5 + 0.5, 0.0), 6.0);
     let col = light * 0.55 + sunL * (0.01 + 0.06 * fwd) + flash;
-    o.col = vec4f(col, 0.3 * fade * cov * S.vol1.x);
+    o.col = vec4f(col, 0.3 * fade * cov * vis * min(S.vol1.x * 2.0 + 0.3, 1.0));
     return o;
   }
   if (ii < nRain + nSplash) {
     o.kind = 1u;
+    let k = ii - nRain;
+    let h = vol_h3(k + 2000003u);
+    let thr = f32(k) / max(S.anim1.z, 1.0);
+    let vis = sk_ss(thr, thr + 0.06, S.vol1.x);
+    if (vis <= 0.0) { return o; }
     let R = 18.0;
     let life = 0.32;
+    let t = S.anim4.x;
     let ph = fract(t / life + h.z);
     let cyc = floor(t / life + h.z);
-    let hc = vol_h3(ii * 31u + u32(cyc) * 977u);
+    let hc = vol_h3(k * 31u + u32(cyc) * 977u);
     let xz = cam.xz + (hc.xy - 0.5) * 2.0 * R;
     let y = terrainHeight(xz) + 0.02;
     let r = mix(0.02, 0.14, sqrt(ph));
@@ -368,19 +407,29 @@ fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
     o.pos = pc;
     o.uv = vec2f(c.x, c.y * 2.0 - 1.0);
     let fade = (1.0 - ph) * sk_ss(R, R * 0.5, length(xz - cam.xz));
-    o.col = vec4f(light * 0.8 + sunL * 0.03 + flash, 0.35 * fade * S.vol1.x);
+    o.col = vec4f(light * 0.8 + sunL * 0.03 + flash, 0.35 * fade * vis * min(S.vol1.x * 2.0 + 0.3, 1.0));
     return o;
   }
   // snow
   o.kind = 2u;
+  let k = ii - nRain - nSplash;
+  let h = vol_h3(k + 3000017u);
+  let h2 = vol_h3(k + 4000037u);
+  let thr = f32(k) / max(S.anim4.w, 1.0);
+  let vis = sk_ss(thr, thr + 0.06, S.vol1.y);
+  if (vis <= 0.0) { return o; }
   let R = S.precip.y;
   let span = 2.0 * R;
-  let fall = 0.8 + 0.6 * h2.x;
-  let flutter = vec2f(sin(t * (1.1 + h2.y) + h.x * 40.0), cos(t * (0.9 + h2.z) + h.y * 40.0)) * 0.35;
-  let base = h.xz * span * 8.0 + vec2f(wv.x, wv.z) * t * 0.85 + flutter;
+  let cls = f32(k % 8u);
+  // flutter: whole multiples of 0.01 rad/s, so the wrap of S.anim4.y
+  // (t mod 200 pi) is seamless
+  let tf = S.anim4.y;
+  let f1 = round((1.1 + h2.y) * 100.0) / 100.0;
+  let f2 = round((0.9 + h2.z) * 100.0) / 100.0;
+  let flutter = vec2f(sin(tf * f1 + h.x * 40.0), cos(tf * f2 + h.y * 40.0)) * 0.35;
+  let base = h.xz * span * 8.0 + S.anim2.zw + flutter;
   let xz = vol_wrap(base, cam.xz, R);
-  let yy = h.y * span - fall * t;
-  let y = cam.y + (fract((yy - cam.y) / span + 0.5) - 0.5) * span;
+  let y = cam.y + (fract(h.y - S.anim3.z - cls * S.anim3.w - cam.y / span + 0.5) - 0.5) * span;
   let p = vec3f(xz.x, y, xz.y);
   if (y < terrainHeight(xz)) { return o; }
   let pc = G.viewProj * vec4f(p, 1.0);
@@ -392,7 +441,7 @@ fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) ->
   o.pos = vec4f(pc.xy + off * pc.w, pc.z, pc.w);
   o.uv = vec2f(c.x, c.y * 2.0 - 1.0);
   let fade = sk_ss(0.3, 1.2, pc.w) * sk_ss(R, R * 0.55, length(p - cam));
-  o.col = vec4f(light * 0.9 + sunL * 0.25 + flash, 0.85 * fade * mix(cov, 1.0, 0.4) * clamp(S.vol1.y * 1.5, 0.0, 1.0));
+  o.col = vec4f(light * 0.9 + sunL * 0.25 + flash, 0.85 * fade * mix(cov, 1.0, 0.4) * vis * clamp(S.vol1.y * 1.5 + 0.3, 0.0, 1.0));
   return o;
 }
 

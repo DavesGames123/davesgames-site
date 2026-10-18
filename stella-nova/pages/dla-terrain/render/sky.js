@@ -19,6 +19,21 @@
 //    drawVolumetric(pass, frame, ctx)
 //                        cloud composite, haze, rain and snow, the bolt
 //
+//  WEATHER MODEL  frame.weather.sim (sky-state.js createSky) runs
+//    weather-model.js. update() gives it the camera and the final terrain,
+//    and uploads the two snapshots round the weather time into tWx
+//    (binding 16, N x 6N rgba16float) when the pair changes; the shaders
+//    blend them by S.wx0.z (wx_tile in sky.wgsl). Without a sim (a
+//    stateless sky state) this module runs its own inline createSky.
+//  CLOCK  every motion here uses the sum of frame.dt (st.clock), not the
+//    wall clock G.camPos.w. Cloud noise moves with the upper wind over the
+//    model's weather time (S.cloud1.zw; the step of the frame, S.anim0.xy,
+//    is the motion vector of the cloud reprojection). Haze banks drift
+//    with the low wind (S.anim1.xy). Rain and snow use the exact phases of
+//    render/weather.js precipPhases (S.anim2 .. S.anim4).
+//  DYNAMIC RESOLUTION  the cloud targets keep their size (and history)
+//    unless the render size changes by more than a quarter.
+//
 //  WGSL. gpu.loadWGSL('shaders/sky.wgsl') gives common + detail + sky.
 //  The text above the line "// @@SKY-ENTRY" is the SKY library. clouds.wgsl
 //  and weather.wgsl compile as library + their own text (wgslFor).
@@ -26,7 +41,10 @@
 //  BIND GROUPS (group 0 is CORE's globals, group 2 CORE's shadow sample)
 //    group 1 READ   bindings 0..9 of sky.wgsl (uniform, LUTs, cloud shadow,
 //                   noise, samplers): the compute passes that only read
-//    group 1 DRAW   READ + 10 scene depth, 11 cloud accum, 12 cloud depth,
+//    group 1 READ   also 16: the weather model texture (weather-model.js)
+//    group 1 DRAW   READ less 6, 7, 9, 16 (noise and model: the draw passes
+//                   do not read them; a stage samples at most 16 textures)
+//                   + 10 scene depth, 11 cloud accum, 12 cloud depth,
 //                   13 froxel volume, 14 bolt segments, 15 sky shaft loss:
 //                   the draw passes.
 //                   Draw pipelines use 2 groups only, so CORE's group 2 in
@@ -45,10 +63,11 @@
 //  "function makeTargets", "compute(enc", "drawSky(", "drawVolumetric(",
 //  "export const SKYU_FLOATS"
 // ============================================================================
-import { ATMO, SUN_ILLUM, GLOBALS } from '../sky-state.js';
-import { createWeather } from './weather.js';
+import { ATMO, SUN_ILLUM, GLOBALS, createSky as createSkyState } from '../sky-state.js';
+import { CH as WX_CH, N as WX_N } from '../weather-model.js';
+import { createWeather, precipPhases } from './weather.js';
 
-export const SKYU_FLOATS = 19 * 4;   // struct SkyU: 19 vec4 (304 bytes)
+export const SKYU_FLOATS = 26 * 4;   // struct SkyU: 26 vec4 (416 bytes)
 const U = (typeof GPUBufferUsage !== 'undefined') ? GPUBufferUsage : { UNIFORM: 64, COPY_DST: 8, STORAGE: 128 };
 const T = (typeof GPUTextureUsage !== 'undefined') ? GPUTextureUsage : { COPY_SRC: 1, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
 const SS = (typeof GPUShaderStage !== 'undefined') ? GPUShaderStage : { VERTEX: 1, FRAGMENT: 2, COMPUTE: 4 };
@@ -59,10 +78,22 @@ export const SKYU = Object.freeze({
   rayleigh: 0, mieS: 4, mieA: 8, ozone: 12, radii: 16, sun: 20, moon: 24,
   cloud0: 28, cloud1: 32, cloud2: 36, bolt: 40, vol0: 44, vol1: 48, vol2: 52,
   shadow: 56, misc: 60, counts: 64, precip: 68, prevCam: 72,
+  wx0: 76, wx1: 80, anim0: 84, anim1: 88, anim2: 92, anim3: 96, anim4: 100,
 });
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+// float32 -> float16 bits (round to nearest, clamp to the f16 range)
+const f32b = new Float32Array(1), u32b = new Uint32Array(f32b.buffer);
+export function f16(v) {
+  f32b[0] = Number.isFinite(v) ? v : 0;
+  const x = u32b[0], sign = (x >>> 16) & 0x8000;
+  let e = ((x >>> 23) & 0xff) - 127 + 15, m = x & 0x7fffff;
+  if (e >= 31) return sign | 0x7bff;
+  if (e <= 0) { if (e < -10) return sign; m |= 0x800000; const sh = 14 - e; return sign | ((m + (1 << (sh - 1))) >> sh); }
+  const r = sign | (e << 10) | (m >> 13);
+  return (m & 0x1000) ? r + 1 : r;
+}
 
 // The SKY library cut from the joined sky.wgsl text, and a joined module
 // text for clouds.wgsl or weather.wgsl.
@@ -92,6 +123,7 @@ export function cloudLayer(terrain, wx) {
   return { base, top: base + thick, anvil: base + 9500 };
 }
 
+const DRAW_SKIP = [6, 7, 9, 16];
 function makeLayouts(device, gpu) {
   const tex = (b, extra = {}) => ({ binding: b, visibility: ALL, texture: { sampleType: 'float', ...extra } });
   const read = [
@@ -100,9 +132,11 @@ function makeLayouts(device, gpu) {
     { binding: 4, visibility: ALL, sampler: { type: 'filtering' } },
     tex(5), tex(6, { viewDimension: '3d' }), tex(7, { viewDimension: '3d' }),
     { binding: 8, visibility: ALL, sampler: { type: 'filtering' } },
-    tex(9),
+    tex(9), tex(16),
   ];
-  const draw = read.concat([
+  // the draw passes do not read the cloud noise or the weather model: keep
+  // them out (a stage may sample at most 16 textures, group 0 has 4)
+  const draw = read.filter((e) => !DRAW_SKIP.includes(e.binding)).concat([
     { binding: 10, visibility: SS.VERTEX | SS.FRAGMENT, texture: { sampleType: 'depth' } },
     tex(11), tex(12), tex(13, { viewDimension: '3d' }),
     { binding: 14, visibility: SS.VERTEX | SS.FRAGMENT, buffer: { type: 'read-only-storage' } },
@@ -115,7 +149,7 @@ function makeLayouts(device, gpu) {
     uOnly: sub([0]),
     multi: sub([0, 1, 4]),
     skyView: sub([0, 1, 2, 4]),
-    shadow: sub([0, 6, 7, 8, 9]),
+    shadow: sub([0, 4, 6, 7, 8, 9, 16]),
     empty: gpu.emptyLayout || device.createBindGroupLayout({ entries: [] }),
   };
 }
@@ -142,6 +176,9 @@ export async function createSky(gpu) {
     base: tex3(NB, 'rgba8unorm', 'cloud base noise'),
     detail: tex3(ND, 'rgba8unorm', 'cloud detail noise'),
     n2d: tex2(N2, N2, 'rgba8unorm', 'cloud 2d noise'),
+    // the weather model: 6 tiles of N x N (snapshot a: A B C, snapshot b:
+    // A B C), stacked in y; the shaders interpolate a to b (S.wx0.z)
+    wx: device.createTexture({ label: 'weather model', size: [WX_N, WX_N * 6], format: 'rgba16float', usage: T.TEXTURE_BINDING | T.COPY_DST }),
   };
   const V = {};
   for (const k in lut) V[k] = lut[k].createView();
@@ -205,14 +242,14 @@ export async function createSky(gpu) {
     uOnly: bg(L.uOnly, [[0, ub]], 'sky u'),
     multi: bg(L.multi, [[0, ub], [1, V.trans], [4, sClamp]], 'sky multi'),
     skyView: bg(L.skyView, [[0, ub], [1, V.trans], [2, V.multi], [4, sClamp]], 'sky view'),
-    shadowRead: bg(L.shadow, [[0, ub], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d]], 'cloud shadow in'),
-    read: bg(L.read, [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d]], 'sky read'),
+    shadowRead: bg(L.shadow, [[0, ub], [4, sClamp], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]], 'cloud shadow in'),
+    read: bg(L.read, [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]], 'sky read'),
     empty: bg(L.empty, [], 'empty'),
     outTrans: bg(G3.lut, [[0, V.trans]]), outMulti: bg(G3.lut, [[0, V.multi]]), outView: bg(G3.lut, [[0, V.view]]),
     outBase: bg(G3.vol, [[0, V.base]]), outDetail: bg(G3.vol, [[0, V.detail]]), outN2d: bg(G3.n2d, [[1, V.n2d]]),
     outShadow: bg(G3.shadow, [[2, V.shadow]]),
   };
-  const readEntries = [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d]];
+  const readEntries = [[0, ub], [1, V.trans], [2, V.multi], [3, V.view], [4, sClamp], [5, V.shadow], [6, V.base], [7, V.detail], [8, sRepeat], [9, V.n2d], [16, V.wx]];
 
   const weather = await createWeather(gpu, {
     lib, weatherText, layouts: L, readBindGroup: BG.read, ubo, u, SKYU, sClamp,
@@ -220,10 +257,18 @@ export async function createSky(gpu) {
 
   // ── size dependent targets ──────────────────────────────────────────────
   let tg = null;
-  function makeTargets(w, h, q) {
-    if (tg) for (const t of tg.all) t.destroy();
+  function makeTargets(w, h, q, force) {
     const k = Math.min(q >= 0.5 ? 0.5 : 0.34, (gpu.profile && gpu.profile.cloudK) || 1);
     const cw = Math.max(8, Math.round(w * k)), ch = Math.max(8, Math.round(h * k));
+    // dynamic resolution changes the render size in steps of 5 to 10 %:
+    // keep the cloud targets (and their history) unless the size changes
+    // by more than a quarter or the aspect changes. The march works in uv,
+    // so the targets need not match the render size.
+    if (tg && !force && tg.k === k && Math.abs(cw / tg.cw - 1) < 0.25 && Math.abs(ch / tg.ch - 1) < 0.25 && Math.abs((cw / ch) / (tg.cw / tg.ch) - 1) < 0.02) {
+      tg.w = w; tg.h = h;
+      return;
+    }
+    if (tg) for (const t of tg.all) t.destroy();
     const mk = (label) => tex2(cw, ch, 'rgba16float', label);
     tg = { w, h, cw, ch, k, raw: mk('cloud raw'), rawZ: mk('cloud raw z'), acc: [mk('cloud acc 0'), mk('cloud acc 1')], all: [] };
     tg.all = [tg.raw, tg.rawZ, ...tg.acc];
@@ -241,7 +286,7 @@ export async function createSky(gpu) {
     let g = tg.drawBG.get(key);
     const vb = weather.drawResources();
     if (g && g.stamp === vb.stamp && g.ping === tg.ping) return g.bg;
-    const e = readEntries.concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }], [15, vb.lossView]]);
+    const e = readEntries.filter(([b]) => !DRAW_SKIP.includes(b)).concat([[10, depthView], [11, tg.v.acc[tg.ping]], [12, tg.v.rawZ], [13, vb.volumeView], [14, { buffer: vb.boltBuffer }], [15, vb.lossView]]);
     g = { bg: bg(L.draw, e, 'sky draw'), stamp: vb.stamp, ping: tg.ping };
     tg.drawBG.set(key, g);
     if (tg.drawBG.size > 8) tg.drawBG.delete(tg.drawBG.keys().next().value);
@@ -250,16 +295,51 @@ export async function createSky(gpu) {
 
   // ── per frame state ─────────────────────────────────────────────────────
   const st = {
+    clock: 0, cloudOff: [0, 0], cloudPrev: [0, 0], hazeOff: [0, 0], rainOff: [0, 0], snowOff: [0, 0], wxKey: null, own: null,
     terrain: null, frameNo: 0, lutMie: -1, noiseDone: false, windOff: [0, 0], prevCam: [0, 0, 0],
     q: gpu.quality ?? 1, lastT: null, haveFrame: false,
   };
 
+  // ── the weather model texture ─────────────────────────────────────────
+  // Two snapshots (a, b) of weather-model.js, 3 tiles each (A cover, type,
+  // top, precip; B storm, fog, base, cirrus; C fog top, wind x, wind z,
+  // freezing level), as rgba16float. Uploaded only when the pair changes
+  // (a few times a second at most); the shaders blend a to b by S.wx0.z.
+  const wxHalf = new Uint16Array(WX_N * WX_N * 6 * 4);
+  function uploadWx(br) {
+    const n = WX_N, nn = n * n;
+    for (let s2 = 0; s2 < 2; s2++) {
+      const d = (s2 ? br.b : br.a).data;
+      for (let tile = 0; tile < 3; tile++) {
+        const o = ((s2 * 3 + tile) * nn) * 4;
+        for (let k = 0; k < nn; k++) for (let c = 0; c < 4; c++) wxHalf[o + k * 4 + c] = f16(d[k * WX_CH + tile * 4 + c]);
+      }
+    }
+    queue.writeTexture({ texture: lut.wx }, wxHalf, { bytesPerRow: n * 8, rowsPerImage: n * 6 }, [n, n * 6, 1]);
+  }
+
   function fillUniform(frame) {
     const g = frame.globals;
-    const s = frame.weather || {};
-    const wx = s.wx || { cover: g[GLOBALS.weather], rain: g[GLOBALS.weather + 1], snow: g[GLOBALS.weather + 2], storm: g[GLOBALS.weather2 + 2], fog: g[GLOBALS.fog + 3], cumulus: 0.7, cirrus: 0.3, mie: 1, wind: 5 };
+    let s = frame.weather || {};
+    // the clock of every motion here: the sum of the frame steps, not the
+    // wall clock (G.camPos.w), so a late frame moves things by its dt only
+    const rdt = clamp(Number.isFinite(frame.dt) ? frame.dt : 1 / 60, 0, 0.1);
+    st.clock += rdt;
     const cam = [g[GLOBALS.camPos], g[GLOBALS.camPos + 1], g[GLOBALS.camPos + 2]];
-    const t = g[GLOBALS.camPos + 3];
+    // the weather model: the state of sky-state.js createSky carries it
+    // (s.sim); without it (a stateless sky state) this module runs its own
+    let sim = s.sim;
+    if (!sim && s.weatherId) {
+      st.own = st.own || createSkyState({ worker: false });
+      const o = st.own.update(s.tod ?? 0.5, s.weatherId, s.season ?? 0.3, s.latitude ?? 46, st.clock);
+      sim = o.sim;
+      s = { ...o, ...s, wx: { ...o.wx, ...(s.wx || {}) }, gameT: o.gameT, upperWind: o.upperWind, local: o.local };
+    }
+    if (sim) {
+      sim.setCamera(cam);
+      if (st.terrain && st.terrain.cpu && st.terrain.cpu.height) sim.setTerrain(st.terrain.cpu);
+    }
+    const wx = s.wx || { cover: g[GLOBALS.weather], rain: g[GLOBALS.weather + 1], snow: g[GLOBALS.weather + 2], storm: g[GLOBALS.weather2 + 2], fog: g[GLOBALS.fog + 3], cumulus: 0.7, cirrus: 0.3, mie: 1, wind: 5 };
     const q = frame.quality ?? g[GLOBALS.frame + 2] ?? 1;
     const terr = st.terrain;
     const sea = g[GLOBALS.terrain + 2];
@@ -277,20 +357,62 @@ export async function createSky(gpu) {
     put(SKYU.sun, 0.00465, SUN_ILLUM, 2 * Math.PI * (tod + season), smooth(0.06, -0.16, sunY));
     const md = s.moonDir || [g[GLOBALS.moonDir], g[GLOBALS.moonDir + 1], g[GLOBALS.moonDir + 2]];
     put(SKYU.moon, md[0], md[1], md[2], s.moonScale ?? g[GLOBALS.moonDir + 3]);
+
+    // the model snapshots and the cloud slab of the whole domain
+    const br = sim ? sim.bracket : null;
     const cl = cloudLayer(terr, wx);
+    // the direction of the upper wind for the cirrus streaks, turned slowly
+    const upw = s.upperWind || [1, 0], ul = Math.hypot(upw[0], upw[1]) || 1;
+    st.ciDir = st.ciDir || [upw[0] / ul, upw[1] / ul];
+    const kd = 1 - Math.exp(-rdt / 4);
+    st.ciDir[0] += (upw[0] / ul - st.ciDir[0]) * kd; st.ciDir[1] += (upw[1] / ul - st.ciDir[1]) * kd;
+    if (br) {
+      const key = br.a.epoch + ':' + br.a.t + ':' + br.b.t;
+      if (key !== st.wxKey) { uploadWx(br); st.wxKey = key; }
+      const lo = Math.min(br.a.minBase, br.b.minBase), hi = Math.max(br.a.maxTop, br.b.maxTop);
+      put(SKYU.wx0, br.a.x0, br.a.D, br.w, WX_N);
+      put(SKYU.wx1, lo - 50, Math.max(hi + 300, lo + 800), st.ciDir[0], st.ciDir[1]);
+      if (s.local) { cl.base = s.local[6]; cl.top = s.local[2]; }
+    } else {
+      // no snapshot yet: a uniform field from the preset values
+      if (st.wxKey !== 'flat') {
+        const fake = new Float32Array(WX_N * WX_N * WX_CH);
+        for (let k = 0; k < WX_N * WX_N; k++) fake.set([wx.cover, wx.cumulus ?? 0.7, cl.top, wx.rain + wx.snow, wx.storm ?? 0, 0, cl.base, wx.cirrus ?? 0.3, sea, 0, 0, 3000], k * WX_CH);
+        uploadWx({ a: { data: fake }, b: { data: fake } });
+        st.wxKey = 'flat';
+      }
+      put(SKYU.wx0, -1e6, 2e6, 0, WX_N);
+      put(SKYU.wx1, cl.base - 50, cl.anvil, st.ciDir[0], st.ciDir[1]);
+    }
     put(SKYU.cloud0, cl.base, cl.top, clamp(wx.cover, 0, 1), clamp(wx.cumulus ?? 0.7, 0, 1));
-    // the cloud field moves with the wind at height (about 2.5x the ground wind)
-    const dt = st.lastT === null ? 0 : clamp(t - st.lastT, 0, 0.5);
-    st.lastT = t;
-    st.windOff[0] += g[GLOBALS.wind] * 2.5 * dt;
-    st.windOff[1] += g[GLOBALS.wind + 1] * 2.5 * dt;
-    put(SKYU.cloud1, clamp(wx.storm ?? 0, 0, 1), clamp(wx.cirrus ?? 0.3, 0, 1), -st.windOff[0], -st.windOff[1]);
+    // cloud motion: the upper wind over the weather time of the model, so
+    // the noise moves with the model's cloud masses. The step of the frame
+    // is the motion vector of the cloud reprojection.
+    const gdt = (typeof s.gameT === 'number' && typeof st.lastGameT === 'number' && s.gameT >= st.lastGameT && s.gameT - st.lastGameT < 3600) ? s.gameT - st.lastGameT : rdt * 60;
+    st.lastGameT = s.gameT;
+    const up = s.upperWind || [g[GLOBALS.wind] * 2.5, g[GLOBALS.wind + 1] * 2.5];
+    st.cloudPrev[0] = st.cloudOff[0]; st.cloudPrev[1] = st.cloudOff[1];
+    st.cloudOff[0] += up[0] * gdt; st.cloudOff[1] += up[1] * gdt;
+    st.evolve = (st.evolve || 0) + gdt;
+    put(SKYU.cloud1, clamp(wx.storm ?? 0, 0, 1), clamp(wx.cirrus ?? 0.3, 0, 1), -st.cloudOff[0], -st.cloudOff[1]);
+    put(SKYU.anim0, st.cloudOff[0] - st.cloudPrev[0], st.cloudOff[1] - st.cloudPrev[1], (st.evolve * 0.25) % 6800, (st.evolve * 0.8) % 560);
+    // haze banks drift with the low wind (at most 20 x real time)
+    const lw = s.local ? [s.local[9], s.local[10]] : [g[GLOBALS.wind], g[GLOBALS.wind + 1]];
+    const hdt = Math.min(gdt, rdt * 20);
+    st.hazeOff[0] = (st.hazeOff[0] + lw[0] * hdt) % 1400; st.hazeOff[1] = (st.hazeOff[1] + lw[1] * hdt) % 1400;
+    // rain and snow: real time and the gusty ground wind, wrapped exactly
+    // by the box spans (render/weather.js precipPhases)
+    const wv = [g[GLOBALS.wind], g[GLOBALS.wind + 1]];
+    const ph = precipPhases(st, wv, rdt, 32, 26);
+    put(SKYU.anim2, ph.rainOff[0], ph.rainOff[1], ph.snowOff[0], ph.snowOff[1]);
+    put(SKYU.anim3, ph.rainA, ph.rainB, ph.snowA, ph.snowB);
     const steps = Math.round(40 + 56 * clamp(st.q ?? q, 0, 1));
     put(SKYU.cloud2, wx.cover > 0.85 ? 0.8 : 1.0, 1.0, cl.anvil, steps);
-    // the bolt: a bearing and a distance from the camera, at the cloud base
+    // the bolt: at the stroke's cell (x, z) or a bearing and a distance
     const flash = g[GLOBALS.weather + 3];
     const b = s.bolt;
-    if (b) put(SKYU.bolt, cam[0] + Math.cos(b.angle) * b.dist, cl.base, cam[2] + Math.sin(b.angle) * b.dist, flash);
+    if (b && typeof b.x === 'number') put(SKYU.bolt, b.x, cl.base, b.z, flash);
+    else if (b) put(SKYU.bolt, cam[0] + Math.cos(b.angle) * b.dist, cl.base, cam[2] + Math.sin(b.angle) * b.dist, flash);
     else put(SKYU.bolt, cam[0], cl.base + 2000, cam[2], flash);
     // froxel haze
     const ws = terr ? terr.worldSize : 16000;
@@ -315,13 +437,15 @@ export async function createSky(gpu) {
     // rainbow: rain in the air and a sun lower than 42 deg that the deck lets through
     const sunEl = Math.asin(clamp(sunY, -1, 1)) * 180 / Math.PI;
     const rainbow = (s.rainbow ?? 1) * smooth(0.02, 0.25, wx.rain) * smooth(-1, 4, sunEl) * smooth(42, 30, sunEl) * (1 - smooth(0.88, 1.0, wx.cover) * 0.8);
-    put(SKYU.misc, lat, s.moonPhase ?? 0.5, t, rainbow);
-    const cnt = st.rain === false ? { rain: 0, splash: 0, snow: 0, bolt: 0 } : weather.counts(wx, q, frame);
+    put(SKYU.misc, lat, s.moonPhase ?? 0.5, st.clock % 3600, rainbow);
+    const cnt = st.rain === false ? { rain: 0, splash: 0, snow: 0, bolt: 0, rainMax: 1, splashMax: 1, snowMax: 1 } : weather.counts(wx, q, frame, s.bolt);
     put(SKYU.counts, cnt.rain, cnt.splash, cnt.snow, cnt.bolt);
+    put(SKYU.anim1, st.hazeOff[0], st.hazeOff[1], cnt.splashMax, 0);
+    put(SKYU.anim4, ph.splashT, ph.flutterT, cnt.rainMax, cnt.snowMax);
     put(SKYU.precip, 32, 26, 1.8 / 60, 0.0026);
     put(SKYU.prevCam, st.prevCam[0], st.prevCam[1], st.prevCam[2], tg ? tg.k : 0.5);
     st.prevCam = cam;
-    return { wx, cl, cam, q };
+    return { wx, cl, cam, q, s };
   }
 
   const mod = {

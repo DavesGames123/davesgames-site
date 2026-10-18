@@ -17,8 +17,12 @@
 //    gpu.shadows.sampleBindGroup), else a stand-in with no cascades (lit).
 //    compute() runs before CORE's shadow pass, so the haze sees the shadow
 //    map of the last frame (one frame late, hidden by the temporal blend).
-//  PRECIPITATION  counts(wx, q) sets the number of rain streaks, splashes
-//    and flakes; the GPU places them (vsPrecip).
+//  PRECIPITATION  counts(wx, q, frame, stroke) sets the number of rain
+//    streaks, splashes and flakes (drop k shows when the amount is over
+//    k / max, so drops come and go one by one); the GPU places them
+//    (vsPrecip) from precipPhases(): the drift and the fall phases worked
+//    out in double precision, with no wind x time or speed x time in f32.
+//    rainDropPos(k, ...) is the same placement in JS, for the tests.
 //  LIGHTNING  a DLA bolt: createBoltGrower grows a 2D DLA tree with
 //    lib/dla-engine.js (dlaf, MIT, Michael Fogleman) from a seed at the
 //    cloud base, with walkers that start under the lowest particle, so the
@@ -27,11 +31,13 @@
 //    wide); side branches get a width and a brightness from their subtree
 //    size. A few ms of growth per frame keeps two bolts ready. When
 //    skyState gives a new cloud-to-ground stroke, the next bolt is placed
-//    at its bearing and distance, from the cloud base to the terrain.
+//    at its storm cell (stroke x, z; or a bearing and a distance), from the
+//    cloud base to the terrain.
 //
 //  grep -n targets: "export function createBoltGrower", "export function boltSegments",
 //  "export async function createWeather", "function gridFor", "counts(",
-//  "function placeBolt", "draw(pass"
+//  "function placeBolt", "draw(pass", "export function precipPhases",
+//  "export function rainDropPos"
 // ============================================================================
 import { createModel } from '../../../lib/dla-engine.js';
 import { GLOBALS } from '../sky-state.js';
@@ -118,6 +124,51 @@ export function boltSegments(model, maxSegs = 900) {
   side.sort((a, b) => size[b] - size[a]);
   for (const i of side) { if (out.length / 8 >= maxSegs) break; pushSeg(i); }
   return { segs: new Float32Array(out), count: out.length / 8, mainCount, minY: pos[low * 3 + 1] };
+}
+
+// ── precipitation phases (DOM-free) ─────────────────────────────────────────
+// The rain and snow particles of shaders/weather.wgsl are placed from these
+// numbers, worked out here in double precision so that nothing in the
+// shader multiplies a speed by a large time:
+//   rainOff, snowOff  the drift of the boxes with the wind: the sum of
+//                     wind x dt (0.9 x for rain, 0.85 x for snow), wrapped
+//                     by the box span 2R (the wrap in vsPrecip has the same
+//                     period, so the wrap is exact and nothing jumps)
+//   rainA, rainB      fall phases: a drop of speed class c (0..7) falls at
+//                     8.5 + 0.25 c m/s, so its phase is fract(rainA + c x
+//                     rainB) with rainA = fract(8.5 t / span), rainB =
+//                     fract(0.25 t / span). c is an integer, so this equals
+//                     fract(speed t / span) exactly.
+//   snowA, snowB      the same for snow (0.8 + 0.075 c m/s)
+//   splashT           t mod 320 s (a splash lives 0.32 s)
+//   flutterT          t mod 200 pi s; the flutter frequencies are whole
+//                     multiples of 0.01 rad/s, so the wrap is seamless
+// st carries clock (s), rainOff, snowOff between frames.
+export const RAIN_SPEED = [8.5, 0.25], SNOW_SPEED = [0.8, 0.075];
+export function precipPhases(st, wind, dt, rainR, snowR) {
+  const sr = 2 * rainR, ss = 2 * snowR;
+  const wrap = (x, p) => ((x % p) + p) % p;
+  st.rainOff = st.rainOff || [0, 0]; st.snowOff = st.snowOff || [0, 0];
+  st.rainOff[0] = wrap(st.rainOff[0] + wind[0] * 0.9 * dt, sr); st.rainOff[1] = wrap(st.rainOff[1] + wind[1] * 0.9 * dt, sr);
+  st.snowOff[0] = wrap(st.snowOff[0] + wind[0] * 0.85 * dt, ss); st.snowOff[1] = wrap(st.snowOff[1] + wind[1] * 0.85 * dt, ss);
+  const t = st.clock || 0, fr = (x) => x - Math.floor(x);
+  return {
+    rainOff: st.rainOff, snowOff: st.snowOff,
+    rainA: fr(RAIN_SPEED[0] * t / sr), rainB: fr(RAIN_SPEED[1] * t / sr),
+    snowA: fr(SNOW_SPEED[0] * t / ss), snowB: fr(SNOW_SPEED[1] * t / ss),
+    splashT: t % 320, flutterT: t % (200 * Math.PI),
+  };
+}
+
+// The world position of rain drop k (the vsPrecip formula, for the tests).
+export function rainDropPos(k, ph, cam, rainR, h) {
+  const span = 2 * rainR, fr = (x) => x - Math.floor(x);
+  const c = k % 8;
+  const bx = h[0] * span * 8 + ph.rainOff[0], bz = h[2] * span * 8 + ph.rainOff[1];
+  const x = cam[0] + (fr((bx - cam[0]) / span + 0.5) - 0.5) * span;
+  const z = cam[2] + (fr((bz - cam[2]) / span + 0.5) - 0.5) * span;
+  const y = cam[1] + (fr(h[1] - ph.rainA - c * ph.rainB - cam[1] / span + 0.5) - 0.5) * span;
+  return [x, y, z];
 }
 
 // ── GPU part ────────────────────────────────────────────────────────────────
@@ -216,7 +267,8 @@ export async function createWeather(gpu, shared) {
     if (!ready) { bolts.segCount = 0; return; }
     const g = frame.globals;
     const cam = info.cam;
-    const top = [cam[0] + Math.cos(stroke.angle) * stroke.dist, info.cl.base, cam[2] + Math.sin(stroke.angle) * stroke.dist];
+    const top = typeof stroke.x === 'number' ? [stroke.x, info.cl.base, stroke.z]
+      : [cam[0] + Math.cos(stroke.angle) * stroke.dist, info.cl.base, cam[2] + Math.sin(stroke.angle) * stroke.dist];
     let ground = g[GLOBALS.terrain + 2];
     const t = bolts.terrain;
     if (t && t.cpu && t.cpu.height) {
@@ -250,15 +302,20 @@ export async function createWeather(gpu, shared) {
     setQuality(qq) { q = qq; const g2 = capGrid(gridFor(q)); if (g2.join() !== grid.join()) { grid = g2; makeVolumes(); } },
     resize(w, h, qq) { if (qq !== undefined) this.setQuality(qq); },
 
-    counts(wx, qq, frame) {
+    // Particle counts. Each kind has a fixed maximum (by quality); drop k
+    // shows when the amount is over k / max and fades in over 0.06 of the
+    // amount (vsPrecip), so a change of the amount adds or takes away drops
+    // one by one, with no pop. The drawn count covers the visible drops.
+    counts(wx, qq, frame, stroke) {
       const k = 0.35 + 0.65 * clamp(qq, 0, 1);
       const coarse = frame && frame.coarse ? 0.6 : 1;
-      const stroke = frame && frame.weather && frame.weather.bolt;
+      stroke = stroke || (frame && frame.weather && frame.weather.bolt);
       const flash = frame ? frame.globals[GLOBALS.weather + 3] : 0;
+      const rainMax = Math.round(42000 * k * coarse), snowMax = Math.round(30000 * k * coarse), splashMax = Math.round(5000 * k * coarse);
+      const n = (amt, max) => (amt > 0.002 ? Math.min(max, Math.ceil(max * (clamp(amt, 0, 1) + 0.06))) : 0);
       return {
-        rain: Math.round(clamp(wx.rain, 0, 1) * 42000 * k * coarse),
-        splash: Math.round(clamp(wx.rain, 0, 1) * 5000 * k * coarse),
-        snow: Math.round(clamp(wx.snow, 0, 1) * 30000 * k * coarse),
+        rain: n(wx.rain, rainMax), splash: n(wx.rain, splashMax), snow: n(wx.snow, snowMax),
+        rainMax, splashMax, snowMax,
         bolt: stroke && stroke.visible && stroke.cloudToGround && flash > 0.02 ? bolts.segCount : 0,
       };
     },
@@ -272,7 +329,7 @@ export async function createWeather(gpu, shared) {
           bolts.growing = null;
         }
       }
-      const stroke = frame.weather && frame.weather.bolt;
+      const stroke = (info.s || frame.weather || {}).bolt;
       if (stroke && stroke.id !== bolts.strokeId && stroke.visible) {
         if (!stroke.cloudToGround) bolts.strokeId = stroke.id;
         else if (bolts.pool.length) { bolts.strokeId = stroke.id; placeBolt(frame, info, stroke); }
