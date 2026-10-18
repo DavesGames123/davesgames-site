@@ -22,7 +22,8 @@
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js (site rule)
      2. style.css, lib/sci.css (fonts, .m1-.m6), lib/sn-panel.css
-     3. the importmap for three r160, then lib/tilt.js (after the map)
+     3. the importmap for three r160, then the phone tilt module (it must
+        come after the map; tools/tilt-check.mjs checks the order)
      4. main.js as a module at the end of the body
 
    LAYOUT  (# marks an element main.js binds to)
