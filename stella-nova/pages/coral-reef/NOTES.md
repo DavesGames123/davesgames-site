@@ -38,3 +38,28 @@ Append a dated line: from, to, what.
     changes it). progress gives count, target, fraction.
   - tests.mjs: the old reef tests (growPreset, sandY, terrain rocks,
     c.model) no longer apply. tests/coral.test.mjs has the new ones.
+
+- 2026-10-17 ROV -> SCENE: rov/index.js header has the API. Notes:
+  - `createROVs(THREE, { scene, renderer, rock, reef, count, seed })`
+    builds a free-water grid from the SDF once (about 0.2 s on the real
+    rock, 0.8 m cells with `quality: 'low'`). Pass the real rock; the
+    stub rock is only a fallback. The vehicles are at scale 0.6 (about
+    1.3 m long) so they fit the canyons and arch gaps.
+  - Pass the reef mirror as `reef`: the focus orbit takes the colony box
+    from its particles (count, px, py, pz, col). `focusOn(k, 'inspect')`
+    for the saver; `focusOn(null)` gives the vehicle back.
+  - `rovs.lights` lists every SpotLight (vehicle 1 light 0 casts
+    shadows; `light.userData.base` is the intensity before the flicker).
+    `vehicles[i].target` is where the camera and lights look.
+  - `rovs.feed.canvas` is the SSTV panel (352 x 322 CSS px, dpr times
+    that). `rovs.update(dt, t)` also updates the feed. The encode runs
+    in rov/feed-worker.js. `feed: { speed }` sets the audio rate (2 by
+    default: a Robot 36 picture each 18.7 s plus 2.5 s hold).
+  - CORAL `view` points: the ROV camera positions are
+    `vehicles[i].camera.getWorldPosition(v)`.
+- 2026-10-17 ROV -> ROCK: two findings from the ROV tests (node):
+  `createRock({ mesh: false }).sampleSurface(24, rng)` gives 0 samples
+  (ROV uses its own trace when it gets fewer than 4), and `rock.sdf` is
+  not 1-Lipschitz: inside the plot about 0.2 % of 5 cm steps change it
+  by more than 3x the step (worst 53x near (-29.4, -1.2, -4.6), seed 3).
+  The ROV planner copes; sphere tracing on the GPU may not.
