@@ -65,7 +65,9 @@ export function installDom() {
 
 const DEFAULT_EXT = ['EXT_color_buffer_float', 'EXT_color_buffer_half_float', 'OES_texture_float_linear', 'EXT_float_blend', 'WEBGL_debug_renderer_info'];
 
-export function fakeCanvas({ w = 800, h = 600, ext = DEFAULT_EXT, compileError = null, maxTex = 16 } = {}) {
+// canvas: an element to use (jsdom); its getContext('webgl2') must then
+// return f.gl (the harness sets it).
+export function fakeCanvas({ w = 800, h = 600, ext = DEFAULT_EXT, compileError = null, maxTex = 16, canvas: el = null } = {}) {
   const C = new Map(); let cn = 0x8000;
   const K = name => { if (!C.has(name)) C.set(name, cn++); return C.get(name); };
   const log = [];
@@ -75,7 +77,7 @@ export function fakeCanvas({ w = 800, h = 600, ext = DEFAULT_EXT, compileError =
   let clearCol = [0, 0, 0, 0];
   const shaders = new Map();
   const obj = kind => ({ id: nextId++, kind });
-  const canvas = evTarget({ width: w, height: h, clientWidth: w, clientHeight: h, style: {} });
+  const canvas = el || evTarget({ width: w, height: h, clientWidth: w, clientHeight: h, style: {} });
   const params = () => ({
     [K('VERSION')]: 'WebGL 2.0 (fake)', [K('SHADING_LANGUAGE_VERSION')]: 'WebGL GLSL ES 3.00 (fake)',
     [K('MAX_TEXTURE_IMAGE_UNITS')]: maxTex, [K('MAX_VERTEX_TEXTURE_IMAGE_UNITS')]: 16, [K('MAX_COMBINED_TEXTURE_IMAGE_UNITS')]: 32,
@@ -134,8 +136,13 @@ export function fakeCanvas({ w = 800, h = 600, ext = DEFAULT_EXT, compileError =
     set() { return true; },
   });
   // three r160 WebGLRenderer asks the canvas for 'webgl2'
-  canvas.getContext = (kind) => (kind === 'webgl2' ? gl : null);
-  function loseContext() { lost = true; canvas.dispatch('webglcontextlost', {}); }
-  function restoreContext() { lost = false; canvas.dispatch('webglcontextrestored', {}); }
+  if (!el) canvas.getContext = (kind) => (kind === 'webgl2' ? gl : null);
+  const fire = t => {
+    if (!el) return canvas.dispatch(t, {});
+    const W = el.ownerDocument.defaultView, e = new W.Event(t, { cancelable: true });
+    el.dispatchEvent(e); return e;
+  };
+  function loseContext() { lost = true; return fire('webglcontextlost'); }
+  function restoreContext() { lost = false; return fire('webglcontextrestored'); }
   return { canvas, gl, log, K, loseContext, restoreContext, get lost() { return lost; } };
 }

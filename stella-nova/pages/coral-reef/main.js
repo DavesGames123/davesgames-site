@@ -25,6 +25,18 @@
 //  snap and the pixel ratio cap. A tap plants a colony on the rock only in
 //  plant mode. A double tap out of plant mode re-frames the reef.
 //
+//  PROFILE. budget.js picks a device profile (desktop, laptop-low, phone,
+//  phone-min; ?profile= in the URL overrides it, and a context loss
+//  lowers it for the session). It sets the default reef, the reef worker
+//  budget, the rock quality and workers, the render loads and the feed.
+//  START. The water draws from the first frame. buildWorld makes the rock
+//  (at most 4 workers), then after stagger.reefMs the reef worker, then
+//  after stagger.rovMs the ROVs and their feed worker. frameGovernor
+//  steps the volume, the polyps, the shadow and the pixels down on slow
+//  frames. ERRORS. crash.js shows window errors, shader errors and a
+//  context loss in a box (#errBox). coral-link.js runs the reef on this
+//  thread when the worker fails.
+//
 //  FRAMING. clearArea() measures the panel, the dock and the plant bar.
 //  The camera view offset (setViewOffset) puts the reef in the middle of
 //  the clear part. The saver uses the clear band of the label plate and
@@ -57,6 +69,9 @@ import { PARAM_INFO } from '../../lib/dla-engine.js';
 import { mountDiagram } from './diagram.js';
 import { PHONE_QUERY, clearFromRects, tapGesture, pixelRatio, nextPreset } from './layout.js';
 import { mountShell } from './shell.js';
+import { PROFILES, PROFILE_ORDER, detectProfile, pageEnv, profileFor, reefBudget, rockWorkers, clampQuality, pixelRatioFor, lostPolicy, frameGovernor } from './budget.js';
+import { mountErrorBox, installErrorHandlers } from './crash.js';
+import { createCoralLink } from './coral-link.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia(PHONE_QUERY);
@@ -67,8 +82,22 @@ const T0 = performance.now();
 const QUAL_IDS = ['phone', 'mid', 'desktop'];
 const QUAL_LABEL = { phone: 'Few', mid: 'Many', desktop: 'Most' };
 
+// the error box first: an error in the start shows on the page
+const box = mountErrorBox(document);
+installErrorHandlers(window, box);
+const SS = (k, v) => { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { /* no storage */ } return null; };
+const URLQ = new URLSearchParams((typeof location !== 'undefined' && location.search) || (window.location && window.location.search) || '');
+// the profile: ?profile= or the device; a profile that a context loss
+// lowered for this session (sessionStorage) wins when it is lower
+const BASE_PROFILE = PROFILES[URLQ.get('profile')] ? URLQ.get('profile') : detectProfile(pageEnv());
+const LOWERED = SS('coral-reef-profile');
+const PROFILE_ID = PROFILES[LOWERED] && PROFILE_ORDER.indexOf(LOWERED) > PROFILE_ORDER.indexOf(BASE_PROFILE) ? LOWERED : BASE_PROFILE;
+const PROF = profileFor(PROFILE_ID);
+const reloadPage = () => (window.__coralReload || (() => location.reload()))();
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
 const G = {
-  preset: 'mixed', seed: 1, R: 30, quality: COARSE ? 'phone' : 'desktop', rovs: COARSE ? 2 : 3, sstv: 'r36',
+  preset: 'mixed', seed: 1, R: 30, quality: PROF.reef, rovs: PROF.rovs, sstv: 'r36',
   mode: 'natural', gradient: 'reef', rev: false,
   playing: true, speed: 1, dir: 20, cur: 0.5, nutrient: 1, temp: 27,
   caust: 0.7, beam: true, snow: true, feed: true, orbit: false, polyps: true, detail: !COARSE,
@@ -79,7 +108,29 @@ let saverOn = false, saver = null;
 
 // ── scene ───────────────────────────────────────────────────────────────────
 const canvas = $('view');
-const S = createScene({ canvas, coarse: COARSE, R: G.R, maxParticles: QUALITY.desktop.particles + 8192, onNoGL: () => { $('nogl').hidden = false; } });
+const S = createScene({
+  canvas, coarse: COARSE, R: G.R, profile: PROF, maxParticles: reefBudget(PROF, PROF.reefMax).particles + 8192,
+  onNoGL: () => { $('nogl').hidden = false; },
+  onShaderError: text => box.show({ title: 'A shader did not compile on this GPU', text: `${text}\n\nPlease report this text (the Copy button).` }),
+});
+// WebGL context loss: one reload at one profile lower, then stop
+let lostNow = false;
+if (S) canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); onContextLost(); }, false);
+function onContextLost() {
+  if (lostNow) return;
+  lostNow = true;
+  let st = null; try { st = JSON.parse(SS('coral-reef-lost') || 'null'); } catch (e) { st = null; }
+  const pol = lostPolicy(st, PROFILE_ID);
+  SS('coral-reef-lost', JSON.stringify(pol.state));
+  if (coral) coral.kill();
+  if (pol.action === 'reload') {
+    SS('coral-reef-profile', pol.profile);
+    box.show({ title: 'The GPU context was lost', text: `The page restarts with the ${PROFILES[pol.profile].label} profile (less memory).`, level: 'note' });
+    setTimeout(reloadPage, 1500);
+  } else {
+    box.show({ title: 'The GPU context was lost again', text: 'The reef stopped, so the page does not restart in a loop. Reload the page to try again.' });
+  }
+}
 const nowMs = () => performance.now() - T0;
 
 let rock = null, coral = null, rovs = null;
@@ -102,25 +153,29 @@ function makeCoral(rk, quality, seed) {
     colTop: [], colExt: [], post: null, kill: null, local: null, off: Infinity,
   };
   mirror.env = { temp: G.temp };
-  const onMsg = e => onCoral(D, e.data);
-  try {
-    const w = new Worker(new URL('./mesh-worker.js', import.meta.url), { type: 'module' });
-    w.onmessage = onMsg;
-    w.onerror = err => { console.error('coral-reef: reef worker', err); };
-    D.post = (m, tr) => w.postMessage(m, tr || []);
-    D.kill = () => w.terminate();
-  } catch (e) {
-    // no module worker: the same runner on this thread, in small slices
-    D.local = createReefRunner({ post: m => onMsg({ data: m }), makeRock: () => rk });
-    D.post = m => D.local.onMessage(m);
-    D.kill = () => {};
-    D.post({ type: 'budget', growMs: 3, meshMs: 4, maxPost: 1500 });
-  }
-  const sites = rk.sampleSurface ? rk.sampleSurface(Q.colonies * 24) : [];
+  // the reef worker, or the same runner on this thread when it fails
+  // (coral-link.js: a lower budget, small slices, the state replayed)
+  const link = createCoralLink({
+    makeWorker: () => new Worker(new URL('./mesh-worker.js', import.meta.url), { type: 'module' }),
+    makeRunner: post => createReefRunner({ post, makeRock: () => rk }),
+    onMessage: m => onCoral(D, m),
+    onFallback: why => {
+      D.gen = -1; D.want = 0; D.ready = false;
+      console.warn('coral-reef: ' + why);
+      box.show({ title: 'The reef runs on the main thread', text: `${why}. The reef is smaller and grows slower.`, level: 'note' });
+    },
+  });
+  D.post = (m, tr) => link.post(m, tr);
+  D.kill = () => link.kill();
+  D.link = link;
+  D.budget = reefBudget(PROF, quality);
+  D.limit = D.budget.particles;
+  const sites = rk.sampleSurface ? rk.sampleSurface(D.budget.colonies * 24) : [];
   D.want = 1;
   D.post({
     type: 'init', seed, quality, radius: G.R, detail: rk.detail ?? 1, rockSeed: rk.seed ?? seed, rockQuality: rk.quality || 'high',
-    sites, preset: G.preset, env: { speed: G.speed, nutrient: G.nutrient, temp: G.temp }, rate: Math.max(20, Math.round(Q.particles / PAGE_FILL_S)),
+    sites, preset: G.preset, env: { speed: G.speed, nutrient: G.nutrient, temp: G.temp }, rate: Math.max(20, Math.round(D.budget.particles / PAGE_FILL_S)),
+    budget: D.budget, colonies: saverOn ? 1 : undefined,
   });
   D.post({ type: 'current', deg: G.dir, strength: G.cur });
   return D;
@@ -131,7 +186,8 @@ const brickCols = new Map(), focusN = new Map();
 let focusDirty = false;
 function onCoral(D, m) {
   if (D !== coral) return;
-  if (m.type === 'error') { console.error('coral-reef: reef worker', m.message); return; }
+  if (m.type === 'error') { console.error('coral-reef: reef worker', m.message); box.show({ title: 'The reef worker reported an error', text: String(m.message || '').split('\n').slice(0, 6).join('\n') }); return; }
+  if (m.type === 'ready') D.ready = true;
   if (m.gen === undefined) return;
   if (m.gen < D.want) return;
   if (m.gen !== D.gen) {
@@ -183,21 +239,42 @@ function sizeBuffers(n) {
 
 // ── the world: rock, reef, ROVs ────────────────────────────────────────────
 // A new plot radius or seed makes a new rock; the reef and the ROVs follow.
+// Start light: the rock first (the water draws already), then the reef
+// worker, then the ROVs and their feed worker (PROF.stagger).
+let worldGen = 0, worldReady = false;
 async function buildWorld({ seed = G.seed, R = G.R, keepRock = false } = {}) {
+  const my = ++worldGen;
+  worldReady = false;
   G.seed = seed; G.R = R;
   setState('Building the reef rock…');
   if (!keepRock || !rock) {
-    const ro = { seed, radius: R, detail: 1, quality: COARSE ? 'low' : G.quality === 'mid' ? 'medium' : 'high' };
-    try { rock = await createRockAsync(ro); } catch (e) { console.error('coral-reef: rock workers', e); rock = createRock(ro); }
+    const ro = { seed, radius: R, detail: 1, quality: PROF.rock };
+    try {
+      rock = await createRockAsync(ro, { workers: rockWorkers(PROF, navigator.hardwareConcurrency || 4) });
+    } catch (e) {
+      // the rock workers failed: the low rock on this thread (about 1 s)
+      console.error('coral-reef: rock workers', e);
+      box.show({ title: 'The rock workers failed', text: `${(e && e.message) || e}. The page builds a low detail rock on the main thread.`, level: 'note' });
+      rock = createRock(Object.assign({}, ro, { quality: 'low' }));
+    }
+    if (my !== worldGen) return;
     if (S) { S.setPlot(R); S.setRock(rock); }
   }
   if (coral) coral.kill();
+  coral = null;
   synced = 0; hMax = 0;
   if (S) { S.clearColonies(); S.setPolypSizes(SHAPES); }
+  fitCamera(true);
+  setState('Seeding the corals…');
+  await delay(PROF.stagger.reefMs);
+  if (my !== worldGen) return;
   coral = makeCoral(rock, G.quality, seed);
   setTemp(G.temp);
-  fitCamera(true);
+  setCurrent();
+  await delay(PROF.stagger.rovMs);
+  if (my !== worldGen) return;
   buildROVs();
+  worldReady = true;
   setState('');
 }
 function presetUI() {
@@ -221,8 +298,8 @@ function buildROVs() {
   try {
     rovs = createROVs(S.THREE, {
       scene: S.scene, renderer: S.renderer, rock, reef: coral ? coral.reef : null,
-      count: G.rovs, seed: G.seed, quality: COARSE ? 'low' : 'high', radius: G.R,
-      feed: { mode: G.sstv, document, dpr: Math.min(2, devicePixelRatio || 1) },
+      count: G.rovs, seed: G.seed, quality: PROFILE_ID === 'desktop' ? 'high' : 'low', radius: G.R, profile: PROF,
+      feed: { mode: G.sstv, document, dpr: Math.min(2, devicePixelRatio || 1), size: PROF.feed },
     });
   } catch (e) { console.error('coral-reef: no ROVs', e); rovs = null; }
   if (!rovs) { S.setLights([]); return; }
@@ -479,7 +556,9 @@ function buildUI() {
   chips($('plantQuick'), SPECIES_IDS.map(id => ({ id, label: SPECIES[id].label.replace(' coral', '').replace('Finger leather', 'Finger'), sw: rgbCss(SPECIES[id].base) })), G.plant, pickPlant);
   chips($('spPick'), spItems, G.spSel, id => { G.spSel = id; buildSpeciesParams(); });
   chips($('modes'), MODES, G.mode, id => setMode(id));
-  chips($('quality'), QUAL_IDS.map(id => ({ id, label: `${QUAL_LABEL[id]} (${QUALITY[id].colonies})` })), G.quality, id => { G.quality = id; buildWorld({ keepRock: true }); setPlaying(true); });
+  chips($('quality'), QUAL_IDS.map(id => ({ id, label: `${QUAL_LABEL[id]} (${reefBudget(PROF, id).colonies})` })), G.quality, id => { G.quality = clampQuality(PROF, id); buildWorld({ keepRock: true }); setPlaying(true); });
+  // a reef larger than the profile allows is off (budget.js reefMax)
+  $('quality').querySelectorAll('button').forEach(b => { if (clampQuality(PROF, b.dataset.id) !== b.dataset.id) { b.disabled = true; b.title = 'Too large for this device'; } });
   chips($('rovCount'), [2, 3].map(n => ({ id: n, label: `${n} ROVs` })), G.rovs, n => { G.rovs = +n; buildROVs(); });
   chips($('sstvMode'), [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }], G.sstv, id => { G.sstv = id; if (rovs && rovs.feed && rovs.feed.setMode) rovs.feed.setMode(id); });
   mountGradientPicker($('gradPick'), { value: G.gradient, reversed: G.rev, onChange: (id, rev) => setGradient(id, rev) });
@@ -560,7 +639,17 @@ function readout(dt) {
 }
 
 // ── loop ────────────────────────────────────────────────────────────────────
-let last = performance.now(), fitTick = 0, viewT = 0;
+let last = performance.now(), fitTick = 0, viewT = 0, prK = 1;
+// slow frames: the volume pass, then the polyps, the shadow and the pixels
+const gov = frameGovernor({
+  frameMs: PROF.frameMs,
+  levels: [
+    { name: 'volume', apply: on => S && S.setLoads(on ? { volScale: PROF.vol.scale * 0.6, volSteps: PROF.vol.steps * 0.6 } : { volScale: PROF.vol.scale, volSteps: PROF.vol.steps }) },
+    { name: 'polyps', apply: on => S && S.setLoads({ polypDraw: on ? Math.round(PROF.polypDraw / 3) : PROF.polypDraw }) },
+    { name: 'shadow', apply: on => S && S.setLoads({ shadow: on ? 0 : PROF.shadow }) },
+    { name: 'pixels', apply: on => { prK = on ? 0.75 : 1; onResize(); } },
+  ],
+});
 // The view points (main camera, ROV cameras): the worker gives the fine
 // mesh to the colonies nearest to them.
 function sendView() {
@@ -570,7 +659,9 @@ function sendView() {
   coral.post({ type: 'view', points: pts });
 }
 function frame(t) {
+  if (lostNow) return;
   requestAnimationFrame(frame);
+  gov.tick(t - last);
   const dtMs = Math.min(100, t - last); last = t; const dt = dtMs / 1000;
   const now = nowMs();
   if (coral) {
@@ -595,12 +686,18 @@ function frame(t) {
 
 function onResize() {
   if (!S) return;
-  const r = pixelRatio(devicePixelRatio, canvas.clientWidth || 1, canvas.clientHeight || 1, COARSE);
+  const r = Math.max(0.5, Math.min(pixelRatio(devicePixelRatio, canvas.clientWidth || 1, canvas.clientHeight || 1, COARSE), pixelRatioFor(PROF, devicePixelRatio, canvas.clientWidth || 1, canvas.clientHeight || 1)) * prK);
   if (Math.abs(S.renderer.getPixelRatio() - r) > 0.01) S.renderer.setPixelRatio(r);
   S.resize(); fitCamera(false);
 }
 addEventListener('resize', onResize);
 
+// The state for the node checks (tests/robust.test.mjs, tests/saver-page.test.mjs).
+window.__coralDebug = () => ({
+  profile: PROFILE_ID, worldReady, lostNow, quality: G.quality, rockQuality: rock ? rock.quality : null, rovs: rovs ? rovs.vehicles.length : 0,
+  coral: coral ? { local: !!(coral.link && coral.link.local), why: coral.link ? coral.link.why : '', ready: !!coral.ready, count: coral.reef.count, colonies: coral.reef.colonies.filter(Boolean).length, budget: coral.budget } : null,
+  post: S ? Object.assign({}, S.post) : null, loads: S ? S.loads : null, gov: gov.level, box: box.count, boxLast: box.last,
+});
 // ── start ───────────────────────────────────────────────────────────────────
 buildUI();
 setGradient(G.gradient, G.rev);
@@ -608,7 +705,8 @@ setMode(G.mode);
 if (S) {
   S.opts.volume = G.beam; S.opts.snow = G.snow; S.U.uCaust.value = G.caust; S.U.uDetail.value = G.detail ? 1 : 0;
   onResize();
-  buildWorld().then(() => requestAnimationFrame(frame)).catch(e => { console.error('coral-reef: world', e); setState('The reef could not be built.'); });
+  requestAnimationFrame(frame);          // the water draws while the rock builds
+  buildWorld().catch(e => { console.error('coral-reef: world', e); setState('The reef could not be built.'); box.show({ title: 'The reef could not be built', text: String((e && e.stack) || e).split('\n').slice(0, 6).join('\n') }); });
 }
 
 // ── screensaver ─────────────────────────────────────────────────────────────
