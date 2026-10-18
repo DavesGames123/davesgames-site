@@ -1,0 +1,157 @@
+Coral Species (stella-nova/pages/coral-species) - credits and licences
+======================================================================
+
+The page code (base.js, species.js, worker.js, main.js, index.html,
+style.css, tests.mjs) is our own code. It imports, read only, the coral
+reef growth page of this site (stella-nova/pages/coral-reef: reef.js,
+coral-sdf.js, mesh-worker.js, colour.js, scene.js, shaders.js, water.js,
+layout.js, budget.js, saver.js, crash.js, coral-link.js), which is our
+own code too, and stella-nova/lib/dla-sdf.js, lib/action-camera.js and
+lib/growth-gradients.js.
+
+
+1. Growth engine: dlaf
+----------------------
+lib/dla-engine.js is a JavaScript port of the Model class of dlaf
+(diffusion-limited aggregation) by Michael Fogleman.
+Upstream: https://github.com/fogleman/dlaf
+The page does not fetch anything from GitHub. The port is a local file.
+
+MIT License
+
+Copyright (C) 2019 Michael Fogleman
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
+MIT License, Copyright (C) 2010-2023 three.js authors. The full text is in
+stella-nova/vendor/three@0.160.0/LICENSE.
+
+
+3. Seabed: NOAA NCEI lidar bathymetry (seabed-data.js, v2 only)
+-----------------------------------------------------
+Source: NOAA National Centers for Environmental Information (NCEI),
+Continuously Updated Digital Elevation Model (CUDEM), 1/9 arc-second
+topobathy tile ncei19_n18x00_w064x75_2019v1 (St. Croix, US Virgin
+Islands). DOI 10.25921/ds9v-ky35 (on 2026-10-17 it redirects to an NCEI page).
+Read on 2026-10-17 with OPeNDAP:
+  https://www.ngdc.noaa.gov/thredds/dodsC/tiles/tiled_19as/ncei19_n18x00_w064x75_2019v1.nc
+  variable z, lat index 1314..1473, lon index 4224..4383
+  (17.7904 N to 17.7953 N, 64.6198 W to 64.6149 W)
+The place is the lagoon of Buck Island Reef National Monument: sand with
+patch reefs and the back-reef ridge. seabed-data.js stores the 160 x 160
+depths in centimetres. terrain.js scales the relief to the reef (the
+scene is not to scale) and adds procedural ripples, rubble and rocks.
+Since v3 (the ROV dive) the page does not draw this seabed: the reef
+grows on the seeded rock of rock/. terrain.js and seabed-data.js stay
+as a compatibility layer until no file imports them.
+Licence: a work of the US Government (NOAA). It is not subject to
+copyright in the United States (public domain). The NCEI coastal DEM
+metadata states: "Produced by the NOAA National Geophysical Data Center.
+Not subject to copyright protection within the United States." It is not
+for navigation.
+
+
+4. Scanned models and textures: Poly Haven (assets/)
+----------------------------------------------------
+All CC0 1.0 Universal (public domain dedication): https://polyhaven.com/license
+CC0 text: https://creativecommons.org/publicdomain/zero/1.0/
+Fetched on 2026-10-17 from api.polyhaven.com (1k glTF and 1k JPEG).
+We made the models small (vertex clustering for the rocks, quantised
+positions and normals: the CRM1 files in assets/models) and resized the
+textures to 512 px.
+  assets/models/lambis_shell.bin, assets/tex/shell_diff.jpg, shell_nor.jpg
+      "Lambis Shell" by Kuutti Siitonen, https://polyhaven.com/a/lambis_shell
+  assets/models/moon_rock_01.bin .. moon_rock_07.bin
+      "Moon Rock 01".."Moon Rock 07" by Greg Zaal, Rico Cilliers,
+      Jenelle van Heerden (01 also Dario Barresi),
+      https://polyhaven.com/a/moon_rock_01 (and _02 .. _07)
+  assets/models/rock_09.bin
+      "Rock 09" by Jenelle van Heerden, https://polyhaven.com/a/rock_09
+  assets/tex/reefrock_diff.jpg, reefrock_nor.jpg
+      "Coral Ground 02" by Rob Tuytel, https://polyhaven.com/a/coral_ground_02
+  assets/tex/gravel_diff.jpg, gravel_nor.jpg
+      "Coral Gravel" by Rob Tuytel, https://polyhaven.com/a/coral_gravel
+  assets/tex/sand_diff.jpg, sand_nor.jpg
+      "Sand 01" by Rob Tuytel, https://polyhaven.com/a/sand_01
+  assets/tex/rock/reef_rock_albedo.webp, reef_rock_normal.webp,
+  reef_rock_orm.webp (v3 rock, 1024 px WebP)
+      "Rock 3" by Rob Tuytel, https://polyhaven.com/a/rock_3
+Since v3 the page draws the rock and sand sets only; the scanned models
+and the other textures are not on screen.
+
+
+5. Code ideas with credit
+-------------------------
+- lib/dla-sdf.js: the round cone distance and the polynomial smooth
+  minimum follow the formulas of Inigo Quilez (iquilezles.org articles
+  "distance functions" and "smooth minimum"; MIT). Surface nets after
+  S. F. F. Gibson, "Constrained elastic surface nets" (1998). Our code.
+- shaders.js and water.js: the caustic map uses the mesh-area method of
+  our own page stella-nova/pages/photon-caustics (topview.js), on a
+  random sea of 28 waves (swell, wind sea, chop; deep-water dispersion
+  omega = sqrt(g k)), warped and broken into patches by fbm noise.
+  The lamp volume uses the Henyey-Greenstein phase function (L. G.
+  Henyey and J. L. Greenstein, Astrophysical Journal 93, 70, 1941) and
+  the tone map is the ACES fit of K. Narkowicz (2015).
+- rov/link.js: the SSTV camera link uses the encoder and decoder of our
+  own SSTV page, stella-nova/pages/sstv (codec.js, modes.js,
+  session.js), imported, not copied. Its CREDITS.md names the sources
+  of the mode timings. Bump mapping from
+  screen derivatives after M. Mikkelsen, "Bump mapping unparametrized
+  surfaces on the GPU" (2010).
+
+
+6. Ideas (no code taken)
+------------------------
+- J. A. Kaandorp, C. P. Lowe, D. Frenkel and P. M. A. Sloot, "Effect of
+  nutrient diffusion and flow on coral morphology", Physical Review
+  Letters 77, 2328 (1996). The view of a coral as nutrient-limited
+  diffusion-limited aggregation in a flow.
+- J. A. Kaandorp and J. E. Kubler, "The Algorithmic Beauty of Seaweeds,
+  Sponges and Corals", Springer (2001). Accretive growth: the brain coral
+  hook lays each new polyp on the surface of a compact dome.
+- T. A. Witten and L. M. Sander, "Diffusion-limited aggregation, a
+  kinetic critical phenomenon", Physical Review Letters 47, 1400 (1981).
+
+The caustics, the water and lamp shading, the volume pass, the coral
+and polyp shading and the marine snow are our own GLSL.
+
+
+2. Rendering: three.js r160 (MIT), https://threejs.org
+
+
+3. Textures (loaded from pages/coral-reef/assets/tex), CC0 1.0
+-------------------------------------------------------------
+Poly Haven, https://polyhaven.com/license (public domain dedication)
+  sand_diff.jpg, sand_nor.jpg ......... "Sand 01" by Rob Tuytel,
+                                        https://polyhaven.com/a/sand_01
+  rock/reef_rock_*.webp ............... "Rock 3" by Rob Tuytel,
+                                        https://polyhaven.com/a/rock_3
+
+
+4. Ideas (our own code, no source copied)
+-----------------------------------------
+- J. A. Kaandorp, C. P. Lowe, D. Frenkel and P. M. A. Sloot, "Effect of
+  nutrient diffusion and flow on coral morphology", Phys. Rev. Lett. 77,
+  2328 (1996).
+- J. A. Kaandorp and J. E. Kubler, The Algorithmic Beauty of Seaweeds,
+  Sponges and Corals (Springer, 2001).
+- T. A. Witten and L. M. Sander, "Diffusion-limited aggregation, a
+  kinetic critical phenomenon", Phys. Rev. Lett. 47, 1400 (1981).
+- I. Quilez: the smooth minimum and the round cone distance (articles).
