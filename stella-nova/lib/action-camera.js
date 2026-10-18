@@ -23,6 +23,15 @@
 //      g.center [x, y, z], g.radius, g.distance(fovY, aspect), g.brightness
 //    ac.reset()     after a new scenario (the next update snaps)
 //
+//  TWO HALVES  update(sample, dt) is follow(measure(sample), dt).
+//    ac.measure(sample)      -> { c, r, n }: the trimmed centre, the
+//                               percentile radius and the body count, with
+//                               no change to the camera state
+//    ac.follow({ c, r, n }, dt) -> the goal: the dead zone, the springs and
+//                               the zoom cap on a centre and a radius that
+//                               the page found its own way (for example a
+//                               shot director that frames two cores)
+//
 //  INPUT  pos (and vel, acc) are flat arrays with `stride` floats per body
 //  (default 3); mass is per body (default 1). Pass a subsample of large sets
 //  (2 000 to 20 000 bodies is enough).
@@ -126,8 +135,12 @@ export function createActionCamera(opts = {}) {
   }
 
   function update(sample, dt = 1 / 60) {
-    const m = measure(sample);
+    return follow(measure(sample), dt);
+  }
+
+  function follow(m, dt = 1 / 60) {
     if (!m) return goal();
+    m = { c: m.c, r: Math.min(o.maxRadius, Math.max(o.minRadius, m.r)), n: m.n || 0 };
     dt = Math.min(0.25, Math.max(0, dt));
     if (!st) { st = { c: m.c.slice(), cv: [0, 0, 0], r: m.r, rv: 0, goalC: m.c.slice(), goalR: m.r, n: m.n }; return goal(); }
     st.n = m.n;
@@ -163,7 +176,7 @@ export function createActionCamera(opts = {}) {
     };
   }
 
-  return { update, goal, reset() { st = null; }, options: o };
+  return { update, measure, follow, goal, reset() { st = null; }, options: o };
 }
 
 export { robustCenter, percentileRadius, spring };
