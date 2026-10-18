@@ -30,6 +30,11 @@
 //  capped. A phone passes a lower cap (density.js runCap). Heavy patterns
 //  run in worker.js.
 //
+//  USERS. pages/pattern-animator imports this file, patterns/, palettes.js,
+//  density.js, taste.js, color.js, export.js and worker.js (its worker
+//  too). It moves the output of run() in time and needs no change here.
+//  Keep these exports and the element format when you change them.
+//
 //  grep -n targets
 //    random source ........ "function makeRng"
 //    noise ................ "function makeNoise"
