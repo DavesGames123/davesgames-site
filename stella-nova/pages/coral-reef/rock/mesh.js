@@ -23,7 +23,7 @@
 //    lattice and chunk list ... "export function meshLayout"
 //    one chunk ................ "export function meshChunk"
 // ============================================================================
-import { Y_BOTTOM } from './geology.js';
+import { Y_BOTTOM, LSCALE, D_OUT, D_IN } from './geology.js';
 
 export const QUALITY = Object.freeze({
   high: { cell: 0.2, chunk: 32 },
@@ -98,7 +98,8 @@ export function meshChunk(geo, lay, ci, cj, ck) {
           const c00 = g(0, 0, 0) + (g(1, 0, 0) - g(0, 0, 0)) * ux, c10 = g(0, 1, 0) + (g(1, 1, 0) - g(0, 1, 0)) * ux;
           const c01 = g(0, 0, 1) + (g(1, 0, 1) - g(0, 0, 1)) * ux, c11 = g(0, 1, 1) + (g(1, 1, 1) - g(0, 1, 1)) * ux;
           const d0 = c00 + (c10 - c00) * uy, d1 = c01 + (c11 - c01) * uy;
-          v = d0 + (d1 - d0) * uz;
+          v = (d0 + (d1 - d0) * uz) * LSCALE;            // same scale and clamp as geo.sdf
+          v = v > D_OUT ? D_OUT : v < -D_IN ? -D_IN : v;
         } else { v = geo.sdf(x0 + gi * cell, y, z); exact++; }
         S[(k * SY + j) * SX + i] = v;
       }

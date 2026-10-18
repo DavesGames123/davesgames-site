@@ -145,7 +145,7 @@ for (const seed of QUICK ? [1] : [1, 5, 9]) {
   const ds = [];
   for (const m of rock.meshes) {
     const P = m.positions;
-    for (let i = 0; i < P.length; i += 9) ds.push(Math.abs(rock.sdf(P[i], P[i + 1], P[i + 2])));
+    for (let i = 0; i < P.length; i += 9) ds.push(Math.abs(rock.sdf(P[i], P[i + 1], P[i + 2])) / rock.sdfScale);
   }
   ds.sort((a, b) => a - b);
   const mean = ds.reduce((a, b) => a + b, 0) / ds.length, p99 = ds[Math.floor(ds.length * 0.99)], worst = ds[ds.length - 1];
@@ -181,7 +181,7 @@ for (const seed of QUICK ? [1] : [1, 5, 9]) {
   let on = 0, outw = 0, above = 0;
   for (const s of S) {
     const [x, y, z] = s.p, n = s.n;
-    if (Math.abs(rock.sdf(x, y, z)) < 0.01) on++;
+    if (Math.abs(rock.sdf(x, y, z)) / rock.sdfScale < 0.01) on++;
     if (rock.sdf(x + n[0] * 0.1, y + n[1] * 0.1, z + n[2] * 0.1) > 0.02 && rock.sdf(x - n[0] * 0.1, y - n[1] * 0.1, z - n[2] * 0.1) < -0.02) outw++;
     if (y >= rock.sand.heightAt(x, z) && Math.hypot(x, z) <= R) above++;
   }
@@ -192,6 +192,44 @@ for (const seed of QUICK ? [1] : [1, 5, 9]) {
   ok(Math.min(...ex) >= 0 && Math.max(...ex) <= 1 && S.some(s => s.overhang) && S.some(s => !s.overhang), 'sampleSurface: exposure in 0..1, both overhang states', `mean exposure ${(ex.reduce((a, b) => a + b, 0) / ex.length).toFixed(2)}, overhang ${S.filter(s => s.overhang).length}`);
   const up = rock.sampleSurface(50, null, s => s.exposure > 0.7);
   ok(up.length === 50 && up.every(s => s.exposure > 0.7), 'sampleSurface: the filter works');
+}
+
+// ── the SDF is a distance bound (Lipschitz) ───────────────────────────────
+{
+  const worst = [];
+  for (const seed of QUICK ? [3] : [1, 3, 5, 7, 9, 11]) {
+    const rock = createRock({ seed, quality: 'high', mesh: false });
+    let L = 0, at = null;
+    let st = (seed * 2654435761) >>> 0;
+    const rnd = () => { st = (st + 0x6d2b79f5) | 0; let t = Math.imul(st ^ (st >>> 15), 1 | st); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = 0; i < (QUICK ? 60000 : 150000); i++) {
+      const a = rnd() * 6.283, r = Math.sqrt(rnd()) * 1.35 * rock.radius;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, y = -3 + rnd() * (rock.bounds.max[1] + 4);
+      const h = [0.05, 0.2, 1][i % 3];
+      let dx = rnd() - 0.5, dy = rnd() - 0.5, dz = rnd() - 0.5; const l = Math.hypot(dx, dy, dz);
+      dx *= h / l; dy *= h / l; dz *= h / l;
+      const q = Math.abs(rock.sdf(x, y, z) - rock.sdf(x + dx, y + dy, z + dz)) / h;
+      if (q > L) { L = q; at = [x, y, z].map(v => v.toFixed(2)).join(', '); }
+    }
+    worst.push(`seed ${seed} L ${L.toFixed(2)} at (${at})`);
+  }
+  ok(worst.every(w => +w.split(' L ')[1].split(' ')[0] <= 1.5), `rock.sdf is 1.5-Lipschitz on random pairs (5 cm, 20 cm, 1 m)`, worst.join('; '));
+}
+
+// ── sampleSurface without a mesh, sand as a solid ─────────────────────────
+{
+  const rock = createRock({ seed: 3, mesh: false });
+  const S = rock.sampleSurface(120);
+  let on = 0, outw = 0, up = 0, side = 0;
+  for (const s of S) {
+    const [x, y, z] = s.p, n = s.n;
+    if (Math.abs(rock.sdf(x, y, z)) / rock.sdfScale < 0.01) on++;
+    if (rock.sdf(x + n[0] * 0.1, y + n[1] * 0.1, z + n[2] * 0.1) > 0.008 && rock.sdf(x - n[0] * 0.1, y - n[1] * 0.1, z - n[2] * 0.1) < -0.008) outw++;
+    if (n[1] > 0.7) up++; else if (Math.abs(n[1]) < 0.5) side++;
+  }
+  ok(S.length === 120 && on === S.length && outw >= 0.95 * S.length, 'sampleSurface works with mesh: false (traced rays)', `${S.length} samples, ${on} on the surface, ${outw} outward normals, ${up} tops, ${side} walls`);
+  const sx = 5, sz = -7, sh = rock.sand.heightAt(sx, sz);
+  ok(rock.sand.sdf(sx, sh - 0.5, sz) < 0 && rock.sand.sdf(sx, sh + 0.5, sz) > 0 && rock.sdfAll(sx, sh - 0.5, sz) < 0, 'sand.sdf and sdfAll treat the sand as solid');
 }
 
 // ── textures and credits ──────────────────────────────────────────────────

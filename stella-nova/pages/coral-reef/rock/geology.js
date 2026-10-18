@@ -44,7 +44,15 @@
 // ============================================================================
 import { makeNoise, mulberry32 } from './noise.js';
 
-export const Y_BOTTOM = -2.5;     // rock floor under the sand (closes the mesh)
+export const Y_BOTTOM = -2.5;
+// rock.sdf = clamp(raw field * LSCALE, -D_IN, D_OUT). The raw field
+// changes by up to about 3.9 m per m (measured on 8 seeds, 5 cm steps;
+// strata, joints, the crag band), so LSCALE brings rock.sdf under
+// 1.5 m per m: a safe bound for sphere tracing (tests/rock.test.mjs).
+// The far parts of the raw field are skipped by bounding tests that are
+// only invisible inside the clamp range.
+export const LSCALE = 0.4;
+export const D_OUT = 4 * LSCALE, D_IN = 2 * LSCALE;
 const G = 0.25;                   // 2D grid step (m)
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -58,7 +66,7 @@ export function smax(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; 
 // 0 = flush, 1 = full recess.
 function strataProfile(u, soft) {
   const j = u < 0.5 ? u : 1 - u;
-  return 0.45 * (1 - sstep(0.0, 0.12, j)) + soft * (sstep(0.3, 0.45, u) - sstep(0.82, 0.95, u));
+  return 0.4 * (1 - sstep(0.0, 0.2, j)) + soft * (sstep(0.22, 0.48, u) - sstep(0.74, 0.98, u));
 }
 
 // 1D squared distance transform (Felzenszwalb and Huttenlocher 2012).
@@ -190,7 +198,9 @@ export function makeGeology(opts = {}) {
         }
       }
       for (let q = 0; q < N2; q++) if (Ck[q] - CWk[q] < C[q] - CW[q] || C[q] === 99) { C[q] = Ck[q]; CW[q] = CWk[q]; }
-      CK.push({ C: Ck, CW: CWk, CS: CSk, bridges: cn.bridges });
+      // The half width of the nearest segment jumps where the nearest
+      // segment changes (inside bends); a blur keeps the walls smooth.
+      CK.push({ C: Ck, CW: boxBlur2(boxBlur2(CWk, n, 6), n, 6), CS: CSk, bridges: cn.bridges });
     }
   }
 
@@ -338,7 +348,7 @@ export function makeGeology(opts = {}) {
       if (!canyonClear(ox, oz, 1.5)) continue;
       if (arches.some(a => Math.hypot(a.x - cx, a.z - cz) < a.Ra + Ra + 3)) continue;
       const sy = sandAt(cx, cz);
-      arches.push({ x: cx, z: cz, yc: sy - Ra * 0.22, Ra, rt, vs, ax: e.nx, az: e.nz, R2: (Ra + rt * 2.2 + 1) ** 2 });
+      arches.push({ x: cx, z: cz, yc: sy - Ra * 0.22, Ra, rt, vs, ax: e.nx, az: e.nz, R2: (Ra + rt * 2.3 + 5) ** 2 });
     }
   }
   const wantArches = 2 + (rng() < 0.5 ? 1 : 0);
@@ -356,7 +366,7 @@ export function makeGeology(opts = {}) {
     while (arches.length < 2) {
       const Ra = clamp(best * 0.9, 2.2, 4.5), a = rng() * 6.283;
       const x = bx + (arches.length ? 0 : 0), z = bz;
-      arches.push({ x, z, yc: sandAt(x, z) - Ra * 0.22, Ra, rt: 0.7, vs: 1.2, ax: Math.cos(a), az: Math.sin(a), R2: (Ra + 2.6) ** 2 });
+      arches.push({ x, z, yc: sandAt(x, z) - Ra * 0.22, Ra, rt: 0.7, vs: 1.2, ax: Math.cos(a), az: Math.sin(a), R2: (Ra + 6.7) ** 2 });
       if (arches.length < 2) { bx = -bx * 0.6 + 4; bz = -bz * 0.6 - 3; }
     }
   }
@@ -373,7 +383,7 @@ export function makeGeology(opts = {}) {
       if (arches.some(q => Math.hypot(q.x - x, q.z - z) < q.Ra + r0 + 2.5)) continue;
       if (pinnacles.some(q => Math.hypot(q.x - x, q.z - z) < q.r0 + r0 + 4)) continue;
       const hgt = 4 + rng() * 6, cap = rng() < 0.55;
-      pinnacles.push({ x, z, y0: sandAt(x, z), r0, h: hgt, ph: rng() * 6.283, lx: (rng() - 0.5) * 0.16, lz: (rng() - 0.5) * 0.16, cap, capR: r0 * (1.35 + rng() * 0.35), capT: 0.7 + rng() * 0.5, R2: (r0 * 2 + 2 + hgt * 0.1) ** 2 });
+      pinnacles.push({ x, z, y0: sandAt(x, z), r0, h: hgt, ph: rng() * 6.283, lx: (rng() - 0.5) * 0.16, lz: (rng() - 0.5) * 0.16, cap, capR: r0 * (1.35 + rng() * 0.35), capT: 0.7 + rng() * 0.5, R2: (r0 * 2 + 5 + hgt * 0.1) ** 2 });
     }
   }
 
@@ -438,7 +448,7 @@ export function makeGeology(opts = {}) {
   const BIN = 4, nb = Math.ceil(2 * E / BIN) + 1;
   const bins = Array.from({ length: nb * nb }, () => []);
   for (let i = 0; i < boulders.length; i++) {
-    const b = boulders[i], rr = Math.max(b.rx, b.rz) + 1.6;
+    const b = boulders[i], rr = Math.max(b.rx, b.rz) + 4.6;
     const i0 = clamp(Math.floor((b.x - rr + E) / BIN), 0, nb - 1), i1 = clamp(Math.floor((b.x + rr + E) / BIN), 0, nb - 1);
     const j0 = clamp(Math.floor((b.z - rr + E) / BIN), 0, nb - 1), j1 = clamp(Math.floor((b.z + rr + E) / BIN), 0, nb - 1);
     for (let j = j0; j <= j1; j++) for (let ii = i0; ii <= i1; ii++) bins[j * nb + ii].push(i);
@@ -455,13 +465,13 @@ export function makeGeology(opts = {}) {
   // Beds of uneven thickness, and an uneven recess per bed (some beds are
   // flush, some stand out as ledges).
   const bp1 = rng() * 6.283, bp2 = rng() * 6.283, bseed = Math.floor(rng() * 1e6);
-  // bedCoord(y, ph) = u + 0.2 sin(2.31 u + bp1) + 0.1 sin(5.13 u + bp2), u = (y + ph) / P,
+  // bedCoord(y, ph) = u + 0.12 sin(2.31 u + bp1) + 0.05 sin(5.13 u + bp2), u = (y + ph) / P,
   // from a table (linear, step 1/64 in u) over the u range of the plot.
   const BU0 = -12, BU1 = 30, BS = 64, BED = new Float64Array((BU1 - BU0) * BS + 2);
-  for (let i = 0; i < BED.length; i++) { const u = BU0 + i / BS; BED[i] = u + 0.2 * Math.sin(u * 2.31 + bp1) + 0.1 * Math.sin(u * 5.13 + bp2); }
+  for (let i = 0; i < BED.length; i++) { const u = BU0 + i / BS; BED[i] = u + 0.12 * Math.sin(u * 2.31 + bp1) + 0.05 * Math.sin(u * 5.13 + bp2); }
   function bedCoord(y, ph) {
     const t = ((y + ph) / P - BU0) * BS;
-    if (t <= 0 || t >= BED.length - 1) { const u = (y + ph) / P; return u + 0.2 * Math.sin(u * 2.31 + bp1) + 0.1 * Math.sin(u * 5.13 + bp2); }
+    if (t <= 0 || t >= BED.length - 1) { const u = (y + ph) / P; return u + 0.12 * Math.sin(u * 2.31 + bp1) + 0.05 * Math.sin(u * 5.13 + bp2); }
     const i = t | 0, f = t - i;
     return BED[i] + (BED[i + 1] - BED[i]) * f;
   }
@@ -471,8 +481,8 @@ export function makeGeology(opts = {}) {
   // ── the base field (no crag detail) ────────────────────────────────────
   function base(x, y, z) {
     const r = Math.sqrt(x * x + z * z);
-    if (r > R132 + 0.5) return r - R132;
-    if (y < Y_BOTTOM - 0.5) return Y_BOTTOM - y;
+    if (r > R132 + 4.5) return r - R132;
+    if (y < Y_BOTTOM - 4.5) return Y_BOTTOM - y;
     at(x, z);
     const f0 = lerp(F), h = lerp(H), s = lerp(S);
     const fade = r <= R ? 0 : sstep(R, R13, r);
@@ -482,7 +492,7 @@ export function makeGeology(opts = {}) {
     const nb2 = (yr - 0.85) / 0.75, notch = un * Math.exp(-nb2 * nb2);
     const capT = ov * sstep(h - 2.8, h - 1.3, y);
     // massif
-    const thin = fade * 8, ht = lerp(HT) - thin;
+    const thin = fade * 6, ht = lerp(HT) - thin;
     const bat = lerp(BT) * Math.max(0, yr - 1.2);           // walls lean back with height
     const f = f0 + Math.min(strA * st + notch, Math.max(0, 0.5 * ht - 0.75 * detail)) - capT * sstep(2, 3.5, ht) + thin + bat;
     let d = smax(f, y - h, 0.9);
@@ -500,12 +510,15 @@ export function makeGeology(opts = {}) {
         const cs = lerp(K.CS);
         for (let b = 0; b < K.bridges.length; b++) {
           const br = K.bridges[b], ds = Math.abs(cs - br.s0);
-          if (ds > br.Tb + 3) continue;
+          if (ds > br.Tb + 5) continue;
           const lat = Math.min(1, c / br.wf);
-          const yb = s + br.rise * Math.sqrt(Math.max(0, 1 - lat * lat)) - 0.4;
+          // a parabolic arch; the height terms are divided by their slope
+          // bound, so the slab stays a distance bound
+          const yb = s + br.rise * (1 - lat * lat) - 0.4;
           const yt = s + br.rise + br.thick + 0.35 * lat;
-          const tb = br.Tb * (1 + 0.25 * Math.sin(y * 1.7 + c));
-          const slab = Math.max(ds - tb, yb - y, y - yt);
+          const tb = br.Tb * (1 + 0.15 * Math.sin(y * 1.2 + c * 0.8));
+          const kb = 1 / Math.sqrt(1 + (2 * br.rise / br.wf) ** 2);
+          const slab = Math.max(ds - tb, (yb - y) * kb, (y - yt) * 0.9);
           cv = smax(cv, -slab, 0.5);
         }
       }
@@ -521,7 +534,7 @@ export function makeGeology(opts = {}) {
       const ex = pax - bax * t, ey = (pay - bay * t) / cv.sq, ez = paz - baz * t;
       const rr = cv.rad * (1 - 0.35 * t);
       const dc = (Math.sqrt(ex * ex + ey * ey + ez * ez) - rr) * cv.sq;
-      if (dc < 2) d = smax(d, -dc, 0.6);
+      if (dc < 3) d = smax(d, -dc, 0.6);
     }
     // arches: half tori in a vertical plane
     for (let k = 0; k < arches.length; k++) {
@@ -544,7 +557,8 @@ export function makeGeology(opts = {}) {
       if (dx * dx + dz * dz > p.R2) continue;
       const tH = clamp(yy / p.h, 0, 1);
       const th = Math.atan2(dz, dx);
-      let rad = p.r0 * (1 - 0.38 * tH) * (1 + 0.18 * Math.sin(3 * th + p.ph + yy * 0.35) + 0.1 * Math.sin(5 * th - yy * 0.6)) + 0.8 * Math.exp(-Math.max(0, yy) / 0.8) - strA * 0.5 * st - notch * 0.25;
+      const rho = Math.sqrt(dx * dx + dz * dz), lob = rho / (rho + 0.5 * p.r0);
+      let rad = p.r0 * (1 - 0.38 * tH) * (1 + lob * (0.18 * Math.sin(3 * th + p.ph + yy * 0.35) + 0.1 * Math.sin(5 * th - yy * 0.6))) + 0.8 * Math.exp(-Math.max(0, yy) / 0.8) - strA * 0.5 * st - notch * 0.25;
       let dp = smax(Math.sqrt(dx * dx + dz * dz) - rad, yy - p.h, 0.5);
       if (p.cap) {
         const cy = yy - (p.h - p.capT * 0.5);
@@ -554,26 +568,29 @@ export function makeGeology(opts = {}) {
       d = smin(d, dp, 0.8);
     }
     // boulders and scree
-    if (y < 4) {
+    if (y < 7) {
       const bi = clamp(Math.floor((x + E) / BIN), 0, nb - 1), bj = clamp(Math.floor((z + E) / BIN), 0, nb - 1);
       const list = bins[bj * nb + bi];
       for (let k = 0; k < list.length; k++) {
         const b = boulders[list[k]];
         const dx = x - b.x, dy = y - b.y, dz = z - b.z;
         const lx = (dx * b.c - dz * b.s) / b.rx, lz = (dx * b.s + dz * b.c) / b.rz, ly = dy / b.ry;
-        const mr = Math.min(b.rx, b.ry, b.rz);
-        const db = (Math.sqrt(lx * lx + ly * ly + lz * lz) - 1) * mr;
-        if (db < 1.2) d = smin(d, db, 0.25);
+        // ellipsoid distance (Quilez: k0 (k0 - 1) / k1), close to exact
+        // far away, so the bin and gate tests below hide no jump
+        const k0 = Math.sqrt(lx * lx + ly * ly + lz * lz);
+        const k1 = Math.sqrt(lx * lx / (b.rx * b.rx) + ly * ly / (b.ry * b.ry) + lz * lz / (b.rz * b.rz)) || 1e-6;
+        const db = k0 < 1 ? (k0 - 1) * Math.min(b.rx, b.ry, b.rz) : k0 * (k0 - 1) / k1;
+        if (db < 4.4) d = smin(d, db, 0.25);
       }
     }
-    if (y < Y_BOTTOM + 0.6) d = smax(d, Y_BOTTOM - y, 0.25);
-    if (r > R13 - 1) d = Math.max(d, r - R132);
+    if (y < Y_BOTTOM + 2.5) d = smax(d, Y_BOTTOM - y, 0.25);
+    if (r > R13 - 3) d = Math.max(d, r - R132);
     return d;
   }
 
   // ── crag detail (near the surface only) ────────────────────────────────
   const W2 = [0, 0, 0];
-  const crackW = 0.1 + 0.2 * (1 - fine);          // crack width (Worley F2 - F1 units), wider on coarse meshes
+  const crackW = 0.3 + 0.15 * (1 - fine);          // crack width (Worley F2 - F1 units), wider on coarse meshes
   const ampR = 0.34 * detail, ampR2 = 0.15 * detail * fine, ampW = 0.2 * detail * (0.4 + 0.6 * fine), ampP = 0.05 * detail * (fine > 0.9 ? 1 : 0);
   function crag(x, y, z) {
     // domain warp
@@ -588,25 +605,39 @@ export function makeGeology(opts = {}) {
     // Each block sits a little out or in (the step hides in the crack).
     nz.worley3(qx * 0.45, qy * 0.2, qz * 0.45, W2);
     const e = W2[1] - W2[0];
-    disp += ampW * 1.6 * (1 - sstep(0.0, crackW, e)) + ampW * 0.7 * (W2[2] - 0.5) * sstep(0.02, crackW, e);
+    // V cracks (linear sides keep the slope bounded)
+    disp += ampW * 1.5 * Math.max(0, 1 - e / crackW) + ampW * 0.5 * (W2[2] - 0.5) * sstep(0.02, crackW, e);
     if (fine > 0.9) {
       // a finer joint set and small chips
       nz.worley3(qx * 1.0 + 7, qy * 0.6, qz * 1.0, W2);
       const e2 = W2[1] - W2[0];
-      disp += ampR2 * (1 - sstep(0.0, 0.25, e2)) + ampR2 * 0.5 * (W2[2] - 0.5) * sstep(0.02, 0.25, e2);
+      disp += ampR2 * 0.8 * Math.max(0, 1 - e2 / 0.35) + ampR2 * 0.4 * (W2[2] - 0.5) * sstep(0.02, 0.35, e2);
     }
     // fine pits
     if (ampP > 0) disp += ampP * nz.g3(x * 2.3, y * 2.3, z * 2.3);
     return disp;
   }
 
-  function sdf(x, y, z) {
+  // The field is clamped to -D_IN..D_OUT. Far from the surface the parts
+  // of the field are skipped (bounding tests), and the skips are only
+  // invisible inside this range; so the clamped field has no jumps. A
+  // clamped distance is still a safe bound for sphere tracing (steps of at
+  // most D_OUT).
+  function sdfRaw(x, y, z) {
     const b = base(x, y, z);
     // The crag acts in a band: from 0.8 m inside the base surface (so it
     // can not cut through thin rock: no loose blocks) to BAND outside.
     if (b <= -0.8 || b >= BAND || detail <= 0) return b;
     const c = crag(x, y, z);
-    return b + c * (b < 0 ? sstep(-0.8, -0.3, b) : 1 - sstep(BAND * 0.5, BAND, b));
+    // Carving is limited to half the depth left to -0.8 m, relief to half
+    // the room left to BAND. Both limits are linear in b, so the slope of
+    // the sum stays bounded (no weight derivative times c).
+    // Both go to 0 at the band ends, so the field is continuous there.
+    return b + (c > 0 ? Math.min(c, 0.5 * (b + 0.8), BAND - b) : Math.max(c, -0.5 * (BAND - b), -(b + 0.8)));
+  }
+  function sdf(x, y, z) {
+    const d = sdfRaw(x, y, z) * LSCALE;
+    return d > D_OUT ? D_OUT : d < -D_IN ? -D_IN : d;
   }
 
   // Features for the ROV survey paths and the tests.
@@ -649,7 +680,7 @@ export function makeGeology(opts = {}) {
   }
 
   return {
-    seed, R, E, detail, sdf, base, crag, sandAt, band: BAND,
+    seed, R, E, detail, sdf, sdfRaw, base, crag, sandAt, band: BAND, lscale: LSCALE, clamp: [-D_IN, D_OUT],
     strata: { period: P, recess: strA, dip: [dipX, dipZ], phaseAt: (x, z) => sample(PH, x, z), bedAt: (x, y, z) => bedCoord(y, sample(PH, x, z)) },
     yMax, features,
     plan: { canyons, bridges, arches, pinnacles, caves, boulders, rockShare },
