@@ -259,6 +259,7 @@ export function createFauna(o) {
 
   // ── the per-frame fill ────────────────────────────────────────────────────
   const frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), sph = new THREE.Sphere();
+  const lodOf = new Int8Array(sim.capacity);          // per animal: -1 hidden, 0, 1, 2 (halo only)
   let halo = null;
   function makeHalo() {
     const geo = new THREE.InstancedBufferGeometry();
@@ -282,18 +283,19 @@ export function createFauna(o) {
     if (camera) { pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv); }
     const ox = origin ? origin[0] : 0, oz = origin ? origin[1] : 0;
     // pass 1: count per bucket and lod
-    const N = sim.capacity, list = sim.species, slotB = new Array(list.length);
-    for (let s = 0; s < list.length; s++) { const b = bucketFor(list[s]); b.n0 = 0; b.n1 = 0; slotB[s] = b; }
-    for (const b of buckets.values()) { b.n0 = b.n0 || 0; b.n1 = b.n1 || 0; }
-    const lodOf = new Int8Array(N);
+    const N = sim.capacity, list = sim.species, slotB = new Array(list.length).fill(null);
+    for (const b of buckets.values()) { b.n0 = 0; b.n1 = 0; }
     for (let i = 0; i < N; i++) {
       lodOf[i] = -1;
       if (!sim.alive[i]) continue;
-      const b = slotB[sim.spec[i]];
+      const sl = sim.spec[i];
+      // a bucket only for the species with a live animal (no churn for old slots)
+      const b = slotB[sl] || (slotB[sl] = bucketFor(list[sl]));
       const dx = sim.px[i] - eye[0], dy = sim.py[i] - eye[1], dz = sim.pz[i] - eye[2], d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (d > B.draw) continue;
       const r = sim.size[i];
-      if (camera) { sph.center.set(sim.px[i] - ox, sim.py[i], sim.pz[i] - oz); sph.radius = r * 0.8 + 0.2; if (!frustum.intersectsSphere(sph)) continue; }
+      // the near animals are always drawn: the ROV feed cameras look at them too
+      if (camera && d > 12) { sph.center.set(sim.px[i] - ox, sim.py[i], sim.pz[i] - oz); sph.radius = r * 0.8 + 0.2; if (!frustum.intersectsSphere(sph)) continue; }
       b.used = t;
       const lod = d < B.lod0 ? 0 : d < B.lod1 && d < r * 260 ? 1 : 2;
       lodOf[i] = lod;
@@ -302,6 +304,8 @@ export function createFauna(o) {
     // build the buckets in need, grow them
     buildsThisFrame = 0;
     for (const b of slotB) if (b && (b.n0 || b.n1)) { build(b); if (b.state === 'ready') grow(b, Math.max(b.n0, b.n1)); }
+    // a new bucket counts as used now (the idle clock starts at its creation)
+    for (const b of slotB) if (b && b.used === undefined) b.used = t;
     for (const b of buckets.values()) { b.k0 = 0; b.k1 = 0; }
     if (!halo && B.halos > 0) halo = makeHalo();
     const HA = halo ? halo.geo.attributes.iHalo.array : null, HC = halo ? halo.geo.attributes.iHaloC.array : null;
