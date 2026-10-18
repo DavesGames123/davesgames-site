@@ -24,8 +24,8 @@
 //
 //  TIME. advance(dt) moves the play head by dt x speed seconds of audio
 //  and feeds the receiver every sample up to it, so the picture builds
-//  line by line at the true line rate of the mode (Robot 36: 150 ms a
-//  line; Martin M1: 446.4 ms a line) times speed. After the last line the
+//  line by line at the true line rate of the mode (Robot 8 B&W: 67 ms a
+//  line; Robot 36: 150 ms a line; Martin M1: 446.4 ms a line) times speed. After the last line the
 //  picture holds for hold seconds, then the link asks for a new frame.
 //  The display buffer keeps the last picture under the new rows, as the
 //  screen of a real receiver does.
@@ -41,7 +41,9 @@ import { encode, channel, rng as crng } from '../../sstv/codec.js';
 import { byId, totalMs, MODES } from '../../sstv/modes.js';
 import { Session, LEAD, TAIL } from '../../sstv/session.js';
 
-export const LINK_MODES = ['r36', 'm1'];
+// Robot 8 B&W is the fastest true mode of pages/sstv/modes.js (160 x 120,
+// 67 ms a line, about 9 s with the VIS); Robot 36 is the fastest colour one.
+export const LINK_MODES = ['r8', 'r36', 'm1'];
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // Linear (or byte) pixels from a render target -> RGBA at the mode size.
@@ -134,7 +136,7 @@ export function frameParams(R, o = {}) {
 }
 
 export class SstvLink {
-  // o: mode ('r36' | 'm1'), fs, seed, speed (audio seconds per second,
+  // o: mode ('r8' | 'r36' | 'm1'), fs, seed, speed (audio seconds per second,
   // default 1), hold (s), noise (overrides for frameParams: snr, fade,
   // clock, lean, dips; false for a clean link)
   constructor(o = {}) {

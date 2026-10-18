@@ -8,10 +8,15 @@
 //  CSS pixels; the canvas has dpr times that.
 //
 //  hudFields(info) gives every text field, so the node test checks them
-//  without a canvas. drawHud(ctx, info, picture) draws them; picture is a
-//  canvas (or ImageBitmap) of the received picture, or null.
-//  info: { id, depth (m), heading (deg), time (s), status (SstvLink.status()),
-//          rec (bool), t (s, wall clock for blinks) }
+//  without a canvas. drawHud(ctx, info, picture, o) draws them; picture is
+//  a canvas (or ImageBitmap) of the received picture, or null.
+//  info: { id, depth (m), heading (deg), time (s), status (SstvLink.status()
+//          or the live status of feed.js), rec (bool), t (s, wall clock for
+//          blinks) }
+//  The live status { live: true, fps, target, frames, signal, glitch }
+//  gives LIVE fields: the mode 'LIVE 30 FPS', 'ANALOG', the frame count.
+//  o.hole: the picture box is cleared to transparent (the live picture is
+//  drawn under the panel by WebGL, feed.js present); o.aspect: its aspect.
 //
 //  grep -n targets
 //    "export const HUD"          layout
@@ -28,6 +33,21 @@ export function hudFields(info) {
   const hdg = ((Math.round(info.heading || 0) % 360) + 360) % 360;
   const db = s.signal && Number.isFinite(s.signal.db) ? s.signal.db : null;
   const phase = s.phase || 'idle';
+  if (s.live) {
+    return {
+      id: 'ROV-' + (info.id ?? 1),
+      cam: 'CAM 1 HD',
+      depth: 'DEPTH ' + (info.depth ?? 0).toFixed(1) + ' m',
+      heading: 'HDG ' + String(hdg).padStart(3, '0') + '°',
+      time: 'T+' + pad2(t / 3600) + ':' + pad2((t / 60) % 60) + ':' + pad2(t % 60),
+      mode: 'LIVE ' + Math.round(s.fps || 0) + ' FPS',
+      vis: 'ANALOG',
+      signal: db == null ? 'SNR --' : 'SNR ' + Math.round(db) + ' dB',
+      line: 'FRM ' + String(s.frames || 0).padStart(6, '0'),
+      phase: s.glitch ? 'SYNC' : 'LIVE',
+      level: s.signal ? s.signal.level : 0,
+    };
+  }
   return {
     id: 'ROV-' + (info.id ?? 1),
     cam: 'CAM 1 HD',
@@ -43,7 +63,7 @@ export function hudFields(info) {
   };
 }
 
-export function drawHud(ctx, info, picture) {
+export function drawHud(ctx, info, picture, o = {}) {
   const F = hudFields(info), s = info.status || {};
   const { W, H, pic, bar } = HUD;
   const ink = '#cfe6e0', dim = '#6f8a86', amber = '#f2b705', red = '#ff5a3c';
@@ -60,12 +80,17 @@ export function drawHud(ctx, info, picture) {
   // REC dot, and the receive phase
   const blink = Math.floor((info.t || 0) * 1.6) % 2 === 0;
   ctx.textAlign = 'left';
-  if (blink || s.phase !== 'image') { ctx.fillStyle = s.phase === 'image' ? red : dim; ctx.beginPath(); ctx.arc(140, 14, 3.2, 0, Math.PI * 2); ctx.fill(); }
+  const rec = s.phase === 'image' || s.live;
+  if (blink || !rec) { ctx.fillStyle = rec ? red : dim; ctx.beginPath(); ctx.arc(140, 14, 3.2, 0, Math.PI * 2); ctx.fill(); }
   ctx.fillStyle = dim; ctx.fillText(F.phase, 148, 14);
   // picture
   ctx.fillStyle = '#000'; ctx.fillRect(pic.x, pic.y, pic.w, pic.h);
   let py = pic.y, ph = pic.h;
-  if (picture) {
+  if (o.hole) {
+    // the live picture is under the panel: a clear box at its aspect
+    ph = Math.min(pic.h, Math.round(pic.w / (o.aspect || 4 / 3))); py = pic.y + Math.round((pic.h - ph) / 2);
+    ctx.clearRect(pic.x, py, pic.w, ph);
+  } else if (picture) {
     const ar = picture.width / picture.height;
     ph = Math.min(pic.h, Math.round(pic.w / ar)); py = pic.y + Math.round((pic.h - ph) / 2);
     ctx.imageSmoothingEnabled = true;
