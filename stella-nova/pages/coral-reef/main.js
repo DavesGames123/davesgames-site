@@ -59,6 +59,7 @@ import { MODES } from './colour.js';
 import { SHAPES } from './coral-sdf.js';
 import { createROVs } from './rov/index.js';
 import { createFeedSet } from './rov/feeds.js';
+import { createCables } from './rov/cables.js';
 import { mountSquadHud } from './squad-hud.js';
 import { mountManual } from './manual.js';
 import { mountDiscoveries } from './discoveries.js';
@@ -110,7 +111,7 @@ const G = {
   seed: 1, rovs: Math.min(4, Math.max(2, PROF.rovs)), sstv: 'r36', detail: HAS_WORKER ? PROFILE_ID : 'phone-min',
   mode: 'natural', gradient: 'reef', rev: false, dir: 20, cur: 0.5, temp: 27,
   caust: 0.5, beam: true, snow: true, feed: true, orbit: false, polyps: true, surface: !COARSE,
-  feedMode: 'live',
+  feedMode: 'live', cables: true,
 };
 let shell = null, saverOn = false, saver = null;
 let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
@@ -124,7 +125,7 @@ function pageEmit(ev, ...a) { for (const f of pageEars[ev] || []) { try { f(...a
 window.snWorld = {
   on(ev, fn) { (pageEars[ev] || (pageEars[ev] = [])).push(fn); return () => { pageEars[ev] = pageEars[ev].filter(f => f !== fn); }; },
   get field() { return W; }, get physics() { return P; }, get streamer() { return streamer; }, get squad() { return squad; }, get rovs() { return rovs; },
-  get root() { return S ? S.worldRoot : null; }, origin: () => origin.slice(), surfaceY: SURFACE_Y,
+  get root() { return S ? S.worldRoot : null; }, get cables() { return cables ? cables.sim : null; }, origin: () => origin.slice(), surfaceY: SURFACE_Y,
   regionAt: (x, z) => (W ? W.regionAt(x, z) : null), depthAt: (x, z) => (W ? SURFACE_Y - W.ground(x, z) : null),
   colonies: () => (streamer ? streamer.colonies() : []), eye: () => (cam ? cam.eye.slice() : null),
 };
@@ -172,6 +173,7 @@ let input = null, camChoice = null;
 
 // ── the world ───────────────────────────────────────────────────────────────
 let W = null, pool = null, streamer = null, P = null, squad = null, rovs = null, WB = null;
+let cables = null;                     // rov/cables.js: the ship, the cage and the tethers
 let origin = [0, 0], worldGen = 0, worldReady = false;
 const coral = new Map();           // chunk key -> { co, M, T, hidden: Set of k }
 const fineK = new Map();           // fine key -> { chunk, k }
@@ -374,6 +376,7 @@ function setOrigin(x, z) {
 function stopWorld() {
   if (fauna) fauna.stop();
   if (rovs) { try { rovs.dispose(); } catch (e) { /* half built */ } rovs = null; }
+  if (cables) { cables.dispose(); cables = null; }
   if (streamer) streamer.dispose();
   if (pool) pool.dispose();
   streamer = null; pool = null; squad = null;
@@ -450,6 +453,17 @@ function buildROVs() {
     });
   } catch (e) { console.error('coral-reef: no ROVs', e); rovs = null; }
   if (!rovs) { S.setLights([]); return; }
+  // the cables (rov/cables.js): a support ship follows the squad, a main
+  // umbilical to the cage, an excursion tether to each ROV. The solid in
+  // metres: rock and sand (P.rockSdf) and the coral (P.coralDist).
+  if (!cables) {
+    try {
+      cables = createCables(S.THREE, {
+        scene: S.scene, profile: PROFILE_ID, surfaceY: SURFACE_Y, origin: () => origin, enabled: G.cables,
+        sdf: (x, y, z) => Math.min(P.rockSdf(x, y, z) / P.sdfScale, P.coralDist(x, y, z)),
+      });
+    } catch (e) { console.error('coral-reef: no cables', e); cables = null; }
+  }
   const V = rovs.vehicles || [];
   const first = V.map(v => v.lights && v.lights[0]).filter(Boolean);
   const rest = V.flatMap(v => (v.lights || []).slice(1));
@@ -633,6 +647,7 @@ function buildUI() {
     items: [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }],
     onChange: id => { G.sstv = id; G.feedMode = 'sstv'; applyFeedMode(); },
   });
+  vw.toggle({ id: 'tCables', label: 'Cables', value: G.cables, onChange: v => { G.cables = v; if (cables) cables.setEnabled(v); }, hint: 'A support ship follows the squad. Its umbilical goes down to a cage, and a tether goes from the cage to each ROV. The camera feed goes up the cables.' });
   vw.toggle({ id: 'tOrbit', label: 'Slow orbit', value: G.orbit, onChange: v => { G.orbit = v; if (cam) cam.setAutoRotate(v); }, hint: 'The camera turns slowly round what it looks at.' });
 
   const lk = panel.section({ id: 'look', title: 'Look', open: true });
@@ -825,6 +840,15 @@ function applyCamera() {
   c.lookAt(l[0] - origin[0], l[1], l[2] - origin[1]);
   c.updateMatrixWorld(true);
 }
+// the ROVs for the cables: body centre and tether termination, world metres
+const CBV = { v: null };
+function cableRovs() {
+  const T = S.THREE, V = CBV.v || (CBV.v = new T.Vector3());
+  return rovs.vehicles.map(v => {
+    v.parts.tetherPoint.getWorldPosition(V);
+    return { id: v.id, p: v.pilot.state.p, term: [V.x + origin[0], V.y, V.z + origin[1]] };
+  });
+}
 function frame(t) {
   if (lostNow) return;
   requestAnimationFrame(frame);
@@ -834,6 +858,7 @@ function frame(t) {
   if (squad) { try { squad.step(dt); } catch (e) { console.error('coral-reef: squad', e); squad = null; } }
   if (saverOn && saver) saver.tick(dt, now);
   if (rovs) { try { rovs.update(dt, now / 1000); } catch (e) { console.error('coral-reef: ROV update', e); rovs = null; } }
+  if (cables && rovs && cables.enabled) { try { cables.update(dt, cableRovs()); } catch (e) { console.error('coral-reef: cables', e); cables.dispose(); cables = null; } }
   readout(dt);
   if (!S) return;
   if (cam) {

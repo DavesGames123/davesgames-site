@@ -20,8 +20,12 @@
 //  them (no allocation per frame). Three is not needed: rov/index.js puts
 //  the arrays in one BufferGeometry.
 //
+//  slack (1.12): the rest length over the straight distance; mid: also
+//  collide the middle of each segment (long cables, rov/cables.js).
+//
 //  USE
 //    const t = createTether({ n: 56, a, b });  t.step(dt, A, B, sdf) -> points
+//    t.reset(a, b) a straight rope again
 //    const tube = createTetherTube({ rings: 240, radial: 16, radius: 0.024 });
 //    tube.update(t.points, t.count)   fills tube.positions, normals, uvs
 //    tube.indices (Uint16 or Uint32, fixed), tube.curve (rings x 3),
@@ -33,10 +37,10 @@
 //    "function catmull", "export function braidTexel"
 // ============================================================================
 
-export function createTether({ n = 56, a, b, weight = 0.5, drag = 0.04, iters = 12, radius = 0.025 } = {}) {
+export function createTether({ n = 56, a, b, weight = 0.5, drag = 0.04, iters = 12, radius = 0.025, slack = 1.12, mid = false } = {}) {
   const N = n + 1, P = new Float64Array(N * 3), Q = new Float64Array(N * 3);
   for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) { P[i * 3 + k] = a[k] + (b[k] - a[k]) * i / n; Q[i * 3 + k] = P[i * 3 + k]; }
-  let rest = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * 1.12 / n;
+  let rest = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) * slack / n;
   // a point nearer than 2 radii to the rock goes out along the gradient
   function collide(sdf) {
     const e = 0.03, want = radius * 2;
@@ -49,10 +53,21 @@ export function createTether({ n = 56, a, b, weight = 0.5, drag = 0.04, iters = 
       const l = Math.hypot(nx, ny, nz) || 1e-9, s = (want - d) / Math.max(0.2, l / (2 * e)) / l;
       P[o] += nx * s; P[o + 1] += ny * s; P[o + 2] += nz * s;
     }
+    // mid: the middle of each segment too (long segments over a ridge):
+    // a middle in the shell moves both ends out (a fixed end stays)
+    if (mid) for (let i = 0; i < n; i++) {
+      const o = i * 3, x = (P[o] + P[o + 3]) / 2, y = (P[o + 1] + P[o + 4]) / 2, z = (P[o + 2] + P[o + 5]) / 2, d = sdf(x, y, z);
+      if (d >= want) continue;
+      const nx = sdf(x + e, y, z) - sdf(x - e, y, z), ny = sdf(x, y + e, z) - sdf(x, y - e, z), nz = sdf(x, y, z + e) - sdf(x, y, z - e);
+      const l = Math.hypot(nx, ny, nz) || 1e-9, s = (want - d) / Math.max(0.2, l / (2 * e)) / l;
+      const ka = i === 0 ? 0 : 1, kb = i + 1 === n ? 0 : 1, kk = ka + kb ? 2 / (ka + kb) : 0;
+      if (ka) { P[o] += nx * s * kk; P[o + 1] += ny * s * kk; P[o + 2] += nz * s * kk; }
+      if (kb) { P[o + 3] += nx * s * kk; P[o + 4] += ny * s * kk; P[o + 5] += nz * s * kk; }
+    }
   }
   function step(dt, A, B, sdf) {
     dt = Math.min(dt, 0.05);
-    const want = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]) * 1.12 / n;
+    const want = Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2]) * slack / n;
     rest += (want - rest) * (1 - Math.exp(-dt * 0.5));
     const g = -weight * dt * dt, dk = 1 - drag;
     for (let i = 1; i < n; i++) {
@@ -78,7 +93,12 @@ export function createTether({ n = 56, a, b, weight = 0.5, drag = 0.04, iters = 
     }
     return P;
   }
-  return { points: P, count: N, step, get rest() { return rest; } };
+  // reset(a, b): a straight rope again (a region jump behind a fade)
+  function reset(a2, b2) {
+    for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) { P[i * 3 + k] = a2[k] + (b2[k] - a2[k]) * i / n; Q[i * 3 + k] = P[i * 3 + k]; }
+    rest = Math.hypot(b2[0] - a2[0], b2[1] - a2[1], b2[2] - a2[2]) * slack / n;
+  }
+  return { points: P, prev: Q, count: N, step, reset, get rest() { return rest; } };
 }
 
 // The braid: two sets of helical strands (left and right lay) and a dark
