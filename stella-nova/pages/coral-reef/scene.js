@@ -34,9 +34,12 @@
 //  SENTINEL colour and read the centre pixel after the composite: two
 //  misses and the scene goes straight to the canvas (S.post has the state).
 //
-//  Per-particle coral data lives in two float textures (PART_W wide):
+//  Per-particle coral data lives in three float textures (PART_W wide):
 //  A = natural rgb, colour t; B = birth s, radius, sway level x 2 + tip,
-//  height over the base. A colour change writes texels only.
+//  height over the base; C = the parent minus the particle (m, xyz: the
+//  grow-in slides a new tip out from its parent), the base height of the
+//  colony (the sway). A colour change writes texels only.
+//  setParticles(from, to, f): f(g, A, B, o, C) writes the texels at o.
 //
 //  grep -n targets
 //    shared uniforms ........ "const U = {"
@@ -219,9 +222,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   lutTex.needsUpdate = true;
 
   const PH = Math.ceil(maxParticles / PART_W), NP = PART_W * PH;
-  const partA = new Float32Array(NP * 4), partB = new Float32Array(NP * 4);
+  const partA = new Float32Array(NP * 4), partB = new Float32Array(NP * 4), partC = new Float32Array(NP * 4);
   const mkPart = (data) => { const t = new THREE.DataTexture(data, PART_W, PH, THREE.RGBAFormat, THREE.FloatType); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.needsUpdate = true; return t; };
-  const texA = mkPart(partA), texB = mkPart(partB);
+  const texA = mkPart(partA), texB = mkPart(partB), texC = mkPart(partC);
 
   const v4 = () => new THREE.Vector4();
   const U = {
@@ -233,7 +236,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     uShadowM: { value: Array.from({ length: SH.MAX_SPOTS }, () => new THREE.Matrix4()) }, uShadowOn: { value: new THREE.Vector4() }, uShadowBias: { value: -0.0006 }, uShadowTexel: { value: new THREE.Vector4(1 / 2048, 1 / 2048, 1 / 2048, 1 / 2048) },
     uShadow0: { value: null }, uShadow1: { value: null }, uShadow2: { value: null }, uShadow3: { value: null },
     uLut: { value: lutTex }, uMode: { value: 0 }, uCount: { value: 1 }, uBleach: { value: 0 }, uSwayK: { value: 1 },
-    uPartA: { value: texA }, uPartB: { value: texB }, uPartW: { value: PART_W }, uDetail: { value: 1 }, uDetailK: { value: 14 }, uKeep: { value: 1 },
+    uPartA: { value: texA }, uPartB: { value: texB }, uPartC: { value: texC }, uPartW: { value: PART_W }, uDetail: { value: 1 }, uDetailK: { value: 14 }, uKeep: { value: 1 },
   };
   const waterU = () => {
     const o = {};
@@ -314,7 +317,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
 
   // ── corals ────────────────────────────────────────────────────────────────
   const coralMats = {}, coarseMats = {}, polypMats = {};
-  const coralU = () => Object.assign(waterU(), { uPartA: U.uPartA, uPartB: U.uPartB, uPartW: U.uPartW, uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK });
+  const coralU = () => Object.assign(waterU(), { uPartA: U.uPartA, uPartB: U.uPartB, uPartC: U.uPartC, uPartW: U.uPartW, uLut: U.uLut, uMode: U.uMode, uCount: U.uCount, uBleach: U.uBleach, uSwayK: U.uSwayK });
   for (const id of Object.keys(SPECIES_CODE)) {
     coralMats[id] = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_VS, fragmentShader: SH.CORAL_FS, side: THREE.DoubleSide,
@@ -332,7 +335,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // (grow-in, the hidden coarse mesh of a focus colony, sway) as the colour
   // pass, RGBA packed depth (shaders.js DEPTH_FS); three's default depth
   // material would cast the full grown shape
-  const depthU = () => ({ uTime: U.uTime, uCur: U.uCur, uPartA: U.uPartA, uPartB: U.uPartB, uPartW: U.uPartW, uSwayK: U.uSwayK });
+  const depthU = () => ({ uTime: U.uTime, uCur: U.uCur, uPartA: U.uPartA, uPartB: U.uPartB, uPartC: U.uPartC, uPartW: U.uPartW, uSwayK: U.uSwayK });
   const coralDepth = [0, 1].map(c => new THREE.ShaderMaterial({
     glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_DEPTH_VS, fragmentShader: SH.DEPTH_FS, side: THREE.DoubleSide,
     uniforms: Object.assign(depthU(), { uCoarse: { value: c } }),
@@ -490,13 +493,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   let texDirty = false, texAt = 0;
   function setParticles(from, to, f) {
     to = Math.min(to, NP);
-    for (let g = from; g < to; g++) f(g, partA, partB, g * 4);
+    for (let g = from; g < to; g++) f(g, partA, partB, g * 4, partC);
     texDirty = true;
   }
   function writeT(t, n) { n = Math.min(n, NP); for (let g = 0; g < n; g++) partA[g * 4 + 3] = t[g]; texDirty = true; }
   function uploadParticles(nowMs, force) {
     if (!texDirty || (!force && nowMs - texAt < 60)) return;
-    texA.needsUpdate = true; texB.needsUpdate = true; texDirty = false; texAt = nowMs;
+    texA.needsUpdate = true; texB.needsUpdate = true; texC.needsUpdate = true; texDirty = false; texAt = nowMs;
   }
 
   // ── marine snow ───────────────────────────────────────────────────────────

@@ -228,8 +228,11 @@ function refresh() {
   radiiOf(reef, radBuf, F); naturalRGB(reef, natBuf, F); colourT(reef, G.mode, tBuf, F);
   for (let g = 0; g < n; g++) { const h = reef.py[g] - reef.gy[g]; if (h > hMax) hMax = h; }
   const off = Number.isFinite(coral.off) ? coral.off : 0;
-  S.setParticles(0, n, (g, A, B, o) => {
+  S.setParticles(0, n, (g, A, B, o, C) => {
     const c = reef.colonies[reef.col[g]];
+    // C: the parent minus the particle (the grow-in), the colony base height (the sway)
+    const p = reef.parent[g];
+    if (C) { C[o] = p >= 0 ? reef.px[p] - reef.px[g] : 0; C[o + 1] = p >= 0 ? reef.py[p] - reef.py[g] : 0; C[o + 2] = p >= 0 ? reef.pz[p] - reef.pz[g] : 0; C[o + 3] = reef.gy[g]; }
     A[o] = natBuf[g * 3]; A[o + 1] = natBuf[g * 3 + 1]; A[o + 2] = natBuf[g * 3 + 2]; A[o + 3] = tBuf[g];
     const tip = Math.max(0, Math.min(0.999, 1 - Math.log2(F.sub[g]) / 5));
     B[o] = (reef.birth[g] + off) / 1000; B[o + 1] = radBuf[g] || polypRadius(c.sp, 1); B[o + 2] = (c ? SWAY(c.id) : 0) * 2 + tip; B[o + 3] = reef.py[g] - reef.gy[g];

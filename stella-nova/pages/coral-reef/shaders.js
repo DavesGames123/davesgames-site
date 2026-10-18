@@ -301,49 +301,89 @@ void main() {
 //  uPartA (rgba) = natural r g b, colour t
 //  uPartB (rgba) = birth s, radius (negative: a focus colony), sway level
 //                  * 2 + tip, height over base
+//  uPartC (rgba) = the parent of the particle minus the particle (m, xyz;
+//                  0 for a root), base height of the colony (m)
+//
+//  SWAY. The user said (2026-10-18): "late evolution sea fans have wayt oo
+//  much dispersion in their top layers, the 3d structure starts to stretch
+//  and break down in the current". The old sway had a phase per particle
+//  (gid), so two near particles moved apart and the mesh between them
+//  stretched. coralSway is a smooth function of the vertex position and the
+//  colony base height only: whole branches move together, a colony bends
+//  as one, and two near points never move apart by more than about 0.12 x
+//  their distance (tests/form.test.mjs, coralSwayJS is the CPU copy).
+// the sway constants (coralSway in GLSL and coralSwayJS)
+export const SWAY = { hMax: 6, kx: 0.05, kz: 0.035, w1: 1.05, b1: 0.45, a2: 0.35, w2: 2.3, b2: 0.7, amp: 0.02 };
 export const PART = /* glsl */`
-uniform float uTime;
+uniform float uTime, uSwayK;
 uniform vec2 uCur;
-uniform highp sampler2D uPartA, uPartB;
+uniform highp sampler2D uPartA, uPartB, uPartC;
 uniform float uPartW;
-ivec2 partCoord(float g) { float gg = max(g, 0.0); return ivec2(int(mod(gg, uPartW)), int(floor(gg / uPartW))); }`;
+ivec2 partCoord(float g) { float gg = max(g, 0.0); return ivec2(int(mod(gg, uPartW)), int(floor(gg / uPartW))); }
+vec3 coralSway(vec3 p, float gy, float lvl) {
+  if (lvl < 0.5) return vec3(0.0);
+  float h = clamp(p.y - gy, 0.0, ${F1(SWAY.hMax)});
+  float ph = dot(p.xz, vec2(${F1(SWAY.kx)}, ${F1(SWAY.kz)}));
+  float wave = sin(uTime * ${F1(SWAY.w1)} + ph - h * ${F1(SWAY.b1)}) + ${F1(SWAY.a2)} * sin(uTime * ${F1(SWAY.w2)} + ph * 1.7 - h * ${F1(SWAY.b2)});
+  vec2 d = normalize(uCur + vec2(0.0001));
+  return vec3(d.x, 0.0, d.y) * wave * lvl * 0.25 * uSwayK * ${F1(SWAY.amp)} * pow(h, 1.5);
+}`;
 
-// The coral vertex in the world: the grow-in by age (a young particle
-// shrinks along the normal) and the sway in the current. False: the coarse
-// mesh of a focus colony (B.y < 0) does not draw. CORAL_VS and the shadow
-// depth pass (CORAL_DEPTH_VS) use the same function, so the shadow follows
-// the surface that shows.
+// The sway in JS (the same sums as coralSway in PART): the offset (m) of a
+// point (x, y, z) of a colony with base height gy and sway level lvl
+// (SPECIES sway x 4) at time t, current direction cur [x, z].
+export function coralSwayJS(x, y, z, gy, lvl, t, cur = [1, 0], swayK = 1, out = [0, 0, 0]) {
+  out[0] = out[1] = out[2] = 0;
+  if (lvl < 0.5) return out;
+  const h = Math.min(SWAY.hMax, Math.max(0, y - gy)), ph = x * SWAY.kx + z * SWAY.kz;
+  const wave = Math.sin(t * SWAY.w1 + ph - h * SWAY.b1) + SWAY.a2 * Math.sin(t * SWAY.w2 + ph * 1.7 - h * SWAY.b2);
+  const l = Math.hypot(cur[0] + 0.0001, cur[1] + 0.0001);
+  const k = wave * lvl * 0.25 * swayK * SWAY.amp * Math.pow(h, 1.5);
+  out[0] = (cur[0] + 0.0001) / l * k; out[2] = (cur[1] + 0.0001) / l * k;
+  return out;
+}
+
+// The coral vertex in the world: the grow-in by age and the sway in the
+// current. GROW-IN: the surface of a young particle slides out from its
+// parent along the branch (position + C.xyz x (1 - g)), so a branch tip
+// extends smoothly; it does not pop out along the normals (the user: "grows
+// in a speckly-kind of way instead of an organic natural kind of way").
+// False: the coarse mesh of a focus colony (B.y < 0) does not draw.
+// CORAL_VS and the shadow depth pass (CORAL_DEPTH_VS) use the same
+// function, so the shadow follows the surface that shows. ax: the branch
+// direction (parent to particle, unit; 0 for a root).
 const CORAL_POS = /* glsl */`
-bool coralWorld(float gid, out vec4 w, out vec4 A, out vec4 B, out float age, out float tip) {
+bool coralWorld(float gid, out vec4 w, out vec4 A, out vec4 B, out float age, out float tip, out vec3 ax) {
   ivec2 tc = partCoord(gid);
   A = texelFetch(uPartA, tc, 0); B = texelFetch(uPartB, tc, 0);
-  w = vec4(0.0); age = 0.0; tip = 0.0;
+  vec4 C = texelFetch(uPartC, tc, 0);
+  w = vec4(0.0); age = 0.0; tip = 0.0; ax = vec3(0.0);
   if (uCoarse > 0.5 && B.y < 0.0) return false;
   age = uTime - B.x;
   float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
-  vec3 p = position - normal * abs(B.y) * (1.0 - g) * 0.85;
+  vec3 p = position + C.xyz * (1.0 - g);
   w = modelMatrix * vec4(p, 1.0);
   float lvl = floor(B.z * 0.5);
   tip = B.z - lvl * 2.0;
-  float amp = lvl / 4.0, h = B.w;
-  float ph = gid * 0.0137;
-  float wave = sin(uTime * 1.05 + ph - h * 1.1) + 0.35 * sin(uTime * 2.3 + ph * 1.7 - h * 1.7);
-  vec2 dir = normalize(uCur + vec2(0.0001)) * 0.8 + vec2(cos(ph * 6.0), sin(ph * 6.0)) * 0.3;
-  w.xz += dir * wave * amp * uSwayK * 0.04 * pow(max(h, 0.0), 1.5);
+  w.xyz += coralSway(w.xyz, C.w, lvl);
+  float l = length(C.xyz);
+  ax = l > 1e-6 ? -C.xyz / l : vec3(0.0);
   return true;
 }`;
 
 export const CORAL_VS = /* glsl */`
 ${PART}
 in float aGid;
-uniform float uSwayK, uCount, uMode, uCoarse;
-out vec3 vN, vW, vL, vNat;
+uniform float uCount, uMode, uCoarse;
+out vec3 vN, vW, vL, vNat, vAx;
 out float vT, vGlow, vTip;
 ${CORAL_POS}
 void main() {
   vec4 w, A, B;
   float age, tip;
-  if (!coralWorld(aGid, w, A, B, age, tip)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
+  vec3 ax;
+  if (!coralWorld(aGid, w, A, B, age, tip, ax)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vAx = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
+  vAx = ax;
   vW = w.xyz; vL = position;
   vN = normalize(mat3(modelMatrix) * normal);
   vNat = pow(A.rgb, vec3(2.2));
@@ -359,13 +399,14 @@ void main() {
 export const CORAL_DEPTH_VS = /* glsl */`
 ${PART}
 in float aGid;
-uniform float uSwayK, uCoarse;
+uniform float uCoarse;
 out vec2 vZW;
 ${CORAL_POS}
 void main() {
   vec4 w, A, B;
   float age, tip;
-  if (!coralWorld(aGid, w, A, B, age, tip)) { vZW = vec2(1.0); gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec3 ax;
+  if (!coralWorld(aGid, w, A, B, age, tip, ax)) { vZW = vec2(1.0); gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vec4 c = projectionMatrix * viewMatrix * w;
   vZW = c.zw;
   gl_Position = c;
@@ -386,7 +427,7 @@ ${WATER}
 ${NOISE}
 uniform sampler2D uLut;
 uniform float uMode, uBleach, uSpecies, uDetail, uDetailK;
-in vec3 vN, vW, vL, vNat;
+in vec3 vN, vW, vL, vNat, vAx;
 in float vT, vGlow, vTip;
 out vec4 oCol;
 // species: 0 staghorn, 1 fan, 2 table, 3 boulder (brain), 4 finger
@@ -448,9 +489,10 @@ bool polypWorld(out vec4 w, out vec4 A, out float age, out vec3 nn, out vec3 t, 
   if (iData.y > uKeep) return false;
   ivec2 tc = partCoord(iData.x);
   A = texelFetch(uPartA, tc, 0);
-  vec4 B = texelFetch(uPartB, tc, 0);
+  vec4 B = texelFetch(uPartB, tc, 0), C = texelFetch(uPartC, tc, 0);
   age = uTime - B.x;
   float grow = clamp((age - 0.6) / 1.5, 0.0, 1.0);
+  float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
   nn = normalize(iNrm);
   t = normalize(cross(nn, abs(nn.y) < 0.92 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
   b = cross(nn, t);
@@ -473,7 +515,11 @@ bool polypWorld(out vec4 w, out vec4 A, out float age, out vec3 nn, out vec3 t, 
   }
   float size = uSize * (0.75 + 0.5 * fract(ph)) * (0.25 + 0.75 * grow);
   vec3 off = (t * lp.x + nn * lp.y + b * lp.z) * size;
-  w = modelMatrix * vec4(iPos + off, 1.0);
+  // the polyp rides on the surface: the same grow-in and sway as the coral
+  // vertex under it (coralWorld), so it never floats off a moving branch
+  vec3 base = (modelMatrix * vec4(iPos + C.xyz * (1.0 - g), 1.0)).xyz;
+  base += coralSway(base, C.w, floor(B.z * 0.5));
+  w = vec4(base + mat3(modelMatrix) * off, 1.0);
   float sw = aT.w > 1.5 ? aT.y * aT.y * e : 0.0;
   w.xz += (normalize(uCur + vec2(0.0001)) * (0.6 + 0.4 * sin(uTime * 1.3 + ph))) * sw * size * 0.9 * uSwayK;
   return true;
@@ -483,7 +529,7 @@ ${PART}
 in vec4 aT;
 in vec3 iPos, iNrm;
 in vec2 iData;
-uniform float uSize, uKeep, uSwayK, uCount, uMode, uExtend;
+uniform float uSize, uKeep, uCount, uMode, uExtend;
 out vec3 vW, vN, vNat;
 out float vS, vT, vKind, vGlow;
 ${POLYP_POS}
@@ -506,7 +552,7 @@ ${PART}
 in vec4 aT;
 in vec3 iPos, iNrm;
 in vec2 iData;
-uniform float uSize, uKeep, uSwayK, uExtend;
+uniform float uSize, uKeep, uExtend;
 out vec2 vZW;
 ${POLYP_POS}
 void main() {

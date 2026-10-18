@@ -432,8 +432,12 @@ function syncCoral() {
 function writeParticles(from, to, F) {
   if (!S || !coral) return;
   const reef = coral.reef;
-  S.setParticles(from, to, (g, A, B, o) => {
+  S.setParticles(from, to, (g, A, B, o, C) => {
     const k = reef.col[g], c = reef.colonies[k];
+    // C: the parent minus the particle (the grow-in slides out from the
+    // parent along the branch), and the colony base height (the sway)
+    const p = reef.parent[g];
+    if (C) { C[o] = p >= 0 ? reef.px[p] - reef.px[g] : 0; C[o + 1] = p >= 0 ? reef.py[p] - reef.py[g] : 0; C[o + 2] = p >= 0 ? reef.pz[p] - reef.pz[g] : 0; C[o + 3] = reef.gy[g]; }
     A[o] = natBuf[g * 3]; A[o + 1] = natBuf[g * 3 + 1]; A[o + 2] = natBuf[g * 3 + 2]; A[o + 3] = tBuf[g];
     const tip = F && F.sub ? Math.max(0, Math.min(0.999, 1 - Math.log2(F.sub[g]) / 5)) : 0.999;
     // the birth is in the worker clock: coral.off moves it to the page clock

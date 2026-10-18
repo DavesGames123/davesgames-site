@@ -201,7 +201,7 @@ function runFrames(f, n = 6) {
     if (raw) ok(/precision highp float;/.test(vs) && /precision highp float;/.test(fs), `safari: raw ${name} declares highp float in both stages`);
     // texelFetch only on the particle textures (RGBA32F, NEAREST: no filtering needed)
     const tf = [...(vs + fs).matchAll(/texelFetch\((\w+)/g)].map(m => m[1]);
-    ok(tf.every(t => t === 'uPartA' || t === 'uPartB'), `safari: ${name} texelFetch only on uPartA / uPartB`, tf.join());
+    ok(tf.every(t => t === 'uPartA' || t === 'uPartB' || t === 'uPartC'), `safari: ${name} texelFetch only on uPartA / uPartB / uPartC`, tf.join());
     rows.push(`${name} ${all.size} samplers, ${slots(fs)} fs vectors, ${loops.length} loops`);
   }
   const sc = fs.readFileSync(new URL('../scene.js', import.meta.url), 'utf8');

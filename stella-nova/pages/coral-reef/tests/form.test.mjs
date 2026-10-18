@@ -23,9 +23,21 @@
 //                    (staghorn), 0.06 (fan), 0.105 (finger); a bead of the
 //                    smooth minimum at each particle made it 0.13, 0.068
 //                    and 0.118 on the same colonies
+//    sway .......... the user said: "late evolution sea fans have wayt oo
+//                    much dispersion in their top layers, the 3d structure
+//                    starts to stretch and break down in the current". The
+//                    shader sway (shaders.js coralSwayJS, the CPU copy of
+//                    coralSway) at four times: a particle and its parent
+//                    move apart by under 0.2 spacings, the swayed fan
+//                    stays one sheet (out-of-plane spread per height decile
+//                    under 5 cm), and the GLSL uses the same sway for the
+//                    coral and the polyps, with no phase per particle
+//    grow-in ....... a new particle slides out from its parent (C.xyz in
+//                    the vertex shader), not along the surface normals
 // ============================================================================
 import { createRock } from '../rock/index.js';
 import { createReef, SPECIES, SPECIES_IDS } from '../reef.js';
+import * as SH from '../shaders.js';
 
 let fails = 0, passes = 0;
 function ok(cond, name, info = '') {
@@ -116,6 +128,49 @@ for (const id of SPECIES_IDS) {
   const dec = Array.from({ length: 10 }, () => [0, 0]);
   for (const g of c.ids) { const k = Math.max(0, Math.min(9, Math.floor(10 * (R.py[g] - c.base[1]) / H))); dec[k][0] = Math.max(dec[k][0], Math.abs(off(g))); dec[k][1]++; }
   ok(dec.every(d => d[0] < 0.005), 'fan net: the fan particles stay in its plane up to the top', `largest offset by height decile (mm): ${dec.map(d => (d[0] * 1000).toFixed(1)).join(' ')}; top decile ${dec[9][1]} particles`);
+}
+
+// ── sway: the vertex shader motion, on the CPU ──────────────────────────────
+// The old sway (shaders.js before this test): a phase per particle (gid).
+// It is here only so that this test shows the old fault on the old code.
+function oldSway(x, y, z, gy, lvl, t, cur, k, out, g, h) {
+  const ph = g * 0.0137, w = Math.sin(t * 1.05 + ph - h * 1.1) + 0.35 * Math.sin(t * 2.3 + ph * 1.7 - h * 1.7);
+  const a = w * lvl / 4 * 0.04 * Math.pow(Math.max(h, 0), 1.5);
+  out[0] = (0.8 + Math.cos(ph * 6) * 0.3) * a; out[1] = 0; out[2] = Math.sin(ph * 6) * 0.3 * a;
+  return out;
+}
+const swayAt = (R, g, t, out) => {
+  const c = R.colonies[R.col[g]], lvl = Math.round((c.sp.sway || 0) * 4);
+  return SH.coralSwayJS ? SH.coralSwayJS(R.px[g], R.py[g], R.pz[g], R.gy[g], lvl, t, [1, 0], 1, out) : oldSway(R.px[g], R.py[g], R.pz[g], R.gy[g], lvl, t, [1, 0], 1, out, g, R.py[g] - R.gy[g]);
+};
+for (const id of SPECIES_IDS.filter(q => SPECIES[q].sway)) {
+  const { R, c } = single[id], sp = R.params[id].particleSpacing, f = c.plane;
+  const O = new Float64Array(R.count * 3), o = [0, 0, 0];
+  let jump = 0, gap = 0;
+  const spread = new Float64Array(10);
+  let H = 0; for (const g of c.ids) H = Math.max(H, R.py[g] - c.base[1]);
+  for (const t of [0.7, 2.3, 5.1, 9.4]) {
+    for (const g of c.ids) { swayAt(R, g, t, o); O[g * 3] = o[0]; O[g * 3 + 1] = o[1]; O[g * 3 + 2] = o[2]; }
+    const dec = Array.from({ length: 10 }, () => [0, 0, 0]);
+    for (const g of c.ids) {
+      const p = R.parent[g];
+      if (p >= 0) {
+        jump = Math.max(jump, Math.hypot(O[g * 3] - O[p * 3], O[g * 3 + 1] - O[p * 3 + 1], O[g * 3 + 2] - O[p * 3 + 2]) / sp);
+        gap = Math.max(gap, Math.hypot(R.px[g] + O[g * 3] - R.px[p] - O[p * 3], R.py[g] + O[g * 3 + 1] - R.py[p] - O[p * 3 + 1], R.pz[g] + O[g * 3 + 2] - R.pz[p] - O[p * 3 + 2]) / sp);
+      }
+      const d = (R.px[g] + O[g * 3] - c.base[0]) * f[0] + (R.pz[g] + O[g * 3 + 2] - c.base[2]) * f[1];
+      const k = Math.max(0, Math.min(9, Math.floor(10 * (R.py[g] - c.base[1]) / H)));
+      dec[k][0] += d; dec[k][1] += d * d; dec[k][2]++;
+    }
+    for (let k = 0; k < 10; k++) { const [s1, s2, n] = dec[k]; if (n > 1) spread[k] = Math.max(spread[k], Math.sqrt(Math.max(0, s2 / n - (s1 / n) * (s1 / n)))); }
+  }
+  ok(jump < 0.2 && gap < 1.25, `sway: a swaying ${id} moves whole branches (a particle and its parent stay together)`, `largest sway difference ${f3(jump)} spacings, largest swayed gap ${f3(gap)} spacings`);
+  if (id === 'fan') ok(Math.max(...spread) < 0.05, 'sway: the swayed sea fan stays one sheet to its top (no dispersion of the top layers)', `out-of-plane spread by height decile (cm): ${[...spread].map(v => (v * 100).toFixed(1)).join(' ')}`);
+}
+{
+  const vs = SH.CORAL_VS, pv = SH.POLYP_VS;
+  ok(/coralSway\(/.test(vs) && /coralSway\(/.test(pv) && !/gid \* 0\.0137/.test(vs), 'sway: the coral and the polyps use one sway with no phase per particle', '');
+  ok(/position \+ C\.xyz \* \(1\.0 - g\)/.test(vs) && !/position - normal \*/.test(vs), 'grow-in: a new particle slides out from its parent, not along the normals', '');
 }
 
 // ── surface: no bead at each particle ───────────────────────────────────────
