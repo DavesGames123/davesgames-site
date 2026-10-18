@@ -36,6 +36,11 @@
 //              shelf per engine, the layout breakpoints (two boxes on a
 //              375 px phone, six in one row from 1024 px), disc or cart
 //              per system; reduced motion and focus rules in style.css
+//    player.   player-common.js: bootLog, pct, parsePrefs (frame on,
+//              scanlines off, sound on), bezelFor, fitScreen (integer
+//              scale when it fills 85%, else fractional, always 4:3 for
+//              DOS); setStatusProgress; the bezel, scanline and boot
+//              markup of each player page; the mute keeps a context down
 //    boot.     main.js and saver.js in a linkedom DOM: the bookcase, credits
 //              and system list fill; a box opens the pull-out and puts
 //              itself back; Play in the pull-out opens the player; Exit
@@ -43,6 +48,9 @@
 //              enters with a canvas in the document, runs its plan (the
 //              2D path: node has no WebGL) and exits. Skipped
 //              when linkedom is not found (set LINKEDOM).
+//    pdom.     player-common.js in a linkedom play-dos.html: the default
+//              view classes, the boot log, bar and percent, the error
+//              screen and its Exit message. Skipped without linkedom.
 //  Exit code 1 on any failure.
 // ============================================================================
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -51,7 +59,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { zipAll } from './unzip.js';
 import { DOS_KEYS, dosboxConf, doomCfg, unpackDos } from './play-dos.js';
-import { scummArgs, dataUrl } from './play-scummvm.js';
+import { scummArgs, dataUrl, setStatusProgress } from './play-scummvm.js';
+import { bootLog, pct, parsePrefs, PREF_DEFAULT, bezelFor, fitScreen } from './player-common.js';
 import { ejsConfig, blockedUrl } from './play-emu.js';
 import { planTour, BEATS, TOUR_MOVES, crtPower, crtState, locate, shotLabel, licenceKind, mediaOf, frameFit, fovFor, beatPose, blendPose, poseEye, span, sameOrigin } from './saver-plan.js';
 import { norm, hasGlyph } from './saver-card.js';
@@ -206,7 +215,7 @@ if (haveFetched) {
     ok(t.includes('[hidden]{display:none!important}'), `page: [hidden] rule in ${css}`);
     ok(!/body\{[^}]*overflow-x/.test(t), `page: no overflow-x on body in ${css}`);
   }
-  const pairs = [['main.js', 'index.html'], ['play-dos.js', 'play-dos.html'], ['play-scummvm.js', 'play-scummvm.html'], ['play-emu.js', 'play-emu.html'], ['player-common.js', 'play-dos.html']];
+  const pairs = [['main.js', 'index.html'], ['play-dos.js', 'play-dos.html'], ['play-scummvm.js', 'play-scummvm.html'], ['play-emu.js', 'play-emu.html'], ['player-common.js', 'play-dos.html'], ['player-common.js', 'play-scummvm.html'], ['player-common.js', 'play-emu.html']];
   for (const [js, h] of pairs) {
     const src = read(js).toString(), doc = read(h).toString();
     const ids = new Set([...src.matchAll(/(?:\$|getElementById)\('([A-Za-z0-9_-]+)'\)/g)].map(x => x[1]));
@@ -383,6 +392,42 @@ if (haveFetched) {
   group('shelf.', m);
 }
 
+// ------------------------------------------------------------------- player
+{
+  const m = mark();
+  let L = [];
+  for (const t of ['Downloading doom19s.zip (2.3 MB)…', 'Downloading doom19s.zip…', 'Downloading doom19s.zip…', 'Checking doom19s.zip…', 'Unpacking DOOM…', '', 'Starting DOSBox…']) L = bootLog(L, t);
+  ok(L.map(l => l.text).join('|') === 'Downloading doom19s.zip (2.3 MB)…|Checking doom19s.zip…|Unpacking DOOM…|Starting DOSBox…', 'player: bootLog keeps one line per step (' + L.map(l => l.text).join('|') + ')');
+  ok(L.slice(0, -1).every(l => l.done) && !L[L.length - 1].done, 'player: bootLog marks the old steps done');
+  let M = []; for (let i = 0; i < 20; i++) M = bootLog(M, 'Step ' + i);
+  ok(M.length === 6 && M[5].text === 'Step 19', 'player: bootLog keeps the last six lines');
+  ok(pct(0) === '0%' && pct(0.505) === '51%' && pct(1.4) === '100%' && pct(-1) === '', 'player: pct');
+  ok(JSON.stringify(parsePrefs(null)) === JSON.stringify(PREF_DEFAULT) && PREF_DEFAULT.frame === true && PREF_DEFAULT.scan === false && PREF_DEFAULT.muted === false, 'player: default view is frame on, scanlines off, sound on');
+  ok(JSON.stringify(parsePrefs('{"scan":true,"muted":true,"frame":"yes","x":1}')) === '{"frame":true,"scan":true,"muted":true}' && parsePrefs('not json').frame === true, 'player: parsePrefs keeps booleans only');
+  ok(bezelFor(false, 1920, 1080) === 0 && bezelFor(true, 1920, 1080) === 22 && bezelFor(true, 390, 600) === 8 && bezelFor(true, 1024, 700) === 14, 'player: bezelFor by screen size');
+  const f1 = fitScreen(1920, 1036, 320, 200);
+  ok(f1.k === 4 && f1.w === 1280 && f1.h === 960, 'player: DOS 320x200 on 1080p is 4x at 4:3 (' + JSON.stringify(f1) + ')');
+  const f2 = fitScreen(374, 400, 320, 200);
+  ok(f2.k === 1 && f2.w === 320 && f2.h === 240, 'player: a phone in portrait gets 1x when 1x fills 85% (' + JSON.stringify(f2) + ')');
+  const f3 = fitScreen(1000, 700, 320, 200);
+  ok(f3.k === 0 && f3.h === 700 && f3.w === 933, 'player: 2.9x is a fractional fit, not 2x (' + JSON.stringify(f3) + ')');
+  ok([[800, 600, 640, 400], [300, 200, 320, 200], [2560, 1400, 720, 400]].every(([a, b, w, h]) => { const f = fitScreen(a, b, w, h); return f.w <= a && f.h <= b && Math.abs(f.w / f.h - 4 / 3) < 0.02; }), 'player: every fit stays in the box at 4:3');
+  ok(fitScreen(0, 500, 320, 200).w === 0 && fitScreen(500, 500, 0, 0).w === 0, 'player: no box or no frame gives 0');
+  ok(setStatusProgress('Downloading data... (3/4)') === 0.75 && setStatusProgress('Running...') === -1 && setStatusProgress('x (1/0)') === -1, 'player: setStatusProgress');
+  const pcss = read('player.css').toString();
+  ok(/image-rendering:pixelated/.test(pcss), 'player: the DOS screen is pixelated');
+  ok(/html\.crt-frame/.test(pcss) && /html\.crt-scan \.scan/.test(pcss), 'player: frame and scanline rules');
+  ok(/prefers-reduced-motion:reduce/.test(pcss), 'player: reduced motion stops the cursor blink');
+  for (const h of ['play-dos.html', 'play-scummvm.html', 'play-emu.html']) {
+    const t = read(h).toString();
+    ok(/id="crt"/.test(t) && /class="scan"/.test(t) && /id="statusLog"/.test(t) && /id="statusActions"/.test(t) && /role="status"/.test(t), `player: ${h} has the bezel, scanlines and boot screen`);
+  }
+  const pc = read('player-common.js').toString();
+  ok(/new Proxy\(AC/.test(pc) && /AUDIO\.muted \? Promise\.resolve\(\) : resume\(\)/.test(pc), 'player: a muted AudioContext does not resume');
+  ok(/e\.origin !== location\.origin/.test(pc), 'player: view messages only from the same origin');
+  group('player.', m);
+}
+
 // --------------------------------------------------------------------- boot
 await bootTest();
 async function bootTest() {
@@ -455,6 +500,42 @@ async function bootTest() {
   } catch (e) { errors.push(e.stack || e.message); }
   ok(errors.length === 0, 'boot: no errors (' + errors.join(' | ') + ')');
   group('boot.', m);
+}
+
+// ------------------------------------------------------------- player DOM
+await playerDomTest();
+async function playerDomTest() {
+  const m = mark();
+  const cands = [process.env.LINKEDOM, '/usr/local/lib/node_modules/openclaw/node_modules/linkedom/esm/index.js'].filter(Boolean);
+  const lp = cands.find(p => existsSync(p));
+  if (!lp) { console.log('pdom.      skipped: linkedom not found (set LINKEDOM)'); return; }
+  const { parseHTML } = await import(pathToFileURL(lp).href);
+  const { window, document } = parseHTML(read('play-dos.html').toString());
+  const posted = [];
+  Object.assign(globalThis, { window, document, CustomEvent: window.CustomEvent || globalThis.CustomEvent });
+  window.parent = { postMessage: d => posted.push(d) };
+  globalThis.parent = window.parent;
+  try {
+    const pc = await import(pathToFileURL(join(HERE, 'player-common.js')).href + '?pdom');
+    const html = document.documentElement;
+    ok(html.classList.contains('crt-frame') && !html.classList.contains('crt-scan'), 'pdom: the default view puts the frame on and the scanlines off');
+    pc.bootGame('DOOM');
+    for (const [t, p] of [['Downloading doom19s.zip (2.3 MB)…', 0], ['Downloading doom19s.zip…', 0.42], ['Checking doom19s.zip…', 1], ['Unpacking DOOM…', -1]]) pc.status(t, p);
+    ok(document.getElementById('statusGame').textContent === 'DOOM', 'pdom: the boot screen shows the game title');
+    ok(document.querySelectorAll('#statusLog li').length === 2 && document.getElementById('statusText').textContent === 'Unpacking DOOM…', 'pdom: two steps done, one step now (' + document.querySelectorAll('#statusLog li').length + ')');
+    ok(document.getElementById('statusBar').hasAttribute('hidden') && document.getElementById('statusPct').textContent === '', 'pdom: no bar for a step without progress');
+    pc.status('Downloading doom19s.zip…', 0.5);
+    ok(!document.getElementById('statusBar').hasAttribute('hidden') && document.getElementById('statusPct').textContent === '50%', 'pdom: the bar and percent show with progress');
+    pc.fail('The game file is not on the server right now.');
+    ok(document.getElementById('status').classList.contains('err') && !document.getElementById('statusActions').hasAttribute('hidden') && /halted/i.test(document.getElementById('statusHead').textContent), 'pdom: an error shows System halted and the two buttons');
+    document.getElementById('quitBtn').dispatchEvent(new window.Event('click'));
+    ok(posted.some(d => d && d.type === 'retro-exit'), 'pdom: Exit on the error screen asks the shelf to close');
+    pc.applyView({ frame: false, scan: true, muted: false });
+    ok(!html.classList.contains('crt-frame') && html.classList.contains('crt-scan'), 'pdom: applyView sets the classes');
+    pc.status('');
+    ok(document.getElementById('status').hasAttribute('hidden'), 'pdom: an empty status hides the boot screen');
+  } catch (e) { ok(false, 'pdom: no errors (' + (e.stack || e.message) + ')'); }
+  group('pdom.', m);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

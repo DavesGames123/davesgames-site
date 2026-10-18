@@ -13,16 +13,19 @@
 //     is at 220 h, IRQ 7, DMA 1). The autoexec starts the .EXE.
 //  5. Draw each frame on #screen, play the sound through Web Audio, and
 //     send keys: keyboard, gamepad (games.json "gamepad") and the touch pad.
+//     fitDos sizes #screen at 4:3 inside the CRT bezel #crt (integer scale
+//     when it fills enough; image-rendering: pixelated in player.css).
 //  pagehide (the shelf removes this iframe) ends DOSBox and the audio.
 //
 //  Exports for node tests: DOS_KEYS, dosboxConf, doomCfg, unpackDos.
 //  grep -n targets
 //    "export const DOS_KEYS"   "export function dosboxConf"
 //    "export async function unpackDos"   "function makeAudio"
-//    "function bindKeys"   "function buildPad"   "async function start"
+//    "function bindKeys"   "function buildPad"   "function fitDos"
+//    "async function start"
 // ============================================================================
 import { zipAll } from './unzip.js';
-import { status, fail, manifest, loadGame, gameFromQuery, gamepadPoll } from './player-common.js';
+import { status, fail, manifest, loadGame, gameFromQuery, gamepadPoll, bootGame, fitScreen, bezelFor, isMuted } from './player-common.js';
 
 // KeyboardEvent.code -> js-dos key code (GLFW numbering, as in js-dos 8).
 export const DOS_KEYS = (() => {
@@ -162,6 +165,24 @@ function buildPad(game, send) {
   pad.addEventListener('contextmenu', e => e.preventDefault());
 }
 
+// ------------------------------------------------------------------ screen
+/**
+ * Size #screen in the stage: DOS VGA modes show at 4:3, with an integer
+ * scale when it fills enough (fitScreen). The bezel width goes on #crt and
+ * the row count (--rows) lines up the scanlines with the game rows.
+ */
+function fitDos(canvas) {
+  const st = document.getElementById('stage'), crt = document.getElementById('crt');
+  const r = st.getBoundingClientRect();
+  const bez = bezelFor(document.documentElement.classList.contains('crt-frame'), r.width, r.height);
+  const f = fitScreen(r.width - bez * 2 - 8, r.height - bez * 2 - 8, canvas.width, canvas.height, 4 / 3);
+  if (!f.w) return;
+  canvas.style.width = f.w + 'px';
+  canvas.style.height = f.h + 'px';
+  crt.style.setProperty('--bez', bez + 'px');
+  crt.style.setProperty('--rows', String(canvas.height));
+}
+
 // ------------------------------------------------------------------- start
 async function start() {
   const canvas = document.getElementById('screen');
@@ -179,6 +200,7 @@ async function start() {
     const game = gameFromQuery(data);
     if (!game.dos) throw new Error(game.title + ' is not a DOS game.');
     document.title = game.title + ' · Retro Shelf';
+    bootGame(game.title);
     const bytes = await loadGame(data, game);
     status('Unpacking ' + game.title + '…');
     const files = await unpackDos(game, bytes);
@@ -187,7 +209,10 @@ async function start() {
     emulators.pathPrefix = new URL(data.fetched + eng.dir, import.meta.url).href;
     ci = await emulators.dosboxWorker([dosboxConf(game), ...files]);
     const ev = ci.events();
-    ev.onFrameSize((w, h) => { canvas.width = w; canvas.height = h; img = c2.createImageData(w, h); });
+    const refit = () => fitDos(canvas);
+    ev.onFrameSize((w, h) => { canvas.width = w; canvas.height = h; img = c2.createImageData(w, h); refit(); });
+    window.addEventListener('resize', refit);
+    window.addEventListener('retro-view', refit);
     let pending = null;
     ev.onFrame((rgb, rgba) => { pending = rgba || rgb; });
     const draw = () => {
@@ -201,6 +226,7 @@ async function start() {
     };
     canvas.width = ci.width() || 640; canvas.height = ci.height() || 400;
     img = c2.createImageData(canvas.width, canvas.height);
+    refit();
     draw();
     audio = makeAudio(ci.soundFrequency() || 44100);
     if (audio) {
@@ -208,12 +234,13 @@ async function start() {
       const hint = document.getElementById('soundHint');
       const wake = () => { audio.ctx.resume().then(() => { if (audio.ctx.state === 'running') hint.hidden = true; }).catch(() => {}); };
       wake();
-      setTimeout(() => { if (audio && audio.ctx.state !== 'running') hint.hidden = false; }, 600);
+      setTimeout(() => { if (audio && audio.ctx.state !== 'running' && !isMuted()) hint.hidden = false; }, 600);
       window.addEventListener('keydown', wake);
       window.addEventListener('pointerdown', wake);
     }
     const send = bindKeys(ci, canvas);
     buildPad(game, send);
+    refit();
     const held = new Map();
     setInterval(() => { if (ci) gamepadPoll(game.gamepad, send, held); }, 16);
     document.addEventListener('visibilitychange', () => { if (!ci) return; if (document.hidden) ci.pause(); else ci.resume(); });

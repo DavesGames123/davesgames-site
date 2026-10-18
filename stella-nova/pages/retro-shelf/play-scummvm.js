@@ -18,13 +18,15 @@
 //  Saves and scummvm.ini go to IndexedDB in this browser (the build mounts
 //  IDBFS on $HOME). pagehide (the shelf removes the iframe) ends it all.
 //
-//  Exports for node tests: scummArgs, dataUrl.
+//  Exports for node tests: scummArgs, dataUrl, setStatusProgress (the
+//  boot screen bar from the Emscripten download count).
 //  grep -n targets
 //    "export function scummArgs"   "export function dataUrl"
+//    "export function setStatusProgress"
 //    "function patchFetch"   "function buildKeys"   "async function start"
 // ============================================================================
 import { zipAll } from './unzip.js';
-import { status, fail, manifest, loadGame, gameFromQuery } from './player-common.js';
+import { status, fail, manifest, loadGame, gameFromQuery, bootGame } from './player-common.js';
 
 /** The ScummVM command line for a game (space separated, in the hash). */
 export function scummArgs(game) {
@@ -36,6 +38,12 @@ export function scummArgs(game) {
 export function dataUrl(url, base) {
   if (typeof url !== 'string' || !url.startsWith('/data')) return null;
   return new URL(url.slice(1), base).href;
+}
+
+/** The progress of an Emscripten setStatus text "... (done/total)", or -1. */
+export function setStatusProgress(t) {
+  const m = /\((\d+)\/(\d+)\)/.exec(String(t || ''));
+  return m && +m[2] > 0 ? Math.min(1, +m[1] / +m[2]) : -1;
 }
 
 function patchFetch(base) {
@@ -74,6 +82,7 @@ async function start() {
     const game = gameFromQuery(data);
     if (game.engine !== 'scummvm') throw new Error(game.title + ' is not a ScummVM game.');
     document.title = game.title + ' · Retro Shelf';
+    bootGame(game.title);
     const eng = data.engines.find(e => e.id === 'scummvm');
     const base = new URL(eng.dir, import.meta.url).href;
     patchFetch(base);
@@ -89,7 +98,7 @@ async function start() {
       postRun: [],
       print: t => console.log(t),
       printErr: t => console.warn(t),
-      setStatus: t => { if (t) status(t.replace(/\(\d+\/\d+\)/, '').trim() || 'Starting ScummVM…'); },
+      setStatus: t => { if (t) status(t.replace(/\(\d+\/\d+\)/, '').trim() || 'Starting ScummVM…', setStatusProgress(t)); },
       retroFS: FS => {
         const root = '/games/' + game.id;
         FS.mkdirTree(root);

@@ -1,40 +1,117 @@
 /* ============================================================================
    RETRO SHELF  ·  player.css — the player pages in the #player iframe
    ----------------------------------------------------------------------------
-   One black full-window stage. #screen is the game canvas (DOSBox: the
-   page draws each frame; ScummVM: SDL draws into #canvas). #status is the
-   download and error line. #pad is the touch pad of the DOS player and the
-   key strip of the ScummVM player (coarse pointers only).
-     grep -n 'STAGE'  'STATUS'  'PAD'
+   One dark full-window stage with the game screen in the middle.
+   #crt is a CRT bezel round the screen: html.crt-frame gives it a plastic
+   frame and a glass sheen, html.crt-scan adds faint scanlines (the shelf
+   page sets both, see player-common.js applyView). --bez is the bezel
+   width. DOSBox: play-dos.js sizes #screen with fitScreen (integer scale
+   when it fills enough, else a fractional fit, always pixelated).
+   ScummVM: SDL draws into #canvas and keeps the game aspect itself.
+   EmulatorJS: draws into #game.
+   #status is the boot screen: done steps, the step now, a segment bar
+   and a percent; .err turns it into "System halted" with two buttons.
+   #pad is the touch pad of the DOS player and #keys the key strip of the
+   ScummVM player (coarse pointers only).
+     grep -n 'STAGE'  'CRT'  'BOOT'  'PAD'  'reduce'
    ========================================================================== */
 [hidden]{display:none!important}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#000;color:#ecebe6;overflow:hidden;font:15px/1.5 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+:root{--bez:0px;--acc:#ffb347;--phos:#ffcf86;--pad-h:0px;--keys-h:0px}
+html,body{height:100%;background:#050505;color:#ecebe6;overflow:hidden;font:15px/1.5 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(ellipse 80% 70% at 50% 45%,#151210,#050505 75%)}
 button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
 
 /* ---------------------------------------------------------------- STAGE */
-.stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;touch-action:none}
-#screen{display:block;max-width:100%;max-height:100%;aspect-ratio:4/3;width:min(100vw,calc(100vh*4/3));height:auto;image-rendering:pixelated;outline:none;background:#000}
-html.has-pad #screen{width:min(100vw,calc((100vh - 170px)*4/3))}
-html.has-pad .stage{bottom:170px}
-#canvas{position:absolute;inset:0;width:100%;height:100%;display:block;border:0;outline:none;background:#000}
-html.has-keys .stage{bottom:52px}
+.stage{position:fixed;inset:0 0 var(--pad-h);display:flex;align-items:center;justify-content:center;touch-action:none}
+.stage.free{touch-action:auto}
+html.has-pad{--pad-h:190px}
+html.has-keys .stage{bottom:var(--keys-h)}
+html.has-keys{--keys-h:60px}
 
-/* ---------------------------------------------------------------- STATUS */
-.status{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(440px,calc(100vw - 32px));padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,0.16);background:rgba(14,16,22,0.94);text-align:center}
-.status p{font-size:0.95rem}
-.status.err p{color:#ffb0a6}
-.status progress{width:100%;height:6px;margin-top:10px;accent-color:#ffb347}
-.sound-hint{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:4;font-size:0.8rem;color:#c4c2ba;background:rgba(14,16,22,0.85);border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:6px 12px;pointer-events:none}
+/* ---------------------------------------------------------------- CRT */
+html.crt-frame{--bez:22px}
+@media (max-width:799px),(max-height:799px){html.crt-frame{--bez:14px}}
+@media (max-width:499px),(max-height:499px){html.crt-frame{--bez:8px}}
+.crt{position:relative;display:block;padding:var(--bez);border-radius:calc(var(--bez) * 0.9);line-height:0}
+html.crt-frame .crt{background:linear-gradient(160deg,#3a3631,#1d1b19 40%,#121110);
+  box-shadow:0 18px 50px rgba(0,0,0,0.75),inset 0 1px 0 rgba(255,255,255,0.12),inset 0 -2px 0 rgba(0,0,0,0.6)}
+/* The DOS screen: play-dos.js sets its CSS size; this is the size before. */
+#screen{display:block;width:min(100vw,calc(100vh*4/3));height:auto;aspect-ratio:4/3;max-width:100%;max-height:100%;
+  image-rendering:pixelated;image-rendering:crisp-edges;outline:none;background:#000}
+html.crt-frame #screen{border-radius:6px}
+/* ScummVM and EmulatorJS: the bezel fills the stage and the screen fills the bezel. */
+.crt.fill{position:absolute;inset:0;padding:0}
+html.crt-frame .crt.fill{inset:6px}
+#canvas,#game{position:absolute;inset:var(--bez);width:calc(100% - var(--bez) * 2);height:calc(100% - var(--bez) * 2);display:block;border:0;outline:none;background:#000}
+html.crt-frame #canvas,html.crt-frame #game{border-radius:6px}
+#game{line-height:1.5}
+.scan,.glass{position:absolute;inset:var(--bez);pointer-events:none;border-radius:inherit;display:none}
+html.crt-frame .glass{display:block;border-radius:6px;
+  background:radial-gradient(ellipse 120% 90% at 50% 50%,transparent 60%,rgba(0,0,0,0.35)),linear-gradient(160deg,rgba(255,255,255,0.06),transparent 35%);
+  box-shadow:inset 0 0 18px rgba(0,0,0,0.65)}
+/* Scanlines: one dark line per game row when --rows is known, else 3 px. */
+html.crt-scan .scan{display:block;border-radius:6px;opacity:0.28;mix-blend-mode:multiply;
+  background:linear-gradient(rgba(0,0,0,0.9) 45%,transparent 55%) 0 0/100% 3px}
+html.crt-scan .crt[style*="--rows"] .scan{background-size:100% calc(100% / var(--rows))}
+
+/* ---------------------------------------------------------------- BOOT */
+/* The boot screen looks like the text screen of a PC that starts: amber
+   phosphor text, the done steps with OK, a blinking cursor, a bar of
+   segments. */
+.status{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;
+  padding:18px 20px 16px;border-radius:10px;border:1px solid rgba(255,207,134,0.22);
+  background:radial-gradient(ellipse at 50% 0,rgba(255,180,90,0.08),transparent 70%),#0a0806;
+  box-shadow:0 20px 60px rgba(0,0,0,0.8),inset 0 0 40px rgba(0,0,0,0.6);
+  font:500 0.86rem/1.5 ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:var(--phos);text-shadow:0 0 6px rgba(255,170,60,0.45)}
+.boot-head{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;font-size:0.74rem;color:#ffe2b0;
+  padding-bottom:8px;margin-bottom:8px;border-bottom:1px dashed rgba(255,207,134,0.25)}
+.boot-mark{width:12px;height:12px;border-radius:2px;background:var(--acc);box-shadow:0 0 10px rgba(255,179,71,0.7)}
+.boot-game{font:400 1.3rem/1.2 'STIX Two Text',Georgia,serif;color:#fff1d8;text-shadow:none;margin-bottom:8px}
+.boot-game:empty{display:none}
+.boot-log{list-style:none;margin:0 0 2px}
+.boot-log li{opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.boot-log li::after{content:" ... OK";color:#9fe08a;text-shadow:0 0 6px rgba(120,220,100,0.4)}
+.boot-now{overflow-wrap:anywhere}
+.boot-now::after{content:"";display:inline-block;width:0.6em;height:1.05em;margin-left:4px;vertical-align:-0.18em;background:var(--phos);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.boot-bar{display:flex;align-items:center;gap:10px;margin-top:10px;min-height:14px}
+.boot-bar progress{flex:1;height:14px;-webkit-appearance:none;appearance:none;border:1px solid rgba(255,207,134,0.4);border-radius:2px;background:#140f09;overflow:hidden}
+.boot-bar progress::-webkit-progress-bar{background:#140f09}
+.boot-bar progress::-webkit-progress-value{background:repeating-linear-gradient(90deg,var(--acc) 0 8px,transparent 8px 10px)}
+.boot-bar progress::-moz-progress-bar{background:repeating-linear-gradient(90deg,var(--acc) 0 8px,transparent 8px 10px)}
+#statusPct{min-width:3.2em;text-align:right;font-variant-numeric:tabular-nums}
+.boot-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.boot-actions button{min-height:44px;padding:10px 18px;border-radius:8px;font:600 0.86rem/1 Inter,system-ui,sans-serif;text-shadow:none;
+  border:1px solid rgba(255,255,255,0.2);background:#1b1916;color:#ecebe6}
+.boot-actions button:first-child{border-color:rgba(255,179,71,0.6);background:var(--acc);color:#1a1206}
+.boot-actions button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+/* Error: red phosphor and a halt head. */
+.status.err{border-color:rgba(255,110,90,0.45);color:#ffb0a6;text-shadow:0 0 6px rgba(255,90,70,0.4)}
+.status.err .boot-mark{background:#ff6e5a;box-shadow:0 0 10px rgba(255,110,90,0.7)}
+.status.err .boot-head{color:#ffcdc4;border-bottom-color:rgba(255,110,90,0.3)}
+.status.err .boot-now::after{display:none}
+.sound-hint{position:fixed;left:50%;bottom:calc(14px + var(--pad-h));transform:translateX(-50%);z-index:4;font-size:0.82rem;color:#ecebe6;
+  background:rgba(14,12,10,0.9);border:1px solid rgba(255,179,71,0.45);border-radius:999px;padding:7px 14px;pointer-events:none;white-space:nowrap}
 
 /* ---------------------------------------------------------------- PAD */
-.pad{position:fixed;left:0;right:0;bottom:0;height:170px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:10px calc(14px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(14px + env(safe-area-inset-left,0px));background:#0b0c10;border-top:1px solid rgba(255,255,255,0.08);user-select:none;-webkit-user-select:none}
-.dpad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:4px;flex:none}
-.dpad button{border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:#1b1e28;color:#ecebe6;font-size:1.1rem}
+/* The touch pad looks like a controller: dark plastic, a cross on the
+   left, round labelled keys on the right. */
+.pad{position:fixed;left:0;right:0;bottom:0;height:var(--pad-h);z-index:3;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px calc(16px + env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) calc(16px + env(safe-area-inset-left,0px));
+  background:linear-gradient(#1a1816,#0f0e0d);border-top:1px solid rgba(255,255,255,0.1);box-shadow:0 -10px 24px rgba(0,0,0,0.6);user-select:none;-webkit-user-select:none}
+.dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:3px;flex:none}
+.dpad button{border-radius:10px;border:1px solid rgba(255,255,255,0.16);background:linear-gradient(#2c2a27,#1c1b19);color:#f2efe6;font-size:1.25rem;
+  box-shadow:0 3px 0 #070606,inset 0 1px 0 rgba(255,255,255,0.12)}
 .dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .r{grid-column:3;grid-row:2}.dpad .d{grid-column:2;grid-row:3}
-.btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:58vw}
-.btns button{min-width:56px;height:44px;padding:0 10px;border-radius:10px;border:1px solid rgba(255,179,71,0.5);background:rgba(255,179,71,0.12);color:#ecebe6;font-weight:600;font-size:0.85rem}
-.pad button.on,.keys button.on{background:#ffb347;color:#1a1206}
-.keys{position:fixed;left:0;right:0;bottom:0;height:52px;z-index:3;display:flex;gap:6px;align-items:center;justify-content:center;padding:6px 10px calc(6px + env(safe-area-inset-bottom,0px));background:#0b0c10;border-top:1px solid rgba(255,255,255,0.08)}
-.keys button{height:38px;padding:0 14px;border-radius:9px;border:1px solid rgba(255,255,255,0.18);background:#1b1e28;color:#ecebe6;font-size:0.85rem}
+.btns{display:grid;grid-template-columns:repeat(4,minmax(52px,1fr));gap:8px;max-width:62vw}
+.btns button{min-width:52px;height:50px;padding:0 6px;border-radius:25px;border:1px solid rgba(255,179,71,0.55);background:linear-gradient(#3a2a14,#24190c);
+  color:#fff3dc;font-weight:700;font-size:0.9rem;letter-spacing:0.02em;box-shadow:0 3px 0 #070606,inset 0 1px 0 rgba(255,220,160,0.25)}
+.pad button.on,.keys button.on{background:var(--acc);color:#1a1206;transform:translateY(2px);box-shadow:0 1px 0 #070606}
+@media (max-width:360px){.dpad{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px)}.btns{grid-template-columns:repeat(3,minmax(48px,1fr))}}
+.keys{position:fixed;left:0;right:0;bottom:0;height:var(--keys-h);z-index:3;display:flex;gap:8px;align-items:center;justify-content:center;
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:linear-gradient(#1a1816,#0f0e0d);border-top:1px solid rgba(255,255,255,0.1)}
+.keys button{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:linear-gradient(#2c2a27,#1c1b19);color:#f2efe6;
+  font-size:0.9rem;font-weight:600;box-shadow:0 3px 0 #070606}
+
+@media (prefers-reduced-motion:reduce){.boot-now::after{animation:none}}

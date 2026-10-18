@@ -11,14 +11,22 @@
   Runs in the #player iframe of index.html: play-emu.html?system=<id>.
   The shelf page posts { type: 'retro-file', file, bios } after this page
   posts 'retro-ready'. The file stays in this browser; nothing is uploaded.
-  This page hosts no game and no BIOS.
+  This page hosts no game and no BIOS. EmulatorJS draws into #game,
+  inside the CRT bezel #crt. No "Try again" here: a reload would lose the
+  file, so an error offers Exit only.
 -->
 <link rel="stylesheet" href="player.css">
-<style>#game{position:fixed;inset:0}</style>
 </head>
 <body>
-<div id="game"></div>
-<div class="status" id="status"><p id="statusText">Waiting for your file…</p><progress id="statusBar" max="1" value="0" hidden></progress></div>
+<div class="stage free" id="stage"><div class="crt fill" id="crt"><div id="game"></div><span class="scan" aria-hidden="true"></span></div></div>
+<div class="status boot" id="status" role="status" aria-live="polite">
+  <div class="boot-head"><span class="boot-mark" aria-hidden="true"></span><span id="statusHead">Retro Shelf · loading</span></div>
+  <p class="boot-game" id="statusGame"></p>
+  <ol class="boot-log" id="statusLog"></ol>
+  <p class="boot-now" id="statusText">Waiting for your file…</p>
+  <div class="boot-bar"><progress id="statusBar" max="1" value="0" hidden></progress><span id="statusPct"></span></div>
+  <div class="boot-actions" id="statusActions" hidden><button type="button" id="retryBtn" hidden>Try again</button><button type="button" id="quitBtn">Exit</button></div>
+</div>
 <script type="module" src="play-emu.js"></script>
 </body>
 </html>

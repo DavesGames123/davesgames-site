@@ -22,7 +22,7 @@
 //    "export function ejsConfig"   "export function blockedUrl"
 //    "function patchFetch"   "async function start"
 // ============================================================================
-import { status, fail, manifest } from './player-common.js';
+import { status, fail, manifest, bootGame } from './player-common.js';
 
 export function blockedUrl(url) {
   try { return new URL(url, 'https://x.invalid/').hostname.endsWith('emulatorjs.org'); } catch (e) { return false; }
@@ -70,6 +70,7 @@ async function start() {
     const id = new URLSearchParams(location.search).get('system');
     const system = data.systems.find(s => s.id === id);
     if (!system) throw new Error('No system "' + id + '".');
+    bootGame(system.name);
     const eng = data.engines.find(e => e.id === 'emu');
     const dataDir = new URL(data.fetched + eng.dir, import.meta.url).href;
     window.addEventListener('message', e => {
@@ -77,6 +78,7 @@ async function start() {
       const { file, bios } = e.data;
       if (!(file instanceof Blob)) { fail('No game file arrived.'); return; }
       document.title = file.name + ' · Retro Shelf';
+      bootGame(file.name);
       Object.assign(window, ejsConfig(system, dataDir, file, bios instanceof Blob ? bios : null));
       status('');
       const s = document.createElement('script');

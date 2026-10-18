@@ -9,15 +9,23 @@
 <!--
   RETRO SHELF · play-dos.html — DOSBox player (js-dos emulators 8.5.2, GPL-2.0)
   Runs in the #player iframe of index.html: play-dos.html?game=<id>.
-  play-dos.js unpacks the unchanged game archive in memory and starts its
+  #crt is the CRT bezel round #screen; play-dos.js sizes #screen with
+  fitScreen (player-common.js). play-dos.js unpacks the unchanged game archive in memory and starts its
   DOS program. ../../vendor/retro/fetched/emulators-8.5.2/emulators.js sets
   the global "emulators"; the deploy fetches it (tools/retro-fetch.mjs).
 -->
 <link rel="stylesheet" href="player.css">
 </head>
 <body>
-<div class="stage" id="stage"><canvas id="screen" tabindex="0" aria-label="Game screen"></canvas></div>
-<div class="status" id="status"><p id="statusText">Starting DOSBox…</p><progress id="statusBar" max="1" value="0" hidden></progress></div>
+<div class="stage" id="stage"><div class="crt" id="crt"><canvas id="screen" tabindex="0" aria-label="Game screen"></canvas><span class="scan" aria-hidden="true"></span><span class="glass" aria-hidden="true"></span></div></div>
+<div class="status boot" id="status" role="status" aria-live="polite">
+  <div class="boot-head"><span class="boot-mark" aria-hidden="true"></span><span id="statusHead">Retro Shelf · loading</span></div>
+  <p class="boot-game" id="statusGame"></p>
+  <ol class="boot-log" id="statusLog"></ol>
+  <p class="boot-now" id="statusText">Starting DOSBox…</p>
+  <div class="boot-bar"><progress id="statusBar" max="1" value="0" hidden></progress><span id="statusPct"></span></div>
+  <div class="boot-actions" id="statusActions" hidden><button type="button" id="retryBtn">Try again</button><button type="button" id="quitBtn">Exit</button></div>
+</div>
 <p class="sound-hint" id="soundHint" hidden>Press a key or tap the screen to start the sound.</p>
 <div class="pad" id="pad" hidden aria-label="On-screen keys">
   <div class="dpad" id="dpad">
