@@ -27,7 +27,8 @@
 //              dust share of each particle (optics.js smokeWeights) is
 //              splatted into it with its temperature, velocity and iron
 //              share; a light pass finds the optical depth to the sun and
-//              the body shadow per cell. Rebuilt with the density volume.
+//              the body shadow per cell. Rebuilt every second frame that
+//              the density volume is, and at once when the cube moves.
 //              Skipped while f.smokeLive is false (before contact).
 //    smooth    smooth.wgsl: bilateral filter on the depth and a blur of the
 //              coverage (the outline), X then Y, f.smooth times (rg32float
@@ -192,7 +193,7 @@ export function defaultFrame() {
     vol: null,                    // { c, r }: the sphere the volume must hold (default: the view at the target)
     // the smoke volume (smoke.wgsl): cells per side (0 off), march and
     // light steps, detail strength 0..1 (budget.js renderBudget sets them)
-    smoke: { grid: 80, steps: 56, light: 20, detail: 1 },
+    smoke: { grid: 80, steps: 56, light: 14, detail: 1 },
     simT: null,                   // sim time (code): the smoke detail flows with it (default: wall time)
     smokeLive: true,              // false: skip the smoke passes (main.js: before contact, no gas or dust)
   };
@@ -482,7 +483,7 @@ export class Renderer {
     d.set(vb ? [vb.o[0], vb.o[1], vb.o[2], vb.cell, vb.G, VOL_ISO, VOL_K, 0] : [0, 0, 0, 0, 0, VOL_ISO, VOL_K, 0], 136);
     const sb = this.smBox, sm = f.smoke || {};
     d.set(sb ? [sb.o[0], sb.o[1], sb.o[2], sb.cell] : [0, 0, 0, 0], 144);
-    d.set([sb ? sb.G : 0, sm.steps || 56, sm.light || 20, this.frameNo % 1024], 148);
+    d.set([sb ? sb.G : 0, sm.steps || 56, sm.light || 14, this.frameNo % 1024], 148);
     const vk = (f.vapK ?? 1.5) / 1.5;
     const R0 = lk.bodies && lk.bodies[0] ? lk.bodies[0].R : 1;
     d.set([SMOKE_K.gas * vk, SMOKE_K.dust * vk, (f.vapGlow ?? 1) * SMOKE_K.emit, SMOKE_K.cycles / R0], 152);
@@ -521,7 +522,10 @@ export class Renderer {
       p.setPipeline(this.pCFinal); p.dispatchWorkgroups(1); p.end(); }
     const clear0 = { r: 0, g: 0, b: 0, a: 0 };
     if (rebuild) this._volume(enc);
-    if (this.smBox && (smRebuild || rebuild)) this._smoke(enc);
+    // the smoke volume follows the solver every second frame (it moves
+    // slowly on screen; the temporal pass hides the step), at once when
+    // its cube moved
+    if (this.smBox && (smRebuild || (rebuild && (this.frameNo & 1) === 0) || !this.smBuilt)) { this._smoke(enc); this.smBuilt = true; }
     // depth: the iso surface of the volume, and the fluid spheres outside it
     { const p = enc.beginRenderPass({ colorAttachments: [{ view: this.v.rawZ, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }, { view: this.v.nrm, loadOp: 'clear', storeOp: 'store', clearValue: clear0 }],
         depthStencilAttachment: { view: this.v.depth, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'discard' } });
@@ -651,7 +655,7 @@ export class Renderer {
     this.bgSmS = dev.createBindGroup({ layout: this.bglSmS, entries: [{ binding: 0, resource: { buffer: v.acc } }] });
     this.bgSmR = dev.createBindGroup({ layout: this.bglSmR, entries: [{ binding: 0, resource: { buffer: v.acc } }, { binding: 1, resource: { buffer: v.bricks } },
       { binding: 2, resource: v.med.createView() }, { binding: 3, resource: v.vel.createView() }] });
-    this.smKey = ''; this.bgSmM = null; this.smLightBody = null; this.histValid = false;
+    this.smKey = ''; this.bgSmM = null; this.smLightBody = null; this.histValid = false; this.smBuilt = false;
   }
   _dropSmoke() {
     if (!this.smVol) return;

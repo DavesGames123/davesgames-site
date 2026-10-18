@@ -176,7 +176,9 @@ fn fs_surface(in: VOut) -> SurfOut {
   let V = -Dn;
   let ndl = dot(n, L);
   let mode = i32(U0.mode.x + 0.5);
-  let shadow = sunAt(P, n, select(0, 24, mode == 0));
+  // the volume march only after contact (before it the sphere shadows
+  // are exact: the bodies are whole)
+  let shadow = sunAt(P, n, select(0, 16, (mode == 0) && (coolH() >= 0.0)));
   var col = vec3f(0.0);
   if (mode == 0) {
     let bi = select(0, 1, b1 > 0.5);
@@ -184,11 +186,13 @@ fn fs_surface(in: VOut) -> SurfOut {
     // the map level from the size of the body on screen
     let Rpx = U0.bodies[bi].y * U0.fwd.w / max(z, 1e-4);
     let lod = clamp(log2(1024.0 / max(6.2832 * Rpx, 1.0)), 0.0, 6.0);
-    let alb = matAlbedo(og, fIron, fIce, style, lod);
+    let alb = matAlbedo(og, fIron, fIce, select(style, -1, cutF > 0.5), lod);
     let Tm = tMelt(fIron, fIce);
     // a cut face shows the hot inside of a planet (fn geotherm, drawn:
     // the solver starts cold), layer by layer
-    let Ti = select(T, max(T, geotherm(length(og), fIron)), cutF > 0.5);
+    // (the impact heat on it is held to 6000 K: SPH wall heating puts
+    // 20000 K and more in places, which would draw blue-white)
+    let Ti = select(T, max(min(T, 6000.0), geotherm(length(og), fIron)), cutF > 0.5);
     let hot = smoothstep(0.7 * Tm, Tm, Ti);
     let melt = smoothstep(Tm, 1.2 * Tm, Ti);
     // relief of the procedural bodies (pre-contact surfaces): bump the
@@ -213,7 +217,8 @@ fn fs_surface(in: VOut) -> SurfOut {
     let gloss = clamp(alb.w + 0.8 * melt * (1.0 - skin.y), 0.0, 1.0);
     // wet melt: a tight, bright highlight with a Fresnel rise (F0 0.05)
     let fres = 0.05 + 0.95 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
-    let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 220.0, melt)) * diff * (fres + 0.2) * mix(1.0, 3.0, melt);
+    // no highlight on and round a cut face (its rim blends two normals)
+    let spec = gloss * pow(max(dot(n, H), 0.0), mix(40.0, 220.0, melt)) * diff * (fres + 0.2) * mix(1.0, 3.0, melt) * (1.0 - smoothstep(0.0, 0.3, cutF));
     // light from the glowing matter round about after contact (the night
     // sides are not black): a warm fill at the skin cap
     let fill = select(vec3f(0.0), glow(skinCap(0.6)) * (0.035 * (1.0 - 0.7 * crustShare())), coolH() >= 0.0);

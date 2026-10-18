@@ -83,7 +83,7 @@ fn vs_drop(@builtin(vertex_index) vi: u32, @builtin(instance_index) inst: u32) -
   // the light left by the bodies and the smoke (scene.wgsl fn sunAt; the
   // first drop of a particle marches the body volume, the others share
   // its smoke term)
-  o.sun = sunAt(c, normalize(U0.sun.xyz), select(0, 10, f == 0u));
+  o.sun = sunAt(c, normalize(U0.sun.xyz), select(0, 10, (f == 0u) && (coolH() >= 0.0)));
   // colour
   let mt = matOf(ii);
   let og = pOrig[ii].xyz;

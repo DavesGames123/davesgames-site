@@ -263,7 +263,8 @@ skin temperature (common.wgsl `fn glow`, `fn skinT`, `fn lavaSkin`):
   steam clouds and a thin atmosphere; Theia has craters with bright rims
   and a trace of atmosphere (fn protoHeight, fn craters, fn cloudCover).
 - Shadows: scene.wgsl fn sunAt marches the density volume toward the sun
-  (24 steps) from each surface pixel and each drop, so bodies, the neck
+  (after contact: 16 steps from each surface pixel, 10 from each drop;
+  before contact the sphere shadows are exact), so bodies, the neck
   and the splash shade each other after contact; the smoke shades them
   too (its light volume).
 - The density volume: an expanded particle (rho under 0.6 rho0) has a
@@ -310,6 +311,15 @@ camera 4 radii from the impact): 5.8 ms per frame at 32k particles and
 1600 x 900; 8.3 ms at 12k and 780 x 1688 (a phone screen at pixel ratio
 2). The fill rate is the cost: cap the drawing buffer near 2 M px on
 desktop and 1 M px on phones.
+
+Cost of the realism work (Deno, the same sim state, the renderer before
+it (881affed) and after, interleaved, median of 5, 20 frames each; the
+machine had other load): theia at 32k, 1600 x 900, +1 h after contact:
+4.6 -> 5.9 ms a frame with the volumes kept, 5.0 -> 7.2 ms when the
+solver stepped (the smoke volume is rebuilt every second such frame);
+before contact 5.7 -> 6.5 ms; a phone (12k, 780 x 1688, smoke 48^3, 24
+steps) 3.6 -> 4.1 and 3.7 -> 4.5 ms. The governor (main.js) holds the
+frame time: the cost comes out of the solver steps per frame.
 
 ## Checks
 

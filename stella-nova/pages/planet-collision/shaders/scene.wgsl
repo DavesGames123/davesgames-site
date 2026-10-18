@@ -86,7 +86,7 @@ fn bodyShadow(P: vec3f, n: vec3f, steps: i32) -> f32 {
     lit = min(lit, 1.0 - smoothstep(0.85 * iso, 1.3 * iso, f));
     if (lit <= 0.01) { break; }
     t += dt;
-    dt *= 1.15;
+    dt *= 1.2;
   }
   return lit;
 }

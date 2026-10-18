@@ -321,20 +321,18 @@ fn cloudCover(n: vec3f, amount: f32) -> f32 {
 }
 // The bump of a body style at the unit direction n (body frame): the
 // tangential gradient of its relief, for the surface normal
+fn reliefH(style: i32, n: vec3f) -> f32 {
+  if (style == 1) { return max(protoHeight(n), 0.0); }
+  return -craters(n, 9.0).x + 0.5 * fbm(n * 16.0);
+}
 fn reliefGrad(style: i32, n: vec3f) -> vec3f {
   if (style != 1 && style != 2) { return vec3f(0.0); }
+  // forward differences: four relief samples, not six
   let e = 0.004;
-  var g = vec3f(0.0);
-  for (var k = 0; k < 3; k++) {
-    var d = vec3f(0.0);
-    d[k] = e;
-    var h1 = 0.0;
-    var h0 = 0.0;
-    if (style == 1) { h1 = max(protoHeight(normalize(n + d)), 0.0); h0 = max(protoHeight(normalize(n - d)), 0.0); }
-    else { h1 = -craters(normalize(n + d), 9.0).x + fbm((n + d) * 16.0) * 0.5; h0 = -craters(normalize(n - d), 9.0).x + fbm((n - d) * 16.0) * 0.5; }
-    g[k] = (h1 - h0) / (2.0 * e);
-  }
-  return g - n * dot(g, n);
+  let h0 = reliefH(style, n);
+  let g = vec3f(reliefH(style, normalize(n + vec3f(e, 0.0, 0.0))), reliefH(style, normalize(n + vec3f(0.0, e, 0.0))), reliefH(style, normalize(n + vec3f(0.0, 0.0, e)))) - vec3f(h0);
+  let gg = g / e;
+  return gg - n * dot(gg, n);
 }
 // The drawn temperature of the inside on a cut face (optics.js geotherm):
 // r the radius share, iron 1 in the core
@@ -404,11 +402,13 @@ fn planetAlbedo(style: i32, n: vec3f, lod: f32) -> vec4f {
   return vec4f(mix(c, vec3f(0.85), salt), 0.0);
 }
 // The cold albedo of a particle mix. o: the start position over the body
-// radius (body frame), fIron and fIce shares, style: the body look.
+// radius (body frame), fIron and fIce shares, style: the body look (a
+// style under 0: the inside only, no surface map: a cut face)
 fn matAlbedo(o: vec3f, fIron: f32, fIce: f32, style: i32, lod: f32) -> vec4f {
   let lo = max(length(o), 1e-4);
-  let crust = smoothstep(0.86, 0.95, lo);
-  let s = planetAlbedo(style, o / lo, lod);
+  let crust = select(smoothstep(0.86, 0.95, lo), 0.0, style < 0);
+  var s = vec4f(0.0);
+  if (style >= 0) { s = planetAlbedo(style, o / lo, lod); }
   let deep = 1.0 - 0.45 * smoothstep(0.9, 0.3, lo);
   // the mantle is dark olive peridotite, the crust lighter rock
   let rock = mix(mix(vec3f(0.12, 0.13, 0.09), vec3f(0.20, 0.21, 0.15), vnoise(o * 14.0)), mix(vec3f(0.16, 0.13, 0.11), vec3f(0.30, 0.25, 0.20), vnoise(o * 14.0)), smoothstep(0.8, 0.95, lo)) * deep;

@@ -72,8 +72,8 @@ export const GRID_TIERS = [144, 128, 112, 96, 80, 64];
 export function volBytes(G) { return G * G * G * (4 + 8) + Math.pow(G / 8, 3) * 4; }
 // the smoke volume per profile, and its steps down
 export const SMOKE_TIERS = [
-  { grid: 80, steps: 56, light: 20, detail: 1 },
-  { grid: 64, steps: 44, light: 16, detail: 1 },
+  { grid: 80, steps: 56, light: 14, detail: 1 },
+  { grid: 64, steps: 44, light: 12, detail: 1 },
   { grid: 48, steps: 24, light: 10, detail: 0.6 },
   { grid: 40, steps: 18, light: 8, detail: 0.5 },
 ];

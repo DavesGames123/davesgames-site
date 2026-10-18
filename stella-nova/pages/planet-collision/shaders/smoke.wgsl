@@ -303,7 +303,7 @@ fn cs_smokeLight(@builtin(global_invocation_id) gid: vec3u) {
     body = min(body, 1.0 - smoothstep(0.7 * iso, 1.2 * iso, f));
     if (body <= 0.0 || tau > 12.0) { break; }
     t += dt;
-    dt *= 1.12;
+    dt *= 1.22;
   }
   textureStore(lightOut, c, vec4f(tau, body, 0.0, 0.0));
 }
@@ -437,7 +437,9 @@ fn fs_smokeMarch(in: MV2) -> MOut2 {
     // and the edge breaks into billows; deep inside the cloud is whole
     let shape = clamp((log2(max(s0 * U0.smoke0.w, 1e-9)) + 8.4) / 11.7, 0.0, 1.0);
     let er = clamp((det - (1.0 - shape)) / max(shape, 0.08), 0.0, 1.0);
-    let dens = mix(1.0, 1.6 * er, U0.misc.z);
+    // a lone puff (a thin medium all through) fades to a wisp instead of
+    // an eroded flake
+    let dens = mix(1.0, 1.6 * er, U0.misc.z) * smoothstep(0.1, 0.4, shape);
     let sg2 = s0 * dens;
     if (sg2 <= 1e-6) { t += dt; continue; }
     let dustShare = clamp(U0.smoke2.y * m.y / max(s0, 1e-9), 0.0, 1.0);
