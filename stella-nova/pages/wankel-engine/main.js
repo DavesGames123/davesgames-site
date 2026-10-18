@@ -30,6 +30,7 @@ import { createCards, esc } from './cards.js';
 import { createAnalysis } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
 import { createTour } from '../../lib/mech-tour.js';
+import { createExplodeBar } from '../../lib/explode-bar.js';
 
 const { VARIANTS, TAU, D, GEO, STROKES } = E;
 const $ = id => document.getElementById(id);
@@ -160,6 +161,9 @@ function setExplode(x) {
 $('explode').addEventListener('input', e => setExplode(+e.target.value));
 $('assemble').addEventListener('click', () => setExplode(0));
 $('burst').addEventListener('click', () => { setExplode(1); setShow('cover', true); });
+// the Explode pill at the top of the view (lib/explode-bar.js), hidden in
+// the saver. Like the panel button, a full explode shows the cover too.
+createExplodeBar({ host: $('stage'), get: () => S.explodeTarget, set: v => { setExplode(v); if (v >= 1) setShow('cover', true); }, saver: () => saverOn });
 function setRpm(r) {
   r = Math.max(0, Math.min(9000, Math.round(r)));
   if (r > 0) S.lastRpm = r;
