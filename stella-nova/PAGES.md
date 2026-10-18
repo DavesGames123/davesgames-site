@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-229 registered pages in 6 regions and 25 constellations.
+229 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -199,9 +199,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `euler-fluid` | Euler Fluid | Fluids > Fluid Solvers | SIM | A grid fluid in 200 lines: wind tunnel, tank and paint. | Ten Minute Physics #17 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `flip-fluid` | FLIP Water | Fluids > Fluid Solvers | SIM | FLIP water: particles carry it, a grid solves the pressure. | Ten Minute Physics #18 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `pbf-boundary` | PBF Boundaries | Fluids > Fluid Solvers | SIM | Position based particles with moving walls and friction. | Ten Minute Physics contribution by Sergii Biloshytskyi, for Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `wind-tunnel` | Wind Tunnel | Fluids > Air, Heat & Fire | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
-| `fire-simulation` | Fire Simulation | Fluids > Air, Heat & Fire | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `thermal-convection` | Thermal Convection | Fluids > Air, Heat & Fire | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
+| `wind-tunnel` | Wind Tunnel | Fluids > Air & Fire | CFD | Lattice Boltzmann flow around a cow, a car or a wing. |  | shown | hook, tier 3, default | yes |
+| `fire-simulation` | Fire Simulation | Fluids > Air & Fire | SIM | Fire from a grid fluid: heat and smoke rise and swirl. | Ten Minute Physics #21 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `ns-equations` | Navier–Stokes 1D | Fluids > Navier–Stokes | MATH | The Navier-Stokes terms one at a time in 1D. |  | shown | generic, tier 5 | yes |
 | `ns-burgers` | Burgers Equation | Fluids > Navier–Stokes | SIM | Shocks form in the Burgers equation. |  | shown | hook, tier 3, default | yes |
 | `ns-flow2d` | Navier–Stokes 2D | Fluids > Navier–Stokes | SIM | Navier-Stokes on a 2D grid. |  | shown | hook, tier 3, default | yes |
@@ -209,14 +208,15 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ns-wave` | Blowup: Wave | Fluids > Blowup | MATH | The blowup question through a wave model. |  | shown | hook, tier 3, default | yes |
 | `ns-geometry` | Blowup: Geometry | Fluids > Blowup | SIM | The blowup question through the geometry of the flow. |  | shown | hook, tier 3, default | yes |
 | `ns-vortex` | Blowup: Vortex | Fluids > Blowup | 3D | A vortex that may blow up. |  | shown | hook, tier 2, default | yes |
-| `tidal-currents` | Tidal Currents | Earth & Weather > Ocean & Weather | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
-| `storm-globe` | Storm Globe | Earth & Weather > Ocean & Weather | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
-| `weather-map` | Weather Map | Earth & Weather > Ocean & Weather | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
-| `city-atlas` | City Atlas | Earth & Weather > Maps & Cities | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
-| `map-generator` | City Generator | Earth & Weather > Maps & Cities | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
-| `map-projections` | Map Projections | Earth & Weather > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
-| `dla-terrain` | DLA Terrain | Earth & Weather > Land & Deep Time | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | yes |
-| `ancient-earth` | Ancient Earth | Earth & Weather > Land & Deep Time | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
+| `tidal-currents` | Tidal Currents | Earth & Oceans > Ocean & Land | DATA | Real tidal current data, animated. |  | shown | hook, tier 2, default | yes |
+| `dla-terrain` | DLA Terrain | Earth & Oceans > Ocean & Land | 3D | Vast worlds: DLA-grown ridges, rivers carved by branched flow, forests, weather and a day-night cycle. | ridges grown with a port of dlaf by Michael Fogleman (MIT); CC0 models from Poly Haven and ambientCG | shown | hook, tier 4, default | yes |
+| `ancient-earth` | Ancient Earth | Earth & Oceans > Ocean & Land | 3D | The Earth from 540 million years ago to today. |  | shown | hook, tier 3, default | yes |
+| `city-atlas` | City Atlas | Earth & Oceans > Maps & Cities | 3D | Twenty-one 3D cities with real terrain, currents and wind. |  | shown | hook, tier 3, default | yes |
+| `map-generator` | City Generator | Earth & Oceans > Maps & Cities | 3D | Grow a procedural city from a seed (after MapGenerator). |  | shown | hook, tier 3, default | yes |
+| `map-projections` | Map Projections | Earth & Oceans > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
+| `storm-globe` | Storm Globe | Meteorology > Weather & Storms | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
+| `weather-map` | Weather Map | Meteorology > Weather & Storms | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
+| `thermal-convection` | Thermal Convection | Meteorology > Atmospheric Convection | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
 | `maxwell` (pages/maxwells-equations) | Maxwell's Equations | Light & Fields > Electromagnetism | NEW | The four equations, animated. |  | shown | hook, tier 4, default | yes |

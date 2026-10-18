@@ -50,6 +50,7 @@
 [data-sector="life"]        { --c: #6cd6a8; --c2: #e8d2a8; }
 [data-sector="fluids"]      { --c: #50c0ff; --c2: #64dcc8; }
 [data-sector="earth"]       { --c: #a8d65c; --c2: #5cc0e8; }
+[data-sector="weather"]     { --c: #c4d2ec; --c2: #ffd25a; }
 [data-sector="fields"]      { --c: #60e0ee; --c2: #ffb478; }
 [data-sector="patterns"]    { --c: #9db4ff; --c2: #c490ff; }
 [data-sector="maths"]       { --c: #f2d16b; --c2: #9db4ff; }

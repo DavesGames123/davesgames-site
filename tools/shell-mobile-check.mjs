@@ -9,7 +9,7 @@
 //  At each viewport:
 //    - drawer mode is on for phones and portrait tablets, off at 1024x768
 //    - the controls are there: menu button, close button, search, 6 region
-//      tabs, 25 constellations
+//      tabs, 26 constellations
 //    - the drawer is closed at load, so it does not cover the page
 //    - no declared width or min-width is wider than the viewport, and the
 //      drawer width fits
@@ -70,8 +70,8 @@ for (const [W, H, coarse] of VPS) {
   const st = el => styleOf(el, css, vp);
   ok(!errs.length, `${tag}: the shell scripts run with no error`, errs.join(' | '));
   ok(drawer === (W <= 844 && coarse), `${tag}: drawer mode is ${drawer ? 'on' : 'off'}`);
-  ok(!!$('#menu-btn') && !!$('#sb-close') && !!$('#sb-q') && $$('#sb-regions .rg-tab').length === 6 && $$('#sb-nav .cluster').length === 25,
-    `${tag}: menu, close, search, 6 region tabs and 25 constellations are there`, `${$$('#sb-regions .rg-tab').length} tabs, ${$$('#sb-nav .cluster').length} clusters`);
+  ok(!!$('#menu-btn') && !!$('#sb-close') && !!$('#sb-q') && $$('#sb-regions .rg-tab').length === 6 && $$('#sb-nav .cluster').length === 26,
+    `${tag}: menu, close, search, 6 region tabs and 26 constellations are there`, `${$$('#sb-regions .rg-tab').length} tabs, ${$$('#sb-nav .cluster').length} clusters`);
 
   // Widths: no declared width or min-width is wider than the viewport.
   const wide = [];

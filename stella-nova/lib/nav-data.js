@@ -158,10 +158,9 @@ w.SN_NAV = [
       ["flip-fluid", "FLIP Water", "SIM"],
       ["pbf-boundary", "PBF Boundaries", "SIM"]
     ] },
-    { h: "Air, Heat & Fire", p: [
+    { h: "Air & Fire", p: [
       ["wind-tunnel", "Wind Tunnel", "CFD"],
-      ["fire-simulation", "Fire Simulation", "SIM"],
-      ["thermal-convection", "Thermal Convection", "SIM"]
+      ["fire-simulation", "Fire Simulation", "SIM"]
     ] },
     { h: "Navier–Stokes", p: [
       ["ns-equations", "Navier–Stokes 1D", "MATH"],
@@ -175,20 +174,25 @@ w.SN_NAV = [
       ["ns-vortex", "Blowup: Vortex", "3D"]
     ] }
   ] },
-  { id: "earth", label: "Earth & Weather", short: "Earth", icon: "♁", color: "#a8d65c", color2: "#5cc0e8", groups: [
-    { h: "Ocean & Weather", p: [
+  { id: "earth", label: "Earth & Oceans", short: "Earth", icon: "♁", color: "#a8d65c", color2: "#5cc0e8", groups: [
+    { h: "Ocean & Land", p: [
       ["tidal-currents", "Tidal Currents", "DATA"],
-      ["storm-globe", "Storm Globe", "DATA"],
-      ["weather-map", "Weather Map", "DATA"]
+      ["dla-terrain", "DLA Terrain", "3D"],
+      ["ancient-earth", "Ancient Earth", "3D"]
     ] },
     { h: "Maps & Cities", p: [
       ["city-atlas", "City Atlas", "3D"],
       ["map-generator", "City Generator", "3D"],
       ["map-projections", "Map Projections", "MATH"]
+    ] }
+  ] },
+  { id: "weather", label: "Meteorology", short: "Weather", icon: "☁", color: "#c4d2ec", color2: "#ffd25a", groups: [
+    { h: "Weather & Storms", p: [
+      ["storm-globe", "Storm Globe", "DATA"],
+      ["weather-map", "Weather Map", "DATA"]
     ] },
-    { h: "Land & Deep Time", p: [
-      ["dla-terrain", "DLA Terrain", "3D"],
-      ["ancient-earth", "Ancient Earth", "3D"]
+    { h: "Atmospheric Convection", p: [
+      ["thermal-convection", "Thermal Convection", "SIM"]
     ] }
   ] },
   { id: "fields", label: "Light & Fields", short: "Fields", icon: "∇", color: "#60e0ee", color2: "#ffb478", groups: [

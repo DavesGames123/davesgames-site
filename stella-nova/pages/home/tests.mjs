@@ -33,7 +33,7 @@
 //      the dock search and the chip row show, the chips scroll in their row
 //      with snap, html (not body) holds overflow-x, no declared width is
 //      wider than the viewport, touch targets are 44 px, the star chart is
-//      the sector list below 1024 px (6 region headings, 25 sectors, one
+//      the sector list below 1024 px (6 region headings, 26 sectors, one
 //      open at a time, a chip opens its sector), and a phone image takes
 //      its thumbs/sm copy with no srcset.
 //
@@ -357,7 +357,7 @@ async function phoneLayouts() {
     check(`${tag}: ${noChart ? 'the sector list shows and the chart hides' : 'the star chart shows'}`,
       noChart ? st($('#chart')).display === 'none' && st($('#sectors')).display === 'block' : st($('#chart')).display !== 'none' && st($('#sectors')).display === 'none');
     const secs = $$('#sectors details.sector');
-    check(`${tag}: the sector list has 6 region headings and 25 closed sectors`, $$('#sectors .sec-region').length === 6 && secs.length === 25 && secs.every(x => !x.open), `${$$('#sectors .sec-region').length} regions, ${secs.length} sectors`);
+    check(`${tag}: the sector list has 6 region headings and 26 closed sectors`, $$('#sectors .sec-region').length === 6 && secs.length === 26 && secs.every(x => !x.open), `${$$('#sectors .sec-region').length} regions, ${secs.length} sectors`);
     if (noChart) {
       secs[3].querySelector('summary').click();
       secs[7].querySelector('summary').click();
