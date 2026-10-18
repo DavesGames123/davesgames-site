@@ -34,6 +34,7 @@ import { createStage } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
 import { createTour } from '../../lib/mech-tour.js';
+import { createExplodeBar } from '../../lib/explode-bar.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -163,6 +164,9 @@ function setExplode(x) { S.explodeTarget = x; $('explode').value = x; $('explode
 $('explode').addEventListener('input', e => setExplode(+e.target.value));
 $('assemble').addEventListener('click', () => setExplode(0));
 $('burst').addEventListener('click', () => setExplode(1));
+// the Explode pill at the top of the view (lib/explode-bar.js), hidden in
+// the saver. No E key: the page types every letter into the machine.
+createExplodeBar({ host: $('stage'), get: () => S.explodeTarget, set: setExplode, saver: () => saverOn, key: null });
 function setRpm(r) {
   r = Math.max(0, Math.min(600, r));
   if (r > 0) { S.lastRpm = r; S.goal = null; }
