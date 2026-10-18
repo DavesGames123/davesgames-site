@@ -1,0 +1,68 @@
+DLA Terrain night sky (package CELESTIAL): data and image credits
+==================================================================
+Every file in this folder, its source, its licence and the source URL.
+The files were made by tools in the scratchpad (resize, webp, packing);
+the build steps are in the line of each file. tests/celestial.test.mjs
+checks that each file in this folder has a line here.
+
+stars.bin
+  The Bright Star Catalogue, 5th Revised Ed. (Hoffleit D., Warren Jr W.H.,
+  Astronomical Data Center, NSSDC/ADC, 1991), VizieR catalogue V/50.
+  J2000 positions, V magnitudes and B-V colours of 9096 stars, packed to
+  10 bytes a star (sky-maps.json "stars").
+  Licence: public domain (US government / NASA ADC catalogue data; facts).
+  URL: https://cdsarc.cds.unistra.fr/ftp/V/50/
+
+milkyway_2k.webp, milkyway_1k.webp
+  "Deep Star Maps 2020", milkyway_2020_4k.exr (the sky with the Hipparcos
+  and Tycho stars taken out), resized to 2048 x 1024 and 1024 x 512,
+  encoded as value^(1/2.2) of the linear map over its 99.99th percentile.
+  Credit: NASA/Goddard Space Flight Center Scientific Visualization Studio.
+  Gaia DR2: ESA/Gaia/DPAC.
+  Licence: NASA media, public domain; Gaia DR2 data credited as asked.
+  URL: https://svs.gsfc.nasa.gov/4851/
+
+moon_1024.webp, moon_512.webp
+  "CGI Moon Kit", lroc_color_poles_2k.tif (LRO LROC WAC colour mosaic).
+  Credit: NASA's Scientific Visualization Studio (Ernie Wright), LRO LROC.
+  Licence: NASA media, public domain.
+  URL: https://svs.gsfc.nasa.gov/4720/
+
+io_1024.webp, io_512.webp, europa_1024.webp, europa_512.webp,
+ganymede_1024.webp, ganymede_512.webp, callisto_1024.webp, callisto_512.webp,
+titan_1024.webp, titan_512.webp, enceladus_1024.webp, enceladus_512.webp,
+rhea_1024.webp, rhea_512.webp, iapetus_1024.webp, iapetus_512.webp,
+phobos_1024.webp, phobos_512.webp, triton_1024.webp, triton_512.webp
+  NASA 3D Resources, "Images and Textures": Jupiter - Io (A), Jupiter -
+  Europa, Jupiter - Ganymede, Jupiter - Callisto, Saturn - Titan, Saturn -
+  Enceladus, Saturn - Rhea, Saturn - Iapetus, Mars - Phobos, Neptune -
+  Triton (global maps from NASA/JPL/USGS mission data), resized.
+  Credit: NASA (NASA 3D Resources; NASA/JPL, USGS).
+  Licence: "free and without copyright" (NASA 3D Resources README), NASA
+  media guidelines.
+  URL: https://github.com/nasa/NASA-3D-Resources/tree/master/Images%20and%20Textures
+
+jupiter_2048.webp, jupiter_1024.webp
+  PIA07782 "Cassini's Best Maps of Jupiter (Cylindrical Map)", resized.
+  Credit: NASA/JPL/Space Science Institute.
+  Licence: NASA/JPL media, public domain.
+  URL: https://science.nasa.gov/photojournal/cassinis-best-maps-of-jupiter-cylindrical-map/
+  (photojournal PIA07782: https://photojournal.jpl.nasa.gov/catalog/PIA07782)
+
+saturn_2048.webp, saturn_1024.webp, uranus_2048.webp, uranus_1024.webp,
+neptune_2048.webp, neptune_1024.webp, ring_1024.png
+  Solar System Scope textures 2k_saturn.jpg, 2k_uranus.jpg,
+  2k_neptune.jpg, 2k_saturn_ring_alpha.png (based on NASA mission data),
+  resized; the ring strip is the mean of the ring image over its rows.
+  Credit: Solar System Scope (INOVE), https://www.solarsystemscope.com/
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  URL: https://www.solarsystemscope.com/textures/
+
+sky-maps.json
+  The manifest of this folder (sizes, map means, the star record layout).
+  Made by CELESTIAL; no third-party content.
+
+Ideas (no code copied): the B-V to temperature fit of Ballesteros (2012,
+EPL 97, 34008); the Planck locus fits of Kim et al. (2002, US patent
+7024034); the lunar phase law of Allen, "Astrophysical Quantities"; the
+airmass of Kasten and Young (1989, Applied Optics 28, 4735).

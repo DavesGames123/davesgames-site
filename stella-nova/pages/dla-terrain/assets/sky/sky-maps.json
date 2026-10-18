@@ -1,0 +1,191 @@
+{
+ "stars": {
+  "file": "stars.bin",
+  "count": 9096,
+  "record": 10,
+  "layout": "u16 HR, u16 RA (x 2pi / 65536 rad, J2000), i16 Dec (x (pi/2) / 32767 rad), i16 V mag x 1000, i16 B-V x 1000 (32767 = none)"
+ },
+ "milkyway": {
+  "files": {
+   "2k": "milkyway_2k.webp",
+   "1k": "milkyway_1k.webp"
+  },
+  "gamma": 2.2,
+  "meanEncoded": 0.0380069708222361,
+  "mapping": "u = 0.5 - RA / 360 (mod 1), v = (90 - Dec) / 180, J2000; linear = encoded^2.2 (1 = the 99.99th percentile)"
+ },
+ "maps": {
+  "moon": {
+   "files": {
+    "d": "moon_1024.webp",
+    "p": "moon_512.webp"
+   },
+   "meanLinear": [
+    0.3055,
+    0.2983,
+    0.2745
+   ]
+  },
+  "io": {
+   "files": {
+    "d": "io_1024.webp",
+    "p": "io_512.webp"
+   },
+   "meanLinear": [
+    0.5094,
+    0.3571,
+    0.1174
+   ]
+  },
+  "europa": {
+   "files": {
+    "d": "europa_1024.webp",
+    "p": "europa_512.webp"
+   },
+   "meanLinear": [
+    0.4416,
+    0.4416,
+    0.4416
+   ]
+  },
+  "ganymede": {
+   "files": {
+    "d": "ganymede_1024.webp",
+    "p": "ganymede_512.webp"
+   },
+   "meanLinear": [
+    0.3693,
+    0.3693,
+    0.3693
+   ]
+  },
+  "callisto": {
+   "files": {
+    "d": "callisto_1024.webp",
+    "p": "callisto_512.webp"
+   },
+   "meanLinear": [
+    0.2735,
+    0.2735,
+    0.2735
+   ]
+  },
+  "titan": {
+   "files": {
+    "d": "titan_1024.webp",
+    "p": "titan_512.webp"
+   },
+   "meanLinear": [
+    0.957,
+    0.1213,
+    0.002
+   ]
+  },
+  "enceladus": {
+   "files": {
+    "d": "enceladus_1024.webp",
+    "p": "enceladus_512.webp"
+   },
+   "meanLinear": [
+    0.7127,
+    0.7127,
+    0.7127
+   ]
+  },
+  "rhea": {
+   "files": {
+    "d": "rhea_1024.webp",
+    "p": "rhea_512.webp"
+   },
+   "meanLinear": [
+    0.5551,
+    0.5551,
+    0.5551
+   ]
+  },
+  "iapetus": {
+   "files": {
+    "d": "iapetus_1024.webp",
+    "p": "iapetus_512.webp"
+   },
+   "meanLinear": [
+    0.2742,
+    0.2742,
+    0.2742
+   ]
+  },
+  "phobos": {
+   "files": {
+    "d": "phobos_1024.webp",
+    "p": "phobos_512.webp"
+   },
+   "meanLinear": [
+    0.1949,
+    0.1949,
+    0.1949
+   ]
+  },
+  "triton": {
+   "files": {
+    "d": "triton_1024.webp",
+    "p": "triton_512.webp"
+   },
+   "meanLinear": [
+    0.061,
+    0.0562,
+    0.0515
+   ]
+  },
+  "jupiter": {
+   "files": {
+    "d": "jupiter_2048.webp",
+    "p": "jupiter_1024.webp"
+   },
+   "meanLinear": [
+    0.3819,
+    0.3614,
+    0.3321
+   ]
+  },
+  "saturn": {
+   "files": {
+    "d": "saturn_2048.webp",
+    "p": "saturn_1024.webp"
+   },
+   "meanLinear": [
+    0.7417,
+    0.6021,
+    0.3934
+   ]
+  },
+  "uranus": {
+   "files": {
+    "d": "uranus_2048.webp",
+    "p": "uranus_1024.webp"
+   },
+   "meanLinear": [
+    0.343,
+    0.6196,
+    0.6676
+   ]
+  },
+  "neptune": {
+   "files": {
+    "d": "neptune_2048.webp",
+    "p": "neptune_1024.webp"
+   },
+   "meanLinear": [
+    0.0414,
+    0.112,
+    0.4733
+   ]
+  },
+  "ring": {
+   "files": {
+    "d": "ring_1024.png",
+    "p": "ring_1024.png"
+   },
+   "mapping": "u = 0 inner edge (1.11 R), u = 1 outer edge (2.33 R) of the Saturn rings (C ring to A ring)"
+  }
+ }
+}
