@@ -40,6 +40,8 @@
                 time of day, weather (layout.js has the sizes)
      #histBack #histFwd #copyLink  the rolled worlds (world-state.js); the
                 URL hash holds the full world, so a link reloads it
+     #build     "Watch it build": stage name, caption, stage bar, scrub, controls
+     #buildBtn  the toggle of that mode (Terrain tab)
      #loadLine  the slim line while the modules and assets load (main.js)
      #notice    a module that did not load
      #credits   the credits drawer
@@ -48,6 +50,7 @@
    GREP MAP
      grep -n 'id="panel'     controls (ui.js fills #optGroups, #wxChips ...)
      grep -n 'id="progress'  stage bar
+     grep -n 'id="build'     the build bar (Watch it build)
      grep -n 'id="map'       map inset
      grep -n 'id="dock'      phone dock
      grep -n 'id="credits'   credits drawer
@@ -79,6 +82,19 @@
     <button id="mapToggle" type="button" aria-label="Hide the map">–</button>
   </figure>
   <div id="hint" data-saver-hide>Drag to turn · scroll to zoom · F fly · O orbit · G drone</div>
+  <section id="build" data-saver-hide aria-label="Watch it build" hidden>
+    <div class="bd-head"><b id="bdStage">DLA growth</b><span id="bdTime"></span></div>
+    <p id="bdCap"></p>
+    <ol id="bdStages"></ol>
+    <input type="range" id="bdScrub" min="0" max="1000" step="1" value="0" aria-label="Scrub through the build">
+    <div class="bd-ctl">
+      <button type="button" id="bdPrev" aria-label="The stage before" title="The stage before">⏮</button>
+      <button type="button" id="bdPlay" aria-label="Pause" title="Play or pause">❚❚</button>
+      <button type="button" id="bdNext" aria-label="The next stage" title="The next stage">⏭</button>
+      <button type="button" id="bdSpeed" aria-label="Playback speed" title="Playback speed">1×</button>
+      <button type="button" id="bdClose" aria-label="Stop watching the build" title="Stop watching (the normal fast generation)">✕</button>
+    </div>
+  </section>
   <div id="loadLine" data-saver-hide role="status" aria-live="polite" hidden><span id="loadText">Loading</span><i><b id="loadFill"></b></i></div>
   <div id="notice" data-saver-hide role="status" aria-live="polite" hidden></div>
   <div id="toast" data-saver-hide role="status" aria-live="polite" hidden></div>
@@ -111,6 +127,7 @@
       <button type="button" id="genBtn" class="primary">Generate</button>
       <button type="button" id="randBtn" title="Roll a new world: terrain, weather, time, season, plants, water and camera (locked groups stay)">⚄ Randomise everything</button>
     </div>
+    <button type="button" id="buildBtn" class="buildtoggle" aria-pressed="false" title="Watch it build (B): each new terrain plays stage by stage, from the DLA tree to the biomes"><span class="ico">▶</span> Watch it build <span class="sw" aria-hidden="true"></span></button>
     <div class="histrow">
       <button type="button" id="histBack" aria-label="The world before" title="The world before" disabled>‹ Back</button>
       <span id="histPos"></span>

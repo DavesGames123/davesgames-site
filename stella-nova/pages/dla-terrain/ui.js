@@ -17,7 +17,12 @@
 //        progressDone(), setTerrainMap(view, BIOMES), drawMap(cam), syncSky(),
 //        syncView(), syncMix(), syncLocks(), syncHistory(), status(a, b, short),
 //        notice(text), toast(text), isPhone(), setPanel(open), panelState(),
-//        mapRect(), hintOnce(), overlays() }
+//        mapRect(), hintOnce(), overlays(), syncBuild(), buildShow(on),
+//        buildSync(info) }
+//    BUILD  "Watch it build": #buildBtn (Terrain tab) toggles app.buildMode;
+//        #build is the bar (stage name, caption, stage cells, scrub,
+//        Prev, Play/Pause, Next, speed, Close) that main.js fills from the
+//        player (build-player.js info()).
 //    PHONE  the dock holds five one-tap actions: controls, Randomise
 //        everything, a new terrain (the next preset), the time of day and
 //        the weather (each tap steps to the next one). The sheet has a grip:
@@ -36,9 +41,10 @@
 //  grep -n targets: "export function groupOptions", "export function mapPixels",
 //  "export function createUI", "function buildOptions", "function drawMap",
 //  "── SHEET", "── SKY", "── VIEW", "── MAP", "── PROGRESS", "── DICE",
-//  "── MIX", "── HISTORY", "── DOCK", "── HINT"
+//  "── MIX", "── HISTORY", "── DOCK", "── BUILD", "── HINT"
 // ============================================================================
 import { sheetHeights, snapSheet, DOCK_H } from './layout.js';
+import { SEGMENTS, segStart } from './build.js';
 
 export const PHONE_Q = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
 export const GROUP_ORDER = ['World', 'DLA ridges', 'Shape', 'Branched flow', 'Erosion', 'Climate', 'Detail'];
@@ -168,8 +174,8 @@ export function createUI(app, doc = globalThis.document) {
   ui.isPhone = () => mq.matches;
   ui.panelState = () => (!panel.classList.contains('open') ? 'closed' : panel.classList.contains('full') ? 'full' : 'half');
   // the bars that cover the view (main.js frames the terrain beside them)
-  const bars = ['panel', 'dock', 'status'].map($).concat([doc.querySelector('.topbar')]).filter(Boolean);
-  ui.overlays = () => bars.filter(b => b !== panel || panel.classList.contains('open')).map(b => b.getBoundingClientRect());
+  const bars = ['panel', 'dock', 'status', 'build'].map($).concat([doc.querySelector('.topbar')]).filter(Boolean);
+  ui.overlays = () => bars.filter(b => (b !== panel || panel.classList.contains('open')) && !b.hidden).map(b => b.getBoundingClientRect());
   setTab('terrain');
   setPanel(!mq.matches);
   mq.addEventListener && mq.addEventListener('change', () => setPanel(!mq.matches));
@@ -535,6 +541,69 @@ export function createUI(app, doc = globalThis.document) {
     setTimeout(() => { n.hidden = true; }, 12000);
   };
   ui.status = (a, b, short) => { $('stMain').textContent = short && mq.matches ? short : a; $('stRight').textContent = b || ''; };
+
+  // ── BUILD: the "Watch it build" toggle and bar ──
+  // #buildBtn (panel, Terrain tab, so the phone sheet has it too) turns the
+  // mode on and off. #build is the bar: the stage name, the caption, the
+  // stage bar (one cell per stage, width by its time; a tap jumps there),
+  // the scrub, then Prev, Play/Pause, Next, the speed and Close. All
+  // targets are 44 px; the bar fits 360 px.
+  const bar = $('build'), bdStages = $('bdStages');
+  for (let i = 0; i < SEGMENTS.length; i++) {
+    const sg = SEGMENTS[i];
+    const li = el('li');
+    const b = el('button', '', sg.label);
+    b.type = 'button'; b.dataset.i = String(i);
+    b.setAttribute('aria-label', `Stage ${i + 1}: ${sg.name}`);
+    b.title = sg.name;
+    li.style.flexGrow = String(sg.dur);
+    const fill = el('i');
+    li.append(fill, b);
+    b.addEventListener('click', () => app.build.seekSeg(i));
+    bdStages.append(li);
+  }
+  $('bdPlay').addEventListener('click', () => app.build.play());
+  $('bdPrev').addEventListener('click', () => app.build.step(-1));
+  $('bdNext').addEventListener('click', () => app.build.step(1));
+  $('bdSpeed').addEventListener('click', () => app.build.speed());
+  $('bdClose').addEventListener('click', () => app.build.close());
+  const scrub = $('bdScrub');
+  scrub.addEventListener('input', () => app.build.seekFrac(+scrub.value / +scrub.max));
+  $('buildBtn').addEventListener('click', () => app.setBuildMode(!app.buildMode));
+  ui.syncBuild = () => {
+    const b = $('buildBtn');
+    b.setAttribute('aria-pressed', String(!!app.buildMode));
+    b.classList.toggle('on', !!app.buildMode);
+  };
+  ui.buildShow = on => {
+    bar.hidden = !on;
+    body.classList.toggle('building', !!on);
+    if (on) { $('progress').hidden = true; if (mq.matches) setPanel(false); }
+    if (app.onLayout) app.onLayout();
+  };
+  let lastCap = '';
+  ui.buildSync = info => {
+    if (!info) return;
+    if (bar.hidden) ui.buildShow(true);
+    $('bdStage').textContent = info.held ? info.name + ' · computing' : info.name;
+    if (info.caption !== lastCap) { lastCap = info.caption; $('bdCap').textContent = info.caption; }
+    const m = Math.floor(info.t / 60), sec = Math.floor(info.t % 60);
+    $('bdTime').textContent = `${info.i + 1}/${SEGMENTS.length} · ${m}:${String(sec).padStart(2, '0')}`;
+    const play = $('bdPlay');
+    const icon = info.ended ? '↻' : info.playing ? '❚❚' : '▶';
+    if (play.textContent !== icon) play.textContent = icon;
+    play.setAttribute('aria-label', info.ended ? 'Play the build again' : info.playing ? 'Pause' : 'Play');
+    $('bdSpeed').textContent = (info.speed % 1 ? info.speed.toFixed(1) : info.speed) + '×';
+    if (doc.activeElement !== scrub) scrub.value = String(Math.round(info.t / info.total * +scrub.max));
+    bdStages.querySelectorAll('li').forEach((li, i) => {
+      const t0 = segStart(i), d = SEGMENTS[i].dur;
+      const f = Math.max(0, Math.min(1, (info.t - t0) / d));
+      li.firstChild.style.width = (f * 100).toFixed(1) + '%';
+      li.classList.toggle('on', i === info.i);
+      li.classList.toggle('done', i < info.i || info.ended);
+    });
+  };
+  ui.syncBuild();
 
   // ── HINT: "tap to explore", one time per browser, on a phone ──
   ui.hintOnce = () => {

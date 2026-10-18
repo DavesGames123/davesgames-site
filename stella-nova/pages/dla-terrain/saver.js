@@ -14,20 +14,30 @@
 //    forming   a NEW terrain (new seed) grows from DLA in front of the camera
 //    vista     a wide high orbit at midday, fair weather
 //    night     moonlight and stars, clear, a slow orbit
-//  buildShotPlan(seed, n) -> [shot]: a seeded shuffle, 'forming' first, no
-//    kind twice in a row, each kind at most once per 6 shots.
+//  buildShotPlan(seed, n, opts) -> [shot]: a seeded shuffle, 'forming'
+//    first, no kind twice in a row, each kind at most once per 6 shots.
+//    opts.channel === 'build' gives the BUILD CHANNEL instead: every shot
+//    is kind 'build', a new seeded world played from DLA to biomes stage
+//    by stage ("Watch it build", build.js), at opts.speed (1..4; from the
+//    shell's opts.seconds when given: buildSpeed). main.js picks the
+//    channel from snSaver.enter({ channel }) or from the page's "Watch it
+//    build" toggle.
 //  framing(W, H, band) -> { fovY, shift, distK, portrait }: the lens and the
 //    NDC y shift that put the subject in the middle of the clear band of the
 //    shell plate (plateBand of lib/saver-clear.js). A 9:16 frame gets a wider
 //    vertical lens and a farther camera, so a ridge still fills the width.
 //  subjectScreenY(fr, H) -> px: where the image centre (the subject) lands.
 //  shotLabel(shot, st, code) -> the opts.label payload of the shell poster.
+//    st.build = { name, caption, index, label } puts the stage name and its
+//    caption on the plate (build shots).
 //  extractFn(src, name) -> the text of one WGSL or JS function (a real
 //    extract for the poster code field).
 //
 //  grep -n targets: "export const SHOT_KINDS", "export function buildShotPlan",
 //  "export function framing", "export function shotLabel", "export function extractFn"
 // ============================================================================
+
+import { TOTAL_S } from './build.js';
 
 export const SHOT_KINDS = Object.freeze({
   ridge: { sub: 'Drone flight along a DLA ridge at golden hour', min: 8, max: 12 },
@@ -48,6 +58,7 @@ export const SHOT_CODE = Object.freeze({
   storm: ['shaders/post.wgsl', 'fs_composite', 'wgsl'],
   snow: ['shaders/common.wgsl', 'sunShadow', 'wgsl'],
   forming: ['gpu/terrain.wgsl', 'blend', 'wgsl'],
+  build: ['shaders/build.wgsl', 'walkerGlow', 'wgsl'],
   vista: ['shaders/post.wgsl', 'agx', 'wgsl'],
   night: ['shaders/common.wgsl', 'baseHeight', 'wgsl'],
 });
@@ -63,7 +74,15 @@ export function mulberry(seed) {
   };
 }
 
-export function buildShotPlan(seed, n = 12) {
+export const BUILD_SHOT = Object.freeze({ sub: 'Watch it build: a new world from DLA to biomes', total: TOTAL_S });
+// the playback speed that fits a build into the shell's page time
+export function buildSpeed(seconds, total = BUILD_SHOT.total) {
+  if (!(seconds > 0)) return 1.25;
+  return Math.max(1, Math.min(4, +(total / (seconds * 0.85)).toFixed(2)));
+}
+
+export function buildShotPlan(seed, n = 12, opts = {}) {
+  if (opts.channel === 'build') return buildChannel(seed, n, opts);
   const r = mulberry(seed * 2654435761 + 7);
   const kinds = Object.keys(SHOT_KINDS);
   const plan = [];
@@ -93,6 +112,25 @@ export function buildShotPlan(seed, n = 12) {
     }
     shot.tod %= 1;
     plan.push(shot);
+  }
+  return plan;
+}
+
+// the build channel: n new worlds, each played from DLA to biomes
+function buildChannel(seed, n, opts) {
+  const r = mulberry(seed * 2246822519 + 3);
+  const speed = opts.speed || buildSpeed(opts.seconds, opts.total || BUILD_SHOT.total);
+  const total = opts.total || BUILD_SHOT.total;
+  const plan = [];
+  for (let i = 0; i < n; i++) {
+    const evening = r() < 0.5;
+    plan.push({
+      i, kind: 'build', sub: BUILD_SHOT.sub, speed, seed: Math.floor(r() * 1e6) + 1,
+      dur: +(total / speed + 4).toFixed(2), regen: true, build: true,
+      tod: evening ? 0.6 + r() * 0.08 : 0.32 + r() * 0.08, weather: r() < 0.7 ? 'fair' : 'clear',
+      season: 0.3 + r() * 0.25, preset: r(), yaw0: r() * 6.2832,
+      cam: { type: 'build' },
+    });
   }
   return plan;
 }
@@ -154,11 +192,13 @@ export function shotLabel(shot, st, code) {
     { sym: '\\mathrm{wx}', name: 'Weather', value: st.weather || '-', cls: 'm5' },
   ];
   if (st.preset) params.unshift({ sym: '\\mathrm{P}', name: 'Preset', value: st.preset, cls: 'm6' });
+  const b = st.build;
+  if (b) params.unshift({ sym: 'k', name: 'Stage', value: `${b.index + 1} of 8 · ${b.label}`, cls: 'm1' });
   return {
     title: 'DLA Terrain',
-    sub: shot ? shot.sub : 'Ridges from DLA, rivers from branched flow',
+    sub: b ? 'Watch it build · ' + b.name : shot ? shot.sub : 'Ridges from DLA, rivers from branched flow',
     params,
-    lines: [st.stage ? 'Stage: ' + st.stage : 'Diffusion-limited aggregation (dlaf, MIT, Michael Fogleman) + branched flow + erosion'],
+    lines: b ? [b.caption] : [st.stage ? 'Stage: ' + st.stage : 'Diffusion-limited aggregation (dlaf, MIT, Michael Fogleman) + branched flow + erosion'],
     tex: ['h_{k+1} = \\mathrm{blur}(\\uparrow h_k) + \\left(1 - \\frac{1}{1 + L/k}\\right)'],
     rules: [['h', 'm1'], ['L', 'm2']],
     code: code || undefined,

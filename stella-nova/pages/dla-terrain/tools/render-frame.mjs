@@ -15,7 +15,8 @@
 //  in), pumpN (N frames at 30 fps), preset:<id>, rand:<seed>, seed:<n>,
 //  tod<x>, season<x>, wx-<weather id>, q:<0..3>, home, orbit, drone,
 //  river, valley, ridge, fly, perfN (frame time to queue done), eval:<js>,
-//  shoot:<file>, gen:<name> (shoot each stage of a new generation).
+//  shoot:<file>, gen:<name> (shoot each stage of a new generation),
+//  build:<name>[@i:u+...] ("Watch it build": shoot points of the timeline).
 //  Without steps= it only checks that the page boots.
 // ============================================================================
 // Deno + jsdom harness: runs the real main.js with a fake swap chain, no browser.
@@ -199,6 +200,23 @@ for (const s of steps) {
       if (app.gen.stage !== last && app.gen.stage) { last = app.gen.stage; await pump(22); await globalThis.__shoot(app.gpu.device, OUT + '/' + base + '-' + (k++) + '-' + last + '.png'); }
     }
     await pump(25); await globalThis.__shoot(app.gpu.device, OUT + '/' + base + '-' + (k++) + '-done.png');
+  }
+  else if (s.startsWith('build:')) {
+    // "Watch it build": play to points of the timeline and shoot each one.
+    // build:<name>[@i:u+i:u+...] (i stage 0..7, u 0..1); default: two per stage
+    const [base, list] = s.slice(6).split('@');
+    const { SEGMENTS, timeOfSeg } = await import('../build.js');
+    const p = app.player;
+    if (!p.active) app.setBuildMode(true);
+    const pts = (list || SEGMENTS.flatMap((_, i) => [i + ':0.3', i + ':0.85']).join('+')).split('+');
+    for (const q of pts) {
+      const [i, u] = q.split(':').map(Number);
+      p.seek(Math.max(0, timeOfSeg(i, u) - 1.2)); p.playing = true;
+      await pump(36);
+      const inf = p.info();
+      console.log('build', q, inf.name, 't', inf.t.toFixed(1), inf.held ? 'held' : '', 'cam pitch', app.cam.orbit.pitch.toFixed(2), 'dist', Math.round(app.cam.orbit.dist));
+      await globalThis.__shoot(app.gpu.device, `${OUT}/${base}-${i}-${String(u).replace('.', '')}-${SEGMENTS[i].id}.png`);
+    }
   }
   else if (s.startsWith('shoot:')) { const f = s.slice(6); await globalThis.__shoot(app.gpu.device, f.startsWith('/') ? f : OUT + '/' + f); }
 }

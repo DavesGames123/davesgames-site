@@ -53,7 +53,8 @@ for (const f of walk(DIR, '.js').concat(walk(DIR, '.mjs'))) {
 
 // ── 2 imports
 const domFree = ['gpu/globals.js', 'gpu/mat.js', 'gpu/shadows.js', 'gpu/terrain-gpu.js', 'gpu/frame.js', 'gpu/device.js', 'gpu/fallback.js',
-  'gpu/sky-stub.js', 'gpu/stub-terrain.js', 'camera.js', 'saver.js', 'ui.js', 'render/post.js', 'world-state.js'];
+  'gpu/sky-stub.js', 'gpu/stub-terrain.js', 'camera.js', 'saver.js', 'ui.js', 'render/post.js', 'world-state.js',
+  'build.js', 'build-player.js', 'render/build.js'];
 for (const f of domFree) {
   try { await import(pathToFileURL(join(DIR, f)).href); ok(true, 'import ' + f); }
   catch (e) { ok(false, 'import ' + f, e.message); }

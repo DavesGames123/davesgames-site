@@ -296,3 +296,52 @@ html.sn-saver [data-saver-hide],html.dt-saver [data-saver-hide],
 html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #status,html.sn-saver .topbar,html.sn-saver #gear,
 html.dt-saver #panel,html.dt-saver #dock,html.dt-saver #status,html.dt-saver .topbar,html.dt-saver #gear{display:none!important}
 html.sn-saver #view,html.dt-saver #view{cursor:none}
+
+/* BUILD. "Watch it build" (ui.js "── BUILD"): the toggle in the Terrain tab
+   and the bar at the top centre, where #progress is in the fast mode. */
+.buildtoggle{display:flex;align-items:center;gap:8px;width:100%;margin-top:8px;padding:9px 12px;border:1px solid var(--line-b);border-radius:7px;background:var(--bg2);color:var(--ink);font-size:0.82rem;text-align:left}
+.buildtoggle .ico{color:var(--acc2)}
+.buildtoggle .sw{margin-left:auto;width:34px;height:18px;border-radius:9px;background:var(--faint);position:relative;flex:0 0 34px}
+.buildtoggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:7px;background:var(--dim);transition:left .2s}
+.buildtoggle.on{border-color:var(--acc2)}
+.buildtoggle.on .sw{background:rgba(242,194,122,0.35)}
+.buildtoggle.on .sw::after{left:18px;background:var(--acc2)}
+#build{position:absolute;top:calc(var(--top-h) + 6px);left:50%;transform:translateX(-50%);z-index:6;width:min(620px,calc(100vw - 32px));
+  padding:8px 12px 6px;border-radius:12px;background:rgba(9,12,14,0.84);border:1px solid var(--line-b);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+body.panel-open #build{left:calc(50% + var(--panel-w) / 2);width:min(620px,calc(100vw - var(--panel-w) - 32px))}
+#build .bd-head{display:flex;align-items:baseline;gap:10px;min-width:0}
+#bdStage{font-size:0.92rem;color:#f4e6cc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#bdTime{margin-left:auto;font-size:0.72rem;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+#bdCap{margin:4px 0 6px;font-size:0.78rem;line-height:1.4;color:#cfd6cf}
+#bdStages{list-style:none;display:flex;gap:3px;height:30px}
+#bdStages li{position:relative;flex:1 1 0;min-width:0;border-radius:5px;background:rgba(255,255,255,0.06);overflow:hidden}
+#bdStages li > i{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(242,194,122,0.28)}
+#bdStages li.done > i{width:100%!important;background:rgba(143,214,160,0.2)}
+#bdStages li.on{box-shadow:inset 0 0 0 1px var(--acc2)}
+#bdStages button{position:relative;width:100%;height:100%;border:0;background:none;color:var(--dim);font-size:0.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+#bdStages li.on button{color:#f4e6cc}
+#bdScrub{display:block;width:100%;height:24px;margin:2px 0 0;accent-color:var(--acc2);background:none}
+#build .bd-ctl{display:flex;gap:6px;justify-content:center}
+#build .bd-ctl button{flex:0 0 44px;height:36px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);font-size:0.86rem;line-height:1}
+#build .bd-ctl button:hover{border-color:var(--acc2)}
+#bdPlay{flex-basis:56px!important;color:var(--acc2)!important}
+#bdSpeed{font-variant-numeric:tabular-nums}
+
+/* touch: 44 px targets; the stage cells take the tap, the label of the
+   stage on screen shows and the others shrink to marks */
+@media (pointer:coarse), (max-width:768px){
+  #bdStages{height:44px}
+  #bdScrub{height:44px;margin:0}
+  #build .bd-ctl button{height:44px}
+}
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #build,body.panel-open #build{top:calc(var(--top-h) + 4px);left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));width:auto;transform:none;padding:6px 8px 4px}
+  #bdCap{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:max(11px,0.72rem)}
+  #bdStages li:not(.on) button{color:transparent}
+  #bdStages li.on{flex-grow:40!important}
+  body.building #map{display:none}
+}
+@media (max-height:500px) and (pointer:coarse){
+  #build,body.panel-open #build{left:calc(128px + env(safe-area-inset-left))}
+  #bdCap{-webkit-line-clamp:1}
+}

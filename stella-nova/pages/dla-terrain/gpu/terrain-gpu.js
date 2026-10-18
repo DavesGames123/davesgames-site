@@ -4,10 +4,10 @@
 //  createTerrainGPU(gpu) -> tg
 //    tg.begin(opts)              a new generation: size n, world size, height
 //                                scale, sea level (from the LIB options)
-//    tg.snapshot(snap, stage)    a LIB progress snapshot { n, height, flow?,
+//    tg.snapshot(snap, stage, s) a LIB progress snapshot { n, height, flow?,
 //                                river?, moisture?, water?, biome? }: upload
-//                                it and start a blend (BLEND_S) from the
-//                                state on screen now
+//                                it and start a blend (s seconds, default
+//                                BLEND_S) from the state on screen now
 //    tg.finish(terrain)          the final Terrain: upload, keep tg.cpu
 //    tg.compute(encoder, dt)     advance the blend: blend + normals passes
 //    tg.view -> TerrainGPU       { n, worldSize, heightScale, seaLevel,
@@ -135,7 +135,7 @@ export async function createTerrainGPU(gpu) {
     return refreshView();
   };
 
-  tg.snapshot = (s, stage) => {
+  tg.snapshot = (s, stage, blendS) => {
     if (!s || !s.height || !tg.tex) return tg.view;
     const n = s.n || Math.round(Math.sqrt(s.height.length));
     ensureSrc(n);
@@ -175,13 +175,14 @@ export async function createTerrainGPU(gpu) {
     tg.stage = stage || s.stage || null;
     tg.lastSnap = s;
     tg.t = 0; tg.blending = true; tg.version++;
+    tg.blendS = blendS > 0 ? blendS : BLEND_S;
     return refreshView();
   };
 
-  tg.finish = terrain => {
+  tg.finish = (terrain, blendS) => {
     tg.cpu = terrain;
     if (terrain && terrain.height) {
-      const v = tg.snapshot({ ...terrain, n: terrain.n }, 'done');
+      const v = tg.snapshot({ ...terrain, n: terrain.n }, 'done', blendS);
       tg.cpu = terrain;
       v.cpu = terrain;
       return v;
@@ -193,7 +194,7 @@ export async function createTerrainGPU(gpu) {
     if (!tg.tex) return false;
     if (!tg.blending && !needNormals) return false;
     if (tg.blending) {
-      tg.t = Math.min(1, tg.t + dt / BLEND_S);
+      tg.t = Math.min(1, tg.t + dt / (tg.blendS || BLEND_S));
     }
     prep[0] = tg.n; prep[1] = srcN || 1; prep[2] = tg.t; prep[3] = tg.worldSize / tg.n;
     prep[4] = tg.hasAux; prep[5] = tg.aoScale;

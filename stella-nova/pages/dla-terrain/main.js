@@ -43,10 +43,19 @@
 //  the asset megabytes until they are in. So the first second shows the
 //  terrain forming, never a blank canvas.
 //
+//  WATCH IT BUILD  ("── BUILD") every generation is recorded by the player
+//  (build-player.js, plan in build.js). With app.buildMode on (#buildBtn,
+//  key B, ?build=1, kept in localStorage) the snapshots do not go to the
+//  screen as they come: the player plays them back stage by stage (DLA
+//  tree and walkers, upscale, shape, branched flow, rivers, erosion,
+//  climate, biomes) with a caption, the #build bar and its own camera; the
+//  render/build.js overlay draws the tree, rays, flow and tints. Off is the
+//  normal fast generation. The saver has a build channel (saver.js).
+//
 //  SAVER  window.snSaver = { enter(opts), exit() } (see "── SAVER"). The
 //  shot plan is saver.js. P toggles the in-page saver.
 //
-//  URL: ?seed=<int> ?preset=<id> ?q=0..3 ?tod=0..1 ?wx=<weather id> ?cam=orbit|fly|drone
+//  URL: ?build=1|0 ?seed=<int> ?preset=<id> ?q=0..3 ?tod=0..1 ?wx=<weather id> ?cam=orbit|fly|drone
 //  HASH (world-state.js): #s=..&p=..&o=..&t=..&w=..&se=..&v=..&wa=..&c=.. holds
 //  the full world (options diff, time, weather, season, plants, water,
 //  camera), so a link reloads the same world; it wins over the query.
@@ -72,7 +81,7 @@
 //  band (saver.js framing).
 //
 //  grep -n targets: "── APP", "── BOOT", "── MODULES", "── GENERATE",
-//  "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
+//  "── BUILD", "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
 import { createTerrainGPU } from './gpu/terrain-gpu.js';
@@ -87,6 +96,8 @@ import { createCamera, dronePath, pickGround } from './camera.js';
 import { clearRect, centreShift } from './layout.js';
 import { createUI, todRate } from './ui.js';
 import { buildShotPlan, framing, shotLabel, shotTod, extractFn, SHOT_CODE, mulberry } from './saver.js';
+import { createBuildPlayer } from './build-player.js';
+import { createBuildOverlay } from './render/build.js';
 import { plateBand } from '../../lib/saver-clear.js';
 import { rollGroup, rollWorld, encodeHash, decodeHash, createHistory, newSeed, VEG0, WATER0, todForElevation } from './world-state.js';
 
@@ -119,24 +130,64 @@ const app = {
   saverRun: null, drones: { ridge: 0, river: 0 },
   veg: { ...VEG0 }, water: { ...WATER0 }, locks: loadLocks(), hist: createHistory(30),
   camShot: null, pendingCam: null, lastHash: '', genOpts: null, opening: true,
+  buildMode: Q.get('build') === '1' || (Q.get('build') !== '0' && loadFlag('dla-terrain-build')),
 };
+function loadFlag(k) { try { return localStorage.getItem(k) === '1'; } catch { return false; } }
 function loadLocks() {
   try { const a = JSON.parse(localStorage.getItem('dla-terrain-locks') || '[]'); return new Set(Array.isArray(a) ? a : []); } catch { return new Set(); }
 }
 window.__dlaTerrain = app;   // for the console
 
-let gpu = null, tg = null, sh = null, post = null, fg = null, ui = null;
+let gpu = null, tg = null, sh = null, post = null, fg = null, ui = null, buildOverlay = null;
 const cam = createCamera({ fovY: 50 * Math.PI / 180 });
 app.cam = cam;   // for the console and the Deno harness
 const G = new Float32Array(GLOBALS_FLOATS), GV = globalsView(G);
 let prevVP = null, frameNo = 0, lastT = 0, fpsAcc = 0, fpsN = 0, fps = 0, pendingSnap = null, lastSnapAt = 0;
-let skyState = null, worker = null, workerKind = null, genId = 0, booted = false;
+let skyState = null, worker = null, workerKind = null, genId = 0, booted = false, lastBuildSeg = -1;
 
 const world = {
   heightAt: (x, z) => (tg ? tg.heightAt(x, z) : 0),
   get size() { return tg ? tg.worldSize : 8000; },
   get seaLevel() { return tg ? tg.seaLevel + 0.4 : 0; },
   get midH() { return tg ? (Math.max(tg.minH, tg.seaLevel) + tg.maxH) / 2 : 0; },
+};
+
+// ── BUILD: "Watch it build" (build.js plan, build-player.js player,
+// render/build.js overlay). Every generation is recorded; in build mode
+// the player plays it back stage by stage with captions and a stage bar.
+const player = createBuildPlayer({
+  app, cam, world, coarse,
+  tg: () => tg,
+  overlay: () => buildOverlay,
+  setTerrainAll: v => setTerrainAll(v),
+  setMap: (snap, label) => {
+    if (!ui || !snap || !snap.height) return;
+    const done = snap === app.terrain;
+    ui.setTerrainMap({ ...snap, worldSize: snap.worldSize || (tg ? tg.worldSize : 1), seaLevel: snap.seaLevel ?? (tg ? tg.seaLevel : 0), stage: label }, app.lib.BIOMES, done ? snap : null);
+  },
+  distK: () => (app.saverRun ? framing(innerWidth, innerHeight, null).distK : 1),
+});
+app.player = player;
+app.setBuildMode = on => {
+  app.buildMode = !!on;
+  try { localStorage.setItem('dla-terrain-build', on ? '1' : '0'); } catch { /* private mode */ }
+  if (on) {
+    // replay what is recorded (the terrain on screen), else make one
+    if (player.rec.order.length) { player.start(); ui.buildShow(true); ui.buildSync(player.info()); }
+    else if (booted) app.generate();
+  } else {
+    player.stop();
+    ui.buildShow(false);
+  }
+  ui.syncBuild();
+};
+app.build = {
+  play: () => { player.togglePlay(); ui.buildSync(player.info()); },
+  step: d => { player.step(d); ui.buildSync(player.info()); },
+  seekFrac: f => { player.seek(f * player.info().total); ui.buildSync(player.info()); },
+  seekSeg: i => { player.seekSeg(i); ui.buildSync(player.info()); },
+  speed: () => { player.cycleSpeed(); ui.buildSync(player.info()); },
+  close: () => app.setBuildMode(false),
 };
 
 // ── methods the UI calls ──
@@ -345,6 +396,12 @@ async function bootGPU() {
   fg.onModuleError = (m, what) => { ui.notice(`${m.label || m.name || m.role}: ${what} failed, the page goes on without it`); wireModules(); };
   fg.fallbacks.ground = await createFallbackGround(gpu);
   fg.fallbacks.sky = await createFallbackSky(gpu);
+  // the "Watch it build" overlay (drawn in the water pass, last)
+  try {
+    buildOverlay = await createBuildOverlay(gpu);
+    buildOverlay.role = 'build';
+    fg.modules = fg.modules.concat(buildOverlay);
+  } catch (e) { buildOverlay = null; console.warn('dla-terrain: build overlay', e); }
   resize();
 }
 
@@ -382,7 +439,7 @@ async function loadModules() {
   }));
 }
 function plugModule(mod) {
-  const order = r => MODULES.findIndex(d => d.role === r);
+  const order = r => (r === 'build' ? 99 : MODULES.findIndex(d => d.role === r));
   fg.modules = fg.modules.concat(mod).sort((a, b) => order(a.role) - order(b.role));
   wireModules();
   try { if (mod.resize) mod.resize(fg.w, fg.h, fg.ctx()); } catch (e) { console.warn(e); }
@@ -481,8 +538,10 @@ app.generate = () => {
   // the sun follows the climate latitude of the terrain
   if (Number.isFinite(+o.latitude)) { app.latitude = clamp(Math.round(+o.latitude), -70, 70); ui.syncSky(); }
   if (tg) { const v = tg.begin({ n, worldSize: ws, heightScale: o.heightScale, seaLevel: 0 }); setTerrainAll(v); }
-  ui.setProgress({ stage: 'dla', label: 'Growing DLA ridges', frac: 0 });
-  if (firstOrNewSize && !app.saverRun) {
+  player.begin();
+  if (player.active) ui.buildShow(true);
+  else ui.setProgress({ stage: 'dla', label: 'Growing DLA ridges', frac: 0 });
+  if (firstOrNewSize && !app.saverRun && !player.active) {
     // a three-quarter view into the range: close enough that the land
     // fills the frame and the haze, not the world edge, is the horizon
     cam.setMode('orbit', world); app.camMode = 'orbit';
@@ -508,19 +567,28 @@ function onWorker(m) {
   if (!m || m.id !== genId) return;
   if (m.type === 'progress') {
     app.gen.stage = m.stage; app.gen.label = m.label;
-    ui.setProgress(m);
-    if (m.snapshot) pendingSnap = { snap: m.snapshot, stage: m.stage, label: m.label };
+    player.record(m);
+    if (!player.active) {
+      ui.setProgress(m);
+      if (m.snapshot) pendingSnap = { snap: m.snapshot, stage: m.stage, label: m.label };
+    }
     if (app.saverRun && m.stage !== app.saverRun.labelStage) { app.saverRun.labelStage = m.stage; saverLabel(); }
   } else if (m.type === 'done') {
     pendingSnap = null;
     const t = m.terrain;
     app.terrain = t;
-    if (tg) setTerrainAll(tg.finish(t));
+    player.finish(t);
     app.gen.running = false;
+    app.drones = { ridge: 0, river: 0 };
+    if (player.active) {
+      // the player puts the final terrain on screen at the end of its clock
+      app.opening = false;
+      return;
+    }
+    if (tg) setTerrainAll(tg.finish(t));
     const ms = performance.now() - app.gen.t0;
     ui.progressDone(`Done in ${(ms / 1000).toFixed(1)} s`);
     ui.setTerrainMap({ ...t, worldSize: t.worldSize, stage: 'done' }, app.lib.BIOMES, t);
-    app.drones = { ridge: 0, river: 0 };
     if (app.saverRun) { /* the saver owns the camera */ }
     else if (app.pendingCam) { applyCam(app.pendingCam); app.pendingCam = null; }
     else if (app.opening && performance.now() - app.lastInput > 4000) {
@@ -585,7 +653,11 @@ function loop(now) {
   if (!saving && app.playing) app.tod = (app.tod + todRate(app.todSpeed) * dt / 1440) % 1;
   // camera
   const inp = takeInput(dt);
-  if (!saving && app.camMode === 'orbit' && app.gen && app.gen.running && now - app.lastInput > 2500) cam.orbit.yaw += dt * 0.035;
+  if (player.active && !app.saverRun && now - app.lastInput < 60) player.userCamera();
+  const bst = player.tick(dt);
+  if (!bst && !saving && app.camMode === 'orbit' && app.gen && app.gen.running && now - app.lastInput > 2500) cam.orbit.yaw += dt * 0.035;
+  if (bst && (frameNo % 4 === 0 || bst.i !== lastBuildSeg)) ui.buildSync(player.info());
+  if (bst && bst.i !== lastBuildSeg) { lastBuildSeg = bst.i; if (app.saverRun) saverLabel(); }
   cam.update(dt, inp, world);
   applySnapshot(now);
   if (!gpu) return;
@@ -632,7 +704,7 @@ function loop(now) {
   // layers: a whole module off when all its layers are off
   for (const md of fg.modules) {
     if (md.role === 'water') md.off = !app.layers.water;
-    if (md.role === 'vegetation') md.off = !(app.layers.grass || app.layers.trees || app.layers.props);
+    if (md.role === 'vegetation') md.off = !(app.layers.grass || app.layers.trees || app.layers.props) || (player.active && !(player.state && player.state.veg));
   }
   const frame = {
     globals: G, g: GV, camera: m, time: now / 1000, dt, tod: app.tod, weather: st, sky: st,
@@ -702,6 +774,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyP') saverEnter({});
   else if (e.code === 'KeyT') app.setPlaying(!app.playing);
   else if (e.code === 'KeyN') app.generate();
+  else if (e.code === 'KeyB') app.setBuildMode(!app.buildMode);
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code) && app.camMode === 'drone') leaveDrone();
 });
@@ -730,6 +803,7 @@ function saverLabel() {
     preset: app.preset ? (app.lib.PRESETS[app.preset] || {}).label : 'random', seed: app.opts.seed,
     worldSize: tg ? tg.worldSize : 0, n: tg ? tg.n : 0, tod: app.tod, weather: wx ? wx.label : app.weatherId,
     stage: app.gen && app.gen.running ? app.gen.label : null,
+    build: player.active ? (() => { const b = player.info(); return { name: b.name, caption: b.caption, index: b.i, label: b.label }; })() : null,
   };
   try { r.label(shotLabel(r.shot, st, loadCode(r.shot.kind))); } catch (e) { console.warn(e); }
 }
@@ -752,6 +826,21 @@ function startShot(i) {
   app.skySpeed = 1;
   app.setWeather(shot.weather, true);
   const r = mulberry(shot.seed);
+  // a build shot: a new seeded world played from DLA to biomes
+  if (shot.kind === 'build') {
+    const ids = Object.keys(app.lib.PRESETS);
+    const pid = ids[Math.floor(shot.preset * ids.length) % ids.length];
+    app.preset = pid;
+    app.opts = { ...app.lib.defaults(), ...app.lib.PRESETS[pid].opts, seed: shot.seed, n: coarse ? 512 : 1024 };
+    app.generate();
+    player.start({ saver: true, speed: shot.speed, yaw0: shot.yaw0 });
+    r0.yawRate = 0; r0.buildEnd = 0;
+    lastBuildSeg = -1;
+    if (post) post.resetHistory();
+    saverLabel();
+    return;
+  }
+  if (player.active) player.stop();
   if (shot.regen || !tg.view || !tg.cpuHeight) {
     const ids = Object.keys(app.lib.PRESETS);
     const pid = ids[Math.floor(r() * ids.length)];
@@ -796,7 +885,11 @@ function saverTick(dt) {
   if (shot.weatherEnd && !r.stormed && r.t > 1.2) { r.stormed = true; app.skySpeed = shot.skySpeed || 1; app.weatherId = shot.weatherEnd; }
   if (r.yawRate && cam.mode === 'orbit') cam.orbit.yaw += r.yawRate * dt * (r.calm ? 0.7 : 1);
   let dur = shot.dur;
-  if (shot.regen && app.gen && app.gen.running) dur = Math.max(dur, Math.min(r.t + 1, 12));
+  if (shot.kind === 'build') {
+    // the shot lasts until the build has played, then 4 s on the world
+    if (!player.ended) dur = r.t + 1;
+    else { if (!r.buildEnd) r.buildEnd = r.t; dur = r.buildEnd + 4; }
+  } else if (shot.regen && app.gen && app.gen.running) dur = Math.max(dur, Math.min(r.t + 1, 12));
   if (r.t >= dur) startShot(r.i + 1);
   return true;
 }
@@ -805,7 +898,10 @@ function saverEnter(opts = {}) {
   const shell = typeof opts.label === 'function';
   const seed = (opts.seed >>> 0) || ((Math.random() * 2 ** 32) >>> 0) || 1;
   app.saverRun = {
-    shell, label: shell ? opts.label : null, seed, calm: opts.calm ?? 0.7, plan: buildShotPlan(seed, 24), i: 0, t: 0, band: null,
+    shell, label: shell ? opts.label : null, seed, calm: opts.calm ?? 0.7, i: 0, t: 0, band: null,
+    // the build channel: snSaver.enter({ channel: 'build' }) or the "Watch
+    // it build" toggle of the page; else the mixed shots
+    plan: buildShotPlan(seed, 24, { channel: opts.channel || (app.buildMode ? 'build' : 'mix'), seconds: opts.seconds }),
     saved: {
       tod: app.tod, playing: app.playing, weatherId: app.weatherId, season: app.season, wxOver: { ...app.wxOver },
       camMode: app.camMode, orbit: JSON.parse(JSON.stringify(cam.orbit)), fly: JSON.parse(JSON.stringify(cam.fly)),
@@ -827,6 +923,7 @@ function saverExit() {
   const r = app.saverRun;
   if (!r) return;
   app.saverRun = null;
+  if (player.active && player.saver) player.stop();
   root.classList.remove('sn-saver', 'dt-saver');
   removeEventListener('pointerdown', saverPointer, true);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});

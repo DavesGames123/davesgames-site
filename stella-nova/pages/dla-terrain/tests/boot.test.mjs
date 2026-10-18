@@ -176,7 +176,7 @@ if (app && app.fg) {
   await pump(30);
   const f1 = app.frames || 0;
   ok(gated.length === 4, 'all four module creates wait on the gate', JSON.stringify(gated));
-  ok(app.fg.modules.length === 0, 'no package module is in before the gate opens', String(app.fg.modules.length));
+  ok(app.fg.modules.filter(m => m.role !== 'build').length === 0, 'no package module is in before the gate opens', String(app.fg.modules.length));
   ok(f1 - f0 >= 25, 'the frame loop runs before the modules and assets load', `${f0} -> ${f1}`);
   ok(fbGround >= 25, 'the fallback ground draws every frame meanwhile', String(fbGround));
   ok(fbSky >= 25, 'the fallback sky draws every frame meanwhile', String(fbSky));
@@ -188,7 +188,7 @@ if (app && app.fg) {
   // open the gate: the modules plug in, the assets are still held
   openGate();
   for (let i = 0; i < 200 && app.loading && app.loading.pending.size; i++) await pump(1);
-  const roles = app.fg.modules.map(m => m.role);
+  const roles = app.fg.modules.map(m => m.role).filter(r => r !== 'build');
   ok(app.loading && app.loading.pending.size === 0, 'every module create settles after the gate opens', JSON.stringify(app.loading && [...app.loading.pending]));
   console.log('# boot: plugged', JSON.stringify(roles));
   ok(roles.length > 0, 'package modules plug in after the gate opens', JSON.stringify(roles) + ' ' + errors.filter(e => /failed|did not load/.test(e)).slice(0, 3).join(' | ').slice(0, 300));
