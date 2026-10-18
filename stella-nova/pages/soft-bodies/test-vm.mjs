@@ -4,8 +4,11 @@
 // ----------------------------------------------------------------------------
 //  loadUpstream(pageDir) makes a fresh vm context with small DOM stubs,
 //  loads vendor three.js r139 and its OrbitControls, swaps the
-//  WebGLRenderer for a no-op, then runs the page's main.js. The scene,
-//  meshes and physics classes are real; nothing is drawn.
+//  WebGLRenderer for a no-op, then runs the page's own classic scripts
+//  (pageScripts: the local <script src> tags of index.html without
+//  type="module", in page order, for example a mesh data file and then
+//  main.js). The scene, meshes and physics classes are real; nothing is
+//  drawn.
 //  Returns { ctx, lex(name), U(extra) }: lex reads a class or let binding
 //  of the script (they are not properties of the global object).
 //  Used by the tests of soft-bodies, soft-body-interaction,
@@ -29,6 +32,18 @@ class El {
 }
 const DOC = { getElementById: id => (DOC._ids[id] = DOC._ids[id] || new El('div')), createElement: t => new El(t), createElementNS: (n, t) => new El(t), body: new El('body'), addEventListener() {}, removeEventListener() {}, _ids: {} };
 
+// The local classic scripts of the page, in the order index.html loads them.
+// A src with a "/" or a scheme (lib, vendor, widgets) is not the page's own.
+export function pageScripts(pageDir) {
+  const html = fs.readFileSync(path.join(pageDir, 'index.html'), 'utf8');
+  const out = [];
+  for (const m of html.matchAll(/<script\b([^>]*)>/g)) {
+    const attrs = m[1], src = /\bsrc="([^"]+)"/.exec(attrs);
+    if (src && !/\btype="module"/.test(attrs) && !/[/:]/.test(src[1])) out.push(src[1]);
+  }
+  return out.length ? out : ['main.js'];
+}
+
 export function loadUpstream(pageDir) {
   const ctx = {
     console: { log() {}, info() {}, warn() {}, error: (...a) => console.error(...a) },
@@ -44,7 +59,7 @@ export function loadUpstream(pageDir) {
   vm.runInContext(fs.readFileSync(path.join(VENDOR, 'build/three.min.js'), 'utf8'), ctx, { filename: 'three.min.js' });
   ctx.THREE.WebGLRenderer = class { constructor() { this.domElement = new El('canvas'); this.shadowMap = {}; } setPixelRatio() {} setSize() {} render() {} };
   vm.runInContext(fs.readFileSync(path.join(VENDOR, 'examples/js/controls/OrbitControls.js'), 'utf8'), ctx, { filename: 'OrbitControls.js' });
-  vm.runInContext(fs.readFileSync(path.join(pageDir, 'main.js'), 'utf8'), ctx, { filename: path.join(pageDir, 'main.js') });
+  for (const f of pageScripts(pageDir)) vm.runInContext(fs.readFileSync(path.join(pageDir, f), 'utf8'), ctx, { filename: path.join(pageDir, f) });
   const lex = name => vm.runInContext(name, ctx);
   return { ctx, lex };
 }
