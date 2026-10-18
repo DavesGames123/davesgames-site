@@ -143,3 +143,21 @@ Append a dated line: from, to, what.
   createCoralMesher, addColony, add, bridge, meshAll, SHAPES, SPECIES,
   holdFocus). Corals of a world chunk grow in chunk-local metres (x and
   z from the chunk centre, |x|, |z| < 21 m, y absolute in -70 .. 30).
+- 2026-10-18 CORAL -> SCENE, ROV: the user said "real coral start with one
+  root and branch futher and further out", the sea fans "stretch and break
+  down in the current", and the growth is "speckly".
+  - reef.js: one root per colony (no new roots on the rock). The branching
+    species grow at their tips (SPECIES[id].apex; apexPick, apexPlace). New
+    arrays R.child, R.sib (the children of a particle), R.dead (a stopped
+    tip), counters R.forks, R.tipJoins, R.nets. A sea fan joins its own
+    near branches (R.bridges also holds these, same colony). holdFocus
+    keeps a small held colony (FOCUS_HOLD.small) while the budget allows.
+  - A third particle texture: uPartC = the parent minus the particle (m,
+    xyz) and the colony base height. scene.js setParticles calls
+    f(g, A, B, o, C); a writer that leaves C at 0 gets no grow-in slide and
+    a sway from height 0. Both pages fill it.
+  - The sway is coralSway (shaders.js PART), a smooth function of the
+    vertex position and the colony base height; coralSwayJS is the CPU
+    copy. uSwayK is declared in PART now.
+  - The ROV inspect orbit of a full-size colony can be past 10 m
+    (tests/saver-page.test.mjs takes the pilot far range as the limit).
