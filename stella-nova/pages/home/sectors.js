@@ -62,6 +62,7 @@ const EXCLUDED = new Set([
 // a visitor types that the label does not hold (a game it is like, a
 // common name, the science term).
 const SEARCH_WORDS = {
+  'pattern-animator': 'animated patterns animation motion graphics loop seamless loop looping gif webm mp4 video export generative art pattern designer motion design kinetic op art moire truchet tiling guilloche spirograph colour cycle color cycle palette cycling morph keyframes timeline easing ease sine bounce noise wallpaper background screensaver svg png frames',
   'fly-duel': 'fruit fly drosophila brain connectome mushroom body neurons neuroscience card game trading card game tcg magic the gathering mtg deck duel play against ai reinforcement learning dopamine flywire hemibrain',
   diamond: 'gem gemstone jewel jewellery jewelry brilliant cut diamond ring sapphire ruby emerald moissanite cubic zirconia facets dispersion fire sparkle total internal reflection snell fresnel aset',
   'gravity-lab': 'gravity sandbox n-body nbody orbits lagrange points three-body slingshot black hole galaxies tidal tails kepler',
@@ -404,6 +405,7 @@ const BLURBS = {
   vectorcraft: 'The VectorCraft vector illustration app.',
   designcraft: 'The DesignCraft page layout app.',
   'pattern-designer': 'Generative vector patterns for posters.',
+  'pattern-animator': 'The pattern book in motion: seamless loops to video and GIF.',
   filmcraft: 'The FilmCraft video editor: timeline, colour, sound.',
   effectcraft: 'The EffectCraft motion graphics compositor.',
   'manim-live': 'Write real ManimCE code and watch it render beside the editor.',

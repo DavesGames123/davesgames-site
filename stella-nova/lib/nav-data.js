@@ -467,6 +467,7 @@ w.SN_NAV = [
     ] },
     { h: "Pattern & Print", p: [
       ["pattern-designer", "Pattern Designer", "SVG"],
+      ["pattern-animator", "Animated Pattern Designer", "NEW"],
       ["thread-art", "Thread Art", "WGSL"],
       ["halftone", "Halftone", "WGSL"]
     ] },
