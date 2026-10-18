@@ -7,9 +7,12 @@
    The walker caption sits at the base. The status bar is at the base.
 
    PHONE (max-width 768px, or a short landscape touch screen): the pattern of
-   pages/wave-membrane. A dock at the base holds the panel button, the colour
-   modes, regrow and pause. In portrait the panel is a bottom sheet above the
-   dock. In landscape it is a drawer on the right edge. Targets are 44px.
+   pages/wave-membrane. A dock at the base holds the menu, the preset, the
+   Lines or Surface switch, regrow and pause. In portrait the panel is a
+   bottom sheet above the dock. In landscape it is a drawer on the right
+   edge. Targets are 44px, text is 11px or more. The CSV stream and the
+   source extracts are <details> blocks that main.js closes on a phone.
+   layout.js has the same queries and sizes (tests.mjs, tests-dom.mjs).
      grep -n 'TOUCH'      target and text sizes for any touch screen
      grep -n 'PHONE'      the phone block
      grep -n 'LANDSCAPE'  the landscape overrides
@@ -50,7 +53,7 @@ button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 
 #panel{
   position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
-  background:rgba(10,8,14,0.96);border-right:1px solid var(--line-b);padding:64px 18px 24px;overflow-y:auto;
+  background:rgba(10,8,14,0.96);border-right:1px solid var(--line-b);padding:64px 18px 24px;overflow-y:auto;overflow-x:hidden;
   transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
 #panel.open{transform:translateX(0)}
 html.in-frame #panel{padding-top:20px}
@@ -93,7 +96,12 @@ html.in-frame #panelClose{top:10px}
 .code.csv{height:13.6em;max-height:none;overflow:hidden;color:#d8d0e0}
 .code.csv .new{color:var(--gold)}
 .code.csv .cmt{color:var(--dim)}
-.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px}
+.about p{font-size:0.8rem;line-height:1.6;color:var(--dim);margin:0 0 9px;overflow-wrap:anywhere}
+.fold > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px}
+.fold > summary::-webkit-details-marker{display:none}
+.fold > summary::after{content:'';margin-left:auto;width:7px;height:7px;border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(45deg);transition:transform 0.2s}
+.fold[open] > summary::after{transform:rotate(-135deg)}
+.fold > summary:hover{color:var(--gold)}
 .about b{color:var(--ink);font-weight:600}
 .ex-label{margin-top:10px!important;color:var(--ink)!important;font-size:0.76rem!important}
 
@@ -140,8 +148,15 @@ html.in-frame #panelClose{top:10px}
   .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1a1218;box-shadow:0 0 0 1px var(--warm)}
   .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
   .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1a1218}
-  .about p{font-size:0.82rem;line-height:1.65}
+  .about p{font-size:0.86rem;line-height:1.65}
   .about a,.credit-line a{display:inline-block;min-height:28px;line-height:28px}
+  .fold > summary{min-height:44px;margin-top:12px;margin-bottom:4px}
+  .code{font-size:0.72rem;max-height:220px;-webkit-overflow-scrolling:touch}
+  .hint,.lg-title,.lg-ticks,#status{font-size:0.78rem}
+  /* the replay scrubber: a larger thumb */
+  .row.scrub input[type=range]::-webkit-slider-thumb{width:34px;height:34px;margin-top:-14px}
+  .row.scrub input[type=range]::-moz-range-thumb{width:30px;height:30px}
+  .row.scrub input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:4px}
 }
 
 /* PHONE. The query matches PHONE_Q in main.js. */
@@ -156,11 +171,11 @@ html.in-frame #panelClose{top:10px}
     background:rgba(10,8,14,0.95);border-top:1px solid var(--line-b)}
   #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
   #dock > button.on{border-color:var(--warm);color:var(--gold)}
-  #dockSurf{font-size:0.72rem!important;font-weight:600}
-  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
-  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-family:inherit;font-size:0.76rem;cursor:pointer}
-  .seg button:last-child{border-right:0}
-  .seg button.on{background:rgba(249,140,10,0.14);color:var(--gold)}
+  #dock > button.txt{flex:0 0 78px;font-family:inherit;font-size:0.8rem;font-weight:600}
+  #dockPreset{flex:1;min-width:0;height:48px;padding:0 28px 0 12px;border:1px solid var(--line-b);border-radius:12px;
+    background:var(--bg2) linear-gradient(45deg,transparent 50%,var(--dim) 50%) no-repeat right 14px center / 6px 6px;
+    color:var(--ink);font:0.82rem var(--sci-sans);-webkit-appearance:none;appearance:none;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+  #dockPreset option{background:#0d0a12;color:var(--ink)}
   #status{left:0;right:0;bottom:var(--dock-h);max-width:none;gap:10px;padding:6px calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));white-space:nowrap;overflow:hidden}
   #status span{min-width:0;overflow:hidden;text-overflow:ellipsis}
   #legend{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;top:calc(50px + env(safe-area-inset-top));bottom:auto;
@@ -173,7 +188,10 @@ html.in-frame #panelClose{top:10px}
   html.in-frame #hint{top:56px}
   body:not(.panel-closed) #hint{opacity:0}
   #walkCap,body.panel-closed #walkCap{left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));width:auto;transform:none;bottom:calc(var(--dock-h) + 34px);padding:9px 12px}
-  #wcText{font-size:0.78rem;min-height:4.5em}
+  #wcKind{font-size:0.92rem}
+  #wcNum{font-size:0.74rem}
+  #wcText{font-size:0.86rem;line-height:1.45;min-height:4.4em}
+  .wc-keys{font-size:0.74rem}
   body:not(.panel-closed) #walkCap{opacity:0}
   #panel{
     top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
@@ -194,7 +212,7 @@ html.in-frame #panelClose{top:10px}
 
 /* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
    tab at the lower left. The topbar and the status bar are hidden. */
-@media (max-height:500px) and (orientation:landscape){
+@media (max-height:500px) and (orientation:landscape) and (max-width:768px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   .topbar,#status{display:none}
   #legend,html.in-frame #legend{display:block;top:10px;right:auto;width:200px;left:calc(10px + env(safe-area-inset-left))}
   #hint,html.in-frame #hint{top:10px;left:30%;right:30%}

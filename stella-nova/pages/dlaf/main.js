@@ -26,7 +26,15 @@
 //    panel controls ........ "function buildUI"
 //    CSV ................... "function updateCSV"
 //    surface view .......... "function surfaceStep"
+//    dock .................. "function buildDock"
 //    screensaver ........... "window.snSaver"
+//
+//  Phone (layout.js): PHONE_Q is layout.js PHONE_QUERY. The dock has the
+//  menu, the preset, the Lines or Surface switch, regrow and pause. The
+//  framing margins come from occlusionOf (each overlay cuts its cheapest
+//  edge). Two fingers pinch and pan the 2D view at the midpoint (pinch2D);
+//  in 3D one finger orbits and two fingers zoom. The drawing buffer uses
+//  dprCap (a phone draws the surface at 1.5 at most).
 //
 //  Surface view (Surface: Smooth): the cluster as a smooth SDF mesh.
 //  surface.js runs surface-core.js (lib/dla-sdf.js) in a module worker;
@@ -48,11 +56,12 @@ import { surfaceFrame } from './surface-frame.js';
 import { surfaceOptions, surfaceCap, RESOLUTIONS, SURFACE_DEFAULTS, PHONE_RES_CAP, RES_IDS } from './surface-core.js';
 import { MATERIALS, materialById } from './surface-shaders.js';
 import { relief2D } from './camera.js';
+import { PHONE_QUERY, occlusionOf, dprCap, pinch2D, zoomAt, sheetSnap } from './layout.js';
 
 export { S };
 
 const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const PHONE_Q = matchMedia(PHONE_QUERY);
 const FOV = 0.8;
 
 const S = {
@@ -119,23 +128,14 @@ function applyGradient() {
 }
 
 // ------------------------------------------------------------------ framing
-// Overlay margins in CSS px, as in pages/wave-membrane: an overlay wider than
-// tall covers the top or the base, any other one covers a side. It counts
-// only when it spans half of that edge or more.
+// Overlay margins in CSS px (layout.js occlusionOf): each overlay cuts the
+// edge strip that costs the least area. A closed sheet is off screen and
+// cuts nothing. On a phone the legend strip under the topbar counts too.
 const OVERLAYS = ['panel', 'dock', 'status', 'walkCap'].map(id => $(id)).concat([document.querySelector('.topbar')]).filter(Boolean);
 function occlusion(w, h) {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  if (S.saverOn) return o;
-  for (const el of OVERLAYS) {
-    if (el.hidden) continue;
-    const q = el.getBoundingClientRect();
-    const x0 = Math.max(0, q.left), x1 = Math.min(w, q.right), y0 = Math.max(0, q.top), y1 = Math.min(h, q.bottom);
-    if (x1 - x0 < 1 || y1 - y0 < 1) continue;
-    const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
-    if (fw >= fh) { if (fw < 0.5) continue; if (y0 + y1 > h) o.b = Math.max(o.b, h - y0); else o.t = Math.max(o.t, y1); }
-    else { if (fh < 0.5) continue; if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0); }
-  }
-  // the phone legend strip under the topbar
+  if (S.saverOn) return { l: 0, r: 0, t: 0, b: 0 };
+  const rects = OVERLAYS.filter(el => !el.hidden).map(el => el.getBoundingClientRect());
+  const o = occlusionOf(rects, w, h);
   const lg = $('legend').getBoundingClientRect();
   if (PHONE_Q.matches && lg.width > w * 0.5 && lg.bottom < h / 2) o.t = Math.max(o.t, lg.bottom + 6);
   return o;
@@ -332,9 +332,10 @@ function frame(now) {
   const dt = Math.min(0.1, lastT ? (now - lastT) / 1000 : 0.016); lastT = now;
   if (!R) return;
   if (S.saverOn && S.saver) S.saver.tick(dt, now);
-  const dpr = R.resize(2);
+  const dpr = R.resize(dprCap({ dpr: window.devicePixelRatio || 1, phone: PHONE_Q.matches, surface: surfActive() }));
   const w = canvas.clientWidth, h = canvas.clientHeight;
   const rect = S.saverOn && S.saver ? S.saver.rect(w, h) : clearRect(w, h, occlusion(w, h));
+  S.rect = rect;
   let k, ov = null, m;
 
   if (S.mode === 'walk' && S.walk) {
@@ -398,17 +399,21 @@ function frame(now) {
     $('dockPlay').textContent = S.paused ? '▶' : '❚❚';
     setText('pauseBtn', S.paused ? 'Resume' : 'Pause');
   }
-  if (!S.saverOn && S.mode === 'grow') updateCSV();
+  if (!S.saverOn && S.mode === 'grow' && $('csvBox').open !== false) updateCSV();
 }
 
 // ------------------------------------------------------------------ pointer
+// One finger pans (2D) or orbits (3D). Two fingers pinch and pan the 2D
+// view at their midpoint (layout.js pinch2D) and zoom the 3D view. The
+// wheel zooms the 2D view at the cursor. A double tap fits the view again.
+const is3D = () => { const m = S.mode === 'walk' && S.walk ? S.walk.m : S.m; return !!(m && m.dim === 3); };
 function bindPointer() {
   const pts = new Map();
-  let pinch0 = 0, zoom0 = 1, lastTap = 0;
+  let lastTap = 0;
+  const local = e => { const q = canvas.getBoundingClientRect(); return [e.clientX - (q.left || 0), e.clientY - (q.top || 0)]; };
   canvas.addEventListener('pointerdown', e => {
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* old browser */ }
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); zoom0 = S.user.zoom; }
     S.cam.idleAt = performance.now();
     $('hint').classList.add('gone');
     const t = performance.now();
@@ -418,15 +423,24 @@ function bindPointer() {
   canvas.addEventListener('pointermove', e => {
     const p = pts.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
-    p.x = e.clientX; p.y = e.clientY;
     S.cam.idleAt = performance.now();
     if (pts.size >= 2) {
-      const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinch0 > 0) S.user.zoom = Math.min(30, Math.max(0.3, zoom0 * d / pinch0));
+      const [a, b] = [...pts.entries()].slice(0, 2).map(([, q]) => q);
+      const a0 = [a.x, a.y], b0 = [b.x, b.y];
+      p.x = e.clientX; p.y = e.clientY;
+      const a1 = [a.x, a.y], b1 = [b.x, b.y];
+      if (is3D()) {
+        const d0 = Math.hypot(a0[0] - b0[0], a0[1] - b0[1]), d1 = Math.hypot(a1[0] - b1[0], a1[1] - b1[1]);
+        if (d0 > 1) S.user.zoom = Math.min(30, Math.max(0.3, S.user.zoom * d1 / d0));
+      } else {
+        const q = canvas.getBoundingClientRect(), ox = q.left || 0, oy = q.top || 0;
+        const sh = v => [v[0] - ox, v[1] - oy];
+        Object.assign(S.user, pinch2D(S.view, S.user, sh(a0), sh(b0), sh(a1), sh(b1), canvas.clientWidth, canvas.clientHeight));
+      }
       return;
     }
-    const m = S.mode === 'walk' && S.walk ? S.walk.m : S.m;
-    if (m && m.dim === 3) {
+    p.x = e.clientX; p.y = e.clientY;
+    if (is3D()) {
       S.cam.yaw += dx * 0.006;
       S.cam.pitch = Math.max(-1.45, Math.min(1.45, S.cam.pitch + dy * 0.006));
     } else {
@@ -434,11 +448,13 @@ function bindPointer() {
       S.user.panX -= dx / s; S.user.panY += dy / s;
     }
   });
-  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = 0; };
+  const up = e => { pts.delete(e.pointerId); };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    S.user.zoom = Math.min(30, Math.max(0.3, S.user.zoom * Math.exp(-e.deltaY * 0.0015)));
+    const ratio = Math.exp(-e.deltaY * 0.0015);
+    if (is3D()) S.user.zoom = Math.min(30, Math.max(0.3, S.user.zoom * ratio));
+    else { const c = local(e); Object.assign(S.user, zoomAt(S.view, S.user, c, c, ratio, canvas.clientWidth, canvas.clientHeight)); }
     S.cam.idleAt = performance.now();
   }, { passive: false });
   canvas.addEventListener('dblclick', () => { S.user.zoom = 1; S.user.panX = 0; S.user.panY = 0; });
@@ -452,7 +468,7 @@ function setMode(mode) {
   $('walkCap').hidden = mode !== 'walk';
   $('walkBox').hidden = mode !== 'walk';
   S.viewInit = false; S.user.zoom = 1; S.user.panX = 0; S.user.panY = 0;
-  if (mode === 'walk') startWalk(false);
+  if (mode === 'walk') { startWalk(false); if (PHONE_Q.matches && S.setOpen) S.setOpen(false); }
   else if (R) { R.setModel(S.m); R.sync(valFn); applyColour(); }
   syncDim();
 }
@@ -483,6 +499,7 @@ function selectPreset(id) {
   else if (S.dim === 2) S.target = Math.max(S.target, 20000);
   $('target').value = String(S.target); setText('targetV', fmt(S.target));
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.id === pr.id));
+  if ($('dockPreset').value !== pr.id) $('dockPreset').value = pr.id;
   setText('hookName', 'Hook: ' + pr.hook);
   setText('presetNote', pr.note);
   setText('presetCode', pr.code.text);
@@ -502,7 +519,7 @@ function fmtParam(p, v) { return p.step >= 1 ? String(Math.round(v)) : (+v).toFi
 
 function setColour(id) {
   S.colour = modeInfo(id).id;
-  document.querySelectorAll('#colourModes button, #dockColours button').forEach(b => b.classList.toggle('on', b.dataset.mode === S.colour));
+  document.querySelectorAll('#colourModes button').forEach(b => b.classList.toggle('on', b.dataset.mode === S.colour));
   setText('colourHint', modeInfo(S.colour).text);
   applyColour(S.replay ? Math.floor(S.replay.k) : null);
   applyGradient();
@@ -511,7 +528,8 @@ function setColour(id) {
 function syncSurfaceUI() {
   const u = S.surf;
   $('surfOff').classList.toggle('on', !u.on); $('surfOn').classList.toggle('on', u.on);
-  $('dockSurf').classList.toggle('on', u.on);
+  const ds = $('dockSurf');
+  ds.classList.toggle('on', u.on); setText(ds, u.on ? 'Surface' : 'Lines'); ds.setAttribute('aria-pressed', String(u.on));
   $('surfBox').hidden = !u.on;
   document.querySelectorAll('#materials button').forEach(b => b.classList.toggle('on', b.dataset.id === u.material));
   const cap = PHONE_Q.matches ? RES_IDS.indexOf(PHONE_RES_CAP) : RES_IDS.length - 1;
@@ -559,15 +577,14 @@ function buildUI() {
   $('dim2').addEventListener('click', () => setDim(2));
   $('dim3').addEventListener('click', () => setDim(3));
 
-  // colour by, in the panel and in the dock
-  for (const host of [$('colourModes'), $('dockColours')]) {
-    for (const c of COLOUR_MODES) {
-      const b = document.createElement('button'); b.type = 'button'; b.dataset.mode = c.id;
-      b.textContent = host.id === 'dockColours' ? c.short : c.label; b.title = c.text;
-      b.addEventListener('click', () => setColour(c.id));
-      host.appendChild(b);
-    }
+  // colour by (the sheet)
+  for (const c of COLOUR_MODES) {
+    const b = document.createElement('button'); b.type = 'button'; b.dataset.mode = c.id;
+    b.textContent = c.label; b.title = c.text;
+    b.addEventListener('click', () => setColour(c.id));
+    $('colourModes').appendChild(b);
   }
+  buildDock();
   mountGradientPicker($('gradPick'), {
     value: S.grad, reversed: S.rev, label: 'Choose a gradient',
     onChange(id, rev) { S.grad = id; S.rev = rev; applyGradient(); },
@@ -617,6 +634,11 @@ function buildUI() {
   syncSurfaceUI();
 
   $('csvBtn').addEventListener('click', downloadCSV);
+  // the CSV stream and the source extracts fold away on a phone
+  const folds = [$('csvBox'), $('codeBox')];
+  const setFolds = phone => folds.forEach(d => { d.open = !phone; });
+  setFolds(PHONE_Q.matches);
+  $('csvBox').addEventListener('toggle', () => { if ($('csvBox').open) updateCSV(true); });
   $('cppCode').textContent = DLAF_ADDPARTICLE;
 
   // panel, sheet and dock (the pattern of pages/wave-membrane)
@@ -634,19 +656,30 @@ function buildUI() {
   dockPanel.addEventListener('click', toggle);
   $('panelClose').addEventListener('click', () => setOpen(false));
   setOpen(!PHONE_Q.matches);
-  PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
+  PHONE_Q.addEventListener('change', e => { setOpen(!e.matches); setFolds(e.matches); });
   const grip = $('sheetGrip');
   let gripY = null;
   grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* old browser */ } });
   grip.addEventListener('pointerup', e => {
     if (gripY === null) return;
     const dy = e.clientY - gripY; gripY = null;
-    if (Math.abs(dy) < 8) panel.classList.toggle('full');
-    else if (dy < -40) panel.classList.add('full');
-    else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+    const next = sheetSnap(panel.classList.contains('full') ? 'full' : 'half', dy);
+    if (next === 'closed') setOpen(false);
+    else panel.classList.toggle('full', next === 'full');
   });
   grip.addEventListener('pointercancel', () => { gripY = null; });
   setTimeout(() => $('hint').classList.add('gone'), 6000);
+}
+
+// The phone dock: menu (bound in buildUI), preset, Lines or Surface, regrow,
+// pause. The preset is a native <select>, so a phone shows its own picker.
+function buildDock() {
+  const sel = $('dockPreset');
+  for (const pr of PRESETS) {
+    const o = document.createElement('option'); o.value = pr.id; o.textContent = pr.name;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', () => selectPreset(sel.value));
 }
 
 // ------------------------------------------------------------------ boot

@@ -22,6 +22,7 @@
      sim.js       presets (the dlaf hooks), colour values, replay, CSV (no DOM)
      walk.js      record one walker and build the slow-motion overlay (no DOM)
      camera.js    2D and 3D view maths, fit to the clear rect (no DOM)
+     layout.js    phone layout kind, framing margins, pinch maths (no DOM)
      saver.js     screensaver shots, shuffle, pace, framing, label (no DOM)
      render.js    WebGL2: lines, dots, front glow, overlay, gradient LUT
      surface-core.js    the SDF surface: lib/dla-sdf.js, pipe radii, AO (no DOM)
@@ -34,6 +35,7 @@
      glsl-check.mjs     compiles the shaders with glslangValidator
      main.js      UI, frame loop, pointer input, window.snSaver
      tests.mjs    node tests of the DOM-free modules
+     tests-dom.mjs  jsdom boot at the phone, tablet and desktop viewports
      CREDITS.txt  the MIT licence of dlaf
 
    HEAD LOAD ORDER (PAGES.md and lib/GROWTH-PAGES.md)
@@ -47,7 +49,9 @@
      #legend    the gradient bar of the colour mode, lower right
      #walkCap   the caption of the walker demo, at the base
      #status    preset, particle count, walks and resets
-     #dock      phone only: panel, colour by, regrow, pause
+     #dock      phone only: menu, preset, Lines or Surface, regrow, pause
+     #csvBox    the CSV stream (a <details>, closed on a phone)
+     #codeBox   the source extracts of the credit (closed on a phone)
 
    GREP MAP (main.js)
      grep -n 'function frame'      the frame loop
@@ -144,7 +148,7 @@
 
   <div class="sec-label">Replay</div>
   <div class="hint">Particles join in id order, so the first k ids are the cluster at the time it had k particles.</div>
-  <div class="row"><label>Particle</label><input type="range" id="replay" min="0" max="1000" step="1" value="1000"><span class="val" id="replayV"></span></div>
+  <div class="row scrub"><label>Particle</label><input type="range" id="replay" min="0" max="1000" step="1" value="1000"><span class="val" id="replayV"></span></div>
   <div class="modes">
     <button id="replayPlay">Play growth</button>
     <button id="replayLive" class="on">Live</button>
@@ -157,9 +161,11 @@
     <div class="hint">The demo cluster has 260 particles and Stickiness 0.4 or less, so a push-back can happen.</div>
   </div>
 
-  <div class="sec-label">dlaf output</div>
-  <div class="hint">dlaf writes one line per particle to stdout. The parent_id is −1 for a seed. In 2D, z is 0.</div>
-  <pre class="code csv" id="csv"></pre>
+  <details id="csvBox" class="fold" open>
+    <summary class="sec-label">dlaf output (CSV stream)</summary>
+    <div class="hint">dlaf writes one line per particle to stdout. The parent_id is −1 for a seed. In 2D, z is 0.</div>
+    <pre class="code csv" id="csv"></pre>
+  </details>
   <div class="modes"><button id="csvBtn">Download CSV</button></div>
 
   <div class="sec-label">Credit</div>
@@ -167,10 +173,13 @@
     <p><b>dlaf</b> is a fast C++ program for diffusion-limited aggregation in 2D or 3D, by Michael Fogleman (2019). Its README gives 35 seconds for one million points on one core. It uses the boost R-tree as its spatial index. Source: <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">github.com/fogleman/dlaf</a>, MIT licence (see CREDITS.txt in this folder).</p>
     <p>Each new particle starts on a circle around the cluster and walks at random until it comes within AttractionDistance of a particle. Then it joins that particle, ParticleSpacing away. The trick: far from the cluster the walker jumps d − AttractionDistance at once, because no particle can be in that circle.</p>
     <p><b>Our port</b>, lib/dla-engine.js, keeps the walk, the join test, the push-back and the five parameters. Two parts are different. The spatial index is a sparse grid with a pyramid of coarse grids, not an R-tree, so a far walker gets a lower bound of d and jumps a bit less far. The five hooks are functions in an options object, not methods of a class, so each preset here replaces one hook.</p>
-    <p class="ex-label">AddParticle in dlaf.cpp (extract)</p>
-    <pre class="code" id="cppCode"></pre>
-    <p class="ex-label">The same walk in lib/dla-engine.js (extract)</p>
-    <pre class="code" id="jsCode"></pre>
+    <details id="codeBox" class="fold" open>
+      <summary class="ex-label">Source extracts: dlaf.cpp and lib/dla-engine.js</summary>
+      <p class="ex-label">AddParticle in dlaf.cpp (extract)</p>
+      <pre class="code" id="cppCode"></pre>
+      <p class="ex-label">The same walk in lib/dla-engine.js (extract)</p>
+      <pre class="code" id="jsCode"></pre>
+    </details>
   </div>
 </div>
 
@@ -181,8 +190,8 @@
 
 <nav id="dock" aria-label="Quick controls">
   <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
-  <div id="dockColours" class="seg"></div>
-  <button id="dockSurf" aria-label="Smooth surface">SDF</button>
+  <select id="dockPreset" aria-label="Hook preset"></select>
+  <button id="dockSurf" class="txt" aria-label="Switch lines and smooth surface" aria-pressed="false">Lines</button>
   <button id="dockRegrow" aria-label="Regrow">↻</button>
   <button id="dockPlay" aria-label="Pause">❚❚</button>
 </nav>
