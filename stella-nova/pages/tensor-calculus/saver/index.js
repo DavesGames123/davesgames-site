@@ -248,7 +248,9 @@ export function installSaver(api, internals, deps = {}) {
       if (s.vizFree && s.scene && s.scene.id) safe(() => api.setScene(s.scene.id, s.scene.params));
       const id = s.scene && s.scene.id;
       const info = id && viz.sceneInfo ? safe(() => viz.sceneInfo(id), null) : null;
-      if (info && info.camera && viz.setCamera) safe(() => viz.setCamera({ ...info.camera, orbit: 0 }, 900));
+      // the page frames the subject from its bounds again (viz/fit.js)
+      if (viz.fitView) { safe(() => viz.setOrbit && viz.setOrbit(0)); safe(() => viz.fitView(900)); }
+      else if (info && info.camera && viz.setCamera) safe(() => viz.setCamera({ ...info.camera, orbit: 0 }, 900));
       safe(() => viz.resize && viz.resize());
     }).catch(() => {});
   }
