@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Stella Nova</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/stella-nova/icons/favicon-32.png">
@@ -150,6 +150,58 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
 #tb-wishlist:hover{filter:brightness(1.08)}
 body.sb-collapsed #tb-wishlist{display:inline-flex}
 @media (max-width:768px),(max-height:500px) and (pointer:coarse){#tb-wishlist{display:inline-flex;min-height:40px}}
+/* ── phone and tablet drawer ─────────────────────────────────────────────
+   Drawer mode is the drawerMode() query: max-width 768 px, or a short screen
+   with a coarse pointer (a landscape phone). The sidebar is then a drawer
+   at full height. It is closed at load, so it does not cover the page.
+   - #sb-tools holds the page search (#sb-q, all modes) and the region tabs
+     (#sb-regions, drawer mode only). The tabs jump to a region of the list.
+   - Each region is a .nav-reg section. Its .nav-region heading is sticky.
+   - In drawer mode only one constellation is open (toggleCluster).
+   - Targets are 44 px or more in drawer mode and on a coarse pointer.
+   - Safe-area insets pad the drawer, the top bar and the frame.
+   grep -n targets: "#sb-tools", "#sb-regions", "drawer mode" */
+#sb-close{display:none}
+#sb-tools{flex-shrink:0;padding:10px 12px 8px;border-bottom:1px solid var(--border)}
+#sb-find{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border:1px solid var(--border-b);border-radius:999px;background:rgba(150,200,255,.04);cursor:text;transition:border-color .2s}
+#sb-find:focus-within{border-color:var(--blue)}
+#sb-find svg{width:16px;height:16px;flex:none;color:var(--dim)}
+#sb-q{flex:1;min-width:0;min-height:38px;background:none;border:0;outline:none;color:var(--ink);font:400 16px/1.2 var(--f-sans)}
+#sb-q::placeholder{color:var(--dim)}
+#sb-q::-webkit-search-cancel-button{filter:invert(.7)}
+#sb-regions{display:none;gap:6px;margin:8px -12px 0;padding:0 12px;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;overscroll-behavior-x:contain;scroll-padding:0 12px}
+#sb-regions::-webkit-scrollbar{display:none}
+.rg-tab{flex:none;scroll-snap-align:start;min-height:36px;padding:0 13px;border:1px solid var(--border-b);border-radius:999px;background:none;color:var(--dim);font:500 .68rem/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.rg-tab[aria-selected="true"]{color:var(--ink);border-color:var(--blue);background:rgba(150,200,255,.08)}
+.nav-region,.nav-region:first-child{position:sticky;top:0;z-index:2;margin:0;padding:16px 22px 8px;background:var(--sidebar);opacity:1;color:#8a9bb5}
+.nav-reg:first-child>.nav-region{padding-top:8px}
+#sb-nav [hidden]{display:none!important}
+#sb-nav.filtering .nav-sub{display:none}
+#sb-nav.filtering .cluster-body{max-height:none;padding-bottom:6px}
+#sb-nav.filtering .cluster-arrow{visibility:hidden}
+#sb-empty{padding:18px 22px;color:var(--dim);font-size:.9rem}
+@media (pointer:coarse){.cluster-head{min-height:48px}.nav-item{min-height:44px}#sb-find{min-height:44px}#collapse-btn{min-width:44px;min-height:44px}}
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){
+#sidebar,body.sb-collapsed #sidebar{width:min(88vw,360px);min-width:0;opacity:1;pointer-events:auto;border-right:1px solid var(--border-b);padding-left:env(safe-area-inset-left,0px);visibility:hidden;transition:transform .28s cubic-bezier(.4,0,.2,1),visibility 0s linear .28s}
+#sidebar.open,body.sb-collapsed #sidebar.open{visibility:visible;transition:transform .28s cubic-bezier(.4,0,.2,1),visibility 0s}
+#sb-header{position:relative;padding:calc(14px + env(safe-area-inset-top,0px)) 64px 12px 20px}
+#sb-wordmark{font-size:1.3rem}
+#sb-sub{font-size:1rem;margin-top:4px}
+#sb-status{display:none}
+#sb-close{display:grid;place-items:center;position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:10px;width:44px;height:44px;border:1px solid var(--border-b);border-radius:12px;background:none;color:var(--dim);font:400 1.3rem/1 var(--f-sans);cursor:pointer}
+#sb-regions{display:flex}
+#sb-find,.rg-tab{min-height:44px}
+.cluster-head{min-height:48px}
+.nav-item{min-height:44px}
+#sb-nav{overscroll-behavior:contain}
+#sb-footer{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+#sb-clock{display:none}
+#topbar{height:calc(var(--topbar-h) + env(safe-area-inset-top,0px));min-height:calc(var(--topbar-h) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
+#frame-wrap{padding:0 env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+}
+/* A short drawer (a landscape phone) keeps the list tall: no tagline, and
+   the footer keeps only the wishlist button. */
+@media (max-height:500px) and (pointer:coarse),(max-width:768px) and (max-height:500px){#sb-sub,#sb-linkedin{display:none}#sb-header{padding-bottom:8px}#sb-wishlist{min-height:44px}}
 </style>
 </head>
 <body>
@@ -161,6 +213,11 @@ body.sb-collapsed #tb-wishlist{display:inline-flex}
       <a id="sb-wordmark" href="#home" aria-label="Stella Nova, go to the homepage" onclick="if(!(event.metaKey||event.ctrlKey||event.shiftKey||event.button)){event.preventDefault();switchTab('home')}"><span>Stella</span><span>Nova</span></a>
       <div id="sb-sub">from ore to <em>empire.</em></div>
       <div id="sb-status">Sim Active</div>
+      <button id="sb-close" type="button" onclick="closeSidebar()" aria-label="Close the page index">&#215;</button>
+    </div>
+    <div id="sb-tools">
+      <label id="sb-find"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="sb-q" type="search" placeholder="Search pages" aria-label="Search the page index" autocomplete="off" spellcheck="false" enterkeyhint="go"></label>
+      <div id="sb-regions" role="tablist" aria-label="Regions"></div>
     </div>
     <div id="sb-nav"></div>
     <div id="sb-footer">
@@ -171,7 +228,7 @@ body.sb-collapsed #tb-wishlist{display:inline-flex}
   </nav>
   <div id="content">
     <div id="topbar">
-      <button id="menu-btn" onclick="openSidebar()">&#9776;</button>
+      <button id="menu-btn" onclick="openSidebar()" aria-label="Open the page index" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
       <button id="collapse-btn" onclick="toggleSidebar()" title="Collapse / expand index">&#171;</button>
       <span id="topbar-title">S T E L L A  N O V A</span>
       <span id="topbar-active">Overview</span>
@@ -195,12 +252,15 @@ snPages().forEach(function(p){PAGES[p.key]=p.path;LABELS[p.key]=p.label});
 // Hidden pages (SN_HIDDEN): routable at #<key>, never in the sidebar.
 (window.SN_HIDDEN||[]).forEach(function(p){PAGES[p[0]]='pages/'+(p[2]||p[0])+'/index.html';LABELS[p[0]]=p[1]});
 function navEsc(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function navRow(p){return '<button class="nav-item" data-tab="'+p[0]+'" onclick="switchTab(\''+p[0]+'\')"><span class="nav-label">'+navEsc(p[1])+'</span>'+(p[2]?'<span class="nav-badge">'+navEsc(p[2])+'</span>':'')+'</button>'}
-function buildNav(){var h='';SN_NAV.forEach(function(r){h+='<div class="nav-region">'+navEsc(r.label)+'</div>';r.constellations.forEach(function(c){var st=' style="--c:'+c.color+'"';var icon='<span class="cluster-icon">'+c.icon+'</span><span class="cluster-label">'+navEsc(c.label)+'</span><span class="cluster-arrow">&#8250;</span>';var g0=c.groups[0];if(c.groups.length===1&&!g0.h&&g0.p.length===1){var k=g0.p[0][0];h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head solo" data-tab="'+k+'" onclick="switchTab(\''+k+'\')">'+icon+'</button></div>';return}h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head" onclick="toggleCluster(\'cl-'+c.id+'\')">'+icon+'</button><div class="cluster-body">';c.groups.forEach(function(g){if(g.h)h+='<div class="nav-sub"'+(g.id?' id="'+g.id+'"':'')+'>'+navEsc(g.h)+'</div>';g.p.forEach(function(p){h+=navRow(p)})});h+='</div></div>'})});document.getElementById('sb-nav').innerHTML=h}
+function navFold(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
+function navRow(p,q){return '<button class="nav-item" data-tab="'+p[0]+'" data-q="'+navEsc(navFold(p[1]+' '+q+' '+p[0]))+'" onclick="switchTab(\''+p[0]+'\')"><span class="nav-label">'+navEsc(p[1])+'</span>'+(p[2]?'<span class="nav-badge">'+navEsc(p[2])+'</span>':'')+'</button>'}
+function buildNav(){var h='',tabs='';SN_NAV.forEach(function(r){tabs+='<button class="rg-tab" type="button" role="tab" data-region="'+r.id+'" aria-selected="false" onclick="jumpRegion(\''+r.id+'\')">'+navEsc(r.label)+'</button>';h+='<section class="nav-reg" id="rg-'+r.id+'" data-region="'+r.id+'"><div class="nav-region">'+navEsc(r.label)+'</div>';r.constellations.forEach(function(c){var st=' style="--c:'+c.color+'"';var icon='<span class="cluster-icon">'+c.icon+'</span><span class="cluster-label">'+navEsc(c.label)+'</span><span class="cluster-arrow">&#8250;</span>';var g0=c.groups[0];if(c.groups.length===1&&!g0.h&&g0.p.length===1){var k=g0.p[0][0];h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head solo" data-tab="'+k+'" data-q="'+navEsc(navFold(c.label+' '+g0.p[0][1]+' '+k))+'" onclick="switchTab(\''+k+'\')">'+icon+'</button></div>';return}h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head" aria-expanded="false" onclick="toggleCluster(\'cl-'+c.id+'\')">'+icon+'</button><div class="cluster-body">';c.groups.forEach(function(g){if(g.h)h+='<div class="nav-sub"'+(g.id?' id="'+g.id+'"':'')+'>'+navEsc(g.h)+'</div>';g.p.forEach(function(p){h+=navRow(p,c.label+' '+(g.h||''))})});h+='</div></div>'});h+='</section>'});h+='<p id="sb-empty" hidden>No page matches. Try another word.</p>';document.getElementById('sb-nav').innerHTML=h;var rt=document.getElementById('sb-regions');if(rt)rt.innerHTML=tabs}
 buildNav();
 // Open the cluster that holds the active page, so a deep link shows where
-// the page sits. Other clusters keep their state.
-function openClusterOf(id){var el=document.querySelector('#sb-nav .nav-item[data-tab="'+id+'"]');var cl=el&&el.closest('.cluster');if(cl)cl.classList.add('open')}
+// the page sits. On a desktop, other clusters keep their state. In drawer
+// mode only that cluster stays open.
+function setCluster(cl,on){cl.classList.toggle('open',on);var b=cl.querySelector('.cluster-head:not(.solo)');if(b)b.setAttribute('aria-expanded',on?'true':'false')}
+function openClusterOf(id){var el=document.querySelector('#sb-nav .nav-item[data-tab="'+id+'"]');var cl=el&&el.closest('.cluster');if(!cl)return;if(drawerMode())document.querySelectorAll('#sb-nav .cluster.open').forEach(function(o){if(o!==cl)setCluster(o,false)});setCluster(cl,true)}
 // XR_PAGES: keys whose iframe gets allow="xr-spatial-tracking" (SN_XR in lib/nav-data.js).
 const XR_PAGES=new Set(window.SN_XR||['orbital']);
 // CRAFT_PAGES: keys whose iframe gets fullscreen and clipboard (SN_CRAFT in lib/nav-data.js).
@@ -262,10 +322,28 @@ function switchTab(id,sub,mode){if(!PAGES[id])id='home';sub=sub||'';markTab(id);
 window.switchTab=switchTab;
 function routeFromHash(){var r=parseShellHash(location.hash);if(!PAGES[r.id])r={id:'home',sub:''};var f=currentFrame();if(r.id===activeTab&&f&&!swapBusy&&pendingTab===null){if(r.sub===activeSub)return;activeSub=r.sub;try{var w=f.contentWindow;w.location.replace(w.location.href.split('#')[0]+'#'+r.sub)}catch(e){switchTab(r.id,r.sub,'none')}return}switchTab(r.id,r.sub,activeTab===null?'replace':'none')}
 window.addEventListener('popstate',routeFromHash);window.addEventListener('hashchange',routeFromHash);routeFromHash();
-function toggleCluster(id){var cl=document.getElementById(id);if(cl)cl.classList.toggle('open')}
-function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('show')}
+/* ── drawer mode ─────────────────────────────────────────────────────────
+   drawerMode() is the CSS drawer query. openSidebar opens the drawer,
+   moves the focus to its close button and scrolls the current page into
+   view. Esc, the close button, the overlay, a left swipe on the drawer and
+   a page choice close it, and the focus goes back to the menu button.
+   navFilter filters the list by the words in #sb-q (all modes).
+   jumpRegion scrolls the list to a region. A scroll marks the region tab.
+   grep -n targets: "function openSidebar", "function navFilter", "function jumpRegion" */
+function toggleCluster(id){var cl=document.getElementById(id);if(!cl)return;var on=!cl.classList.contains('open');if(on&&drawerMode())document.querySelectorAll('#sb-nav .cluster.open').forEach(function(o){if(o!==cl)setCluster(o,false)});setCluster(cl,on);if(on&&drawerMode()&&cl.scrollIntoView)cl.scrollIntoView({block:'nearest'})}
+function sbOpen(){return document.getElementById('sidebar').classList.contains('open')}
+function openSidebar(){var sb=document.getElementById('sidebar');sb.classList.add('open');document.getElementById('overlay').classList.add('show');var mb=document.getElementById('menu-btn');if(mb)mb.setAttribute('aria-expanded','true');if(activeTab)openClusterOf(activeTab);var a=document.querySelector('#sb-nav .active');if(a&&a.scrollIntoView)a.scrollIntoView({block:'center'});markRegion();var x=document.getElementById('sb-close');if(x)try{x.focus({preventScroll:true})}catch(e){}}
 function drawerMode(){return matchMedia('(max-width:768px),(max-height:500px) and (pointer:coarse)').matches}
-function closeSidebar(){if(drawerMode()){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show')}}
+function closeSidebar(){if(!drawerMode())return;var was=sbOpen();document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show');var mb=document.getElementById('menu-btn');if(mb){mb.setAttribute('aria-expanded','false');if(was&&document.activeElement&&document.getElementById('sidebar').contains(document.activeElement))try{mb.focus({preventScroll:true})}catch(e){}}}
+function navFilter(q){var nav=document.getElementById('sb-nav');var t=navFold(q||'').split(/\s+/).filter(Boolean);var on=t.length>0,n=0;nav.classList.toggle('filtering',on);nav.querySelectorAll('[data-q]').forEach(function(el){var hit=!on||t.every(function(w){return el.dataset.q.indexOf(w)>=0});el.hidden=!hit;if(hit&&on)n++});nav.querySelectorAll('.cluster').forEach(function(cl){cl.hidden=on&&!cl.querySelector('[data-q]:not([hidden])')});nav.querySelectorAll('.nav-reg').forEach(function(r){r.hidden=on&&!r.querySelector('.cluster:not([hidden])')});document.getElementById('sb-empty').hidden=!on||n>0;return n}
+function jumpRegion(id){var nav=document.getElementById('sb-nav'),r=document.getElementById('rg-'+id);if(!r)return;nav.scrollTop=r.offsetTop-nav.offsetTop;markRegion(id)}
+function markRegion(id){var nav=document.getElementById('sb-nav');if(!id){var top=nav.scrollTop+nav.offsetTop+4;nav.querySelectorAll('.nav-reg').forEach(function(r){if(!r.hidden&&(!id||r.offsetTop<=top))id=r.dataset.region})}document.querySelectorAll('#sb-regions .rg-tab').forEach(function(b){var on=b.dataset.region===id;b.setAttribute('aria-selected',on?'true':'false');if(on&&sbOpen()&&b.scrollIntoView)b.scrollIntoView({block:'nearest',inline:'nearest'})})}
+;(function(){var q=document.getElementById('sb-q'),nav=document.getElementById('sb-nav'),sb=document.getElementById('sidebar');if(q){q.addEventListener('input',function(){navFilter(q.value)});q.addEventListener('keydown',function(e){if(e.key==='Enter'){var f=nav.querySelector('[data-q]:not([hidden])');if(f&&q.value.trim()){e.preventDefault();f.click()}}})}
+nav.addEventListener('click',function(e){if(q&&q.value&&e.target.closest('[data-tab]')){q.value='';navFilter('')}});
+var sq=0;nav.addEventListener('scroll',function(){if(!sq)sq=requestAnimationFrame(function(){sq=0;markRegion()})},{passive:true});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&sbOpen()&&drawerMode()){if(q&&q.value&&document.activeElement===q){q.value='';navFilter('');return}closeSidebar()}});
+var x0=null,y0=0;sb.addEventListener('touchstart',function(e){var t=e.touches[0];x0=t.clientX;y0=t.clientY},{passive:true});sb.addEventListener('touchend',function(e){if(x0===null)return;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0;x0=null;if(dx<-60&&Math.abs(dy)<Math.abs(dx)*0.6)closeSidebar()},{passive:true});
+var n=document.querySelectorAll('#sb-nav .nav-item, #sb-nav .cluster-head.solo').length;if(q)q.placeholder='Search '+n+' pages';markRegion()})();
 function toggleSidebar(){var c=document.body.classList.toggle('sb-collapsed');try{localStorage.setItem('sn-sb-collapsed',c?'1':'0')}catch(e){}}
 window.toggleSidebar=toggleSidebar;
 setInterval(function(){var el=document.getElementById('sb-clock');if(el)el.textContent=new Date().toTimeString().slice(0,8)},1000);
