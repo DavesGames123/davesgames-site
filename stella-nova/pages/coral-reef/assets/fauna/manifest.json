@@ -1,6 +1,6 @@
 {
  "about": "Creature models of coral-reef/fauna. Every file in assets/fauna/ is listed here with its source and licence (tests/fauna.test.mjs checks it).",
- "bytes": 1992223,
+ "bytes": 4096009,
  "models": [
   {
    "id": "acanthaster-brevispinus",
@@ -45,6 +45,50 @@
     0.2147
    ],
    "scanUnit": 0.2147
+  },
+  {
+   "id": "astraea-heliotropium",
+   "sci": "Astraea heliotropium (Martyn, 1784)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:6e5ce6b4-ca94-4ae6-b367-62534fa079db",
+   "record": "http://n2t.net/ark:/65665/369d1a4ad-8e97-4e6a-b0ca-b7bf58d5b4a1",
+   "specimen": "nmnhinvertebratezoology_578856",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "astraea-heliotropium.glb",
+     "bytes": 72288,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "astraea-heliotropium-lod1.glb",
+     "bytes": 16648,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/astraea-heliotropium-512.jpg",
+     "bytes": 45957,
+     "texture": true
+    },
+    {
+     "path": "tex/astraea-heliotropium-256.jpg",
+     "bytes": 18728,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1138,
+    0.0465,
+    0.1016
+   ],
+   "scanUnit": 0.1138
   },
   {
    "id": "astrophyton-muricatum",
@@ -135,6 +179,94 @@
    "scanUnit": 0.083
   },
   {
+   "id": "charybdis-lucifera",
+   "sci": "Charybdis lucifera (Fabricius, 1798)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:28a32285-db66-420a-bc26-70577cdf0a23",
+   "record": "http://n2t.net/ark:/65665/3e5f2bcd9-110b-435c-b570-ebcc8d486d14",
+   "specimen": "nmnhinvertebratezoology_157355",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "charybdis-lucifera.glb",
+     "bytes": 74180,
+     "tris": 2992,
+     "lod": 0
+    },
+    {
+     "path": "charybdis-lucifera-lod1.glb",
+     "bytes": 16880,
+     "tris": 596,
+     "lod": 1
+    },
+    {
+     "path": "tex/charybdis-lucifera-512.jpg",
+     "bytes": 58617,
+     "texture": true
+    },
+    {
+     "path": "tex/charybdis-lucifera-256.jpg",
+     "bytes": 23264,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1045,
+    0.0492,
+    0.0626
+   ],
+   "scanUnit": 0.1045
+  },
+  {
+   "id": "chicoreus-cervicornis",
+   "sci": "Chicoreus cervicornis (Lamarck, 1822)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:78dbfa2e-f031-4d60-a447-d61415823149",
+   "record": "http://n2t.net/ark:/65665/3313c3ffc-cc09-44c5-831e-f974e4ab3673",
+   "specimen": "nmnhinvertebratezoology_535416",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "chicoreus-cervicornis.glb",
+     "bytes": 69228,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "chicoreus-cervicornis-lod1.glb",
+     "bytes": 16076,
+     "tris": 598,
+     "lod": 1
+    },
+    {
+     "path": "tex/chicoreus-cervicornis-512.jpg",
+     "bytes": 44865,
+     "texture": true
+    },
+    {
+     "path": "tex/chicoreus-cervicornis-256.jpg",
+     "bytes": 19605,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0451,
+    0.0313,
+    0.0665
+   ],
+   "scanUnit": 0.0665
+  },
+  {
    "id": "cidaris-blakei",
    "sci": "Cidaris blakei (Agassiz)",
    "source": "si",
@@ -177,6 +309,50 @@
     0.1168
    ],
    "scanUnit": 0.1359
+  },
+  {
+   "id": "conus-gloriamaris",
+   "sci": "Conus gloriamaris Chemnitz, 1777",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:0dff6ec4-bbff-4231-b0aa-2cb00e6dd643",
+   "record": "http://n2t.net/ark:/65665/34fa7cdb0-c6f1-45ad-88ba-aedd5cfae36a",
+   "specimen": "nmnhinvertebratezoology_10382184",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "conus-gloriamaris.glb",
+     "bytes": 56620,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "conus-gloriamaris-lod1.glb",
+     "bytes": 13556,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/conus-gloriamaris-512.jpg",
+     "bytes": 46039,
+     "texture": true
+    },
+    {
+     "path": "tex/conus-gloriamaris-256.jpg",
+     "bytes": 18421,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.045,
+    0.0337,
+    0.0906
+   ],
+   "scanUnit": 0.0906
   },
   {
    "id": "culcita-novaeguineae",
@@ -267,6 +443,270 @@
    "scanUnit": 0.1577
   },
   {
+   "id": "harpa-costata",
+   "sci": "Harpa costata (Linnaeus, 1758)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:88fd0473-7073-437e-9f50-7e178c09e54c",
+   "record": "http://n2t.net/ark:/65665/37ca4296a-b0c4-4923-8d67-bc532a7babcc",
+   "specimen": "nmnhinvertebratezoology_11294249",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "harpa-costata.glb",
+     "bytes": 74400,
+     "tris": 2998,
+     "lod": 0
+    },
+    {
+     "path": "harpa-costata-lod1.glb",
+     "bytes": 16324,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/harpa-costata-512.jpg",
+     "bytes": 42377,
+     "texture": true
+    },
+    {
+     "path": "tex/harpa-costata-256.jpg",
+     "bytes": 18195,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0569,
+    0.0671,
+    0.0806
+   ],
+   "scanUnit": 0.0806
+  },
+  {
+   "id": "ibacus-ciliatus",
+   "sci": "Ibacus ciliatus pubescens Holthuis, 1960",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:1b2ab6c4-c329-4b36-9166-33d81ff95718",
+   "record": "http://n2t.net/ark:/65665/36f6e0020-d11a-4179-8513-24025506cd15",
+   "specimen": "nmnhinvertebratezoology_78695",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "ibacus-ciliatus.glb",
+     "bytes": 72992,
+     "tris": 2994,
+     "lod": 0
+    },
+    {
+     "path": "ibacus-ciliatus-lod1.glb",
+     "bytes": 15740,
+     "tris": 596,
+     "lod": 1
+    },
+    {
+     "path": "tex/ibacus-ciliatus-512.jpg",
+     "bytes": 61218,
+     "texture": true
+    },
+    {
+     "path": "tex/ibacus-ciliatus-256.jpg",
+     "bytes": 23347,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0982,
+    0.1072,
+    0.0559
+   ],
+   "scanUnit": 0.1072
+  },
+  {
+   "id": "lauridromia-dehaani",
+   "sci": "Lauridromia dehaani (Rathbun, 1923)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:6e994d9f-feb7-4ce0-9639-ee1f36f92ebd",
+   "record": "http://n2t.net/ark:/65665/34f524c82-10e1-4f53-aa1a-36b72b7a8f88",
+   "specimen": "nmnhinvertebratezoology_78565",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "lauridromia-dehaani.glb",
+     "bytes": 77712,
+     "tris": 2984,
+     "lod": 0
+    },
+    {
+     "path": "lauridromia-dehaani-lod1.glb",
+     "bytes": 16968,
+     "tris": 594,
+     "lod": 1
+    },
+    {
+     "path": "tex/lauridromia-dehaani-512.jpg",
+     "bytes": 64816,
+     "texture": true
+    },
+    {
+     "path": "tex/lauridromia-dehaani-256.jpg",
+     "bytes": 24366,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0906,
+    0.1138,
+    0.0533
+   ],
+   "scanUnit": 0.1138
+  },
+  {
+   "id": "limulus-polyphemus",
+   "sci": "Limulus polyphemus (Linnaeus, 1758)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:22d816a4-aaf6-4b3d-9ea6-283c41daa987",
+   "record": "http://n2t.net/ark:/65665/3faf99bfb-092d-41e8-b9f1-404ea6f35f69",
+   "specimen": "nmnhinvertebratezoology_15653359",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "limulus-polyphemus.glb",
+     "bytes": 74236,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "limulus-polyphemus-lod1.glb",
+     "bytes": 18612,
+     "tris": 668,
+     "lod": 1
+    },
+    {
+     "path": "tex/limulus-polyphemus-512.jpg",
+     "bytes": 45663,
+     "texture": true
+    },
+    {
+     "path": "tex/limulus-polyphemus-256.jpg",
+     "bytes": 18836,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.2361,
+    0.1343,
+    0.1131
+   ],
+   "scanUnit": 0.2361
+  },
+  {
+   "id": "lopha-cristagalli",
+   "sci": "Lopha cristagalli (Linnaeus, 1758)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:9fee6d66-8ad5-49d4-b257-2409aa0397e9",
+   "record": "http://n2t.net/ark:/65665/3502bdf9e-cbbd-434b-91aa-337259b637ff",
+   "specimen": "nmnhinvertebratezoology_517019",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "lopha-cristagalli.glb",
+     "bytes": 63656,
+     "tris": 3000,
+     "lod": 0
+    },
+    {
+     "path": "lopha-cristagalli-lod1.glb",
+     "bytes": 16648,
+     "tris": 656,
+     "lod": 1
+    },
+    {
+     "path": "tex/lopha-cristagalli-512.jpg",
+     "bytes": 48252,
+     "texture": true
+    },
+    {
+     "path": "tex/lopha-cristagalli-256.jpg",
+     "bytes": 19120,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.0762,
+    0.0627,
+    0.0702
+   ],
+   "scanUnit": 0.0762
+  },
+  {
+   "id": "lopholithodes-foraminatus",
+   "sci": "Lopholithodes foraminatus (Stimpson, 1859)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:5a518fb2-b5cb-4e21-a61a-eb6bf7c25db7",
+   "record": "http://n2t.net/ark:/65665/37849aa37-260a-4a0b-8a07-47ddb33240b3",
+   "specimen": "nmnhinvertebratezoology_10041048",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "lopholithodes-foraminatus.glb",
+     "bytes": 75604,
+     "tris": 2996,
+     "lod": 0
+    },
+    {
+     "path": "lopholithodes-foraminatus-lod1.glb",
+     "bytes": 16128,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/lopholithodes-foraminatus-512.jpg",
+     "bytes": 74789,
+     "texture": true
+    },
+    {
+     "path": "tex/lopholithodes-foraminatus-256.jpg",
+     "bytes": 27793,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    241.7856,
+    227.9275,
+    136.6172
+   ],
+   "scanUnit": 241.7856
+  },
+  {
    "id": "myxaster-sol",
    "sci": "Myxaster sol Perrier, 1885",
    "source": "si",
@@ -309,6 +749,50 @@
     0.0894
    ],
    "scanUnit": 0.0949
+  },
+  {
+   "id": "ovalipes-ocellatus",
+   "sci": "Ovalipes ocellatus (Herbst, 1799)",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:3635a529-88ed-44c8-9554-2b80e813a5f7",
+   "record": "http://n2t.net/ark:/65665/3bcad9de8-05e0-48ae-baaa-6edffb1cdab9",
+   "specimen": "nmnhinvertebratezoology_17124155",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "ovalipes-ocellatus.glb",
+     "bytes": 75224,
+     "tris": 2998,
+     "lod": 0
+    },
+    {
+     "path": "ovalipes-ocellatus-lod1.glb",
+     "bytes": 16228,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/ovalipes-ocellatus-512.jpg",
+     "bytes": 50929,
+     "texture": true
+    },
+    {
+     "path": "tex/ovalipes-ocellatus-256.jpg",
+     "bytes": 21239,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1023,
+    0.0528,
+    0.0823
+   ],
+   "scanUnit": 0.1023
   },
   {
    "id": "plagiobrissus-grandis",
@@ -485,6 +969,94 @@
     0.0566
    ],
    "scanUnit": 0.0576
+  },
+  {
+   "id": "scyllarides-astori",
+   "sci": "Scyllarides astori Holthuis, 1960",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:7f602ad1-7a6c-4b5e-b096-88d4b5a047f7",
+   "record": "http://n2t.net/ark:/65665/345e0e3ef-c5cf-4d0f-aac7-e7662e7b0c39",
+   "specimen": "nmnhinvertebratezoology_282672",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "scyllarides-astori.glb",
+     "bytes": 75240,
+     "tris": 2994,
+     "lod": 0
+    },
+    {
+     "path": "scyllarides-astori-lod1.glb",
+     "bytes": 16388,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/scyllarides-astori-512.jpg",
+     "bytes": 57268,
+     "texture": true
+    },
+    {
+     "path": "tex/scyllarides-astori-256.jpg",
+     "bytes": 21892,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.1412,
+    0.0766,
+    0.1497
+   ],
+   "scanUnit": 0.1497
+  },
+  {
+   "id": "tridacna-squamosa",
+   "sci": "Tridacna (Flodacna) squamosa Lamarck, 1819",
+   "source": "si",
+   "archive": "Smithsonian Institution, National Museum of Natural History (Smithsonian 3D Digitization, Open Access)",
+   "author": "Smithsonian Institution",
+   "licence": "CC0-1.0",
+   "licenceUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "url": "https://3d-api.si.edu/voyager/3d_package:701a39f3-c97a-4951-9de4-1125229eb703",
+   "record": "http://n2t.net/ark:/65665/3c5411850-22ee-4670-a573-1665cae0ac41",
+   "specimen": "nmnhinvertebratezoology_536521",
+   "checked": "2026-10-18 Open Access API: access CC0",
+   "modified": "Simplified (meshopt), turned to +y up and +z forward, scaled to 1 m, textures re-encoded as 512 and 256 px JPG, quantized. fauna/build-assets.mjs.",
+   "files": [
+    {
+     "path": "tridacna-squamosa.glb",
+     "bytes": 69840,
+     "tris": 2998,
+     "lod": 0
+    },
+    {
+     "path": "tridacna-squamosa-lod1.glb",
+     "bytes": 15864,
+     "tris": 600,
+     "lod": 1
+    },
+    {
+     "path": "tex/tridacna-squamosa-512.jpg",
+     "bytes": 45338,
+     "texture": true
+    },
+    {
+     "path": "tex/tridacna-squamosa-256.jpg",
+     "bytes": 19572,
+     "texture": true
+    }
+   ],
+   "scanExtent": [
+    0.2526,
+    0.2372,
+    0.1067
+   ],
+   "scanUnit": 0.2526
   },
   {
    "id": "tylocidaris-ohshimai",
