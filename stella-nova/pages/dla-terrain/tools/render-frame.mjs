@@ -11,11 +11,12 @@
 //
 //  Args: w, h (px), out (folder for shoot:), qs (a ?query or #hash, so a
 //  world link renders), coarse=1 (a phone), early=1 (shoot the first
-//  terrain as it forms). Steps (';' between them): ready (plant models
+//  terrain as it forms), groundimg=1 (decode the ground sets with magick). Steps (';' between them): ready (plant models
 //  in), pumpN (N frames at 30 fps), preset:<id>, rand:<seed>, seed:<n>,
 //  tod<x>, season<x>, wx-<weather id>, q:<0..3>, home, orbit, drone,
 //  river, valley, ridge, fly, perfN (frame time to queue done), eval:<js>,
 //  shoot:<file>, gen:<name> (shoot each stage of a new generation),
+//  close:<rock|scree|ground>:<d m>[:<pick>] (a close-up of that surface),
 //  build:<name>[@i:u+...] ("Watch it build": shoot points of the timeline).
 //  Without steps= it only checks that the page boots.
 // ============================================================================
@@ -29,6 +30,9 @@ const win = dom.window;
 globalThis.window = globalThis; globalThis.document = win.document;
 globalThis.HTMLElement = win.HTMLElement;
 const COARSE = args.coarse === '1';
+// groundimg=1: decode the GROUND webp sets through magick too (ground.js
+// gpu.groundImageLoader), so Deno frames show the texture sets
+const GROUND_IMG = args.groundimg === '1';
 globalThis.matchMedia = q => ({ matches: q.includes('coarse') ? COARSE : false, addEventListener() {} });
 win.matchMedia = globalThis.matchMedia;
 globalThis.location = win.location; globalThis.history = win.history;
@@ -62,7 +66,7 @@ const vegLoader = async (url, size) => {
   const out = await new Deno.Command('magick', { args: [src, '-resize', `${size}x${size}!`, '-depth', '8', 'RGBA:-'] }).output();
   return { data: out.stdout, width: size, height: size };
 };
-{ const iv = setInterval(() => { if (app.gpu && !app.gpu.vegImageLoader) { app.gpu.vegImageLoader = vegLoader; clearInterval(iv); } }, 2); }
+{ const iv = setInterval(() => { if (app.gpu && !app.gpu.vegImageLoader) { app.gpu.vegImageLoader = vegLoader; if (GROUND_IMG) app.gpu.groundImageLoader = vegLoader; clearInterval(iv); } }, 2); }
 let t = 0;
 async function pump(n, label) {
   for (let i = 0; i < n; i++) {
@@ -107,6 +111,12 @@ if (args.early) {
   await pump(150); await globalThis.__shoot(app.gpu.device, (args.out || Deno.cwd()) + '/early-' + (k++) + '-5s.png');
 }
 await until(() => app.gen && !app.gen.running, 900);
+if (GROUND_IMG) {
+  // the ground module may have started its load before the hook was set
+  const gm = app.fg && app.fg.modules.find(m => m.role === 'ground');
+  if (gm && gm.reloadTextures && !(gm.stats().textures)) await gm.reloadTextures();
+  console.log('ground textures', gm ? gm.stats().textures : 'no ground module');
+}
 console.log('lib', app.libKind, 'terrain', app.terrain && app.terrain.n, 'rivers', app.terrain && app.terrain.rivers.length);
 console.log('status:', document.getElementById('stMain').textContent, '|', document.getElementById('stRight').textContent);
 console.log('notice:', document.getElementById('notice').hidden ? '(none)' : document.getElementById('notice').textContent);
@@ -158,6 +168,43 @@ function shotCam(kind) {
   cam.fly.pos = [best[0], best[1] + (kind === 'valley' ? 35 : 60), best[2]];
   cam.fly.yaw = yaw; cam.fly.pitch = kind === 'valley' ? 0.04 : -0.12;
 }
+// close:<kind>:<d>[:<pick>] — a close-up shot at about d metres from a
+// surface of kind rock (a steep face, seen from out in front), scree (the
+// foot of a face) or ground (gentle soil or grass, seen from above). The
+// eye stays over the full ground height (LIB terrainHeightAt) + 1.7 m.
+function closeCam(kind, d, pick = 0) {
+  const t = app.terrain, cam = app.cam, ws = t.worldSize, n = t.n, h = t.height;
+  const H = (x, z) => (app.lib && app.lib.terrainHeightAt ? app.lib.terrainHeightAt(t, x, z) : 0);
+  const cell = ws / n, ij = (x, z) => [Math.max(1, Math.min(n - 2, Math.round((x / ws + 0.5) * n - 0.5))), Math.max(1, Math.min(n - 2, Math.round((z / ws + 0.5) * n - 0.5)))];
+  let s = 977 + pick * 7919;
+  const r = () => ((s = (s * 1103515245 + 12345) >>> 0) / 4294967296);
+  const cands = [];
+  for (let k = 0; k < 40000 && cands.length < 400; k++) {
+    const x = (r() - 0.5) * ws * 0.8, z = (r() - 0.5) * ws * 0.8;
+    const [i, j] = ij(x, z), y = h[j * n + i];
+    if (y < t.seaLevel + 3 || (t.water && t.water[j * n + i] > 0.02) || (t.river && t.river[j * n + i] > 0.1)) continue;
+    const gx = (h[j * n + i + 1] - h[j * n + i - 1]) / (2 * cell), gz = (h[(j + 1) * n + i] - h[(j - 1) * n + i]) / (2 * cell), g = Math.hypot(gx, gz);
+    const ok = kind === 'rock' ? g > 0.9 && g < 3 : kind === 'scree' ? g > 0.45 && g < 0.75 : g < 0.25;
+    if (ok) cands.push([x, z, gx, gz, g]);
+  }
+  if (!cands.length) { console.log('close: no', kind, 'site'); return false; }
+  const [x, z, gx, gz, g] = cands[Math.floor(r() * cands.length)];
+  const P = [x, H(x, z), z];
+  // out of the face (downhill), a little above; ground: from the side, above
+  const ox = g > 1e-6 ? -gx / g : 1, oz = g > 1e-6 ? -gz / g : 0;
+  const el = kind === 'ground' ? 0.75 : kind === 'scree' ? 0.45 : 0.18;
+  const C = [P[0] + ox * d * Math.cos(el), P[1] + d * Math.sin(el), P[2] + oz * d * Math.cos(el)];
+  C[1] = Math.max(C[1], H(C[0], C[2]) + 1.7);
+  const dx = P[0] - C[0], dy = P[1] - C[1], dz = P[2] - C[2];
+  cam.setMode('fly', { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  app.camMode = 'fly';
+  cam.fly.pos = C;
+  cam.fly.yaw = Math.atan2(dx, -dz); cam.fly.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  // a snap update (dt >= 0.5 s): no glide from the last pose
+  cam.update(1, {}, { heightAt: H, size: ws, seaLevel: t.seaLevel });
+  console.log('close', kind, d, 'at', P.map(v => v.toFixed(1)).join(','), 'slope', g.toFixed(2), 'eye agl', (C[1] - H(C[0], C[2])).toFixed(1), 'dist', Math.hypot(dx, dy, dz).toFixed(1));
+  return true;
+}
 let perf = [];
 for (const s of steps) {
   if (s === 'orbit') { await pump(30, 'orbit'); }
@@ -165,6 +212,7 @@ for (const s of steps) {
   else if (s === 'river') { app.drone('river'); await pump(60, 'river'); }
   else if (s === 'fly') { app.setCam('fly'); await pump(10, 'fly'); }
   else if (s === 'valley' || s === 'ridge') { shotCam(s); await pump(12, s); }
+  else if (s.startsWith('close:')) { const [, kind, d, pk] = s.split(':'); closeCam(kind, +d || 5, +pk || 0); await pump(24, s); }
   else if (s === 'home') { app.setCam('orbit'); app.cam.frameWorld({ size: app.terrain.worldSize, midH: 0 }, 0.55); app.cam.orbit.pitch = -0.36; app.cam.orbit.dist = Math.min(app.cam.orbit.dist, 15000); await pump(30, 'home'); }
   else if (s === 'ready') { const v = app.fg.modules.find(m => m.role === 'vegetation'); const t0 = performance.now(); for (let k = 0; k < 2; k++) { for (let i = 0; i < 3000 && v && !String(v.stats().assets).startsWith('loaded') && v.stats().assets !== 'failed'; i++) await pump(1); await pump(30); } await pump(10); console.log('veg ready', v && JSON.stringify(v.stats()).slice(0, 160), ((performance.now() - t0) / 1000).toFixed(1) + ' s'); }
   else if (s.startsWith('pump')) { await pump(+s.slice(4) || 10, s); }
