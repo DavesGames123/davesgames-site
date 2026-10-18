@@ -59,25 +59,25 @@ export default {
       title: 'Birdtracks and tensor networks',
       text: [
         t`Cvitanović's birdtracks extend Penrose's pictures for group theory: symmetrisers and antisymmetrisers become boxes across legs, and long algebra becomes moving lines around.`,
-        t`Physics and machine learning use the same idea as tensor networks: matrix product states for quantum spin chains, and the einsum graphs of a neural network. Switch the diagram style to compare.`,
+        t`Physics and machine learning use the same idea as tensor networks: matrix product states for quantum spin chains, and the einsum graphs of a neural network. Switch the Penrose diagram style to compare.`,
       ],
       tex: t`S_{ij} = Q_{ia}\,K_{ja}\quad\longleftrightarrow\quad Q\ \text{---}\ K`,
       show: { view: 'diagram', entry: 'attention-contraction', style: 'network' },
     },
     {
-      title: 'Not Feynman diagrams',
+      title: 'An exact equation',
       text: [
-        t`Penrose diagrams can look like Feynman diagrams: lines and vertices. They are different tools. A Feynman diagram is one term in a perturbation series for a quantum scattering amplitude; its lines are particle propagators and it comes with an integral over momenta.`,
         t`A Penrose diagram is an exact equation in multilinear algebra. Every line is a summed index, every node a tensor, and two diagrams that can be deformed into each other are equal.`,
+        t`So a proof can be a picture: slide a node along its lines, untwist a crossing of two legs, or pull a loop tight, and the value stays the same. The birdtrack style adds an arrow on each line, from the upper slot to the lower slot.`,
       ],
-      tex: t`\text{Penrose: } T^{a}{}_{b}S^{b}{}_{c}\ \text{(exact)}\qquad \text{Feynman: a term in } \langle f\,|\,S\,|\,i\rangle\ \text{(a series)}`,
+      tex: t`T^{a}{}_{b}\,S^{b}{}_{c} \;=\; (TS)^{a}{}_{c}`,
       show: { view: 'diagram', expr: t`T^{a}{}_{b}\,S^{b}{}_{c}`, style: 'birdtrack' },
     },
     {
       title: 'Shapes at a glance',
       text: [
         t`A last check that ties the notations together. The type $(p,q)$, the number of up and down legs, and the shape of the component array all carry the same information. A type $(1,2)$ tensor in three dimensions is a $3\times3\times3$ array with variance (up, down, down), drawn as a node with one leg up and two down.`,
-        t`Mark the free indices of each expression. The free indices are the legs left loose in the diagram, and they decide the shape of the result.`,
+        t`Mark the free indices of each expression. The free indices are the legs left loose in the Penrose diagram, and they decide the shape of the result.`,
       ],
       tex: t`T^{\mu}{}_{\nu\rho}\ \longleftrightarrow\ (1,2)\ \longleftrightarrow\ n\times n\times n,\ (\uparrow,\downarrow,\downarrow)`,
       show: { view: 'all', expr: t`\Gamma^{\lambda}{}_{\mu\nu}`, scene: 'rank3-cube', params: { tensor: 'christoffel' }, style: 'penrose' },

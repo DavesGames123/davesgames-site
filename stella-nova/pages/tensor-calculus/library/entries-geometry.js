@@ -180,7 +180,7 @@ export const GEOMETRY = [
       r`Take the constant field $\mathbf e_{x}$, an arrow pointing right everywhere. In polar coordinates its components are $V^{r} = \cos\theta$, $V^{\theta} = -\sin\theta/r$: they change from point to point even though the arrow does not. The plain partial derivatives $\partial_{\mu}V^{\nu}$ are not zero. They mix the change of the field with the change of the basis.`,
       r`The covariant derivative removes the basis part: $\nabla_{\mu}V^{\nu} = \partial_{\mu}V^{\nu} + \Gamma^{\nu}_{\mu\lambda}V^{\lambda}$. For $\mathbf e_{x}$ the two terms cancel exactly and $\nabla V = 0$, the right answer for a constant field. For the rotation field $\partial_{\theta}$ the result is not zero, because that field really does turn.`,
       r`The index rule: each upper index of the field gets a $+\Gamma$ term, each lower index a $-\Gamma$ term, and the derivative index $\mu$ always sits in the first lower slot of $\Gamma$. The result has one more lower index than the field, so $\nabla V$ is a $(1,1)$ tensor. That is the point: $\partial_{\mu}V^{\nu}$ is not a tensor, $\nabla_{\mu}V^{\nu}$ is.`,
-      r`Slide the mix between the constant field and the rotation field and watch the partial and Christoffel terms trade places. In the diagram the derivative is a box drawn round the node, with one new leg pointing down.`,
+      r`Slide the mix between the constant field and the rotation field and watch the partial and Christoffel terms trade places. In the Penrose diagram the derivative is a box drawn round the node, with one new leg pointing down.`,
     ],
     vocab: [
       { term: 'covariant derivative', meaning: 'A derivative that gives a tensor: partial derivative plus Christoffel corrections.' },

@@ -35,8 +35,14 @@ the same way, with the prefix `tensor-calculus:`).
 The diagram the user means is **Penrose graphical notation** (tensor
 diagram notation, 1971), with **birdtracks** (Cvitanović) and modern
 **tensor-network diagrams** as relatives. Feynman diagrams are a
-different tool (particle interactions); the page says so in one short
-note and links the difference.
+different tool (particle interactions).
+
+Update 2026-10-17 (user, verbatim): "rename them and call them penrose
+diagrams properly. put feynman diagrams over on the particle physics
+collider page where approrpiate". So the view is "Penrose diagram"
+everywhere a reader sees it, with the styles Penrose, Birdtrack and
+Network. This page has no Feynman note; one credits line links to
+../particle-collider/, where the Feynman diagrams live.
 
 The user has called earlier pages low effort. The bar: a deep,
 correct, beautiful teaching tool. Every operation is animated in all

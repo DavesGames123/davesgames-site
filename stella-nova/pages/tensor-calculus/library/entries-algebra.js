@@ -271,7 +271,7 @@ export const ALGEBRA = [
       r`The tensor product $u\otimes w$ puts every component of $u$ next to every component of $w$: $T^{i}{}_{j} = u^{i}w_{j}$. No index is summed. The ranks add, so a vector (one up) times a covector (one down) gives a $(1,1)$ tensor, an $n\times n$ block of numbers.`,
       r`As a machine, $T$ eats a vector $v$ and returns $u$ scaled by $w(v) = w_{j}v^{j}$. It squashes all of space onto the line of $u$, which is why a pure tensor product has matrix rank 1. Sums of such products give every $(1,1)$ tensor; the fewest products you need is its rank.`,
       r`Contract the product, $T^{i}{}_{i} = w_{i}u^{i}$, and you get the number $w(u)$: how many of $w$'s level planes the arrow $u$ crosses. Outer product then contraction is the pattern behind every tensor operation on this page.`,
-      r`Under a change of basis each factor transforms on its own: $u$ with $J$, $w$ with $J^{-1}$. So $T$ transforms with one $J$ and one $J^{-1}$, as its index positions say, and the trace is invariant. In the 3D view the product is a block of cubes coloured by $u^{i}w_{j}$; in the diagram two separate nodes stand side by side with no line between them.`,
+      r`Under a change of basis each factor transforms on its own: $u$ with $J$, $w$ with $J^{-1}$. So $T$ transforms with one $J$ and one $J^{-1}$, as its index positions say, and the trace is invariant. In the 3D view the product is a block of cubes coloured by $u^{i}w_{j}$; in the Penrose diagram two separate nodes stand side by side with no line between them.`,
     ],
     vocab: [
       { term: 'tensor product', meaning: 'u (x) w: all products of components, ranks add, no sum.' },
@@ -502,7 +502,7 @@ export const ALGEBRA = [
       r`A rank-2 tensor carries one Jacobian per index. Each upper index of $T^{cd}$ is contracted with the lower index of its own copy of $\Lambda$, and the new upper index of that $\Lambda$ becomes the new index of $T'$. Read it left to right and the index positions write the law for you.`,
       r`Picture a symmetric positive $T^{ab}$ as an ellipsoid: the surface $T^{-1}_{ab}x^{a}x^{b} = 1$ with semi-axes $\sqrt{\lambda}$. A rotation turns the ellipsoid and shuffles all nine components, but its shape, the eigenvalues, trace and determinant, is the same. A stretch distorts the ellipsoid itself, and the components follow.`,
       r`In matrix language the law is $T' = \Lambda T\Lambda^{\mathsf T}$, not the similarity $\Lambda T\Lambda^{-1}$ that a $(1,1)$ tensor obeys. The two agree only for rotations, where $\Lambda^{\mathsf T} = \Lambda^{-1}$. That is why careless index placement goes unnoticed in Cartesian coordinates and fails in curved or skewed ones.`,
-      r`Watch the step player: first the left $\Lambda$ acts on the first slot (each row mixes), then the right $\Lambda$ acts on the second slot (each column mixes). Each step is one contraction, one joined line in the diagram.`,
+      r`Watch the step player: first the left $\Lambda$ acts on the first slot (each row mixes), then the right $\Lambda$ acts on the second slot (each column mixes). Each step is one contraction, one joined line in the Penrose diagram.`,
     ],
     vocab: [
       { term: 'transformation law', meaning: 'The rule that gives new components: one Lambda per upper index, one inverse per lower index.' },

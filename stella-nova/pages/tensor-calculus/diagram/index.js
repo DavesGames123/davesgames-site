@@ -1,11 +1,11 @@
 // ============================================================================
 //  DIAGRAM  ·  Penrose, birdtrack and tensor-network views of a TensorExpr
 // ----------------------------------------------------------------------------
-//  The user asked for "Feynman diagrams for the actual tensor calculus". The
-//  diagram that shows tensor operations is Penrose graphical notation (1971).
-//  This package draws it, and two relatives: Cvitanovic birdtracks (arrows
-//  on lines) and tensor-network diagrams (boxes, bonds, einsum). The legend
-//  says in one note that Feynman diagrams are a different tool.
+//  The page calls this view the Penrose diagram: Penrose graphical
+//  notation (1971), the diagram that shows tensor operations. This package
+//  draws it in three styles: Penrose, Cvitanovic birdtracks (arrows on
+//  lines) and tensor-network diagrams (boxes, bonds, einsum). Feynman
+//  diagrams are a different tool; they are on the particle-collider page.
 //
 //  PUBLIC API (CONTRACT.md "DIAGRAM API"):
 //
@@ -42,7 +42,7 @@
 //                       bend, Jacobians wrap, bars and rings grow, sums
 //                       expand, cancelled terms fade
 //      render.js ...... scene -> SVG primitives, SVG string, live DOM diff
-//      legend.js ...... legend panel per style and the Feynman note
+//      legend.js ...... legend panel per style and its note
 //      geom.js ........ curves, resampling, crossing count
 //      text.js ........ TeX names to Unicode, coefficients, einsum strings
 //      colors.js ...... stand-in index colours, theme inks
@@ -56,10 +56,10 @@
 import { layoutExpr, STYLES } from './layout.js';
 import { stepFrame, ease } from './transition.js';
 import { scenePrims, toSvgString, applyPrims } from './render.js';
-import { mountLegend, legendItems, FEYNMAN_NOTE, STYLE_INFO } from './legend.js';
+import { mountLegend, legendItems, LEGEND_NOTE, STYLE_INFO } from './legend.js';
 import { fallbackIndexColor } from './colors.js';
 
-export { layoutExpr, STYLES, stepFrame, toSvgString, scenePrims, legendItems, mountLegend, FEYNMAN_NOTE, STYLE_INFO };
+export { layoutExpr, STYLES, stepFrame, toSvgString, scenePrims, legendItems, mountLegend, LEGEND_NOTE, STYLE_INFO };
 
 let paletteColor = null;
 const paletteReady = import('../palette.js')
@@ -131,7 +131,7 @@ export function createDiagram(svgHost, opts = {}) {
 
   function show(e, o = {}) {
     expr = e; lastPlay = null;
-    if (e && e.tex) svg.setAttribute('aria-label', `Tensor diagram of ${e.tex}`);
+    if (e && e.tex) svg.setAttribute('aria-label', `Penrose diagram of ${e.tex}`);
     const target = layout(e);
     if (o.animate === false) { stop(); draw(target); } else morphTo(target);
   }

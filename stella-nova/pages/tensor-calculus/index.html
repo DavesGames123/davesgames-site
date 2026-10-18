@@ -18,8 +18,8 @@
                    a step it shows the expression before and after, with the
                    touched indices pulsing, and the written-out sum.
      #paneViz      the 3D scene (viz/index.js, three r160) in #vizCanvas
-     #paneDiagram  the diagram (diagram/index.js): Penrose, birdtrack or
-                   tensor network, in #diagHost
+     #paneDiagram  the Penrose diagram (diagram/index.js), in the Penrose,
+                   birdtrack or tensor-network style, in #diagHost
    The step player (#player) drives play(step, t) of all three views with
    one clock. Each index letter has one colour everywhere (palette.js).
 
@@ -87,7 +87,7 @@
     <button data-layout="all" class="on" title="All three views (1)">All</button>
     <button data-layout="tex" title="Equation only (2)">Equation</button>
     <button data-layout="viz" title="3D only (3)">3D</button>
-    <button data-layout="diagram" title="Diagram only (4)">Diagram</button>
+    <button data-layout="diagram" title="Penrose diagram only (4)">Penrose</button>
   </div>
   <button id="creditsBtn" class="ghost" aria-controls="credits">Credits</button>
 </header>
@@ -176,29 +176,23 @@
     </div>
   </section>
 
-  <section class="pane" id="paneDiagram" data-view="diagram" aria-label="Diagram view">
+  <section class="pane" id="paneDiagram" data-view="diagram" aria-label="Penrose diagram view">
     <header class="pane-head">
-      <span class="pane-title">Diagram</span>
-      <div id="diagStyle" class="seg small" role="group" aria-label="Diagram style">
+      <span class="pane-title">Penrose diagram</span>
+      <div id="diagStyle" class="seg small" role="group" aria-label="Penrose diagram style">
         <button data-style="penrose" class="on">Penrose</button>
         <button data-style="birdtrack">Birdtrack</button>
         <button data-style="network">Network</button>
       </div>
       <span class="spacer"></span>
       <button id="legendBtn" class="mini" aria-controls="diagLegend" aria-expanded="false" title="What each mark means">Legend</button>
-      <button id="feynBtn" class="mini" aria-controls="feynNote" title="Why this is not a Feynman diagram">Not Feynman?</button>
-      <button class="mini pane-focus" data-focus="diagram" title="Focus this view" aria-label="Focus the diagram view">⤢</button>
-      <button class="mini pane-close" data-close="diagram" title="Hide this view" aria-label="Hide the diagram view">✕</button>
+      <button class="mini pane-focus" data-focus="diagram" title="Focus this view" aria-label="Focus the Penrose diagram view">⤢</button>
+      <button class="mini pane-close" data-close="diagram" title="Hide this view" aria-label="Hide the Penrose diagram view">✕</button>
     </header>
     <div class="pane-body diag-body">
       <div id="diagHost" class="diag-host"></div>
       <div id="diagFallback" class="fallback" hidden></div>
       <div id="diagLegend" class="note-pop legend-pop" hidden></div>
-      <div id="feynNote" class="note-pop" hidden>
-        <p>These are <b>Penrose diagrams</b> (Roger Penrose, 1971): each tensor is a node, each upper index a leg up, each lower index a leg down, and a joined leg is a summed index. Birdtracks (Predrag Cvitanović) and tensor-network diagrams use the same idea.</p>
-        <p><b>Feynman diagrams</b> are a different tool. They draw particle interactions in quantum field theory, and each picture stands for a term of a scattering amplitude. They look alike because both join lines at nodes, but a Feynman line is a particle and a Penrose leg is an index.</p>
-        <p><a href="https://en.wikipedia.org/wiki/Penrose_graphical_notation" target="_blank" rel="noopener">Penrose graphical notation</a> · <a href="https://en.wikipedia.org/wiki/Feynman_diagram" target="_blank" rel="noopener">Feynman diagram</a></p>
-      </div>
     </div>
   </section>
   <div id="swipeDots" class="swipe-dots" aria-hidden="true"></div>
@@ -242,7 +236,7 @@
   <div id="dockViews" class="seg" role="group" aria-label="Views">
     <button data-layout="tex">Eq</button>
     <button data-layout="viz">3D</button>
-    <button data-layout="diagram">Diagram</button>
+    <button data-layout="diagram">Penrose</button>
     <button data-layout="all" class="on">All</button>
   </div>
   <button id="dockLens" aria-label="Indices lens" aria-expanded="false">μ</button>

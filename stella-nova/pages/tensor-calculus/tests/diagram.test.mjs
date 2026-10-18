@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { layoutExpr, unitBoxes, STYLES } from '../diagram/layout.js';
 import { stepFrame, matchTerms, rekey } from '../diagram/transition.js';
 import { toSvgString } from '../diagram/render.js';
-import { legendItems, FEYNMAN_NOTE } from '../diagram/legend.js';
+import { legendItems, LEGEND_NOTE, STYLE_INFO } from '../diagram/legend.js';
 import { boxesOverlap } from '../diagram/geom.js';
 import { parseStub, FIXTURES, fixtureSteps } from '../diagram/fixtures.js';
 import { createDiagram } from '../diagram/index.js';
@@ -207,7 +207,7 @@ const all = el => [el, ...el.children.flatMap(all)];
   check('svgString gives a document', d.svgString().startsWith('<svg'));
   const leg = new El('div', doc);
   d.legend(leg);
-  check('legend mounts with the Feynman note', /Feynman/.test(leg.innerHTML) && /<svg/.test(leg.innerHTML));
+  check('legend mounts as a Penrose diagram legend with no Feynman note', /Penrose diagram/.test(leg.innerHTML) && !/Feynman/.test(leg.innerHTML) && /<svg/.test(leg.innerHTML));
   d.dispose();
   check('dispose removes the svg', host.children.length === 0);
 }
@@ -217,7 +217,7 @@ for (const style of STYLES) {
   const items = legendItems(style);
   check(`legend ${style} has glyphs`, items.length >= 5 && items.every(i => i.svg.startsWith('<svg') && i.text.length > 10));
 }
-check('Feynman note says it is a different tool', /different tool/.test(FEYNMAN_NOTE));
+check('legend note and style names say Penrose diagram, not Feynman', /Penrose diagram/.test(LEGEND_NOTE) && !/Feynman/.test(LEGEND_NOTE) && Object.values(STYLE_INFO).every(i => /^Penrose diagram/.test(i.name)));
 
 // ---------------------------------------------------------------- MATH parser (when it has landed)
 const mathIndex = fileURLToPath(new URL('../tensor/index.js', import.meta.url));

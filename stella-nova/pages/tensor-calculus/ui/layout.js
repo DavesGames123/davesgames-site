@@ -30,7 +30,7 @@
 
 export const VIEWS = Object.freeze(['tex', 'viz', 'diagram']);
 export const STYLES = Object.freeze(['penrose', 'birdtrack', 'network']);
-export const LABELS = Object.freeze({ tex: 'Equation', viz: '3D', diagram: 'Diagram', penrose: 'Penrose', birdtrack: 'Birdtrack', network: 'Network' });
+export const LABELS = Object.freeze({ tex: 'Equation', viz: '3D', diagram: 'Penrose diagram', penrose: 'Penrose', birdtrack: 'Birdtrack', network: 'Network' });
 
 export function modeOf(views) { return views.length >= 3 ? 'all' : views.length === 2 ? 'pair' : 'focus'; }
 

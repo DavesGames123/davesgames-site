@@ -57,7 +57,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const CHANNELS = Object.freeze(['all', 'geometry', 'relativity', 'notation', 'derivations']);
 export const CHANNEL_LABELS = Object.freeze({
   all: 'All channels', geometry: 'Geometry', relativity: 'Relativity',
-  notation: 'Notation and diagrams', derivations: 'Derivations',
+  notation: 'Notation and Penrose diagrams', derivations: 'Derivations',
 });
 export const KINDS = Object.freeze(['orbit', 'push', 'stretch', 'derive', 'diagram', 'equation']);
 export const HOLD_S = Object.freeze([5, 12]);
@@ -482,13 +482,13 @@ export function labelFor(shot, live = {}) {
     if (live.count) params.push({ sym: 'k', name: 'step', value: `${(live.index | 0) + 1} / ${live.count}`, cls: 'm1' });
     if (live.trace && live.trace.dim) params.push({ sym: 'n', name: 'dimension', value: String(live.trace.dim), cls: 'm3' });
     if (live.trace && live.trace.metric) params.push({ sym: 'g', name: 'metric', value: String(live.trace.metric), cls: 'm5' });
-    if (shot.kind === 'diagram' && live.style) params.push({ sym: '\\mathcal{D}', name: 'diagram', value: live.style, cls: 'm6' });
+    if (shot.kind === 'diagram' && live.style) params.push({ sym: '\\mathcal{D}', name: 'Penrose diagram', value: live.style, cls: 'm6' });
   } else params.push(...readParams(live.reads));
   const sub = shot.entry
     ? (step ? plainLabel(step.label) : (shot.sub || ''))
     : shot.sub || '';
   const lines = [CHANNEL_LABELS[live.channel || shot.planChannel || shot.channel] || ''];
-  if (shot.kind === 'diagram' || shot.layout === 'pair' || shot.layout === 'texdiagram') lines.push('Penrose notation: a leg up is an upper index, a leg down a lower one; a joined leg is a sum.');
+  if (shot.kind === 'diagram' || shot.layout === 'pair' || shot.layout === 'texdiagram') lines.push('Penrose diagram: a leg up is an upper index, a leg down a lower one; a joined leg is a sum.');
   if (shot.kind === 'stretch') lines.push('Upper index: an arrow. Lower index: a stack of planes.');
   const info = {
     title: shot.title, sub, tex, rules, params, lines: lines.filter(Boolean),

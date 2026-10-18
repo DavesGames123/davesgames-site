@@ -80,7 +80,7 @@ export default {
       title: 'Arrows and stacks in three dimensions',
       text: [
         t`The 3D view keeps one rule everywhere. Each upper index is drawn as an arrow. Each lower index is drawn as a stack of planes. A type $(1,1)$ tensor such as a linear map takes an arrow to an arrow; a type $(0,2)$ tensor takes two arrows to a number.`,
-        t`The same colours run through the TeX, the diagram legs and the 3D glyphs. Pick an index with the Indices lens and it lights up in all three views.`,
+        t`The same colours run through the TeX, the Penrose diagram legs and the 3D glyphs. Pick an index with the Indices lens and it lights up in all three views.`,
       ],
       tex: t`A^{i}{}_{j}:\ \text{arrow}\mapsto\text{arrow},\qquad g_{ij}:\ (\text{arrow},\text{arrow})\mapsto\text{number}`,
       show: { view: 'all', scene: 'upper-lower', params: { s: 1, covector: true }, expr: t`A^{i}{}_{j}\,v^{j}`, pick: 'j', style: 'penrose' },

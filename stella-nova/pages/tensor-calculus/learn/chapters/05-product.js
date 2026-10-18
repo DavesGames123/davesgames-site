@@ -29,7 +29,7 @@ export default {
       title: 'Contraction',
       text: [
         t`Contraction is the opposite move. Choose one upper slot and one lower slot, give them the same name, and sum. Each contraction removes one upper and one lower index, so the type drops from $(p,q)$ to $(p-1,q-1)$.`,
-        t`In the 3D view the component block folds along the two matched axes and only the diagonal survives, summed. In the diagram the two legs join into one line.`,
+        t`In the 3D view the component block folds along the two matched axes and only the diagonal survives, summed. In the Penrose diagram the two legs join into one line.`,
       ],
       tex: t`T^{i}{}_{j}\ \longmapsto\ T^{i}{}_{i} = T^{1}{}_{1} + T^{2}{}_{2} + \cdots + T^{n}{}_{n}`,
       show: { view: 'all', scene: 'contraction', params: { mode: 'trace' }, entry: 'matrix-trace', step: 'trace', style: 'penrose' },

@@ -4,11 +4,12 @@
 //  Each glyph is a real layout of a tiny expression, drawn with the same
 //  renderer as the main diagram, so the legend can never disagree with it.
 //  legendItems() is DOM-free (tests read it). mountLegend() writes the panel
-//  into an element. FEYNMAN_NOTE is the short note that Feynman diagrams
-//  are a different tool.
+//  into an element. The page calls this view the Penrose diagram, in
+//  three styles. Feynman diagrams are on the particle-collider page, and
+//  the CORE credits link there; the legend does not name them.
 //
 //  EXPORTS   (jump with grep -n "<anchor>" legend.js)
-//      FEYNMAN_NOTE ... "export const FEYNMAN_NOTE"
+//      LEGEND_NOTE .... "export const LEGEND_NOTE"
 //      STYLE_INFO ..... "export const STYLE_INFO"   name, origin, one line
 //      legendItems .... "export function legendItems"
 //      mountLegend .... "export function mountLegend"
@@ -18,17 +19,16 @@ import { layoutExpr } from './layout.js';
 import { toSvgString } from './render.js';
 import { parseStub } from './fixtures.js';
 
-export const FEYNMAN_NOTE =
-  'Feynman diagrams are a different tool: they draw particle interactions in quantum field theory. ' +
-  'They share one idea with these diagrams. A line that joins two vertices is a summed (contracted) index, ' +
-  'so a closed diagram is a number. The notation here is Penrose graphical notation (1971) and its relatives.';
+export const LEGEND_NOTE =
+  'Penrose diagram (Roger Penrose, 1971). A line that joins two legs is a summed (contracted) index, ' +
+  'so a Penrose diagram with no loose legs is a number.';
 
 export const STYLE_INFO = {
-  penrose: { name: 'Penrose', origin: 'Roger Penrose, 1971',
+  penrose: { name: 'Penrose diagram', origin: 'Roger Penrose, 1971',
     line: 'A tensor is a shape. Upper indices are legs up, lower indices are legs down. Joined legs are summed.' },
-  birdtrack: { name: 'Birdtracks', origin: 'Predrag Cvitanović, Group Theory: Birdtracks, 2008',
+  birdtrack: { name: 'Penrose diagram, birdtrack style', origin: 'Predrag Cvitanović, Group Theory: Birdtracks, 2008',
     line: 'Each line has an arrow: it leaves an upper slot and enters a lower slot. Boxes symmetrise.' },
-  network: { name: 'Tensor network', origin: 'Physics and machine learning (einsum)',
+  network: { name: 'Penrose diagram, tensor-network style', origin: 'Physics and machine learning (einsum)',
     line: 'Boxes with legs. A bond is a summed index of size d. The einsum string under it does the same sum.' },
 };
 
@@ -103,6 +103,6 @@ export function mountLegend(el, style = 'penrose', opts = {}) {
     `<p class="dg-legend-line">${esc(info.line)}</p>` +
     `<ul class="dg-legend-list">` +
     items.map(it => `<li><span class="dg-glyph">${it.svg}</span><span class="dg-text"><b>${esc(it.title)}</b> ${esc(it.text)}</span></li>`).join('') +
-    `</ul><p class="dg-legend-note">${esc(FEYNMAN_NOTE)}</p>`;
+    `</ul><p class="dg-legend-note">${esc(LEGEND_NOTE)}</p>`;
   return items;
 }

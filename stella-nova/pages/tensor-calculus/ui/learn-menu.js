@@ -46,7 +46,7 @@ export function createLearnMenu(els, deps) {
       els.menu.appendChild(b);
       return;
     }
-    if (!cur) els.menu.appendChild(h('p', 'hint', 'Ten short chapters. Each one drives the equation, the 3D view and the diagram as you read.'));
+    if (!cur) els.menu.appendChild(h('p', 'hint', 'Ten short chapters. Each one drives the equation, the 3D view and the Penrose diagram as you read.'));
     list.forEach((c, k) => {
       const b = h('button', 'chapter-row' + (c.id === cur ? ' on' : ''));
       b.setAttribute('role', 'listitem');

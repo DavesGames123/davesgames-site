@@ -180,6 +180,61 @@ check('module script main.js at the end of body', () => {
   assert.match(HTML, /<script type="module" src="main.js"><\/script>\s*<\/body>/);
 });
 
+section('rename: Penrose diagram');
+// The user asked (2026-10-17) to call the diagram view "Penrose diagram"
+// and to keep Feynman diagrams on the particle-collider page. These checks
+// read the user-facing text of every source file: the HTML text and
+// attributes, and the JS strings (comments stripped).
+import { readdirSync, statSync } from 'node:fs';
+function srcFiles(dir) {
+  const out = [];
+  for (const f of readdirSync(join(ROOT, dir))) {
+    const rel = dir ? dir + '/' + f : f;
+    if (statSync(join(ROOT, rel)).isDirectory()) { if (!/^(tests|node_modules)$/.test(f)) out.push(...srcFiles(rel)); }
+    else if (/\.(js|html)$/.test(f)) out.push(rel);
+  }
+  return out;
+}
+const stripComments = src => src.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const SOURCES = srcFiles('').map(f => [f, stripComments(read(f))]);
+check('no user-facing Feynman text except one credits line and the Feynman slash', () => {
+  const hits = [];
+  for (const [f, src] of SOURCES) for (const m of src.matchAll(/[^\n]*Feynman[^\n]*/g)) {
+    if (/Feynman slash/.test(m[0])) continue;
+    if (f === 'ui/credits.js' && /particle-collider/.test(m[0])) continue;
+    hits.push(f + ': ' + m[0].trim());
+  }
+  assert.deepEqual(hits, []);
+  const cred = SOURCES.find(([f]) => f === 'ui/credits.js')[1];
+  assert.equal((cred.match(/Feynman/g) || []).length, 1, 'one credits sentence');
+  assert.match(cred, /url: '\.\.\/particle-collider\/'/);
+});
+check('no Not Feynman button or note in index.html', () => {
+  assert.ok(!/feynBtn|feynNote/.test(HTML));
+});
+check('no bare "Diagram" label and no "the diagram" prose', () => {
+  const hits = [];
+  for (const [f, src] of SOURCES) {
+    // a label: Diagram with no Penrose before it, as an HTML text node, an
+    // attribute value or a whole JS string
+    for (const m of src.matchAll(/(>\s*Diagram\b|"Diagram\b|'Diagram\b|`Diagram\b|\bDiagram (only|view|style)\b)/g)) hits.push(f + ': ' + m[0]);
+    for (const m of src.matchAll(/[^\n]{0,30}\b[Tt]he diagram\b[^\n]{0,30}/g)) {
+      // code names such as "the diagram" in a log key are not prose
+      if (/['"`]diagram\./.test(m[0])) continue;
+      hits.push(f + ': ' + m[0].trim());
+    }
+  }
+  assert.deepEqual(hits, []);
+});
+check('the diagram view is called Penrose diagram in the pane, switch and labels', async () => {
+  assert.match(HTML, /<span class="pane-title">Penrose diagram<\/span>/);
+  assert.match(HTML, /aria-label="Penrose diagram view"/);
+  assert.match(HTML, /data-layout="diagram"[^>]*>Penrose</);
+  const { LABELS } = await import(join(ROOT, 'ui/layout.js'));
+  assert.equal(LABELS.diagram, 'Penrose diagram');
+  assert.deepEqual([LABELS.penrose, LABELS.birdtrack, LABELS.network], ['Penrose', 'Birdtrack', 'Network']);
+});
+
 section('style.css');
 const CSS = read('style.css');
 check('[hidden]{display:none!important} rule', () => assert.match(CSS, /\[hidden\]\{display:none!important\}/));

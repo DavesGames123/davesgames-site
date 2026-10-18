@@ -145,10 +145,10 @@ export async function boot(opts = {}) {
   }
   if (viz.note) { const fb = $('vizFallback'); fb.hidden = false; fb.textContent = viz.note; }
 
-  let diagram = nullView('The diagram package has not loaded.');
+  let diagram = nullView('The Penrose diagram package has not loaded.');
   if (pk.diagram && pk.diagram.createDiagram) {
     try { diagram = pk.diagram.createDiagram($('diagHost'), { ...viewOpts, style: S.layout.style }) || diagram; }
-    catch (e) { diagram = nullView('The diagram did not start: ' + e.message); }
+    catch (e) { diagram = nullView('The Penrose diagram did not start: ' + e.message); }
   }
   if (diagram.note) { const fb = $('diagFallback'); fb.hidden = false; fb.textContent = diagram.note; }
 
@@ -498,12 +498,10 @@ export async function boot(opts = {}) {
   const legendBox = $('diagLegend');
   $('legendBtn').addEventListener('click', () => {
     const open = legendBox.hidden;
-    if (open) { legendBox.replaceChildren(); if (diagram.legend) safe('diagram.legend', () => diagram.legend(legendBox)); else legendBox.textContent = 'The diagram legend is not available.'; }
+    if (open) { legendBox.replaceChildren(); if (diagram.legend) safe('diagram.legend', () => diagram.legend(legendBox)); else legendBox.textContent = 'The Penrose diagram legend is not available.'; }
     legendBox.hidden = !open; $('legendBtn').setAttribute('aria-expanded', String(open));
   });
   on('view', () => { if (!legendBox.hidden && diagram.legend) { legendBox.replaceChildren(); safe('diagram.legend', () => diagram.legend(legendBox)); } });
-  const feyn = $('feynNote');
-  $('feynBtn').addEventListener('click', () => { feyn.hidden = !feyn.hidden; $('feynBtn').setAttribute('aria-expanded', String(!feyn.hidden)); });
   $('texSumsBtn').addEventListener('click', () => { const on = tex.setSums(!tex.sums()); $('texSumsBtn').setAttribute('aria-pressed', String(on)); $('texSumsBtn').classList.toggle('on', on); });
   const dockLens = $('dockLens');
   if (dockLens) dockLens.addEventListener('click', () => {
@@ -530,7 +528,7 @@ export async function boot(opts = {}) {
       else if (e.key === 'ArrowRight') { player.pause(); player.next(); syncPlay(); }
       else if (e.key === 'ArrowLeft') { player.pause(); player.prev(); syncPlay(); }
       else if (e.key >= '1' && e.key <= '4') setView(['all', 'tex', 'viz', 'diagram'][+e.key - 1]);
-      else if (e.key === 'Escape') { setCredits(false); feyn.hidden = true; legendBox.hidden = true; sceneCtl.close(); el.stepList.hidden = true; if (S.pickedIndex) pickIndex(null); }
+      else if (e.key === 'Escape') { setCredits(false); legendBox.hidden = true; sceneCtl.close(); el.stepList.hidden = true; if (S.pickedIndex) pickIndex(null); }
     });
   }
   bindKeys();
