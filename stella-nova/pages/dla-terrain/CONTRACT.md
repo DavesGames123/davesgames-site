@@ -44,7 +44,7 @@ Survey before you write. Take WGSL, maths and ideas from our own pages
   unclear); `pages/storm-globe`.
 - Noise, lighting, post: the shader tables `pages/noise-table`,
   `lighting-table`, `postfx-table`, `color-table`, `sampling-table`,
-  `frost-table`, `smoke-table`, `fire-table` (cells and pack.wgsl), and
+  `frost-table`, `fire-table` (cells and pack.wgsl), and
   `pages/sdf-solids-table/shaders/pack.wgsl`.
 - Water and flow: `pages/height-field-water`, `pages/tidal-currents`,
   `pages/fluidlab`, `pages/cube_branched_flow/flow.js` (branched flow).

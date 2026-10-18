@@ -1863,31 +1863,6 @@
    "confidence": "skimmed"
   },
   {
-   "key": "smoke",
-   "label": "Smoke Table",
-   "tier": 3,
-   "render": "webgpu (60 tile canvases + #m-orb, shared table-engine)",
-   "mainCanvas": "#m-orb",
-   "animatesIdle": false,
-   "guiSelectors": [
-    ".topbar",
-    "#side",
-    "#stage",
-    ".grid-bg",
-    ".sheet-main",
-    "#m-name",
-    "#m-fn",
-    "#m-species",
-    "#m-knobs",
-    "#nogpu"
-   ],
-   "plan": "Uses the SHARED TABLE HOOK (see beam page plan). Stateless fragment-per-cell PAGE (same shape as fire-table/page.js). Smoke is the calmest table: nearly every cell suits a screensaver. Calm: tempo map y=>0.1+2.9y, bias 0.05-0.31 by calm; exposure 0.5. Curated list: wispy_plume, lazy, curl_wisp, tendrils, incense, ribbon, lace, serpentine, slow_haze, layered_drift, ground_fog, mist, valley_fog, rolling_fog, dawn_mist, smoke_ring, ring_train, vortex, ink_water, dye_swirl, bloom, marble, tendril_ink, cloud_deck, thunderhead. Optional exclusions: gust, turbulent, boil, pixel_smoke, threshold_puff (abrupt/stylised). Dwell can be longer here: max(12, seconds/4).",
-   "calmRisks": "none significant; gust/turbulent cells are faster; hard cut between cells",
-   "recordNotes": "Record #m-orb only; labels are DOM.",
-   "hookLoc": 4,
-   "confidence": "read-code"
-  },
-  {
    "key": "heat-diffraction",
    "label": "Heat Diffraction",
    "tier": 3,

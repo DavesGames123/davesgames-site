@@ -191,7 +191,6 @@ window.SN_SAVER_CATALOG = {
     'beam': { tier: 3, default: true, hook: true, note: 'SHARED TABLE HOOK (write once in stella-nova/lib/table-engine.js inside bootTable, ~60 LOC, used by all 7 effects tables and other tables): the engine exposes no globals;' },
     'fire': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK described for the beam page (window.snSaver in stella-nova/lib/table-engine.js: hide stage/side, set inspected=t directly, pin #m-orb' },
     'fire-ev1': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK (see beam page plan;' },
-    'smoke': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK (see beam page plan).' },
     'heat-diffraction': { tier: 3, hook: true, note: 'Not a default (user, 2026-10-02). Uses the SHARED TABLE HOOK (see beam page plan).' },
     'heat-metal': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK (see beam page plan).' },
     'frost': { tier: 3, default: true, hook: true, note: 'Uses the SHARED TABLE HOOK (see beam page plan).' },

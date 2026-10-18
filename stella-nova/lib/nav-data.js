@@ -391,8 +391,7 @@ w.SN_NAV = [
     ] },
     { h: "Fire & Smoke", p: [
       ["fire", "Fire Table", "WGSL", "fire-table"],
-      ["fire-ev1", "Fire Table (Evolved 1)", "WGSL", "fire-table-evolved-1"],
-      ["smoke", "Smoke Table", "WGSL", "smoke-table"]
+      ["fire-ev1", "Fire Table (Evolved 1)", "WGSL", "fire-table-evolved-1"]
     ] },
     { h: "Heat & Frost", p: [
       ["heat-diffraction", "Heat Diffraction", "IMG"],

@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-232 registered pages in 6 regions and 26 constellations.
+231 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -338,7 +338,6 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `beam` (pages/beam-table) | Beam & Decal Table | Game Effects > Weapons & Engines | WGSL | Lasers, beams and decals. |  | shown | hook, tier 3, default | yes |
 | `fire` (pages/fire-table) | Fire Table | Game Effects > Fire & Smoke | WGSL | Procedural fire, many variants. |  | shown | hook, tier 3, default | yes |
 | `fire-ev1` (pages/fire-table-evolved-1) | Fire Table (Evolved 1) | Game Effects > Fire & Smoke | WGSL | An evolved set of fire shaders. |  | shown | hook, tier 3, default | yes |
-| `smoke` (pages/smoke-table) | Smoke Table | Game Effects > Fire & Smoke | WGSL | Plumes, puffs and drifting smoke. |  | shown | hook, tier 3, default | yes |
 | `heat-diffraction` | Heat Diffraction | Game Effects > Heat & Frost | IMG | Heat haze that bends the image. |  | shown | hook, tier 3 | yes |
 | `heat-metal` | Heat Metal | Game Effects > Heat & Frost | WGSL | Metal that glows from a hot spot. |  | shown | hook, tier 3, default | yes |
 | `frost` (pages/frost-table) | Frost Table | Game Effects > Heat & Frost | WGSL | Frost that creeps across glass. |  | shown | hook, tier 3, default | yes |
