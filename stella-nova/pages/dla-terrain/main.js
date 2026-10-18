@@ -119,6 +119,7 @@ import { createReveal } from './reveal.js';
 import { createBuildOverlay } from './render/build.js';
 import { plateBand } from '../../lib/saver-clear.js';
 import { rollGroup, rollWorld, encodeHash, decodeHash, createHistory, newSeed, VEG0, WATER0, todForElevation } from './world-state.js';
+import { createCelestial, SKY_MODES } from './world/celestial-gen.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('view');
@@ -144,7 +145,9 @@ const app = {
   season: 0.35, latitude: 46, weatherId: Q.get('wx') || 'fair', wxOver: {},
   qualityIndex: clamp(Math.round(+(Q.get('q') ?? (coarse ? 0 : 2))) || 0, 0, 3),   // phones start on Low; a bad ?q= is Low
   layers: { grass: true, trees: true, props: true, water: true, clouds: true, rain: true },
-  camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50, shafts: 'auto', shaftK: 1 },
+  camMode: 'orbit', look: { ev: 0, bloom: 0.045, fov: 50, shafts: 'auto', shaftK: 1, nightSky: 1 },
+  // CELESTIAL: Random (weighted per seed) / one / several / giant (?bodies=)
+  skyBodies: SKY_MODES.includes(Q.get('bodies')) ? Q.get('bodies') : 'random',
   terrain: null, gen: null, skyT: 0, skySpeed: 1, lastInput: -1e9,
   saverRun: null, drones: { ridge: 0, river: 0 },
   veg: { ...VEG0 }, water: { ...WATER0 }, locks: loadLocks(), hist: createHistory(30),
@@ -730,6 +733,15 @@ function skyNow(dt) {
   if (app.skyLib && app.skyLib.nightLights && app.celNow) skyState = app.skyLib.nightLights(skyState, app.celNow);
   return skyState;
 }
+
+// CELESTIAL: the moons and planets of this world (world/celestial-gen.js),
+// one system per seed and mode; at() counts the day wraps of tod. ATMO
+// reads app.celNow.lights (NOTES.md CELESTIAL -> ATMO).
+function celestialNow() {
+  const seed = ((app.opts && app.opts.seed) >>> 0) || 1;
+  if (!app.celestial || app.celestial.seed !== seed || app.celestial.mode !== app.skyBodies) app.celestial = createCelestial(seed, app.skyBodies);
+  return (app.celNow = app.celestial.at(app.tod, app.season, app.latitude, skyState && skyState.sunDir ? skyState.sunDir : null));
+}
 function frameGlobals(m, st, dt) {
   const t = tg;
   packGlobals(G, {
@@ -836,6 +848,7 @@ function loop(now) {
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
+    celestial: celestialNow(), nightSky: app.look.nightSky ?? 1,
     // SKY's light shafts (render/weather.js shaftPlan); fg.prepare below
     // puts the governor plan on top (govLevel, ao, shafts, layers, taa, gov)
     shafts: { mode: app.look.shafts, k: app.look.shaftK },

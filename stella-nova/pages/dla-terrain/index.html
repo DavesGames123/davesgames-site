@@ -147,6 +147,9 @@
     <div class="sec-label" data-group="Season">Season</div>
     <div class="row"><label for="season">Season</label><input type="range" id="season" min="0" max="1" step="0.01" value="0.35"><span class="val" id="seasonV"></span></div>
     <div class="row"><label for="latitude">Latitude</label><input type="range" id="latitude" min="-70" max="70" step="1" value="46"><span class="val" id="latitudeV"></span></div>
+    <div class="sec-label">Night sky</div>
+    <div class="row"><label for="skyBodies">Sky bodies</label><select id="skyBodies" title="The moons and planets in the sky of this world (random per seed: mostly one Moon, some two or three moons, a few worlds under a gas giant)"><option value="random">Random</option><option value="one">One moon</option><option value="several">Several moons</option><option value="giant">Gas giant</option></select><span class="val" id="skyBodiesV"></span></div>
+    <div class="row"><label for="nightSky">Night sky</label><input type="range" id="nightSky" min="0" max="3" step="0.05" value="1" title="Brightness of the stars and the Milky Way"><span class="val" id="nightSkyV"></span></div>
     <div class="sec-label" data-group="Sky">Weather</div>
     <div class="chips" id="wxChips"></div>
     <div id="wxSliders"></div>

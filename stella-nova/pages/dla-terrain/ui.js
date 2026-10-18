@@ -398,6 +398,10 @@ export function createUI(app, doc = globalThis.document) {
   const seasonNames = ['spring', 'summer', 'autumn', 'winter'];
   $('season').addEventListener('input', e => { app.setSeason ? app.setSeason(+e.target.value) : (app.season = +e.target.value); $('seasonV').textContent = seasonNames[Math.floor(((+e.target.value + 0.125) % 1) * 4)]; });
   $('latitude').addEventListener('input', e => { app.latitude = +e.target.value; $('latitudeV').textContent = (+e.target.value).toFixed(0) + '°'; });
+  // CELESTIAL: the sky bodies (world/celestial-gen.js) and the star brightness
+  const bodiesText = () => { const c = app.celNow; const k = c && c.system ? c.system.kind : ''; return k === 'giant' ? 'giant' : k === 'several' ? (c.system.bodies.length + ' moons') : k === 'one' ? '1 moon' : ''; };
+  $('skyBodies').addEventListener('change', e => { app.skyBodies = e.target.value; setTimeout(() => { $('skyBodiesV').textContent = bodiesText(); }, 100); });
+  $('nightSky').addEventListener('input', e => { app.look = app.look || {}; app.look.nightSky = +e.target.value; $('nightSkyV').textContent = (+e.target.value).toFixed(2); });
   ui.wxRows = new Map();
   function buildWeather(WEATHER) {
     ui.wxList = WEATHER.slice();
@@ -422,6 +426,8 @@ export function createUI(app, doc = globalThis.document) {
     $('todPlay').textContent = app.playing ? 'Pause' : 'Play';
     $('season').value = app.season; $('seasonV').textContent = seasonNames[Math.floor(((app.season + 0.125) % 1) * 4)];
     $('latitude').value = app.latitude; $('latitudeV').textContent = app.latitude.toFixed(0) + '°';
+    $('skyBodies').value = app.skyBodies || 'random'; $('skyBodiesV').textContent = bodiesText();
+    const nk = (app.look && app.look.nightSky) ?? 1; $('nightSky').value = nk; $('nightSkyV').textContent = (+nk).toFixed(2);
     for (const b of doc.querySelectorAll('#wxChips button')) b.classList.toggle('on', b.dataset.id === app.weatherId);
     $('dockTimeV').textContent = todText(app.tod);
     $('dockWxV').textContent = wxShort((ui.wxList || []).find(w => w.id === app.weatherId) || { id: app.weatherId });
