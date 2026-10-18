@@ -20,7 +20,8 @@
 
    The upstream demo is split into the page with no change to its code:
    style.css holds its <style> block, main.js its inline script, one
-   shared global scope. CDN libraries load from vendor/. Its buttons and
+   shared global scope. cloth-mesh.js holds the mesh data block of that
+   script (meshes) and loads just before main.js. CDN libraries load from vendor/. Its buttons and
    inputs stay in the hidden block #tmp-ui, so the upstream script still
    finds them; the sim kit GUI replaces them on screen.
 
@@ -67,6 +68,7 @@
 	
 <script src="../../vendor/three@0.139.2/build/three.min.js"></script>
 <script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script src="cloth-mesh.js"></script>
 <script src="main.js"></script>
 <script type="module" src="../../lib/tilt.js"></script>
 <script type="module" src="sim.js"></script>
