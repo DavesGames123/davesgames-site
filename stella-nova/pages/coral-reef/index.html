@@ -7,21 +7,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Coral colonies grow live on a real reef floor (NOAA lidar of Buck Island, St. Croix): staghorn, sea fans, table, brain and finger corals catch falling marine snow by 3D diffusion-limited aggregation (a port of fogleman/dlaf), drawn as smooth signed-distance-field surfaces with living polyps, with heatmap gradients for age, flow, height and light.">
+<meta name="description" content="An ROV dive on a growing coral reef: in dark deep water, work-class ROVs light craggy rock arches and canyons while dozens of coral colonies grow by 3D diffusion-limited aggregation (a port of fogleman/dlaf), compete and fuse, with fine SDF branches, dense polyps, broken caustics and a live SSTV camera feed.">
 <title>Coral Reef Growth — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   CORAL REEF GROWTH  ·  page shell
+   CORAL REEF GROWTH  ·  page shell (v3: the ROV dive)
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. reef.js grows the colonies (3D DLA, lib/dla-engine.js,
-   no DOM) on terrain.js (the real seabed: seabed-data.js, NOAA lidar, and
-   rock SDFs). coral-sdf.js turns each colony into a smooth SDF surface
-   (lib/dla-sdf.js) in mesh-worker.js. colour.js maps each particle to a
-   colour t (no DOM). saver.js has the screensaver shots and the camera fit
-   (no DOM). scene.js and shaders.js draw the water, the seabed, the rocks,
-   the scanned models (assets.js), the corals and the polyps with three
-   r160. diagram.js draws the explainer diagram. main.js binds the controls
-   and runs the loop.
+   Static markup only. rock/ (ROCK) makes the craggy reef rock of one
+   circular plot. reef.js and coral-sdf.js (CORAL) grow the colonies on it
+   by 3D DLA and mesh them as SDF surfaces with polyps. rov/ (ROV) flies
+   the vehicles and sends the lead camera over a simulated SSTV link.
+   water.js, scene.js and shaders.js (SCENE) draw the dark water, the lamp
+   beams, the marine snow and the broken caustics. saver.js plans the
+   screensaver dives. main.js binds it all and runs the loop.
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js, lib/wishlist.js, lib/stats-beacon.js
@@ -30,19 +28,18 @@
 
    LAYOUT  (# marks an element id that main.js binds)
      desktop ... #panel at the left, #view fills the frame, #read at the
-                 upper right, #about a drawer at the right
+                 upper right, #legend under it, #feed (the SSTV card) at
+                 the lower right, #about a drawer at the right
      phone ..... #dock at the base: preset, grow or pause, regrow, plant
-                 mode and menu. Menu opens #panel with all the groups as a
-                 bottom sheet (portrait, half or full height) or a drawer
-                 (landscape). The dlaf parameters are in #adv. #plantBar
-                 shows in plant mode. #about is a full-height sheet.
-                 shell.js binds the dock, the sheet and the explainer;
-                 layout.js has the layout logic (no DOM)
+                 mode and menu. Menu opens #panel as a bottom sheet
+                 (portrait) or a drawer (landscape). #feed is a small card
+                 above the dock at the right: a tap makes it large.
+                 shell.js binds the dock, the sheet, the feed card and the
+                 explainer; layout.js has the layout logic (no DOM)
 
    GREP MAP  (main.js)
-     grep -n 'function loadPreset'   regrow a preset
-     grep -n 'function syncPolyps'   new polyps to the GPU buffers
-     grep -n 'function refresh'      radii, natural colours and t
+     grep -n 'function buildWorld'   rock, reef, ROVs for a plot
+     grep -n 'function syncCoral'    new particles to the mesher and the GPU
      grep -n 'function clearArea'    the parts of the canvas that overlays cover
      grep -n 'function frame'        the loop
      grep -n 'window.snSaver'        the screensaver hook
@@ -60,19 +57,23 @@
   <div class="pagetitle">Coral Reef Growth</div>
 </div>
 
-<canvas id="view" aria-label="A coral reef that grows"></canvas>
+<canvas id="view" aria-label="ROVs light a coral reef that grows in dark water"></canvas>
 <div id="nogl" hidden>WebGL is not available in this browser, so the reef cannot render.</div>
 <button id="gear" type="button" aria-label="Open controls">☰</button>
 
 <div id="read" aria-live="off">
-  <div><span>Polyps</span><b id="rPolyps">0</b></div>
+  <div><span>Particles</span><b id="rPolyps">0</b></div>
   <div><span>Colonies</span><b id="rCol">0</b></div>
-  <div><span>Reef height</span><b id="rH">0</b></div>
-  <div><span>Polyps / s</span><b id="rRate">0</b></div>
-  <div><span>Walker steps / s</span><b id="rWalk">0</b></div>
+  <div><span>Tallest colony</span><b id="rH">0</b></div>
+  <div><span>Contacts</span><b id="rContact">0</b></div>
+  <div><span>Particles / s</span><b id="rRate">0</b></div>
   <div id="rState" class="state"></div>
 </div>
-<div id="hint">Drag to orbit · pinch or scroll to zoom · double tap to re-frame · Plant mode, then tap the seabed to plant a colony</div>
+<div id="hint">Drag to orbit · pinch or scroll to zoom · double tap to re-frame · Plant mode, then tap the rock to plant a colony</div>
+<div id="feed" hidden>
+  <button id="feedSize" type="button" aria-label="Make the camera feed larger" aria-pressed="false"></button>
+  <div id="feedSlot"></div>
+</div>
 <div id="tapMark" aria-hidden="true"></div>
 <div id="plantBar" hidden>
   <div class="pb-head"><span id="plantMsg">Plant mode: tap open sand or rock</span><button id="plantDone" type="button">Done</button></div>
@@ -84,7 +85,7 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
   <h1 class="ptitle">Coral reef growth</h1>
-  <p class="lede">Marine snow falls through the water and drifts with the current. A flake that touches a coral sticks and becomes a polyp. The tips meet the snow first, so the tips grow. The seabed is real: lidar of the Buck Island lagoon, St. Croix.</p>
+  <p class="lede">An ROV dive in dark water. Marine snow falls and drifts with the current. A flake that touches a coral sticks: the tips meet the snow first, so the tips grow. Neighbour colonies compete for the same snow and fuse where they meet. The ROV camera comes up over a slow-scan TV link.</p>
 
   <section class="grp" data-grp="reef">
     <div class="sec-label">Reef</div>
@@ -101,6 +102,18 @@
     <p class="note">In plant mode, tap the seabed to plant the chosen species there. Out of plant mode, a tap only moves the view.</p>
   </section>
 
+  <section class="grp" data-grp="dive">
+    <div class="sec-label">Dive</div>
+    <div class="row"><label for="sR">Reef plot radius</label><input type="range" id="sR" min="20" max="45" step="1" value="30"><span class="val" id="vR"></span></div>
+    <div class="sec-label sub">Colonies</div>
+    <div class="chips" id="quality"></div>
+    <div class="sec-label sub">ROVs</div>
+    <div class="chips" id="rovCount"></div>
+    <div class="sec-label sub">Camera feed (SSTV mode)</div>
+    <div class="chips" id="sstvMode"></div>
+    <p class="note">The lead ROV camera goes over a simulated slow-scan TV radio link, so the picture comes in line by line, with noise and a little slant.</p>
+  </section>
+
   <section class="grp" data-grp="colour">
     <div class="sec-label">Colour by</div>
     <div class="chips" id="modes"></div>
@@ -115,10 +128,11 @@
     <div class="row"><label for="sNut">Nutrient rate</label><input type="range" id="sNut" min="0.1" max="3" step="0.05" value="1"><span class="val" id="vNut"></span></div>
     <div class="row"><label for="sTemp">Water temperature</label><input type="range" id="sTemp" min="24" max="33" step="0.1" value="27"><span class="val" id="vTemp"></span></div>
     <p class="note" id="bleachNote">Above about 30 °C the corals bleach: they lose their colour and stop growing.</p>
+    <div class="row"><label for="sCaust">Caustics</label><input type="range" id="sCaust" min="0" max="1.5" step="0.05" value="0.7"><span class="val" id="vCaust"></span></div>
     <div class="grid2">
-      <button class="tog on" id="tCaust" type="button">Caustics</button>
+      <button class="tog on" id="tBeam" type="button">Lamp beams</button>
       <button class="tog on" id="tSnow" type="button">Marine snow</button>
-      <button class="tog on" id="tShaft" type="button">Light shafts</button>
+      <button class="tog on" id="tFeed" type="button">Camera feed</button>
       <button class="tog" id="tOrbit" type="button">Slow orbit</button>
       <button class="tog on" id="tPolyps" type="button">Polyps</button>
       <button class="tog on" id="tDetail" type="button">Surface detail</button>
@@ -156,12 +170,15 @@
   </table>
   <h2>From particles to a living surface</h2>
   <p>Each joined particle is a round cone from its parent, as thick as the branch it feeds: the radius grows with the number of particles above it (the pipe rule), so trunks are thick and tips are thin and round. A smooth minimum blends the cones into one signed distance field. The field lives in small bricks, and only the bricks near a new particle are recomputed and meshed again (surface nets, in a worker), so the coral grows live. Each species adds its own shape term: a web in the plane of a sea fan, a flat plate for a table coral, meandering valleys on a brain coral. Polyps sit on the surface, more at the tips, and open and close in the current.</p>
-  <h2>The seabed</h2>
-  <p>The floor is a 160 × 160 crop of NOAA NCEI lidar bathymetry (CUDEM, 1/9 arc-second, about 3.3 m a sample) from the lagoon of Buck Island Reef National Monument, St. Croix: sand with patch reefs and the back-reef ridge. The relief is real, scaled to the reef; the knolls carry rock boulders (signed distance fields with overhangs), and the corals seed and grow on the rock. A walker that hits the rock near a colony can stick there and start a new branch. The rocks, shells and textures are CC0 scans from Poly Haven.</p>
+  <h2>The rock</h2>
+  <p>The reef rock is a seeded signed distance field: winding canyons with undercut walls, bridges and free arches, pinnacles, caves, ledges and scree, with strata and crag detail. It is meshed with surface nets and textured with scanned CC0 stone. The colonies seed on exposed rock and grow on it; a walker that touches the rock near a colony base can start a new root.</p>
+  <h2>The dive</h2>
+  <p>The plot is a circle in deep water. Past its edge the rock and the sand go into the black over 30% of the radius. The light comes from the ROV lamps: each lamp has a cone in the turbid water, the lead lamp casts shadows, and the marine snow shows in the beams. A faint blue light comes down from the surface, with caustics: the sun refracted by a random sea of 28 waves (swell, wind sea and chop), so the net of light is irregular, and it breaks into patches that come and go.</p>
+  <p>The camera card shows the lead ROV camera sent over a slow-scan TV link with the encoder and decoder of the SSTV page of this site: Robot 36 or Martin M1, with noise, fades and a little slant.</p>
   <h2>Colour by</h2>
   <p>Age is the order of joining, so the growing front is at the hot end of the gradient and the colours move while the reef grows. Depth counts the hops from the seed. Flow is the size of the subtree that a polyp feeds. Light is an estimate from the height and the number of close neighbours.</p>
   <h2>Credits</h2>
-  <p class="cr">Growth engine: a JavaScript port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a>, Copyright (C) 2019 Michael Fogleman, MIT licence. The coral hooks, the reef, the shaders and the page are our own code. Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r160, MIT. Seabed: NOAA NCEI CUDEM lidar bathymetry, public domain. Rocks, shells and textures: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a>, CC0. Ideas: Kaandorp et al. 1996; Kaandorp and Kübler 2001; Quilez (round cone distance, smooth minimum). Full text in CREDITS.txt next to this page.</p>
+  <p class="cr">Growth engine: a JavaScript port of <a href="https://github.com/fogleman/dlaf" target="_blank" rel="noopener">dlaf</a>, Copyright (C) 2019 Michael Fogleman, MIT licence. The coral hooks, the reef, the shaders and the page are our own code. Rendering: <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> r160, MIT. Stone and sand textures: CC0 scans (see CREDITS.txt). Ideas: Kaandorp et al. 1996; Kaandorp and Kübler 2001; Quilez (round cone distance, smooth minimum); the mesh-area caustics of our photon caustics page. Full text in CREDITS.txt next to this page.</p>
 </aside>
 
 <nav id="dock" aria-label="Controls">

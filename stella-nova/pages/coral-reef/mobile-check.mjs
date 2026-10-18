@@ -16,6 +16,9 @@
 //                   back to half and closed; Escape closes it
 //    plant ........ plant mode on and off, the plant bar, the species chips
 //    explainer .... opens over the sheet, closes with Escape
+//    feed ......... the SSTV camera card: a tap makes it large, a second
+//                   tap or Escape small again; the dive controls (plot
+//                   radius, colonies, ROVs, SSTV mode) are in the sheet
 //    css .......... 44 px targets and 11 px text in the touch block,
 //                   safe-area insets, no fixed widths over the viewport
 // ============================================================================
@@ -140,8 +143,9 @@ for (const [w, h, coarse] of VIEWS) {
     click('dockMenu');
     win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
     ok(!panel.classList.contains('open'), `${tag}: Escape closes the sheet`);
-    for (const g of ['colour', 'water', 'reef', 'species']) ok(panel.querySelector(`.grp[data-grp=${g}]`), `${tag}: the sheet holds the ${g} group`);
-    ok(['gradPick', 'modes', 'sDir', 'sCur', 'sNut', 'sTemp', 'tCaust', 'spParams'].every(id => panel.contains($(id))), `${tag}: gradient, colour by, current, nutrients, temperature, caustics, dlaf parameters are in the sheet`);
+    for (const g of ['dive', 'colour', 'water', 'reef', 'species']) ok(panel.querySelector(`.grp[data-grp=${g}]`), `${tag}: the sheet holds the ${g} group`);
+    ok(['gradPick', 'modes', 'sDir', 'sCur', 'sNut', 'sTemp', 'sCaust', 'spParams', 'sR', 'quality', 'rovCount', 'sstvMode', 'tBeam', 'tFeed'].every(id => panel.contains($(id))), `${tag}: gradient, colour by, current, nutrients, temperature, caustics, plot radius, colonies, ROVs, SSTV mode, beams, feed and dlaf parameters are in the sheet`);
+    ok($('quality').querySelectorAll('button').length === 3 && $('rovCount').querySelectorAll('button').length === 2 && $('sstvMode').querySelectorAll('button').length === 2, `${tag}: colony, ROV and SSTV mode chips`);
     ok(panel.querySelectorAll('#spParams input[type=range]').length === 5 && $('adv').contains($('spParams')), `${tag}: the five dlaf parameters are in the advanced section`);
   }
 
@@ -158,6 +162,16 @@ for (const [w, h, coarse] of VIEWS) {
   ok(doc.querySelector('#plant button.on').dataset.id === quick[1].dataset.id && /sea fan/i.test($('plantMsg').textContent), `${tag}: a plant bar chip picks the species everywhere`, $('plantMsg').textContent);
   click('plantDone');
   ok(!doc.body.classList.contains('planting') && $('plantBar').hidden && $('dockPlant').getAttribute('aria-pressed') === 'false', `${tag}: Done ends plant mode`);
+
+  // the feed card (no scene in jsdom: show it by hand to test the toggle)
+  $('feed').hidden = false;
+  click('feedSize');
+  ok($('feed').classList.contains('big') && $('feedSize').getAttribute('aria-pressed') === 'true', `${tag}: a tap on the feed card makes it large`);
+  win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
+  ok(!$('feed').classList.contains('big'), `${tag}: Escape makes the feed card small again`);
+  click('feedSize'); click('feedSize');
+  ok(!$('feed').classList.contains('big'), `${tag}: a second tap makes the feed card small`);
+  $('feed').hidden = true;
 
   // explainer
   if (phone) click('dockMenu');
@@ -183,6 +197,7 @@ for (const [w, h, coarse] of VIEWS) {
   ok(touch && phoneB, 'css: the touch block and the phone block are there');
   for (const sel of ['.chips button', '#adv summary', '.linkbtn', '.row{min-height:44px', '#aboutClose{width:44px;height:44px', '#panelClose{width:44px;height:44px']) ok(touch.includes(sel), `css: the touch block sizes ${sel.split('{')[0]} to 44 px`);
   ok(/::-webkit-slider-thumb\{[^}]*width:26px;height:26px/.test(touch) && /input\[type=range\][^{]*\{[^}]*height:44px/.test(touch), 'css: thumb sliders, 26 px thumbs on a 44 px track');
+  ok(/#feed\{[^}]*width:150px/.test(phoneB) && /#feed\.big\{[^}]*width:calc\(100vw - 16px\)/.test(phoneB), 'css: the phone feed card is small (150 px) and full width when large');
   ok(/#dock > button\{[^}]*height:48px/.test(phoneB) && /#sheetGrip\{[^}]*height:44px/.test(phoneB) && /#plantDone\{[^}]*min-height:44px/.test(phoneB), 'css: dock buttons 48 px, grip and Done 44 px');
   ok(['safe-area-inset-bottom', 'safe-area-inset-left', 'safe-area-inset-right', 'safe-area-inset-top'].every(s => phoneB.includes(s)), 'css: the phone block uses all four safe-area insets');
   const small = [...css.matchAll(/font(?:-size)?:\s*(?:\d+\s+)?([\d.]+)rem/g)].map(m => +m[1]).filter(v => v < 0.6875);

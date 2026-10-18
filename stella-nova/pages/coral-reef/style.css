@@ -4,7 +4,9 @@
    Deep-water shell. Type comes from lib/sci.css (loaded after this file).
    The WebGL canvas fills the frame. The control panel is at the left on a
    desktop. The readout is at the upper right, the legend at the lower
-   right, and the explainer is a drawer at the right.
+   right under the readout, the SSTV feed card (#feed) at the lower right,
+   and the explainer is a drawer at the right.
+     grep -n 'FEED'       the camera feed card (phone: small, a tap makes it large)
 
    PHONE (max-width 768px, or a short landscape touch screen): the pattern
    of pages/wave-membrane. A dock at the base holds preset, grow or pause,
@@ -54,6 +56,7 @@ html.in-frame #panelClose{top:12px}
 .ptitle{font-family:var(--sci-serif);font-weight:500;font-size:1.25rem;color:#eef8f8;margin:0 34px 6px 0}
 .lede{font-size:0.78rem;line-height:1.55;color:var(--dim);margin-bottom:6px}
 .sec-label{font-size:0.8rem;font-weight:600;color:var(--ink);margin:18px 0 9px}
+.sec-label.sub{font-weight:500;color:var(--dim);margin:12px 0 7px}
 .note{font-size:0.74rem;line-height:1.5;color:var(--dim);margin:8px 0 2px}
 .note.warn{color:var(--warm)}
 
@@ -93,7 +96,7 @@ html:not(.in-frame) #read{top:58px}
 #hint{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:20;font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;text-align:center}
 #hint.gone{opacity:0}
 
-#legend{position:fixed;right:18px;bottom:18px;z-index:20;padding:9px 11px 7px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:8px;pointer-events:none}
+#legend{position:fixed;right:14px;top:200px;z-index:20;padding:9px 11px 7px;background:rgba(3,18,27,0.72);border:1px solid var(--line);border-radius:8px;pointer-events:none}
 #legend.off{display:none}
 .lg-title{font-size:0.74rem;color:var(--dim);margin-bottom:6px}
 #lgBar{width:180px;height:10px;border-radius:2px}
@@ -114,6 +117,13 @@ html:not(.in-frame) #read{top:58px}
 .hooks code{font:0.72rem var(--sci-mono);color:var(--warm)}
 
 #dock,#sheetGrip,#plantBar{display:none}
+
+/* FEED: the SSTV camera card of the lead ROV (rov/ draws the canvas). */
+#feed{position:fixed;right:14px;bottom:14px;z-index:24;width:352px;max-width:calc(100vw - 28px);border:1px solid var(--line-b);border-radius:8px;overflow:hidden;background:#000;box-shadow:0 6px 30px rgba(0,0,0,0.6)}
+#feedSlot canvas{display:block;width:100%;height:auto;image-rendering:auto}
+#feedSize{position:absolute;inset:0;z-index:2;width:100%;height:100%;border:0;background:transparent;cursor:zoom-in;padding:0}
+#feed.big #feedSize{cursor:zoom-out}
+#feed.big{width:min(704px,calc(100vw - 28px))}
 
 /* PLANT mode: a crosshair, and a ring where a tap lands (ok or not). */
 body.planting #view{cursor:crosshair}
@@ -157,11 +167,12 @@ body.planting #view{cursor:crosshair}
   #panel{display:flex;flex-direction:column}
   #panel > *{flex:0 0 auto}
   #sheetGrip{order:0}
-  #panel .grp[data-grp=colour]{order:1}
-  #panel .grp[data-grp=water]{order:2}
-  #panel .grp[data-grp=reef]{order:3}
-  #panel .grp[data-grp=species]{order:4;margin-top:8px;border-top:1px solid var(--line)}
-  #panel .credit{order:5}
+  #panel .grp[data-grp=dive]{order:1}
+  #panel .grp[data-grp=colour]{order:2}
+  #panel .grp[data-grp=water]{order:3}
+  #panel .grp[data-grp=reef]{order:4}
+  #panel .grp[data-grp=species]{order:5;margin-top:8px;border-top:1px solid var(--line)}
+  #panel .credit{order:6}
   .grp > .sec-label:first-child{margin-top:4px}
 
   #dock{
@@ -173,11 +184,15 @@ body.planting #view{cursor:crosshair}
   #dock > button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
   #dock > button.on{border-color:var(--accent);color:var(--accent)}
 
-  #read{top:auto;bottom:calc(var(--dock-h) + 8px);right:8px;min-width:0;padding:6px 9px;font-size:0.7rem}
-  html:not(.in-frame) #read{top:auto}
+  #read{top:calc(50px + env(safe-area-inset-top));right:8px;min-width:0;padding:6px 9px;font-size:0.7rem}
+  html.in-frame #read,html:not(.in-frame) #read{top:calc(50px + env(safe-area-inset-top))}
+  html.in-frame #read{top:8px}
   #read div{gap:10px;line-height:1.45}
   #read div:nth-child(4),#read div:nth-child(5){display:none}
-  #legend{right:auto;left:8px;bottom:calc(var(--dock-h) + 8px);padding:6px 9px}
+  #legend{right:auto;left:8px;top:auto;bottom:calc(var(--dock-h) + 8px);padding:6px 9px}
+  #feed{right:8px;bottom:calc(var(--dock-h) + 8px);width:150px;border-radius:10px}
+  #feed.big{width:calc(100vw - 16px);max-width:calc(100vw - 16px)}
+  body:not(.panel-closed) #feed{opacity:0;pointer-events:none}
   #lgBar{width:110px;height:8px}
   #hint{bottom:auto;top:calc(52px + env(safe-area-inset-top));left:16px;right:16px;transform:none;line-height:1.5}
   html.in-frame #hint{top:10px}
@@ -227,7 +242,9 @@ body.planting #view{cursor:crosshair}
   .topbar{display:none}
   #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
   #read{bottom:auto;top:8px}
+  html:not(.in-frame) #read{top:8px}
   #legend{bottom:auto;top:8px}
+  #feed{width:132px}
   #hint,html.in-frame #hint{top:auto;bottom:calc(var(--dock-h) + 6px);left:60vw;right:8px}
   #panel,#panel.full{
     top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;
@@ -246,3 +263,5 @@ body.planting #view{cursor:crosshair}
 html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #read,html.sn-saver #legend,html.sn-saver #hint,
 html.sn-saver #gear,html.sn-saver .topbar,html.sn-saver #about,html.sn-saver #plantBar,html.sn-saver #tapMark{display:none!important}
 html.sn-saver #view{cursor:none;transition:opacity 0.8s ease}
+html.sn-saver #feed{opacity:1;pointer-events:none;max-width:none;transition:opacity 0.8s ease}
+html.sn-saver #feedSize{display:none}

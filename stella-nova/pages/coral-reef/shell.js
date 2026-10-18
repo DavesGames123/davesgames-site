@@ -17,7 +17,13 @@
 //  a tap does not fight the orbit. body.planting shows #plantBar (phone:
 //  the species chips and the last result) and a crosshair cursor.
 //
+//  FEED. #feed is the SSTV camera card of the lead ROV (the ROV package
+//  draws its canvas into #feedSlot). A tap on the card (#feedSize, a
+//  button over it) makes it large or small again: on a phone the card is
+//  small above the dock, so a tap shows the picture at full width.
+//
 //  GREP MAP
+//    grep -n 'function setFeedBig'  the feed card size
 //    grep -n 'function setOpen'     open or close the panel, sheet state
 //    grep -n 'function setPlant'    plant mode on or off
 //    grep -n 'function setPlaying'  the grow and pause labels
@@ -29,7 +35,7 @@ import { sheetSnap } from './layout.js';
 export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
   const $ = id => doc.getElementById(id);
   const panel = $('panel'), body = doc.body, about = $('about');
-  const st = { open: false, sheet: 'closed', plant: false, playing: true, about: false };
+  const st = { open: false, sheet: 'closed', plant: false, playing: true, about: false, feedBig: false };
   const call = (k, ...a) => { if (typeof on[k] === 'function') on[k](...a); };
 
   // sheet: 'half' | 'full' (phone portrait). A closed panel is 'closed'.
@@ -65,6 +71,14 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
       d.setAttribute('aria-label', p ? 'Pause the growth' : 'Grow');
       d.classList.toggle('on', !st.playing);
     }
+  }
+
+  function setFeedBig(v) {
+    st.feedBig = !!v;
+    const f = $('feed'), b = $('feedSize');
+    if (f) f.classList.toggle('big', st.feedBig);
+    if (b) { b.setAttribute('aria-pressed', String(st.feedBig)); b.setAttribute('aria-label', st.feedBig ? 'Make the camera feed smaller' : 'Make the camera feed larger'); }
+    call('feed', st.feedBig);
   }
 
   function setPresetLabel(text) { const s = $('dockPresetName'); if (s) s.textContent = text; }
@@ -115,11 +129,12 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
   click('dockPlant', () => { setPlant(!st.plant); if (st.plant && phoneQ.matches) setOpen(false); });
   click('tPlant', () => setPlant(!st.plant));
   click('plantDone', () => setPlant(false));
+  click('feedSize', () => setFeedBig(!st.feedBig));
   click('aboutOpen', openAbout);
   click('aboutClose', closeAbout);
   doc.defaultView.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (st.about) closeAbout(); else if (phoneQ.matches && st.open) setOpen(false);
+    if (st.about) closeAbout(); else if (st.feedBig) setFeedBig(false); else if (phoneQ.matches && st.open) setOpen(false);
   });
   bindGrip();
 
@@ -132,7 +147,7 @@ export function mountShell({ doc = document, phoneQ, plant = false, on = {} }) {
   else if (phoneQ.addListener) phoneQ.addListener(onQ);
 
   return {
-    st, setOpen, setPlant, setPlaying, setPresetLabel, openAbout, closeAbout,
+    st, setOpen, setPlant, setPlaying, setPresetLabel, setFeedBig, openAbout, closeAbout,
     get open() { return st.open; }, get plant() { return st.plant; }, get sheet() { return st.sheet; },
   };
 }
