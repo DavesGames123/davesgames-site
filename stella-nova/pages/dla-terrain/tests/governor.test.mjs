@@ -251,6 +251,8 @@ if (GOVJS) {
   await F.frame(FPS58);
   ok(F.fg.w === F.fg.outW && !F.fg.U && !F.rec.passes.includes('upscale') && F.post.last[2] === F.fg.outW, 'render size = output: no upscale pass, post to the swap chain', F.rec.passes.join(','));
   ok((F.live.get('upscale source') || 0) === 0, 'no mid target at the full size');
+  F.fg.setScale(0.75); F.post.upsamples = true; F.fg.resize(2000, 1260, 2);
+  ok(!F.fg.U && F.post.last[2] === F.fg.outW, 'post.upsamples: no upscale pass, post gets the output size', JSON.stringify(F.post.last));
   const { UPSCALE_WGSL } = await import('../gpu/upscale.js');
   const NAGA = join(homedir(), '.cargo/bin/naga');
   if (existsSync(NAGA)) {

@@ -176,7 +176,8 @@ export function createFrameGraph(gpu, parts) {
   const up = gpu.canvasFormat ? createUpscaler(device, gpu.canvasFormat) : null;
   fg.upscaler = up;
   function upTargets() {
-    const need = !!(up && up.ready && fg.T && (fg.w < fg.outW || fg.h < fg.outH));
+    // post.upsamples: post does its own upsample (a TAA upsample): no pass
+    const need = !!(up && up.ready && fg.T && !parts.post.upsamples && (fg.w < fg.outW || fg.h < fg.outH));
     if (fg.U && (!need || fg.U.w !== fg.w || fg.U.h !== fg.h)) { fg.U.tex.destroy(); fg.U = null; }
     if (need && !fg.U) {
       const tex = device.createTexture({ label: 'upscale source', size: [fg.w, fg.h], format: gpu.canvasFormat, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
