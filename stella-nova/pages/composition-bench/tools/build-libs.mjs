@@ -8,6 +8,9 @@
 //
 //      node stella-nova/pages/composition-bench/tools/build-libs.mjs
 //      node .../build-libs.mjs --check      parse and report, write no file
+//  A TABLES entry with frozen: true has no table page any more: the run keeps
+//  its libs/<key>.json and index entry as they are (smoke, since smoke-table
+//  left the site).
 //
 //  OUTPUT  (../libs/)
 //      index.json ...... the catalog: groups, per-library metadata and cells
@@ -109,7 +112,9 @@ const TABLES = [
   { key: 'beam', page: 'beam-table', label: 'Beam & Decal', group: 'Surfaces & Effects', kind: 'fs' },
   { key: 'fire', page: 'fire-table', label: 'Fire', group: 'Elements', kind: 'fs' },
   { key: 'fire_evolved', page: 'fire-table-evolved-1', label: 'Fire · evolved', group: 'Elements', kind: 'fs' },
-  { key: 'smoke', page: 'smoke-table', label: 'Smoke', group: 'Elements', kind: 'fs' },
+  // smoke-table was removed from the site (2026-10-18); its library stays
+  // frozen at the last built libs/smoke.json so saved graphs keep loading
+  { key: 'smoke', page: null, label: 'Smoke', group: 'Elements', kind: 'fs', frozen: true },
   { key: 'heat_haze', page: 'heat-diffraction', label: 'Heat Haze', group: 'Elements', kind: 'fs', inputName: 'img' },
   { key: 'heat_metal', page: 'heat-metal', label: 'Heat Metal', group: 'Elements', kind: 'sim' },
   { key: 'frost', page: 'frost-table', label: 'Frost', group: 'Elements', kind: 'fs' },
@@ -321,7 +326,18 @@ return (d, a) => {
 // ---------------------------------------------------------------- run
 const index = { generated: new Date().toISOString(), generator: 'tools/build-libs.mjs', groups: GROUPS.map(g => ({ name: g, libs: [] })), libs: {}, skipped: [] };
 const files = {};
+const prevIndex = existsSync(join(OUT, 'index.json')) ? JSON.parse(readFileSync(join(OUT, 'index.json'), 'utf8')) : { libs: {} };
 for (const T of TABLES) {
+  // frozen: the table page is gone; keep the shipped library file and its
+  // catalog entry as they are
+  if (T.frozen) {
+    const prev = prevIndex.libs[T.key], path = join(OUT, T.key + '.json');
+    if (!prev || !existsSync(path)) { console.error(`FAIL ${T.key}: frozen, but libs/${T.key}.json or its index entry is missing`); process.exitCode = 1; continue; }
+    const meta = Object.assign({}, prev, { page: null, frozen: true }); delete meta.bytes;
+    index.libs[T.key] = meta; index.groups.find(g => g.name === T.group).libs.push(T.key);
+    files[T.key] = JSON.parse(readFileSync(path, 'utf8'));
+    continue;
+  }
   let r;
   try { r = T.kind === 'sim' ? buildSim(T) : T.kind === 'orb' ? buildOrb(T) : buildFnOrFs(T); }
   catch (e) { console.error(`FAIL ${T.key} (${T.page}): ${e.message}`); process.exitCode = 1; continue; }
