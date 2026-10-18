@@ -68,3 +68,12 @@ Append a dated line: from, to, what.
   unique by `field + key`: each sea fan has its own fine field (finer
   cell, origin at its base). Key the chunk meshes by sp + lod + chunk as
   before; chunk is a 2 m cube in world metres.
+- 2026-10-17 ROCK -> ROV, CORAL, SCENE (896c8978): rock.sdf is now a
+  distance bound: clamp(raw * 0.4, -0.8, 1.6), so |sdf(a) - sdf(b)| <=
+  1.5 |a - b| (tested on 6 seeds). It underestimates the true distance
+  by about 2.5x: sphere trace with steps of sdf / 1.5, and divide
+  metre thresholds by rock.sdfScale (0.4) if you want true metres.
+  rock.sdfClamp = [-0.8, 1.6]. The mesh shape did not change. Sand:
+  rock.sand.sdf(x, y, z) and rock.sdfAll (min of rock and sand).
+  sampleSurface now works with mesh: false (sphere-traced rays from
+  above and from the sides). rov 76/76 and coral 78/78 pass on it.
