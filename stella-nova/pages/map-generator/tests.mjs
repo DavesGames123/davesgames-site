@@ -398,6 +398,93 @@ section('3D mesh');
   check('STL export parses: header, count, size, finite numbers', stl.byteLength === 84 + nt * 50 && nt > 0 && stlBad === 0, `${nt} triangles, ${(stl.byteLength / 1e6).toFixed(1)} MB`);
 }
 
+// ─── ragged edge (edge.js) ──────────────────────────────────────────────────
+// The user: "rougher edges on the city generator". Before: the built area
+// was the whole view rectangle. The measure: the built-area mask (the 3D
+// extent blocks, streets and the river closed: 40 m, holes filled) on an
+// 8 m grid; ratio = perimeter /
+// (2 sqrt(pi area)) is 1 for a disc and 1.13 for a square.
+section('ragged edge');
+{
+  const { boundaryStats, rasterise, urbanForm } = await import('./edge.js');
+  const { extent, buildMesh, STRIDE } = await import('./mesh3d.js');
+  const measure = (c) => {
+    const ex = extent(c), st = 8;
+    const nx = Math.ceil(c.view.w / st), ny = Math.ceil(c.view.h / st);
+    return boundaryStats(rasterise(c.blocks.filter((_, i) => ex.block[i]), 0, 0, nx, ny, st), nx, ny, 5);
+  };
+  const results2 = [];
+  for (const seed of [7, 8, 11]) {
+    const old = await generate({ seed, size: 'town', edge: 0 });
+    const rough = seed === 7 ? A : seed === 8 ? B : await generate({ seed, size: 'town' });
+    results2.push([seed, measure(old), measure(rough), old, rough]);
+  }
+  const fmtS = (m) => `ratio ${m.ratio.toFixed(2)} dim ${m.dimension.toFixed(2)}`;
+  check('edge 0: the old city (no fields, every block, urban share 1)', results2.every(([, , , o]) => o.farms.length === 0 && o.form.urbanShare === 1 && o.form.edge === 0));
+  const gain = results2.map(([, m0, m1]) => m1.ratio / m0.ratio);
+  check('edge on: the boundary ratio is higher on each seed (x 1.15) and x 1.5 on the mean', gain.every((g) => g > 1.15) && gain.reduce((a2, b2) => a2 + b2, 0) / gain.length > 1.5,
+    results2.map(([sd, m0, m1]) => `seed ${sd}: ${fmtS(m0)} -> ${fmtS(m1)}`).join('; '));
+  check('edge on: not a smooth disc or a rectangle (ratio over 1.75; disc 1, square 1.13)', results2.every(([, , m1]) => m1.ratio > 1.75));
+  check('edge on: the built area still holds most of the centre and less than the view', results2.every(([, m0, m1]) => m1.area > 0.2 * m0.area && m1.area < 0.85 * m0.area),
+    results2.map(([sd, m0, m1]) => `seed ${sd}: ${(m1.area / m0.area * 100).toFixed(0)} %`).join(', '));
+  check('edge on: fields past the edge, in strips', results2.every(([, , , , r]) => r.farms.length > 5 && r.farms.every((f) => f.poly.length >= 3 && Math.abs(area(f.poly)) > 100 && f.crop >= 0 && f.crop < 6)),
+    results2.map(([sd, , , , r]) => `seed ${sd}: ${r.farms.length}`).join(', '));
+  let wetF = 0, onBlock = 0;
+  for (const [, , , , r] of results2) {
+    for (const f of r.farms) {
+      const c = centroid(f.poly);
+      if ((r.sea.length > 2 && inside(c, r.sea)) || (r.river.length > 2 && inside(c, r.river))) wetF++;
+      if (r.blocks.some((b) => inside(c, b))) onBlock++;
+    }
+  }
+  check('no field in the sea or the river, none under an urban block', wetF === 0 && onBlock === 0, `${wetF} wet, ${onBlock} on blocks`);
+  // fringe: fewer lots per block area and lower buildings than the core
+  {
+    const r = A, cx = r.view.w / 2, cy = r.view.h / 2;
+    const d = r.lots.map((l) => { const c = centroid(l); return Math.hypot(c[0] - cx, c[1] - cy); });
+    const order = d.map((v, i) => i).sort((i, j) => d[i] - d[j]);
+    const q = Math.floor(order.length / 4);
+    const mean = (ix) => ix.reduce((s2, i) => s2 + r.buildings[i].h, 0) / ix.length;
+    const core = mean(order.slice(0, q)), fringe = mean(order.slice(-q));
+    check('the fringe is lower than the core', fringe < 0.8 * core, `core ${core.toFixed(1)} m, fringe ${fringe.toFixed(1)} m`);
+  }
+  // minor roads end near the urban blocks
+  {
+    const pts = [];
+    for (const b of A.blocks) for (const p of b) pts.push(p);
+    const near = (p) => pts.some((q) => (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 < 40 * 40);
+    let far = 0, n = 0;
+    for (const l of A.roads.minor) for (const e of [l[0], l[l.length - 1]]) { n++; if (!near(e)) far++; }
+    check('minor roads end near the urban blocks (no streets in the fields)', far / n < 0.03, `${far} of ${n} ends over 40 m from a block`);
+    check('road families stay one per line after the trim', ['main', 'major', 'minor'].every((k) => A.roadFamily[k].length === A.roads[k].length));
+  }
+  check('the same seed gives the same edge and fields', JSON.stringify(A.farms) === JSON.stringify(A2.farms) && JSON.stringify(A.form) === JSON.stringify(A2.form));
+  // urbanForm with edge 0 keeps everything
+  {
+    const F = urbanForm({ W: 100, H: 100, dom: { x: -10, y: -10, w: 120, h: 120 }, blocks: [[[0, 0], [10, 0], [10, 10]]], lots: [[[0, 0], [10, 0], [10, 10]]], lotBlock: [0], roads: {}, edge: 0, seed: 1 });
+    check('urbanForm edge 0 keeps every block and lot', F.keepBlock[0] === 1 && F.keepLot[0] === 1 && F.farms.length === 0);
+  }
+  // roofs: hip roofs on low buildings, setbacks or plant rooms on tall ones
+  {
+    const tl = timeline(A);
+    const m = buildMesh(A, tl);
+    const f32 = new Float32Array(m.vertices), nv = m.vertices.byteLength / STRIDE;
+    let ridge = 0, slopeN = 0;
+    for (let i = 0; i < nv; i++) {
+      if (Math.round(f32[i * 13 + 8]) !== 3) continue;
+      if (f32[i * 13 + 2] > 1.0001) ridge++;
+      const nz = new Int8Array(m.vertices, i * STRIDE + 12, 3)[2];
+      if (nz > 60 && nz < 125) slopeN++;
+    }
+    const st = m.styles;
+    check('3D buildings: hip roofs, flat roofs and plant rooms or setbacks', st.hip > 0.04 * A.lots.length && st.flat > 0 && (st.plant || 0) + (st.tier || 0) > 0, JSON.stringify(st));
+    check('3D buildings: ridge vertices over the eaves, sloped roof normals', ridge > A.lots.length * 0.1 && slopeN > (st.hip || 0) * 3, `${ridge} ridge, ${slopeN} sloped`);
+    let farmV = 0;
+    for (let i = 0; i < nv; i++) if (Math.round(f32[i * 13 + 8]) === 8) farmV++;
+    check('3D fields: a flat layer of their own (kind 8)', farmV >= A.farms.length * 3, `${farmV} vertices`);
+  }
+}
+
 // ─── terrain ────────────────────────────────────────────────────────────────
 section('terrain');
 {

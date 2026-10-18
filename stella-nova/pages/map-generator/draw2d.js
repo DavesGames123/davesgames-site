@@ -15,7 +15,8 @@
 //   3D buildings agree.
 //
 // Layers, bottom to top: land (or the terrain underlay: hillshade, biome
-// tint, then contour lines), river, sea, coastline, parks, blocks, lots
+// tint, then contour lines), river, sea, coastline, fields (city.farms,
+// edge.js: strips by crop, hedge lines), parks, blocks, lots
 // (by height), roads (minor, major, main), field crosses. A terrain sea is
 // an even-odd polygon of several rings (gen.js), so it fills 'evenodd'.
 //
@@ -37,7 +38,10 @@ export const PAL = {
   coastRoad: '#f0d39a',
   riverRoad: '#d8d2c4',
   field: [150, 185, 220],
+  hedge: 'rgba(24,30,20,0.85)',
 };
+// the field colours by crop (edge.js CROPS order), dark like the map
+export const CROP_CSS = ['#4a4430', '#2f3a24', '#3b322a', '#34402c', '#433f33', '#4f4c2a'];
 export const WIDTH = { main: 4.2, major: 2.6, minor: 1.25, coast: 4.2, river: 2.6 };
 
 export function heightColour(h) {
@@ -128,6 +132,21 @@ export function drawMap(ctx, city, frame, view) {
       ctx.strokeStyle = PAL.shore; ctx.lineWidth = 1.4 * px;
       ctx.beginPath(); path(ctx, city.coastline); ctx.stroke();
     }
+    ctx.restore();
+  }
+  // fields past the city edge (edge.js), from the first block on
+  if (city.farms && city.farms.length && frame.blocks.length) {
+    ctx.save();
+    ctx.globalAlpha = ter && ter.a ? 0.8 : 1;
+    for (let c = 0; c < CROP_CSS.length; c++) {
+      ctx.fillStyle = CROP_CSS[c];
+      ctx.beginPath();
+      for (const f of city.farms) if (f.crop === c) poly(ctx, f.poly);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = PAL.hedge; ctx.lineWidth = 0.9 * px;
+    ctx.beginPath(); for (const f of city.farms) poly(ctx, f.poly); ctx.stroke();
     ctx.restore();
   }
   // parks
@@ -230,6 +249,10 @@ export function toSVG(city, opts = {}) {
   if (city.sea.length > 2) out.push(`<polygon id="sea" points="${pts(city.sea)}" fill="${PAL.sea}"${city.terrain ? ' fill-rule="evenodd"' : ''}/>`);
   if (city.terrain) for (const l of city.coastlines || []) out.push(`<polyline class="coastline" points="${pts(l)}" fill="none" stroke="${PAL.shore}" stroke-width="1.4"/>`);
   else if (city.coastline.length > 1) out.push(`<polyline id="coastline" points="${pts(city.coastline)}" fill="none" stroke="${PAL.shore}" stroke-width="1.4"/>`);
+  if (city.farms && city.farms.length) {
+    const d = (c) => city.farms.filter((f) => f.crop === c).map((f) => 'M' + f.poly.map((q) => `${n2(q[0])} ${n2(q[1])}`).join('L') + 'Z').join('');
+    out.push(`<g id="fields" stroke="${PAL.hedge}" stroke-width="0.9">${CROP_CSS.map((col, c) => `<path fill="${col}" d="${d(c)}"/>`).join('')}</g>`);
+  }
   out.push(`<g id="parks" fill="${PAL.park}" stroke="${PAL.parkEdge}">${city.parks.map((p) => `<polygon points="${pts(p)}"/>`).join('')}</g>`);
   out.push(`<g id="blocks" fill="${PAL.block}">${city.blocks.map((p) => `<polygon points="${pts(p)}"/>`).join('')}</g>`);
   out.push(`<g id="lots" stroke="#14161a" stroke-width="0.8">${city.lots.map((p, i) => `<polygon points="${pts(p)}" fill="${css(heightColour(city.buildings[i].h))}" data-h="${city.buildings[i].h}"/>`).join('')}</g>`);

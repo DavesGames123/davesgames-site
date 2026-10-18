@@ -13,7 +13,7 @@
 //   kind 2 block     the top rises to 0.6 m
 //   kind 3 building  a 0.5 m pad when its lot shows, then it rises to h
 //   kind 4 sea       a disc from the middle of the coastline grows over it
-//   kind 5, 6        park, river: they fade in from the ground colour
+//   kind 5, 6, 8     park, river, field (edge.js): they fade in from the ground colour
 //   kind 7           still water (the terrain sea plane), always shown
 // A part that has not started goes outside the clip volume (vertex) or is
 // discarded (fragment). ext.w is added to every z: the ground under the
@@ -104,7 +104,7 @@ fn place(v: VIn) -> Placed {
     o.zr = v.pos.z * top;
     o.p.z = BLOCK_H + o.zr;
     o.k = pb;
-  } else if (kind == 5 || kind == 6) {
+  } else if (kind == 5 || kind == 6 || kind == 8) {
     o.show = select(0.0, 1.0, p > 0.0);
     o.k = p;
   } else if (kind == 4) {
@@ -215,7 +215,7 @@ fn fs(v: VOut) -> @location(0) vec4f {
     col = water(v.col, v.world);
   } else if (kind == 6) {
     col = mix(shade(GROUND, N, v.world), water(v.col, v.world), v.info.y);
-  } else if (kind == 5) {
+  } else if (kind == 5 || kind == 8) {
     col = shade(mix(GROUND, v.col, v.info.y), N, v.world);
   } else if (kind == 3) {
     let h = v.info.z;

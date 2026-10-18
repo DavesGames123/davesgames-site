@@ -23,9 +23,11 @@
 //                 base (w) is added to z: the ground under the vertex with
 //                 terrain, 0 without
 // KINDS 0 ground (static), 1 road, 2 block (rises to BLOCK_H), 3 building
-//   (a pad when its lot shows, then it rises), 4 sea (a disc reveal from the
+//   (a pad when its lot shows, then it rises; z over 1 on a hip ridge or a
+//   plant room, see ROOFS AND TIERS), 4 sea (a disc reveal from the
 //   coast), 5 park (fades in), 6 river (fades in, water shading),
-//   7 still water (always shown: the terrain sea plane)
+//   7 still water (always shown: the terrain sea plane), 8 field (edge.js
+//   farm strip, fades in like a park)
 //
 // TERRAIN (city.terrain). No flat ground: terrain3d.js gives the ground
 // mesh. Each city vertex keeps its layer z and takes base = the ground
@@ -36,7 +38,7 @@
 // river a ribbon at its surface, lakes and the other LIB rivers quads at
 // theirs. Parks are a colour of the ground mesh, not polygons.
 //
-// FLAT LAYERS (z, m): ground 0, river 0.06, sea 0.08, park 0.12, road 0.2,
+// FLAT LAYERS (z, m): ground 0, river 0.06, sea 0.08, field 0.1, park 0.12, road 0.2,
 // field 0.3, block top 0.6, building roofs 0.6 + 0.5 or more. Each layer
 // has its own z, so no two coplanar faces overlap (tests.mjs checks it).
 // Building footprints are the lots scaled 0.35 m in about their centroid,
@@ -44,15 +46,16 @@
 //
 // grep: export const STRIDE  export const Z  export function buildMesh  export function toSTL
 //       export function extent  export function trimRoads  export function earcut  export function fieldLines  function seaApron  function ribbon  function prism
-//       function terrainBases  function riverRibbon
+//       function terrainBases  function riverRibbon  export function building  function hipRoof  function slab
 
 import { heightColour } from './draw2d.js';
 import { prog } from './playback.js';
 import { buildTerrainMesh, waterQuads } from './terrain3d.js';
 import { groundAt, riverAt, LIFT } from './terrain.js';
+import { CROPS } from './edge.js';
 
 export const STRIDE = 52;
-export const Z = { ground: 0, river: 0.06, sea: 0.08, park: 0.12, road: 0.2, field: 0.3, block: 0.6, pad: 0.5 };
+export const Z = { ground: 0, river: 0.06, sea: 0.08, farm: 0.1, park: 0.12, road: 0.2, field: 0.3, block: 0.6, pad: 0.5 };
 export const ROAD_W = { main: 10, major: 7, minor: 3.6, coast: 10, river: 7 };
 const ROAD_COL = { main: [0.86, 0.72, 0.46], major: [0.66, 0.64, 0.60], minor: [0.44, 0.45, 0.47], coast: [0.86, 0.72, 0.46], river: [0.66, 0.64, 0.60] };
 const COL = { ground: [0.25, 0.255, 0.26], block: [0.46, 0.46, 0.44], park: [0.24, 0.36, 0.19], sea: [0.07, 0.17, 0.22], river: [0.08, 0.20, 0.26] };
@@ -170,6 +173,134 @@ function prism(W, pts, col, kind, t0, dur, e = [0, 0, 0], bases = null) {
   return 1;
 }
 
+// ROOFS AND TIERS (the broken skyline). A building is its prism plus a top
+// by its height and a hash of its lot (no random stream used):
+//   h < 14, convex footprint: a hip roof (a pyramid on a near-square lot),
+//     slopes 22 to 32 degrees, a roof colour (clay, slate, brown); the eave
+//     vertices keep z = 1, the ridge has z = 1 + rise / h
+//   14 .. 45 m: a flat roof, on half of them a plant room (a box of 35 to
+//     55 % of the footprint, 2.5 to 4 m tall)
+//   over 45 m, convex: a setback: the body to f = 0.62 .. 0.8 of h, a tier
+//     of 55 to 75 % of the footprint from f to 1
+// The shader scales z by the risen height, so each part grows with the
+// building. Kind 3 everywhere; roof flag 1 on the tops.
+const ROOF_COL = [[0.50, 0.27, 0.19], [0.27, 0.29, 0.33], [0.40, 0.31, 0.25], [0.56, 0.36, 0.24]];
+function hashU(i, k) {
+  let h = Math.imul((i + 1) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(k + 7, 0xc2b2ae35);
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+}
+function convex(p) {
+  let sg = 0;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length], c = p[(i + 2) % p.length];
+    const cr = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+    if (Math.abs(cr) < 1e-6) continue;
+    if (sg === 0) sg = Math.sign(cr); else if (Math.sign(cr) !== sg) return false;
+  }
+  return true;
+}
+// the walls and top of pts between z0 and z1 (0..1 flags of the height)
+function slab(W, pts, z0, z1, col, t0, dur, e, footB, topB, roofTop = true) {
+  const tri = earcut(pts);
+  if (!tri.length) return 0;
+  const n = pts.length;
+  W.reserve(n + 4 * n, tri.length + 6 * n);
+  const base = W.nv;
+  if (roofTop) {
+    pts.forEach((q) => W.v(q[0], q[1], z1, 0, 0, 1, col, 1, t0, dur, 0, 3, e[0], e[1], e[2], topB));
+    for (let i = 0; i < tri.length; i += 3) W.t(base + tri[i], base + tri[i + 1], base + tri[i + 2]);
+  }
+  let u = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1;
+    const nx = dy / L, ny = -dx / L;
+    const q0 = W.v(a[0], a[1], z0, nx, ny, 0, col, 0, t0, dur, u, 3, e[0], e[1], e[2], footB);
+    const q1 = W.v(b[0], b[1], z0, nx, ny, 0, col, 0, t0, dur, u + L, 3, e[0], e[1], e[2], footB);
+    const q2 = W.v(b[0], b[1], z1, nx, ny, 0, col, 0, t0, dur, u + L, 3, e[0], e[1], e[2], topB);
+    const q3 = W.v(a[0], a[1], z1, nx, ny, 0, col, 0, t0, dur, u, 3, e[0], e[1], e[2], topB);
+    W.t(q0, q1, q2); W.t(q0, q2, q3);
+    u += L;
+  }
+  return 1;
+}
+const shrink = (p, k) => { const c = cen(p); return p.map((q) => [c[0] + (q[0] - c[0]) * k, c[1] + (q[1] - c[1]) * k]); };
+// a hip roof over a convex ccw footprint, eaves at z 1, for a building of h m
+function hipRoof(W, pts, h, col, t0, dur, e, topB, rk) {
+  const n = pts.length;
+  let best = 0, ux = 1, uy = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L > best) { best = L; ux = (b[0] - a[0]) / L; uy = (b[1] - a[1]) / L; }
+  }
+  const vx = -uy, vy = ux, c = cen(pts);
+  let s0 = Infinity, s1 = -Infinity, t0r = Infinity, t1r = -Infinity;
+  for (const q of pts) {
+    const s = (q[0] - c[0]) * ux + (q[1] - c[1]) * uy, t = (q[0] - c[0]) * vx + (q[1] - c[1]) * vy;
+    s0 = Math.min(s0, s); s1 = Math.max(s1, s); t0r = Math.min(t0r, t); t1r = Math.max(t1r, t);
+  }
+  const hw = (t1r - t0r) / 2, tc = (t0r + t1r) / 2;
+  let ra = s0 + hw * 0.95, rb = s1 - hw * 0.95;
+  if (rb < ra) ra = rb = (s0 + s1) / 2;
+  const rise = Math.min(hw * Math.tan((22 + 10 * rk) * Math.PI / 180), 5);
+  if (!(rise > 0.3)) return false;
+  const zr = 1 + rise / h;
+  const R = [[c[0] + ux * ra + vx * tc, c[1] + uy * ra + vy * tc], [c[0] + ux * rb + vx * tc, c[1] + uy * rb + vy * tc]];
+  const mid = (ra + rb) / 2;
+  const sOf = (q) => (q[0] - c[0]) * ux + (q[1] - c[1]) * uy;
+  W.reserve(4 * n, 6 * n);
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const ia = sOf(a) < mid ? 0 : 1, ib = sOf(b) < mid ? 0 : 1;
+    // the face plane through a, b and its ridge point(s), in metres
+    const r0 = R[ia], P3 = (q, z) => [q[0], q[1], z * h];
+    const A = P3(a, 1), B = P3(b, 1), C = P3(ia === ib ? r0 : R[ib], zr);
+    let nx = (B[1] - A[1]) * (C[2] - A[2]) - (B[2] - A[2]) * (C[1] - A[1]);
+    let ny = (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2]);
+    let nz = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+    const L = Math.hypot(nx, ny, nz) || 1;
+    nx /= L; ny /= L; nz /= L;
+    if (nz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    const qa = W.v(a[0], a[1], 1, nx, ny, nz, col, 1, t0, dur, 0, 3, e[0], e[1], e[2], topB);
+    const qb = W.v(b[0], b[1], 1, nx, ny, nz, col, 1, t0, dur, 0, 3, e[0], e[1], e[2], topB);
+    const qr = W.v(R[ib][0], R[ib][1], zr, nx, ny, nz, col, 1, t0, dur, 0, 3, e[0], e[1], e[2], topB);
+    W.t(qa, qb, qr);
+    if (ia !== ib) {
+      const qs = W.v(R[ia][0], R[ia][1], zr, nx, ny, nz, col, 1, t0, dur, 0, 3, e[0], e[1], e[2], topB);
+      W.t(qa, qr, qs);
+    }
+  }
+  return true;
+}
+// one building: style by height and the lot hash (see ROOFS AND TIERS)
+export function building(W, pts, h, col, t0, dur, e, bases, lotIndex) {
+  const footB = bases ? bases[1] : 0, topB = bases ? bases[0][0] : 0;
+  const r1 = hashU(lotIndex, 1), r2 = hashU(lotIndex, 2), r3 = hashU(lotIndex, 3);
+  const cvx = pts.length <= 10 && convex(pts);
+  if (h < 14 && cvx) {
+    slab(W, pts, 0, 1, col, t0, dur, e, footB, topB, false);
+    if (hipRoof(W, pts, h, ROOF_COL[Math.floor(r1 * ROOF_COL.length)], t0, dur, e, topB, r2)) return 'hip';
+    slab(W, pts, 1, 1, col, t0, dur, e, topB, topB, true);
+    return 'flat';
+  }
+  if (h > 45 && cvx) {
+    const f = 0.62 + 0.18 * r1;
+    slab(W, pts, 0, f, col, t0, dur, e, footB, topB, true);
+    slab(W, shrink(pts, 0.55 + 0.2 * r2), f, 1, col, t0, dur, e, topB, topB, true);
+    return 'tier';
+  }
+  slab(W, pts, 0, 1, col, t0, dur, e, footB, topB, true);
+  if (h >= 14 && cvx && r3 < 0.5) {
+    const k = 0.35 + 0.2 * r1, top = 1 + (2.5 + 1.5 * r2) / h;
+    const c = cen(pts), off = (r2 - 0.5) * 0.3;
+    const box = shrink(pts, Math.sqrt(k)).map((q) => [q[0] + (pts[0][0] - c[0]) * off * 0.5, q[1] + (pts[0][1] - c[1]) * off * 0.5]);
+    slab(W, box, 1, top, [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8], t0, dur, e, topB, topB, true);
+    return 'plant';
+  }
+  return 'flat';
+}
+
 // a road ribbon of width w along line l (world x, y), s = share of length
 function ribbon(W, l, w, col, t0, dur, s0 = 0, total = 0, ground = null) {
   const n = l.length;
@@ -279,6 +410,12 @@ export function buildMesh(city, tl) {
     for (const r of seaApron(city.sea, dMap, ext)) flat(W, ccwOf(r.map(T)), Z.sea, COL.sea, 4, tl.coast[0], tl.coast[1], [mid[0], mid[1], seaR * 4]);
   }
   if (!TER) city.parks.forEach((p, i) => flat(W, ccwOf(p.map(T)), Z.park, COL.park, 5, tl.parks[2 * i], tl.parks[2 * i + 1]));
+  // fields past the city edge (edge.js): kind 8 at Z.farm, in with the
+  // blocks; on terrain they are a colour of the ground (terrain3d.js)
+  if (!TER && city.farms && city.farms.length) {
+    const ft0 = tl.blocks && tl.blocks.length ? tl.blocks[0] : 0;
+    for (const f of city.farms) flat(W, ccwOf(f.poly.map(T)), Z.farm, CROPS[f.crop] || CROPS[0], 8, ft0, 1.5);
+  }
   const kept = extent(city);
   city.blocks.forEach((b, i) => {
     if (!kept.block[i]) return;
@@ -288,13 +425,15 @@ export function buildMesh(city, tl) {
   // ── buildings (the shadow casters) ──
   const bFirst = W.ni;
   let tallest = 0;
+  const styles = {};
   city.lots.forEach((l, i) => {
     if (!kept.lot[i]) return;
     const h = city.buildings[i].h;
     tallest = Math.max(tallest, h);
     const col = heightColour(h);
     const pts = ccwOf(inset(l.map(T), INSET));
-    prism(W, pts, col, 3, tl.lots[2 * i], tl.lots[2 * i + 1], [h, tl.buildings[2 * i], tl.buildings[2 * i + 1]], tb ? tb.lot(pts, city.lotBlock[i]) : null);
+    const st = building(W, pts, h, col, tl.lots[2 * i], tl.lots[2 * i + 1], [h, tl.buildings[2 * i], tl.buildings[2 * i + 1]], tb ? tb.lot(pts, city.lotBlock[i]) : null, i);
+    styles[st] = (styles[st] || 0) + 1;
   });
   const bEnd = W.ni;
   // ── roads, minor first, so the main roads draw on top ──
@@ -319,7 +458,7 @@ export function buildMesh(city, tl) {
   return {
     vertices: out.vertices, indices: out.indices,
     ranges: { opaque: [0, bEnd], buildings: [bFirst, bEnd - bFirst], roads: [bEnd, rEnd - bEnd] },
-    seaCentre, seaR, half: [cx, cy], domain: dW, ext, tallest,
+    seaCentre, seaR, half: [cx, cy], domain: dW, ext, tallest, styles,
     terrain, groundZ: TER ? Math.max(groundAt(TER, cx, cy), TER.hasSea ? TER.seaLevel : -Infinity) : 0, homeYaw, worldSize: TER ? TER.worldSize : 0,
     transfer,
   };

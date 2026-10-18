@@ -16,7 +16,8 @@
 //   8  float32x4  heights 0..3 (m above the sea)
 //  24  float32x4  heights 4..7 (7 = the final ground)
 //  40  snorm8x4   normal of the final ground
-//  44  unorm8x4   albedo rgb (terrain.js natural colour), a 255
+//  44  unorm8x4   albedo rgb (terrain.js natural colour; 70 % crop colour
+//                 in an edge.js field strip), a 255
 //  48  float32x2  park: t0, dur of the park this vertex lies in (dur 0: none)
 //
 // MESHES. The outer grid covers the world, less the cells under the patch.
@@ -29,6 +30,7 @@
 // grep: export const TSTRIDE  export function buildTerrainMesh  function snapAt  export function waterQuads
 
 import { groundAt } from './terrain.js';
+import { farmLookup, CROPS } from './edge.js';
 
 export const TSTRIDE = 56;
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -101,6 +103,7 @@ export function buildTerrainMesh(city, tl) {
     for (const q of p) { a = Math.min(a, q[0]); b = Math.min(b, q[1]); cc = Math.max(cc, q[0]); d = Math.max(d, q[1]); }
     return { p, box: [a, b, cc, d], t: [tl.parks[2 * pi], tl.parks[2 * pi + 1]] };
   });
+  const farmAt = city.farms && city.farms.length ? farmLookup(city.farms) : null;
   for (let b = 0; b < ny; b++) for (let a = 0; a < nx; a++) {
     const q = b * nx + a, mx = x0 + a * s, my = y0 + b * s;
     const ia = Math.min(Math.floor(a / k), i1 - i0 - 1), jb = Math.min(Math.floor(b / k), j1 - j0 - 1);
@@ -117,7 +120,10 @@ export function buildTerrainMesh(city, tl) {
       if (mx < pk.box[0] || my < pk.box[1] || mx > pk.box[2] || my > pk.box[3]) continue;
       if (insidePoly(mx, my, pk.p)) { park = pk.t; break; }
     }
-    put(nOuter + q, mx, my, hs, norm(gx, gy), [T.col[3 * q], T.col[3 * q + 1], T.col[3 * q + 2]], park);
+    let col = [T.col[3 * q], T.col[3 * q + 1], T.col[3 * q + 2]];
+    const crop = farmAt ? farmAt(mx, my) : -1;
+    if (crop >= 0) { const cc = CROPS[crop]; col = col.map((v, k) => Math.round(v * 0.3 + cc[k] * 255 * 0.7)); }
+    put(nOuter + q, mx, my, hs, norm(gx, gy), col, park);
   }
 
   // skirt: the world edge, out to three times its distance, sloping down

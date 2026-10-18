@@ -105,7 +105,7 @@ function pageMark() {
 }
 
 // ─── URL options ────────────────────────────────────────────────────────────
-const NUM_KEYS = ['seed', 'grids', 'radials', 'fieldScale', 'mainSep', 'majorSep', 'minorSep', 'bigParks', 'lotArea', 'noDivide', 'height', ...TERRAIN_NUM];
+const NUM_KEYS = ['seed', 'grids', 'radials', 'fieldScale', 'mainSep', 'majorSep', 'minorSep', 'bigParks', 'lotArea', 'noDivide', 'height', 'edge', ...TERRAIN_NUM];
 const BOOL_KEYS = ['coast', 'river', 'smooth', 'terrain'];
 const STR_OK = { tPreset: (v) => CITY_PRESETS.some((p) => p[0] === v), tSite: (v) => SITES.some((p) => p[0] === v) };
 function hashOpts() {
@@ -528,6 +528,7 @@ const SLIDERS = [
   ['sLot', 'lotArea', 'Lot size', 20, 300, 5, (v) => `${v} m²`],
   ['sWhole', 'noDivide', 'Whole blocks', 0, 0.6, 0.01, (v) => `${fmt(v * 100)} %`],
   ['sHeight', 'height', 'Height', 0.3, 3, 0.05, (v) => `× ${fmt(v, 2)}`],
+  ['sEdge', 'edge', 'Ragged edge', 0, 1, 0.05, (v) => (v > 0 ? `${fmt(v * 100)} %` : 'Off')],
 ];
 // Terrain sliders (terrain.js options)
 const T_SLIDERS = [
@@ -546,7 +547,7 @@ function rollSection(k, r) {
   const fix = (v, d) => +v.toFixed(d);
   if (k === 'field') return { grids: pick(1, 6, 1), radials: pick(0, 2, 1), fieldScale: fix(pick(0.6, 1.6, 0.05), 2), smooth: r() < 0.25 };
   if (k === 'roads') return { mainSep: pick(300, 600, 10), majorSep: pick(70, 160, 5), minorSep: pick(16, 32, 1), bigParks: pick(0, 5, 1) };
-  if (k === 'build') return { lotArea: pick(30, 160, 5), noDivide: fix(pick(0, 0.2, 0.01), 2), height: fix(pick(0.6, 1.8, 0.05), 2) };
+  if (k === 'build') return { lotArea: pick(30, 160, 5), noDivide: fix(pick(0, 0.2, 0.01), 2), height: fix(pick(0.6, 1.8, 0.05), 2), edge: fix(pick(0.35, 1, 0.05), 2) };
   if (k === 'terrain') return rollTerrain(r);
   return {};
 }
@@ -576,8 +577,8 @@ function buildPanel() {
       `<div class="row two"><span>Coast</span>${sw('swCoast', opts.coast, 'Coastline')}</div><div class="row two"><span>River</span>${sw('swRiver', opts.river, 'River')}</div>`),
     lg('roads', 'roads', 'Roads', 'The distance between two roads of a class that run side by side.',
       S('sMain') + S('sMajor') + S('sMinor') + S('sParks'), true),
-    lg('build', 'build', 'Lots and buildings', 'Blocks are cut into lots no smaller than the lot size. Some blocks stay whole.',
-      S('sLot') + S('sWhole') + S('sHeight'), true),
+    lg('build', 'build', 'Lots and buildings', 'Blocks are cut into lots no smaller than the lot size. Some blocks stay whole. The ragged edge grows the city from its centre and a few villages over the land: slow on slopes and water, fast along the main roads; past the edge are fields.',
+      S('sLot') + S('sWhole') + S('sHeight') + S('sEdge'), true),
     lg('view', 'light', '3D light', 'The light of the 3D view, as in City Atlas.',
       seg('lightSeg', 'Light', [['day', 'Day'], ['golden', 'Golden'], ['dusk', 'Dusk'], ['night', 'Night']], light)),
   ].join('');

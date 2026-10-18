@@ -14,6 +14,9 @@
 //     steep ground is closed to roads and lots, a slope field turns the
 //     streets along the contours, parks favour steep or wet ground, and
 //     buildings are lower on slopes. Off, the city is as before.
+//   - the ragged edge (edge.js, opts.edge): the built area grows out from
+//     the centre and a few villages over a cost field (slope, water, noise,
+//     roads), so it stops in a ragged line; past it, fields and wild land
 // No DOM. worker.js, main.js (fallback) and tests.mjs import it.
 //
 // opts.onTerrain(p) and opts.onStage(k) are optional progress hooks (the
@@ -31,6 +34,8 @@
 //            parks, blocks, lots  ([polygon, ..])
 //            lotBlock  (Int32Array-like: the block of each lot)
 //            buildings: [{ lot, h }]   (h in map units, 1 unit = 1 m in 3D)
+//            farms: [{ poly, crop }]  (edge.js field strips past the city edge)
+//            form: { edge, R, cell, nuclei, urbanShare }  (edge.js)
 //            terrain   (only with opts.terrain: terrain.js buildTerrain(), the
 //                       ground, snapshots, underlay, rings and river; the
 //                       sea is then an even-odd polygon of several rings,
@@ -51,6 +56,9 @@
 
 import * as MG from '../../vendor/mapgenerator/mapgen.js';
 import { terrainDefaults, buildTerrain, makeSlopeField, groundAt, slopeAt, riverAt } from './terrain.js';
+import { urbanForm, trimLines, nearPolys } from './edge.js';
+
+const ANCHOR_TRIM = 12;   // m: a trimmed road keeps its runs this near a kept block
 
 export const VERSION = 1;
 export const SIZES = {
@@ -77,6 +85,7 @@ export function defaults() {
     lotArea: 50,        // PolygonFinder minArea for lots (upstream 50)
     noDivide: 0.05,     // chanceNoDivide (upstream 0.05)
     height: 1,          // building height scale (ours)
+    edge: 0.7,          // the ragged edge (edge.js): 0 fills the view, 1 the most sprawl and fields
     ...terrainDefaults(),   // terrain.js: off by default
   };
 }
@@ -230,8 +239,10 @@ async function build(o, W, H, t0, T = null, onStage = null) {
     return p.polygons;
   };
   let bigParks = [];
+  let superBlocks = [];
   {
     const polys = parkFinder(major.allStreamlinesSimple.concat(main.allStreamlinesSimple));
+    superBlocks = polys.map(line);
     if (T) bigParks = pickParks(T, polys, o.bigParks);
     else if (polys.length > o.bigParks) {
       for (let i = 0; i < o.bigParks; i++) bigParks.push(polys[Math.floor(Math.random() * polys.length)]);
@@ -264,7 +275,7 @@ async function build(o, W, H, t0, T = null, onStage = null) {
   // note which lots each block gave. toDivide.pop() takes the last block.
   if (onStage) await stage('lots');
   const dividing = finder.divide(true);
-  const lotBlockOrder = [];
+  const lotBlockOrder0 = [];
   const lotsV = [];
   {
     // (with no shrunk block, upstream divides the unshrunk faces: those
@@ -276,7 +287,7 @@ async function build(o, W, H, t0, T = null, onStage = null) {
       const before = finder._dividedPolygons.length;
       finder.update();
       const after = finder._dividedPolygons.length;
-      if (blocksV.length) for (let i = before; i < after; i++) { lotsV.push(finder._dividedPolygons[i]); lotBlockOrder.push(block); }
+      if (blocksV.length) for (let i = before; i < after; i++) { lotsV.push(finder._dividedPolygons[i]); lotBlockOrder0.push(block); }
     }
   }
   await dividing;
@@ -292,8 +303,53 @@ async function build(o, W, H, t0, T = null, onStage = null) {
   // the family of each road line: 1 = it follows the major eigenvector
   const family = (gen) => gen.allStreamlines.map((sl) => (gen.streamlinesMajor.includes(sl) ? 1 : 0));
   const roadFamily = { main: family(main), major: family(major), minor: family(minor) };
-  const blocks = blocksV.map(line);
-  const lots = lotsV.map(line);
+  const blocksAll = blocksV.map(line);
+  const lotsAll = lotsV.map(line);
+  const lotBlockAll = lotBlockOrder0;
+
+  // building heights: ours. Taller near the field centres (the radial
+  // centre most), a seeded spread, a few towers. Legible, not real.
+  const centres = fields.map((f) => ({ x: f.x, y: f.y, w: f.type === 'radial' ? 1.4 : 0.8 }));
+  const R = Math.max(W, H) * 0.32;
+  const heightsAll = lotsAll.map((lot) => {
+    let cx = 0, cy = 0;
+    for (const p of lot) { cx += p[0]; cy += p[1]; }
+    cx /= lot.length; cy /= lot.length;
+    let core = 0;
+    for (const c of centres) core = Math.max(core, c.w * Math.exp(-((cx - c.x) ** 2 + (cy - c.y) ** 2) / (R * R)));
+    core = Math.min(1, core);
+    const u = Math.random();
+    let h = 5 + 9 * u + 62 * Math.pow(core, 2.4) * (0.35 + 0.65 * Math.random());
+    if (Math.random() < 0.015 + 0.08 * core) h *= 1.7;
+    // terrain: lower on slopes (a hillside of houses, towers on the flat)
+    if (T) h *= Math.min(1, Math.max(0.35, 1 - 0.65 * slopeAt(T, cx, cy) / T.grade));
+    return { h: Math.round(h * o.height * 10) / 10 };
+  });
+  // the ragged edge (edge.js): which blocks stay urban, which become
+  // fields, which lots stay empty, how low the fringe is. Its own seeded
+  // stream, after the heights, so opts.edge 0 gives the old city exactly.
+  const F = urbanForm({ W, H, dom: { x: origin.x, y: origin.y, w: dims.x, h: dims.y }, blocks: blocksAll, lots: lotsAll, lotBlock: lotBlockAll,
+    roads, fields, T, sea: T ? null : line(water.seaPolygon), river: T ? null : line(water.riverPolygon), edge: o.edge, seed: o.seed, grade: T ? T.grade : 0.22, superBlocks });
+  const blockMap = new Int32Array(blocksAll.length).fill(-1);
+  const blocks = [];
+  blocksAll.forEach((b, i) => { if (F.keepBlock[i] === 1) { blockMap[i] = blocks.length; blocks.push(b); } });
+  const lots = [], lotBlockOrder = [], buildings = [];
+  lotsAll.forEach((l, i) => {
+    if (!F.keepLot[i] || blockMap[lotBlockAll[i]] < 0) return;
+    lots.push(l); lotBlockOrder.push(blockMap[lotBlockAll[i]]);
+    const h = heightsAll[i].h * F.lotScale[i];
+    buildings.push({ h: F.lotScale[i] === 1 ? heightsAll[i].h : Math.max(3.5, Math.round(h * 10) / 10) });
+  });
+  if (F.form.edge > 0) {
+    // minor roads: their runs near urban blocks; major roads: near urban
+    // blocks or fields. Main, coast and river roads stay whole.
+    const nearU = nearPolys(blocks, ANCHOR_TRIM);
+    const nearUF = nearPolys(blocks.concat(F.farms.map((f) => f.poly)), ANCHOR_TRIM);
+    for (const [cls, near] of [['minor', nearU], ['major', nearUF]]) {
+      const t = trimLines(roads[cls], roadFamily[cls], near);
+      roads[cls] = t.lines; roadFamily[cls] = t.fam;
+    }
+  }
 
   // events: roads in creation order (allStreamlinesSimple keeps it), parks
   // after the major roads, blocks, then lots block by block, then buildings
@@ -313,24 +369,6 @@ async function build(o, W, H, t0, T = null, onStage = null) {
     }
   }
 
-  // building heights: ours. Taller near the field centres (the radial
-  // centre most), a seeded spread, a few towers. Legible, not real.
-  const centres = fields.map((f) => ({ x: f.x, y: f.y, w: f.type === 'radial' ? 1.4 : 0.8 }));
-  const R = Math.max(W, H) * 0.32;
-  const buildings = lots.map((lot) => {
-    let cx = 0, cy = 0;
-    for (const p of lot) { cx += p[0]; cy += p[1]; }
-    cx /= lot.length; cy /= lot.length;
-    let core = 0;
-    for (const c of centres) core = Math.max(core, c.w * Math.exp(-((cx - c.x) ** 2 + (cy - c.y) ** 2) / (R * R)));
-    core = Math.min(1, core);
-    const u = Math.random();
-    let h = 5 + 9 * u + 62 * Math.pow(core, 2.4) * (0.35 + 0.65 * Math.random());
-    if (Math.random() < 0.015 + 0.08 * core) h *= 1.7;
-    // terrain: lower on slopes (a hillside of houses, towers on the flat)
-    if (T) h *= Math.min(1, Math.max(0.35, 1 - 0.65 * slopeAt(T, cx, cy) / T.grade));
-    return { h: Math.round(h * o.height * 10) / 10 };
-  });
   buildings.forEach((_, i) => events.push({ k: 'building', i }));
 
   const t1 = (typeof performance !== 'undefined' ? performance : Date).now();
@@ -351,6 +389,8 @@ async function build(o, W, H, t0, T = null, onStage = null) {
     blocks,
     lots,
     lotBlock: lotBlockOrder,
+    farms: F.farms,
+    form: F.form,
     buildings,
     events,
     stats: {
@@ -358,6 +398,7 @@ async function build(o, W, H, t0, T = null, onStage = null) {
       roads: roads.main.length + roads.major.length + roads.minor.length,
       blocks: blocks.length, lots: lots.length,
       tallest: buildings.reduce((m, b) => Math.max(m, b.h), 0),
+      farms: F.farms.length, urbanShare: F.form.urbanShare,
     },
   };
   if (T) {
