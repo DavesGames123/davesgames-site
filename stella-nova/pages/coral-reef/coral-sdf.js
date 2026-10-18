@@ -160,6 +160,22 @@ export const SHAPES = {
     polyp: { density: 1500, tip: 0, size: 0.0016, max: 500, extend: 0.3, tint: [0.96, 0.9, 0.96], fluor: 0.5, trunk: 1, under: 0.5, range: [292, 936] } },
   mushroom: { cell: 0.004, k: 0.016, chain: 1, rTip: 0.016, pipe: 4, rMax: 0.016, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.012, skin: 2,
     polyp: { density: 120, tip: 0, size: 0.004, max: 60, extend: 0.7, tint: [0.96, 1.0, 0.9], fluor: 0.6, trunk: 1, under: 0.2, range: [43, 138] } },
+
+  // soft corals
+  leather: { post: 'plate', cell: 0.012, k: 0.03, bend: 0.35, hold: 0.4, rTip: 0.02, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.04, skin: 9,
+    inflate: 0.014, half: 0.016, polyp: { density: 600, tip: 0.5, size: 0.006, max: 600, extend: 1.0, tint: [1.0, 0.98, 0.9], fluor: 0.1, range: [120, 386] } },
+  carnation: { cell: 0.008, k: 0.02, bend: 0.4, hold: 0.3, rTip: 0.008, pipe: 3.4, rMax: 0.03, sub0: 2, quant: 0.2, rootScale: 1.8, band: 0.024, skin: 9,
+    polyp: { density: 500, tip: 4, size: 0.006, max: 600, extend: 0.9, tint: [1.0, 0.86, 0.9], fluor: 0.1, trunk: 0.05, range: [305, 976] } },
+  xenia: { cell: 0.005, k: 0.012, bend: 0.4, hold: 0.3, rTip: 0.006, pipe: 3.4, rMax: 0.016, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.016, skin: 9,
+    polyp: { density: 250, tip: 4, size: 0.009, max: 400, extend: 1.0, tint: [1.0, 1.0, 1.0], fluor: 0.1, trunk: 0.05, range: [240, 766] } },
+
+  // gorgonians and sea fans
+  seawhip: { cell: 0.007, k: 0.012, bend: 0.5, hold: 0.25, rTip: 0.006, pipe: 3.6, rMax: 0.012, sub0: 3, quant: 0.16, rootScale: 1.8, band: 0.018, skin: 1,
+    polyp: { density: 1200, tip: 0.5, size: 0.003, max: 700, extend: 0.9, tint: [1.0, 0.92, 0.84], fluor: 0.1, range: [188, 603] } },
+  searod: { cell: 0.009, k: 0.018, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 3.6, rMax: 0.02, sub0: 3, quant: 0.16, rootScale: 1.6, band: 0.024, skin: 9,
+    polyp: { density: 1500, tip: 0.5, size: 0.0035, max: 700, extend: 1.0, tint: [0.96, 0.9, 0.8], fluor: 0.1, range: [392, 1254] } },
+  annella: { own: true, post: 'web', cell: 0.005, k: 0.0045, bend: 0.25, hold: 0.4, rTip: 0.0025, pipe: 3.5, rMax: 0.007, sub0: 3, quant: 0.2, rootScale: 2, band: 0.028, skin: 1,
+    web: 0.009, half: 0.0024, polyp: { density: 2000, tip: 1, size: 0.0016, max: 900, extend: 0.9, tint: [1.0, 0.96, 0.9], fluor: 0.1, trunk: 0.35, range: [483, 1547] } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
 // The skin code of each species (scene.js uSpecies: the species branch of
