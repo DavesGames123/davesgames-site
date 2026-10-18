@@ -34,6 +34,11 @@
 //                    coral and the polyps, with no phase per particle
 //    grow-in ....... a new particle slides out from its parent (C.xyz in
 //                    the vertex shader), not along the surface normals
+//    detail ........ (a text check of shaders.js CORAL_FS) the bump map of
+//                    each species: no random noise bump, small corallite
+//                    cups on staghorn and finger, radial ridges on the
+//                    table (vAx), pores on the fan, grooves on the brain
+//                    coral; bump strength 0.3 or less except the brain
 // ============================================================================
 import { createRock } from '../rock/index.js';
 import { createReef, SPECIES, SPECIES_IDS } from '../reef.js';
@@ -171,6 +176,9 @@ for (const id of SPECIES_IDS.filter(q => SPECIES[q].sway)) {
   const vs = SH.CORAL_VS, pv = SH.POLYP_VS;
   ok(/coralSway\(/.test(vs) && /coralSway\(/.test(pv) && !/gid \* 0\.0137/.test(vs), 'sway: the coral and the polyps use one sway with no phase per particle', '');
   ok(/position \+ C\.xyz \* \(1\.0 - g\)/.test(vs) && !/position - normal \*/.test(vs), 'grow-in: a new particle slides out from its parent, not along the normals', '');
+  const fs = SH.CORAL_FS, kb = [...fs.matchAll(/kb = ([0-9.]+)/g)].map(m => +m[1]);
+  ok(!/noise3\(q \* 15\.0\)/.test(fs) && /dot\(q, across\)/.test(fs) && /float cup = /.test(fs) && /groove\(q\)/.test(fs) && kb.filter(v => v > 0.3).length === 1,
+    'detail: species marks (cups, ridges, pores, grooves) with shallow bumps, no random noise bump', `bump strengths ${kb.join(', ')} (0.9: the brain grooves)`);
 }
 
 // ── surface: no bead at each particle ───────────────────────────────────────

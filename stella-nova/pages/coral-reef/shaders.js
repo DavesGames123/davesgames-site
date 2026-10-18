@@ -439,34 +439,51 @@ void main() {
   vec3 base = uMode < 0.5 ? vNat : lutC;
   float bl = uMode < 0.5 ? uBleach : uBleach * 0.35;
   base = mix(base, vec3(0.88, 0.88, 0.84), bl * 0.88);
-  float h = 0.0, ao = 1.0, thin = 0.35, sheen = 0.0;
+  float h = 0.0, ao = 1.0, thin = 0.35, sheen = 0.0, kb = 0.22;
   float sp = uSpecies;
   vec3 q = vL * uDetailK;
+  // Fine detail by species. The user said: "the surface texture of
+  // growing corals along the normals is too rough". The bumps are small and
+  // shallow now (kb 0.2 to 0.3, was 0.55), with no random noise term: a
+  // smooth skin with the species mark on it.
   if (uDetail > 0.5) {
-    if (sp < 0.5 || (sp > 1.5 && sp < 2.5)) {
-      vec2 c = worley(q * (sp < 0.5 ? 4.2 : 5.0));
-      float rim = smoothstep(0.12, 0.26, c.x) * (1.0 - smoothstep(0.30, 0.46, c.x));
-      float pit = 1.0 - smoothstep(0.06, 0.2, c.x);
-      h = rim * 0.6 - pit * 0.9 + (c.y - c.x) * 0.15;
-      ao = 1.0 - pit * 0.55;
-      base *= 0.86 + 0.28 * rim;
-      thin = sp < 0.5 ? 0.3 + 0.6 * vTip : 0.35;
+    if (sp < 0.5 || sp > 3.5) {
+      // staghorn and finger: a smooth skin with small corallite cups
+      vec2 c = worley(q * (sp < 0.5 ? 9.0 : 11.0));
+      float cup = 1.0 - smoothstep(0.05, 0.15, c.x);
+      float rim = smoothstep(0.11, 0.18, c.x) * (1.0 - smoothstep(0.2, 0.3, c.x));
+      h = rim * 0.25 - cup * 0.45;
+      ao = 1.0 - cup * 0.3;
+      base *= 0.94 + 0.1 * rim;
+      thin = sp < 0.5 ? 0.3 + 0.6 * vTip : 0.6; sheen = sp > 3.5 ? 0.35 : 0.0;
     } else if (sp < 1.5) {
-      vec2 c = worley(q * 9.0);
-      float pore = 1.0 - smoothstep(0.08, 0.22, c.x);
-      h = -pore * 0.5; ao = 1.0 - pore * 0.35; thin = 1.0;
+      // sea fan: thin blades with fine pores in rows along each blade
+      vec2 c = worley(q * 10.0);
+      float pore = 1.0 - smoothstep(0.06, 0.16, c.x);
+      h = -pore * 0.35; ao = 1.0 - pore * 0.25; thin = 1.0; kb = 0.25;
+    } else if (sp < 2.5) {
+      // table: a flat plate with fine ridges along the radial branches
+      // (vAx, the branch direction) and small cups between them
+      vec3 ax = length(vAx) > 0.5 ? normalize(vAx) : vec3(1.0, 0.0, 0.0);
+      vec3 across = cross(ax, n);
+      across = length(across) > 1e-3 ? normalize(across) : vec3(0.0, 0.0, 1.0);
+      float ridge = smoothstep(0.1, 0.9, 0.5 + 0.5 * sin(dot(q, across) * 18.0 + noise3(q * 1.5) * 1.5));
+      vec2 c = worley(q * 12.0);
+      float cup = 1.0 - smoothstep(0.05, 0.13, c.x);
+      h = ridge * 0.3 - cup * 0.3;
+      ao = 0.92 + 0.08 * ridge - cup * 0.2;
+      base *= 0.94 + 0.1 * ridge;
+      thin = 0.35; kb = 0.3;
     } else if (sp < 3.5) {
+      // brain coral: meandering valleys and ridges
       float gv = groove(q);
       float sep = 0.5 + 0.5 * sin(dot(q, vec3(7.1, 5.3, 6.7)) + noise3(q * 0.9) * 6.0);
       h = -gv * 1.2 + (1.0 - gv) * sep * 0.15;
       ao = 1.0 - gv * 0.5;
       base = mix(base, base * vec3(0.72, 0.82, 0.62), gv * 0.6);
-      thin = 0.25;
-    } else {
-      float v = noise3(q * 7.0) * 0.6 + noise3(q * 15.0) * 0.4;
-      h = v * 0.5; ao = 0.85 + 0.15 * v; thin = 0.6; sheen = 0.6;
+      thin = 0.25; kb = 0.9;
     }
-    n = bumpN(n, vW, h, sp > 2.5 && sp < 3.5 ? 0.9 : 0.55);
+    n = bumpN(n, vW, h, kb);
   }
   // subsurface: wrap light and light through the thin parts, a soft sheen
   vec3 col = lightSurf(base, vW, n, V, 0.5, 0.12 + sheen * 0.2, 0.55, thin, ao);
