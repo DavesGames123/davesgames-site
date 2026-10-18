@@ -16,6 +16,9 @@
 //      quality: 'high' | 'low',  // low: fewer segments, 512 shadow map
 //      radius: 30,               // the plot radius (m)
 //      depthBase: 26,            // HUD depth = depthBase - y (m)
+//      scale: 0.6,               // vehicle size: 2.2 x 1.4 x 1.5 m at 1;
+//                                // 0.6 fits ROCK's canyons and arch gaps
+//      clear: 1.45 * scale + 0.05,  // the clearance shell (m)
 //      feed: { mode: 'r36' | 'm1', speed: 2, hold: 2.5, noise, canvas,
 //              document, dpr, worker: true, vehicle: 1 },
 //      lightIntensity: 420,      // candela of each SpotLight (r160 units)
@@ -54,7 +57,7 @@
 //  FILES (grep -n targets)
 //    index.js ....... "export function createROVs", "function colonyBounds"
 //    build.js ....... the vehicle model ("export function buildVehicle")
-//    pilot.js ....... paths and motion, DOM-free ("export function createPilot")
+//    pilot.js ....... grid, A*, paths and motion, DOM-free ("export function createPilot")
 //    tether.js ...... the verlet rope ("export function createTether")
 //    wash.js ........ thruster wash and silt ("export function createWash")
 //    link.js ........ the SSTV link over pages/sstv ("export class SstvLink")
@@ -64,7 +67,7 @@
 //    stub-rock.js ... a stand-in rock for tests ("export function createStubRock")
 // ============================================================================
 import { buildVehicle } from './build.js';
-import { createPilot, hash, rng, zoomFov, trace } from './pilot.js';
+import { createPilot, createGrid, hash, rng, zoomFov, trace, surfaceY } from './pilot.js';
 import { createTether } from './tether.js';
 import { createWash } from './wash.js';
 import { createFeed } from './feed.js';
@@ -104,7 +107,12 @@ export function colonyBounds(reef, c) {
 export function createROVs(THREE, o = {}) {
   const seed = o.seed ?? 1, count = clamp(o.count ?? 3, 1, 3), radius = o.radius ?? 30, low = o.quality === 'low';
   const rock = o.rock || createStubRock({ seed, radius });
-  const sdf = rock.sdf, scene = o.scene || null, reef = o.reef || null;
+  // the water: free of the rock and of the sand floor (ROCK keeps the sand
+  // out of rock.sdf; its height field is near enough to a distance)
+  const sand = rock.sand && typeof rock.sand.heightAt === 'function' ? rock.sand : null;
+  const sdf = sand ? (x, y, z) => Math.min(rock.sdf(x, y, z), (y - sand.heightAt(x, z)) * 0.9) : rock.sdf;
+  const scene = o.scene || null, reef = o.reef || null;
+  const scale = o.scale ?? 0.6, clear = o.clear ?? 1.45 * scale + 0.05;
   const top = (rock.bounds ? rock.bounds.max[1] : 8);
   const depthBase = o.depthBase ?? 26;
 
@@ -120,8 +128,21 @@ export function createROVs(THREE, o = {}) {
     if (!rockTargets && rock.sampleSurface) {
       rockTargets = rock.sampleSurface(24, rng(hash(seed, 41)), (s) => s.exposure > 0.45).map((s, i) => ({ id: 'rock' + i, center: [s.p[0] + s.n[0] * 0.4, s.p[1] + s.n[1] * 0.4, s.p[2] + s.n[2] * 0.4], radius: 0.7 }));
     }
-    return rockTargets || [];
+    if (!rockTargets || rockTargets.length < 4) {
+      // our own: trace down onto the rock or sand at seeded points
+      const r = rng(hash(seed, 43)), out = [];
+      for (let i = 0; i < 24; i++) {
+        const a = r() * TAU, d = radius * Math.sqrt(0.02 + 0.7 * r()), x = Math.cos(a) * d, z = Math.sin(a) * d;
+        out.push({ id: 'rock' + i, center: [x, surfaceY(sdf, x, z, top + 4) + 0.5, z], radius: 0.7 });
+      }
+      rockTargets = out;
+    }
+    return rockTargets;
   }
+
+  // the free-water grid for A* routes, shared by the vehicles (about 350k
+  // SDF calls once; 0.8 m cells on low quality)
+  const grid = o.grid !== false ? createGrid(sdf, { radius, ymin: rock.bounds ? rock.bounds.min[1] : -4, ymax: top + 6, cell: low ? 0.8 : 0.6 }) : null;
 
   const wash = createWash(THREE, { count: low ? 500 : 1000, seed });
   if (scene) scene.add(wash.points);
@@ -134,9 +155,9 @@ export function createROVs(THREE, o = {}) {
     const id = i + 1, vs = hash(seed, i, 101);
     const parts = buildVehicle(THREE, {
       id, seed: vs, quality: o.quality, lights: i === 0 ? 2 : 1, shadows: i === 0 && o.shadows !== false,
-      shadowSize: low ? 512 : 1024, lightIntensity: o.lightIntensity ?? 420, foam: [0xf2b705, 0xf0a800, 0xe8b818][i],
+      shadowSize: low ? 512 : 1024, scale, lightIntensity: o.lightIntensity ?? 420, foam: [0xf2b705, 0xf0a800, 0xe8b818][i],
     });
-    const pilot = createPilot({ sdf, bounds: rock.bounds, features: rock.features || [], radius, seed, index: i, targets, clear: 1.5 });
+    const pilot = createPilot({ sdf, bounds: rock.bounds, features: rock.features || [], radius, seed, index: i, targets, clear, grid });
     const st = pilot.state;
     const g = parts.group;
     g.position.set(...st.p); g.rotation.order = 'YXZ'; g.rotation.y = -st.yaw;
@@ -184,10 +205,11 @@ export function createROVs(THREE, o = {}) {
     v.target.set(st.look[0], st.look[1], st.look[2]);
     // pan and tilt the camera pod at the look point
     loc.copy(v.target); P.body.worldToLocal(loc); loc.sub(P.cameraPod.position);
-    const pan = clamp(Math.atan2(-loc.z, loc.x), -1.75, 1.75), tilt = clamp(Math.atan2(loc.y, Math.hypot(loc.x, loc.z)), -1.35, 0.6);
+    const pan = clamp(Math.atan2(-loc.z, loc.x), -1.75, 1.75), tilt = clamp(Math.atan2(loc.y, Math.hypot(loc.x, loc.z)), -1.5, 0.6);
     P.cameraPod.rotation.y = pan; P.cameraTilt.rotation.z = tilt;
     // zoom: hold the target sphere when inspecting, wide on a survey
-    const d = Math.max(0.3, v.target.distanceTo(g.position));
+    P.cameraPod.updateMatrixWorld(true);
+    const d = Math.max(0.1, v.target.distanceTo(P.camera.getWorldPosition(V)));   // from the lens, not the hull
     const want = st.mode === 'survey' ? 60 : zoomFov(d, st.lookR, P.camera.aspect || 1.25, { margin: 1.3, min: 8, max: 70 });
     v.fov += (want - v.fov) * (1 - Math.exp(-dt * 1.5));
     if (st.mode !== 'survey') v.fov = Math.max(v.fov, want);   // never tighter than the colony
@@ -239,7 +261,7 @@ export function createROVs(THREE, o = {}) {
     // manipulator: a slow wrist turn while inspecting
     const insp = st.mode !== 'survey' && st.phase === 'orbit';
     P.arm.wrist.rotation.x += ((insp ? Math.sin(t * 0.4) * 0.6 : 0) - P.arm.wrist.rotation.x) * (1 - Math.exp(-dt));
-    P.arm.elbow.rotation.z += ((insp ? 1.6 : 1.9) - P.arm.elbow.rotation.z) * (1 - Math.exp(-dt * 0.5));
+    P.arm.elbow.rotation.z += ((insp ? 2.1 : 2.55) - P.arm.elbow.rotation.z) * (1 - Math.exp(-dt * 0.5));
     // tether: the top end follows the vehicle slowly (ship drift)
     const sh = v.ship, e = 1 - Math.exp(-dt / 40);
     sh[0] += (st.p[0] + v.shipOff[0] - sh[0]) * e; sh[2] += (st.p[2] + v.shipOff[1] - sh[2]) * e;
@@ -299,7 +321,7 @@ export function createROVs(THREE, o = {}) {
   }
 
   return {
-    update, vehicles, focusOn, feed, wash: wash.points, rock, dispose,
+    update, vehicles, focusOn, feed, wash: wash.points, rock, sdf, clear, grid, dispose,
     get lights() { return vehicles.flatMap(v => v.lights); },
     get time() { return clock; },
     headingOf,

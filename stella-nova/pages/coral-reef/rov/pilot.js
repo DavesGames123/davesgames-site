@@ -5,10 +5,13 @@
 //  here: points are [x, y, z] arrays, y up, metres. Every choice comes from
 //  a seeded generator, so one seed gives one dive (the tests check it).
 //
-//  PLANNING. A survey leg is a list of control points: the pass line of a
-//  rock feature (through a canyon, under an arch, past a pinnacle), or a
-//  free point at 1.5 to 3 m over the surface. passLine() tries 16 headings
+//  PLANNING (see also the grid section). A survey leg is a list of control points: the pass line of a
+//  rock feature (along a canyon path, through an arch on its axis, to a
+//  cave mouth, past a pinnacle), or a free point 1.5 to 3 m over the
+//  surface. Without ROCK's path or axis, passLine() tries 16 headings
 //  through the feature centre and keeps the one with the most free water.
+//  Where a gap is narrower than the clearance, the push-out lifts the path
+//  over it: the vehicle never squeezes.
 //  buildPath() samples a Catmull-Rom curve through the points every 0.25 m,
 //  pushes each sample out of the rock to the clearance (sdf >= clear),
 //  smooths, pushes again, and splits any segment whose midpoint is too
@@ -38,6 +41,9 @@
 //    "export function pushOut"       move a point to the clearance
 //    "export function passLine"      the line through a feature
 //    "export function buildPath"     control points -> safe polyline
+//    "export function createGrid"    free-water grid and A* routes
+//    "export function pullTight"     string pulling of a route
+//    "export function marchPath"     the planner with no grid
 //    "export function pathAt"        point and tangent at arc length s
 //    "export function zoomFov"       field of view for a target sphere
 //    "export function orbitPose"     the focus orbit point at time t
@@ -74,13 +80,29 @@ function gradient(sdf, p) {
   return l > 1e-9 ? [g[0] / l, g[1] / l, g[2] / l] : [0, 1, 0];
 }
 
-// Move p out along the SDF gradient until sdf(p) >= clear. In place.
+// Move p out to sdf(p) >= clear. In place. First along the gradient (a
+// true distance field needs one or two steps). A rock field that is not
+// an exact distance can stall that, so then a search: the nearest free
+// point on 26 directions at growing radii, up first on a tie.
+const DIRS = [];
+for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+  if (!x && !y && !z) continue;
+  const l = Math.hypot(x, y, z); DIRS.push([x / l, y / l, z / l]);
+}
+DIRS.sort((a, b) => b[1] - a[1]);
 export function pushOut(sdf, p, clear) {
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 8; i++) {
     const d = sdf(p[0], p[1], p[2]);
     if (d >= clear) return p;
     const n = gradient(sdf, p), s = clear - d + 0.04;
     p[0] += n[0] * s; p[1] += n[1] * s; p[2] += n[2] * s;
+  }
+  if (sdf(p[0], p[1], p[2]) >= clear) return p;
+  for (let r = 0.15; r < 8; r *= 1.35) {
+    for (const d of DIRS) {
+      const x = p[0] + d[0] * r, y = p[1] + d[1] * r, z = p[2] + d[2] * r;
+      if (sdf(x, y, z) >= clear) { p[0] = x; p[1] = y; p[2] = z; return p; }
+    }
   }
   for (let i = 0; i < 600 && sdf(p[0], p[1], p[2]) < clear; i++) p[1] += 0.1;   // a pocket: climb out
   return p;
@@ -117,18 +139,41 @@ function minAlong(sdf, a, b, step = 0.3) {
 
 const sizeOf = (f) => (Array.isArray(f.size) ? Math.max(...f.size) : (f.size || 4));
 
-// The best straight line through a feature: [enter, middle, exit] or null.
-export function passLine(sdf, f, clear) {
+// The pass of a feature: a list of control points. ROCK gives a canyon
+// path, an arch axis and gap, a cave mouth and axis; these are used when
+// present. Else: the best of 16 straight lines through the centre.
+export function passLine(sdf, f, clear, rand = Math.random) {
+  if (f.kind === 'canyon' && Array.isArray(f.path) && f.path.length > 1) {
+    // a window of about 24 m of the floor path, 1.2 m up, every 3 m
+    const P = f.path, cum = [0];
+    for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + len(sub(P[i], P[i - 1])));
+    const total = cum[cum.length - 1], win = Math.min(total, 24), s0 = rand() * (total - win);
+    const out = [];
+    for (let s = s0; s <= s0 + win + 1e-6; s += 3) {
+      let i = 1; while (i < P.length - 1 && cum[i] < s) i++;
+      const u = clamp((s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1), 0, 1), q = lerp3(P[i - 1], P[i], u);
+      q[1] += 1.2;
+      out.push(pushOut(sdf, q, clear));
+    }
+    return out.length > 1 ? out : null;
+  }
+  if (f.kind === 'cave' && f.mouth && f.axis) {
+    const m = f.mouth, a = f.axis, d = (f.radius || 1.5) + 2.5;
+    return [pushOut(sdf, [m[0] - a[0] * d, m[1] - a[1] * d + 0.3, m[2] - a[2] * d], clear)];
+  }
   const c = pushOut(sdf, f.center.slice(), clear);
+  if (f.axis) {
+    const y = f.gap ? (f.gap[0] + f.gap[1]) / 2 : f.center[1], L = clamp(sizeOf(f) * 0.8 + 3, 4, 12), a = f.axis;
+    const m = pushOut(sdf, [f.center[0], y, f.center[2]], clear);
+    return [pushOut(sdf, [m[0] - a[0] * L, y, m[2] - a[2] * L], clear), m, pushOut(sdf, [m[0] + a[0] * L, y, m[2] + a[2] * L], clear)];
+  }
   const L = clamp(sizeOf(f) * 0.6, 3, 14);
   let best = null, bs = -Infinity;
   for (let i = 0; i < 16; i++) {
     const a = i / 16 * Math.PI;                 // a line: 0..pi covers both ways
     const d = [Math.cos(a), 0, Math.sin(a)];
     const p0 = [c[0] - d[0] * L, c[1], c[2] - d[2] * L], p1 = [c[0] + d[0] * L, c[1], c[2] + d[2] * L];
-    // the score: the free water along it; a canyon or arch wants a tight
-    // fit on the sides, so a line along the walls scores above one into them
-    const s = Math.min(minAlong(sdf, p0, c), minAlong(sdf, c, p1));
+    const s = Math.min(minAlong(sdf, p0, c), minAlong(sdf, c, p1));   // the free water along it
     if (s > bs) { bs = s; best = [p0, c, p1]; }
   }
   if (!best) return null;
@@ -136,9 +181,182 @@ export function passLine(sdf, f, clear) {
   return best;
 }
 
-// Catmull-Rom through ctrl -> a polyline that keeps sdf >= clear.
+// String pulling: from each vertex, jump to the farthest later vertex (up
+// to 40 on) with a free straight line (samples every 0.15 m at 0.9 x
+// clear). This drops the zigzag of a grid or of slides. Then the path is
+// split again into segments of at most step metres.
+export function pullTight(sdf, pts, clear, step = 0.25) {
+  if (pts.length < 3) return pts;
+  const lineOk = (a, b) => {
+    const n = Math.max(2, Math.ceil(len(sub(b, a)) / 0.15));
+    for (let k = 1; k < n; k++) { const m = lerp3(a, b, k / n); if (sdf(m[0], m[1], m[2]) < clear * 0.9) return false; }
+    return true;
+  };
+  const out = [pts[0]];
+  for (let i = 0; i < pts.length - 1;) {
+    let j = Math.min(pts.length - 1, i + 40);
+    while (j > i + 1 && !lineOk(pts[i], pts[j])) j -= j - i > 8 ? 4 : 1;
+    out.push(pts[j]); i = j;
+  }
+  const res = [out[0]];
+  for (let i = 1; i < out.length; i++) {
+    const a = out[i - 1], b = out[i], n = Math.max(1, Math.ceil(len(sub(b, a)) / step));
+    for (let k = 1; k <= n; k++) res.push(k === n ? b : lerp3(a, b, k / n));
+  }
+  return res;
+}
+
+// ---------------------------------------------------------------- the grid
+// A free-water grid over the plot: the SDF at every cell centre (cell 0.6
+// m; about 350k calls, once, shared by the vehicles). A cell is free when
+// its distance is at least 0.9 x clear. A* (26 neighbours, a cost that
+// rises near the rock, so the routes keep to open water but still take a
+// canyon) finds a route between two points; pullTight straightens it.
+export function createGrid(sdf, { radius = 30, ymin = -3, ymax = 16, cell = 0.6 } = {}) {
+  const ext = radius * 1.05, nx = Math.ceil(2 * ext / cell) + 1, nz = nx, ny = Math.ceil((ymax - ymin) / cell) + 1;
+  const x0 = -ext, z0 = -ext, y0 = ymin, N = nx * ny * nz;
+  const D = new Float32Array(N);
+  for (let k = 0, i = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let h = 0; h < nx; h++, i++) D[i] = sdf(x0 + h * cell, y0 + j * cell, z0 + k * cell);
+  const g = new Float32Array(N).fill(Infinity), par = new Int32Array(N).fill(-1), shut = new Uint8Array(N);
+  // connected parts of the free water (per clearance limit, on demand), so
+  // a route to a closed pocket fails at once instead of a full search
+  const comps = new Map();
+  function compOf(lim) {
+    if (comps.has(lim)) return comps.get(lim);
+    const C = new Int32Array(N).fill(-1), Q = new Int32Array(N);
+    let label = 0;
+    for (let s0 = 0; s0 < N; s0++) {
+      if (C[s0] >= 0 || D[s0] < lim) continue;
+      let qh = 0, qt = 0; Q[qt++] = s0; C[s0] = label;
+      while (qh < qt) {
+        const i = Q[qh++], h = i % nx, j = Math.floor(i / nx) % ny, k = Math.floor(i / (nx * ny));
+        if (h > 0 && C[i - 1] < 0 && D[i - 1] >= lim) { C[i - 1] = label; Q[qt++] = i - 1; }
+        if (h < nx - 1 && C[i + 1] < 0 && D[i + 1] >= lim) { C[i + 1] = label; Q[qt++] = i + 1; }
+        if (j > 0 && C[i - nx] < 0 && D[i - nx] >= lim) { C[i - nx] = label; Q[qt++] = i - nx; }
+        if (j < ny - 1 && C[i + nx] < 0 && D[i + nx] >= lim) { C[i + nx] = label; Q[qt++] = i + nx; }
+        const L = nx * ny;
+        if (k > 0 && C[i - L] < 0 && D[i - L] >= lim) { C[i - L] = label; Q[qt++] = i - L; }
+        if (k < nz - 1 && C[i + L] < 0 && D[i + L] >= lim) { C[i + L] = label; Q[qt++] = i + L; }
+      }
+      label++;
+    }
+    comps.set(lim, C);
+    return C;
+  }
+  const id = (h, j, k) => (k * ny + j) * nx + h;
+  const cellOf = (p) => [clamp(Math.round((p[0] - x0) / cell), 0, nx - 1), clamp(Math.round((p[1] - y0) / cell), 0, ny - 1), clamp(Math.round((p[2] - z0) / cell), 0, nz - 1)];
+  const centre = (i) => { const h = i % nx, j = Math.floor(i / nx) % ny, k = Math.floor(i / (nx * ny)); return [x0 + h * cell, y0 + j * cell, z0 + k * cell]; };
+  const NBa = new Int8Array(26), NBb = new Int8Array(26), NBc = new Int8Array(26), NBw = new Float32Array(26);
+  for (let a = -1, e = 0; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) if (a || b || c) { NBa[e] = a; NBb[e] = b; NBc[e] = c; NBw[e] = Math.hypot(a, b, c); e++; }
+  let HF = new Float64Array(4096), HI = new Int32Array(4096);
+  // the nearest free cell to p (a shell search)
+  function nearestFree(p, lim, C = null, want = -1) {
+    const [h, j, k] = cellOf(p);
+    for (let r = 0; r < (C ? 14 : 8); r++) {
+      let best = -1, bd = Infinity;
+      for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) {
+        if (Math.max(Math.abs(a), Math.abs(b), Math.abs(c)) !== r) continue;
+        const H = h + a, J = j + b, K = k + c;
+        if (H < 0 || J < 0 || K < 0 || H >= nx || J >= ny || K >= nz) continue;
+        const i = id(H, J, K);
+        if (D[i] < lim || (C && C[i] !== want)) continue;
+        const q = centre(i), d = len(sub(q, p)) - b * 0.01;    // up first on a tie
+        if (d < bd) { bd = d; best = i; }
+      }
+      if (best >= 0) return best;
+    }
+    return -1;
+  }
+  // A* from a to b (points). Returns the cell centres, or null.
+  function route(a, b, clear, maxNodes = 80000) {
+    const lim = clear * 0.9, s = nearestFree(a, lim);
+    if (s < 0) return null;
+    const C = compOf(lim), t = nearestFree(b, lim, C, C[s]);   // the goal cell in the same water as the start
+    if (t < 0) return null;
+    const touched = [], tp = centre(t), tx = tp[0], ty = tp[1], tz = tp[2];
+    // a binary heap in typed arrays: f and cell index
+    let hn = 0;
+    const push = (f, i) => {
+      if (hn >= HF.length) { const F2 = new Float64Array(HF.length * 2), I2 = new Int32Array(HF.length * 2); F2.set(HF); I2.set(HI); HF = F2; HI = I2; }
+      let c = hn++;
+      while (c > 0) { const p = (c - 1) >> 1; if (HF[p] <= f) break; HF[c] = HF[p]; HI[c] = HI[p]; c = p; }
+      HF[c] = f; HI[c] = i;
+    };
+    const pop = () => {
+      const top = HI[0], f = HF[--hn], i = HI[hn];
+      let c = 0;
+      for (;;) { const l = 2 * c + 1; if (l >= hn) break; const m = l + 1 < hn && HF[l + 1] < HF[l] ? l + 1 : l; if (HF[m] >= f) break; HF[c] = HF[m]; HI[c] = HI[m]; c = m; }
+      HF[c] = f; HI[c] = i;
+      return top;
+    };
+    const W = 1.7;
+    g[s] = 0; touched.push(s);
+    { const q = centre(s); push(Math.hypot(q[0] - tx, q[1] - ty, q[2] - tz) * W, s); }
+    let found = false, n = 0;
+    while (hn > 0 && n < maxNodes) {
+      const i = pop();
+      if (shut[i]) continue;
+      shut[i] = 1; n++;
+      if (i === t) { found = true; break; }
+      const h = i % nx, j = Math.floor(i / nx) % ny, k = Math.floor(i / (nx * ny));
+      for (let e = 0; e < 26; e++) {
+        const H = h + NBa[e], J = j + NBb[e], K = k + NBc[e];
+        if (H < 0 || J < 0 || K < 0 || H >= nx || J >= ny || K >= nz) continue;
+        const q = (K * ny + J) * nx + H;
+        if (shut[q] || D[q] < lim) continue;
+        const near = Math.max(0, clear + 1.2 - D[q]) / 1.2;          // 0 in open water, 1 at the shell
+        const ng = g[i] + NBw[e] * cell * (1 + 1.5 * near);
+        if (ng < g[q]) {
+          if (g[q] === Infinity) touched.push(q);
+          g[q] = ng; par[q] = i;
+          push(ng + Math.hypot(x0 + H * cell - tx, y0 + J * cell - ty, z0 + K * cell - tz) * W, q);
+        }
+      }
+    }
+    let out = null;
+    if (found) { out = []; for (let i = t; i >= 0; i = par[i]) out.push(centre(i)); out.reverse(); }
+    for (const i of touched) { g[i] = Infinity; par[i] = -1; shut[i] = 0; }
+    return out;
+  }
+  return { D, nx, ny, nz, cell, x0, y0, z0, route, nearestFree, centre, cellOf };
+}
+
+// Control points -> a safe polyline. With a grid: A* between the points,
+// then pullTight. Without: marchPath. Returns { pts, s, length }.
 export function buildPath(sdf, ctrl, clear, o = {}) {
-  const step = o.step || 0.25, lim = o.radius || Infinity, top = o.top ?? Infinity;
+  if (!o.grid) return marchPath(sdf, ctrl, clear, o);
+  const step = o.step || 0.25;
+  let pts = [pushOut(sdf, ctrl[0].slice(), clear)];
+  for (let i = 1; i < ctrl.length; i++) {
+    const r = o.grid.route(pts[pts.length - 1], ctrl[i], clear);
+    if (!r) continue;                               // unreachable: skip it
+    for (let k = 1; k < r.length; k++) pts.push(r[k]);
+  }
+  pts = pullTight(sdf, pts, clear, step);
+  const s = new Float64Array(pts.length);
+  for (let i = 1; i < pts.length; i++) s[i] = s[i - 1] + len(sub(pts[i], pts[i - 1]));
+  return { pts, s, length: s[pts.length - 1] };
+}
+
+// The fallback planner (no grid): Catmull-Rom through ctrl -> a polyline
+// that keeps sdf >= clear. The curve gives targets every step metres (pushed out of the rock). A
+// marcher walks from the start to each target in moves of at most 0.3 m.
+// A move that would end or pass nearer than the clearance slides: of 26
+// directions it takes the free one that gets closest to the target. So
+// every vertex is free and every segment is short and checked, also on a
+// rock field that is not an exact distance. A target that the marcher
+// cannot reach (it climbs up to 7 m, or moves to open water out of a
+// pocket with a roof, first) is skipped; after 4 misses in a row, or
+// past the SDF budget, the path ends there. String pulling then drops
+// the zigzag of the slides. Then a light smoothing that keeps
+// only the moves that stay free.
+export function marchPath(sdf0, ctrl, clear, o = {}) {
+  const step = o.step || 0.25, lim = o.radius || Infinity, top = o.top ?? Infinity, mv = 0.3;
+  // a budget of SDF calls bounds the frame time of one plan (about 40 ms
+  // on the real rock): past it the path ends where the marcher is, and
+  // the next leg goes on from there
+  let calls = 0;
+  const budget = o.budget ?? 40000, sdf = (x, y, z) => { calls++; return sdf0(x, y, z); };
   const P = ctrl.map(p => p.slice());
   const keep = (p) => {
     const r = Math.hypot(p[0], p[2]);
@@ -146,35 +364,67 @@ export function buildPath(sdf, ctrl, clear, o = {}) {
     if (p[1] > top) p[1] = top;
     return pushOut(sdf, p, clear);
   };
-  let pts = [];
+  const free = (p) => sdf(p[0], p[1], p[2]) >= clear;
+  const segOk = (a, b) => { for (const u of [0.25, 0.5, 0.75]) { const m = lerp3(a, b, u); if (sdf(m[0], m[1], m[2]) < clear * 0.9) return false; } return true; };
+  const targets = [];
   for (let i = 0; i < P.length - 1; i++) {
     const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
     const n = Math.max(1, Math.ceil(len(sub(p2, p1)) / step));
     for (let j = 0; j < n; j++) {
       const t = j / n, t2 = t * t, t3 = t2 * t;
-      const q = [0, 1, 2].map(k => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3));
-      pts.push(keep(q));
+      targets.push(keep([0, 1, 2].map(k => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3))));
     }
   }
-  pts.push(keep(P[P.length - 1].slice()));
-  // smooth the push-outs, then push again (the ends stay)
-  for (let it = 0; it < 4; it++) {
-    const q = pts.map(p => p.slice());
-    for (let i = 1; i < pts.length - 1; i++) for (let k = 0; k < 3; k++) q[i][k] = (pts[i - 1][k] + 2 * pts[i][k] + pts[i + 1][k]) / 4;
-    for (let i = 1; i < q.length - 1; i++) keep(q[i]);
-    pts = q;
-  }
-  // split: no segment midpoint nearer the rock than the clearance
-  for (let pass = 0; pass < 6; pass++) {
-    let added = false;
-    const out = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1], b = pts[i], m = lerp3(a, b, 0.5);
-      if (sdf(m[0], m[1], m[2]) < clear * 0.97 || len(sub(b, a)) > step * 2.5) { out.push(keep(m)); added = true; }
-      out.push(b);
+  targets.push(keep(P[P.length - 1].slice()));
+  let cur = keep(P[0].slice());
+  let pts = [cur], misses = 0;
+  for (const T of targets) {
+    if (calls > budget || misses > 3) break;
+    let climbs = 0, escapes = 0, reached = false;
+    for (let it = 0; it < 90; it++) {
+      const d = sub(T, cur), l = len(d);
+      if (l < 0.02) { reached = true; break; }
+      const c = l <= mv ? T.slice() : [cur[0] + d[0] / l * mv, cur[1] + d[1] / l * mv, cur[2] + d[2] / l * mv];
+      let next = null;
+      if (free(c) && segOk(cur, c)) next = c;
+      else {
+        let bd = Infinity;
+        for (const D of DIRS) {
+          const q = [cur[0] + D[0] * mv, cur[1] + D[1] * mv, cur[2] + D[2] * mv];
+          if (Math.hypot(q[0], q[2]) > lim || q[1] > top) continue;
+          const dist = len(sub(T, q));
+          if (dist < bd && free(q) && segOk(cur, q)) { bd = dist; next = q; }
+        }
+        if (!next || bd >= l - 1e-3) {
+          // stuck behind rock: climb (an ROV goes over), else skip the target
+          const up = [cur[0], cur[1] + mv, cur[2]];
+          if (climbs < 24 && up[1] <= top && free(up) && segOk(cur, up)) { next = up; climbs++; }
+          else if (escapes < 16) {
+            // a pocket with a roof: move to the most open water
+            let bs = -Infinity;
+            for (const D of DIRS) {
+              const q = [cur[0] + D[0] * mv, cur[1] + D[1] * mv, cur[2] + D[2] * mv];
+              if (Math.hypot(q[0], q[2]) > lim || q[1] > top) continue;
+              const sd = sdf(q[0], q[1], q[2]);
+              if (sd > bs && sd >= clear && segOk(cur, q)) { bs = sd; next = q; }
+            }
+            if (!next) break;
+            escapes++; climbs = 0;
+          } else break;
+        }
+      }
+      pts.push(next); cur = next;
+      if (next === c && l <= mv) { reached = true; break; }
     }
-    pts = out;
-    if (!added) break;
+    misses = reached ? 0 : misses + 1;
+  }
+  pts = pullTight(sdf, pts, clear, step);
+  // smoothing that keeps the path free
+  for (let it = 0; it < 3; it++) {
+    for (let i = 1; i < pts.length - 1; i++) {
+      const q = [0, 1, 2].map(k => (pts[i - 1][k] + 2 * pts[i][k] + pts[i + 1][k]) / 4);
+      if (free(q) && segOk(pts[i - 1], q) && segOk(q, pts[i + 1])) pts[i] = q;
+    }
   }
   const s = new Float64Array(pts.length);
   for (let i = 1; i < pts.length; i++) s[i] = s[i - 1] + len(sub(pts[i], pts[i - 1]));
@@ -211,14 +461,15 @@ export function orbitPose(c, r, t, ph, o = {}) {
   const near = Math.max(r * 2.2 + 1.2, o.minDist ?? 2.2), far = near * 1.9 + 1.5;
   const push = 0.5 + 0.5 * Math.cos(TAU * t / (o.pushPeriod ?? 50) + ph);
   const d = near + (far - near) * push;
-  const el = (12 + 26 * (0.5 + 0.5 * Math.sin(TAU * t / 83 + ph * 1.7)) + (o.climb || 0)) * Math.PI / 180;
+  const el = Math.min(62, 12 + 26 * (0.5 + 0.5 * Math.sin(TAU * t / 83 + ph * 1.7)) + (o.climb || 0)) * Math.PI / 180;
   const a = ph * 3.1 + t * (o.rate ?? 0.07);
   return { p: [c[0] + Math.cos(a) * Math.cos(el) * d, c[1] + Math.sin(el) * d, c[2] + Math.sin(a) * Math.cos(el) * d], d, a, el };
 }
 
 // ---------------------------------------------------------------- the pilot
 // o: sdf, bounds, features, radius (plot), seed, index, start ([x,y,z]),
-//    clear (m, default 1.4), cruise (m/s), targets() -> [{ id, center, radius }]
+//    clear (m, default 1.4), cruise (m/s), targets() -> [{ id, center, radius }],
+//    grid (createGrid: A* routes; without it the marcher plans)
 export function createPilot(o) {
   const sdf = o.sdf, clear = o.clear ?? 1.4, R = o.radius ?? 30;
   const top = (o.bounds ? o.bounds.max[1] : 8) + 6;
@@ -256,18 +507,18 @@ export function createPilot(o) {
   }
   function planSurvey() {
     const ctrl = [st.p.slice()];
-    const n = 2 + Math.floor(rand() * 2);
+    const n = rand() < 0.4 ? 2 : 1;
     for (let i = 0; i < n; i++) {
       const f = rand() < 0.65 ? pickFeature() : null;
-      const line = f ? passLine(sdf, f, clear) : null;
+      const line = f ? passLine(sdf, f, clear, rand) : null;
       if (line) {
         // enter at the end nearer the last point
         const last = ctrl[ctrl.length - 1];
-        if (len(sub(line[0], last)) > len(sub(line[2], last))) line.reverse();
+        if (len(sub(line[0], last)) > len(sub(line[line.length - 1], last))) line.reverse();
         ctrl.push(...line);
       } else ctrl.push(freePoint());
     }
-    st.path = buildPath(sdf, ctrl, clear, { radius: R * 0.95, top });
+    st.path = buildPath(sdf, ctrl, clear, { radius: R * 0.95, top, grid: o.grid });
     st.s = 0; st.mode = 'survey'; st.phase = 'path'; st.legs++;
   }
   function planApproach(c, r) {
@@ -275,7 +526,7 @@ export function createPilot(o) {
     const goal = pushOut(sdf, pose.p, clear);
     const mid = pushOut(sdf, lerp3(st.p, goal, 0.5), clear);
     mid[1] = Math.max(mid[1], Math.min(st.p[1], goal[1]) + 1);
-    st.path = buildPath(sdf, [st.p.slice(), pushOut(sdf, mid, clear), goal], clear, { radius: R * 1.05, top });
+    st.path = buildPath(sdf, [st.p.slice(), pushOut(sdf, mid, clear), goal], clear, { radius: R * 1.05, top, grid: o.grid });
     st.s = 0; st.phase = 'approach'; st.orbitT = 0;
   }
   function startInspect() {
@@ -294,7 +545,7 @@ export function createPilot(o) {
   function goal(dt) {
     if (st.mode === 'survey') {
       if (!st.path || st.s >= st.path.length - 0.05) {
-        if (st.legs > 0 && rand() < 0.45 && startInspect()) return goal(dt);
+        if (st.legs > 0 && rand() < 0.55 && startInspect()) return goal(dt);
         planSurvey();
       }
       const lag = len(sub(pathAt(st.path, st.s).p, st.p));
@@ -315,12 +566,16 @@ export function createPilot(o) {
       return { g: pathAt(st.path, st.s).p, look: c, lookR: r, face: null };
     }
     st.orbitT += dt;
+    st.replan = (st.replan || 0) - dt;
     // climb while rock hides the colony from the orbit point
     const pose = orbitPose(c, r, st.orbitT, st.ph, { climb: st.climb, rate: st.mode === 'focus' ? 0.05 : 0.08, pushPeriod: st.focusMode === 'orbit' && st.mode === 'focus' ? 1e9 : 50 });
     const to = sub(c, pose.p), tl = len(to);
     const hit = trace(sdf, pose.p, [to[0] / tl, to[1] / tl, to[2] / tl], tl);
     const hidden = hit < tl - r * 1.1 - 0.2;
     st.climb = clamp(st.climb + (hidden ? 14 : -4) * dt, 0, 45);
+    // far from the orbit (the approach was cut short, or the colony
+    // moved): plan a new approach round the rock, not a straight line
+    if (len(sub(pose.p, st.p)) > 6 && st.replan <= 0) { st.replan = 12; planApproach(c, r); return goal(0); }
     if (st.mode === 'inspect') { st.timer -= dt; if (st.timer <= 0) { st.mode = 'survey'; st.path = null; st.target = null; } }
     return { g: pushOut(sdf, pose.p, clear), look: c, lookR: r, face: null };
   }
