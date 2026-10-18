@@ -311,7 +311,7 @@ function receive(mode, noise, dt = 0.25, watch = null) {
   ok(v.lights.length === 2 && v.lights[0].isSpotLight && v.lights[0].castShadow && !R.vehicles[1].lights[0].castShadow, 'vehicle: the lead has 2 SpotLights, the first casts shadows, the others do not');
   ok(R.lights.length === 4, 'vehicle: rovs.lights lists every SpotLight', R.lights.length);
   ok(P.leds.length >= 4 && P.camera.isPerspectiveCamera && P.arm.wrist && P.tetherPoint, 'vehicle: LEDs, the feed camera, the arm and the tether point');
-  ok(tris > 4000 && tris < 30000, 'vehicle: a careful model in a frame budget', `${tris} triangles`);
+  ok(tris > 4000 && tris < 40000, 'vehicle: a careful model in a frame budget (under 40 k near, tests/rov-model.test.mjs has the LOD)', `${tris} triangles`);
   ok(scene.children.length === 1 + 3 * 2, 'vehicle: the vehicles, tethers and wash are in the scene', scene.children.length);
   let col = false;
   v.group.traverse(m => { if (m.isMesh && m.material === P.materials.foam && m.geometry.attributes.color) col = true; });
