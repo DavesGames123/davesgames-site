@@ -75,6 +75,7 @@
 <button id="gear" class="snp-gear" type="button" aria-label="Open controls" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i></button>
 
 <div id="read" class="snp-card snp-read" aria-live="off">
+  <div class="rd"><span>Region</span><b id="rRegion">—</b></div>
   <div class="rd"><span>Depth</span><b id="rDepth">0 m</b></div>
   <div class="rd"><span>Explored</span><b id="rDist">0 m</b></div>
   <div class="rd rd-more"><span>Colonies seen</span><b id="rCol">0</b></div>
@@ -127,8 +128,10 @@
 <aside id="about" aria-label="How it works" hidden>
   <div class="ab-head"><span>How it works</span><button id="aboutClose" class="snp-iconbtn" type="button" aria-label="Close"><i data-icon="close"></i></button></div>
   <h2>An endless seafloor</h2>
-  <p>The seafloor has no edge. One seeded field makes it everywhere: an abyssal plain about 40 m down with sand in the low ground, seamounts and flat-topped guyots that rise 35 to 60 m, ridges, terraced plateaus and drop-off cliffs. Canyons cut into the slopes with vertical, undercut walls and a sand floor. Natural arches, pinnacles with hoodoo caps, boulders and scree sit on it, and the rock has strata ledges and craggy joints. The same seed always gives the same world.</p>
+  <p>The seafloor has no edge. One seeded field makes it everywhere: shelves, slopes and plains with sand in the low ground, seamounts and flat-topped guyots, ridges, terraced plateaus and drop-off cliffs. Canyons cut into the slopes with vertical, undercut walls and a sand floor. Natural arches, pinnacles with hoodoo caps, boulders and scree sit on it, and the rock has strata ledges and craggy joints. The same seed always gives the same world.</p>
   <p>The page keeps only the part near the camera, in chunks of 32 m. Workers mesh each chunk with surface nets on one global lattice, so two chunks meet with the same vertices and no seam. The rock near you is finest; far chunks are coarser and go into the black water.</p>
+  <h2>From the shallows to the trenches</h2>
+  <p>A slower field sets the depth of each region: the sunlit shallows (a few metres, sand flats and bright turquoise water with strong caustics), the reef (5 to 40 m, the densest corals), the reef wall that drops into the twilight zone (40 to 1000 m, fading blue, plate corals, then large gorgonian fans, Lophelia thickets, black and bamboo corals and sponges), and the abyss (3000 m and more) with trenches near 5000 m, where only the ROV lamps light the water. The light, the fog, the caustics and the marine snow follow the depth of the camera. Below about 40 m the corals take the pigments of deep corals: bubblegum pink, orange, gold and white.</p>
   <h2>Why coral looks like DLA</h2>
   <p>Many corals feed on food that drifts in the water. Near the colony the water is slow, so the food reaches the coral mostly by diffusion, a random walk. A random walker that comes near a branched shape almost always touches a tip first: the gaps between branches are screened. So tips catch more food, grow faster, and stay ahead. That is diffusion-limited aggregation (DLA), and it is why a nutrient-limited coral grows branches (Kaandorp, Lowe, Frenkel and Sloot, Phys. Rev. Lett. 77, 2328, 1996; Kaandorp and Kübler, <i>The Algorithmic Beauty of Seaweeds, Sponges and Corals</i>, 2001).</p>
   <canvas id="diag" aria-label="A walker falls and joins a tip"></canvas>

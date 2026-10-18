@@ -93,7 +93,7 @@ say(inView >= n * 0.9, 'the subject of the shot is in the field of view (90 % of
 say(shots.size >= 2, 'the shots cut (8 to 14 s each)', `${shots.size} shots: ${[...kinds].join(', ')}`);
 say(lead0 && D.squad && len(sub(D.squad[0], lead0)) > 2, 'the squad explores during the saver', lead0 ? `${len(sub(D.squad[0], lead0)).toFixed(1)} m` : 'no squad');
 const L = labels[labels.length - 1];
-say(L && L.title === 'ROV squad' && L.params.length === 5 && /explored/.test(L.params[0].name) && L.code && /frontierScore|novelty/.test(L.code.text), 'the plate has live squad stats and the frontier score code', L ? JSON.stringify(L.params.map(p => p.value)) : 'no label');
+say(L && L.title === 'Deep Ocean Explorer' && L.params.length === 5 && /explored/.test(L.params[0].name) && L.code && /frontierScore|novelty/.test(L.code.text), 'the plate has live squad stats and the frontier score code', L ? JSON.stringify(L.params.map(p => p.value)) : 'no label');
 const age = W.__coralDebug().ageMin;
 say(age === null || age > 1e4, 'no growth: the corals shown are all old (no grow-in)', `youngest ${age}`);
 const f = $('feed');

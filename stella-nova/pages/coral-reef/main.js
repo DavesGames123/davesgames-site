@@ -82,7 +82,9 @@ const COARSE = matchMedia('(pointer:coarse)').matches;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const T0 = performance.now();
 const SQUAD_CLEAR = 0.62;             // the ROV clearance (field units: about 1.5 m true)
-const DEPTH_BASE = 320;               // HUD depth = DEPTH_BASE - y (m)
+const DEPTH_BASE = SURFACE_Y;         // HUD depth = DEPTH_BASE - y (m): the true depth (water.js SURFACE_Y)
+const REGION_IDS = ['shallows', 'reef', 'twilight', 'abyss', 'trench'];
+const REGION_LABEL = { shallows: 'Shallows', reef: 'Reef', twilight: 'Twilight', abyss: 'Abyss', trench: 'Trench' };
 const ORIGIN_STEP = 1024, ORIGIN_MOVE = 4096;
 const DETAIL_LABEL = { desktop: 'High', 'laptop-low': 'Medium', phone: 'Low', 'phone-min': 'Lowest' };
 
@@ -106,6 +108,18 @@ const G = {
 };
 let shell = null, saverOn = false, saver = null;
 let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
+// The world API for other packages (FAUNA, SNOW; NOTES.md): events of the
+// world ('world', 'rock', 'unload', 'coral', 'uncoral') and its queries.
+// A new world (seed, detail) sends 'world' again with the new objects.
+const pageEars = {};
+function pageEmit(ev, ...a) { for (const f of pageEars[ev] || []) { try { f(...a); } catch (e) { console.error('coral-reef: world listener', e); } } }
+window.snWorld = {
+  on(ev, fn) { (pageEars[ev] || (pageEars[ev] = [])).push(fn); return () => { pageEars[ev] = pageEars[ev].filter(f => f !== fn); }; },
+  get field() { return W; }, get physics() { return P; }, get streamer() { return streamer; }, get squad() { return squad; }, get rovs() { return rovs; },
+  get root() { return S ? S.worldRoot : null; }, origin: () => origin.slice(), surfaceY: SURFACE_Y,
+  regionAt: (x, z) => (W ? W.regionAt(x, z) : null), depthAt: (x, z) => (W ? SURFACE_Y - W.ground(x, z) : null),
+  colonies: () => (streamer ? streamer.colonies() : []), eye: () => (cam ? cam.eye.slice() : null),
+};
 
 // ── scene ───────────────────────────────────────────────────────────────────
 const canvas = $('view');
@@ -192,6 +206,8 @@ const view = {
 // A start with corals: the richest habitat on a grid round the origin of
 // this seed (the same seed, the same start).
 function findStart(Wd) {
+  const r = findRegion(Wd, 'reef', [0, 0, 0]);
+  if (r) return r;
   let best = null;
   for (let j = -6; j <= 6; j++) for (let i = -6; i <= 6; i++) {
     const x = i * 64 + 16, z = j * 64 + 16, g = Wd.ground(x, z);
@@ -202,6 +218,118 @@ function findStart(Wd) {
   if (!best) best = { x: 16, z: 16, g: Wd.ground(16, 16) };
   return [best.x, best.g + 3.5, best.z];
 }
+// The nearest point of a region (rings of growing radius round `from`,
+// then the best spot near it: the most coral habitat, or for the abyss
+// and the trenches the deepest ground). [x, y, z] 3.5 m over the ground.
+function findRegion(Wd, id, from, maxR = 60000) {
+  for (let r = 0; r <= maxR; r += 600) {
+    const n = Math.max(1, Math.round(2 * Math.PI * r / 600));
+    let hit = null;
+    for (let k = 0; k < n; k++) {
+      const a = k / n * 2 * Math.PI + r * 0.001, x = from[0] + Math.cos(a) * r, z = from[2] + Math.sin(a) * r;
+      const g = Wd.regionAt(x, z);
+      if (g.id !== id) continue;
+      const sc = id === 'abyss' || id === 'trench' ? g.depth : Wd.habitat(x, z);
+      if (!hit || sc > hit.sc) hit = { x, z, sc };
+    }
+    if (!hit) continue;
+    let best = null;
+    for (let j = -4; j <= 4; j++) for (let i = -4; i <= 4; i++) {
+      const x = hit.x + i * 48, z = hit.z + j * 48;
+      if (Wd.regionAt(x, z).id !== id) continue;
+      const sc = Wd.habitat(x, z) + (id === 'shallows' ? -Math.abs(Wd.regionAt(x, z).depth - 8) * 0.02 : 0);
+      if (!best || sc > best.sc) best = { x, z, sc };
+    }
+    const p = best || hit;
+    return [p.x, Wd.ground(p.x, p.z) + 3.5, p.z];
+  }
+  return null;
+}
+// Go to a region: a fade, the squad and the camera move there, and the
+// fade ends when the chunk under the eye has rock.
+let regionBusy = false;
+function goRegion(id, why = '') {
+  if (!W || !squad || regionBusy) return false;
+  const lead = squad.vehicles[0].state.p;
+  const to = findRegion(W, id, lead);
+  if (!to) { flash(`No ${REGION_LABEL[id].toLowerCase()} within 60 km of here.`); return false; }
+  regionBusy = true;
+  canvas.style.opacity = '0';
+  setTimeout(() => {
+    squad.reset(to);
+    setOrigin(to[0], to[2]);
+    if (streamer) streamer.update(to, [to]);
+    if (cam) { if (cam.mode === 'follow' || !camChoice) cam.follow(squad.vehicles[0].id, { snap: true }); else cam.frame({ target: to, dist: 7, snap: true }); }
+    const t0 = performance.now();
+    const wait = () => {
+      if (!streamer || streamer.ready(to) || performance.now() - t0 > 9000) { canvas.style.opacity = ''; regionBusy = false; return; }
+      setTimeout(wait, 200);
+    };
+    wait();
+    flash(`${REGION_LABEL[id]}${why}: ${Math.round(SURFACE_Y - to[1])} m down.`);
+    if (panel) panel.find('regions').set(id);
+  }, 700);
+  return true;
+}
+// The squad wanders between the regions: every 20 to 40 minutes a new
+// target region (seeded), and the squad drifts toward its nearest point.
+const wander = { at: 0, id: null, p: null, i: 0 };
+function wanderTarget() {
+  if (!W || !squad) return null;
+  const t = squad.stats.t;
+  if (!wander.p || t > wander.at) {
+    const h = Math.imul((G.seed + wander.i * 7919) | 0, 2654435761) >>> 0;
+    wander.i++;
+    wander.at = t + 1200 + (h % 1200);
+    wander.id = REGION_IDS[h % REGION_IDS.length];
+    wander.p = findRegion(W, wander.id, squad.vehicles[0].state.p, 30000);
+  }
+  if (wander.p && Math.hypot(wander.p[0] - squad.vehicles[0].state.p[0], wander.p[2] - squad.vehicles[0].state.p[2]) < 400) return null;
+  return wander.p;
+}
+// The look of the water from the camera depth (uniforms only): bright
+// turquoise in the shallows, blue in the twilight, black in the abyss.
+const LOOK = [
+  // depth, fog colour (linear in-scatter), fog k (r, g, b per m), downwell,
+  // caustics, snow, exposure max. The user said (2026-10-18): "the rov
+  // pages should probably be a bit darker if we're not in the shallows,
+  // right now it is dark up close and then bright at a distance": below
+  // the shallows the in-scatter colour goes toward black (far water and
+  // far rock darker than the lit near rock), and the auto exposure may
+  // not lift the dark water.
+  [0, [0.020, 0.075, 0.085], [0.08, 0.026, 0.02], 3.4, 1, 0.3, 24],
+  [12, [0.008, 0.032, 0.044], [0.08, 0.03, 0.022], 2.0, 1, 0.35, 16],
+  [25, [0.0025, 0.010, 0.017], [0.075, 0.036, 0.028], 1.0, 0.5, 0.45, 8],
+  [60, [0.0008, 0.0030, 0.0060], [0.07, 0.04, 0.03], 0.45, 0, 0.7, 6],
+  [200, [0.00025, 0.0008, 0.0016], [0.07, 0.042, 0.032], 0.12, 0, 1, 5],
+  [800, [0.00004, 0.00008, 0.00016], [0.07, 0.042, 0.032], 0, 0, 1, 5],
+];
+let hemi = null;
+function depthLook(d) {
+  if (!S) return;
+  let i = 1; while (i < LOOK.length - 1 && d > LOOK[i][0]) i++;
+  const a = LOOK[i - 1], b = LOOK[i], u = Math.min(1, Math.max(0, (d - a[0]) / (b[0] - a[0])));
+  const L = (p, q) => p + (q - p) * u;
+  S.U.uFogCol.value.set(L(a[1][0], b[1][0]), L(a[1][1], b[1][1]), L(a[1][2], b[1][2]));
+  S.U.uFogK.value.set(L(a[2][0], b[2][0]), L(a[2][1], b[2][1]), L(a[2][2], b[2][2]));
+  S.U.uDown.value = L(a[3], b[3]);
+  S.U.uCaust.value = G.caust * L(a[4], b[4]);
+  const snowK = L(a[5], b[5]);
+  try { const g = S.snow && S.snow.geometry; if (g && g.attributes && g.attributes.position) g.setDrawRange(0, Math.round(g.attributes.position.count * snowK)); } catch (e) { /* the snow belongs to the SNOW package now */ }
+  // the exposure may not lift the dark water past the cap of the depth:
+  // scene.js autoExposure reads S.exposureMax (NOTES.md, WORLD -> SCENE)
+  S.exposureMax = L(a[6], b[6]);
+  // the standard materials (ROV models) get the same fog colour as the shaders
+  const fc = S.U.uFogCol.value;
+  if (S.scene.fog) S.scene.fog.color.setRGB(fc.x, fc.y, fc.z);
+  if (!hemi) { hemi = new S.THREE.HemisphereLight(0x8fd8ff, 0x3a3020, 0); S.scene.add(hemi); }
+  // sky light on the standard materials (ROVs, creatures) only in the
+  // sunlit water: gone by 40 m, so a far ROV or animal in the twilight is
+  // not brighter than the lamp-lit rock near the eye (rov/fill.js gives
+  // the ROVs their own small fill at every depth)
+  hemi.intensity = 1.0 * Math.max(0, 1 - d / 40) ** 2;
+}
+
 function setOrigin(x, z) {
   origin = [Math.round(x / ORIGIN_STEP) * ORIGIN_STEP, Math.round(z / ORIGIN_STEP) * ORIGIN_STEP];
   if (S) S.setOrigin(origin[0], origin[1]);
@@ -247,7 +375,10 @@ async function buildWorld({ seed = G.seed, keepSquad = false } = {}) {
   streamer = createStreamer({ seed, budget: WB, pool, view, now: nowMs });
   if (fauna) fauna.start({ W, streamer, seed, profile: G.detail, physics: () => P, squad: () => squad, origin: () => origin });
   P = worldPhysics(W, streamer, { clear: SQUAD_CLEAR, eye: () => (cam ? cam.eye : start) });
-  squad = createSquad({ field: P, seed, count: G.rovs, clear: SQUAD_CLEAR, start });
+  squad = createSquad({ field: P, seed, count: G.rovs, clear: SQUAD_CLEAR, start, target: wanderTarget });
+  wander.p = null; wander.at = 0;
+  pageEmit('world', { seed, field: W, streamer, physics: P, squad });
+  for (const ev of ['rock', 'unload', 'coral', 'uncoral']) streamer.on(ev, (...a) => pageEmit(ev, ...a));
   if (cam) {
     cam.setRock(P, Infinity);
     const L = squad.vehicles[0].state;
@@ -441,6 +572,11 @@ function buildUI() {
   panel = createPanel($('panelBody'), { store: 'coral-reef' });
 
   const ex = panel.section({ id: 'explore', title: 'Explore', open: true });
+  ex.chips({
+    id: 'regions', label: 'Go to a region', columns: 3, value: null, onChange: id => goRegion(id),
+    items: REGION_IDS.map(id => ({ id, label: REGION_LABEL[id] })),
+    hint: 'From the sunlit shallows down the reef wall to the abyss and its trenches. The squad also goes between the regions by itself.',
+  });
   ex.segmented({
     id: 'rovCount', label: 'ROVs in the squad', value: G.rovs,
     items: [2, 3, 4].map(n => ({ id: n, label: String(n) })),
@@ -581,14 +717,16 @@ const camCtx = { getVehicle: id => { const v = squad && squad.vehicles.find(x =>
 let camShown = '';
 
 // ── readout ─────────────────────────────────────────────────────────────────
-let readT = 0;
+let readT = 0, curRegion = null;
 const metres = d => (d >= 1000 ? `${(d / 1000).toFixed(2)} km` : `${d.toFixed(0)} m`);
 function readout(dt) {
   readT += dt; if (readT < 0.4 || !squad) return;
   readT = 0;
   const st = squad.stats;
   $('rDist').textContent = metres(st.distance);
-  $('rDepth').textContent = `${(DEPTH_BASE - squad.vehicles[0].state.p[1]).toFixed(0)} m`;
+  const lp = squad.vehicles[0].state.p;
+  $('rDepth').textContent = `${(DEPTH_BASE - lp[1]).toFixed(0)} m`;
+  if (W) { const rg = W.regionAt(lp[0], lp[2]); $('rRegion').textContent = rg.name; curRegion = rg.id; }
   $('rCol').textContent = String(st.colonies);
   $('rTask').textContent = squad.task.label;
   if (performance.now() > flashT && streamer) {
@@ -653,7 +791,7 @@ function frame(t) {
   S.U.uCount.value = 1;
   S.U.uSwayK.value = REDUCED ? 0.3 : 1;
   if (!saverOn && (fitTick++ & 7) === 0) { const f = fitNow(); S.view.tox = f.ox; S.view.toy = f.oy; }
-  if (cam) S.setCausticCentre(cam.eye[0] - origin[0], cam.eye[2] - origin[1], 96);
+  if (cam) { S.setCausticCentre(cam.eye[0] - origin[0], cam.eye[2] - origin[1], 96); depthLook(SURFACE_Y - cam.eye[1]); }
   S.flushChunks(COARSE ? 2.5 : 3.5, now);
   if (fauna && cam) fauna.frame(dt, S.camera, cam.eye);
   S.render(dt, now);
@@ -732,8 +870,8 @@ window.snSaver = {
       const s = squad.stats, L = squad.vehicles[0].state;
       const src = frontierScore.toString();
       return {
-        title: 'ROV squad',
-        sub: `${squad.vehicles.length} ROVs · ${squad.task.label} · seed ${G.seed}`,
+        title: 'Deep Ocean Explorer',
+        sub: `${curRegion ? REGION_LABEL[curRegion] : 'ROV squad'} · ${squad.vehicles.length} ROVs · ${squad.task.label}`,
         params: [
           { sym: 'd', name: 'explored', value: metres(s.distance), cls: 'm1' },
           { sym: 'z', name: 'depth', value: `${(DEPTH_BASE - L.p[1]).toFixed(0)} m`, cls: 'm2' },
@@ -768,6 +906,9 @@ window.snSaver = {
     function tick(dt) {
       if (st.bandFn && (st.bandT += dt) > 0.4) { st.bandT = 0; try { saver.band = st.bandFn(canvas.clientHeight); } catch (e) { saver.band = null; } placeCard(); }
       if (!squad || !P) return;
+      // the saver visits every region: a new one every 4 minutes
+      st.regionT = (st.regionT || 0) + dt;
+      if (st.regionT > 240 && !regionBusy) { st.regionT = 0; st.ri = ((st.ri ?? REGION_IDS.indexOf(curRegion)) + 1) % REGION_IDS.length; if (goRegion(REGION_IDS[st.ri])) st.cut = true; }
       if (!st.shot || st.t > st.shot.hold) next();
       st.t += dt;
       if ((st.labT += dt) > 1) { st.labT = 0; label(makeLabel()); }
