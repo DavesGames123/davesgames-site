@@ -80,11 +80,22 @@
 //  of the sheet, the drawer, the dock and the bars. The saver uses its own
 //  band (saver.js framing).
 //
-//  grep -n targets: "── APP", "── BOOT", "── MODULES", "── GENERATE",
+//  CRASH GUARD (2026-10-18, Safari on a Mac: "let's make sure we stop
+//  crashing my computer when we're zoomed all the way in"). The loop
+//  writes a flag (gpu/budget.js guardMark, localStorage) when the eye goes
+//  near the ground (fg.setNear) and every GUARD_EVERY ms; pagehide and a
+//  hidden tab clear it (guardClean). A flag of a zoomed session that is
+//  still there at the next start means that the session did not end
+//  cleanly: bootGPU asks createGPU for the 'safe' profile, and a notice
+//  says so (?gpu=desktop or ?gpu=safari undoes it). A frame that the frame
+//  graph cannot take now (fg.ready() false: GPU busy or in its idle gap)
+//  skips the module updates and the queue writes too; their dt adds up.
+//
+//  grep -n targets: "── APP", "── BOOT", "── GUARD", "── MODULES", "── GENERATE",
 //  "── BUILD", "── LOOP", "── LOADING", "function plugModule", "── INPUT", "── SAVER", "── LOSS", "── WORLD", "function frameGlobals"
 // ============================================================================
 import { createGPU, QUALITY } from './gpu/device.js';
-import { detectProfile, pageEnv, PROFILES } from './gpu/budget.js';
+import { detectProfile, pageEnv, PROFILES, guardRead, guardMark, guardClean, guardProfile } from './gpu/budget.js';
 import { createTerrainGPU } from './gpu/terrain-gpu.js';
 import { createShadowMaps, computeCascades } from './gpu/shadows.js';
 import { createFrameGraph } from './gpu/frame.js';
@@ -157,6 +168,23 @@ const G = new Float32Array(GLOBALS_FLOATS), GV = globalsView(G);
 app.G = G;   // the Globals of the last frame, for the console and the Deno harness
 let prevVP = null, frameNo = 0, lastT = 0, fpsAcc = 0, fpsN = 0, fps = 0, pendingSnap = null, lastSnapAt = 0;
 let skyState = null, worker = null, workerKind = null, genId = 0, booted = false, lastBuildSeg = -1;
+
+// ── GUARD (see the header)
+const GUARD_EVERY = 1000;   // ms between flag writes
+const store = (() => { try { return globalThis.localStorage || null; } catch { return null; } })();
+const crash = { last: guardRead(store), at: -1e9, zoomed: false, on: true, skipDt: 0 };
+function guardTick(now, agl) {
+  if (!crash.on || !store) return;
+  const z = Number.isFinite(agl) && agl < 120;
+  // at once when the eye goes near the ground (before the heavy frames)
+  if (z === crash.zoomed && now - crash.at < GUARD_EVERY) return;
+  crash.zoomed = z; crash.at = now;
+  guardMark(store, { zoomed: z, profile: gpu && gpu.profileId, agl });
+}
+function guardOff() { crash.at = -1e9; guardClean(store); }
+addEventListener('pagehide', guardOff);
+addEventListener('beforeunload', guardOff);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') guardOff(); });
 
 const world = {
   // the rendered ground: the snapshot height, plus LIB's detailHeight (a
@@ -283,7 +311,7 @@ app.clearWxOver = () => { app.wxOver = {}; };
 app.setQuality = i => { app.qualityIndex = i; applyQuality(); ui.syncView(); phoneQualityNote(); };
 // a phone profile caps the sizes: say so when High or Ultra is picked
 function phoneQualityNote() {
-  if (gpu && gpu.profileId && gpu.profileId !== 'desktop' && app.qualityIndex >= 2) ui.notice(`Phone quality: ${gpu.profile.label} caps the sizes on this device`);
+  if (gpu && gpu.profileId && /^phone/.test(gpu.profileId) && app.qualityIndex >= 2) ui.notice(`Phone quality: ${gpu.profile.label} caps the sizes on this device`);
 }
 app.setLayer = (k, on) => { app.layers[k] = on; ui.syncView(); };
 app.setLook = (k, v) => {
@@ -410,8 +438,14 @@ async function bootGPU() {
     } catch (e) { console.warn('dla-terrain: no nature assets', e); }
     return null;
   })();
-  gpu = await createGPU(canvas, { qualityIndex: app.qualityIndex, assets: null, coarse });
+  // CRASH GUARD: the last zoomed session did not end cleanly -> 'safe'
+  const safeStart = guardProfile('desktop', crash.last) === 'safe' && !Q.has('gpu');
+  gpu = await createGPU(canvas, { qualityIndex: app.qualityIndex, assets: null, coarse, safeStart });
   app.gpu = gpu;
+  if (safeStart && crash.last.unclean && gpu.profileId === 'safe') {
+    crash.last = { unclean: false, zoomed: false, why: 'shown' };
+    ui.notice('The last visit stopped while it was zoomed in, so this visit uses the safe GPU profile (add ?gpu=safari or ?gpu=desktop to undo)');
+  }
   gpu.device.lost.then(info => onLost(info));
   gpu.device.addEventListener && gpu.device.addEventListener('uncapturederror', e => console.warn('dla-terrain GPU:', e.error && e.error.message));
   tg = await createTerrainGPU(gpu);
@@ -701,6 +735,18 @@ function loop(now) {
   cam.update(dt, inp, world);
   applySnapshot(now);
   if (!gpu) return;
+  // the eye height over the ground: the near render cap and the guard
+  const agl = cam.pos[1] - Math.max(world.heightAt(cam.pos[0], cam.pos[2]), Number.isFinite(world.seaLevel) ? world.seaLevel : -1e9);
+  fg.setNear(agl);
+  guardTick(now, agl);
+  // the GPU is busy or in its idle gap: no updates, no queue writes
+  if (!fg.ready()) {
+    crash.skipDt += dt;
+    if (!saving) fg.tick(ms);
+    return;
+  }
+  // the module time of this frame: dt plus the skipped frames
+  const dtF = Math.min(0.25, dt + crash.skipDt); crash.skipDt = 0;
   const st = skyNow(dt);
   // SKY's exposure hint caps the auto exposure, so a night stays dark
   // (at night only: by day the auto exposure may lift a shaded valley
@@ -730,7 +776,7 @@ function loop(now) {
   }
   const m = cam.matrices(fg.w, fg.h, { jitter: post.jitter(frameNo), shift: [shiftX, shift] });
   app.lastMatrices = m;
-  frameGlobals(m, st, dt);
+  frameGlobals(m, st, dtF);
   // cascades: the sun (no shadows at night)
   const sd = [G[GLOBALS.sunDir.offset], G[GLOBALS.sunDir.offset + 1], G[GLOBALS.sunDir.offset + 2]];
   const far = Math.min(tg.worldSize * 0.8, [2500, 5000, 9000, 14000][app.qualityIndex]);
@@ -747,7 +793,7 @@ function loop(now) {
     if (md.role === 'vegetation') md.off = !(app.layers.grass || app.layers.trees || app.layers.props) || (player.active && !(player.state && player.state.veg));
   }
   const frame = {
-    globals: G, g: GV, camera: m, time: now / 1000, dt, tod: app.tod, weather: st, sky: st,
+    globals: G, g: GV, camera: m, time: now / 1000, dt: dtF, tod: app.tod, weather: st, sky: st,
     quality: gpu.quality, coarse, layers: app.layers, terrain: tg.view, frameIndex: frameNo,
     cascade: -1, shadowDistance: far, cloudShadow: gpu.cloudShadow || null, skyView: gpu.skyView || null,
     veg: app.veg, waterLook: app.water, season: app.season,
