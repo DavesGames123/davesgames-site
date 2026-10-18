@@ -108,25 +108,3 @@ float groundY(float x, float z) {
 
 // The soil cut-away (roots on): the quarter x > 0, z > 0 within radius R.
 export function inCutaway(x, z, R) { return x > 0 && z > 0 && x * x + z * z < R * R; }
-
-// Grass tufts: Float32Array of [x, z, scale, rand] per tuft. (Kept for the
-// old render path until meadow.js replaces it.)
-// opts: n, radius, seed, avoid ([{ x, z, r }]), cut (cut-away radius or 0)
-import { rng } from '../../lib/dla-engine.js';
-export function grassField(opts = {}) {
-  const n = opts.n ?? 60000, R = opts.radius ?? 26, r = rng(opts.seed ?? 5);
-  const out = new Float32Array(n * 4);
-  let k = 0, tries = 0;
-  while (k < n && tries < n * 6) {
-    tries++;
-    const u = r(), rr = R * (u < 0.55 ? Math.sqrt(r()) * 0.55 : Math.sqrt(r()));
-    const a = r() * Math.PI * 2, x = Math.cos(a) * rr, z = Math.sin(a) * rr;
-    if (opts.cut && inCutaway(x, z, opts.cut + 0.05)) continue;
-    let bad = false;
-    if (opts.avoid) for (const p of opts.avoid) if ((x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) { bad = true; break; }
-    if (bad) continue;
-    out[k * 4] = x; out[k * 4 + 1] = z; out[k * 4 + 2] = 0.6 + 0.8 * r() * r(); out[k * 4 + 3] = r();
-    k++;
-  }
-  return out.subarray(0, k * 4);
-}

@@ -21,6 +21,13 @@
 //  drawer, and camera.setViewOffset puts the plant in the clear part of
 //  the canvas, above an open sheet.
 //
+//  GROUND. Once per sowing, placeEco() builds the ground ecosystem
+//  (eco.js buildEco: the meadow, the woodland edge, stones, forbs, litter)
+//  with the caps of layout.js ecoLimits, and sets flat pads at the plant
+//  bases and the cut-away. Each simulated year adds the crown radius of
+//  each plant to crownHist, and growSeedlings() runs the seedling model.
+//  The litter amount and its decay follow eco.js litterSeason.
+//
 //  LEAVES. Over the leaf budget (130 000, or 40 000 on a phone) a share of
 //  the leaves is left out and the rest drawn larger (pose.js packYear).
 //  PHONES. A coarse pointer caps the live metamers (24 000), uses fewer
@@ -34,6 +41,8 @@
 //    sow a new plant ....... "function sow"
 //    snapshots ............. "function onYear"
 //    pack the shown year ... "function repack"
+//    ground ecosystem ...... "function placeEco"
+//    seedlings ............. "function growSeedlings"
 //    roots ................. "function growRoots"
 //    frame loop ............ "function frame"
 //    camera ................ "function frameTarget"
@@ -45,12 +54,15 @@
 // ============================================================================
 import { SPECIES, SPECIES_IDS, createSim } from './grow.js';
 import { createRoots, packRoots } from './roots.js';
-import { COLOUR_MODES, createHistory, addToHistory, packYear, nodeFrames } from './pose.js';
+import { COLOUR_MODES, createHistory, addToHistory, packYear, nodeFrames, cellIndex } from './pose.js';
+import { buildEco, seedlings, litterSeason } from './eco.js';
+import { LOOK } from './look.js';
+import { ATLAS_CELLS } from './atlas.js';
 import { seasonOf, snowCover, smoothstep } from './season.js';
 import { fitDistance, bandFrame, makeShots, codeExtract, shotPlan } from './saver.js';
 import { createRender } from './render.js';
 import { createDiagram } from './diagram.js';
-import { PHONE_QUERY, occlusion as occlude, clearFractions, createGestures, dockClock, nextId, pixelRatioStep } from './layout.js';
+import { PHONE_QUERY, occlusion as occlude, clearFractions, createGestures, dockClock, nextId, pixelRatioStep, ecoLimits } from './layout.js';
 import { GRADIENTS, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
 import { rng } from '../../lib/dla-engine.js';
 
@@ -59,6 +71,7 @@ const PHONE_Q = matchMedia(PHONE_QUERY);
 const COARSE = matchMedia('(pointer:coarse)').matches;
 const MAX_NODES = COARSE ? 24000 : 60000, LEAF_BUDGET = COARSE ? 40000 : 130000, ROOTS_MAX = COARSE ? 1200 : 2400;
 const FOV = 40;
+const ECO = ecoLimits(COARSE);
 
 const S = {
   species: 'oak', stand: 'single', seed: 7, spy: 8, paused: false, follow: true,
@@ -72,8 +85,9 @@ let snap = null, hist = createHistory(), frames = null, framesFor = null;
 let pack = null, packKey = '', clock = 0, time = 0, simDone = false, lastStats = null;
 let roots = null, rootsInfo = null, rootsAt = -1, rootsN = -1;
 let plantsInfo = [];
+let eco = null, crownHist = [];
 
-const R = createRender({ canvas: $('gl'), coarse: COARSE });
+const R = createRender({ canvas: $('gl'), coarse: COARSE, limits: ECO });
 if (!R || R.failed) $('nogl').hidden = false;
 const ok = R && !R.failed;
 
@@ -83,6 +97,7 @@ function speciesOpts() { return { lambda: S.lambda, alpha: S.alpha, xi: S.xi }; 
 function sow() {
   token++;
   snap = null; hist = createHistory(); frames = null; pack = null; packKey = ''; clock = 0; simDone = false; lastStats = null;
+  crownHist = []; eco = null;
   const opts = { species: S.species, stand: S.stand, seed: S.seed, maxNodes: MAX_NODES, tune: speciesOpts() };
   if (!worker && !fallback) {
     try {
@@ -127,15 +142,53 @@ function onYear(s) {
   if (plantsInfo.length !== s.plants.length || plantsInfo.token !== token) {
     plantsInfo = s.plants.map(p => ({ x: p.x, z: p.z, germ: p.germ, r: SPECIES[p.species].size.r * 0.3, form: SPECIES[p.species].form, species: p.species }));
     plantsInfo.token = token;
-    if (ok) { R.setPlants(plantsInfo); placeProps(); }
+    if (ok) { R.setPlants(plantsInfo); placeEco(); }
   }
+  // the crown radius of each plant at the end of this year (seedling model)
+  const cr = plantsInfo.map(() => 0);
+  for (let i = 0; i < s.count; i++) {
+    if (s.died[i] < s.year + 1) continue;
+    const k = s.plant[i], p = plantsInfo[k]; if (!p) continue;
+    const d = Math.hypot(s.px[i] - p.x, s.pz[i] - p.z); if (d > cr[k]) cr[k] = d;
+  }
+  crownHist[s.year] = cr;
+  growSeedlings();
 }
 
-// the scanned rocks, stump, ferns, flowers and grass round the plants
-function placeProps() {
+// ------------------------------------------------- the ground ecosystem
+// eco.js: the meadow, the woodland edge and the floor under the crowns,
+// placed once per sowing; render.js and meadow.js draw it and make it
+// answer the live crowns. Pads keep the ground level at each plant base
+// and over the soil cut-away.
+const DISPERSE = { oak: 'gravity', cherry: 'gravity', maple: 'wind', birch: 'wind', conifer: 'wind', willow: 'wind' };
+function ecoPlants() {
+  return plantsInfo.map(p => ({ x: p.x, z: p.z, species: p.species, form: p.form, rMature: SPECIES[p.species].size.r * 0.9, disperse: DISPERSE[p.species] || 'gravity' }));
+}
+function placeEco() {
   if (!ok || !plantsInfo.length) return;
-  R.setProps({ seed: S.seed, cut: S.roots && rootsInfo ? rootsInfo.R : 0,
-    plants: plantsInfo.map(p => ({ x: p.x, z: p.z, r: SPECIES[p.species].size.r, trunk: p.form === 'tree' ? 0.9 : 0.45 })) });
+  const cut = S.roots && rootsInfo ? rootsInfo.R : 0;
+  const pads = plantsInfo.map(p => ({ x: p.x, z: p.z, r: p.form === 'tree' ? 0.5 : 0.3 }));
+  if (cut) pads.unshift({ x: 0, z: 0, r: cut + 0.15 });
+  R.setPads(pads);
+  eco = buildEco({ seed: S.seed, plants: ecoPlants(), cut, limits: ECO, R: ECO.R });
+  // the leaf litter of each plant: its species and atlas cells
+  const leafInfo = plantsInfo.map(p => {
+    const sp = SPECIES_IDS.indexOf(p.species), L = LOOK[p.species] || LOOK.oak;
+    return [sp, cellIndex(sp, 0, 0), ATLAS_CELLS[L.leaf].length, SPECIES[p.species].leaf.fall && p.form === 'tree' ? 1 : 0];
+  });
+  R.setEco(eco, leafInfo);
+  growSeedlings();
+}
+function growSeedlings() {
+  if (!ok || !eco || !crownHist.length) return;
+  const stones = eco.stones.filter(st => st.s > 0.12);
+  const list = seedlings({ seed: S.seed, plants: ecoPlants(), crowns: crownHist, years: crownHist.length, fields: eco.fields, cap: ECO.seedlings,
+    blocked: (x, z) => stones.some(st => Math.abs(st.x - x) < st.s * 0.5 && Math.abs(st.z - z) < st.s * 0.5) || plantsInfo.some(p => Math.hypot(p.x - x, p.z - z) < 0.6) });
+  for (const sl of list) sl.spIndex = SPECIES_IDS.indexOf(sl.species);
+  R.setSeedlings(list, sp => {
+    const id = SPECIES_IDS[sp], L = LOOK[id] || LOOK.oak;
+    return [cellIndex(sp, 0, 0), ATLAS_CELLS[L.leaf].length, SPECIES[id].leaf.ever ? 1 : 0];
+  });
 }
 
 // ------------------------------------------------------- pack the shown year
@@ -206,9 +259,9 @@ function frame(now) {
   if (saver.on && saver.tick) saver.tick(dt);
   const p = clock - Math.floor(clock);
   const snow = S.snow ? snowCover(clock) : 0;
-  const litter = p > 0.74 ? smoothstep(0.74, 0.86, p) : 1 - smoothstep(0.2, 0.36, p);
+  const ls = litterSeason(p);
   const top = pack ? Math.max(0.3, pack.box[4]) : 1;
-  R.frame({ clock: saver.waiting ? saver.hold : clock, time, wind: S.wind, snow, litter, range: [S.roots && rootsInfo ? -rootsInfo.D : 0, top] });
+  R.frame({ clock: saver.waiting ? saver.hold : clock, time, wind: S.wind, snow, litter: ls.k, decay: ls.decay, range: [S.roots && rootsInfo ? -rootsInfo.D : 0, top] });
   if (S.follow && !saver.on) followStep(dt);
   R.controls.update();
   const w = $('gl').clientWidth, h = $('gl').clientHeight, o = occlusion(w, h);
@@ -334,7 +387,7 @@ function setToggle(id, key, on, label) {
 function setRootsOn(on) {
   setToggle('rootsBtn', 'roots', on, 'Roots');
   if (ok && rootsInfo) R.setRootsOn(on, rootsInfo.R, rootsInfo.D);
-  rootsN = -1; placeProps();
+  rootsN = -1; placeEco();
 }
 function setLeavesOn(on) { setToggle('leavesBtn', 'leaves', on, 'Leaves'); if (ok) R.setLeavesOn(on); }
 const fmt = { spy: v => v.toFixed(0) + ' s', wind: v => Math.round(v * 100) + '%', lam: v => '×' + v.toFixed(2), alp: v => '×' + v.toFixed(2), xi: v => '×' + v.toFixed(2) };

@@ -28,9 +28,14 @@
 //  grid of the model) darkens the sky light inside the crown (AO).
 //
 //  The scene round the plant: an analytic sky with a seasonal sun (and its
-//  PMREM as the environment light), a ground of scanned CC0 grass and
-//  litter maps on gentle hills, instanced grass blades that sway, the soil
-//  cut-away for the roots, the seed before it germinates, and fog.
+//  PMREM as the environment light), the ground (makeGround: CC0 turf,
+//  meadow, worn ground, soil, moss and litter blended by the fields of
+//  eco.js, on the micro-relief of ground.js), the ground ecosystem
+//  (meadow.js: grass tussocks, nature-pack stones, forbs, shrubs, petals,
+//  drifted litter, seedlings, woodland impostors), the soil cut-away for
+//  the roots, the seed before it germinates, and fog. The shared uniforms
+//  carry the flat pads (uPads), the live crowns (uCrown), the path and the
+//  woodland edge (uPath, uEdge). glsl-check.mjs compiles every shader.
 //
 //  grep -n targets
 //    shared uniforms ......... "function makeUniforms"
@@ -39,10 +44,10 @@
 //    leaf shader ............. "function leafMaterial"
 //    sky ..................... "function makeSky"
 //    ground .................. "function makeGround"
-//    grass ................... "function makeGrass"
+//    the ecosystem ........... "function setEco"
 //    cut-away ................ "function makeCutaway"
 //    texture loading ......... "function loadArray"
-//    props ................... "function buildProps"
+//    pads and crowns ......... "function setPads"
 //    public api .............. "const api = {"
 // ============================================================================
 import * as THREE from 'three';
@@ -50,14 +55,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { lut } from '../../lib/growth-gradients.js';
 import { TEX_W, CELLS, speciesTables, WIND_GLSL } from './pose.js';
 import { SEASON_GLSL } from './season.js';
-import { GROUND_GLSL, grassField } from './ground.js';
+import { GROUND_GLSL, MAX_PADS, setPads as setPads0, RELIEF_AMP } from './ground.js';
 import { BARKS } from './look.js';
-import { scatterProps, decodeMesh } from './props.js';
+import { ECO_GLSL, MAX_CROWNS, GROUND_COL, SUN_XZ } from './eco.js';
+import { createMeadow } from './meadow.js';
 import { ATLAS_SIZE } from './atlas.js';
 
 const TAB = speciesTables();
 const NSP = TAB.n, NCELL = CELLS.length;
 const lin = v => Math.pow(v, 2.2);
+const gv3 = c => `vec3(${c.map(v => v.toFixed(4)).join(', ')})`;
 
 // ------------------------------------------------------------ uniforms
 function vec4Array(f32, linear) {
@@ -74,6 +81,9 @@ function makeUniforms(lutTex) {
     uTint: { value: vec4Array(TAB.tint) }, uAut0: { value: vec4Array(TAB.aut0, true) }, uAut1: { value: vec4Array(TAB.aut1, true) },
     uAut2: { value: vec4Array(TAB.aut2, true) }, uLitter: { value: vec4Array(TAB.litter, true) }, uTwig: { value: vec4Array(TAB.twig, true) },
     uCells: { value: CELLS.map(c => new THREE.Vector4(c[0], c[1], c[2], c[3])) },
+    uPads: { value: Array.from({ length: MAX_PADS }, () => new THREE.Vector4()) }, uNPads: { value: 0 },
+    uCrown: { value: Array.from({ length: MAX_CROWNS }, () => new THREE.Vector4()) }, uNCrown: { value: 0 },
+    uPath: { value: new THREE.Vector4(0.7, -0.7, -7, 0) }, uEdge: { value: new THREE.Vector4(-0.7, -0.7, 24, 0) },
   };
 }
 const COMMON_GLSL = /* glsl */`
@@ -88,6 +98,7 @@ uniform sampler2D uLut;
 ${SEASON_GLSL}
 ${WIND_GLSL}
 ${GROUND_GLSL}
+${ECO_GLSL}
 vec3 heatOf(float t) { return texture(uLut, vec2(clamp(t, 0.002, 0.998), 0.5)).rgb; }
 vec3 qrot(vec4 q, vec3 v) { return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v); }
 `;
@@ -272,6 +283,7 @@ const LEAF_BODY = /* glsl */`
     float drift = h * (0.35 + 0.5 * rnd);
     vec2 wd = uWindDir;
     float gx = O.x + wd.x * drift + cos(a2) * 0.12 * h, gz = O.z + wd.y * drift + sin(a2) * 0.12 * h;
+    gy = groundY(gx, gz);   // the leaf lies on the ground where it lands
     float e = pow(fall, 1.15);
     float wob = (1.0 - fall) * min(1.0, h * 0.3) * 0.35;
     O = vec3(O.x + (gx - O.x) * e + sin(fall * 9.0 + rnd * 6.0) * wob, O.y + (gy + 0.006 + 0.01 * rnd - O.y) * e, O.z + (gz - O.z) * e + cos(fall * 7.0 + rnd * 5.0) * wob);
@@ -303,6 +315,7 @@ const LEAF_BODY = /* glsl */`
 #ifndef DEPTH_PASS
   vLeafUv = lUv;
   vInfo = vec4(st.y, fall >= 1.0 ? st.w : 1.0, kind, rnd);
+  vGround = fall >= 1.0 ? 1.0 : 0.0;
   vSp = float(sp);
   vHeatT = uMode < 1.5 ? clamp(a0.w / max(uClock, 1e-3), 0.0, 1.0) : uMode < 2.5 ? a3.w : clamp((O.y - uRange.x) / max(1e-3, uRange.y - uRange.x), 0.0, 1.0);
   vAO = fall >= 0.0 ? 0.7 : 0.3 + 0.7 * a3.z;
@@ -322,12 +335,12 @@ function leafMaterial(U, tex, atlas) {
     Object.assign(sh.uniforms, U, own);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + COMMON_GLSL + NODE_GLSL +
-        'attribute vec4 aL0; attribute vec4 aL1;\nvarying vec2 vLeafUv; varying vec4 vInfo; varying float vSp, vHeatT, vAO; varying vec3 vTanV, vBitV;\nvec3 vTanW, vBitW;\n')
+        'attribute vec4 aL0; attribute vec4 aL1;\nvarying vec2 vLeafUv; varying vec4 vInfo; varying float vSp, vHeatT, vAO, vGround; varying vec3 vTanV, vBitV;\nvec3 vTanW, vBitW;\n')
       .replace('#include <beginnormal_vertex>', LEAF_BODY + '\n vTanV = normalize(normalMatrix * vTanW); vBitV = normalize(normalMatrix * vBitW);')
       .replace('#include <begin_vertex>', 'vec3 transformed = lPos;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + COMMON_GLSL +
-        'uniform sampler2D uAtlasC, uAtlasA, uAtlasN;\nvarying vec2 vLeafUv; varying vec4 vInfo; varying float vSp, vHeatT, vAO; varying vec3 vTanV, vBitV;\n')
+        'uniform sampler2D uAtlasC, uAtlasA, uAtlasN;\nvarying vec2 vLeafUv; varying vec4 vInfo; varying float vSp, vHeatT, vAO, vGround; varying vec3 vTanV, vBitV;\n')
       .replace('#include <map_fragment>', /* glsl */`
         float la = texture(uAtlasA, vLeafUv).r;
         vec2 tsz = vec2(textureSize(uAtlasA, 0));
@@ -345,6 +358,11 @@ function leafMaterial(U, tex, atlas) {
         c = mix(c, ac * (0.6 + 3.2 * lum), vInfo.x * isLeaf);
         vec3 lit = uLitter[sp].rgb * (0.5 + 2.0 * lum);
         c = mix(mix(lit, c, isLeaf > 0.5 ? 0.0 : 0.6), c, clamp(vInfo.y, 0.0, 1.0));
+        // a leaf on the ground rots darker over the winter (eco.js litterSeason) and snow covers it
+        float pg = uClock - floor(uClock);
+        float rotK = pg >= 0.74 ? 0.4 * smoothstep(0.88, 1.0, pg) : 0.4 + 0.6 * smoothstep(0.0, 0.3, pg);
+        c = mix(c, c * vec3(0.42, 0.36, 0.3), vGround * rotK * 0.8);
+        c = mix(c, vec3(0.86, 0.89, 0.94), vGround * uSnow * 0.92);
         vec3 heat = heatOf(vHeatT);
         c = uMode < 0.5 ? c : heat * (0.7 + 1.3 * lum);
         diffuseColor = vec4(c, la);`)
@@ -423,11 +441,18 @@ function makeSky(sunDir) {
 }
 
 // -------------------------------------------------------------- ground
+// Layers (eco.js groundMix is the CPU twin): turf where the sward is dense,
+// open meadow ground in the gaps, worn ground under a crown or in the wood,
+// moss on wet shaded ground and on the north side of a trunk base, bare
+// soil at the path, the drip line and the trunk base, and leaf litter
+// (under the crowns, in the hollows, in the wood) that rots over the
+// winter. Far off it blends to large-scale turf, so the meadow runs on to
+// the woodland and the horizon with no edge.
 function makeGround(U, tex) {
   // a polar grid: fine near the plants, coarse at the horizon
-  const rings = 90, segs = 160, pos = [], idx = [];
+  const rings = 96, segs = 180, pos = [], idx = [];
   for (let i = 0; i <= rings; i++) {
-    const r = i === 0 ? 0 : 0.25 * Math.pow(i, 1.75);
+    const r = i === 0 ? 0 : 0.2 * Math.pow(i, 1.78);
     for (let k = 0; k <= segs; k++) { const a = k / segs * Math.PI * 2; pos.push(Math.cos(a) * r, 0, Math.sin(a) * r); }
   }
   for (let i = 0; i < rings; i++) for (let k = 0; k < segs; k++) {
@@ -439,103 +464,71 @@ function makeGround(U, tex) {
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length).fill(0).map((v, i) => i % 3 === 1 ? 1 : 0), 3));
   geo.setIndex(idx);
   const m = new THREE.MeshStandardMaterial({ roughness: 0.96, metalness: 0, envMapIntensity: 0.6 });
-  const own = { uGrassC: { value: tex.grassC }, uGrassN: { value: tex.grassN }, uMeadowC: { value: tex.meadowC }, uLitterC: { value: tex.litterC }, uLitterK: { value: 0 }, uPlants: { value: [] }, uNP: { value: 0 } };
-  for (let k = 0; k < 12; k++) own.uPlants.value.push(new THREE.Vector4(0, 0, 0, 0));
+  const own = { uTurf: { value: tex.turf }, uMeadowT: { value: tex.meadow }, uForest: { value: tex.forest }, uSoil: { value: tex.soil }, uLitterC: { value: tex.litter }, uGroundN: { value: tex.normal }, uLitterK: { value: 0 }, uDecay: { value: 0 } };
   m.userData.own = own;
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, U, own);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\n' + COMMON_GLSL + 'varying vec3 vWp;')
       .replace('#include <beginnormal_vertex>', /* glsl */`
-        float gx = position.x, gz = position.z, e = 0.25;
+        float gx = position.x, gz = position.z, e = 0.12;
         float hy = groundY(gx, gz);
         vec3 objectNormal = normalize(vec3(groundY(gx - e, gz) - groundY(gx + e, gz), 2.0 * e, groundY(gx, gz - e) - groundY(gx, gz + e)));`)
       .replace('#include <begin_vertex>', 'vec3 transformed = vec3(gx, hy, gz); vWp = transformed;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + COMMON_GLSL +
-        'uniform sampler2D uGrassC, uGrassN, uMeadowC, uLitterC; uniform float uLitterK, uNP; uniform vec4 uPlants[12]; varying vec3 vWp;\n' +
+        'uniform sampler2D uTurf, uMeadowT, uForest, uSoil, uLitterC, uGroundN; uniform float uLitterK, uDecay; varying vec3 vWp;\n' +
         'float gh(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 15731.7); }\nfloat gn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(gh(i), gh(i + vec2(1, 0)), f.x), mix(gh(i + vec2(0, 1)), gh(i + vec2(1, 1)), f.x), f.y); }\n')
       .replace('#include <map_fragment>', /* glsl */`
         if (uCut > 0.0 && vWp.x > 0.0 && vWp.z > 0.0 && dot(vWp.xz, vWp.xz) < uCut * uCut) discard;
-        vec2 guv = vWp.xz / 3.2;
-        float mixK = smoothstep(0.35, 0.7, gn(vWp.xz * 0.11) * 0.7 + gn(vWp.xz * 0.37) * 0.3);
-        vec3 gc = mix(texture(uGrassC, guv).rgb, texture(uMeadowC, guv * 0.83 + 0.37).rgb, mixK);
-        // far off: the tile repeats less when it blends to its mean colour
-        float far = smoothstep(25.0, 90.0, length(vWp.xz));
-        gc = mix(gc, texture(uGrassC, vWp.xz / 41.0).rgb * 0.9 + vec3(0.0, 0.01, 0.0), far * 0.7);
-        // litter under each crown, from autumn to spring
-        float lk = 0.0;
-        for (int k = 0; k < 12; k++) { if (float(k) >= uNP) break; vec4 pp = uPlants[k]; float d = length(vWp.xz - pp.xy); lk = max(lk, (1.0 - smoothstep(pp.z * 0.5, pp.z * 1.15, d)) * pp.w); }
-        gc = mix(gc, texture(uLitterC, guv * 0.9).rgb, lk * uLitterK * (0.6 + 0.4 * gn(vWp.xz * 1.7)));
-        // winter: snow, thinner near the trunks
-        float sn = uSnow * (0.75 + 0.25 * gn(vWp.xz * 2.3)) * (1.0 - 0.6 * lk);
-        gc = mix(gc, vec3(0.86, 0.89, 0.94), clamp(sn, 0.0, 1.0));
+        vec2 p = vWp.xz;
+        float dist = length(p);
+        float cov = fCover(p), wood = fWood(p), sw = fSward(p), pth = fPath(p), mo = fMoist(p), dr = fDrip(p);
+        float shade = max(cov, wood);
+        float hollow = clamp(-relief(p.x, p.y) / ${RELIEF_AMP.toFixed(4)} * 1.4, 0.0, 1.0);
+        float base = 0.0;
+        for (int k = 0; k < ${MAX_CROWNS}; k++) { if (float(k) >= uNCrown) break; vec4 q = uCrown[k]; if (q.z > 0.3) { float dd = length(p - q.xy) / (0.35 + 0.08 * q.z); base = max(base, q.w * exp(-dd * dd)); } }
+        vec2 c0 = uNCrown > 0.5 ? uCrown[0].xy : vec2(0.0);
+        float nz = gn(p * 1.7) * 0.55 + gn(p * 5.3) * 0.45;
+        float turf = (0.5 + 0.5 * sw) * (1.0 - 0.85 * shade) * (1.0 - pth);
+        float soil = clamp(max(max(smoothstep(0.3, 0.9, pth), (1.0 - sw) * 0.5 * (1.0 - 0.6 * shade)), max(dr * 0.4, base * 0.7)), 0.0, 1.0);
+        float litter = clamp(wood * 0.75 + uLitterK * (cov * 1.15 + dr * 0.4 + hollow * 0.7 * min(1.0, cov * 2.0 + wood)) * (1.0 - 0.6 * pth), 0.0, 1.0);
+        float north = clamp(1.0 - (dot(p - c0, SUN_XZ) + 0.2) * 2.0, 0.0, 1.0);
+        float moss = clamp(clamp((mo - 0.45) * 2.5, 0.0, 1.0) * shade * 0.75 + base * north * 0.9, 0.0, 1.0);
+        soil = smoothstep(0.2, 0.8, soil + (nz - 0.5) * 0.5);
+        litter = smoothstep(0.12, 0.7, litter + (nz - 0.5) * 0.45 * litter);
+        moss = smoothstep(0.15, 0.75, moss + (nz - 0.5) * 0.4);
+        vec3 turfC = mix(texture(uTurf, p / 1.9).rgb, texture(uTurf, p / 6.7 + 0.31).rgb, 0.4);
+        vec3 meadC = texture(uMeadowT, p / 2.8).rgb;
+        vec3 forC = texture(uForest, p / 3.0).rgb * 0.62;
+        vec3 soilC = texture(uSoil, p / 2.2).rgb * (1.0 + 0.3 * (1.0 - mo));
+        soilC = mix(soilC, soilC * 1.9 + 0.015, pth * (1.0 - mo));   // a dry trodden path is lighter
+        vec3 litC = mix(texture(uLitterC, p / 1.7).rgb, ${gv3(GROUND_COL.rot)}, uDecay * 0.9);
+        vec3 mossC = ${gv3(GROUND_COL.moss)} * (0.7 + 0.6 * nz);
+        vec3 gc = mix(meadC, turfC, turf);
+        gc = mix(gc, forC, shade * 0.85);
+        gc = mix(gc, mossC, moss);
+        gc = mix(gc, soilC, soil);
+        gc = mix(gc, litC, litter);
+        gc *= 1.0 - 0.15 * mo * (1.0 - turf);
+        gc *= 1.0 - 0.45 * fWoodShade(p);   // the canopy of the wood (no shadow map out there)
+        // far off: large-scale turf, so the tile does not repeat and the meadow runs on
+        float far = smoothstep(28.0, 110.0, dist);
+        vec3 farC = mix(texture(uTurf, p / 37.0).rgb, texture(uMeadowT, p / 53.0).rgb, 0.25 + 0.35 * gn(p * 0.03));
+        gc = mix(gc, farC * (0.85 + 0.3 * gn(p * 0.11)), far * 0.8 * (1.0 - wood * 0.5));
+        // winter: snow, thinner under the crowns and at the trunks
+        float sn = uSnow * (0.75 + 0.25 * gn(p * 2.3)) * (1.0 - 0.55 * cov) * (1.0 - 0.6 * base);
+        gc = mix(gc, ${gv3(GROUND_COL.snow)}, clamp(sn, 0.0, 1.0));
         diffuseColor.rgb = gc;`)
       .replace('#include <normal_fragment_maps>', /* glsl */`
-        vec3 gN = texture(uGrassN, vWp.xz / 3.2).xyz * 2.0 - 1.0;
+        vec3 gN = texture(uGroundN, vWp.xz / 3.2).xyz * 2.0 - 1.0;
         gN.xy *= 0.8 * (1.0 - uSnow * 0.8);
         vec3 tW = normalize(vec3(1.0, 0.0, 0.0)), bW = normalize(vec3(0.0, 0.0, -1.0));
         normal = normalize(mat3(normalize((viewMatrix * vec4(tW, 0.0)).xyz), normalize((viewMatrix * vec4(bW, 0.0)).xyz), normal) * gN);`);
   };
-  m.customProgramCacheKey = () => 'pg-ground';
+  m.customProgramCacheKey = () => 'pg-ground2';
   const mesh = new THREE.Mesh(geo, m);
   mesh.receiveShadow = true; mesh.frustumCulled = false;
-  return mesh;
-}
-
-// --------------------------------------------------------------- grass
-// Instanced blades: each tuft is 3 curved, tapered blades. They sway with
-// the wind, yellow in late summer, brown in winter and hide under snow.
-function makeGrass(U, n, avoid) {
-  const field = grassField({ n, radius: 24, seed: 11, avoid });
-  const segs = 4, pos = [], idx = [];
-  for (let b = 0; b < 3; b++) {
-    const base = pos.length / 3;
-    for (let s = 0; s <= segs; s++) { const t = s / segs; pos.push(-1, t, b, 1, t, b); }
-    for (let s = 0; s < segs; s++) { const a = base + s * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-  }
-  const geo = new THREE.InstancedBufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length), 3));
-  geo.setIndex(idx);
-  geo.setAttribute('aTuft', new THREE.InstancedBufferAttribute(field, 4));
-  geo.instanceCount = field.length / 4;
-  const m = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0, side: THREE.DoubleSide, envMapIntensity: 0.6 });
-  m.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, U);
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\n' + COMMON_GLSL + 'attribute vec4 aTuft; varying vec3 vGc; varying float vGt;')
-      .replace('#include <beginnormal_vertex>', /* glsl */`
-        float rnd = fract(aTuft.w * 13.7 + position.z * 0.37);
-        float a = (aTuft.w + position.z * 0.33) * 6.2831853 * 3.0;
-        vec2 dir = vec2(cos(a), sin(a));
-        vec2 side = vec2(-dir.y, dir.x);
-        float t = position.y;
-        float p = uClock - floor(uClock);
-        float season = 0.55 + 0.45 * smoothstep(0.12, 0.4, p) - 0.25 * smoothstep(0.75, 1.0, p);
-        float hgt = (0.2 + 0.28 * rnd) * aTuft.z * season * (1.0 - 0.85 * uSnow);
-        float wbl = 0.012 * (1.0 - t * 0.85) * (0.7 + 0.6 * rnd);
-        float lean = (0.25 + 0.35 * rnd) * t * t;
-        vec2 wv = uWindDir * uWind * (0.35 + 0.25 * sin(uTime * 2.1 + aTuft.x * 0.6 + aTuft.y * 0.4)) * t * t;
-        vec2 base = aTuft.xy + side * position.z * 0.025 + dir * 0.01 * position.z;
-        float gy0 = groundY(base.x, base.y);
-        vec3 bp = vec3(base.x + side.x * position.x * wbl + dir.x * lean * hgt + wv.x * hgt, gy0 + t * hgt * (1.0 - 0.3 * lean), base.y + side.y * position.x * wbl + dir.y * lean * hgt + wv.y * hgt);
-        if (uCut > 0.0 && base.x > -0.05 && base.y > -0.05 && dot(base, base) < (uCut + 0.1) * (uCut + 0.1)) bp = vec3(0.0, -50.0, 0.0);
-        vec3 objectNormal = normalize(vec3(dir.x * 0.4, 1.0, dir.y * 0.4));
-        float autumn = smoothstep(0.6, 0.85, p) + 1.0 - smoothstep(0.05, 0.25, p);
-        vec3 green = mix(vec3(0.05, 0.12, 0.02), vec3(0.2, 0.36, 0.06), t) * (0.8 + 0.4 * rnd);
-        vec3 straw = mix(vec3(0.16, 0.13, 0.05), vec3(0.42, 0.36, 0.16), t);
-        vGc = mix(green, straw, clamp(autumn * (0.5 + 0.5 * rnd), 0.0, 1.0));
-        vGt = t;`)
-      .replace('#include <begin_vertex>', 'vec3 transformed = bp;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vGc; varying float vGt;')
-      .replace('#include <map_fragment>', 'diffuseColor.rgb = vGc;')
-      .replace('#include <aomap_fragment>', 'reflectedLight.indirectDiffuse *= 0.45 + 0.55 * vGt;');
-  };
-  m.customProgramCacheKey = () => 'pg-grass';
-  const mesh = new THREE.Mesh(geo, m);
-  mesh.frustumCulled = false; mesh.receiveShadow = true;
   return mesh;
 }
 
@@ -669,19 +662,15 @@ export function createRender(opts) {
     loadArray(BARKS.map(b => A + 'bark-' + b + '-color.jpg'), BS, true, [90, 72, 56]),
     loadArray(BARKS.map(b => A + 'bark-' + b + '-normal.jpg'), coarse ? 256 : 512, false, [128, 128, 255]),
   ]).then(([c, n]) => { U.uBarkC.value = c; U.uBarkN.value = n; if (opts.onReady) opts.onReady(); });
+  const N = '../../assets/nature/ground/';
   const groundTex = {
-    grassC: loadTex(loader, A + 'ground-grass-color.jpg', true, true), grassN: loadTex(loader, A + 'ground-grass-normal.jpg', false, true),
-    meadowC: loadTex(loader, A + 'ground-meadow-color.jpg', true, true), litterC: loadTex(loader, A + 'ground-litter-color.jpg', true, true),
+    turf: loadTex(loader, N + 'grass_albedo.webp', true, true), meadow: loadTex(loader, N + 'meadow_albedo.webp', true, true),
+    soil: loadTex(loader, N + 'mud_albedo.webp', true, true), forest: loadTex(loader, A + 'ground-grass-color.jpg', true, true),
+    litter: loadTex(loader, A + 'ground-litter-color.jpg', true, true), normal: loadTex(loader, A + 'ground-grass-normal.jpg', false, true),
   };
 
-  // ground, grass, cut-away
+  // ground, cut-away (the grass and the rest of the meadow: meadow.js)
   const ground = makeGround(U, groundTex); scene.add(ground);
-  let grass = null;
-  function setGrass(avoid) {
-    if (grass) { scene.remove(grass); grass.geometry.dispose(); }
-    grass = makeGrass(U, coarse ? 22000 : 70000, avoid);
-    scene.add(grass);
-  }
   const cut = makeCutaway(); scene.add(cut.group); cut.group.visible = false;
 
   // the node structures: plant and roots
@@ -761,70 +750,17 @@ export function createRender(opts) {
   const seeds = new THREE.InstancedMesh(seedGeo, seedMat, 16); seeds.count = 0; seeds.castShadow = true; scene.add(seeds);
   let seedList = [];
 
-  // ------------------------------------------------- natural objects
-  // Scanned CC0 props (props.js): one InstancedMesh per packed mesh. The
-  // rocks and the stump take snow on top; the foliage sways, browns in
-  // late autumn, and the celandine shows only from spring to summer.
-  const props = { table: null, buf: null, mats: {}, meshes: [], want: null };
-  function propMaterial(set) {
-    if (props.mats[set]) return props.mats[set];
-    const S2 = props.table.sets[set];
-    const m = new THREE.MeshStandardMaterial({ roughness: S2.foliage ? 0.8 : 0.95, metalness: 0, envMapIntensity: 0.6 });
-    m.map = loadTex(loader, A + S2.color, true, true);
-    m.normalMap = loadTex(loader, A + S2.normal, false, true);
-    if (S2.foliage) {
-      m.alphaMap = loadTex(loader, A + S2.alpha, false, true);
-      m.alphaTest = 0.5; m.side = THREE.DoubleSide; m.alphaToCoverage = true;
-    }
-    const foliage = S2.foliage ? 1 : 0, flower = set === 'celandine' ? 1 : 0;
-    m.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader
-        .replace('#include <common>', '#include <common>\n' + COMMON_GLSL + 'varying float vUpN;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
-          float pph = uClock - floor(uClock);
-          ${flower ? 'transformed *= smoothstep(0.18, 0.28, pph) * (1.0 - smoothstep(0.62, 0.75, pph));' : ''}
-          ${foliage ? 'vec3 ip = instanceMatrix[3].xyz; transformed.xz += uWindDir * uWind * 0.35 * position.y * position.y * sin(uTime * 2.2 + ip.x * 0.7 + ip.z * 0.5);' : ''}
-          vUpN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;`);
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uSnow, uClock; varying float vUpN;')
-        .replace('#include <map_fragment>', `#include <map_fragment>
-          float pp = uClock - floor(uClock);
-          ${foliage ? 'float brown = smoothstep(0.74, 0.9, pp) + 1.0 - smoothstep(0.1, 0.3, pp); diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.35, 1.0, 0.45) * 0.8, clamp(brown, 0.0, 1.0) * 0.8);' : ''}
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.89, 0.94), uSnow * smoothstep(0.35, 0.8, vUpN) * ${foliage ? '0.6' : '0.95'});`);
-    };
-    m.customProgramCacheKey = () => 'pg-prop-' + foliage + flower;
-    props.mats[set] = m;
-    return m;
+  // ------------------------------------------------- the ground ecosystem
+  // meadow.js: grass tussocks, nature-pack stones, forbs, ferns, shrubs and
+  // the stump, falling petals, drifted leaf litter, seedlings, woodland.
+  const meadow = createMeadow({ THREE, scene, U, COMMON: COMMON_GLSL, coarse, atlas, limits: opts.limits });
+  // eco: eco.js buildEco result. plantLeaf[k] = [species index, first atlas
+  // cell, cells, deciduous] of plant k (for its leaf litter).
+  function setEco(eco, plantLeaf) {
+    U.uPath.value.set(...eco.params.path); U.uEdge.value.set(...eco.params.edge);
+    meadow.setEco(eco, plantLeaf);
   }
-  function buildProps() {
-    if (!props.table || !props.want) return;
-    for (const im of props.meshes) { scene.remove(im); im.dispose(); }
-    props.meshes = [];
-    const list = scatterProps(Object.assign({ meshes: props.table.meshes, coarse }, props.want));
-    const by = new Map();
-    for (const o of list) { if (!by.has(o.mesh)) by.set(o.mesh, []); by.get(o.mesh).push(o); }
-    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), P = new THREE.Vector3(), SC = new THREE.Vector3();
-    for (const [k, items] of by) {
-      const md = props.table.meshes[k];
-      if (!md.geo) {
-        const d = decodeMesh(props.buf, md), g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3));
-        g.setAttribute('normal', new THREE.BufferAttribute(d.nrm, 3, true));
-        g.setAttribute('uv', new THREE.BufferAttribute(d.uv, 2));
-        g.setIndex(new THREE.BufferAttribute(d.idx, 1));
-        md.geo = g;
-      }
-      const im = new THREE.InstancedMesh(md.geo, propMaterial(md.set), items.length);
-      items.forEach((o, i) => { Q.setFromAxisAngle(Y, o.rot); P.set(o.x, o.y - o.sink, o.z); SC.setScalar(o.scale); M.compose(P, Q, SC); im.setMatrixAt(i, M); });
-      im.castShadow = true; im.receiveShadow = true;
-      scene.add(im); props.meshes.push(im);
-    }
-  }
-  Promise.all([fetch(A + 'props.json').then(r => r.json()), fetch(A + 'props.bin').then(r => r.arrayBuffer())])
-    .then(([t, b]) => { props.table = t; props.buf = b; buildProps(); })
-    .catch(() => { /* the scene works without the props */ });
-  function setProps(want) { props.want = want; buildProps(); }
+  function setSeedlings(list, info) { meadow.setSeedlings(list, info); }
 
   // ---------------------------------------------------------- state set
   let box = [-0.3, 0, -0.3, 0.3, 0.3, 0.3];
@@ -841,14 +777,18 @@ export function createRender(opts) {
   function setPlants(list) {
     // list: [{ x, z, germ, r (crown radius), species }]
     seedList = list;
-    const o = ground.material.userData.own;
-    o.uNP.value = Math.min(12, list.length);
-    list.slice(0, 12).forEach((p, k) => o.uPlants.value[k].set(p.x, p.z, Math.max(0.6, p.r), 1));
-    setGrass(list.map(p => ({ x: p.x, z: p.z, r: p.form === 'tree' ? 0.45 : 0.25 })));
   }
-  function setCrowns(list) {   // live crown radius for the litter
-    const o = ground.material.userData.own;
-    list.slice(0, 12).forEach((p, k) => o.uPlants.value[k].set(p.x, p.z, Math.max(0.4, p.r), p.w ?? 1));
+  // pads: [{ x, z, r }] flat ground at the plant bases and the cut-away
+  // (ground.js). The same list goes to groundY in JavaScript and the shaders.
+  function setPads(list) {
+    setPads0(list);
+    const L = list.slice(0, MAX_PADS);
+    U.uNPads.value = L.length;
+    L.forEach((p, k) => U.uPads.value[k].set(p.x, p.z, p.r, 0));
+  }
+  function setCrowns(list) {   // live crown radius per plant: light, litter, the community
+    U.uNCrown.value = Math.min(MAX_CROWNS, list.length);
+    list.slice(0, MAX_CROWNS).forEach((p, k) => U.uCrown.value[k].set(p.x, p.z, Math.max(0.05, p.r), p.w ?? 1));
   }
   function setMode(mode) {
     U.uMode.value = mode === 'natural' ? 0 : mode === 'age' ? 1 : mode === 'height' ? 3 : 2;
@@ -888,12 +828,14 @@ export function createRender(opts) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
-  // o: { clock (years), time (s), wind, snow, range: [y0, y1], litter }
+  // o: { clock (years), time (s), wind, snow, range: [y0, y1], litter, decay }
   function frame(o) {
     U.uClock.value = o.clock; U.uTime.value = o.time; U.uWind.value = o.wind;
     U.uSnow.value = o.snow; U.uRange.value.set(o.range[0], o.range[1]);
-    ground.material.userData.own.uLitterK.value = o.litter;
-    seasonSun(o.clock);
+    const go = ground.material.userData.own;
+    go.uLitterK.value = o.litter; go.uDecay.value = o.decay ?? 0;
+    const el = seasonSun(o.clock);
+    meadow.frame({ litterK: o.litter, decay: o.decay ?? 0, sunK: Math.min(1, Math.sin(el) * 1.3) });
     const winter = o.snow;
     sky.material.uniforms.uTime.value = o.time; sky.material.uniforms.uWinter.value = winter;
     updateEnv(Math.round(winter * 4) / 4);
@@ -914,13 +856,13 @@ export function createRender(opts) {
 
   const api = {
     renderer, scene, camera, controls, uniforms: U, ready,
-    setPack, setRootPack, setPlants, setCrowns, setProps, setMode, setGradient, setRootsOn, setLeavesOn, resize, frame,
+    setPack, setRootPack, setPlants, setPads, setCrowns, setEco, setSeedlings, setMode, setGradient, setRootsOn, setLeavesOn, resize, frame,
     get box() { return box; },
     render() { renderer.render(scene, camera); },
-    stats() { return { nodes: plant.geo.instanceCount, leaves: leafGeo.instanceCount, roots: roots.geo.instanceCount }; },
+    stats() { return Object.assign({ nodes: plant.geo.instanceCount, leaves: leafGeo.instanceCount, roots: roots.geo.instanceCount }, meadow.stats()); },
   };
   return api;
 }
 
 // The materials and GLSL, for a shader check in node (no GPU).
-export { branchMaterial, leafMaterial, branchDepth, leafDepth, makeSky, COMMON_GLSL, NODE_GLSL, BRANCH_BODY, LEAF_BODY };
+export { branchMaterial, leafMaterial, branchDepth, leafDepth, makeSky, makeGround, COMMON_GLSL, NODE_GLSL, BRANCH_BODY, LEAF_BODY };
