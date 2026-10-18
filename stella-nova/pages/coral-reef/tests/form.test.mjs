@@ -18,6 +18,11 @@
 //    fan net ....... the sea fan joins its own branches (bridges in its
 //                    plane, at most net x spacing long), and its particles
 //                    stay in its plane in every height decile
+//    surface ....... the fine mesh of a plain branch part is a smooth tube:
+//                    the mean |normal . branch axis| is under 0.08
+//                    (staghorn), 0.06 (fan), 0.105 (finger); a bead of the
+//                    smooth minimum at each particle made it 0.13, 0.068
+//                    and 0.118 on the same colonies
 // ============================================================================
 import { createRock } from '../rock/index.js';
 import { createReef, SPECIES, SPECIES_IDS } from '../reef.js';
@@ -111,6 +116,36 @@ for (const id of SPECIES_IDS) {
   const dec = Array.from({ length: 10 }, () => [0, 0]);
   for (const g of c.ids) { const k = Math.max(0, Math.min(9, Math.floor(10 * (R.py[g] - c.base[1]) / H))); dec[k][0] = Math.max(dec[k][0], Math.abs(off(g))); dec[k][1]++; }
   ok(dec.every(d => d[0] < 0.005), 'fan net: the fan particles stay in its plane up to the top', `largest offset by height decile (mm): ${dec.map(d => (d[0] * 1000).toFixed(1)).join(' ')}; top decile ${dec[9][1]} particles`);
+}
+
+// ── surface: no bead at each particle ───────────────────────────────────────
+// The fine mesh of a plain branch part (the particle and its parent each
+// have one child) should be a smooth tapered tube: its normals are nearly
+// square to the branch axis. A bead of the smooth minimum at each joint
+// tilts them along the axis. Measure: the mean |n . axis| of those
+// vertices (0 on a cylinder; the taper of the pipe rule gives a little).
+{
+  const { createCoralMesher } = await import('../coral-sdf.js');
+  const { colonyInfo } = await import('../reef.js');
+  for (const id of ['staghorn', 'fan', 'finger']) {
+    const { R, c } = single[id];
+    const M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: 0, lod: false });
+    M.addColony(colonyInfo(c));
+    for (let g = 0; g < R.count; g++) M.add(g, R.parent[g], R.px[g], R.py[g], R.pz[g], R.col[g]);
+    const list = M.meshAll();
+    const F = [...M.fields.values()][0], S = F.SM;
+    const kids = new Int32Array(R.count); for (let g = 0; g < R.count; g++) if (R.parent[g] >= 0) kids[R.parent[g]]++;
+    let s = 0, n = 0;
+    for (const m of list) for (let v = 0; v < m.gids.length; v++) {
+      const g = m.gids[v]; if (g < 0) continue;
+      const p = R.parent[g]; if (p < 0 || kids[g] !== 1 || kids[p] !== 1) continue;
+      const i = F.localOf.get(g), q = F.localOf.get(p); if (i === undefined || q === undefined) continue;
+      const ax = S[i * 3] - S[q * 3], ay = S[i * 3 + 1] - S[q * 3 + 1], az = S[i * 3 + 2] - S[q * 3 + 2], l = Math.hypot(ax, ay, az) || 1;
+      s += Math.abs((m.normals[v * 3] * ax + m.normals[v * 3 + 1] * ay + m.normals[v * 3 + 2] * az) / l); n++;
+    }
+    const lim = { staghorn: 0.08, fan: 0.06, finger: 0.105 }[id];
+    ok(n > 1000 && s / n < lim, `surface: ${id} branches are smooth tubes, no bead at each particle`, `mean |n . axis| ${f3(s / n)} over ${n} vertices (limit ${lim})`);
+  }
 }
 
 // ── root: a reef on the real rock ───────────────────────────────────────────

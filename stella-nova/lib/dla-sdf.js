@@ -40,6 +40,13 @@
 //      post   optional (x, y, z, d, id) -> d', a pure per-point shape term
 //             (grooves, webs, plates). It runs at mesh time only, so it
 //             costs nothing per particle and keeps the field exact.
+//      link, chainK  optional: link(a, b) -> true when primitives a and b
+//             are one chain (a parent cone and its child). Where the
+//             nearest primitive so far is linked to the new one, the fold
+//             uses the blend chainK (default 0, a plain min) and not k. Two
+//             cones of one chain meet on a shared end sphere, so a plain
+//             min is already smooth there, and the smooth minimum would
+//             add a bead of k / 4 at each joint. Without link: no change.
 //    sdf.setPrim(id, ax, ay, az, ra, bx, by, bz, rb)
 //             add (new id) or change (old id) a round cone. A sphere is a
 //             cone with a == b. Ids are small integers. Add them in
@@ -142,6 +149,10 @@ export function createSdf(opts = {}) {
   const quant = v => Math.round((v < -T ? -T : v > T ? T : v) / QS);
   const reach = T + k;                      // a primitive writes points nearer than this
   const post = opts.post || null;
+  const link = opts.link || null, chainK = opts.chainK ?? 0;
+  // the blend of the fold: k, or chainK where the nearest so far (id0, the
+  // stored id + 1) is a cone of the same chain as primitive c
+  const blend = (v, d, id0, c) => (link && id0 > 0 && link(id0 - 1, c) ? (chainK > 0 ? smin(v, d, chainK) : Math.min(v, d)) : smin(v, d, k));
   const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
 
   let P = new Float64Array(PS * 256), nPrim = 0;
@@ -220,7 +231,7 @@ export function createSdf(opts = {}) {
             if (!b) { b = brickAt(bx, by, bz, true); }
             if (!b.s) alloc(b);
             const j = (lz * B + ly) * B + lx, q0 = b.s[j], s0 = q0 * QS;
-            const q = quant(smin(s0, d, k));
+            const q = quant(blend(s0, d, b.id[j], c));
             if (d < s0 || b.id[j] === 0) b.id[j] = c + 1;
             if (q !== q0) {
               b.s[j] = q;
@@ -261,8 +272,9 @@ export function createSdf(opts = {}) {
             const d = coneDist(P, o, x, y, z);
             if (d >= reach) continue;
             const v = qv * QS;
+            const id0 = id;
             if (d < v || id === 0) id = c + 1;
-            qv = quant(smin(v, d, k));
+            qv = quant(blend(v, d, id0, c));
           }
           const j = (lz * B + ly) * B + lx;
           if (!b.s) { if (qv === QT && id === 0) continue; alloc(b); }
@@ -368,12 +380,14 @@ export function createSdf(opts = {}) {
     const gx = Math.floor(x / cell / B), gy = Math.floor(y / cell / B), gz = Math.floor(z / cell / B);
     const b = brickAt(gx, gy, gz, false);
     if (!b) return QT * QS;
-    let v = QT * QS;
+    let v = QT * QS, id = 0;
     for (const c of b.prims) {
       const o = c * PS; if (!P[o + 15]) continue;
       const d = coneDist(P, o, x, y, z);
       if (d >= reach) continue;
-      v = quant(smin(v, d, k)) * QS;
+      const id0 = id;
+      if (d < v || id === 0) id = c + 1;
+      v = quant(blend(v, d, id0, c)) * QS;
     }
     return v;
   }

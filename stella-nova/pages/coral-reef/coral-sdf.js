@@ -100,18 +100,24 @@ import { createSdf, pipeRadius, smin } from '../../lib/dla-sdf.js';
 // field band (past the largest outward post term). polyp: density per m^2,
 // tip (extra density at the tips), size (polyp radius, m), max per brick.
 export const SHAPES = {
-  staghorn: { cell: 0.0115, k: 0.018, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 4, rMax: 0.019, sub0: 3, quant: 0.16, rootScale: 1.4, band: 0.022,
+  staghorn: { cell: 0.0115, k: 0.026, bend: 0.5, hold: 0.25, rTip: 0.011, pipe: 4, rMax: 0.019, sub0: 3, quant: 0.16, rootScale: 1.4, band: 0.022,
     polyp: { density: 3600, tip: 2.5, size: 0.0032, max: 700 } },
   fan: { own: true, cell: 0.0055, k: 0.005, bend: 0.25, hold: 0.4, rTip: 0.0028, pipe: 3.5, rMax: 0.008, sub0: 3, quant: 0.2, rootScale: 2, band: 0.03,
     web: 0.011, half: 0.0028, polyp: { density: 14000, tip: 1, size: 0.0016, max: 900 } },
-  table: { cell: 0.016, k: 0.02, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034,
+  table: { cell: 0.016, k: 0.026, bend: 0.3, hold: 0.4, rTip: 0.015, pipe: 3, rMax: 0.05, sub0: 2, quant: 0.2, rootScale: 1.6, band: 0.034,
     inflate: 0.012, half: 0.011, polyp: { density: 5000, tip: 1.5, size: 0.003, max: 700 } },
-  boulder: { cell: 0.025, k: 0.1, rTip: 0.12, pipe: 4, rMax: 0.12, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.045,
+  boulder: { cell: 0.025, k: 0.1, chain: 1, rTip: 0.12, pipe: 4, rMax: 0.12, sub0: 3, quant: 0.25, rootScale: 1.3, band: 0.045,
     groove: 0.045, polyp: { density: 240, tip: 0, size: 0.006, max: 160 } },
-  finger: { cell: 0.012, k: 0.018, bend: 0.4, hold: 0.3, rTip: 0.013, pipe: 3.4, rMax: 0.032, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03,
+  finger: { cell: 0.012, k: 0.022, bend: 0.4, hold: 0.3, rTip: 0.019, pipe: 3.4, rMax: 0.04, sub0: 2, quant: 0.22, rootScale: 1.5, band: 0.03,
     polyp: { density: 5000, tip: 1, size: 0.0045, max: 700 } },
 };
 export const SHAPE_IDS = Object.keys(SHAPES);
+// The blend of two cones of one branch (a particle and its parent), as a
+// part of k. They meet on a shared end sphere, so the branch is smooth
+// with a small blend; the full k there made a bead at every particle (the
+// user: "the surface texture of growing corals along the normals is too
+// rough"). The full k stays for forks, bridges and neighbours.
+export const CHAIN_K = 0.15;
 
 // ── species scale ───────────────────────────────────────────────────────────
 // The user said (2026-10-18): "we should be able to simulate much large
@@ -257,7 +263,9 @@ export const LOD_K = 3;         // coarse cell = LOD_K x fine cell
 // "change" on every ancestor and queues a recompute of its bricks. Here a
 // radius changes only when its quantised step changes.
 export function createTree(opts = {}) {
-  const sdf = createSdf(opts);
+  // chain: the cones of one branch (a parent and its child) join with the
+  // blend chainK x k, not k (lib/dla-sdf.js link): no bead at each joint
+  const sdf = createSdf(opts.chain === undefined ? opts : Object.assign({}, opts, { link: (a, b) => par[b] === a || par[a] === b, chainK: opts.chain * (opts.k ?? 0) }));
   const rTip = opts.rTip ?? 0.5, pipe = opts.pipe ?? 3, rMax = opts.rMax ?? 4 * rTip, quant = opts.quant ?? 0.12, sub0 = opts.sub0 ?? 2;
   const rootScale = opts.rootScale ?? 1;
   let cap = 1024, n = 0;
@@ -370,7 +378,7 @@ export function createCoralMesher(opts = {}) {
       depth: new Int32Array(1024), gid: new Int32Array(1024), colOf: new Int32Array(1024), localOf: new Map() };
     F.tree = createTree({
       cell, brick: BRICK, k: sh.k, band: sh.band, rTip: sh.rTip, pipe: sh.pipe, rMax: sh.rMax,
-      sub0: sh.sub0, quant: sh.quant, rootScale: sh.rootScale, maxPrims: 1 << 22,
+      sub0: sh.sub0, quant: sh.quant, rootScale: sh.rootScale, maxPrims: 1 << 22, chain: sh.chain ?? CHAIN_K,
       post: wrapPost(postFor(id, sh, F), O),
     });
     fields.set(key, F);
