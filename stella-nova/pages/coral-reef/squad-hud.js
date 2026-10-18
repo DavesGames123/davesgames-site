@@ -15,9 +15,10 @@
 //  colour on all of them (rov/hud.js ROV_COLOURS).
 //
 //  FEED CARDS (#feed > #feedSlot > .fcard). One card per ROV in id order,
-//  at the right; the selected card is large, the others small (hud.js
-//  compact). feedLayout() gives the card widths so the stack fits under
-//  the readout. A tap on a small card selects its ROV. Phones show the
+//  at the right; the selected card is large (0.32 of the width at M), the
+//  others in a column at its left (hud.js compact). feedLayout() gives the
+//  card widths so the stack fits under the readout and right of the
+//  minimap; #feedTools > #feedScale sets S, M or L (localStorage). A tap on a small card selects its ROV. Phones show the
 //  selected card only, with tabs (#feedTabs) and a swipe to change it; a
 //  tap on the card makes it large (#feedSize). The saver shows the main
 //  card only, at the cardRect place of saver.js (main.js placeCard sets the
@@ -34,7 +35,8 @@
 //
 //    const H = mountSquadHud({ doc, win, THREE, canvas, camera: () => S.camera,
 //      getSquad, getRovs, getField, getCam, surfaceY, phoneQ, isSaver,
-//      feedOn: () => G.feed, onSelect(id, { follow }), flash(msg) });
+//      feedOn: () => G.feed, onSelect(id, { follow }), flash(msg),
+//      onCardTap(id) -> true when it took the tap (manual.js: back to auto) });
 //    H.setRovs(rovs)   after createROVs (bar buttons, cards, tags)
 //    H.select(id, { follow = true })   H.selectNext(+1 | -1)   H.selected
 //    H.tick(dt)        each frame (tags; minimap at 4 Hz)
@@ -45,6 +47,8 @@
 //
 //  grep -n targets
 //    "export function feedLayout"    the card widths (pure)
+//    "export function feedRects"     the card rects of a layout (pure)
+//    "  function buildTools"  "  function setFeedSize"
 //    "export function vehicleTask"   the task text of each ROV (pure)
 //    "export function mountSquadHud"
 //    "  function select("  "  function buildBar"  "  function buildCards"
@@ -57,22 +61,49 @@ import { mountExploreMap } from './map-view.js';
 const CARD_AR = 322 / 352;           // rov/hud.js HUD.H / HUD.W
 
 // The card widths (CSS px). vw, vh: the window; n: the cards; top: the
-// first free y at the right (under the readout); bottom: the margin.
-// Desktop: the main card about 0.27 vw (at most 352), the small cards 0.6
-// of it; both scale down so the stack fits. Phone: one card.
-export function feedLayout({ vw, vh, n, top = 0, bottom = 14, phone = false, gap = 8 }) {
-  if (phone) return { main: Math.min(150, vw * 0.4), thumb: 0, one: true };
-  const A = Math.max(120, vh - top - bottom);
-  let wm = Math.min(352, Math.max(220, vw * 0.27)), wt = Math.round(wm * 0.6);
-  const need = (a, b) => CARD_AR * (a + (n - 1) * b) + gap * (n - 1);
-  if (need(wm, wt) > A) { const k = (A - gap * (n - 1)) / (CARD_AR * (wm + (n - 1) * wt)); wm *= k; wt *= k; }
-  return { main: Math.round(Math.max(150, wm)), thumb: Math.round(Math.max(96, wt)), one: false, height: Math.round(need(Math.max(150, wm), Math.max(96, wt))) };
+// first free y at the right (under the readout); bottom, right: the
+// margins of #feed; left: the first free x at the left (the right edge of
+// the minimap and a gap); size: the S/M/L choice of #feedScale.
+// The user said (2026-10-18): "the rov's feeds need to be bigger".
+// Desktop: the main card is FEED_SIZES[size] of the window width (M: 0.32)
+// at the right, the other cards in a column at its left (hud.css grid),
+// 0.62 of it or less, so that the column fits under the readout and the
+// tool row (#feedTools). When the two columns do not fit right of the
+// minimap, both scale down. Phone: one card, FEED_PHONE[size] of the width.
+export const FEED_SIZES = { S: 0.26, M: 0.32, L: 0.38 };
+export const FEED_PHONE = { S: 0.4, M: 0.58, L: 0.8 };
+export const FEED_TOOLS_H = 34;
+export function feedLayout({ vw, vh, n, top = 0, bottom = 12, right = 12, left = 0, phone = false, gap = 8, size = 'M' }) {
+  const sz = FEED_SIZES[size] ? size : 'M';
+  if (phone) {
+    const main = Math.round(Math.max(120, Math.min(vw * FEED_PHONE[sz], vw - 16, (vh * 0.45) / CARD_AR)));
+    return { main, thumb: 0, one: true, size: sz, width: main, height: Math.round(main * CARD_AR) };
+  }
+  const A = Math.max(160, vh - top - bottom - FEED_TOOLS_H), m = Math.max(0, n - 1);
+  let main = Math.min(vw * FEED_SIZES[sz], A / CARD_AR, 900);
+  let thumb = m ? Math.min(main * 0.62, (A - gap * (m - 1)) / (m * CARD_AR)) : 0;
+  const room = vw - right - left;
+  if (main + (m ? gap + thumb : 0) > room) { const k = Math.max(0.3, (room - (m ? gap : 0)) / (main + thumb)); main *= k; thumb *= k; }
+  main = Math.round(Math.max(150, main)); thumb = m ? Math.round(Math.max(96, thumb)) : 0;
+  const colH = m ? m * thumb * CARD_AR + gap * (m - 1) : 0;
+  return { main, thumb, one: false, size: sz, width: main + (m ? gap + thumb : 0), height: Math.round(Math.max(main * CARD_AR, colH)) };
+}
+
+// The rects of the cards in window px (x, y, w, h), as hud.css places
+// them: #feed at right / bottom, the main card at the upper right of the
+// grid, the other cards in the left column; the tool row on top.
+export function feedRects(L, { vw, vh, n, bottom = 12, right = 12, gap = 8 }) {
+  const x1 = vw - right, y0 = vh - bottom - L.height, out = { tools: { x: x1 - L.width, y: y0 - FEED_TOOLS_H, w: L.width, h: FEED_TOOLS_H }, cards: [] };
+  out.cards.push({ main: true, x: x1 - L.main, y: y0, w: L.main, h: L.main * CARD_AR });
+  if (!L.one) for (let i = 0; i < n - 1; i++) out.cards.push({ main: false, x: x1 - L.width, y: y0 + i * (L.thumb * CARD_AR + gap), w: L.thumb, h: L.thumb * CARD_AR });
+  return out;
 }
 
 // The task text of vehicle i: the leader has the squad task; the others
 // say what they do.
 export function vehicleTask(squad, i) {
   if (!squad || !squad.vehicles[i]) return '';
+  if (squad.isManual && squad.isManual(squad.vehicles[i].id)) return 'manual control';
   if (i === 0) return squad.task ? squad.task.label : 'surveying';
   // the spread squad: each ROV has a task of its own (rov/squad.js tasks)
   if (squad.spread && typeof squad.tasks === 'function') { const t = squad.tasks()[i]; if (t) return t.label; }
@@ -195,6 +226,8 @@ export function mountSquadHud(o) {
     });
     el.addEventListener('click', () => {
       if (el.dataset.swiped) { delete el.dataset.swiped; return; }
+      // the card of the ROV in control mode: back to auto (manual.js)
+      if (o.onCardTap && o.onCardTap(id)) return;
       if (!phone() && id !== sel) { select(id, { source: 'card' }); return; }
       // the main card (and on a phone the one card): large or small
       const fs = $('feedSize'); if (fs) fs.click();
@@ -205,12 +238,38 @@ export function mountSquadHud(o) {
     const vw = win.innerWidth || 1280, vh = win.innerHeight || 720, rd = $('read');
     let top = 70;
     try { const r = rd && rd.getBoundingClientRect(); if (r && r.bottom > 0) top = r.bottom + 10; } catch { /* no layout */ }
-    const L = feedLayout({ vw, vh, n: Math.max(1, ids().length), top, bottom: 14, phone: phone() });
+    // the first free x: right of the minimap (open, not in the saver)
+    let left = 0;
+    try { const mb = $('minimap'), r = mb && !mb.classList.contains('fold') && mb.getBoundingClientRect(); if (r && r.width > 0) left = r.right + 12; } catch { /* no layout */ }
+    const L = feedLayout({ vw, vh, n: Math.max(1, ids().length), top, bottom: 12, left, phone: phone(), size: feedSize });
     // on #feedSlot: the saver exit clears the style of #feed
     const sl = $('feedSlot');
     if (sl) { sl.style.setProperty('--fc-main', `${L.main}px`); sl.style.setProperty('--fc-thumb', `${L.thumb}px`); }
     f.classList.toggle('one', L.one);
     mm.layout = L;
+  }
+
+  // ── the tool row over the cards (#feedTools): the card size S, M, L ─────
+  // kept in localStorage 'coral-reef-feed-size' (M: the main card 0.32 of
+  // the width). The saver hides the row (hud.css).
+  const FS = ['S', 'M', 'L'], FS_NAMES = { S: 'small', M: 'medium', L: 'large' };
+  let feedSize = 'M';
+  try { const v = win.localStorage.getItem('coral-reef-feed-size'); if (FS.includes(v)) feedSize = v; } catch { /* private mode: the default */ }
+  function buildTools() {
+    const f = $('feed'); if (!f || $('feedTools')) return;
+    const row = doc.createElement('div'); row.id = 'feedTools'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', 'Camera cards');
+    const b = doc.createElement('button'); b.type = 'button'; b.id = 'feedScale';
+    b.addEventListener('click', () => setFeedSize(FS[(FS.indexOf(feedSize) + 1) % FS.length], true));
+    row.appendChild(b);
+    f.insertBefore(row, f.firstChild);
+    setFeedSize(feedSize, false);
+  }
+  function setFeedSize(v, keep) {
+    feedSize = FS.includes(v) ? v : 'M';
+    const b = $('feedScale');
+    if (b) { b.textContent = feedSize; b.title = `Card size: ${FS_NAMES[feedSize]}. Press to change (small, medium, large)`; b.setAttribute('aria-label', b.title); }
+    if (keep) { try { win.localStorage.setItem('coral-reef-feed-size', feedSize); } catch { /* not kept */ } }
+    layout(); frameN = 0;
   }
 
   // ── live pictures (after the main render) ─────────────────────────────────
@@ -306,6 +365,7 @@ export function mountSquadHud(o) {
     const sb = $('mmSize');
     if (sb) sb.addEventListener('click', () => {
       setSize(SIZES[(SIZES.indexOf(size) + 1) % SIZES.length]);
+      win.setTimeout(layout, 260);   // the feed keeps clear of the new map size
       try { win.localStorage.setItem('coral-reef-minimap-size', size); } catch { /* not kept */ }
     });
     const xb = $('mmExpand');
@@ -418,14 +478,14 @@ export function mountSquadHud(o) {
     rovs = r;
     const all = ids();
     if (all.length && !all.includes(sel)) sel = all[0];
-    buildBar(); buildCards(); buildTags();
+    buildTools(); buildBar(); buildCards(); buildTags();
     if (rovs && rovs.feed && rovs.feed.setVehicle) rovs.feed.setVehicle(sel);
     syncSelection();
   }
 
   return {
     get selected() { return sel; },
-    select, selectNext, setRovs, tick, present, layout, sendTo, drawMap,
+    select, selectNext, setRovs, tick, present, layout, sendTo, drawMap, setFeedSize,
     map: big, mapCovers: () => !!big && big.covers(),
     colourOf: rovColour,
     debug() {
@@ -437,7 +497,7 @@ export function mountSquadHud(o) {
         tagSel: [...doc.querySelectorAll('#rovTags .rtag.sel')].map(b => +b.dataset.rov),
         feedMain: set ? set.vehicle : null, feedStats: set && set.stats ? JSON.parse(JSON.stringify(set.stats)) : null,
         map: mm.last ? { arrows: mm.arrows.slice(), painted: mm.fog ? mm.fog.painted.size : 0, view: Object.assign({}, mm.view), selArrow: (mm.last.rovs.find(r => r.sel) || {}).id } : null,
-        layout: mm.layout || null, fold, zoom: SPANS[zoom], size: mm.size ? mm.size() : null, big: big ? big.debug() : null,
+        layout: mm.layout || null, feedSize, fold, zoom: SPANS[zoom], size: mm.size ? mm.size() : null, big: big ? big.debug() : null,
       };
     },
   };

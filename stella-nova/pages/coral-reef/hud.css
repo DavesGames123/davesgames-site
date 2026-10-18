@@ -39,6 +39,14 @@ html #feed .fcard #feedSize{position:absolute;top:0;right:0;z-index:2}
 #feed.big .fcard:not(.main){display:none}
 html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
 #feedTabs{display:none}
+/* the main card at the upper right, the other cards in a column at its left */
+#feed:not(.one):not(.big) #feedSlot{display:grid;grid-template-columns:auto auto;grid-auto-flow:row dense;align-items:start;justify-items:end;gap:8px}
+#feed:not(.one):not(.big) .fcard.main{grid-column:2;grid-row:1 / span 3}
+#feed:not(.one):not(.big) .fcard:not(.main){grid-column:1}
+#feedTools{display:flex;gap:4px;justify-content:flex-end}
+#feedTools button{min-width:32px;height:28px;padding:0 8px;border:1px solid var(--snp-line,var(--line));border-radius:var(--snp-r,8px);background:var(--snp-bg,rgba(3,18,27,0.85));color:var(--snp-ink,var(--ink));font:600 0.75rem var(--sci-mono,ui-monospace,monospace);cursor:pointer}
+#feedTools button:hover{background:var(--snp-raise-h,rgba(255,255,255,0.08))}
+#feedTools button:focus-visible{outline:2px solid var(--snp-accent,var(--accent));outline-offset:1px}
 #feedTabs button{min-width:40px;min-height:32px;padding:2px 8px;border:1px solid var(--snp-line,var(--line));border-bottom:2px solid var(--c);border-radius:var(--snp-r,8px) var(--snp-r,8px) 0 0;background:var(--snp-bg,rgba(3,18,27,0.85));color:var(--snp-dim,var(--dim));font:600 0.75rem var(--sci-mono,ui-monospace,monospace);cursor:pointer}
 #feedTabs button.on{color:var(--snp-ink,var(--ink));background:rgba(255,255,255,0.08);background:color-mix(in srgb,var(--c) 22%,var(--snp-solid,#06161f))}
 #feedTabs button:focus-visible{outline:2px solid var(--c);outline-offset:1px}
@@ -96,6 +104,7 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
   .mm-tools button{width:40px;height:40px}
   #minimap.fold #mmFold{height:44px;min-width:44px}
   #feedTabs button{min-height:40px;min-width:44px}
+  #feedTools button{min-height:40px;min-width:44px}
 }
 
 /* PHONE (PHONE_Q of main.js): one card with tabs; the map folds at the
@@ -104,7 +113,7 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
   #rovPick{flex-direction:column;padding:3px 0;margin:2px 0;border:0;border-top:1px solid var(--snp-line,var(--line));border-bottom:1px solid var(--snp-line,var(--line))}
   #rovPick button em{display:none}
   html #feed{right:calc(8px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 8px);width:auto}
-  html #feed .fcard.main{width:150px}
+  html #feed .fcard.main{width:var(--fc-main,150px)}
   html #feed.big .fcard.main{width:calc(100vw - 16px)}
   #minimap{left:calc(8px + env(safe-area-inset-left));right:auto;top:calc(52px + env(safe-area-inset-top));bottom:auto;padding:4px}
   html.in-frame #minimap{top:8px}
@@ -115,14 +124,15 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
 }
 @media (max-height:500px) and (orientation:landscape){
   #rovPick{flex-direction:row;border:0}
-  html #feed .fcard.main{width:132px}
+  html #feed .fcard.main{width:var(--fc-main,132px)}
   #minimap,html.in-frame #minimap{top:8px}
   #mmCanvas{width:110px;height:110px}
 }
 
 /* SAVER: the main card alone at the cardRect place (main.js placeCard) */
-html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #minimap,html.sn-saver #rovTags{display:none!important}
+html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #feedTools,html.sn-saver #minimap,html.sn-saver #rovTags{display:none!important}
 html.sn-saver #feed .fcard.main{width:100%!important;max-width:none}
+html.sn-saver #feedSlot{display:block!important}
 html.sn-saver #feed .fpick{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.fcard{transition:none}}
 
