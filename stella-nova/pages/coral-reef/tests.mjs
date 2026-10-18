@@ -17,12 +17,17 @@
 //    tests/saver-safe.test.mjs  SCENE: saver sites, safe camera, card place
 //    tests/saver-page.test.mjs  SCENE: the saver end to end in jsdom
 //    tests/follow.test.mjs .. SCENE: the camera follows an ROV by default
-//    tests/grow-once.test.mjs  SCENE, CORAL: the saver grows one colony once, the
-//                             exit restores the grown reef (worker park, restore)
 //    tests/lock.test.mjs .... CORAL, SCENE: a grown reef stays locked in while
 //                             the cameras move (no fine mesh made again, one
 //                             full mesh per colony in each frame)
 //    tests/form.test.mjs .... CORAL: the colony form (one root per colony)
+//    tests/world.test.mjs ... WORLD: the infinite seafloor field, its bound,
+//                             arches and canyons, seamless chunk meshes
+//    tests/stream.test.mjs .. WORLD: the worker pool, a 2 km streaming
+//                             flight (bytes bounded, no leak), corals shown
+//                             only grown, no grow-in, fine focus
+//    tests/squad.test.mjs ... WORLD, ROV: the squad never in rock or coral,
+//                             it keeps exploring, the follow camera
 //    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
 //                             extents, budgets) and the ROVs keep clear
 //                             of the coral (rov/coral-field.js)

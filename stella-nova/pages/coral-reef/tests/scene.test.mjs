@@ -8,30 +8,19 @@
 //                   near 1, patches of contrast that differ, and it moves.
 //                   The old 6-wave tile pattern fails the same test, so
 //                   the test can see a regular net.
-//    saver ........ saver.js: the dive plan (one colony per dive, seeded,
-//                   calm shots, few wide shots), each shot keeps its
-//                   subject in the clear band of the plate in 16:9 and
-//                   9:16, pickSite takes a feature site, clearPath keeps
-//                   rock out of the camera line
 //    glsl ......... every program of shaders.js passes naga (as GLSL 450)
 //                   and glslangValidator as GLSL ES 3.00 with the prefix
 //                   that three.js r160 adds (the browser form)
-//    saver reef ... the saver path end to end: the reef runner of
-//                   mesh-worker.js in this process, single-colony mode,
-//                   the rate of the meter sent twice a second; the
-//                   particles stay under the eased rate
 //    boot ......... mobile-check.mjs: main.js boots in jsdom at five phone
 //                   sizes and a desktop (dock, sheet, feed card, controls);
 //                   it needs jsdom (JSDOM_DIR or NODE_PATH), else it skips
 //    fade ......... water.js fadeAt and the GLSL fadeAt: 1 in the plot, 0
 //                   at 1.3 R, smooth, no step
+//  Retired (2026-10-18, CONTRACT-V4.md: "we shouldn't grow corals, they
+//  should just grow once"): the dive plan of one growing colony, the
+//  growth meter and the single-colony saver reef. The squad saver tests
+//  come with the v4 page.
 // ============================================================================
-import { divePlan, growSeconds, createGovernor, shotAt, shotPose, pickSite, clearPath, frameFit, projectedBox, projectSphere, SHOT_KINDS, SAVER_GRADIENTS } from '../saver.js';
-import { createStubRock } from '../rov/stub-rock.js';
-import { createRock } from '../rock/index.js';
-import { createReefRunner } from '../mesh-worker.js';
-import { createReefMirror } from '../reef.js';
-import { GRADIENTS } from '../../../lib/growth-gradients.js';
 import * as SH from '../shaders.js';
 import { checkPrograms } from '../glsl-check.mjs';
 import { execFileSync } from 'node:child_process';
@@ -117,145 +106,6 @@ const stats = a => { let m = 0; for (const v of a) m += v; m /= a.length; let s 
     ok(mono && jump < 0.02, `fade R ${R}: falls smoothly, no step (largest step ${f3(jump)} per 0.2% of R)`);
     ok(fadeAt(R * 1.005, R) > 0.998 && fadeAt(R * 1.295, R) < 0.002, `fade R ${R}: no edge at R or at ${FADE_K} R (the slope is 0 at both ends)`);
   }
-}
-
-// ── saver ───────────────────────────────────────────────────────────────────
-{
-  const sp = ['staghorn', 'fan', 'table', 'boulder', 'finger'];
-  const a = divePlan(42, { n: 8, species: sp }), b = divePlan(42, { n: 8, species: sp }), c = divePlan(43, { n: 8, species: sp });
-  ok(JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) !== JSON.stringify(c), 'saver: one seed gives one run, another seed another');
-  ok(a.every(d => sp.includes(d.species) && GRADIENTS[d.gradient] && d.grow >= 0.9 * growSeconds(0.7) && d.grow <= 1.1 * growSeconds(0.7)), 'saver: each dive grows one colony of a species for the whole dive');
-  ok(a.every((d, i) => i === 0 || d.species !== a[i - 1].species), 'saver: no species twice in a row');
-  ok(new Set(a.map(d => d.seed)).size === a.length && new Set(a.map(d => d.siteKind)).size >= 4, 'saver: every dive has a new seed, and the sites vary');
-  ok(SAVER_GRADIENTS.every(g => GRADIENTS[g]), 'saver: the gradients exist');
-  let shots = 0, wide = 0, twice = 0, holdOk = true, calmOk = true, cover = true;
-  for (const d of a) {
-    const S = d.shots; shots += S.length;
-    cover = cover && S[S.length - 1].t0 + S[S.length - 1].hold >= d.grow;
-    for (let i = 0; i < S.length; i++) {
-      if (S[i].kind === 'wide') wide++;
-      if (i && S[i].kind === S[i - 1].kind) twice++;
-      if (S[i].hold < 7 || S[i].hold > 14) holdOk = false;
-      if (Math.abs(S[i].spin) > 0.07 || !SHOT_KINDS.includes(S[i].kind)) calmOk = false;
-    }
-    ok(S[0].kind === 'orbit' || S[0].kind === 'shoulder', 'saver: a dive opens on the colony, not a wide shot');
-  }
-  console.log(`saver: 8 dives, ${shots} shots, ${wide} wide (${(wide / shots * 100).toFixed(0)}%), kinds ${SHOT_KINDS.map(k => `${k} ${a.flatMap(d => d.shots).filter(s => s.kind === k).length}`).join(', ')}`);
-  ok(twice === 0 && holdOk && calmOk && cover, 'saver: no shot kind twice in a row, 7 to 14 s holds, calm turns, shots cover the growth');
-  ok(wide > 0 && wide / shots <= 0.25, 'saver: some wide shots of the ROV in the dark, at most one in four', `${wide}/${shots}`);
-  ok(shotAt(a[0], 0).i === 0 && shotAt(a[0], a[0].shots[1].t0 + 0.1).i === 1 && shotAt(a[0], 1e6).u === 1, 'saver: shotAt finds the shot on at a time');
-
-  // growth: slow and calm (the user: "corals grow way too fast")
-  const g7 = growSeconds(0.7), g1 = growSeconds(1), g0 = growSeconds(0);
-  console.log(`saver growth: ${g0} s at calm 0, ${g7} s at calm 0.7, ${g1} s at calm 1; 120 s saver slot: ${growSeconds(0.7, 120)} s`);
-  ok(g7 >= 120 && g7 <= 240 && g1 > g7 && g7 > g0, 'saver growth: 2 to 4 minutes from seed to full size at calm 0.7, slower when calmer');
-  ok(growSeconds(0.7, 120) <= 108 && growSeconds(0.7, 40) >= 90 && divePlan(5, { calm: 0.7, seconds: 120 }).every(d => d.grow <= 120), 'saver growth: a short saver slot (opts.seconds) shortens the dive, never under 90 s');
-  {
-    // any frame schedule: the particles stay under rate x t + the stock cap
-    const rate = 24, cap = Math.max(1, rate * 0.1);
-    let worstOver = -Infinity, worstWin = 0, total = 0;
-    const scheds = {
-      steady60: () => 1 / 60, steady144: () => 1 / 144, slow15: () => 1 / 15,
-      jitter: (i, r) => 0.004 + r() * 0.06, spikes: (i, r) => (i % 97 === 0 ? 0.5 + r() : 1 / 60), stall: (i) => (i === 300 ? 30 : 1 / 60),
-    };
-    for (const [name, f] of Object.entries(scheds)) {
-      let rs = 9; const r = () => { rs = (rs * 16807) % 2147483647; return rs / 2147483647; };
-      const G2 = createGovernor(rate, { ramp: 10 });
-      let t = 0, n = 0; const hist = [];
-      for (let i = 0; i < 6000 && t < 240; i++) {
-        const dt = f(i, r); t += dt;
-        const q = G2.take(dt); G2.used(q); n += q; hist.push([t, n]);
-        worstOver = Math.max(worstOver, n - (rate * t + cap));
-      }
-      // the most in any 1 s window
-      for (let i = 0, j = 0; i < hist.length; i++) { while (hist[i][0] - hist[j][0] > 1) j++; worstWin = Math.max(worstWin, hist[i][1] - (j ? hist[j - 1][1] : 0)); }
-      total += n;
-      if (name === 'steady60') ok(Math.abs(n - rate * (t - 5)) < rate * 1.5, 'saver growth: at 60 fps the meter gives the full rate after the ease-in', `${n} in ${t.toFixed(0)} s`);
-    }
-    console.log(`saver growth meter: rate ${rate}/s, most over rate x t ${worstOver.toFixed(2)} (cap ${cap}), most in any 1 s ${worstWin}`);
-    ok(worstOver <= 1e-9 && worstWin <= Math.ceil(rate + cap), 'saver growth: no frame schedule (60, 144, 15 fps, jitter, spikes, a 30 s stall) goes over the target particles per second');
-    const e = createGovernor(100, { ramp: 10 }); let first = 0; for (let i = 0; i < 60; i++) { const q = e.take(1 / 60); e.used(q); first += q; }
-    ok(first < 100 * 0.05, 'saver growth: a smooth ease-in, not a burst at the start', first);
-  }
-
-  // framing: each shot keeps its subject in the clear band (16:9, 9:16)
-  const subj = { c: [2, 1.2, -1], r: 1.4, front: [2.3, 2.1, -0.8], rov: [5.5, 2.6, 1.8] };
-  let worst = 0, n = 0;
-  for (const [w, h, name] of [[1920, 1080, '16:9'], [1080, 1920, '9:16']]) {
-    for (const band of [{ t: 0.2 * h, b: 0.27 * h }, { t: 0.3 * h, b: 0.32 * h }]) {
-      const fitDist = r => frameFit({ w, h, clear: band, radius: r, fov: 40 }).dist;
-      const f0 = frameFit({ w, h, clear: band, radius: 1, fov: 40 });
-      for (const d of a.slice(0, 4)) for (const s of d.shots) for (const u of [0, 0.5, 1]) {
-        const P = shotPose(s, u, u * s.hold, subj, fitDist);
-        const box = projectSphere({ w, h, fov: 40, ox: f0.ox, oy: f0.oy }, P.pos, P.tgt, P.tgt, P.r);
-        const tol = 0.03 * h;
-        const inside = box && box.y0 >= band.t - tol && box.y1 <= h - band.b + tol && box.x0 >= -tol && box.x1 <= w + tol;
-        n++;
-        if (!inside) { worst++; if (worst < 4) console.log(`  out of band: ${name} ${s.kind} u ${u}`, JSON.stringify(box)); }
-        // the colony itself is in the frame (it may be larger in a push-in)
-        const cb = projectSphere({ w, h, fov: 40, ox: f0.ox, oy: f0.oy }, P.pos, P.tgt, subj.c, subj.r);
-        if (!cb || (cb.x0 + cb.x1) / 2 < 0 || (cb.x0 + cb.x1) / 2 > w || (cb.y0 + cb.y1) / 2 < band.t * 0.5 || (cb.y0 + cb.y1) / 2 > h - band.b * 0.5) { worst++; if (worst < 4) console.log(`  colony off frame: ${name} ${s.kind} u ${u}`, JSON.stringify(cb)); }
-      }
-    }
-  }
-  console.log(`saver framing: ${n} poses checked, ${worst} out of the band`);
-  ok(worst === 0, `saver framing: ${n} poses in 16:9 and 9:16 keep the subject in the clear band and the colony on screen`, worst);
-  const fw = frameFit({ w: 1920, h: 1080, clear: { t: 216, b: 292 }, radius: 1.4 }), fv = frameFit({ w: 1080, h: 1920, clear: { t: 384, b: 518 }, radius: 1.4 });
-  const bw = projectedBox({ w: 1920, h: 1080 }, fw, 1.4), bv = projectedBox({ w: 1080, h: 1920 }, fv, 1.4);
-  console.log(`saver framing: a 1.4 m colony at ${fw.dist.toFixed(1)} m (16:9, box y ${bw.y0.toFixed(0)}..${bw.y1.toFixed(0)} of band 216..788), ${fv.dist.toFixed(1)} m (9:16, box x ${bv.x0.toFixed(0)}..${bv.x1.toFixed(0)} of 1080)`);
-  ok(bw.y0 >= 215.5 && bw.y1 <= 788.5 && bv.x0 >= -0.5 && bv.x1 <= 1080.5, 'saver framing: frameFit puts a colony in the band at both aspects');
-
-  // a site on the rock, and rock out of the camera line (the ROV stub rock)
-  const rock = createStubRock({ seed: 3, radius: 30 });
-  let r = 7; const rand = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
-  const arch = rock.features.find(f => f.kind === 'arch');
-  const site = pickSite(rock, 'arch', 0, rand, 30);
-  const dArch = site ? Math.hypot(site.p[0] - arch.center[0], site.p[1] - arch.center[1], site.p[2] - arch.center[2]) : Infinity;
-  console.log(`saver site: arch site ${site ? site.p.map(v => v.toFixed(1)).join(',') : 'none'}, ${dArch.toFixed(1)} m from the arch centre, sdf ${site ? rock.sdf(...site.p).toFixed(3) : '-'}`);
-  ok(site && dArch < 8 && Math.abs(rock.sdf(...site.p)) < 0.2 && site.n[1] > 0.25, 'saver: pickSite takes a site on the rock near the wanted feature');
-  ok(pickSite(null, 'arch') === null && pickSite({ sampleSurface: () => [] }, 'arch') === null, 'saver: pickSite with no rock gives null');
-  // a camera inside a canyon wall comes to the open side
-  const tgt = [0, 2, 0], pos = [-4.2, 2, 0];
-  const cp = clearPath(rock.sdf, tgt, pos, 0.5);
-  let minD = Infinity; for (let i = 0; i <= 50; i++) { const t = i / 50; minD = Math.min(minD, rock.sdf(tgt[0] + (cp[0] - tgt[0]) * t, tgt[1] + (cp[1] - tgt[1]) * t, tgt[2] + (cp[2] - tgt[2]) * t)); }
-  ok(rock.sdf(...pos) < 0 && minD > 0.2 && Math.hypot(...cp.map((v, i) => v - tgt[i])) >= 0.6, 'saver: clearPath moves a camera out of the rock to the open side', `${cp.map(v => v.toFixed(2))} min sdf ${minD.toFixed(2)}`);
-  const free = [0, 6, 6];
-  ok(JSON.stringify(clearPath(rock.sdf, [0, 6, 0], free, 0.5)) === JSON.stringify(free), 'saver: clearPath keeps a camera with a free line');
-}
-
-// ── saver reef (mesh-worker.js runner, single colony) ─────────────────────
-{
-  const rock = createRock({ seed: 3, radius: 30, quality: 'low', mesh: false });
-  const mirror = createReefMirror(1024);
-  let gen = -1, cols = null, bricks = 0, err = null;
-  const run = createReefRunner({ makeRock: () => rock, post: m => {
-    if (m.gen !== undefined && m.gen > gen) { gen = m.gen; mirror.reset(); }
-    if (m.type === 'colonies') { mirror.setColonies(m.list); cols = m.list; }
-    else if (m.type === 'particles') mirror.addParticles(m.from, m.data);
-    else if (m.type === 'bricks') bricks += m.list.length;
-    else if (m.type === 'error') err = m.message;
-  } });
-  await run.onMessage({ type: 'init', seed: 3, quality: 'phone', radius: 30, rockSeed: 3, rockQuality: 'low', sites: [], colonies: 0 });
-  await run.onMessage({ type: 'single', site: { p: [0, rock.sand.heightAt(0, 0) + 0.02, 0], n: [0, 1, 0] }, species: 'staghorn', rate: 0, seed: 9 });
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  await sleep(200);
-  const rate = 12, gov = createGovernor(rate, { ramp: 2 });
-  const t0 = Date.now(); let last = t0, sent = -1, worst = -Infinity, n0 = mirror.count;
-  while (Date.now() - t0 < 6000) {
-    await sleep(40 + (Date.now() % 3) * 30);
-    const now = Date.now(), dt = (now - last) / 1000; last = now;
-    gov.used(gov.take(dt));
-    if (Math.abs(gov.current - sent) > 0.2) { sent = gov.current; await run.onMessage({ type: 'rate', value: sent }); }
-    const t = (now - t0) / 1000;
-    // the most the meter allows: the eased integral, plus the reef stock (rate x 0.25 + 2)
-    const allow = rate * (t < 2 ? (t / 2) ** 3 * 2 * (1 - 0.25 * t) : 1 + (t - 2)) + rate * 0.25 + 2 + 1;
-    worst = Math.max(worst, (mirror.count - n0) - allow);
-  }
-  const grown = mirror.count - n0, t = (Date.now() - t0) / 1000;
-  console.log(`saver reef: one ${cols && cols[0] ? cols[0].id : '?'} colony (cap ${cols && cols[0] ? cols[0].cap : '?'}) grew ${grown} particles in ${t.toFixed(1)} s at a meter rate of ${rate}/s (most over the allowance ${worst.toFixed(1)}), ${bricks} brick meshes`);
-  ok(!err && cols && cols.length === 1 && gen >= 2, 'saver reef: the runner grows one colony in single mode', err || '');
-  ok(worst <= 0 && grown >= rate * (t - 2) * 0.5, 'saver reef: growth follows the meter and never goes over it', `${grown} in ${t.toFixed(1)} s`);
-  ok(bricks > 0, 'saver reef: the colony is meshed while it grows');
 }
 
 // ── glsl ────────────────────────────────────────────────────────────────────
