@@ -5,7 +5,18 @@
 //  their tint masks as webp files from media/sprites/ship-livery/. The paths
 //  come from window.SN_DATA (lib/game-data/catalog.js) when it is present.
 //  Three colours paint the ship: hull, trim (a second hull tone inside a trim
-//  pattern) and accent. The cockpit keeps its own colours.
+//  pattern) and accent. The cockpit keeps its own colours. The presets are
+//  the game liveries from liveries.js (window.SDLiveries).
+//
+//  LIGHT  In the Lit look, shade.js (window.SDShade) lights the flat
+//  composite with one sun, as the game lights its ships. The surface (normal
+//  map, occlusion, materials) comes once from the layer pixels, at 512 for
+//  the hero and at 128 for the fleet and the preset buttons. The sun dial
+//  sets the sun plane angle and height; Auto turns the sun slowly. The fleet
+//  uses FLEET_BINS sprites, each lit from one plane angle in the sprite
+//  frame, so a ship that turns, or a sun that turns, costs no new shading.
+//  The Flat look shows the composite with no light. A page from file:// has
+//  tainted canvases, so the Lit look is off there.
 //
 //  LAYER STACK   (bottom to top, built by composeShip)
 //      hull grey   + hull colour   (overlay)  cut to the hull mask
@@ -15,19 +26,25 @@
 //
 //  DATA PATH
 //      control input -> setColour / setTrim -> state -> schedulePaint()
-//      paint() -> composeShip(512) -> #shipCanvas, fleet sprite, URL hash
+//      paint() -> composeShip(512) -> relight() -> #shipCanvas
+//              -> composeShip(128) -> rebuildFleet() -> fleet sprites
+//              -> URL hash
+//      sun dial -> setSun() -> scheduleRelight(); a new sun height also
+//      rebuilds the fleet sprites (scheduleBins).
 //      fleet.frame() runs only while the fleet card is on screen, the tab is
 //      visible and the user has not paused it.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //      layer paths ........ "var LAYER_FALLBACK"
-//      presets ............ "var PRESETS"
+//      presets ............ "var PRESETS"   (table in liveries.js)
 //      trim patterns ...... "var TRIMS"
 //      state .............. "var state"
 //      colour maths ....... "function hexToRgb"
 //      compositing ........ "function composeShip"
+//      lighting ........... "var lit ="  "function relight"  "function rebuildFleet"
+//      sun dial ........... "function buildSun"
 //      paint and sync ..... "function paint"
-//      URL hash ........... "function readHash"
+//      URL hash ........... "function readHash"   (old links: "migrate")
 //      preset grid ........ "function buildPresets"
 //      colour picker ...... "function buildPicker"
 //      bottom sheet ....... "function buildSheet"
@@ -66,24 +83,12 @@
   }
 
   // ── PRESETS ──
-  // Site liveries: [name, hull, accent]. The trim colour of a preset is a
-  // darker tone of the hull, and the trim pattern is 'none'.
-  var PRESETS = [
-    ['Viper', '#1a6b3a', '#b8901e'], ['Crimson', '#8a1a1a', '#d0d0d8'], ['Phantom', '#181820', '#e04040'],
-    ['Imperial', '#e8e0d0', '#c8a030'], ['Nebula', '#3020a0', '#00e8ff'], ['Inferno', '#cc3300', '#ff9900'],
-    ['Arctic', '#d0e8f0', '#2080c0'], ['Synth', '#200840', '#ff40ff'], ['Militia', '#3a4a30', '#7a8a60'],
-    ['Chrome', '#808890', '#40e0d0'], ['Monarch', '#4a0060', '#ffd700'], ['Stealth', '#1a1a1e', '#333340'],
-    ['Coral', '#ff6b6b', '#ffd93d'], ['Oceanic', '#006994', '#40e0d0'], ['Ember', '#8b0000', '#ff4500'],
-    ['Frost', '#e8f4f8', '#88ccee'], ['Jade', '#005544', '#50c878'], ['Sunset', '#ff6347', '#ffa500'],
-    ['Void', '#0a0a14', '#6600cc'], ['Hazard', '#222222', '#ffcc00'], ['Lotus', '#ff69b4', '#fff0f5'],
-    ['Tundra', '#c8d0d0', '#6a8a8a'], ['Scorpion', '#5a3a00', '#cc8800'], ['Wraith', '#2a2a3a', '#8866ff'],
-    ['Venom', '#004400', '#88ff00'], ['Sakura', '#ffb7c5', '#880044'], ['Blitz', '#0044aa', '#ffcc00'],
-    ['Obsidian', '#101018', '#cc0000'], ['Polaris', '#001133', '#aaeeff'], ['Rustic', '#8b4513', '#daa520'],
-    ['Neon', '#0d0d0d', '#39ff14'], ['Regal', '#1a0033', '#c0a0ff'], ['Sandstorm', '#c2b280', '#8b7355'],
-    ['Plasma', '#220033', '#ff00ff'], ['Osprey', '#36454f', '#c0c0c0'], ['Aurora', '#004466', '#66ffcc'],
-    ['Magma', '#330000', '#ff3300'], ['Glacier', '#f0f8ff', '#4682b4'], ['Hornet', '#111100', '#ffdd00'],
-    ['Specter', '#1a1a2e', '#e94560']
-  ];
+  // The game liveries: [name, hull, accent], from liveries.js. The trim
+  // colour of a preset is a darker tone of the hull, and the trim pattern is
+  // 'none'. The fallback is the first game livery only, for a page where
+  // liveries.js did not load.
+  var LIV = window.SDLiveries || null;
+  var PRESETS = LIV ? LIV.CURRENT : [['Viper', '#4ac86e', '#ffc832']];
 
   // Quick swatches in the picker.
   var QUICK = ['#f2f4f8', '#9aa3b2', '#2a2f3a', '#0c0e14', '#d23a3a', '#ff8a2a', '#ffc832', '#7bd13b',
@@ -107,10 +112,11 @@
   ];
 
   // ── STATE ──
-  var state = { hull: '#1a6b3a', trim: '#0f3d22', accent: '#b8901e', pattern: 'none', channel: 'hull' };
+  // The page opens on the first game livery.
+  var state = { hull: PRESETS[0][1], trim: '#000000', accent: PRESETS[0][2], pattern: 'none', channel: 'hull' };
   var layers = null;        // { hull: {base, mask}, ... } decoded Image objects
-  var shipFull = null;      // 512 x 512 composite
-  var shipSmall = null;     // 128 x 128 composite for the fleet
+  var shipFull = null;      // 512 x 512 flat composite (offscreen)
+  var shipSmall = null;     // 128 x 128 flat composite for the fleet
 
   function $(id) { return document.getElementById(id); }
 
@@ -146,6 +152,7 @@
     var c = hexToRgb(hex);
     return rgbToHex(c.r * k, c.g * k, c.b * k);
   }
+  state.trim = shade(state.hull, 0.55);
 
   // ── COMPOSITING ──
   function makeCanvas(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h || w; return c; }
@@ -195,6 +202,147 @@
     return c;
   }
 
+  // ── LIGHTING ──
+  // lit.on is the look the user picked (Lit or Flat). lit.ok is false when
+  // shade.js is missing or the layer pixels cannot be read (file://).
+  var SH = window.SDShade || null;
+  var SMALL = 128, FLEET_BINS = 24;
+  var EL_MIN = 0.12, EL_MAX = 1.35;           // sun height range, radians
+  var THUMB_SUN = { az: -2.3, el: 0.5 };      // fixed sun of the preset buttons
+  var sun = { az: -2.25, el: 0.42, auto: false };
+  // A quick relight (a dial drag, Auto on a phone) shades the 256 surface
+  // and scales it up; QUICK_IDLE ms after the last quick one, a full 512
+  // relight follows.
+  var MID = 256, QUICK_IDLE = 160;
+  var lit = {
+    on: true, ok: !!SH, surf: null, surfMid: null, surfSmall: null,
+    px: {}, cv: {}, img: {}, full: null, bins: null, binsEl: null, relights: 0, quick: 0,
+    lite: !!(window.matchMedia && window.matchMedia('(hover: none)').matches)
+  };
+  function sunVec() { return SH.lightDir(sun.az, sun.el); }
+  function heroLit() { return !!(lit.on && lit.ok && lit.surf); }
+  function wrapAz(a) { a = a % (2 * Math.PI); if (a > Math.PI) a -= 2 * Math.PI; if (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  // RGBA pixels of the six layer images at S x S.
+  function layerPixels(S) {
+    var c = makeCanvas(S), x = c.getContext('2d'), out = {};
+    function px(img) { x.clearRect(0, 0, S, S); x.drawImage(img, 0, 0, S, S); return x.getImageData(0, 0, S, S).data; }
+    out.hull = px(layers.hull.base); out.hullMask = px(layers.hull.mask);
+    out.cockpit = px(layers.cockpit.base); out.cockpitMask = px(layers.cockpit.mask);
+    out.accents = px(layers.accents.base); out.accentsMask = px(layers.accents.mask);
+    return out;
+  }
+  function litFail() {
+    lit.ok = false; lit.surf = lit.surfSmall = null;
+    syncLook();
+    toast('Lit view needs the page served over http');
+  }
+  // Build the three surfaces after the first flat paint, so that the page
+  // shows the ship at once. The small ones come first: they are quick.
+  function buildSurfaces(done) {
+    if (!SH) { lit.ok = false; syncLook(); return; }
+    try {
+      lit.surfSmall = SH.buildSurface(layerPixels(SMALL), SMALL, SMALL);
+      lit.surfMid = SH.buildSurface(layerPixels(MID), MID, MID);
+    } catch (e) { litFail(); return; }
+    setTimeout(function () {
+      try { lit.surf = SH.buildSurface(layerPixels(512), 512, 512); }
+      catch (e) { litFail(); return; }
+      done();
+    }, 0);
+  }
+
+  // Draw the hero: the lit ship with a soft drop shadow away from the sun,
+  // or the flat composite.
+  // The flat composite pixels at size S (cached until the next paint).
+  function flatPixels(S) {
+    if (lit.px[S]) return lit.px[S];
+    var c = shipFull;
+    if (S !== 512) {
+      c = makeCanvas(S);
+      var cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(shipFull, 0, 0, S, S);
+    }
+    return (lit.px[S] = c.getContext('2d').getImageData(0, 0, S, S).data);
+  }
+  var idleTimer = 0;
+  function relight(quick) {
+    var cv = $('shipCanvas'), x = cv.getContext('2d');
+    if (!x || !shipFull) return;
+    clearTimeout(idleTimer);
+    x.clearRect(0, 0, 512, 512);
+    if (!heroLit()) { x.drawImage(shipFull, 0, 0); return; }
+    var q = !!(quick && lit.surfMid), S = q ? MID : 512, surf = q ? lit.surfMid : lit.surf;
+    var c = lit.cv[S] || (lit.cv[S] = makeCanvas(S)), lx = c.getContext('2d');
+    var img = lit.img[S] || (lit.img[S] = lx.createImageData(S, S));
+    var L = sunVec();
+    SH.shade(flatPixels(S), surf, L, { steps: q ? 5 : lit.lite ? 6 : 10 }, img.data);
+    lx.putImageData(img, 0, 0);
+    x.save();
+    x.imageSmoothingQuality = 'high';
+    x.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    x.shadowBlur = 20;
+    x.shadowOffsetX = -L.x * 16; x.shadowOffsetY = -L.y * 16;
+    x.drawImage(c, 0, 0, 512, 512);
+    x.restore();
+    if (q) { lit.quick++; idleTimer = setTimeout(function () { relight(false); }, QUICK_IDLE); }
+    else { lit.full = c; lit.relights++; }
+  }
+  var relightQueued = false, relightQuick = false;
+  function scheduleRelight(quick) {
+    relightQuick = relightQueued ? relightQuick && !!quick : !!quick;
+    if (relightQueued) return;
+    relightQueued = true;
+    (window.requestAnimationFrame || setTimeout)(function () { relightQueued = false; relight(relightQuick); });
+  }
+
+  // Fleet sprites: FLEET_BINS copies of the small composite, bin i lit from
+  // plane angle 2 PI i / FLEET_BINS in the sprite frame, at the sun height.
+  function rebuildFleet() {
+    if (!(lit.on && lit.ok && lit.surfSmall && shipSmall)) { lit.bins = null; return; }
+    var px = shipSmall.getContext('2d').getImageData(0, 0, SMALL, SMALL).data;
+    var bins = lit.bins || [], buf = null;
+    for (var i = 0; i < FLEET_BINS; i++) {
+      var c = bins[i] || makeCanvas(SMALL), x = c.getContext('2d');
+      var img = buf || (buf = x.createImageData(SMALL, SMALL));
+      SH.shade(px, lit.surfSmall, SH.lightDir(i / FLEET_BINS * 2 * Math.PI, sun.el), { steps: 5 }, img.data);
+      x.putImageData(img, 0, 0);
+      bins[i] = c;
+    }
+    lit.bins = bins; lit.binsEl = sun.el;
+  }
+  // The fleet sprite bin for a ship drawn with canvas rotation rot.
+  function fleetBin(rot) {
+    var t = wrapAz(sun.az - rot) / (2 * Math.PI) * FLEET_BINS;
+    return ((Math.round(t) % FLEET_BINS) + FLEET_BINS) % FLEET_BINS;
+  }
+  var binsTimer = 0;
+  function scheduleBins() {
+    clearTimeout(binsTimer);
+    binsTimer = setTimeout(function () { rebuildFleet(); fleetKick(); }, 120);
+  }
+
+  // Preset buttons: lit from THUMB_SUN in the Lit look, flat in the Flat look.
+  var thumbs = [];
+  function drawThumbs() {
+    var lt = lit.on && lit.ok && lit.surfSmall, c128 = lt ? makeCanvas(SMALL) : null, img = null;
+    thumbs.forEach(function (t) {
+      var set = { hull: t.p[1], trim: t.p[1], accent: t.p[2], pattern: 'none' };
+      var x = t.canvas.getContext('2d');
+      if (!x) return;
+      x.clearRect(0, 0, 96, 96);
+      if (!lt) { composeShip(96, set, t.canvas); return; }
+      composeShip(SMALL, set, c128);
+      var cx = c128.getContext('2d');
+      img = img || cx.createImageData(SMALL, SMALL);
+      SH.shade(cx.getImageData(0, 0, SMALL, SMALL).data, lit.surfSmall, SH.lightDir(THUMB_SUN.az, THUMB_SUN.el), { steps: 5 }, img.data);
+      cx.putImageData(img, 0, 0);
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(c128, 0, 0, 96, 96);
+    });
+  }
+
   // ── PAINT AND SYNC ──
   var paintQueued = false;
   function schedulePaint() {
@@ -203,12 +351,17 @@
     (window.requestAnimationFrame || setTimeout)(function () { paintQueued = false; paint(); });
   }
   function paint() {
-    shipFull = composeShip(512, state, $('shipCanvas'));
-    shipSmall = shipSmall || makeCanvas(128);
+    shipFull = composeShip(512, state, shipFull);
+    lit.px = {};
+    shipSmall = shipSmall || makeCanvas(SMALL);
     var sx = shipSmall.getContext('2d');
-    sx.clearRect(0, 0, 128, 128);
+    sx.clearRect(0, 0, SMALL, SMALL);
     sx.imageSmoothingQuality = 'high';
-    sx.drawImage(shipFull, 0, 0, 128, 128);
+    sx.drawImage(shipFull, 0, 0, SMALL, SMALL);
+    relight();
+    // The fleet sprites follow a little later, so that a colour drag stays
+    // smooth: 24 small shades on each move would cost more than the hero.
+    if (lit.bins) scheduleBins(); else rebuildFleet();
     syncUi();
     if (!saverOn) writeHash();
   }
@@ -245,18 +398,38 @@
   }
 
   // ── URL HASH ──
-  // Format: #hull=1a6b3a&trim=0f3d22&accent=b8901e&pattern=spine
+  // Format: #v=2&hull=4ac86e&trim=296e3d&accent=ffc832&pattern=spine
+  // plus &look=flat in the Flat look. A link with no v is from before the
+  // game liveries (2026-10-18): when its hull and accent are an old preset,
+  // migrate() moves it to the game livery of the same name (or the nearest
+  // one) and a toast tells the user. Custom colours load as they are.
   function readHash() {
     var h = (location.hash || '').replace(/^#/, '');
-    if (!h) return;
+    if (!h) return null;
+    var got = {};
     h.split('&').forEach(function (kv) {
       var p = kv.split('='), k = p[0], v = decodeURIComponent(p[1] || '');
+      got[k] = v;
       if (k === 'hull' || k === 'trim' || k === 'accent') { var c = normHex(v); if (c) state[k] = c; }
       if (k === 'pattern' && TRIMS.some(function (t) { return t.id === v; })) state.pattern = v;
+      if (k === 'look') lit.on = v !== 'flat';
     });
+    if (got.v) lit.on = got.look !== 'flat';
+    if (got.v || !LIV || !got.hull) return null;
+    var m = LIV.migrate(state.hull, state.accent);
+    if (!m) return null;
+    state.hull = m.to[1]; state.accent = m.to[2];
+    if (state.pattern === 'none') state.trim = shade(state.hull, 0.55);
+    return m;
+  }
+  function migrateNote(m) {
+    if (!m) return;
+    toast(m.by === 'name' ? 'Old link: ' + m.from[0] + ' now has the game colours'
+      : 'Old link: ' + m.from[0] + ' is now ' + m.to[0]);
   }
   function hashString() {
-    return 'hull=' + state.hull.slice(1) + '&trim=' + state.trim.slice(1) + '&accent=' + state.accent.slice(1) + '&pattern=' + state.pattern;
+    return 'v=2&hull=' + state.hull.slice(1) + '&trim=' + state.trim.slice(1) + '&accent=' + state.accent.slice(1) +
+      '&pattern=' + state.pattern + (lit.on ? '' : '&look=flat');
   }
   var hashTimer = 0;
   var saverOn = false;   // screensaver mode: no hash writes
@@ -281,17 +454,19 @@
   // One button per preset, with a 96 px thumbnail of the painted ship.
   function buildPresets() {
     var grid = $('presetGrid');
+    thumbs = [];
     PRESETS.forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'preset'; b.dataset.name = p[0];
       b.setAttribute('aria-label', 'Livery ' + p[0]);
       var c = makeCanvas(96);
-      composeShip(96, { hull: p[1], trim: p[1], accent: p[2], pattern: 'none' }, c);
+      thumbs.push({ p: p, canvas: c });
       var s = document.createElement('span'); s.textContent = p[0];
       b.appendChild(c); b.appendChild(s);
       b.addEventListener('click', function () { applyPreset(p); });
       grid.appendChild(b);
     });
+    drawThumbs();
   }
 
   // ── COLOUR PICKER ──
@@ -464,7 +639,14 @@
   // ── PNG EXPORT ──
   function exportPng() {
     if (!layers) return;
-    var c = composeShip(1024, state);
+    var c;
+    if (heroLit()) relight(false);
+    if (heroLit() && lit.full) {
+      c = makeCanvas(1024);
+      var cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(lit.full, 0, 0, 1024, 1024);
+    } else c = composeShip(1024, state);
     var name = 'stella-nova-livery-' + (presetName() || 'custom').toLowerCase() + '.png';
     try {
       c.toBlob(function (blob) {
@@ -681,7 +863,7 @@
     x.setTransform(1, 0, 0, 1, 0, 0);
     if (fleet.bg) x.drawImage(fleet.bg, 0, 0); else { x.fillStyle = '#05070d'; x.fillRect(0, 0, fleet.canvas.width, fleet.canvas.height); }
     if (!shipSmall) return;
-    var sz = fleet.size, t = fleet.t;
+    var sz = fleet.size, t = fleet.t, bins = lit.bins;
     for (var i = 0; i < fleet.ships.length; i++) {
       var s = fleet.ships[i];
       x.setTransform(d, 0, 0, d, s.x * d, s.y * d);
@@ -699,7 +881,8 @@
         x.globalAlpha = 1;
         x.globalCompositeOperation = 'source-over';
       }
-      x.drawImage(shipSmall, -sz / 2, -sz / 2, sz, sz);
+      // Lit: the bin lit from the sun direction in this ship's frame.
+      x.drawImage(bins ? bins[fleetBin(s.a - SPRITE_NOSE)] : shipSmall, -sz / 2, -sz / 2, sz, sz);
     }
     x.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -717,9 +900,129 @@
     if (fleet.paused || !fleet.visible || !fleet.onScreen) { fleet.running = false; return; }
     var dt = fleet.last ? Math.min(0.05, (now - fleet.last) / 1000) : 0.016;
     fleet.last = now;
+    // In the screensaver the sun turns slowly. The fleet sprites are lit
+    // per plane angle, so this costs no new shading.
+    if (saverOn) sun.az = wrapAz(sun.az + dt * 0.06);
     fleetStep(dt);
     fleetDraw();
     requestAnimationFrame(fleetFrame);
+  }
+
+  // ── SUN DIAL AND LOOK ──
+  // The dial is a top view of the sky over the ship. The knob angle is the
+  // sun plane angle. The knob distance from the centre is the sun height:
+  // the centre is high (EL_MAX), the rim is low (EL_MIN). A drag or an arrow
+  // key stops Auto.
+  function placeKnob() {
+    var k = $('sunKnob');
+    if (!k) return;
+    var r = (EL_MAX - sun.el) / (EL_MAX - EL_MIN);
+    k.style.left = (50 + Math.cos(sun.az) * r * 50) + '%';
+    k.style.top = (50 + Math.sin(sun.az) * r * 50) + '%';
+    var deg = Math.round(((sun.az * 180 / Math.PI) + 450) % 360);
+    $('sunDial').setAttribute('aria-valuetext', 'Sun from ' + deg + ' degrees, ' + Math.round(sun.el * 180 / Math.PI) + ' degrees high');
+  }
+  function setSun(az, el, user) {
+    sun.az = wrapAz(az);
+    sun.el = Math.max(EL_MIN, Math.min(EL_MAX, el));
+    if (user && sun.auto) setAuto(false);
+    placeKnob();
+    scheduleRelight(true);
+    if (lit.binsEl === null || Math.abs(sun.el - lit.binsEl) > 0.015) scheduleBins();
+  }
+  function syncLook() {
+    var on = lit.on && lit.ok;
+    document.querySelectorAll('#lookSeg button').forEach(function (b) {
+      var me = b.dataset.look === (on ? 'lit' : 'flat');
+      b.classList.toggle('on', me);
+      b.setAttribute('aria-pressed', me ? 'true' : 'false');
+      if (b.dataset.look === 'lit') b.disabled = !lit.ok;
+    });
+    var ctl = $('lightCtl');
+    if (ctl) ctl.classList.toggle('flat', !on);
+    $('hero').classList.toggle('lit', on);
+  }
+  function setLook(on) {
+    lit.on = !!on;
+    syncLook();
+    relight();
+    rebuildFleet();
+    drawThumbs();
+    fleetKick();
+    if (!saverOn) writeHash();
+    sunKick();
+  }
+  function setAuto(on) {
+    sun.auto = !!on;
+    var b = $('btnSunAuto');
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.classList.toggle('on', !!on);
+    sunKick();
+  }
+  // Auto: the sun turns while the hero is on screen, the tab is visible and
+  // the look is Lit. One relight per frame at most.
+  var sunLoop = { running: false, last: 0, heroOn: true };
+  function sunKick() {
+    var want = sun.auto && heroLit() && sunLoop.heroOn && !document.hidden && !saverOn;
+    if (!want) { sunLoop.running = false; return; }
+    if (sunLoop.running) return;
+    sunLoop.running = true; sunLoop.last = 0;
+    requestAnimationFrame(sunFrame);
+  }
+  function sunFrame(now) {
+    if (!sunLoop.running) return;
+    if (!(sun.auto && heroLit() && sunLoop.heroOn && !document.hidden && !saverOn)) { sunLoop.running = false; return; }
+    var dt = sunLoop.last ? Math.min(0.1, (now - sunLoop.last) / 1000) : 0.016;
+    sunLoop.last = now;
+    sun.az = wrapAz(sun.az + dt * 0.35);
+    placeKnob();
+    // A phone shades the 256 surface while the sun turns; the full relight
+    // comes when Auto stops.
+    relight(lit.lite);
+    if (!fleet.running) fleetDraw();
+    requestAnimationFrame(sunFrame);
+  }
+  function buildSun() {
+    var dial = $('sunDial');
+    function fromPointer(e) {
+      var r = dial.getBoundingClientRect();
+      if (!r.width) return;
+      var dx = (e.clientX - r.left - r.width / 2) / (r.width / 2), dy = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+      var len = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+      setSun(len > 0.02 ? Math.atan2(dy, dx) : sun.az, EL_MAX - len * (EL_MAX - EL_MIN), true);
+    }
+    dial.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      if (dial.setPointerCapture) dial.setPointerCapture(e.pointerId);
+      dial.classList.add('drag');
+      fromPointer(e);
+      function move(ev) { fromPointer(ev); }
+      function up() {
+        dial.classList.remove('drag');
+        dial.removeEventListener('pointermove', move);
+        dial.removeEventListener('pointerup', up);
+        dial.removeEventListener('pointercancel', up);
+      }
+      dial.addEventListener('pointermove', move);
+      dial.addEventListener('pointerup', up);
+      dial.addEventListener('pointercancel', up);
+    });
+    dial.addEventListener('keydown', function (e) {
+      var d = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, 0.06], ArrowDown: [0, -0.06] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      setSun(sun.az + d[0], sun.el + d[1], true);
+    });
+    document.querySelectorAll('#lookSeg button').forEach(function (b) {
+      b.addEventListener('click', function () { setLook(b.dataset.look === 'lit'); });
+    });
+    $('btnSunAuto').addEventListener('click', function () { setAuto(!sun.auto); });
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(function (es) { sunLoop.heroOn = es[0].isIntersecting; sunKick(); }, { threshold: 0.01 }).observe($('hero'));
+    }
+    document.addEventListener('visibilitychange', sunKick);
+    placeKnob();
+    syncLook();
   }
 
   // ── BOOT ──
@@ -739,21 +1042,38 @@
   }
 
   function boot() {
-    readHash();
+    var moved = readHash();
     buildPicker();
     buildSheet();
+    buildSun();
     $('btnPng').addEventListener('click', exportPng);
     $('btnLink').addEventListener('click', copyLink);
-    window.addEventListener('hashchange', function () { readHash(); schedulePaint(); });
+    window.addEventListener('hashchange', function () { migrateNote(readHash()); syncLook(); drawThumbs(); schedulePaint(); });
     fleetInit();
     syncUi();
+    migrateNote(moved);
     loadLayers(function (l) {
       layers = l;
       buildPresets();
       paint();
       fleetKick();
+      // Then the light: the surfaces, the lit thumbnails, a lit repaint.
+      buildSurfaces(function () {
+        drawThumbs();
+        paint();
+        fleetKick();
+        sunKick();
+        lit.ready = true;
+      });
     });
   }
+
+  // Test hook for tests.mjs. It changes nothing on the page.
+  window.__snShipDesigner = {
+    state: state, sun: sun, lit: lit, presets: PRESETS, FLEET_BINS: FLEET_BINS,
+    setLook: setLook, setSun: setSun, setAuto: setAuto, relight: relight,
+    fleetBin: fleetBin, hashString: hashString, readHash: readHash, paint: paint
+  };
 
   // ── SCREENSAVER HOOK ──
   // The shell (lib/screensaver.js) calls enter() in screensaver mode. It pins
@@ -815,7 +1135,8 @@
             { name: 'hull', value: state.hull }, { name: 'trim', value: state.trim }, { name: 'accent', value: state.accent },
             { name: 'trim pattern', value: tr ? tr.name : state.pattern }
           ],
-          lines: ['Layers: hull, trim, cockpit, accent. Each tints a over grey b, cut by its mask.'],
+          lines: ['Layers: hull, trim, cockpit, accent. Each tints a over grey b, cut by its mask.',
+            'One sun lights the ships: soft terminator, plate highlights, cool fill, self shadows.'],
           tex: ['\\text{overlay}(a, b) = \\begin{cases} 2ab, & b < \\tfrac12 \\\\ 1 - 2(1 - a)(1 - b), & b \\ge \\tfrac12 \\end{cases}'].concat(tex),
           eq: ['overlay = b < ½ ? 2ab : 1 − 2(1 − a)(1 − b)'].concat(eq)
         });

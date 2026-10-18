@@ -14,16 +14,23 @@
    The livery painter. main.js loads the three ship-livery layers (hull,
    cockpit, accents) and their tint masks from media/sprites/ship-livery/.
    It paints the layers with three colours and shows the result in the hero
-   card and in a fleet of ships that fly on a 2D canvas.
+   card and in a fleet of ships that fly on a 2D canvas. In the Lit look
+   one sun lights the ship, as in the game.
 
    LAYOUT
      desktop (> 900 px)  .stage (hero card, fleet card)  |  #panel (tabs)
      phone   (<= 900 px) .stage in one column; #panel is a bottom sheet with
                          a grip. A tap on a tab opens the sheet.
 
+   SCRIPTS
+     liveries.js ........ the game livery presets, old-link migration
+     shade.js ........... one-sun shading of the ship (pure functions)
+     main.js ............ the page
+
    SECTION MAP   (jump with grep -n "<anchor>" index.html)
      header actions ..... id="btnPng"        PNG export, copy link
      hero preview ....... id="shipCanvas"    the painted ship, 512 x 512
+     light controls ..... id="lightCtl"      Flat / Lit, sun dial, Auto
      fleet canvas ....... id="fleetCanvas"   the flying fleet
      fleet head ......... id="fleetMode"     wander / formation, pause
      control panel ...... id="panel"         tabs, grip on phones
@@ -58,8 +65,17 @@
 <main class="layout">
   <section class="stage">
     <!-- Hero preview. paint() draws the full-size ship here. -->
-    <div class="card hero" id="hero">
+    <div class="card hero lit" id="hero">
       <div class="hero-glow" id="heroGlow"></div>
+      <!-- Light. setLook() and setSun() in main.js. -->
+      <div class="light-ctl" id="lightCtl">
+        <div class="seg" id="lookSeg" role="group" aria-label="Shading">
+          <button type="button" data-look="flat" aria-pressed="false">Flat</button>
+          <button type="button" data-look="lit" class="on" aria-pressed="true">Lit</button>
+        </div>
+        <div class="sun-dial" id="sunDial" role="slider" tabindex="0" aria-label="Sun direction. Drag, or use the arrow keys" title="Drag the sun"><i class="sun" id="sunKnob"></i></div>
+        <button class="chip-btn" id="btnSunAuto" type="button" aria-pressed="false" title="Turn the sun slowly">Auto</button>
+      </div>
       <canvas id="shipCanvas" width="512" height="512" aria-label="Painted ship preview"></canvas>
       <div class="hero-meta">
         <div>
@@ -133,6 +149,8 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="../../lib/game-data/catalog.js"></script>
+<script src="liveries.js"></script>
+<script src="shade.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

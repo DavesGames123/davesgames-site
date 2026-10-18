@@ -10,6 +10,7 @@
      layout ............... ".layout"
      cards ................ ".card"
      hero preview ......... ".hero"
+     light controls ....... ".light-ctl" / ".sun-dial"
      fleet card ........... ".fleet"
      panel and tabs ....... ".panel" / ".tabs"
      presets .............. ".preset"
@@ -92,6 +93,23 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
 .hero-chips span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px 5px 6px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(10, 13, 22, .7); font: 500 0.68rem/1 var(--f-mono); color: var(--text); letter-spacing: .04em; }
 .hero-chips i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25); }
 .credit { position: absolute; top: 12px; right: 16px; font: 400 0.68rem/1 var(--f-mono); color: var(--dim); letter-spacing: .06em; }
+/* In the Lit look the canvas draws its own drop shadow, away from the sun. */
+.hero.lit #shipCanvas { filter: none; }
+
+/* ── light controls ─────────────────────────────────────────────────────────
+   Flat / Lit, the sun dial and Auto, at the top left of the hero. The dial
+   is a top view of the sky: the knob angle is the sun direction, and the
+   knob is high in the sky at the centre and low at the rim.               */
+.light-ctl { position: absolute; top: 10px; left: 12px; z-index: 2; display: flex; align-items: center; gap: 8px; }
+.sun-dial { position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--line2); cursor: grab; touch-action: none;
+  background: radial-gradient(circle, rgba(255, 200, 50, .16), rgba(10, 13, 22, .75) 70%); }
+.sun-dial::before, .sun-dial::after { content: ''; position: absolute; background: rgba(150, 200, 255, .16); pointer-events: none; }
+.sun-dial::before { left: 50%; top: 4px; bottom: 4px; width: 1px; }
+.sun-dial::after { top: 50%; left: 4px; right: 4px; height: 1px; }
+.sun-dial.drag { cursor: grabbing; }
+.sun-dial .sun { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px 2px rgba(255, 200, 50, .6); pointer-events: none; }
+.light-ctl.flat .sun-dial, .light-ctl.flat #btnSunAuto { opacity: .35; pointer-events: none; }
+.light-ctl .seg button:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ── fleet card ─────────────────────────────────────────────────────────── */
 .fleet-wrap { position: relative; height: clamp(260px, 42vh, 460px); touch-action: none; cursor: grab; }
@@ -177,7 +195,8 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bord
   .btn { white-space: nowrap; }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-bottom: 20px; }
   .stage { gap: 14px; }
-  .hero { min-height: 0; padding: 26px 12px 70px; }
+  .hero { min-height: 0; padding: 62px 12px 70px; }
+  .light-ctl { gap: 6px; }
   #shipCanvas { width: min(72vw, 40vh); }
   .livery-name { font-size: 1.25rem; }
   .hero-chips span { padding: 4px 6px; }
