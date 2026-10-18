@@ -37,6 +37,7 @@ import { createCards, esc } from './cards.js';
 import { createAnalysis, ratioText, fmtRpm, SHORT } from './analysis.js';
 import { partsFor, GROUP_COLOR } from './parts.js';
 import { createTour } from '../../lib/mech-tour.js';
+import { createExplodeBar } from '../../lib/explode-bar.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -246,6 +247,9 @@ $('explode').addEventListener('input', e => setExplode(+e.target.value));
 // the buttons also move the camera: the exploded set is about twice as long
 $('assemble').addEventListener('click', () => S.view === 'exploded' ? setView('three') : setExplode(0));
 $('burst').addEventListener('click', () => VIEWS[S.view] && VIEWS[S.view].ghost ? setExplode(1) : setView('exploded'));
+// the Explode pill at the top of the view (lib/explode-bar.js), hidden in
+// the saver. Like the panel buttons, a full explode frames the exploded view.
+createExplodeBar({ host: $('stage'), get: () => S.explodeTarget, set: v => v >= 1 ? (VIEWS[S.view] && VIEWS[S.view].ghost ? setExplode(1) : setView('exploded')) : v <= 0 && S.view === 'exploded' ? setView('three') : setExplode(v), saver: () => saverOn });
 function setRpm(r) {
   r = Math.max(0, Math.min(60, r));
   if (r > 0) S.lastRpm = r;
