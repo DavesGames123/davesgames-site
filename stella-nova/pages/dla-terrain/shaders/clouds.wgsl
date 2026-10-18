@@ -256,7 +256,8 @@ fn cl_coverage(xz: vec2f, w: ClWx) -> vec4f {
   // the threshold moves through the field: cover 0 no cloud, 1 all cloud
   let cov = w.cover;
   let lo = 1.0 - (cov * 1.2);
-  let c = clamp((field - lo) / max(1.0 - lo, 0.05), 0.0, 1.0);
+  // a high cover closes the deck: overcast has no holes of blue
+  let c = max(clamp((field - lo) / max(1.0 - lo, 0.05), 0.0, 1.0), sk_ss(0.78, 0.97, cov));
   let lift = clamp((big.g - 0.3) / 0.55, 0.0, 1.0) * 260.0 * (1.0 - w.storm) * (1.0 - (cum * 0.5));
   return vec4f(c * sk_ss(0.0, 0.04, cov), cum, lift, c);
 }
@@ -395,13 +396,18 @@ fn cl_scatter(p: vec3f, d: f32, cosT: f32, ld: vec3f, lrad: vec3f, hf: f32, step
   let powder = 1.0 - exp(-d * CL_SIGMA * 2.0 * 90.0);
   let pw = mix(powder, 1.0, (0.5 * cosT) + 0.5);
   let lit = lrad * ms * mix(1.0, pw, 0.7) * 1.25;
-  // ambient: sky from above (G.ambient is the clear-sky hemisphere), ground bounce below
-  let skyA = G.ambient.rgb * (1.0 / SK_PI) * (0.45 + (0.55 * hf)) * mix(1.0, 0.7, S.cloud0.z);
-  let grndA = ((G.sunColor.rgb * max(G.sunDir.y, 0.0) * 0.1) + (G.ambient.rgb * 0.05)) * (1.0 - hf) / SK_PI;
-  // a thick deck: the light from above comes through the cloud over this point
-  let patchy = sk_ss(-0.25, 0.3, cl_baseOffset((p.xz * 0.6) + vec2f(913.0, 211.0)));
+  // a thick deck: the light from above comes through the cloud over this
+  // point, so it is grey and not sky blue, and it is darker where more
+  // cloud is above (one coarse sample 400 m up) and in patches
   let deck = sk_ss(0.6, 1.0, S.cloud0.z);
-  let skyLeak = mix(1.0, (0.35 + (0.65 * hf)) * (0.55 + (0.45 * patchy)), deck);
+  let ambC = mix(G.ambient.rgb, vec3f(cm_luminance(G.ambient.rgb)), deck * 0.8);
+  // ambient: sky from above (G.ambient is the clear-sky hemisphere), ground bounce below
+  let skyA = ambC * (1.0 / SK_PI) * (0.45 + (0.55 * hf)) * mix(1.0, 0.7, S.cloud0.z);
+  let grndA = ((G.sunColor.rgb * max(G.sunDir.y, 0.0) * 0.1) + (G.ambient.rgb * 0.05)) * (1.0 - hf) / SK_PI;
+  let patchy = sk_ss(-0.3, 0.35, cl_baseOffset((p.xz * 0.6) + vec2f(913.0, 211.0)));
+  var above = 1.0;
+  if (deck > 0.01) { above = exp(-cl_density(p + vec3f(0.0, 400.0, 0.0), false) * 400.0 * CL_SIGMA * 0.06); }
+  let skyLeak = mix(1.0, (0.3 + (0.7 * hf)) * (0.35 + (0.65 * patchy)) * (0.4 + (0.6 * above)), deck);
   let amb = ((skyA * skyLeak) + grndA) * mix(0.6, 1.0, exp(-od * 0.25)) * (1.0 - (0.45 * S.cloud1.x * (1.0 - hf)));
   // lightning inside the cloud
   let bd = length(p - S.bolt.xyz);
@@ -469,6 +475,30 @@ fn csCloudShadow(@builtin(global_invocation_id) id: vec3u) {
 // ── the raymarch ─────────────────────────────────────────────────────────────
 @group(3) @binding(3) var outCloud: texture_storage_2d<rgba16float, write>;
 @group(3) @binding(4) var outCloudZ: texture_storage_2d<rgba16float, write>;
+// the scene depth of this frame (reverse-Z, 0 = sky), or a 1 x 1 sky
+@group(3) @binding(9) var tMarchZ: texture_depth_2d;
+
+// The farthest scene point under cloud texel id (4 corners of its
+// footprint in the full-size depth), m from the eye; 1e9 when any is sky.
+// The march stops there, so no cloud behind a ridge is added in front of
+// it (that drew a light copy of the ridge line into a low deck).
+fn cl_sceneLimit(id: vec2u, sz: vec2u) -> f32 {
+  let full = vec2i(textureDimensions(tMarchZ));
+  if (full.x <= 1) { return 1.0e9; }
+  let k = vec2f(full) / vec2f(sz);
+  let a = vec2i(floor(vec2f(id) * k));
+  let b = max(vec2i(floor((vec2f(id) + vec2f(1.0)) * k)) - vec2i(1), a);
+  var dmin = 1.0;
+  var at = a;
+  for (var c = 0; c < 4; c++) {
+    let q = clamp(vec2i(select(a.x, b.x, (c & 1) == 1), select(a.y, b.y, c >= 2)), vec2i(0), full - vec2i(1));
+    let dz = textureLoad(tMarchZ, q, 0);
+    if (dz < dmin) { dmin = dz; at = q; }
+  }
+  if (dmin <= 0.0) { return 1.0e9; }
+  let uv = (vec2f(at) + 0.5) / vec2f(full);
+  return length(worldFromDepth(uv, dmin) - G.camPos.xyz);
+}
 
 // Ray parameter of sample u (0..1) in a segment of length len: the first
 // step is about dt0, the steps grow toward the far end (a u + (1 - a) u^3),
@@ -494,7 +524,9 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
   var front = 1.0e6;
   var wsum = 0.0;
   var tsum = 0.0;
-  let seg = sk_slab(ro, rd, L.h0, L.h1, 90000.0);
+  // the slab, cut at the ground behind this texel (+ 60 m: a cloud that
+  // wraps a peak still shows round its edge)
+  let seg = sk_slab(ro, rd, L.h0, L.h1, min(90000.0, cl_sceneLimit(id.xy, sz) + 60.0));
   if (seg.y > seg.x) {
     let n = clamp(i32(S.cloud2.w), 8, CL_STEPS_MAX);
     let len = seg.y - seg.x;
@@ -529,6 +561,10 @@ fn csClouds(@builtin(global_invocation_id) id: vec3u) {
       }
     }
   }
+  // the march stops at T < 0.01; a thick deck has far less. Take the rest
+  // to 0, so the sun disc (about 3.7e4) does not shine through an
+  // overcast sky as a white dot (a change of 1 % in the cloud alpha)
+  T = select(T, 0.0, T < 0.01);
   var mean = 1.0e6;
   if (wsum > 1e-4) {
     mean = tsum / wsum;

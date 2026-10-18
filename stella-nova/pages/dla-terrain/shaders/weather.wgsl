@@ -166,7 +166,12 @@ fn csFroxInject(@builtin(global_invocation_id) id: vec3u) {
   textureStore(outSun, id, vec4f(sunAll * VOL_K, cm_luminance(sunAir) / max(cm_luminance(sunAll), 1e-12)));
   var loss = sunAir * (1.0 - vis) * (1.0 - S.cloud0.z * 0.8) * far;
   let rKm = sk_rKm(p.y);
-  let ms = sk_multi(rKm, G.sunDir.y) * S.sun.y;
+  // the multiple-scattered sky light of the LUT is clear-sky light: under
+  // clouds it is dimmer and grey (the cloud shadow here, and the deck at
+  // the camera), or rain and overcast haze turn sky blue
+  let deckK = sk_ss(0.6, 1.0, S.cloud0.z);
+  let ms0 = sk_multi(rKm, G.sunDir.y) * S.sun.y * mix(1.0, 0.25 + (0.75 * cvis), 0.7) * (1.0 - (0.55 * deckK));
+  let ms = mix(ms0, vec3f(cm_luminance(ms0)), deckK * 0.85);
   var Ls = sunAll * (vis * far) + ms * (m.sR + vec3f(m.sM + m.sF * 0.5));
   // sky ambient (G.ambient is irradiance: radiance = E / pi)
   Ls += G.ambient.rgb * (1.0 / SK_PI) * (m.sF + m.sM * 0.5) * 0.85;

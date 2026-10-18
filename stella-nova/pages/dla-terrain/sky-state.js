@@ -761,7 +761,12 @@ export function createSky(opts = {}) {
       // model texture, at the model's own pace)
       // (two first-order stages of CAM_LAG_S / 2: a step starts and ends
       // smoothly; its fastest change is about step / (1.36 CAM_LAG_S) per s)
-      if (prev && dt > 0 && sim.lag) {
+      if (!have) {
+        // no snapshot yet (the worker spins the model up after a reset):
+        // the preset values show for these frames; the lag starts from the
+        // first model values, not from the preset
+        sim.lag = null;
+      } else if (prev && dt > 0 && sim.lag) {
         const k = 1 - Math.exp(-dt / (CAM_LAG_S / 2));
         const lag2 = (key, v) => {
           const a = sim.lag[key], b = sim.lag2[key];

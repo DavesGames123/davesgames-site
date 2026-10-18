@@ -229,7 +229,9 @@ export async function createSky(gpu) {
     vol: bgl3('cloud out vol', [st3(0, 'rgba8unorm')]),
     n2d: bgl3('cloud out 2d', [st2(1, 'rgba8unorm')]),
     shadow: bgl3('cloud out shadow', [st2(2)]),
-    march: bgl3('cloud out march', [st2(3), st2(4)]),
+    // 9: the scene depth (the march stops at the ground; render/sky.js
+    // marchGroup, a 1 x 1 sky stand-in when there is no depth yet)
+    march: bgl3('cloud out march', [st2(3), st2(4), { binding: 9, texture: { sampleType: 'depth' } }]),
     resolve: bgl3('cloud resolve', [tx(5), tx(6), tx(7), st2(8)]),
   };
   const comp = (module, entry, g1, g3) => device.createComputePipelineAsync({
@@ -302,12 +304,40 @@ export async function createSky(gpu) {
     tg = { w, h, cw, ch, k, raw: mk('cloud raw'), rawZ: mk('cloud raw z'), acc: [mk('cloud acc 0'), mk('cloud acc 1')], all: [] };
     tg.all = [tg.raw, tg.rawZ, ...tg.acc];
     tg.v = { raw: tg.raw.createView(), rawZ: tg.rawZ.createView(), acc: tg.acc.map((t) => t.createView()) };
-    tg.march = bg(G3.march, [[3, tg.v.raw], [4, tg.v.rawZ]], 'cloud march out');
+    tg.marchBG = new Map();
     tg.resolve = [0, 1].map((i) => bg(G3.resolve, [[5, tg.v.raw], [6, tg.v.rawZ], [7, tg.v.acc[1 - i]], [8, tg.v.acc[i]]], 'cloud resolve ' + i));
     tg.ping = 0;
     tg.drawBG = new Map();
     tg.fresh = true;
     weather.resize(w, h, q);
+  }
+
+  // the march group for a depth view (cached; the 1 x 1 stand-in reads as
+  // sky, so the march has no limit)
+  const skyDepth = device.createTexture({ label: 'cloud no depth', size: [1, 1], format: 'depth32float', usage: T.TEXTURE_BINDING | T.RENDER_ATTACHMENT });
+  const skyDepthView = skyDepth.createView();
+  function marchGroup(depthView) {
+    const dv = depthView || skyDepthView;
+    let g = tg.marchBG.get(dv);
+    if (!g) {
+      g = bg(G3.march, [[3, tg.v.raw], [4, tg.v.rawZ], [9, dv]], 'cloud march out');
+      tg.marchBG.set(dv, g);
+      if (tg.marchBG.size > 6) tg.marchBG.delete(tg.marchBG.keys().next().value);
+    }
+    return g;
+  }
+  // the march and the temporal resolve, into the next history target
+  function marchClouds(enc, depthView) {
+    const pass = enc.beginComputePass({ label: 'cloud march' });
+    pass.setBindGroup(0, gpu.globalsBindGroup);
+    pass.setBindGroup(2, BG.empty);
+    pass.setBindGroup(1, BG.read);
+    pass.setPipeline(P.march); pass.setBindGroup(3, marchGroup(depthView));
+    pass.dispatchWorkgroups(Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
+    tg.ping = 1 - tg.ping;
+    pass.setPipeline(P.resolve); pass.setBindGroup(3, tg.resolve[tg.ping]);
+    pass.dispatchWorkgroups(Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
+    pass.end();
   }
 
   // cached per depth view, shaft view and cloud ping (the cloud and the
@@ -503,7 +533,7 @@ export async function createSky(gpu) {
     get readLayout() { return L.read; },
     get readBindGroup() { return BG.read; },
     weather,
-    _debug: { lut, targets: () => tg },
+    _debug: { lut, targets: () => tg, u, SKYU },
 
     setTerrain(t) { st.terrain = t; weather.setTerrain(t); },
 
@@ -563,12 +593,12 @@ export async function createSky(gpu) {
       };
       run(P.view, BG.skyView, BG.outView, 24, 14);
       run(P.shadow, BG.shadowRead, BG.outShadow, SH / 8, SH / 8);
-      if (st.clouds) {
-        run(P.march, BG.read, tg.march, Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
-        tg.ping = 1 - tg.ping;
-        run(P.resolve, BG.read, tg.resolve[tg.ping], Math.ceil(tg.cw / 8), Math.ceil(tg.ch / 8));
-      }
       pass.end();
+      // the cloud march runs in volumetricPrep, where the depth of this
+      // frame is known (the march stops at the ground: no cloud from
+      // behind a ridge is added in front of it). When CORE did not call
+      // volumetricPrep last frame, march here with no depth.
+      if (st.clouds && st.lastPrep !== st.frameNo) marchClouds(enc, null);
       weather.compute(enc, frame);
       st.frameNo++;
       st.haveFrame = true;
@@ -586,6 +616,9 @@ export async function createSky(gpu) {
     // pass (gpu/frame.js), with the depth and the shadow map of this frame
     volumetricPrep(enc, frame, ctx) {
       if (!tg) return;
+      // compute2 has counted this frame already (st.frameNo + 1)
+      if (st.clouds && st.lastPrep === st.frameNo - 1 && ctx && ctx.depthView) marchClouds(enc, ctx.depthView);
+      if (ctx && ctx.depthView) st.lastPrep = st.frameNo;
       weather.prep(enc, frame, ctx, st.clouds ? tg.v.acc[tg.ping] : null);
     },
 
@@ -604,6 +637,7 @@ export async function createSky(gpu) {
     dispose() {
       if (tg) for (const t of tg.all) t.destroy();
       for (const k in lut) lut[k].destroy();
+      skyDepth.destroy();
       ubo.destroy();
       weather.dispose();
     },

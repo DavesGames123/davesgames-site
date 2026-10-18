@@ -641,7 +641,12 @@ fn skyRadiance(d: vec3f, ro: vec3f, pxAng: f32) -> vec3f {
       L += st * Tv * night * sk_ss(-0.02, 0.06, d.y);
     }
     let sunT = sk_transmittance(r, G.sunDir.y);
-    L += sk_sunDisc(d, G.sunDir.xyz, pxAng) * sunT;
+    // under a closed deck (cover over 0.8 at the camera) the disc also
+    // takes the direct share of sky-state.js (G.sunDir.w / S.sun.y): the
+    // march stops at a transmittance of 0.01 or more, and 0.01 x 3.7e4 is
+    // still a white dot in a grey sky
+    let deck = mix(1.0, clamp(G.sunDir.w / S.sun.y, 0.0, 1.0), sk_ss(0.8, 0.95, S.cloud0.z));
+    L += sk_sunDisc(d, G.sunDir.xyz, pxAng) * (sunT * deck);
     // the moon is behind the air: add it (it hides only the stars, which
     // are faint next to it)
     let mo = sk_moon(d, S.moon.xyz);
