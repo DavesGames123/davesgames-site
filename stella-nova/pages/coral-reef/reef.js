@@ -95,8 +95,8 @@ export const QUALITY = {
 export const SPECIES = {
   staghorn: {
     label: 'Staghorn coral', latin: 'Acropora cervicornis', form: 'Branching',
-    params: { particleSpacing: 0.032, attractionDistance: 0.045, minMoveDistance: 0.02, stubbornness: 0, stickiness: 0.9 },
-    size: [2.0, 4.0], tall: 0.7, tpp: 66, dim: 1.62, fill: 1.3, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.06, roots: 22, reach: 0.5,
+    params: { particleSpacing: 0.04, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 0, stickiness: 0.9 },
+    size: [2.0, 4.0], tall: 0.7, tpp: 81, dim: 1.62, fill: 1.8, r0: 0.013, thick: 0.17, sway: 0, encrust: 0.1, roots: 30, reach: 0.5,
     base: [0.72, 0.56, 0.38], tip: [0.86, 0.80, 0.98],
     hooks: {
       // Tips favoured: a busy particle, or a walker from the side or below,
@@ -112,8 +112,8 @@ export const SPECIES = {
   },
   fan: {
     label: 'Sea fan', latin: 'Gorgonia ventalina', form: 'Planar fan',
-    params: { particleSpacing: 0.02, attractionDistance: 0.03, minMoveDistance: 0.015, stubbornness: 0, stickiness: 0.75 },
-    size: [1.2, 2.6], tall: 1, tpp: 17, dim: 1.55, fill: 1.6, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
+    params: { particleSpacing: 0.022, attractionDistance: 0.03, minMoveDistance: 0.016, stubbornness: 0, stickiness: 0.75 },
+    size: [1.4, 2.8], tall: 1, tpp: 72, dim: 1.55, fill: 1.7, r0: 0.006, thick: 0.1, sway: 1, encrust: 0,
     base: [0.62, 0.16, 0.46], tip: [0.95, 0.45, 0.62],
     hooks: {
       // The new particle goes into the vertical plane of the fan, across the
@@ -130,8 +130,8 @@ export const SPECIES = {
   },
   table: {
     label: 'Table coral', latin: 'Acropora hyacinthus', form: 'Tabular',
-    params: { particleSpacing: 0.035, attractionDistance: 0.055, minMoveDistance: 0.025, stubbornness: 1, stickiness: 0.9 },
-    size: [1.6, 3.8], tall: 0.4, tpp: 18, dim: 1.6, fill: 1.4, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
+    params: { particleSpacing: 0.045, attractionDistance: 0.065, minMoveDistance: 0.03, stubbornness: 1, stickiness: 0.9 },
+    size: [1.6, 3.8], tall: 0.4, tpp: 25, dim: 1.6, fill: 2.0, r0: 0.016, thick: 0.12, sway: 0, stalkM: 0.3, encrust: 0,
     base: [0.42, 0.55, 0.42], tip: [0.75, 0.92, 0.72],
     hooks: {
       // A short stalk grows up. Past it, only horizontal joins stick.
@@ -154,8 +154,8 @@ export const SPECIES = {
   },
   boulder: {
     label: 'Brain coral', latin: 'Diploria labyrinthiformis', form: 'Massive dome',
-    params: { particleSpacing: 0.07, attractionDistance: 0.1, minMoveDistance: 0.04, stubbornness: 14, stickiness: 0.5 },
-    size: [1.2, 2.6], tall: 0.6, tpp: 19, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
+    params: { particleSpacing: 0.08, attractionDistance: 0.1, minMoveDistance: 0.045, stubbornness: 14, stickiness: 0.5 },
+    size: [1.2, 2.6], tall: 0.6, tpp: 23, dim: 2.75, fill: 0.3, r0: 0.04, thick: 0.03, sway: 0, density: 0.45, encrust: 0,
     base: [0.66, 0.60, 0.30], tip: [0.86, 0.80, 0.50],
     hooks: {
       // Accretive growth: the tissue lays each new particle on the surface
@@ -173,8 +173,8 @@ export const SPECIES = {
   },
   finger: {
     label: 'Finger leather coral', latin: 'Sinularia', form: 'Soft lobes',
-    params: { particleSpacing: 0.045, attractionDistance: 0.075, minMoveDistance: 0.03, stubbornness: 3, stickiness: 0.2 },
-    size: [1.0, 2.2], tall: 0.7, tpp: 40, dim: 2.1, fill: 0.9, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
+    params: { particleSpacing: 0.04, attractionDistance: 0.065, minMoveDistance: 0.026, stubbornness: 3, stickiness: 0.2 },
+    size: [1.0, 2.2], tall: 0.7, tpp: 91, dim: 1.9, fill: 1.4, r0: 0.02, thick: 0.15, sway: 0.6, encrust: 0.05, roots: 6, reach: 0.3,
     base: [0.72, 0.48, 0.62], tip: [0.96, 0.82, 0.88],
     hooks: {
       // dlaf ShouldJoin with a low stickiness: the walkers creep into the
@@ -425,8 +425,8 @@ export function createReef(opts = {}) {
 
   // ── colony seeds ──
   // Sites from rock.sampleSurface inside 0.92 R. Reefs grow in patches:
-  // first patch centres, spread over the whole plot (a least distance of
-  // about 0.8 x the plot radius / sqrt(patches)), then the seeds of each
+  // first patch centres, spread evenly over the whole plot (farthest-point
+  // sampling of the sites), then the seeds of each
   // patch within PATCH m of its centre, with a gap of 0.35 x the mean size
   // of two neighbours (+ 0.25 m). So neighbours meet, compete and fuse, but
   // no two seeds clump. Species by pickSpecies, sizes by exposure. Then
@@ -442,12 +442,25 @@ export function createReef(opts = {}) {
     sites = sites.filter(filter);
     let y0 = Infinity, y1 = -Infinity;
     for (const s of sites) { y0 = Math.min(y0, s.p[1]); y1 = Math.max(y1, s.p[1]); }
-    const nPatch = o.patches ?? Math.max(4, Math.round(want / 5));
-    const dC = 0.8 * R0 / Math.sqrt(nPatch);
+    // patch centres by farthest-point sampling over the sites (the first
+    // one at random), so the patches cover the plot evenly
+    const nPatch = Math.min(sites.length, o.patches ?? Math.max(4, Math.round(want / 5)));
     const centres = [];
-    for (const s of sites) {
-      if (centres.length >= nPatch) break;
-      if (centres.every(c => Math.hypot(c[0] - s.p[0], c[1] - s.p[2]) >= dC)) centres.push([s.p[0], s.p[2]]);
+    if (sites.length) {
+      const dmin = new Float64Array(sites.length).fill(Infinity);
+      let next = Math.floor(random() * sites.length);
+      while (centres.length < nPatch) {
+        const c = sites[next].p;
+        centres.push([c[0], c[2]]);
+        let best = -1, bd = -1;
+        for (let t = 0; t < sites.length; t++) {
+          const d = Math.hypot(sites[t].p[0] - c[0], sites[t].p[2] - c[2]);
+          if (d < dmin[t]) dmin[t] = d;
+          if (dmin[t] > bd) { bd = dmin[t]; best = t; }
+        }
+        if (bd <= 0) break;
+        next = best;
+      }
     }
     const chosen = [];
     const gapK = o.gap ?? 0.35;
@@ -516,6 +529,10 @@ export function createReef(opts = {}) {
       if (c.full) continue;
       if (c.count >= c.cap) { c.full = true; continue; }
       const r = discOf(c);
+      // the snow disc: centre upstream of the base, radius r, height y
+      const a0 = params[c.id].attractionDistance, y = c.top + 4 * a0 + LIFT * (c.top - c.base[1]) + LIFT0;
+      const kx = env.strength * 0.8 / FALL, fall = y - c.base[1] + 0.3;
+      c.disc = [c.base[0] - env.cur[0] * kx * fall * 0.6, c.base[2] - env.cur[1] * kx * fall * 0.6, r, y, kx * fall];
       live.push(c); liveSum += r * r; liveW.push(liveSum);
     }
     liveAt = R.count;
@@ -524,38 +541,67 @@ export function createReef(opts = {}) {
   // Marine snow starts on a disc above a live colony (chosen by the area
   // of its disc). The disc moves upstream by the distance that the current
   // carries a walker while it falls, so the snow passes over the colony.
-  // The walker is free: it can land on any colony on its way down.
-  let spawnTop = 0, spawnX = 0, spawnZ = 0, spawnR = 0, spawnC = null;
-  const FALL = 0.85;
+  // Where the discs of k colonies overlap, a start is kept with chance
+  // 1 / k, so the snow is uniform over the union of the discs: two
+  // neighbours share the snow over the gap between them, they do not get
+  // twice as much. The walker is free: it can land on any colony.
+  let spawnTop = 0, spawnX = 0, spawnZ = 0, spawnR = 0, spawnC = null, wFall = 0.85, wPlane = null;
+  const FALL = 0.85, LIFT = 0.08, LIFT0 = 0;
   // the snow disc of a colony: its extent plus a few attraction distances,
   // so that a young colony (one seed) still catches some snow
   function discOf(c) { return c.ext + 3 * params[c.id].attractionDistance + 0.04 * c.size * Math.min(1, c.count / 300); }
-  function spawn(out) {
+  function pick() {
     const u = random() * liveSum;
     let lo = 0, hi = live.length - 1;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (liveW[mid] < u) lo = mid + 1; else hi = mid; }
-    const c = live[lo];
-    spawnC = c;
-    c.tries++;
-    const a0 = params[c.id].attractionDistance;
-    const y = c.top + 4 * a0 + 0.08 * (c.top - c.base[1]);
-    const r = discOf(c);
-    const kx = env.strength * 0.8 / FALL;
-    const a = random() * TAU, rr = r * Math.sqrt(random());
-    const fall = y - c.base[1] + 0.3;
-    spawnX = c.base[0] + Math.cos(a) * rr - env.cur[0] * kx * fall * 0.6;
-    spawnZ = c.base[2] + Math.sin(a) * rr - env.cur[1] * kx * fall * 0.6;
-    spawnTop = y; spawnR = r + 0.3 + 0.2 * c.size + env.strength * kx * fall;
-    out[0] = spawnX / U; out[1] = y / U; out[2] = spawnZ / U;
-    return out;
+    return live[lo];
+  }
+  function spawn(out) {
+    for (let tries = 0; ; tries++) {
+      const c = pick();
+      const a0 = params[c.id].attractionDistance;
+      wFall = FALL; wPlane = null;
+      if (c.id === 'fan') {
+        // a sea fan feeds from the water that the current carries through
+        // its plane: the walkers start on a half circle in the fan plane
+        // and drift in it with a small fall (as the fans of the old page)
+        spawnC = c; c.tries++;
+        const f = c.plane, Rf = Math.max(c.top - c.base[1], c.ext) + 3 * a0 + 0.04 * c.size * Math.min(1, c.count / 300);
+        const t = (random() - 0.5) * 0.9 * Math.PI, j = (random() - 0.5) * 2 * a0;
+        const x = c.base[0] - f[1] * Math.sin(t) * Rf + f[0] * j, z = c.base[2] + f[0] * Math.sin(t) * Rf + f[1] * j;
+        spawnX = c.base[0]; spawnZ = c.base[2]; spawnTop = c.base[1] + Rf + 0.3; spawnR = Rf + 0.6;
+        wFall = 0.25; wPlane = f;
+        out[0] = x / U; out[1] = (c.base[1] + Math.cos(t) * Rf) / U; out[2] = z / U;
+        return out;
+      }
+      const D = c.disc, a = random() * TAU, rr = D[2] * Math.sqrt(random());
+      const x = D[0] + Math.cos(a) * rr, z = D[1] + Math.sin(a) * rr;
+      let k = 0, y = D[3];
+      for (const d of live) {
+        if (d.id === 'fan') continue;
+        const e = d.disc, ex = x - e[0], ez = z - e[1];
+        if (ex * ex + ez * ez < e[2] * e[2]) { k++; if (e[3] > y) y = e[3]; }
+      }
+      if (tries < 8 && random() * k > 1) continue;
+      spawnC = c; c.tries++;
+      spawnX = x; spawnZ = z; spawnTop = y;
+      spawnR = D[2] + 0.3 + 0.2 * c.size + env.strength * D[4];
+      out[0] = x / U; out[1] = y / U; out[2] = z / U;
+      return out;
+    }
   }
 
   // Can a particle of colony c be at (x, y, z) (metres)? Out of the rock,
-  // in the plot, and in the size box of the colony: a horizontal radius of
-  // size / 2 and a height of size x sp.tall over the base.
+  // in the plot, and in the size ellipsoid of the colony: a horizontal
+  // radius of size / 2, from 0.2 x size x sp.tall under the base to
+  // size x sp.tall over it (a round outline, not a cut).
+  // Near the outline the joins thin out (a soft, ragged edge, not a rim).
   function fits(c, x, y, z) {
-    const dx = x - c.base[0], dy = y - c.base[1], dz = z - c.base[2], h = 0.5 * c.size;
-    if (dx * dx + dz * dz > h * h || dy > c.size * c.sp.tall || dy < -0.3 * c.size) return false;
+    const H = c.size * c.sp.tall, h = 0.5 * c.size;
+    const dx = x - c.base[0], dy = y - c.base[1] - 0.4 * H, dz = z - c.base[2];
+    const e = (dx * dx + dz * dz) / (h * h) + (dy * dy) / (0.36 * H * H);
+    if (e > 1) return false;
+    if (e > 0.6 && random() > Math.pow((1 - e) / 0.4, 1.5)) return false;
     if (x * x + z * z > radius * radius) return false;
     const s = params[c.id].particleSpacing;
     return rock.sdf(x, y, z) > s * 0.25 && y > sandAt(x, z) + s * 0.25;
@@ -572,10 +618,15 @@ export function createReef(opts = {}) {
     return rock.sdf(out[0] * U, out[1] * U, out[2] * U) > 0;
   }
 
-  // A walker that hits the rock near the base of a colony that encrusts
-  // can stick there: a new root of that colony.
+  // A walker that hits the rock next to the coral of a colony that
+  // encrusts (the nearest particle is of that colony, within 0.3 m) can
+  // stick there: a new root of that colony. So the base creeps over the
+  // rock from the coral that is there, never into a neighbour's ground.
   function encrust(x, y, z) {
-    const c = spawnC; if (!c || c.full) return false;
+    const n0 = R.m.nearest(P);
+    if (n0.id < 0 || n0.d * U > 0.3) return false;
+    const c = R.colonies[R.col[n0.id]];
+    if (c.full || c.count >= c.cap) return false;
     const s = c.sp; if (!s.encrust || c.roots >= s.roots) return false;
     const reach = c.size * s.reach;
     const dx = x - c.base[0], dz = z - c.base[2];
@@ -596,8 +647,8 @@ export function createReef(opts = {}) {
     if (liveAt !== R.count || !live.length) refreshLive();
     if (!live.length) return -1;
     const m = R.m;
+    if ((++R.walkers & 1023) === 0) { starve(); if (liveAt < 0) { refreshLive(); if (!live.length) return -1; } }
     spawn(P);
-    R.walkers++;
     const minMoveU = 0.6 * Math.min(params[spawnC.id].minMoveDistance, 0.03) / U;
     const AgU = maxAttrU;
     const drift = env.strength * 0.8;
@@ -628,7 +679,8 @@ export function createReef(opts = {}) {
       }
       const step = Math.max(minMoveU, Math.min(d - A, dr * 0.8 / U));
       randomInUnitSphere(random, 3, V);
-      V[0] += env.cur[0] * drift; V[1] -= FALL; V[2] += env.cur[1] * drift;
+      if (wPlane) { const q = V[0] * wPlane[0] + V[2] * wPlane[1]; V[0] -= wPlane[0] * q; V[2] -= wPlane[1] * q; V[1] -= wFall; }
+      else { V[0] += env.cur[0] * drift; V[1] -= wFall; V[2] += env.cur[1] * drift; }
       const l = Math.hypot(V[0], V[1], V[2]) || 1;
       P[0] += V[0] / l * step; P[1] += V[1] / l * step; P[2] += V[2] / l * step;
       R.walks++;
@@ -656,7 +708,7 @@ export function createReef(opts = {}) {
     while (R.allowance >= 1 && R.count < R.limit) {
       const g = walkOne(); tries++;
       if (g >= 0) { R.allowance--; n++; }
-      if ((tries & 7) === 0) { if ((tries & 1023) === 0) starve(); if (clock() - t0 > budgetMs) break; }
+      if ((tries & 7) === 0 && clock() - t0 > budgetMs) break;
       if (!live.length) break;
     }
     R.joined += n;
@@ -672,7 +724,6 @@ export function createReef(opts = {}) {
       if (!live.length) break;
       const g = walkOne(); w++;
       if (g >= 0) k++;
-      if ((w & 1023) === 0) starve();
     }
     R.joined += k;
     return k;

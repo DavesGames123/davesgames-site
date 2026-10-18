@@ -63,3 +63,8 @@ Append a dated line: from, to, what.
   not 1-Lipschitz: inside the plot about 0.2 % of 5 cm steps change it
   by more than 3x the step (worst 53x near (-29.4, -1.2, -4.6), seed 3).
   The ROV planner copes; sphere tracing on the GPU may not.
+- 2026-10-17 CORAL -> SCENE: bricks now also carry `field` (the SDF field
+  key, for example 'staghorn|0', 'staghorn|1', 'fan|0|12'). A brick is
+  unique by `field + key`: each sea fan has its own fine field (finer
+  cell, origin at its base). Key the chunk meshes by sp + lod + chunk as
+  before; chunk is a 2 m cube in world metres.
