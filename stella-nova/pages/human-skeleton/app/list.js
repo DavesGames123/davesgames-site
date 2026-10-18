@@ -3,7 +3,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 //  buildList writes one group per region, with Explode and Hide buttons,
 //  and one row per bone. One click listener on #list handles the rows and
-//  the buttons. A click on a hidden bone shows it first. syncList marks
+//  the buttons. A row isolates its bone (inspect.js isolate), as a click
+//  on the bone does. A click on a hidden bone shows it first. syncList marks
 //  the selected row and opens its group. The search box hides the rows
 //  that do not match the name, Latin name, region or side.
 //
@@ -19,7 +20,7 @@ import { $, PHONE_Q, esc, SIDE_NAME } from './env.js';
 import { S, regionOf } from './state.js';
 import { refreshVisibility } from './visibility.js';
 import { toggleRegionExplode } from './layouts.js';
-import { select } from './select.js';
+import { isolate } from './inspect.js';
 import { panel, setOpen } from './panel.js';
 import { setShow, syncUI } from './controls.js';
 
@@ -57,7 +58,8 @@ list.addEventListener('click', e => {
       else if (b.type === 'cartilage') setShow('cartilage', true);
       else setRegionHidden(b.region, false);
     }
-    select(i, { fly: S.iso < 0, scroll: false });
+    // the same as a click on the bone: frame it and isolate it
+    isolate(i);
     if (PHONE_Q.matches && !matchMedia('(orientation:landscape)').matches) setOpen(false);
     return;
   }

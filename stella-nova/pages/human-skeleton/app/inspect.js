@@ -1,14 +1,17 @@
 // ============================================================================
 //  HUMAN SKELETON  ·  app/inspect.js — isolate and focus
 // ────────────────────────────────────────────────────────────────────────────
-//  isolate() keeps one bone solid and turns the other bones into fresnel
-//  ghosts. The camera flies to the bone, and the old camera pose is kept
-//  for exitIsolate(true). focusBone and focusRegion fly the camera to one
+//  isolate() keeps one bone solid with a soft rim, and turns the other
+//  bones into fresnel ghosts, or hides them (S.isoHide). The camera flies
+//  to frame the bone (camera.js frameBone), and the old camera pose is
+//  kept for exitIsolate(true). The chip (chip.js) shows while it lasts. focusBone and focusRegion fly the camera to one
 //  bone or to the bounds of a region, from a good direction for the hands
 //  and the feet.
 //
 //  GREP MAP
+//    const ISO_GLOW                                  rim of the isolated bone
 //    function isolate / exitIsolate                  ghost the other bones
+//    function setIsoHide                             ghost or hide the others
 //    function focusBone / focusRegion                camera flights
 // ============================================================================
 import * as THREE from 'three';
@@ -21,27 +24,44 @@ import { boneCentre, setHi } from './select.js';
 import { showCard } from './card.js';
 import { syncList } from './list.js';
 import { syncRead } from './controls.js';
+import { syncChip } from './chip.js';
 
+// Glow of the isolated bone: a soft rim (render.js: the fresnel term of
+// the picked glow), not the full glow of a selection.
+const ISO_GLOW = 0.3;
 export function isolate(i) {
-  if (i < 0) return;
+  if (i < 0 || S.saver) return;
   if (S.iso < 0) S.isoBack = { t: controls.target.clone(), p: camera.position.clone() };
   S.iso = i;
-  if (S.sel !== i) { if (S.sel >= 0) setHi(S.sel, 0, 0); S.sel = i; setHi(i, 0, 1); syncList(true); }
-  for (const g of S.groups.values()) g.ghost.visible = true;
-  setHi(i, 0, 0.18);
+  if (S.sel !== i) { if (S.sel >= 0) setHi(S.sel, 0, 0); S.sel = i; syncList(true); }
+  for (const g of S.groups.values()) g.ghost.visible = !S.isoHide;
+  setHi(i, 0, ISO_GLOW);
   refreshVisibility(false);
   showCard();
+  syncChip();
   frameBone(i);
   syncRead();
 }
+// Show all. back: fly to the view from before the isolation.
 export function exitIsolate(back) {
+  if (S.iso < 0) return;
   S.iso = -1;
   for (const g of S.groups.values()) g.ghost.visible = false;
   refreshVisibility(false);
   if (back && S.isoBack) flyTo(S.isoBack.t, S.isoBack.p.distanceTo(S.isoBack.t), 0.9, S.isoBack.p.clone().sub(S.isoBack.t).normalize());
   S.isoBack = null;
   if (S.sel >= 0) { setHi(S.sel, 0, 1); showCard(); }
+  syncChip();
   syncRead();
+}
+// Ghost (false) or hide (true) the other bones. The choice stays for the
+// next isolation.
+export function setIsoHide(hide) {
+  S.isoHide = !!hide;
+  if (S.iso < 0) { syncChip(); return; }
+  for (const g of S.groups.values()) g.ghost.visible = !S.isoHide;
+  refreshVisibility(false);
+  syncChip();
 }
 export function focusBone(i) {
   const b = S.bones[i];

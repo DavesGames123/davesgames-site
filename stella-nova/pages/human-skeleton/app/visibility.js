@@ -4,7 +4,7 @@
 //  A bone is visible when its group has loaded and no toggle hides it (the
 //  teeth and cartilage toggles, a hidden region). refreshVisibility writes
 //  S.vis and the flag of each bone into the BoneState texture: 0 shown,
-//  1 hidden, 2 ghost (isolate). A change of the visible set starts a new
+//  1 hidden, 2 ghost (isolate; 1 when the others hide). A change of the visible set starts a new
 //  layout transition, because the layouts use only the visible bones.
 //
 //  GREP MAP
@@ -26,7 +26,7 @@ export function refreshVisibility(relayout = true) {
   for (const b of S.bones) {
     const v = S.loaded[b.i] && shownByToggles(b) ? 1 : 0;
     if (v !== S.vis[b.i]) { S.vis[b.i] = v; changed = true; }
-    const flag = !v ? 1 : S.iso >= 0 && b.i !== S.iso ? 2 : 0;
+    const flag = !v ? 1 : S.iso >= 0 && b.i !== S.iso ? (S.isoHide ? 1 : 2) : 0;
     S.state.setK(2, b.i, 3, flag);
   }
   S.state.dirty();

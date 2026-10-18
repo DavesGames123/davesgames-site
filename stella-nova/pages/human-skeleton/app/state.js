@@ -22,7 +22,7 @@ export const S = {
   cur: null, from: null, to: null, delay: null, tr: null, traysOn: false, cat: null,
   drag: null, dOff: null, dVel: null, springing: new Set(),
   appear: null, loaded: null, vis: null, hiddenRegion: new Set(), show: { teeth: true, cartilage: false, spin: false },
-  sel: -1, hov: -1, iso: -1, isoBack: null, pick: [], fly: null, dirty: true, frames: 0, groups: new Map(), mats: null,
+  sel: -1, hov: -1, iso: -1, isoBack: null, isoHide: false, saver: false, pick: [], fly: null, dirty: true, frames: 0, groups: new Map(), mats: null,
   labelsOn: false, theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark', ready: false,
 };
 export const dirty = () => { S.dirty = true; };

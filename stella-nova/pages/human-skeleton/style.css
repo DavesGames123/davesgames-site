@@ -7,6 +7,7 @@
      grep -n 'TOKENS'     colours and sizes for both themes
      grep -n 'STAGE'      canvas, readout, hint, tip, tray labels, loading
      grep -n 'CARD'       the bone card (a museum label)
+     grep -n 'ISO CHIP'   "Isolated: <bone>" and its buttons
      grep -n 'PANEL'      the control panel (desktop: left column)
      grep -n 'LIST'       the bone list: regions, counts, rows
      grep -n 'TOUCH'      44px targets for any coarse pointer
@@ -110,6 +111,23 @@ html.in-frame #gear{display:none!important}
 .c-acts button.on{border-color:var(--hi);color:var(--hi);background:color-mix(in srgb,var(--hi) 10%,transparent)}
 .c-foot{margin-top:8px;font-size:0.6rem;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
 
+/* ISO CHIP. "Isolated: <bone>" at the base of the stage, in the clear
+   part beside the panel. camera.js frames the bone above it. */
+#isoChip{position:absolute;left:calc(var(--panel-w) + 18px);bottom:16px;z-index:8;display:flex;align-items:center;gap:6px;max-width:calc(100% - var(--panel-w) - 36px);padding:5px;border:1px solid var(--line-b);border-radius:10px;background:var(--glass);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 10px 28px rgba(0,0,0,0.28);transition:left 0.28s;animation:cardIn 0.2s ease-out}
+#isoChip button{flex:0 0 auto;height:32px;min-width:32px;padding:0 10px;border:1px solid var(--line-b);border-radius:7px;background:var(--ink2);font-size:0.74rem;color:var(--text)}
+#isoChip button:hover{border-color:var(--hi);color:var(--hi)}
+#isoChip .iso-t{flex:1 1 auto;min-width:0;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.68rem;letter-spacing:0.06em;color:var(--dim)}
+#isoChip .iso-t b{font-family:var(--serif);font-weight:500;font-size:1rem;letter-spacing:0;color:var(--hi)}
+#isoChip .iso-t i{font-family:var(--serif);color:var(--dim)}
+#isoChip .iso-seg{display:flex;flex:0 0 auto}
+#isoChip .iso-seg button{border-radius:0;color:var(--dim)}
+#isoChip .iso-seg button:first-child{border-radius:7px 0 0 7px;border-right:0}
+#isoChip .iso-seg button:last-child{border-radius:0 7px 7px 0}
+#isoChip .iso-seg button.on{color:var(--text);border-color:var(--tone);background:color-mix(in srgb,var(--tone) 14%,var(--ink2))}
+#isoChip .iso-all{border-color:var(--hi);color:var(--hi)}
+#isoChip kbd{margin-left:5px;font:0.6rem var(--mono);color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+body.has-iso .phint{opacity:0}
+
 /* PANEL */
 #panel{position:fixed;top:var(--top);left:0;bottom:0;width:var(--panel-w);z-index:35;background:var(--glass2);border-right:1px solid var(--line-b);padding:18px 18px 28px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
 #panel.open{transform:none}
@@ -176,6 +194,8 @@ body.panel-closed{--panel-w:0px}
 @media (pointer:coarse){
   #panelClose,.grid2 button,.grid3 button,.tog,.c-x,.c-acts button,.seg button,#themeBtn{min-height:44px;font-size:0.8rem}
   .c-x{flex-basis:44px;height:44px}
+  #isoChip button{height:44px;min-width:44px;font-size:0.8rem}
+  #isoChip kbd{display:none}
   #themeBtn{width:44px;height:44px}
   .c-acts{grid-template-columns:44px 1fr 1fr 44px}
   .c-acts button{height:44px}
@@ -220,6 +240,13 @@ body.panel-closed{--panel-w:0px}
   .nb::-webkit-scrollbar{display:none}
   .nb button{flex:0 0 auto}
   .c-foot{display:none}
+  /* the chip is a bar at the base of the stage, above the dock */
+  #isoChip{left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));bottom:8px;max-width:none;flex-wrap:wrap;gap:4px;padding:4px}
+  #isoChip button{padding:0 9px}
+  #isoChip .iso-all{flex:1 0 auto}
+  /* the name on its own line, so a long name is not cut */
+  #isoChip .iso-t{order:-1;flex:1 0 100%;font-size:0.75rem;padding:2px 6px 0}
+  #isoChip .iso-t b{font-size:0.95rem}
 
   #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:7px;align-items:center;height:var(--dock-h);padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));background:var(--glass2);border-top:1px solid var(--line-b)}
   #dock > button{height:50px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1;min-width:0}
@@ -255,10 +282,11 @@ body.panel-closed{--panel-w:0px}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:3;background:var(--ink2);min-height:44px;width:44px}
   #card{left:auto;right:calc(8px + env(safe-area-inset-right));width:min(330px,46vw);max-height:calc(100% - 16px)}
+  #isoChip{right:calc(min(330px,46vw) + 16px + env(safe-area-inset-right))}
   /* the drawer and the card would cover the whole view: the card waits */
   body.sheet-open #card{display:none}
 }
-@media(prefers-reduced-motion:reduce){#panel,.phint,#card,#toast{transition:none;animation:none}}
+@media(prefers-reduced-motion:reduce){#panel,.phint,#card,#toast,#isoChip{transition:none;animation:none}}
 
 /* TOUCH TEXT. On a coarse pointer the small uppercase labels are 12 px
    (they were 9-10.6 px), and the other small text is 12 px or more. */

@@ -21,7 +21,7 @@ import { ensureCartilage } from './load.js';
 import { refreshVisibility } from './visibility.js';
 import { exploded, retarget, setMode, explode, reconstruct, setAmount } from './layouts.js';
 import { clearSelection, step } from './select.js';
-import { isolate, exitIsolate, focusBone, focusRegion } from './inspect.js';
+import { isolate, exitIsolate, setIsoHide, focusBone, focusRegion } from './inspect.js';
 import { list } from './list.js';
 
 export function setTheme(t) {
@@ -103,12 +103,13 @@ export function buildUI() {
   $('dockFit').addEventListener('click', () => { if (S.iso >= 0) exitIsolate(false); fitView(false); });
   $('hint').textContent = COARSE ? 'Tap a bone · drag to turn · pinch to zoom' : 'Click a bone · drag to orbit · scroll to zoom';
   addEventListener('keydown', e => {
-    if (e.target.closest && e.target.closest('input')) return;
+    if (S.saver || (e.target.closest && e.target.closest('input'))) return;
     if (e.key === 'Escape') { if (S.iso >= 0) exitIsolate(true); else clearSelection(); }
     else if (e.key === 'ArrowRight' || e.key === ']') step(1);
     else if (e.key === 'ArrowLeft' || e.key === '[') step(-1);
     else if (e.key === 'e') (exploded() ? reconstruct() : explode());
     else if (e.key === 'i' && S.sel >= 0) (S.iso >= 0 ? exitIsolate(true) : isolate(S.sel));
+    else if (e.key === 'g' && S.iso >= 0) setIsoHide(!S.isoHide);
     else if (e.key === 'f' && S.sel >= 0) focusBone(S.sel);
     else if (e.key === 'r') fitView(false);
   });

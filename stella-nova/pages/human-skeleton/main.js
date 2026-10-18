@@ -17,8 +17,9 @@
 //           within 4 px (mouse) or 14 px (touch) of the ray picks too.
 //  SELECT   the bone glows, the card opens, the list marks it, and the
 //           camera pans if the bone sits under the card or the panel.
-//  ISOLATE  the other bones become fresnel ghosts; the camera flies to
-//           the bone and orbits it.
+//  ISOLATE  a click (or a list row) isolates the bone: the others become
+//           fresnel ghosts or hide, the camera glides to frame the bone
+//           (focus.js) and orbits it, and the chip names it.
 //  FRAME    occlusion() measures the panel and the card;
 //           camera.setViewOffset centres the view in the clear part.
 //
@@ -33,6 +34,7 @@
 //    pick.js        pickAt / pickInfo / pickRay (mesh ray pick)
 //    select.js      select / clearSelection / step / boneCentre
 //    card.js        showCard / hideCard and the card buttons
+//    chip.js        syncChip: the "Isolated: <bone>" chip and its buttons
 //    inspect.js     isolate / exitIsolate / focusBone / focusRegion
 //    list.js        buildList / syncList / setRegionHidden, search
 //    pointer.js     tap, double tap, hover, drag out
@@ -68,8 +70,9 @@ import { pickAt } from './app/pick.js';
 import { loadAll } from './app/load.js';
 import { setMode, explode, reconstruct, setAmount, toggleRegionExplode, retarget } from './app/layouts.js';
 import { boneCentre, select, clearSelection, step, setHi } from './app/select.js';
-import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
+import { isolate, exitIsolate, setIsoHide, focusBone, focusRegion } from './app/inspect.js';
 import { setRegionHidden } from './app/list.js';
+import { syncChip } from './app/chip.js';
 import { setOpen } from './app/panel.js';
 import { setTheme, setShow, buildUI } from './app/controls.js';
 import { frame } from './app/loop.js';
@@ -78,7 +81,7 @@ import { buildDelays, liftDir, liftAmount, liftProfile, liftFit, neighbours } fr
 
 // debug and headless checks
 window.__hs = {
-  S, T, select, clearSelection, isolate, exitIsolate, setMode, explode, reconstruct, setAmount, toggleRegionExplode, focusRegion, focusBone,
+  S, T, select, clearSelection, isolate, exitIsolate, setIsoHide, setMode, explode, reconstruct, setAmount, toggleRegionExplode, focusRegion, focusBone,
   setTheme, setShow, setRegionHidden, pickAt, step, camera, controls, setOpen, fitView, boneGoal, frameBone, clearRect, boneCentre,
   screenOf(id) {
     const b = typeof id === 'number' ? S.bones[id] : S.P.byId.get(id);
@@ -340,6 +343,12 @@ window.snSaver = {
     css.textContent = '#stage{top:0!important}#stage>*:not(#view),body>*:not(#stage){display:none!important}#view{cursor:none!important}';
     document.head.appendChild(css);
     setOpen(false);
+    // no isolation in the saver: end it, close the card, and the pointer
+    // and key handlers stop (S.saver). The saver CSS hides the chip too.
+    if (S.iso >= 0) exitIsolate(false);
+    clearSelection();
+    S.saver = true;
+    syncChip();
     scene.background = saverBackdrop();
     setShow('spin', false);
     // the tour is made when the bones are in (saverTour needs S.vis)

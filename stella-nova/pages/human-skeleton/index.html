@@ -42,6 +42,8 @@
      │  focus     │        #view  the WebGL canvas      type, joints,     │
      │  show      │        #labels  tray labels         fact, isolate,    │
      │  bones     │        #tip  hover name (mouse)     previous / next   │
+     │        #isoChip  "Isolated: <bone>", previous / next in the    │
+     │                  region, Ghost / Hide, Show all (Esc)          │
      │   search   │                                                       │
      │   regions  │ #loading  the body groups as they arrive   #themeBtn  │
      │  source    │                                                       │
@@ -52,7 +54,9 @@
                 landscape: a drawer at the right edge.
      #card      a strip at the top of the stage (portrait), or at the
                 right edge (landscape).
-     main.js measures the panel and the card, and frames the skeleton in
+     #isoChip   a bar at the base of the stage, above the dock, with
+                44 px buttons.
+     main.js measures the panel, the card and the chip, and frames the skeleton in
      the clear part with camera.setViewOffset.
 
    GREP MAP  (main.js)
@@ -90,6 +94,13 @@ try{var t=localStorage.getItem('hs-theme');if(t==='light'||t==='dark')document.d
   <div id="tip" aria-hidden="true"></div>
   <div id="loading"><span class="spin"></span><span id="loadingText">Loading the skeleton</span><span id="loadBar"><i></i></span></div>
   <section id="card" aria-live="polite" hidden></section>
+  <div id="isoChip" role="toolbar" aria-label="Isolated bone" hidden>
+    <button type="button" data-act="prev" aria-label="Previous bone in this region">‹</button>
+    <span class="iso-t">Isolated: <b id="isoName"></b></span>
+    <button type="button" data-act="next" aria-label="Next bone in this region">›</button>
+    <span class="iso-seg" role="group" aria-label="Other bones"><button type="button" data-act="ghost" class="on" aria-pressed="true">Ghost</button><button type="button" data-act="hide" aria-pressed="false">Hide</button></span>
+    <button type="button" data-act="all" class="iso-all" aria-keyshortcuts="Escape">Show all <kbd>Esc</kbd></button>
+  </div>
   <button id="themeBtn" type="button" aria-label="Switch theme"><span>◐</span></button>
 </main>
 <div id="nogl" hidden>WebGL 2 is not available in this browser, so the skeleton cannot render.</div>

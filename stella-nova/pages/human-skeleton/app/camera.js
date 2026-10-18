@@ -1,7 +1,7 @@
 // ============================================================================
 //  HUMAN SKELETON  ·  app/camera.js — framing, fit, fly-to, shadow frustum
 // ────────────────────────────────────────────────────────────────────────────
-//  The panel and the card can cover part of the canvas. occlusion() measures
+//  The panel, the card and the isolate chip can cover part of the canvas. occlusion() measures
 //  that part, and the loop eases occ toward it. resize() then moves the view
 //  offset, so the specimen stays in the centre of the clear part. fitView
 //  and fitDist size the camera distance to that clear part.
@@ -23,6 +23,7 @@ import { canvas, renderer, camera, key, pool, controls } from './stage.js';
 import { S, dirty } from './state.js';
 import { boneCentre } from './select.js';
 import { card } from './card.js';
+import { chip } from './chip.js';
 import { setHover } from './pointer.js';
 import { panel } from './panel.js';
 import { drawn, pose } from './pick.js';
@@ -47,6 +48,7 @@ export function occlusion() {
   };
   if (panel.classList.contains('open')) consider(panel);
   consider(card);
+  consider(chip);
   if (saverOcc.o) for (const k in o) o[k] = Math.max(o[k], saverOcc.o[k]);
   return o;
 }

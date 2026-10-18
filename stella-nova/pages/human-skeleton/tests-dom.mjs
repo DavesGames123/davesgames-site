@@ -233,13 +233,98 @@ async function desktop() {
   hs.exitIsolate(true);
   for (let k = 0; k < 90; k++) env.step();
   hs.fitView(true); env.step();
+  await isoChecks(env, hs, S, byId);
 
   // WebXR: the controller ray pick runs the same mesh pick in scene space
   const xr = await import(pathToFileURL(join(HERE, 'app/xr.js')).href);
   const c = hs.camera.position.clone(), f = new THREE.Vector3(...S.bones[byId('femur-r')].c);
   const xi = xr.pickRay(new THREE.Ray(c, f.clone().sub(c).normalize()));
   ok(S.bones[xi]?.id === 'femur-r', 'xr: the controller ray at the femur picks it on the mesh', S.bones[xi]?.id || 'none');
+
+  // the saver: no isolation UI. enter() ends an isolation and closes the
+  // card; the saver CSS hides every child of #stage but the canvas
+  const chip = env.doc.getElementById('isoChip');
+  hs.isolate(byId('femur-l')); runFrames(env, 70);
+  const shown = !chip.hidden;
+  env.win.snSaver.enter({ seed: 3, label: () => {} });
+  runFrames(env, 120);
+  const css = [...env.doc.head.querySelectorAll('style')].map(s => s.textContent).join('');
+  ok(shown && S.iso === -1 && chip.hidden && env.doc.getElementById('card').hidden && /#stage>\*:not\(#view\)\{?/.test(css.replace(/\s/g, '')) && chip.matches('#stage>*:not(#view)'),
+    'saver: enter() ends the isolation; the chip is hidden and its saver rule hides it', `iso ${S.iso}, chip hidden ${chip.hidden}`);
+  env.win.dispatchEvent(new env.win.KeyboardEvent('keydown', { key: 'i', bubbles: true }));
+  hs.isolate(byId('femur-r')); runFrames(env, 5);
+  ok(S.iso === -1 && S.sel === -1 && chip.hidden, 'saver: the i key or isolate() bring no isolation in the saver', `iso ${S.iso}, sel ${S.sel}`);
   return env;
+}
+
+// ── isolation: the chip, ghost / hide, step, Esc, the list, exact restore ──
+const flag = (S, i) => S.state.get(2, i, 3);
+const runFrames = (env, n) => { for (let k = 0; k < n; k++) env.step(); };
+async function isoChecks(env, hs, S, byId) {
+  const doc = env.doc, chip = doc.getElementById('isoChip');
+  env.RECTS.set('isoChip', el => el.hidden ? env.rect(0, 0, 0, 0) : env.rect(358, env.top + env.stageH - 60, 560, 44));
+  const fem = byId('femur-l');
+  // the state before: the femur selected, not isolated
+  hs.select(fem); runFrames(env, 60);
+  doc.getElementById('view').dispatchEvent(new env.win.Event('pointerleave'));
+  runFrames(env, 2);
+  const before = { data: S.state.data.slice(), ghosts: [...S.groups.values()].map(g => g.ghost.visible), mats: [...S.groups.values()].map(g => g.mesh.material === S.mats.bone && g.ghost.material === S.mats.ghost) };
+  const camBefore = { t: hs.controls.target.clone(), p: hs.camera.position.clone() };
+  // the list row does the same as a click: isolate and frame
+  const row = doc.querySelector(`#list .br[data-i="${fem}"]`);
+  row.dispatchEvent(new env.win.MouseEvent('click', { bubbles: true }));
+  runFrames(env, 80);
+  const others = S.bones.filter(b => b.i !== fem && S.vis[b.i]).map(b => b.i);
+  ok(S.iso === fem && !chip.hidden && /Isolated:\s*Femur/.test(chip.textContent) && /Left/.test(doc.getElementById('isoName').textContent),
+    'list: a row isolates its bone and the chip names it', `iso ${S.bones[S.iso]?.id}, chip "${chip.textContent.replace(/\s+/g, ' ').trim()}"`);
+  ok(hs.controls.target.distanceTo(hs.boneCentre(fem)) < 1e-6 && !S.fly, 'list: the row glides the camera to the bone, the orbit target at its centre');
+  ok(flag(S, fem) === 0 && others.every(i => flag(S, i) === 2) && [...S.groups.values()].every(g => g.ghost.visible),
+    'isolate: the bone stays solid, every other shown bone is a ghost', `${others.length} ghosts`);
+  ok(S.state.get(3, fem, 0) > 0 && S.state.get(3, fem, 0) < 1, 'isolate: the bone has a soft rim glow, not the full selection glow', S.state.get(3, fem, 0).toFixed(2));
+  const card = doc.getElementById('card');
+  ok(!card.hidden && /Femur/.test(card.querySelector('.c-name').textContent) && doc.querySelector('#list .br.sel')?.dataset.i === String(fem), 'isolate: the card and the list row are in sync');
+  // the chip does not cover the bone: it is in the clear part
+  const cr = hs.clearRect();
+  const c = hs.boneCentre(fem), dist = hs.camera.position.distanceTo(c), THREE = await import(T160);
+  const fy = Math.tan(THREE.MathUtils.degToRad(hs.camera.fov) / 2), rpx = Math.tan(Math.asin(S.bones[fem].r / dist)) / fy * cr.h / 2;
+  const py = (1 - c.clone().project(hs.camera).y) / 2 * cr.h;
+  const chipTop = env.stageH - 60;
+  ok(cr.o.b >= 60 && py + rpx <= chipTop + 0.5, 'chip: the framed bone sphere stays above the chip', `bottom inset ${cr.o.b.toFixed(0)} px, sphere bottom ${(py + rpx).toFixed(0)} px, chip top ${chipTop} px`);
+  // Hide, then Ghost
+  chip.querySelector('[data-act="hide"]').click(); runFrames(env, 2);
+  ok(S.isoHide && others.every(i => flag(S, i) === 1) && flag(S, fem) === 0 && [...S.groups.values()].every(g => !g.ghost.visible),
+    'chip: Hide hides every other bone and the ghost meshes');
+  const sk = hs.screenOf('humerus-l');
+  ok(S.bones[hs.pickAt(sk.x, sk.y)]?.id !== 'humerus-l', 'pick: a hidden bone never picks (the humerus point gives no humerus)', String(hs.pickAt(sk.x, sk.y)));
+  chip.querySelector('[data-act="ghost"]').click(); runFrames(env, 2);
+  ok(!S.isoHide && others.every(i => flag(S, i) === 2), 'chip: Ghost turns them back to ghosts');
+  // next / previous in the region
+  const reg = S.bones.filter(b => b.region === S.bones[fem].region && S.vis[b.i]).map(b => b.i);
+  const k = reg.indexOf(fem), nx = reg[(k + 1) % reg.length];
+  chip.querySelector('[data-act="next"]').click(); runFrames(env, 80);
+  ok(S.iso === nx && S.sel === nx && flag(S, fem) === 2 && flag(S, nx) === 0 && card.querySelector('.c-name').textContent.includes(S.bones[nx].name),
+    'chip: Next isolates the next bone of the region and frames it', `${S.bones[fem].id} -> ${S.bones[S.iso].id}, target off ${hs.controls.target.distanceTo(hs.boneCentre(nx)).toExponential(1)} m`);
+  chip.querySelector('[data-act="prev"]').click(); runFrames(env, 80);
+  ok(S.iso === fem, 'chip: Previous comes back', S.bones[S.iso]?.id);
+  // Esc: show all, the camera goes back, every material as it was
+  env.win.dispatchEvent(new env.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  runFrames(env, 90);
+  doc.getElementById('view').dispatchEvent(new env.win.Event('pointerleave'));
+  runFrames(env, 2);
+  const after = { data: S.state.data, ghosts: [...S.groups.values()].map(g => g.ghost.visible), mats: [...S.groups.values()].map(g => g.mesh.material === S.mats.bone && g.ghost.material === S.mats.ghost) };
+  let diff = 0;
+  for (let q = 0; q < after.data.length; q++) if (after.data[q] !== before.data[q]) diff++;
+  ok(S.iso === -1 && chip.hidden && diff === 0 && after.ghosts.join() === before.ghosts.join() && after.mats.every(Boolean),
+    'Esc: Show all restores the bone state texture and the materials bit for bit', `${diff} of ${after.data.length} floats differ, chip hidden ${chip.hidden}`);
+  ok(hs.controls.target.distanceTo(camBefore.t) < 1e-6 && hs.camera.position.distanceTo(camBefore.p) < 1e-4, 'Esc: the camera goes back to the view from before the isolation',
+    `target off ${hs.controls.target.distanceTo(camBefore.t).toExponential(1)} m, eye off ${hs.camera.position.distanceTo(camBefore.p).toExponential(1)} m`);
+  env.win.dispatchEvent(new env.win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  ok(S.sel === -1 && card.hidden, 'Esc: a second Esc closes the selection');
+  // Show all button
+  hs.isolate(fem); runFrames(env, 70);
+  chip.querySelector('[data-act="all"]').click(); runFrames(env, 70);
+  ok(S.iso === -1 && chip.hidden && S.bones.every(b => flag(S, b.i) === (S.vis[b.i] ? 0 : 1)), 'chip: Show all shows every bone');
+  hs.clearSelection(); hs.fitView(true); runFrames(env, 2);
 }
 
 // ── phone ───────────────────────────────────────────────────────────────────
