@@ -562,9 +562,9 @@ void main() {
   float z = max(0.2, -mv.z);
   float px = aSize * uPx / z;
   vSoft = clamp((1.2 - z) / 1.0, 0.0, 1.0);
-  gl_PointSize = clamp(px * (1.0 + vSoft * 3.0), 1.0, 48.0);
+  gl_PointSize = clamp(px * (1.0 + vSoft * 1.5), 1.0, 20.0);
   float far = smoothstep(uBox.x * 0.5, uBox.x * 0.3, length(q - cameraPosition));
-  vC = c * far * exp(-z * uFogK) * 0.6 / (1.0 + vSoft * 6.0);
+  vC = c * far * exp(-z * uFogK) * 0.28 / (1.0 + vSoft * 10.0);
   gl_Position = projectionMatrix * mv;
 }`;
 export const SNOW_FS = /* glsl */`

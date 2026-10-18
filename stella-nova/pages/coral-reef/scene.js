@@ -182,7 +182,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   const LD = {
     shadow: profile ? profile.shadow : coarse ? 1024 : 2048,
     volScale: profile ? profile.vol.scale : coarse ? 0.4 : 0.5, volSteps: profile ? profile.vol.steps : coarse ? 14 : 30,
-    snow: profile ? profile.snow : coarse ? 2600 : 7000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
+    snow: profile ? profile.snow : coarse ? 1200 : 3000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
   };
   renderer.debug.checkShaderErrors = true;
   if (onShaderError) renderer.debug.onShaderError = (gl, program, vs, fs) => { try { onShaderError(shaderErrorText(gl, program, vs, fs)); } catch (e) { onShaderError(String(e)); } };
