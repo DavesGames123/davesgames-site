@@ -36,7 +36,8 @@ renderer.shadowMap.autoUpdate = false;
 export const scene = new THREE.Scene();
 export const envRT = studioEnvironment(renderer);
 scene.environment = envRT.texture;
-export const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 60);
+// near 0.015 m: the camera can come to 3.5 cm of a toe bone (frameBone)
+export const camera = new THREE.PerspectiveCamera(30, 1, 0.015, 60);
 export const key = new THREE.DirectionalLight(0xfff0dc, 2.1);
 key.castShadow = true;
 key.shadow.mapSize.set(COARSE ? 1024 : 2048, COARSE ? 1024 : 2048);
@@ -79,4 +80,4 @@ controls.rotateSpeed = COARSE ? 0.8 : 0.9; controls.zoomSpeed = 1.1; controls.pa
 controls.screenSpacePanning = true;
 controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 controls.autoRotateSpeed = 0.8;
-controls.minDistance = 0.08; controls.maxDistance = 14;
+controls.minDistance = 0.035; controls.maxDistance = 14;

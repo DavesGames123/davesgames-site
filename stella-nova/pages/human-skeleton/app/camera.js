@@ -12,6 +12,7 @@
 //    function fitDist / fitBox / fitView             camera distance
 //    function resize                                 canvas size, view offset
 //    function flyTo                                  start a camera flight
+//    function boneGoal / frameBone                   frame one bone, clear view
 //    function fitShadow                              key light frustum
 //    function ensureVisible                          pan to a covered bone
 // ============================================================================
@@ -24,6 +25,8 @@ import { boneCentre } from './select.js';
 import { card } from './card.js';
 import { setHover } from './pointer.js';
 import { panel } from './panel.js';
+import { drawn, pose } from './pick.js';
+import { FILL, FLY_S, frameDistance, chooseView } from '../focus.js';
 
 export const occ = { l: 0, r: 0, t: 0, b: 0 };
 // The screensaver sets o to the insets (CSS px) that keep the subject off
@@ -69,11 +72,35 @@ export function resize() {
   camera.updateProjectionMatrix();
   return true;
 }
+// A flight from the present pose (focus.js flightPose): the target in a
+// line, the direction on the great circle (or kept, with no dir), the
+// distance on a log scale, with a sine ease. The loop moves it.
 export function flyTo(tgt, dist, dur = 0.9, dir = null) {
   if (S.hov >= 0) setHover(-1);
-  const d0 = camera.position.clone().sub(controls.target);
-  S.fly = { t: 0, dur: REDUCED ? 0.01 : dur, t0: controls.target.clone(), t1: tgt.clone(), r0: d0.length(), r1: dist, u0: d0.normalize(), u1: dir ? dir.clone().normalize() : null };
+  const d0 = camera.position.clone().sub(controls.target), r0 = d0.length() || 1;
+  const u0 = d0.normalize().toArray(), u1 = dir ? dir.clone().normalize().toArray() : u0;
+  S.fly = { t: 0, dur: REDUCED ? 0.01 : dur, f: { t0: controls.target.toArray(), t1: tgt.toArray(), u0, u1, r0, r1: dist } };
   dirty();
+}
+// The camera goal that frames bone i: the target at the bone centre, the
+// distance that puts its bounding sphere at FILL of the short side of the
+// clear part, and a direction with a clear line of sight (focus.js
+// chooseView; the present direction when it is clear). The cast counts
+// the bones that the eye can see: with the others hidden, none.
+export function boneGoal(i) {
+  const b = S.bones[i], c = boneCentre(i);
+  const fy = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const d = frameDistance(b.r, fy, clearRect(), FILL, Math.max(controls.minDistance, b.r + camera.near * 1.5));
+  const u0 = camera.position.clone().sub(controls.target).normalize().toArray();
+  const alone = S.iso >= 0 && S.isoHide;
+  const cast = { n: S.n, mesh: k => S.pick[k] || null, pose, solid: k => !alone && drawn(k) && S.bones[k].type !== 'cartilage' };
+  const v = alone ? { u: u0, los: 0, path: 0 } : chooseView({ u0, t0: controls.target.toArray(), r0: camera.position.distanceTo(controls.target), c: c.toArray(), d, i, cast });
+  return { c, d, u: new THREE.Vector3(...v.u), los: v.los, path: v.path };
+}
+export function frameBone(i, dur = FLY_S) {
+  const g = boneGoal(i);
+  flyTo(g.c, g.d, dur, g.u);
+  return g;
 }
 const FRONT = new THREE.Vector3(0.32, 0.1, 1).normalize();
 const ABOVE = new THREE.Vector3(0, 1.25, 0.95).normalize();

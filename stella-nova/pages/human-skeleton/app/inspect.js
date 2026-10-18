@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import * as L from '../layout.js';
 import { camera, controls } from './stage.js';
 import { S } from './state.js';
-import { fitDist, flyTo, fitView } from './camera.js';
+import { fitDist, flyTo, fitView, frameBone } from './camera.js';
 import { refreshVisibility } from './visibility.js';
 import { boneCentre, setHi } from './select.js';
 import { showCard } from './card.js';
@@ -30,9 +30,8 @@ export function isolate(i) {
   for (const g of S.groups.values()) g.ghost.visible = true;
   setHi(i, 0, 0.18);
   refreshVisibility(false);
-  const b = S.bones[i];
-  flyTo(boneCentre(i), fitDist(b.r * 1.15), 1.0);
   showCard();
+  frameBone(i);
   syncRead();
 }
 export function exitIsolate(back) {

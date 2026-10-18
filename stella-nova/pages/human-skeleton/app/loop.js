@@ -15,6 +15,7 @@
 // ============================================================================
 import * as L from '../layout.js';
 import { REDUCED, clamp01, easeIO, ease } from './env.js';
+import { flightPose } from '../focus.js';
 import { renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, controls } from './stage.js';
 import { T, S } from './state.js';
 import { occ, occlusion, resize, fitShadow } from './camera.js';
@@ -41,10 +42,9 @@ export function frame(now) {
   if (S.fly) {
     const f = S.fly;
     f.t = Math.min(1, f.t + dt / f.dur);
-    const k = easeIO(f.t);
-    controls.target.lerpVectors(f.t0, f.t1, k);
-    const u = f.u1 ? f.u0.clone().lerp(f.u1, k).normalize() : camera.position.clone().sub(controls.target).normalize();
-    camera.position.copy(controls.target).addScaledVector(u, f.r0 + (f.r1 - f.r0) * k);
+    const p = flightPose(f.f, f.t);
+    controls.target.fromArray(p.target);
+    camera.position.fromArray(p.pos);
     if (f.t >= 1) S.fly = null;
     S.dirty = true;
   }

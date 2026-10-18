@@ -198,9 +198,44 @@ async function desktop() {
   ok(S.sel === -1 && S.iso === -1 && turned > 0.05, 'drag: an orbit drag that starts on a bone does not select it', `sel ${S.sel}, camera moved ${turned.toFixed(2)} m`);
   hs.fitView(true); env.step();
 
+  // frame: isolate flies the camera to frame the bone
+  env.RECTS.set('panel', () => env.rect(0, env.top, 340, env.stageH));
+  env.RECTS.set('card', el => el.hidden ? env.rect(0, 0, 0, 0) : env.rect(env.W - 348, env.top + 14, 332, 600));
+  const THREE = await import(T160);
+  const frameCheck = async (id, name) => {
+    const i = byId(id);
+    const start = hs.camera.position.clone(), t0 = performance.now();
+    hs.isolate(i);
+    const goal = hs.boneGoal(i);
+    const path = [hs.camera.position.clone()];
+    let frames = 0;
+    while (S.fly && frames < 400) { env.step(); frames++; path.push(hs.camera.position.clone()); }
+    for (let k = 0; k < 40; k++) env.step();
+    const secs = (performance.now() - t0) / 1000 - 40 * 0.0167;
+    const c = hs.boneCentre(i), tgtErr = hs.controls.target.distanceTo(c);
+    const dist = hs.camera.position.distanceTo(hs.controls.target);
+    const cr = hs.clearRect(), fy = Math.tan(THREE.MathUtils.degToRad(hs.camera.fov) / 2);
+    const short = Math.min(cr.x1 - cr.x0, cr.y1 - cr.y0);
+    const rpx = Math.tan(Math.asin(S.bones[i].r / dist)) / fy * cr.h / 2;
+    const p = c.clone().project(hs.camera), px = (p.x + 1) / 2 * cr.w, py = (1 - p.y) / 2 * cr.h;
+    const off = Math.hypot(px - (cr.x0 + cr.x1) / 2, py - (cr.y0 + cr.y1) / 2);
+    const steps = path.slice(1).map((q, k) => q.distanceTo(path[k]));
+    const mean = steps.reduce((a, b) => a + b, 0) / Math.max(1, steps.length), peak = Math.max(...steps);
+    ok(tgtErr < 1e-6 && Math.abs(2 * rpx / short - 0.6) < 0.01 && off < 1.5, `frame ${name}: the orbit target is the bone centre and its sphere fills 0.6 of the clear short side`,
+      `target off ${tgtErr.toExponential(1)} m, fill ${(2 * rpx / short).toFixed(3)}, centre off ${off.toFixed(2)} px, clear ${cr.x0.toFixed(0)}..${cr.x1.toFixed(0)} x ${cr.y0.toFixed(0)}..${cr.y1.toFixed(0)}`);
+    ok(secs > 0.8 && secs < 1.2 && peak / mean < 2, `frame ${name}: the glide takes 0.8 to 1.2 s with no lunge`, `${secs.toFixed(2)} s, ${frames} frames, peak step ${(peak / mean).toFixed(2)} x the mean, moved ${start.distanceTo(hs.camera.position).toFixed(2)} m`);
+    return goal;
+  };
+  await frameCheck('femur-l', 'femur');
+  const g6 = await frameCheck('t6', 'T6 (behind the ribs)');
+  ok(g6.los === 0, 'frame T6: the camera takes a direction with no bone on the line of sight', `los ${g6.los}, path ${g6.path}`);
+  await frameCheck('dpt5-r', 'distal phalanx of the little toe');
+  hs.exitIsolate(true);
+  for (let k = 0; k < 90; k++) env.step();
+  hs.fitView(true); env.step();
+
   // WebXR: the controller ray pick runs the same mesh pick in scene space
   const xr = await import(pathToFileURL(join(HERE, 'app/xr.js')).href);
-  const THREE = await import(T160);
   const c = hs.camera.position.clone(), f = new THREE.Vector3(...S.bones[byId('femur-r')].c);
   const xi = xr.pickRay(new THREE.Ray(c, f.clone().sub(c).normalize()));
   ok(S.bones[xi]?.id === 'femur-r', 'xr: the controller ray at the femur picks it on the mesh', S.bones[xi]?.id || 'none');

@@ -62,7 +62,7 @@ import * as THREE from 'three';
 import { $, TYPE_NAME, SIDE_NAME, MODE_NAME } from './app/env.js';
 import { canvas, camera, controls, scene } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
-import { fitView, saverOcc } from './app/camera.js';
+import { fitView, saverOcc, boneGoal, frameBone, clearRect } from './app/camera.js';
 import { loopHook } from './app/loop.js';
 import { pickAt } from './app/pick.js';
 import { loadAll } from './app/load.js';
@@ -79,7 +79,7 @@ import { buildDelays, liftDir, liftAmount, liftProfile, liftFit, neighbours } fr
 // debug and headless checks
 window.__hs = {
   S, T, select, clearSelection, isolate, exitIsolate, setMode, explode, reconstruct, setAmount, toggleRegionExplode, focusRegion, focusBone,
-  setTheme, setShow, setRegionHidden, pickAt, step, camera, controls, setOpen, fitView,
+  setTheme, setShow, setRegionHidden, pickAt, step, camera, controls, setOpen, fitView, boneGoal, frameBone, clearRect, boneCentre,
   screenOf(id) {
     const b = typeof id === 'number' ? S.bones[id] : S.P.byId.get(id);
     const p = boneCentre(b.i).project(camera);
