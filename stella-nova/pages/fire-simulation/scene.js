@@ -32,24 +32,25 @@ export function makeSchema(PHONE) {
         random: { weights: { mixed: 3, static: 2, orbit: 2, sweep: 2, bob: 1 } } },
       { key: 'speed', type: 'range', label: 'Motion speed', min: 0.03, max: 0.4, step: 0.01, value: 0.12, unit: 'Hz', rebuild: true },
       { key: 'floor', type: 'toggle', label: 'Floor burns', value: false, random: false },
-      { key: 'cells', type: 'range', label: 'Cells', min: 20000, max: PHONE ? 60000 : 140000, step: 5000, value: PHONE ? 40000 : 100000, phone: 40000, rebuild: true, random: { min: PHONE ? 30000 : 60000, max: PHONE ? 50000 : 110000 } },
+      { key: 'cells', type: 'range', label: 'Cells', min: 8000, max: PHONE ? 60000 : 160000, step: 2000, value: PHONE ? 20000 : 48000, phone: 20000, rebuild: true, random: { min: PHONE ? 16000 : 36000, max: PHONE ? 28000 : 64000 } },
       { key: 'aspect', type: 'range', label: 'Width', min: 0.6, max: 2.2, step: 0.05, value: 1.6, unit: '× height', rebuild: true, random: { min: 0.9, max: 2 } },
       { type: 'buttons', key: 'add', label: 'Add burner', action: 'add', items: BURNERS.map(b => ({ id: b, label: b[0].toUpperCase() + b.slice(1) })) },
       { type: 'button', key: 'clear', label: 'Put out the burners', action: 'clear' },
     ] },
     { id: 'flame', label: 'Flame', hint: 'Drag a burner to move it and fan the flame.', controls: [
       { key: 'lift', type: 'range', label: 'Buoyant lift', min: 0.5, max: 8, step: 0.1, value: 3, unit: 'm/s', random: { min: 1.5, max: 6 } },
-      { key: 'fireCool', type: 'range', label: 'Fire cooling', min: 0.3, max: 3, step: 0.05, value: 1.2, unit: '1/s', random: { min: 0.6, max: 2.2 } },
+      { key: 'fireCool', type: 'range', label: 'Fire cooling', min: 0.3, max: 3, step: 0.05, value: 1.8, unit: '1/s', random: { min: 1.2, max: 2.4 } },
       { key: 'smokeCool', type: 'range', label: 'Smoke cooling', min: 0.05, max: 1.5, step: 0.05, value: 0.3, unit: '1/s', random: { min: 0.2, max: 0.8 } },
       { key: 'accel', type: 'range', label: 'Acceleration', min: 1, max: 15, step: 0.5, value: 6, unit: '1/s' },
       { key: 'torch', type: 'range', label: 'Torch jet', min: 0.5, max: 6, step: 0.1, value: 2.5, unit: 'm/s' },
       { key: 'wind', type: 'range', label: 'Side wind', min: -1.5, max: 1.5, step: 0.05, value: 0, unit: 'm/s', random: { dist: 'normal', mean: 0, sd: 0.3, min: -1, max: 1 } },
     ] },
-    { id: 'swirl', label: 'Swirls', controls: [
-      { key: 'prob', type: 'range', label: 'Swirl probability', min: 0, max: 100, step: 1, value: 50, random: { min: 0, max: 100 } },
+    { id: 'swirl', label: 'Turbulence', hint: 'A calm core at the fuel, flicker higher up. Raise Turbulence for a wilder flame.', controls: [
+      { key: 'turb', type: 'range', label: 'Turbulence', min: 0, max: 1, step: 0.05, value: 0.25, random: { min: 0.1, max: 0.45 } },
+      { key: 'prob', type: 'range', label: 'Swirl probability', min: 0, max: 100, step: 1, value: 4, random: { min: 0, max: 20 } },
       { key: 'swirlR', type: 'range', label: 'Swirl radius', min: 0.02, max: 0.1, step: 0.005, value: 0.05, unit: 'm', random: { min: 0.03, max: 0.08 } },
-      { key: 'swirlW', type: 'range', label: 'Swirl strength', min: 5, max: 40, step: 1, value: 20, unit: 'rad/s', random: { min: 10, max: 32 } },
-      { key: 'swirlLife', type: 'range', label: 'Swirl life', min: 0.3, max: 3, step: 0.1, value: 1, unit: 's' },
+      { key: 'swirlW', type: 'range', label: 'Swirl strength', min: 2, max: 30, step: 1, value: 6, unit: 'rad/s', random: { min: 3, max: 12 } },
+      { key: 'swirlLife', type: 'range', label: 'Swirl life', min: 0.3, max: 3, step: 0.1, value: 1.5, unit: 's' },
       { key: 'showSwirls', type: 'toggle', label: 'Show swirls', value: false, random: { p: 0.15 } },
     ] },
     { id: 'look', label: 'Look', controls: [
@@ -61,9 +62,9 @@ export function makeSchema(PHONE) {
       K.themeControl('night', { random: { pick: ['night', 'abyss', 'ember', 'violet', 'forest', 'slate'] } }),
     ] },
     { id: 'solver', label: 'Solver', open: false, random: false, controls: [
-      { key: 'iters', type: 'range', label: 'Pressure iterations', min: 4, max: 40, step: 1, value: 10 },
+      { key: 'iters', type: 'range', label: 'Pressure V-cycles', min: 1, max: 4, step: 1, value: 2, phone: 1 },
       { key: 'gravity', type: 'range', label: 'Gravity', min: -10, max: 0, step: 0.1, value: 0, unit: 'm/s²' },
-      { type: 'note', text: 'Staggered grid fluid with buoyant temperature, cooling and random swirls (Müller, Ten Minute Physics 21).' },
+      { type: 'note', text: 'Staggered grid on the GPU (WebGPU, else WebGL2, else CPU): multigrid pressure, MacCormack heat, buoyant lift (Müller, Ten Minute Physics 21), vorticity confinement in the cooling plume. The frame governor lowers the cell count under load and raises it again.' },
     ] },
   ] };
 }
@@ -104,6 +105,6 @@ export function sceneConfig(st, r) { return { cells: st.cells, aspect: st.aspect
 export function applyParams(S, st) {
   const C = S.cfg;
   C.lift = st.lift; C.fireCooling = st.fireCool; C.smokeCooling = st.smokeCool; C.accel = st.accel; C.torch = st.torch; C.wind = st.wind;
-  C.swirlProbability = st.prob; C.swirlMaxRadius = st.swirlR; C.swirlOmega = st.swirlW; C.swirlLife = st.swirlLife;
+  C.swirlProbability = st.prob; C.swirlMaxRadius = st.swirlR; C.swirlOmega = st.swirlW; C.swirlLife = st.swirlLife; C.turbulence = st.turb;
   C.floor = st.floor; C.iters = st.iters; C.gravity = st.gravity;
 }

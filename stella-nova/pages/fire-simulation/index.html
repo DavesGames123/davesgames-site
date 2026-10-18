@@ -11,34 +11,45 @@
   ═══════════════════════════════════════════════════════════════════════════
    FIRE SIMULATION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Fire from the Eulerian fluid solver: a burning obstacle releases heat and smoke that rise and swirl.
+   Fire from an Eulerian fluid solver on the GPU: a burner releases heat
+   that rises as a steady flame, flickers higher up and turns to smoke.
 
-   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #21.
-   Upstream file: tenMinutePhysics/21-fire.html in
-   https://github.com/matthias-research/pages (MIT License (notice kept above)).
-   Video tutorial: https://youtu.be/RsgmS3ZxDtc
+   CREDIT. The fire model follows Matthias Müller, Ten Minute Physics #21
+   (buoyant lift, fire and smoke cooling, the burning ring and floor,
+   swirls). Upstream file: tenMinutePhysics/21-fire.html in
+   https://github.com/matthias-research/pages (MIT License; the port with
+   its notice is in upstream.js). Video tutorial: https://youtu.be/RsgmS3ZxDtc
 
-   OUR ADDITIONS (davesgames.io, not upstream): burner kinds (disc, log,
-   torch) and motions, wind, blackbody flame palettes and colour maps, glow,
-   the renderer, the sim kit GUI, the randomizer and the screensaver.
+   OUR ADDITIONS (davesgames.io, not upstream): the GPU solver (WebGPU
+   compute, WebGL2 fallback, CPU fallback) with multigrid pressure,
+   MacCormack heat, vorticity confinement and a hot laminar core; the
+   frame governor; burner kinds (disc, log, torch) and motions, wind,
+   blackbody flame palettes and colour maps, glow, the renderer, the sim
+   kit GUI, the randomizer and the screensaver.
 
    FILES
-     solver.js   upstream Fluid (MIT notice kept) + burners and wind
-     scene.js    sim kit schema, guard, flame palettes, scene config
-     palette.js  flame colour: Planck locus, T^4, ACES tone map, smoke
-     render.js   Canvas 2D renderer
-     main.js     page controller: sim kit GUI, loop, pointer
-     saver.js    screensaver shots (sim kit director)
-     tests.mjs   node tests (no browser)
+     solver.js    the fire model, CPU reference (and fallback)
+     gpu.js       GPU engine: pass plan, WebGPU and WebGL2 backends
+     wgsl.js      WebGPU compute and render shaders
+     glsl.js      WebGL2 fragment shaders (same passes)
+     governor.js  frame governor: cell count down under load, back up
+     upstream.js  the v1 CPU port of 21-fire.html (MIT), test baseline
+     scene.js     sim kit schema, guard, flame palettes, scene config
+     palette.js   flame colour: Planck locus, T^4, ACES tone map, smoke
+     render.js    Canvas 2D: overlay (burners, swirls) and the CPU field
+     main.js      page controller: engine, GUI, loop, pointer, governor
+     saver.js     screensaver shots (sim kit director)
+     tests.mjs    node tests (no browser); tests-dom.mjs (jsdom boot)
    Shared: ../../widgets/sim-kit/, ../../widgets/ten-minute-physics/kit.js.
 
    GREP MAP
      grep -n 'export function makeSchema'  scene.js   every control
      grep -n 'const SHOTS'                 saver.js   the screensaver shots
-     grep -n 'updateFire('                 solver.js  the upstream fire step
+     grep -n 'export function step'        solver.js  one step, pass order
+     grep -n 'export function makePlan'    gpu.js     the GPU pass list
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Fire from the Eulerian fluid solver: a burning obstacle releases heat and smoke that rise and swirl. By Matthias Müller, Ten Minute Physics.">
+<meta name="description" content="Fire from an Eulerian fluid solver on the GPU: a steady flame at the burner that flickers higher up and turns to smoke. After Matthias Müller, Ten Minute Physics.">
 <script src="../../widgets/ten-minute-physics/kit.js"></script>
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">

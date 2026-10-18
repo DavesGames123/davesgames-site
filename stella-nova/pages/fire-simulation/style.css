@@ -1,13 +1,15 @@
 /* ===========================================================================
    FIRE SIMULATION  ·  style.css
    ---------------------------------------------------------------------------
-   The page is one full-window canvas under the sim kit GUI
-   (widgets/sim-kit/sim-kit.css). The theme colours are --sk-* tokens.
+   The page is one full-window GPU canvas (#view) and a 2D overlay canvas
+   for burners and swirls (#overlay, no pointer events) under the sim kit
+   GUI (widgets/sim-kit/sim-kit.css). The theme colours are --sk-* tokens.
    Our file (davesgames.io); the upstream demo's <style> block is gone with
    its raw controls.
    =========================================================================== */
 html, body { margin: 0; height: 100%; background: var(--sk-bg); overflow: hidden; }
 #view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; cursor: grab; }
+#overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; pointer-events: none; }
 
 /* Site rule: an element with the hidden attribute stays hidden, also when
    a rule above gives it a display value. */
