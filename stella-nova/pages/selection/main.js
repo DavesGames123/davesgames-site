@@ -992,6 +992,14 @@
       return { canvas: cv, warmupMs: 1500 };
     }
   };
-  window.__snSelection = { S: S, ents: function () { return ents; }, loadLesson: loadLesson, toScreen: toScreen, zoomAt: zoomAt };
+  // Test hook (tests.mjs). setEnts replaces the entity list for a scripted
+  // scene. No page code reads this object.
+  window.__snSelection = {
+    S: S, ents: function () { return ents; }, setEnts: function (a) { ents = a; },
+    make: make, loadLesson: loadLesson, toScreen: toScreen, toWorld: toWorld, zoomAt: zoomAt,
+    doClick: doClick, doBox: doBox, clickWinner: clickWinner, boxWinners: boxWinners, live: live,
+    TYPES: TYPES, LESSONS: LESSONS, CELL: CELL, SPLIT_IN: SPLIT_IN, SPLIT_OUT: SPLIT_OUT,
+    view: function () { return { W: W, H: H, Y0: Y0, Y1: Y1 }; }
+  };
   boot();
 })();
