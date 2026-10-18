@@ -27,6 +27,7 @@ import { wireXR } from '../watch-movement/xr.js';
 import * as Gen from './generator.js';
 import { caseDims } from './dims.js';
 import { buildCase } from './cases/index.js';
+import { createExplodeBar } from '../../lib/explode-bar.js';
 
 // every calibre's scene is ../watch-movement/scenes/<id>.js
 const loadScene = id => import(`../watch-movement/scenes/${id}.js`);
@@ -398,6 +399,9 @@ function plateAnchor(objs, keys = []) {
 const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
 
 let saverOn = false;
+// the Explode pill at the top of the view (lib/explode-bar.js), hidden in
+// the saver (made here, after saverOn)
+createExplodeBar({ host: $('stage'), get: () => S.explodeTarget, set: setExplode, saver: () => saverOn, steps: [0, 0.45, 0.85] });
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;

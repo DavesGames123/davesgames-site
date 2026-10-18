@@ -26,6 +26,7 @@ import { createStage, ease } from './stage.js';
 import { createCards, esc } from './cards.js';
 import { wireXR } from './xr.js';
 import * as G from './geom.js';
+import { createExplodeBar } from '../../lib/explode-bar.js';
 
 const SCENES = {
   lever: () => import('./scenes/lever.js'),
@@ -322,6 +323,9 @@ requestAnimationFrame(frame);
 // step holds seconds/4 (at least 8 s). calm (1 = slowest) slows the orbit.
 // No URL hash writes while it plays. No exit(): the shell reloads the page.
 let saverOn = false;
+// the Explode pill at the top of the view (lib/explode-bar.js), hidden in
+// the saver (made here, after saverOn)
+createExplodeBar({ host: $('stage'), get: () => S.explodeTarget, set: setExplode, saver: () => saverOn, steps: [0, 0.45, 0.9] });
 // escapement of each calibre, from the calibre headers and escapement.js imports
 const ESC_NAME = {
   lever: 'Swiss lever', automatic: 'Swiss lever', tourbillon: 'Swiss lever in a one-minute cage',
