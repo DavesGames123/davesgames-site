@@ -46,6 +46,15 @@ export function exposureStep(prev, avgLog2, dt, s = POST_DEFAULTS) {
   return Math.exp(Math.log(prev) + (Math.log(tgt) - Math.log(prev)) * (1 - Math.exp(-dt * rate)));
 }
 
+// NIGHT: the JS twin of post.wgsl scotopic (the Purkinje shift by the
+// adapted exposure e, before the EV)
+export function scotopicMix(c, e) {
+  const u = Math.min(Math.max((e - 2.5) / 6.5, 0), 1), s = u * u * (3 - 2 * u) * 0.8;
+  if (s <= 0) return c.slice();
+  const rod = c[0] * 0.1 + c[1] * 0.5 + c[2] * 0.4, t = [0.928, 1.004, 1.179];
+  return c.map((v, i) => v + (rod * t[i] - v) * s);
+}
+
 export function halton(i, b) {
   let f = 1, r = 0;
   while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); }

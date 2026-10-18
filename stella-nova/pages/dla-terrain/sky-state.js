@@ -59,6 +59,7 @@
 //    "export function sunTransmittance", "function presetVec",
 //    "export function skyState", "function lightning",
 //    "export function writeSkyGlobals", "export function airTemps",
+//    "export function exposureHintOf", "export function nightLights",
 //    "function composeSky", "export function weatherEnv",
 //    "export function createDriver", "function airMassAt",
 //    "function upperWindAt", "export function lightningCells",
@@ -410,8 +411,8 @@ function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
     valleyFog, hourDeg,
     flash, bolt: flashObj.bolt,
     // a linear exposure that maps this light to mid grey; night is kept
-    // darker than day (capped), so a moonlit scene still reads as night
-    exposureHint: Math.min(0.55 / ((amb[0] + 2 * amb[1] + amb[2]) / 4 * 0.9 + 0.02 * sunColor[1] + 1e-4), 45) * (0.35 + 0.65 * day),
+    // darker than day, so a moonlit scene still reads as night
+    exposureHint: exposureHintOf(amb, sunColor, day),
   };
   // the names of gpu/globals.js packGlobals (CORE)
   Object.assign(out, {
@@ -420,6 +421,54 @@ function composeSky(tod, id, season, latitude, t, wx, prev, dt, extra) {
     storminess: wx.storm,
   });
   return out;
+}
+
+// NIGHT (the user: "make nighttime actually make sense"). The exposure
+// hint (main.js caps the auto exposure at 1.5 x it at night). By day it
+// maps the light to mid grey (at most 45). At night the eye adapts only
+// part of the way: NIGHT_K / sqrt(light), so a full moon night is about an
+// eighth of the day and a new moon night darker again, never a day-bright
+// night (before, the cap of 45 x 0.35 lifted a full moon night to a third
+// of the day). day 0..1 blends the two in log space through twilight.
+export const NIGHT_K = 1.24;
+export function exposureHintOf(amb, sunColor, day) {
+  const a = (amb[0] + 2 * amb[1] + amb[2]) / 4 * 0.9 + 0.02 * sunColor[1] + 1e-4;
+  const hDay = Math.min(0.55 / a, 45), hNight = Math.min(0.55 * NIGHT_K / Math.sqrt(a), 45);
+  return Math.exp(Math.log(hNight) + (Math.log(hDay) - Math.log(hNight)) * clamp(day, 0, 1));
+}
+
+// NIGHT: the night lights of CELESTIAL (world/celestial-gen.js, frame
+// celestial = { lights, eclipse }; NOTES.md CELESTIAL -> ATMO) on a sky
+// state s: lights[0] (the brightest) becomes the globals moon (moonDir,
+// moonScale: the moonlight term of every shader), the moonlight in the
+// ambient is taken from the list (the old moon of composeSky out, every
+// light in, a gas giant tints it), the sun is dimmed by the eclipse, and
+// the exposure hint follows. No celestial: s as it is.
+export function nightLights(s, cel) {
+  if (!s || !cel || !Array.isArray(cel.lights)) return s;
+  const wx = s.wx || {};
+  const overcast = smooth(0.55, 1.0, wx.cover ?? 0) * 0.9 + clamp((wx.fog ?? 0) * 120, 0, 0.6);
+  const direct = Math.max(0.15, 1 - overcast);
+  const up = (d) => smooth(-0.02, 0.05, d[1]);
+  // the old moon part of the ambient (composeSky)
+  const Tm = sunTransmittance(s.moonDir[1], 0.2, wx.mie ?? 1);
+  const TmL = 0.2126 * Tm[0] + 0.7152 * Tm[1] + 0.0722 * Tm[2];
+  const amb = s.ambient.map((a, c) => Math.max(0, a - s.moonScale * 0.35 * [0.55, 0.65, 0.85][c] * mix(TmL, Tm[c], 0.2)));
+  for (const l of cel.lights) {
+    if (!l || !l.dir || !(l.irradiance > 0)) continue;
+    const E = l.irradiance * up(l.dir) * direct, col = l.color || [1, 1, 1];
+    for (let c = 0; c < 3; c++) amb[c] += E * 0.35 * mix([0.55, 0.65, 0.85][c], [0.55, 0.65, 0.85][c] * col[c], 0.5);
+  }
+  const L0 = cel.lights.find((l) => l && l.dir && l.irradiance > 0);
+  const ecl = 1 - clamp(cel.eclipse || 0, 0, 1);
+  const sunColor = s.sunColor.map((x) => x * ecl);
+  const day = smooth(-0.10, 0.45, s.sunDir[1]);
+  return {
+    ...s, ambient: amb, sunColor, sunScale: s.sunScale * ecl, sunIlluminance: s.sunScale * ecl,
+    moonDir: L0 ? L0.dir : s.moonDir, moonScale: L0 ? L0.irradiance * up(L0.dir) * direct : 0,
+    moonIlluminance: L0 ? L0.irradiance * up(L0.dir) * direct : 0,
+    exposureHint: exposureHintOf(amb, sunColor, day),
+  };
 }
 
 // Copy the SKY fields into the Globals Float32Array. CORE owns the rest

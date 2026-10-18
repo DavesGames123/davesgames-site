@@ -215,11 +215,26 @@ fn agxOut(v: vec3f) -> vec3f {
   return outset * v;
 }
 
+// NIGHT (the user: "make nighttime actually make sense"): the scotopic
+// shift. In dim light the rods take over: colours fade to a grey that is
+// a little blue (the Purkinje shift; blue-green looks brighter than red).
+// The weight comes from the adapted exposure (ke0, before the EV): none
+// under 2.5 (day and dusk), most over 9 (a moonlit night). It is not a
+// blue tint over a day image: it takes the colour out. render/post.js
+// scotopicMix is the JS twin (tests/night.test.mjs).
+fn scotopic(c: vec3f, ke0: f32) -> vec3f {
+  let s = smoothstep(2.5, 9.0, ke0) * 0.8;
+  if (s <= 0.0) { return c; }
+  let rod = dot(c, vec3f(0.1, 0.5, 0.4));
+  return mix(c, rod * vec3f(0.928, 1.004, 1.179), s);
+}
+
 // tA = the resolved scene, tB = bloom level 0, tC = exposure (1 x 1)
 @fragment fn fs_composite(v: VOut) -> @location(0) vec4f {
   var c = textureSampleLevel(tA, sL, v.uv, 0.0).rgb;
   var ke = textureLoad(tC, vec2i(0), 0).r;
   if (P.p3.w > 0.0) { ke = P.p3.w; }
+  let ke0 = ke;
   ke = ke * exp2(P.p0.y);
   {
     // light sharpen (a cross unsharp mask in tonemapped space, clamped):
@@ -233,6 +248,7 @@ fn agxOut(v: vec3f) -> vec3f {
   }
   let b = textureSampleLevel(tB, sL, v.uv, 0.0).rgb * P.p6.x;
   c = mix(c, b, P.p0.x);
+  c = scotopic(c, ke0);
   var e = textureLoad(tC, vec2i(0), 0).r;
   if (P.p3.w > 0.0) { e = P.p3.w; }
   c = c * e * exp2(P.p0.y) * P.p3.rgb;

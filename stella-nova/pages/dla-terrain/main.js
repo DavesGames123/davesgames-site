@@ -725,6 +725,9 @@ function skyNow(dt) {
   } else {
     skyState = SkyStub.skyState(app.tod, app.weatherId, app.season, app.latitude, app.skyT);
   }
+  // NIGHT: CELESTIAL's night lights (app.celNow, set by the last frame)
+  // take the place of the old moon (sky-state.js nightLights)
+  if (app.skyLib && app.skyLib.nightLights && app.celNow) skyState = app.skyLib.nightLights(skyState, app.celNow);
   return skyState;
 }
 function frameGlobals(m, st, dt) {
