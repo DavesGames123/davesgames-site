@@ -87,6 +87,7 @@ ok(K.sim.ropes.length === 4 && K.sim.ropes.every((r, i) => r.kind === 'tether' &
   scene.traverse(o => { if (/cage|tms|umbilical/i.test(o.name)) bad.push(o.name); if (o.isMesh && !/^rov-cable-tether/.test(o.name)) { const w = new THREE.Vector3(); o.getWorldPosition(w); if (w.y < 55 - 12) bad.push(o.name || o.geometry.type); } });
   ok(bad.length === 0 && K.tubes.length === 4, 'cables: no cage mesh in the scene graph (in the water only the 4 tether tubes)', bad.join(',') || `${K.group.children.length} children`);
   ok(!('cage' in K.sim), 'cables: the sim has no cage');
+  ok(K.group.children.every(m => /^rov-cable-tether/.test(m.name)), 'cables: no ship mesh: the cable group holds only the tether tubes', K.group.children.map(m => m.name || m.type).join(','));
 }
 ok(topRise > 5 && topFar < RISE + 0.5, 'cables: each tether rises from its ROV toward the ship (top over the ROV: the sheave in the shallows, else RISE m up)', `least rise ${f3(topRise)} m, longest ${f3(topFar)} m`);
 ok(K.sim.leash === LEASH && LEASH === 180, 'cables: the leash stays 180 m');

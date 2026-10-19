@@ -131,7 +131,7 @@ export function createCableSim({ sdf, profile = 'desktop', surfaceY = 55, count 
   return S;
 }
 
-// The three part: one tube mesh per tether and the ship (no cage).
+// The three part: one tube mesh per tether (no cage, no ship mesh).
 export function createCables(THREE, o = {}) {
   const profile = o.profile || 'desktop', q = CABLE_Q[profile] || CABLE_Q.phone, surfaceY = o.surfaceY ?? 55;
   const origin = o.origin || (() => [0, 0]);
@@ -143,14 +143,9 @@ export function createCables(THREE, o = {}) {
   const tex = new THREE.DataTexture(braid, 64, 64, THREE.RGBAFormat);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true; tex.needsUpdate = true;
   const matEx = new THREE.MeshStandardMaterial({ color: 0xd8a21c, roughness: 0.65, metalness: 0, map: tex });
-  // the ship: a dark hull with lights and a moon pool
-  const lampMat = new THREE.MeshBasicMaterial({ color: 0xffe2a8 });
-  const shipG = new THREE.Group(), hullMat = new THREE.MeshStandardMaterial({ color: 0x0a0d10, roughness: 1, metalness: 0 });
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(52, 5, 13), hullMat); hull.position.y = -2.4; shipG.add(hull);
-  const keel = new THREE.Mesh(new THREE.BoxGeometry(40, 1.6, 6), hullMat); keel.position.y = -5.4; shipG.add(keel);
-  const pool = new THREE.Mesh(new THREE.BoxGeometry(5, 0.4, 5), new THREE.MeshBasicMaterial({ color: 0x182028 })); pool.position.y = -5.0; shipG.add(pool);   // the moon pool
-  for (let i = 0; i < 6; i++) { const l = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), lampMat); l.position.set(-20 + i * 8, -4.9, (i & 1 ? 1 : -1) * 6.2); shipG.add(l); }
-  group.add(shipG);
+  // no ship mesh: the user said "remove the central submarine object/boat
+  // object that's not right". The ship stays as an invisible anchor point
+  // in the sim (sim.ship), where the tethers go up into the dark.
   const tubes = [];
   const scratch = new Float64Array((q.n + 1) * 3);
   function tubeFor(i, kind) {
@@ -185,14 +180,13 @@ export function createCables(THREE, o = {}) {
         T.tube.update(scratch, n);
         const a = T.mesh.geometry.attributes; a.position.needsUpdate = true; a.normal.needsUpdate = true; a.uv.needsUpdate = true;
       });
-      shipG.position.set(sim.ship[0] - O[0], surfaceY, sim.ship[2] - O[1]);
       return K;
     },
     cost: () => cableCost(profile),
     dispose() {
       if (group.parent) group.parent.remove(group);
       group.traverse(m => { if (m.geometry) m.geometry.dispose(); });
-      for (const m of [matEx, lampMat, hullMat]) m.dispose();
+      matEx.dispose();
       tex.dispose();
     },
   };
