@@ -421,7 +421,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // material would cast the full grown shape
   const depthU = () => ({ uTime: U.uTime, uCur: U.uCur, uPartA: U.uPartA, uPartB: U.uPartB, uPartC: U.uPartC, uPartW: U.uPartW, uSwayK: U.uSwayK });
   const coralDepth = [0, 1].map(c => new THREE.ShaderMaterial({
-    glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_DEPTH_VS, fragmentShader: SH.DEPTH_FS, side: THREE.DoubleSide,
+    glslVersion: THREE.GLSL3, vertexShader: SH.CORAL_DEPTH_VS, fragmentShader: SH.CORAL_DEPTH_FS, side: THREE.DoubleSide,
     uniforms: Object.assign(depthU(), { uCoarse: { value: c } }),
   }));
   const polypDepth = {};

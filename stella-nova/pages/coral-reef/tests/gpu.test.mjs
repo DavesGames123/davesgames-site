@@ -176,7 +176,7 @@ function runFrames(f, n = 6) {
   const SH = await import('../shaders.js');
   const BL = await import('../bloom.js');
   const progs = [
-    ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['coral-depth', SH.CORAL_DEPTH_VS, SH.DEPTH_FS, false], ['polyp-depth', SH.POLYP_DEPTH_VS, SH.DEPTH_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
+    ['coral', SH.CORAL_VS, SH.CORAL_FS, false], ['polyp', SH.POLYP_VS, SH.POLYP_FS, false], ['coral-depth', SH.CORAL_DEPTH_VS, SH.CORAL_DEPTH_FS, false], ['polyp-depth', SH.POLYP_DEPTH_VS, SH.DEPTH_FS, false], ['rock', SH.ROCK_VS, SH.ROCK_FS, false],
     ['sand', SH.SURF_VS, SH.SAND_FS, false], ['snow', SH.SNOW_VS, SH.SNOW_FS, false], ['caustic', SH.CAUSTIC_VS, SH.CAUSTIC_FS, true],
     ['volume', SH.FULL_VS, SH.VOL_FS, true], ['volume-history', SH.FULL_VS, SH.VOL_TAA_FS, true], ['composite', SH.FULL_VS, SH.COMP_FS, true], ['luminance', SH.FULL_VS, SH.LUM_FS, true],
     ['bloom-pre', SH.FULL_VS, BL.BLOOM_PRE_FS, true], ['bloom-down', SH.FULL_VS, BL.BLOOM_DOWN_FS, true], ['bloom-up', SH.FULL_VS, BL.BLOOM_UP_FS, true],

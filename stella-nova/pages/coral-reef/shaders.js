@@ -51,7 +51,7 @@
 //    shadow maps ........... "float shadowAt", "float shadowTap"
 //    coral vertex .......... "const CORAL_POS"
 //    coral surface ......... "export const CORAL_VS"
-//    coral shadow depth .... "export const CORAL_DEPTH_VS", "export const DEPTH_FS"
+//    coral shadow depth .... "export const CORAL_DEPTH_VS", "export const DEPTH_FS", "export const CORAL_DEPTH_FS"
 //    polyp vertex .......... "const POLYP_POS"
 //    polyps ................ "export const POLYP_VS"
 //    polyp shadow depth .... "export const POLYP_DEPTH_VS"
@@ -423,17 +423,24 @@ export function coralSwayJS(x, y, z, gy, lvl, t, cur = [1, 0], swayK = 1, out = 
 // parent along the branch (position + C.xyz x (1 - g)), so a branch tip
 // extends smoothly; it does not pop out along the normals (the user: "grows
 // in a speckly-kind of way instead of an organic natural kind of way").
-// False: the coarse mesh of a focus colony (B.y < 0) does not draw.
-// CORAL_VS and the shadow depth pass (CORAL_DEPTH_VS) use the same
-// function, so the shadow follows the surface that shows. ax: the branch
-// direction (parent to particle, unit; 0 for a root).
+// coralHide 1: the coarse mesh of a focus colony (B.y < 0) does not draw.
+// The vertex stays in place and the fragment shader discards where the
+// interpolated vHide passes 0.5: a coarse face that joins a hidden colony
+// and a shown one (a fused contact) is cut half way. (A vertex sent out of
+// the clip box made such a face a long thin spike: the user said "the
+// fused region where two corals intersect often looks like it's covered
+// in mesh errors considerably".) CORAL_VS and the shadow depth pass
+// (CORAL_DEPTH_VS, CORAL_DEPTH_FS) use the same function, so the shadow
+// follows the surface that shows. ax: the branch direction (parent to
+// particle, unit; 0 for a root).
 const CORAL_POS = /* glsl */`
+float coralHide = 0.0;
 bool coralWorld(float gid, out vec4 w, out vec4 A, out vec4 B, out float age, out float tip, out vec3 ax) {
   ivec2 tc = partCoord(gid);
   A = texelFetch(uPartA, tc, 0); B = texelFetch(uPartB, tc, 0);
   vec4 C = texelFetch(uPartC, tc, 0);
   w = vec4(0.0); age = 0.0; tip = 0.0; ax = vec3(0.0);
-  if (uCoarse > 0.5 && B.y < 0.0) return false;
+  coralHide = uCoarse > 0.5 && B.y < 0.0 ? 1.0 : 0.0;
   age = uTime - B.x;
   float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
   vec3 p = position + C.xyz * (1.0 - g);
@@ -451,13 +458,14 @@ ${PART}
 in float aGid;
 uniform float uCount, uMode, uCoarse;
 out vec3 vN, vW, vL, vNat, vAx;
-out float vT, vGlow, vTip;
+out float vT, vGlow, vTip, vHide;
 ${CORAL_POS}
 void main() {
   vec4 w, A, B;
   float age, tip;
   vec3 ax;
-  if (!coralWorld(aGid, w, A, B, age, tip, ax)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); vN = vec3(0.0, 1.0, 0.0); vW = vec3(0.0); vL = vec3(0.0); vNat = vec3(0.0); vAx = vec3(0.0); vT = 0.0; vGlow = 0.0; vTip = 0.0; return; }
+  coralWorld(aGid, w, A, B, age, tip, ax);
+  vHide = coralHide;
   vAx = ax;
   vW = w.xyz; vL = position;
   vN = normalize(mat3(modelMatrix) * normal);
@@ -476,12 +484,14 @@ ${PART}
 in float aGid;
 uniform float uCoarse;
 out vec2 vZW;
+out float vHide;
 ${CORAL_POS}
 void main() {
   vec4 w, A, B;
   float age, tip;
   vec3 ax;
-  if (!coralWorld(aGid, w, A, B, age, tip, ax)) { vZW = vec2(1.0); gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  coralWorld(aGid, w, A, B, age, tip, ax);
+  vHide = coralHide;
   vec4 c = projectionMatrix * viewMatrix * w;
   vZW = c.zw;
   gl_Position = c;
@@ -495,6 +505,8 @@ vec4 packD(float v) {
   return r * (256.0 / 255.0);
 }
 void main() { oCol = packD(clamp(0.5 * vZW.x / vZW.y + 0.5, 0.0, 1.0)); }`;
+// The coral depth: DEPTH_FS with the coarse hide of CORAL_DEPTH_VS.
+export const CORAL_DEPTH_FS = DEPTH_FS.replace('in vec2 vZW;', 'in vec2 vZW;\nin float vHide;').replace('void main() {', 'void main() {\n  if (vHide > 0.5) discard;');
 
 export const CORAL_FS = /* glsl */`
 ${NOISE2}
@@ -503,12 +515,13 @@ ${NOISE}
 uniform sampler2D uLut;
 uniform float uMode, uBleach, uSpecies, uDetail, uDetailK;
 in vec3 vN, vW, vL, vNat, vAx;
-in float vT, vGlow, vTip;
+in float vT, vGlow, vTip, vHide;
 out vec4 oCol;
 // skin (uSpecies): coral-sdf.js SHAPES[id].skin; 0 staghorn, 1 fan,
 // 2 table, 3 brain, 4 finger, 5 pores, 6 cells, 7 fleshy, 8 concentric,
 // 9 soft, 10 glass lattice, 11 sponge, 12 bamboo nodes, 13 knobs, 14 spines
 void main() {
+  if (vHide > 0.5) discard;          // the coarse mesh of a focus colony (CORAL_POS)
   vec3 n = normalize(vN);
   if (!gl_FrontFacing) n = -n;
   vec3 V = normalize(cameraPosition - vW);

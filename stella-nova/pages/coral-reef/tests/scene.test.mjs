@@ -224,7 +224,7 @@ function checkES(progs) {
   const progs = [
     { name: 'coral', vs: SH.CORAL_VS, fs: SH.CORAL_FS },
     { name: 'polyp', vs: SH.POLYP_VS, fs: SH.POLYP_FS },
-    { name: 'coral-depth', vs: SH.CORAL_DEPTH_VS, fs: SH.DEPTH_FS },
+    { name: 'coral-depth', vs: SH.CORAL_DEPTH_VS, fs: SH.CORAL_DEPTH_FS },
     { name: 'polyp-depth', vs: SH.POLYP_DEPTH_VS, fs: SH.DEPTH_FS },
     { name: 'rock', vs: SH.ROCK_VS, fs: SH.ROCK_FS },
     { name: 'sand', vs: SH.SURF_VS, fs: SH.SAND_FS },
