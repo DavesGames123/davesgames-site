@@ -1,36 +1,69 @@
 // ============================================================================
 //  POOL PHYSICS  ·  view/scene3d.js — the 3D table (three.js r160)
 // ----------------------------------------------------------------------------
-//  The same table as core/table.js, in metres: the green cloth with the six
-//  pocket holes, the cushions cut at the jaw angles, mahogany rails with
-//  pearl diamonds, leather pockets, the apron and legs on a dark floor, a
-//  three-shade lamp over the table (three spot lights with soft shadows),
-//  the numbered balls and the cue. Overlays: the aim line, the ghost ball
-//  and the velocity / acceleration arrows.
+//  The same table as core/table.js, in metres. The user asked for a table
+//  "lit up less brightly", a "better felt texture", pockets that are
+//  "well carved", shadows that "draw accurately directly underneath the
+//  ball", vectors "centered within the ball", balls with "fingerprint
+//  smudge" and roughness from real image textures, a cue that does not
+//  intersect the table, and a "more visually interesting" table.
+//
+//    cloth ....... a CC0 felt scan (artwork/felt-*.jpg, ambientCG Fabric
+//                  034): grey fibres tinted green by the material, the
+//                  normal map for the fibre relief, sheen and a little
+//                  anisotropy for the nap
+//    rails ....... polished rosewood (tex/rosewood-*, clearcoat), pearl
+//                  diamond inlays flush in the wood, a dark leather cover
+//                  round each pocket cut
+//    pockets ..... the rail, the slate and the apron are cut through at
+//                  each hole; the cut follows the jaw lines back to the
+//                  hole circle (function pocketCut); a leather liner lines
+//                  the back of the cut and a drop bag hangs under it.
+//                  Nothing stands in the mouth (tests/scene.test.mjs casts
+//                  rays down into each hole and along each mouth)
+//    body ........ mahogany apron with a brass bead, four turned legs on a
+//                  plinth frame, a dark rug on a plank floor (room hint)
+//    light ....... a three-shade lamp; three spots (one casts shadows on
+//                  a phone), PCF shadows, a shadow camera fitted to the
+//                  table (focus), a small bias; a contact shadow (an
+//                  ambient occlusion disc, function contactShadows) under
+//                  each ball touches its contact point
+//    balls ....... a printed decal, clearcoat, and a roughness map of real
+//                  fingerprints and smudges (artwork/ball-smudge-rough.jpg,
+//                  ambientCG Fingerprints 003 and Surface Imperfections
+//                  003), offset per ball so no two look the same
+//    cue ......... core/cue.js cuePose: lifted over the rail and the
+//                  balls, the tip on the ball face, a bridge under it
+//    overlays .... the aim line, the ghost ball, and the arrows of v and a,
+//                  which start at the ball centre and draw over the ball
 //  Axes: table (x, y, z up) -> three (X = x, Y = z, Z = -y). A ball
 //  orientation (w, x, y, z) of core/physics.js -> three (w, x, z, -y).
 //
 //  createScene(canvas, T, { phone }) -> V or null (no WebGL)
 //    V.resize(w, h, dpr)   V.render()   V.pick(px, py) -> { x, y } or null
-//    V.setBalls(list)      list: [{ n, x, y, q, on, drop: { p, hx, hy } }]
-//    V.setCue({ x, y, phi, a, b, back, alpha })   or null
+//    V.setBalls(list)      list: [{ n, x, y, q, drop: { p, hx, hy } }]
+//    V.setCue({ x, y, phi, a, b, back, alpha }, S)   or null
 //    V.setOverlay({ aim, ghost, arrows: [{ from, vec, m }] })
 //    V.camMode(mode) 'auto' | 'broadcast' | 'behind' | 'overhead' | 'free'
-//    V.focus({ phase, cx, cy, phi })   where the auto camera looks
-//    V.update(dt)          the camera spring
-//    V.onUserOrbit         set by main: the user moved the camera
+//    V.focus({ phase, cx, cy, phi })   V.update(dt)   V.onUserOrbit
+//    V.table, V.contact, V.arrows, V.cuePose   (read by the tests)
+//  buildTableGroup(T, mats, phone) and pocketCut(T, p) are exported for
+//  the tests.
 //
-//  grep -n targets: "function ballTexture", "function clothTexture",
-//  "function buildTable", "function buildLamp", "function buildCue",
+//  grep -n targets: "function ballTexture", "const feltMaterial",
+//  "export function pocketCut", "function railInner", "function bedOutline",
+//  "export function buildTableGroup",
+//  "function buildLamp", "function buildCue", "function contactShadows",
 //  "function camTarget", "export function createScene"
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { diamonds, ballColor, isStripe, cushionPolys } from '../core/table.js';
+import { cuePose, cueRadius } from '../core/cue.js';
 
 const TEX = new URL('../tex/', import.meta.url).href;
+const ART = new URL('../artwork/', import.meta.url).href;
 export const BED_Y = 0;            // the cloth (three Y)
-const CUSH_H = 0.042, RAIL_TOP = 0.048, APRON = 0.2;
 
 const canvas2d = (w, h) => {
   try {
@@ -65,110 +98,221 @@ function ballTexture(n) {
   return t;
 }
 
-// Fine cloth: a mid green with fibre noise (worsted wool, like a pro cloth).
-function clothTexture(rng) {
-  const k = canvas2d(256, 256);
-  if (!k) return null;
-  const { c, g } = k, img = g.createImageData(256, 256);
-  for (let i = 0; i < 256 * 256; i++) {
-    const n = (rng() - 0.5) * 18 + (rng() - 0.5) * 8;
-    img.data[4 * i] = 18 + n * 0.4; img.data[4 * i + 1] = 108 + n; img.data[4 * i + 2] = 68 + n * 0.6; img.data[4 * i + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(24, 12);
-  return t;
-}
-
-function leatherTexture(rng) {
-  const k = canvas2d(128, 128);
-  if (!k) return null;
-  const { c, g } = k, img = g.createImageData(128, 128);
-  for (let i = 0; i < 128 * 128; i++) { const n = (rng() - 0.5) * 22; img.data[4 * i] = 34 + n; img.data[4 * i + 1] = 24 + n * 0.8; img.data[4 * i + 2] = 20 + n * 0.6; img.data[4 * i + 3] = 255; }
-  g.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
 function rngOf(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
 // table (x, y) polygon -> a THREE.Shape in the same plane
 const shapeOf = pts => { const s = new THREE.Shape(); pts.forEach(([x, y], k) => (k ? s.lineTo(x, y) : s.moveTo(x, y))); s.closePath(); return s; };
-// extrude a plan shape up from y0 by h (three Y)
-function slab(shape, y0, h, mat, bevel = 0) {
-  const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 2, curveSegments: 24 });
+const pathOf = pts => { const s = new THREE.Path(); pts.forEach(([x, y], k) => (k ? s.lineTo(x, y) : s.moveTo(x, y))); s.closePath(); return s; };
+// extrude a plan shape up from y0 by h (three Y); table y -> three -Z
+function slab(shape, y0, h, mat, bevel = 0, curve = 24) {
+  const g = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 2, curveSegments: curve });
   g.rotateX(-Math.PI / 2); g.translate(0, y0, 0);
   const m = new THREE.Mesh(g, mat);
   m.castShadow = true; m.receiveShadow = true;
   return m;
 }
 
-function buildTable(T, mats, phone) {
-  const grp = new THREE.Group(), cw = T.spec.cushionW, rw = T.spec.railW;
-  const ix = T.hx + cw, iy = T.hy + cw, ox = ix + rw, oy = iy + rw;
-  // the bed: the cloth to the cushion backs, with the pocket holes
-  const bed = shapeOf([[-ix, -iy], [ix, -iy], [ix, iy], [-ix, iy]]);
-  for (const p of T.pockets) { const h = new THREE.Path(); h.absarc(p.hx, p.hy, p.r, 0, 2 * Math.PI, true); bed.holes.push(h); }
-  const bg = new THREE.ShapeGeometry(bed, 32); bg.rotateX(-Math.PI / 2);
-  const bedMesh = new THREE.Mesh(bg, mats.cloth); bedMesh.receiveShadow = true; grp.add(bedMesh);
-  // a slate edge under the cloth
-  grp.add(slab(shapeOf([[-ix, -iy], [ix, -iy], [ix, iy], [-ix, iy]]), -0.03, 0.0295, mats.slate));
-  // cushions
-  for (const q of cushionPolys(T)) grp.add(slab(shapeOf(q), 0, CUSH_H, mats.cushion));
-  // the rail top: the outer outline with the inner line notched at the pockets
-  const inner = [], step = 0.004, cut = p => (p.kind === 'corner' ? p.r + 0.012 : p.r + 0.006);
-  const perim = [[-ix, -iy], [ix, -iy], [ix, iy], [-ix, iy], [-ix, -iy]];
-  for (let k = 0; k < 4; k++) {
+// ── pockets ──────────────────────────────────────────────────────────────────
+// The cut of a pocket in plan: the hole circle (radius rc) and the corridor
+// between the two jaw lines, from the nose tips back to the circle. Returns
+// { cx, cy, rc, inside(x, y), jaws: [[tip, back], [tip, back]], open: [a0, a1] }
+// where open is the angle range (round the hole centre) that faces the
+// table: the liner and the leather cover leave it free.
+export function pocketCut(T, p) {
+  const rc = p.r + (p.kind === 'corner' ? 0.004 : 0.003), cx = p.hx, cy = p.hy;
+  const jaws = T.segs.filter(s => s.kind === 'jaw' && Math.hypot((s.ax + s.bx) / 2 - p.mx, (s.ay + s.by) / 2 - p.my) < 0.12);
+  // each jaw line from the nose tip outward, extended until it passes the circle
+  const lines = jaws.map(j => {
+    const ext = 0.25;
+    return [[j.ax, j.ay], [j.ax + j.tx * ext, j.ay + j.ty * ext]];
+  });
+  const quad = lines.length === 2 ? [lines[0][0], lines[0][1], lines[1][1], lines[1][0]] : null;
+  const inPoly = (x, y, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  // the corridor is cut only up to the hole: beyond the circle centre it stops
+  const ox = p.ox, oy = p.oy;
+  const inside = (x, y) => {
+    if (Math.hypot(x - cx, y - cy) < rc) return true;
+    if (!quad || !inPoly(x, y, quad)) return false;
+    return (x - cx) * ox + (y - cy) * oy < 0;
+  };
+  // the open side: the angles round the centre whose ray at radius rc + 2 cm
+  // lies inside the inner rectangle of the cushion backs or in the corridor
+  const ix = T.hx + T.spec.cushionW, iy = T.hy + T.spec.cushionW;
+  const isOpen = a => { const x = cx + Math.cos(a) * (rc + 0.003), y = cy + Math.sin(a) * (rc + 0.003); return (Math.abs(x) < ix && Math.abs(y) < iy) || (quad && inPoly(x, y, quad)); };
+  const N = 180, flags = [];
+  for (let k = 0; k < N; k++) flags.push(isOpen(k / N * 2 * Math.PI));
+  // the longest run of open angles (wrapping)
+  let best = [0, 0], run = 0, start = 0;
+  for (let k = 0; k < 2 * N; k++) {
+    if (flags[k % N]) { if (!run) start = k; run++; if (run > best[1] - best[0] && run <= N) best = [start, start + run]; } else run = 0;
+  }
+  const open = [best[0] / N * 2 * Math.PI, best[1] / N * 2 * Math.PI];
+  return { cx, cy, rc, inside, jaws: lines, open, p };
+}
+
+// The inner outline of the rail: the cushion-back rectangle joined with
+// each pocket cut. Walking the rectangle, a run of points inside a cut is
+// replaced by the outline of the cut, traced round its hole centre on the
+// side away from the table (the cut is star-shaped from that centre).
+function railInner(T, cuts) {
+  const ix = T.hx + T.spec.cushionW, iy = T.hy + T.spec.cushionW, step = 0.003, out = [];
+  // start half way along a long side: no cut there
+  const x0 = T.hx * 0.5, perim = [[x0, -iy], [ix, -iy], [ix, iy], [-ix, iy], [-ix, -iy], [x0, -iy]];
+  const reach = (c, a) => { const dx = Math.cos(a), dy = Math.sin(a); let r = 0; while (r < 0.4 && c.inside(c.cx + dx * r, c.cy + dy * r)) r += 0.0005; return r; };
+  let cur = null, entry = 0;
+  for (let k = 0; k < 5; k++) {
     const [ax, ay] = perim[k], [bx, by] = perim[k + 1], L = Math.hypot(bx - ax, by - ay), n = Math.ceil(L / step);
     for (let i = 0; i < n; i++) {
-      let x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n;
-      for (const p of T.pockets) { const dx = x - p.hx, dy = y - p.hy, d = Math.hypot(dx, dy), r = cut(p); if (d < r) { x = p.hx + dx / (d || 1) * r; y = p.hy + dy / (d || 1) * r; } }
-      inner.push([x, y]);
+      const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n;
+      const c = cuts.find(q => q.inside(x, y));
+      if (c && !cur) { cur = c; entry = Math.atan2(y - c.cy, x - c.cx); continue; }
+      if (c) continue;
+      if (cur) {
+        const exit = Math.atan2(y - cur.cy, x - cur.cx);
+        let d = exit - entry; while (d <= -Math.PI) d += 2 * Math.PI; while (d > Math.PI) d -= 2 * Math.PI;
+        // go round the outer side: the middle direction points out of the table
+        const pa = cur.p, mid = entry + d / 2;
+        if (Math.cos(mid) * pa.ox + Math.sin(mid) * pa.oy < 0) d = d > 0 ? d - 2 * Math.PI : d + 2 * Math.PI;
+        const m = Math.max(12, Math.ceil(Math.abs(d) * 80));
+        for (let j = 0; j <= m; j++) { const a = entry + d * j / m, r = reach(cur, a); out.push([cur.cx + Math.cos(a) * r, cur.cy + Math.sin(a) * r]); }
+        cur = null;
+      }
+      out.push([x, y]);
     }
   }
-  const rail = new THREE.Shape(); const rr = 0.03;
+  return out;
+}
+
+// The outline of the rectangle |x| < ix, |y| < iy less the hole circles
+// (radius rc + extra): the perimeter, and round each circle the arc that
+// lies inside the rectangle. A hole that crosses the outline cannot be a
+// THREE.Path hole (the triangulation drops it), so it is part of the outline.
+function bedOutline(ix, iy, cuts, extra) {
+  const x0 = ix * 0.45, step = 0.003, out = [], perim = [[x0, -iy], [ix, -iy], [ix, iy], [-ix, iy], [-ix, -iy], [x0, -iy]];
+  const inRect = (x, y) => Math.abs(x) <= ix + 1e-9 && Math.abs(y) <= iy + 1e-9;
+  const hole = (x, y) => cuts.find(c => Math.hypot(x - c.cx, y - c.cy) < c.rc + extra);
+  let inside = null, entry = null;
+  for (let k = 0; k < 5; k++) {
+    const [ax, ay] = perim[k], [bx, by] = perim[k + 1], L = Math.hypot(bx - ax, by - ay), n = Math.ceil(L / step);
+    for (let i = 0; i < n; i++) {
+      const x = ax + (bx - ax) * i / n, y = ay + (by - ay) * i / n, c = hole(x, y);
+      if (c && !inside) { inside = c; entry = Math.atan2(y - c.cy, x - c.cx); continue; }
+      if (c) continue;
+      if (inside) {
+        // the arc from the entry angle to the exit angle that stays in the rectangle
+        const c0 = inside, r = c0.rc + extra, exit = Math.atan2(y - c0.cy, x - c0.cx);
+        let d = exit - entry; while (d <= -Math.PI) d += 2 * Math.PI; while (d > Math.PI) d -= 2 * Math.PI;
+        const mid = a => inRect(c0.cx + Math.cos(a) * r, c0.cy + Math.sin(a) * r);
+        if (!mid(entry + d / 2)) d = d > 0 ? d - 2 * Math.PI : d + 2 * Math.PI;
+        const m = Math.max(6, Math.ceil(Math.abs(d) * r / step));
+        for (let j = 0; j <= m; j++) { const a = entry + d * j / m; out.push([c0.cx + Math.cos(a) * r, c0.cy + Math.sin(a) * r]); }
+        inside = null;
+      }
+      out.push([x, y]);
+    }
+  }
+  return out;
+}
+
+// an arc band (a flat ring sector) from radius r0 to r1 over angles a0..a1, in plan
+function arcBand(cx, cy, r0, r1, a0, a1, segs = 40) {
+  const pts = [];
+  for (let k = 0; k <= segs; k++) { const a = a0 + (a1 - a0) * k / segs; pts.push([cx + Math.cos(a) * r1, cy + Math.sin(a) * r1]); }
+  for (let k = segs; k >= 0; k--) { const a = a0 + (a1 - a0) * k / segs; pts.push([cx + Math.cos(a) * r0, cy + Math.sin(a) * r0]); }
+  return shapeOf(pts);
+}
+
+// ── the table ────────────────────────────────────────────────────────────────
+export function buildTableGroup(T, mats, phone) {
+  const grp = new THREE.Group(), cw = T.spec.cushionW, rw = T.spec.railW, CUSH_H = T.spec.cushionTop, RAIL_TOP = T.spec.railTop;
+  const ix = T.hx + cw, iy = T.hy + cw, ox = ix + rw, oy = iy + rw;
+  const cuts = T.pockets.map(p => pocketCut(T, p));
+  grp.userData.cuts = cuts;
+  // the bed: the cloth to the cushion backs, less the pocket holes (they
+  // cross the outline, so the outline itself goes round them)
+  const bedPts = bedOutline(ix, iy, cuts, -0.003);
+  const bed = shapeOf(bedPts);
+  const bg = new THREE.ShapeGeometry(bed, 40); bg.rotateX(-Math.PI / 2);
+  // planar UVs in metres for the felt
+  { const pos = bg.attributes.position, uv = bg.attributes.uv; for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), -pos.getZ(i)); }
+  const bedMesh = new THREE.Mesh(bg, mats.cloth); bedMesh.receiveShadow = true; bedMesh.name = 'cloth'; grp.add(bedMesh);
+  // the slate under the cloth (cut through at the holes)
+  grp.add(Object.assign(slab(shapeOf(bedPts), -0.03, 0.0295, mats.slate), { name: 'slate' }));
+  // cushions: the rubber with the cloth over it, cut along the jaw lines
+  for (const q of cushionPolys(T)) {
+    const m = slab(shapeOf(q), 0, CUSH_H, mats.cushion, 0.0025, 4);
+    // planar UVs for the felt on the cushions too
+    const pos = m.geometry.attributes.position, uv = m.geometry.attributes.uv;
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) + pos.getY(i) * 0.7, -pos.getZ(i) + pos.getY(i) * 0.7);
+    m.name = 'cushion'; grp.add(m);
+  }
+  // the rail: wood from under the cloth to the rail top, cut at each pocket
+  const rail = new THREE.Shape(); const rr = 0.035;
   rail.moveTo(-ox + rr, -oy); rail.lineTo(ox - rr, -oy); rail.quadraticCurveTo(ox, -oy, ox, -oy + rr); rail.lineTo(ox, oy - rr); rail.quadraticCurveTo(ox, oy, ox - rr, oy);
   rail.lineTo(-ox + rr, oy); rail.quadraticCurveTo(-ox, oy, -ox, oy - rr); rail.lineTo(-ox, -oy + rr); rail.quadraticCurveTo(-ox, -oy, -ox + rr, -oy);
-  rail.holes.push(shapeOf(inner.slice().reverse()));
-  grp.add(slab(rail, CUSH_H - 0.004, RAIL_TOP - CUSH_H + 0.004, mats.wood, 0.004));
-  // the apron (a frame down from the rail) and six legs
-  const ap = shapeOf([[-ox, -oy], [ox, -oy], [ox, oy], [-ox, oy]]);
-  ap.holes.push(shapeOf([[-ox + 0.05, -oy + 0.05], [-ox + 0.05, oy - 0.05], [ox - 0.05, oy - 0.05], [ox - 0.05, -oy + 0.05]]));
-  grp.add(slab(ap, -APRON, APRON + CUSH_H - 0.006, mats.wood));
-  const floorY = -T.spec.bedH;
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1]]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.13, -floorY - APRON, 0.13), mats.wood);
-    leg.position.set(x * (ox - 0.12), floorY + (-floorY - APRON) / 2, z * (oy - 0.12));
-    leg.castShadow = !phone; leg.receiveShadow = true; grp.add(leg);
+  rail.holes.push(pathOf(railInner(T, cuts).reverse()));
+  const railMesh = slab(rail, -0.03, RAIL_TOP + 0.03 - 0.002, mats.wood, 0.002);
+  railMesh.name = 'rail'; grp.add(railMesh);
+  // pockets: a leather cover on the rail round the back of the cut, the
+  // liner of the cut, the drop bag under the hole
+  for (const c of cuts) {
+    const a0 = c.open[1], a1 = c.open[0] + 2 * Math.PI;          // the closed (back) side
+    const cover = slab(arcBand(c.cx, c.cy, c.rc - 0.001, c.rc + 0.024, a0, a1), RAIL_TOP - 0.003, 0.0045, mats.leather, 0.0015, 4);
+    cover.name = 'pocket-cover'; grp.add(cover);
+    // the liner of the cut above the bed: only the back arc (the mouth stays open)
+    const lin = new THREE.Mesh(new THREE.CylinderGeometry(c.rc - 0.0008, c.rc - 0.0008, RAIL_TOP + 0.03, 48, 1, true, a0 + Math.PI / 2, a1 - a0), mats.leatherIn);
+    lin.position.set(c.cx, (RAIL_TOP - 0.03) / 2, -c.cy); lin.name = 'pocket-liner'; grp.add(lin);
+    // the drop: a leather bag under the hole, full round, below the slate
+    const bag = new THREE.Mesh(new THREE.CylinderGeometry(c.rc - 0.0008, c.rc * 0.82, 0.15, 40, 1, true), mats.leatherIn);
+    bag.position.set(c.cx, -0.03 - 0.075, -c.cy); bag.name = 'pocket-bag'; grp.add(bag);
+    const bottom = new THREE.Mesh(new THREE.CircleGeometry(c.rc * 0.82, 40), mats.leatherIn);
+    bottom.rotation.x = -Math.PI / 2; bottom.position.set(c.cx, -0.18, -c.cy); bottom.name = 'pocket-bottom'; grp.add(bottom);
   }
-  // pockets: a leather cup under each hole and a leather rim on the rail
-  for (const p of T.pockets) {
-    const cup = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r * 0.9, 0.16, 32, 1, true), mats.leatherIn);
-    cup.position.set(p.hx, -0.08, -p.hy); grp.add(cup);
-    const bottom = new THREE.Mesh(new THREE.CircleGeometry(p.r * 0.9, 32), mats.leatherIn);
-    bottom.rotation.x = -Math.PI / 2; bottom.position.set(p.hx, -0.16, -p.hy); grp.add(bottom);
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(cut(p) + 0.004, 0.009, 10, 40, Math.PI * (p.kind === 'corner' ? 1.5 : 1)), mats.leather);
-    rim.rotation.x = -Math.PI / 2;
-    // open toward the table
-    rim.rotation.z = p.kind === 'corner' ? Math.atan2(p.sy, p.sx) - Math.PI * 0.75 : (p.sy > 0 ? 0 : Math.PI);
-    rim.position.set(p.hx, RAIL_TOP - 0.004, -p.hy); rim.castShadow = true; grp.add(rim);
-  }
-  // diamonds
-  const dg = new THREE.OctahedronGeometry(0.009, 0); dg.scale(1, 0.18, 0.62);
+  // diamonds: pearl inlays flush in the wood, each in a thin dark ring
+  const dShape = shapeOf([[0, 0.012], [0.006, 0], [0, -0.012], [-0.006, 0]]);
+  const dGeo = new THREE.ShapeGeometry(dShape); dGeo.rotateX(-Math.PI / 2);
+  const rGeo = new THREE.ShapeGeometry(shapeOf([[0, 0.0145], [0.0078, 0], [0, -0.0145], [-0.0078, 0]])); rGeo.rotateX(-Math.PI / 2);
   for (const q of diamonds(T)) {
-    const d = new THREE.Mesh(dg, mats.pearl);
-    d.position.set(q.x, RAIL_TOP + 0.0012, -q.y);
-    if (q.side === 'short') d.rotation.y = Math.PI / 2;
-    grp.add(d);
+    const ring = new THREE.Mesh(rGeo, mats.inlayRim), d = new THREE.Mesh(dGeo, mats.pearl);
+    for (const m of [ring, d]) { m.position.set(q.x, RAIL_TOP + (m === d ? 0.0004 : 0.0002), -q.y); if (q.side === 'long') m.rotation.y = Math.PI / 2; m.receiveShadow = true; grp.add(m); }
   }
-  // the floor
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), mats.floor);
-  floor.rotation.x = -Math.PI / 2; floor.position.y = floorY; floor.receiveShadow = true; grp.add(floor);
+  // the apron under the rail (below the slate), a brass bead along its top;
+  // the long sides open at the side pockets so the drop bags hang free
+  const APRON = 0.19, ay0 = -0.03 - APRON, at = 0.045;
+  const board = (x0, x1, z0, z1) => { const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, APRON, z1 - z0), mats.apron); m.position.set((x0 + x1) / 2, ay0 + APRON / 2, (z0 + z1) / 2); m.castShadow = !phone; m.receiveShadow = true; m.name = 'apron'; grp.add(m); };
+  const sideGap = T.pockets.find(p => p.kind === 'side').r + 0.02;
+  for (const s of [-1, 1]) {
+    board(-ox, -sideGap, s > 0 ? oy - at : -oy, s > 0 ? oy : -oy + at);
+    board(sideGap, ox, s > 0 ? oy - at : -oy, s > 0 ? oy : -oy + at);
+    board(s > 0 ? ox - at : -ox, s > 0 ? ox : -ox + at, -oy + at, oy - at);
+  }
+  // the bead: four thin brass strips on the outer face of the apron top (open at the side pockets)
+  const strip = (x0, x1, z0, z1) => { const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.006, z1 - z0), mats.brass); m.position.set((x0 + x1) / 2, -0.034, (z0 + z1) / 2); m.name = 'bead'; grp.add(m); };
+  for (const sz of [-1, 1]) { const z0 = sz * (oy + 0.002); strip(-ox - 0.002, -sideGap, Math.min(z0, z0 - sz * 0.006), Math.max(z0, z0 - sz * 0.006)); strip(sideGap, ox + 0.002, Math.min(z0, z0 - sz * 0.006), Math.max(z0, z0 - sz * 0.006)); }
+  for (const sx of [-1, 1]) { const x0 = sx * (ox + 0.002); strip(Math.min(x0, x0 - sx * 0.006), Math.max(x0, x0 - sx * 0.006), -oy, oy); }
+  // four turned legs (a lathe profile) on a dark plinth frame
+  const floorY = -T.spec.bedH;
+  const legH = -floorY + ay0;
+  const prof = [[0, 0], [0.075, 0], [0.075, 0.05], [0.06, 0.07], [0.05, 0.12], [0.042, 0.3], [0.05, 0.42], [0.065, 0.46], [0.055, 0.5], [0.062, legH - 0.05], [0.07, legH - 0.02], [0.07, legH], [0, legH]].map(([r, y]) => new THREE.Vector2(r, y));
+  const legGeo = new THREE.LatheGeometry(prof, phone ? 16 : 28);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const leg = new THREE.Mesh(legGeo, mats.apron);
+    leg.position.set(sx * (ox - 0.16), floorY, sz * (oy - 0.14));
+    leg.castShadow = !phone; leg.receiveShadow = true; leg.name = 'leg'; grp.add(leg);
+  }
+  const plinth = new THREE.Mesh(new THREE.BoxGeometry(2 * (ox - 0.16), 0.05, 0.06), mats.plinth);
+  for (const sz of [-1, 1]) { const m = plinth.clone(); m.position.set(0, floorY + 0.12, sz * (oy - 0.14)); m.receiveShadow = true; grp.add(m); }
+  // the floor and a rug (a hint of the room)
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), mats.floor);
+  floor.rotation.x = -Math.PI / 2; floor.position.y = floorY; floor.receiveShadow = true; floor.name = 'floor'; grp.add(floor);
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(2 * ox + 1.6, 2 * oy + 1.4), mats.rug);
+  rug.rotation.x = -Math.PI / 2; rug.position.y = floorY + 0.002; rug.receiveShadow = true; rug.name = 'rug'; grp.add(rug);
   return grp;
 }
 
 // A three-shade billiard lamp: a dark metal bar, three cone shades with warm
-// emissive bulbs, a spot light under each.
+// bulbs, a spot light under each. Shadows: the shadow camera fits the table
+// (focus), PCF with a small radius (the bulb size), a small bias.
 function buildLamp(scene, phone) {
   const grp = new THREE.Group(), body = new THREE.Group(), y = 1.0;
   grp.add(body);
@@ -178,14 +322,24 @@ function buildLamp(scene, phone) {
   [-0.55, 0, 0.55].forEach((x, k) => {
     const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.19, 0.16, 40, 1, true), new THREE.MeshStandardMaterial({ color: 0x14402c, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide }));
     shade.position.set(x, y + 0.07, 0); body.add(shade);
-    const bulb = new THREE.Mesh(new THREE.CircleGeometry(0.17, 40), new THREE.MeshBasicMaterial({ color: 0xfff1d6 }));
+    const bulb = new THREE.Mesh(new THREE.CircleGeometry(0.17, 40), new THREE.MeshBasicMaterial({ color: 0xd9ccb4 }));
     bulb.rotation.x = Math.PI / 2; bulb.position.set(x, y + 0.005, 0); body.add(bulb);
     const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12), metal); rod.position.set(x, y + 0.2, 0); body.add(rod);
-    const L = new THREE.SpotLight(0xfff0dc, phone ? 26 : 22, 4, 1.05, 0.75, 1.4);
+    // dimmer than before (the user: "the table lit up less brightly")
+    const L = new THREE.SpotLight(0xffe8cc, phone ? 16 : 13, 4, 1.0, 0.8, 1.6);
     L.position.set(x, y - 0.01, 0); L.target.position.set(x * 1.15, 0, 0);
     const shadow = !phone || k === 1;
     L.castShadow = shadow;
-    if (shadow) { L.shadow.mapSize.set(phone ? 1024 : 1536, phone ? 1024 : 1536); L.shadow.bias = -0.00015; L.shadow.normalBias = 0.002; L.shadow.radius = 4; L.shadow.camera.near = 0.3; L.shadow.camera.far = 3; }
+    if (shadow) {
+      const ms = phone ? 1024 : 2048;
+      L.shadow.mapSize.set(ms, ms);
+      // the shadow camera covers the table, not the room: three lights share
+      // it on a desktop (0.8 of the cone each), one light on a phone (all of it)
+      L.shadow.focus = phone ? 1 : 0.8;
+      L.shadow.camera.near = 0.55; L.shadow.camera.far = 1.35;
+      L.shadow.bias = -0.00012; L.shadow.normalBias = 0.0006;
+      L.shadow.radius = phone ? 2 : 3;
+    }
     grp.add(L, L.target); lights.push(L);
   });
   scene.add(grp);
@@ -193,7 +347,7 @@ function buildLamp(scene, phone) {
 }
 
 // The cue: tip, ferrule, maple shaft, ebony butt with a ring and a bumper.
-// Built along +x from the tip at x = 0. 147 cm long.
+// Built along +x from the tip at x = 0. 148 cm (core/cue.js cueRadius).
 function buildCue(mats) {
   const grp = new THREE.Group();
   const part = (r0, r1, len, x0, mat) => {
@@ -209,6 +363,36 @@ function buildCue(mats) {
   return grp;
 }
 
+// The bridge under the cue: a V rest on a small foot (on the cloth or the
+// rail), its height set to the cue at that point.
+function buildBridge(mats) {
+  const grp = new THREE.Group();
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.006, 20), mats.bridge); foot.position.y = 0.003; grp.add(foot);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 1, 10), mats.bridge); grp.add(post);
+  const vL = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.022, 0.004), mats.bridge), vR = vL.clone();
+  vL.rotation.x = 0.6; vR.rotation.x = -0.6; grp.add(vL, vR);
+  grp.userData = { post, vL, vR };
+  for (const m of [foot, post, vL, vR]) m.castShadow = true;
+  return grp;
+}
+
+// Contact shadows: an ambient occlusion disc on the cloth under each ball.
+// The lamp shadow of a ball falls a little off its foot (the light is not
+// straight above); this dark core sits exactly under the contact point.
+function contactShadows(scene, R) {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    uniforms: { k: { value: 0.62 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv * 2.0 - 1.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float k; varying vec2 vUv; void main(){ float r = length(vUv); float a = k * pow(clamp(1.0 - r, 0.0, 1.0), 2.2); gl_FragColor = vec4(0.0, 0.0, 0.0, a); }',
+  });
+  const geo = new THREE.PlaneGeometry(2.5 * R, 2.5 * R); geo.rotateX(-Math.PI / 2);
+  const out = [];
+  for (let n = 0; n < 16; n++) { const m = new THREE.Mesh(geo, mat); m.visible = false; m.renderOrder = 1; m.name = 'contact-shadow'; scene.add(m); out.push(m); }
+  return out;
+}
+
 export function createScene(canvas, T, { phone = false } = {}) {
   let renderer;
   try {
@@ -216,13 +400,13 @@ export function createScene(canvas, T, { phone = false } = {}) {
   } catch (e) { return null; }
   if (!renderer.getContext()) return null;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;      // PCF takes shadow.radius (PCFSoft does not)
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 0.85;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x07090b);
-  scene.fog = new THREE.Fog(0x07090b, 5, 11);
+  scene.background = new THREE.Color(0x060708);
+  scene.fog = new THREE.Fog(0x060708, 5, 12);
   const camera = new THREE.PerspectiveCamera(38, 1.6, 0.05, 30);
   camera.position.set(0, 2.1, 2.3);
   const controls = new OrbitControls(camera, canvas);
@@ -230,50 +414,69 @@ export function createScene(canvas, T, { phone = false } = {}) {
   controls.minDistance = 0.5; controls.maxDistance = 6.5; controls.maxPolarAngle = 1.42;
   controls.target.set(0, 0, 0);
 
-  const rng = rngOf(7), loader = new THREE.TextureLoader();
-  const tex = (f, srgb = true, rep = [1, 1]) => {
+  const loader = new THREE.TextureLoader();
+  const tex = (base, f, srgb = true, rep = [1, 1]) => {
     try {
-      const t = loader.load(TEX + f);
+      const t = loader.load(base + f);
+      t.userData.url = base + f;
       if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); t.anisotropy = 4;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); t.anisotropy = 8;
       return t;
     } catch (e) { return null; }
   };
-  const wood = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: tex('mahogany-color.jpg', true, [1.6, 1.6]), normalMap: tex('mahogany-normal.jpg', false, [1.6, 1.6]), roughnessMap: tex('mahogany-rough.jpg', false, [1.6, 1.6]), roughness: 0.55, clearcoat: 0.8, clearcoatRoughness: 0.18 });
-  const clothMap = clothTexture(rng);
+  // the felt: one tile is 0.3 m of cloth (planar UVs in metres)
+  const FELT = 1 / 0.3;
+  const feltMap = tex(ART, 'felt-color.jpg', true, [FELT, FELT]), feltN = tex(ART, 'felt-normal.jpg', false, [FELT, FELT]);
+  const feltMaterial = (color) => new THREE.MeshPhysicalMaterial({
+    color, map: feltMap, normalMap: feltN, normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.94,
+    sheen: 0.35, sheenRoughness: 0.75, sheenColor: new THREE.Color(0x2a6e4c), anisotropy: 0.2, anisotropyRotation: 0,
+  });
+  const rose = (rep) => new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: tex(TEX, 'rosewood-color.jpg', true, rep), normalMap: tex(TEX, 'rosewood-normal.jpg', false, rep), roughnessMap: tex(TEX, 'rosewood-rough.jpg', false, rep), roughness: 0.5, clearcoat: 1, clearcoatRoughness: 0.08 });
   const mats = {
-    wood,
-    cloth: new THREE.MeshPhysicalMaterial({ color: clothMap ? 0xffffff : 0x146b43, map: clothMap, roughness: 0.92, sheen: 0.6, sheenRoughness: 0.7, sheenColor: new THREE.Color(0x3fa070) }),
-    cushion: new THREE.MeshPhysicalMaterial({ color: clothMap ? 0xe8f2ea : 0x136640, map: clothMap, roughness: 0.92, sheen: 0.6, sheenRoughness: 0.7, sheenColor: new THREE.Color(0x3fa070) }),
-    slate: new THREE.MeshStandardMaterial({ color: 0x2c2f31, roughness: 0.8 }),
-    leather: new THREE.MeshStandardMaterial({ color: 0x2a1e18, map: leatherTexture(rng), roughness: 0.55 }),
-    leatherIn: new THREE.MeshStandardMaterial({ color: 0x0b0807, roughness: 0.9, side: THREE.DoubleSide }),
-    pearl: new THREE.MeshPhysicalMaterial({ color: 0xf2efe6, roughness: 0.25, iridescence: 0.6, clearcoat: 1 }),
-    floor: new THREE.MeshStandardMaterial({ color: 0x17120f, roughness: 0.85 }),
+    wood: rose([1.4, 1.4]),
+    apron: new THREE.MeshPhysicalMaterial({ color: 0xc8b6a8, map: tex(TEX, 'mahogany-color.jpg', true, [2, 2]), normalMap: tex(TEX, 'mahogany-normal.jpg', false, [2, 2]), roughnessMap: tex(TEX, 'mahogany-rough.jpg', false, [2, 2]), roughness: 0.55, clearcoat: 0.7, clearcoatRoughness: 0.2 }),
+    cloth: feltMaterial(0x1f6a46),
+    cushion: feltMaterial(0x1c6342),
+    slate: new THREE.MeshStandardMaterial({ color: 0x1e2022, roughness: 0.85 }),
+    leather: new THREE.MeshPhysicalMaterial({ color: 0x2b1a12, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.5 }),
+    leatherIn: new THREE.MeshStandardMaterial({ color: 0x0b0806, roughness: 0.9, side: THREE.DoubleSide }),
+    pearl: new THREE.MeshPhysicalMaterial({ color: 0xf2efe6, roughness: 0.22, iridescence: 0.7, clearcoat: 1 }),
+    inlayRim: new THREE.MeshStandardMaterial({ color: 0x1a120c, roughness: 0.5 }),
+    brass: new THREE.MeshStandardMaterial({ color: 0xb08d57, metalness: 0.9, roughness: 0.35 }),
+    plinth: new THREE.MeshStandardMaterial({ color: 0x0f0b09, roughness: 0.7 }),
+    floor: new THREE.MeshStandardMaterial({ color: 0x5a4a40, map: tex(TEX, 'ebony-color.jpg', true, [10, 40]), roughness: 0.7 }),
+    rug: new THREE.MeshStandardMaterial({ color: 0x3a1c1a, roughness: 1 }),
+    bridge: new THREE.MeshStandardMaterial({ color: 0x24272a, metalness: 0.5, roughness: 0.4 }),
     tip: new THREE.MeshStandardMaterial({ color: 0x2f5fa8, roughness: 0.9 }),
     ferrule: new THREE.MeshStandardMaterial({ color: 0xf1ede2, roughness: 0.35 }),
-    maple: new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex('maple-color.jpg', true, [6, 0.2]), roughness: 0.4 }),
-    ebony: new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex('ebony-color.jpg', true, [4, 0.2]), roughness: 0.35 }),
+    maple: new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex(TEX, 'maple-color.jpg', true, [6, 0.2]), roughness: 0.4 }),
+    ebony: new THREE.MeshStandardMaterial({ color: 0xffffff, map: tex(TEX, 'ebony-color.jpg', true, [4, 0.2]), roughness: 0.35 }),
   };
-  scene.add(buildTable(T, mats, phone));
+  const table = buildTableGroup(T, mats, phone);
+  scene.add(table);
   const { lights, body: lampBody } = buildLamp(scene, phone);
-  scene.add(new THREE.HemisphereLight(0x8899aa, 0x1a120c, 0.35));
+  scene.add(new THREE.HemisphereLight(0x7d8a96, 0x140e0a, 0.16));
 
-  // balls
+  // balls: the decal, clearcoat, and real fingerprints and smudges in the roughness
   const geo = new THREE.SphereGeometry(T.R, phone ? 32 : 48, phone ? 20 : 32);
-  const balls = [], qBase = [];
+  const smudge = tex(ART, 'ball-smudge-rough.jpg', false, [2, 1]);
+  const balls = [], qBase = [], rng = rngOf(11);
   for (let n = 0; n < 16; n++) {
     // the decal number faces up at rest, each ball turned a little about the vertical
     qBase.push(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, (n * 2.39996) % (2 * Math.PI), 0)).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2)));
     const map = ballTexture(n);
-    const mat = new THREE.MeshPhysicalMaterial({ color: map ? 0xffffff : ballColor(n), map, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.06 });
-    const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; m.visible = false;
+    const rough = smudge ? smudge.clone() : null;
+    if (rough) { rough.offset.set(rng(), rng()); rough.needsUpdate = true; }
+    const mat = new THREE.MeshPhysicalMaterial({ color: map ? 0xffffff : ballColor(n), map, roughness: 0.32, roughnessMap: rough, clearcoat: 1, clearcoatRoughness: 0.16, clearcoatRoughnessMap: rough });
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; m.visible = false; m.name = 'ball-' + n;
     scene.add(m); balls.push(m);
   }
+  const contact = contactShadows(scene, T.R);
   const cue = buildCue(mats); cue.visible = false; scene.add(cue);
+  const bridge = buildBridge(mats); bridge.visible = false; scene.add(bridge);
 
-  // overlays
-  const ovl = new THREE.Group(); scene.add(ovl);
+  // overlays: they draw over the balls (no depth test), the arrows from the ball centre
+  const ovl = new THREE.Group(); ovl.renderOrder = 10; scene.add(ovl);
   const aimMat = new THREE.LineDashedMaterial({ color: 0x62c4ff, dashSize: 0.025, gapSize: 0.018, transparent: true, opacity: 0.9 });
   const aimGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]);
   const aimLine = new THREE.Line(aimGeo, aimMat); aimLine.visible = false; ovl.add(aimLine);
@@ -284,14 +487,17 @@ export function createScene(canvas, T, { phone = false } = {}) {
   function arrow(k) {
     if (arrowPool[k]) return arrowPool[k];
     const g = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 1, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.024, 12), shaft.material);
-    g.add(shaft, head); g.userData = { shaft, head }; ovl.add(g); arrowPool[k] = g;
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 1, 8), mat);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.024, 12), mat);
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.0042, 10, 8), mat);   // the ball centre
+    for (const m of [shaft, head, dot]) m.renderOrder = 11;
+    g.add(shaft, head, dot); g.userData = { shaft, head, dot }; ovl.add(g); arrowPool[k] = g;
     return g;
   }
-  const up = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), X1 = new THREE.Vector3(1, 0, 0);
 
-  const V = { renderer, scene, camera, controls, balls, lights, lamp: lampBody, mode: 'auto', onUserOrbit: null };
+  const V = { renderer, scene, camera, controls, balls, lights, lamp: lampBody, table, contact, cue, bridge, arrows: arrowPool, mode: 'auto', onUserOrbit: null, cuePose: null };
   let w = 1, h = 1;
   let lastSize = '';
   V.resize = (W, H, dpr) => {
@@ -305,7 +511,7 @@ export function createScene(canvas, T, { phone = false } = {}) {
     camera.aspect = w / h; camera.updateProjectionMatrix();
   };
   V.setBalls = list => {
-    for (let n = 0; n < 16; n++) balls[n].visible = false;
+    for (let n = 0; n < 16; n++) { balls[n].visible = false; contact[n].visible = false; }
     for (const b of list) {
       const m = balls[b.n];
       let x = b.x, y = b.y, Y = T.R;
@@ -313,20 +519,30 @@ export function createScene(canvas, T, { phone = false } = {}) {
       m.visible = true;
       m.position.set(x, BED_Y + Y, -y);
       if (b.q) m.quaternion.set(b.q[1], b.q[3], -b.q[2], b.q[0]).multiply(qBase[b.n]); else m.quaternion.copy(qBase[b.n]);
+      // the contact shadow: right under the ball on the cloth, not while it drops
+      if (!b.drop) { const c = contact[b.n]; c.visible = true; c.position.set(x, BED_Y + 0.0006, -y); }
     }
   };
-  V.setCue = c => {
-    if (!c) { cue.visible = false; return; }
+  // c: { x, y, phi, a, b, back, alpha }; S: the physics state (the other balls)
+  V.setCue = (c, S) => {
+    if (!c) { cue.visible = false; bridge.visible = false; V.cuePose = null; return; }
+    const P = cuePose(T, S || { on: new Uint8Array(16) }, c);
+    V.cuePose = P;
     cue.visible = true;
-    const d = new THREE.Vector3(Math.cos(c.phi), 0, -Math.sin(c.phi)), right = new THREE.Vector3(Math.sin(c.phi), 0, Math.cos(c.phi));
-    const elev = 0.07;
-    // tip point on the ball face, then back along the cue axis
-    const face = new THREE.Vector3(c.x, BED_Y + T.R, -c.y).addScaledVector(right, -(c.a || 0) * T.R * 0.98).addScaledVector(up, (c.b || 0) * T.R * 0.98).addScaledVector(d, -Math.sqrt(Math.max(0, 1 - (c.a || 0) ** 2 - (c.b || 0) ** 2)) * T.R);
-    const axis = d.clone().multiplyScalar(-Math.cos(elev)).addScaledVector(up, Math.sin(elev)).normalize();
-    cue.position.copy(face).addScaledVector(axis, c.back || 0.02);
-    tmpQ.setFromUnitVectors(new THREE.Vector3(1, 0, 0), axis);
+    cue.position.set(P.tip[0], BED_Y + P.tip[2], -P.tip[1]);
+    tmpV.set(P.u[0], P.u[2], -P.u[1]);
+    tmpQ.setFromUnitVectors(X1, tmpV);
     cue.quaternion.copy(tmpQ);
-    cue.traverse(o => { if (o.material) { o.material.transparent = (c.alpha ?? 1) < 1; o.material.opacity = c.alpha ?? 1; } });
+    const al = c.alpha ?? 1;
+    cue.traverse(o => { if (o.material) { o.material.transparent = al < 1; o.material.opacity = al; } });
+    // the bridge: from its base (cloth or rail top) up to the bottom of the cue
+    const B = P.bridge, top = B.z - cueRadius(B.s) - 0.001, base = B.base;
+    bridge.visible = al > 0.5;
+    bridge.position.set(B.x, BED_Y + base, -B.y);
+    bridge.rotation.y = P.phi;
+    const hgt = Math.max(0.004, top - base), { post, vL, vR } = bridge.userData;
+    post.scale.y = hgt; post.position.y = hgt / 2;
+    vL.position.set(0, hgt, 0.006); vR.position.set(0, hgt, -0.006);
   };
   V.setOverlay = o => {
     o = o || {};
@@ -345,7 +561,8 @@ export function createScene(canvas, T, { phone = false } = {}) {
       shaft.material.color.setHex(colorOf(r.m));
       const len = Math.max(0.03, L);
       shaft.scale.set(1, len - 0.024, 1); shaft.position.set(0, (len - 0.024) / 2, 0); head.position.set(0, len - 0.012, 0);
-      g.position.set(r.from[0], BED_Y + T.R * 2 + 0.004, -r.from[1]);
+      // from the ball centre, in the plane of the centres (ball-centre height)
+      g.position.set(r.from[0], BED_Y + T.R, -r.from[1]);
       tmpV.set(r.vec[0] / L, 0, -r.vec[1] / L); g.quaternion.setFromUnitVectors(up, tmpV);
       g.visible = true;
     });
