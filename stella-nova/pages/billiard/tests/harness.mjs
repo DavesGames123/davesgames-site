@@ -10,7 +10,7 @@
 //    - a manual requestAnimationFrame clock (P.frames(n, dtMs))
 //  jsdom comes from JSDOM_DIR or NODE_PATH; bootPage() gives null without it.
 //
-//    const P = await bootPage({ w, h, coarse, dpr, hash })
+//    const P = await bootPage({ w, h, coarse, dpr, hash, before })
 //    P.win  P.doc  P.pool (window.__pool)  P.ctx2d  P.errors
 //    P.frames(n, dtMs = 1000/60)   P.close()
 // ============================================================================
@@ -71,7 +71,7 @@ export function fake2d(name) {
 }
 
 let run = 0;
-export async function bootPage({ w = 1280, h = 800, coarse = false, dpr = 2, hash = '#seed=7&game=8' } = {}) {
+export async function bootPage({ w = 1280, h = 800, coarse = false, dpr = 2, hash = '#seed=7&game=8', before = null } = {}) {
   const JSDOM = loadJsdom();
   if (!JSDOM) return null;
   const html = fs.readFileSync(path.join(PAGE, 'index.html'), 'utf8')
@@ -129,6 +129,8 @@ export async function bootPage({ w = 1280, h = 800, coarse = false, dpr = 2, has
       win.close();
     },
   };
+  // before(win): the online tests put a fake fetch, WebSocket and storage here
+  if (before) await before(win);
   try { await import(pathToFileURL(path.join(PAGE, 'main.js')).href + `?boot=${run++}`); }
   catch (e) { errors.push('import: ' + (e && e.stack || e)); }
   P.pool = win.__pool;

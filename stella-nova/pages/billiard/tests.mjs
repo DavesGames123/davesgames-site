@@ -16,6 +16,13 @@
 //                      shadows, shadow cameras, arrows from the centre, cue
 //    page.test.mjs     the page in jsdom: desktop, take over and plan, no
 //                      layout shift, phone order, the saver and its framing
+//    online-worker.test.mjs  the room server (worker/worker.js) on a fake
+//                      Durable Object runtime: password, seats, turns,
+//                      versions, restart, expiry, sockets, limits
+//    online-sync.test.mjs  core/netstate.js: compute, replay, snap
+//    online-page.test.mjs  the Online mode in jsdom against the real
+//                      Worker code: no URL, create, join, shots both
+//                      ways, reload, leave
 //  Needs (a missing one FAILS, it does not skip):
 //    JSDOM_DIR or NODE_PATH  a folder with jsdom 24 (page, scene)
 //    MATHJAX_DIR or NODE_PATH  a folder with mathjax-full 3.2.2 (shot.test.mjs)

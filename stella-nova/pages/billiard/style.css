@@ -17,6 +17,7 @@
    GREP MAP
      grep -n 'TOKENS'  grep -n 'APP'  grep -n 'VIEWS'  grep -n 'MATHS'
      grep -n 'BAR'  grep -n 'PLAN'  grep -n 'PHONE'  grep -n 'SAVER'
+     grep -n 'ONLINE'
    =========================================================================== */
 
 /* TOKENS */
@@ -124,6 +125,26 @@ body.planning .mstep{opacity:0.92}
 #saverCanvas{position:fixed;inset:0;width:100vw;height:100vh;z-index:100;background:#05080a}
 html.saver #app,html.saver #panel,html.saver #dock,html.saver #gear{display:none!important}
 
+/* ONLINE: the Online section (online.js) and the presence dots in the score pills */
+.onl{display:flex;flex-direction:column;gap:8px;min-width:0}
+.onl-form,.onl-room{display:flex;flex-direction:column;gap:8px;min-width:0}
+.onl-l{display:flex;flex-direction:column;gap:4px;font-size:0.75rem;color:var(--snp-dim)}
+.onl-l input{box-sizing:border-box;width:100%;min-height:36px;padding:6px 10px;border:0;border-radius:var(--snp-r,8px);background:var(--snp-raise,rgba(255,255,255,0.045));box-shadow:inset 0 0 0 1px var(--snp-line);color:var(--snp-ink);font:inherit;font-size:0.875rem;letter-spacing:0.02em}
+.onl-l input:focus-visible{outline:2px solid var(--snp-accent);outline-offset:1px}
+.onl-code{display:flex;align-items:center;gap:8px;min-width:0}
+.onl-code span{font-size:0.75rem;color:var(--snp-dim)}
+.onl-code b{flex:1 1 auto;font-size:1.25rem;letter-spacing:0.18em;font-variant-numeric:tabular-nums;color:var(--snp-ink)}
+.onl-line{margin:0;font-size:0.8125rem;line-height:1.5;color:var(--snp-dim)}
+.onl-line b{color:var(--snp-ink);font-weight:600}
+.onl-turn{color:var(--snp-ink);font-weight:500}
+.onl-dot{display:inline-block;width:8px;height:8px;margin:0 4px 0 2px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--snp-dim);vertical-align:0}
+.onl-dot.on{background:var(--snp-accent);box-shadow:none}
+.onl-more summary{cursor:pointer;font-size:0.75rem;color:var(--snp-dim)}
+.onl-more[open]{display:flex;flex-direction:column;gap:8px}
+.onl-key{display:block;padding:6px 8px;border-radius:6px;background:var(--snp-raise,rgba(255,255,255,0.045));font-size:0.75rem;word-break:break-all;user-select:all}
+body.online #score .pl .dot.net-off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--dim)}
+body.online #score .pl .dot.net-on{background:var(--snp-accent)}
+
 /* PHONE: one column that scrolls: the 2D diagram, the last four steps, the 3D table */
 @media (max-width:768px), (max-height:500px) and (pointer:coarse){
   #app{left:0!important;bottom:var(--snp-dock-h,64px);padding:6px 8px 16px;display:flex;flex-direction:column;gap:6px;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;--top-h:58px;--card-h:46px}
@@ -154,6 +175,7 @@ html.saver #app,html.saver #panel,html.saver #dock,html.saver #gear{display:none
   body.planning .banner .bb{display:none}
   #strikeCard{position:fixed;right:6px;bottom:calc(var(--snp-dock-h,64px) + 56px);left:6px;padding:8px;z-index:4}
   .sc-col{flex:1 1 auto;min-width:0}
+  .onl-l input{font-size:16px;min-height:44px}
 }
 @media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   #app{display:grid;overflow:hidden;grid-template-rows:var(--top-h) minmax(0,1fr)}

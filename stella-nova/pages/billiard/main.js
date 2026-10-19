@@ -29,10 +29,19 @@
 //  changes size (never from a caption), and fixes the contact inset in
 //  the bottom-right corner (view/diagram.js D.inset).
 //
+//  ONLINE (online.js, the user: "i want to play against my girlfriend from
+//  anywhere in the world with a "chess by mail" strategy"): APP.net is the
+//  room session. On the user's turn the planner runs; shootPlan asks
+//  APP.net.shoot for the outcome (core/netstate.js computeShot) and plays
+//  it; the phase 'wait' waits for the other seat. A shot of the other
+//  seat plays from its input (playNet), and stepSettle sets the balls to
+//  the end state of the record (APP.netShot) in place of the local rules.
+//
 //  grep -n targets: "const APP", "function startTurn", "function beginAim",
 //  "function strikeNow", "function frame", "function draw2d", "function
 //  draw3d", "function enterPlan", "function planPointer", "function
-//  buildPanel", "function layout", "window.__pool", "APP.predAim"
+//  buildPanel", "function layout", "window.__pool", "APP.predAim",
+//  "function playNet", "function enterNet", "function verdictMsg"
 // ============================================================================
 import { buildTable } from './core/table.js';
 import { beginShot, strike, tick, anyMoving, settle, ballState, accel, enableOrientation } from './core/physics.js';
@@ -46,6 +55,8 @@ import { createMaths } from './view/maths.js';
 import { createStrike, spinWords } from './view/strike.js';
 import { createPanel, mountSheet, fillIcons } from '../../lib/sn-panel.js';
 import { installSaver } from './saver.js';
+import { installOnline } from './online.js';
+import { applySnapshot } from './core/netstate.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width: 768px), (max-height: 500px) and (pointer: coarse)');
@@ -68,6 +79,8 @@ const APP = {
   show: { cons: true, vel: true, acc: true, comp: true, trails: true, slow: true, paths: true },
   pl: null,           // the planner state
   saver: null,        // set by saver.js while the screensaver runs
+  net: null,          // the online room session (online.js), else null
+  netShot: null,      // the online shot that plays now: { input, end, verdict }
 };
 
 // ── views ────────────────────────────────────────────────────────────────────
@@ -92,6 +105,9 @@ async function boot3d() {
 
 // ── the game ─────────────────────────────────────────────────────────────────
 function startGame(seed = APP.seed, type = APP.type) {
+  // a local game (a panel button, the saver) ends the online session; the
+  // room stays saved, so the Online section offers to resume it
+  if (APP.net) online.leave({ keep: true, restart: false });
   APP.seed = seed; APP.type = type;
   APP.G = newGame({ type, seed, T, names: APP.mode === 'you-ai' ? ['You', 'AI'] : ['Left', 'Right'], kinds: APP.mode === 'you-ai' ? ['human', 'ai'] : ['ai', 'ai'] });
   enableOrientation(APP.G.S);
@@ -103,16 +119,17 @@ function startGame(seed = APP.seed, type = APP.type) {
 }
 function snapPrev() { const S = APP.G.S; APP.prevX.set(S.x); APP.prevY.set(S.y); APP.acc = 0; }
 const setPhase = p => { APP.phase = p; APP.phaseT = APP.ts; };
-const humanTurn = () => APP.takeover || (APP.mode === 'you-ai' && APP.G.turn === 0);
+const humanTurn = () => (APP.net ? APP.net.myTurn() : APP.takeover || (APP.mode === 'you-ai' && APP.G.turn === 0));
 // the saver keeps the gaps short (the user: "the shots on the screensaver
 // mode should not take long between things"): see saver.js SAVER_PACE
 const pace = s => s * APP.pace * (APP.saver ? APP.saver.pace : 1);
 
 function startTurn() {
   const G = APP.G;
-  if (G.phase === 'over') { setPhase('over'); return; }
+  if (G.phase === 'over') { setPhase('over'); updateHud(); return; }
   if (humanTurn()) { enterPlan(); return; }
   APP.human = false;
+  if (APP.net) { APP.pl = null; syncPlanUI(); setPhase('wait'); updateHud(); return; }
   APP.it = think(G, { skill: APP.skill, flair: APP.saver ? APP.saver.flair : APP.flair });
   APP.cands = [];
   setPhase('think');
@@ -203,14 +220,32 @@ function stepRoll(dt) {
   }
 }
 
+// the message after a shot (G after apply, v the verdict)
+function verdictMsg(G, v, shooter) {
+  return v.win || v.lose ? `${G.players[G.winner].name} wins: ${v.why}` : v.foul ? `Foul by ${shooter}: ${v.why}. Ball in hand for ${G.players[G.turn].name}.` : v.keep ? `${shooter} keeps the table` : `${shooter} misses; ${G.players[G.turn].name} to shoot`;
+}
 function stepSettle() {
   if (APP.ts - APP.phaseT < pace(APP.fast ? 0.7 : 1.1)) return;
   const G = APP.G, S = G.S;
-  const v = judge(G, { ball: APP.plan.n, pocket: APP.plan.pocket });
   const shooter = G.players[G.turn].name;
+  if (APP.netShot) {
+    // online: the end state of the record is the truth (no local judge)
+    const rec = APP.netShot;
+    APP.netShot = null;
+    applySnapshot(G, rec.end);
+    APP.verdict = rec.verdict;
+    APP.msg = verdictMsg(G, rec.verdict, shooter);
+    for (const k of Object.keys(APP.drops)) if (S.on[k]) delete APP.drops[k];
+    snapPrev();
+    if (APP.net) APP.net.settled(rec);
+    updateHud();
+    startTurn();
+    return;
+  }
+  const v = judge(G, { ball: APP.plan.n, pocket: APP.plan.pocket });
   apply(G, v);
   APP.verdict = v;
-  APP.msg = v.win || v.lose ? `${G.players[G.winner].name} wins: ${v.why}` : v.foul ? `Foul by ${shooter}: ${v.why}. Ball in hand for ${G.players[G.turn].name}.` : v.keep ? `${shooter} keeps the table` : `${shooter} misses; ${G.players[G.turn].name} to shoot`;
+  APP.msg = verdictMsg(G, v, shooter);
   if (APP.human && APP.mode === 'ai-ai') { APP.takeover = false; APP.human = false; APP.msg += ' · the AI has the table again'; }
   for (const k of Object.keys(APP.drops)) if (S.on[k]) delete APP.drops[k];
   snapPrev();
@@ -272,12 +307,41 @@ function shootPlan() {
   if (APP.phase !== 'plan') return;
   refreshPlan();
   const shot = APP.plan;
+  if (APP.net) {
+    // online: the outcome is computed and sent now; the roll plays it
+    const rec = APP.net.shoot(shot);
+    if (!rec) return;
+    APP.netShot = rec;
+  }
   APP.pl = null;
   syncPlanUI();
   beginAim(shot, true);
 }
 
+// online: play a shot of the other seat from its input; stepSettle then
+// sets the end state of the record
+function playNet(rec, before) {
+  applySnapshot(APP.G, before);
+  snapPrev();
+  APP.pl = null; APP.human = false; APP.drops = {};
+  syncPlanUI();
+  APP.netShot = rec;
+  beginAim(rec.input, true);
+}
+// online: start from a room state (a join, a resume, a new rack)
+function enterNet(G) {
+  enableOrientation(G.S);
+  APP.G = G; APP.type = G.type;
+  APP.items = []; APP.trails = []; APP.drops = {}; APP.verdict = null; APP.msg = '';
+  APP.pred = null; APP.ct = null; APP.plan = null; APP.pl = null; APP.netShot = null; APP.takeover = false; maths.load([]);
+  APP.it = null;
+  snapPrev();
+  syncPlanUI();
+  startTurn();
+}
+
 function handBack() {
+  if (APP.net) return;
   if (APP.phase !== 'plan') { APP.takeover = false; return; }
   APP.takeover = false; APP.pl = null; APP.human = false;
   if (APP.mode === 'you-ai') { APP.mode = 'ai-ai'; const c = panel && panel.find('players'); if (c) c.set('ai-ai'); }
@@ -287,6 +351,7 @@ function handBack() {
 
 function takeOver() {
   if (APP.saver) return;
+  if (APP.net) { if (APP.phase === 'over') online.newGame(); return; }
   if (APP.phase === 'plan') return;
   APP.takeover = true;
   if (APP.phase === 'think' || APP.phase === 'aim') { fadeItems(); enterPlan(); }
@@ -347,8 +412,9 @@ function frame(now) {
       case 'roll': stepRoll(dt); break;
       case 'settle': stepSettle(); break;
       case 'plan': refreshPlan(); break;
-      case 'over': if (APP.mode === 'ai-ai' && APP.ts - APP.phaseT > pace(5)) startGame(APP.seed + 1); break;
+      case 'over': if (!APP.net && APP.mode === 'ai-ai' && APP.ts - APP.phaseT > pace(5)) startGame(APP.seed + 1); break;
     }
+    if (APP.net) APP.net.tick();
   }
   APP.items = APP.items.filter(x => x.fade == null || APP.ts - x.fade < 0.7);
   if (APP.saver) APP.saver.frame(dt); else { draw2d(); draw3d(dt); }
@@ -494,17 +560,23 @@ function updateHud() {
     if (!el) continue;
     el.classList.toggle('turn', G.turn === k && G.phase !== 'over');
     const grp = G.type === '9' ? '' : p.group ? (p.group === 'solids' ? 'solids' : 'stripes') : 'open';
-    setText('p' + k + 'n', `${p.name}${(APP.mode === 'you-ai' && k === 0) || (APP.human && G.turn === k) ? ' (you)' : ''}`);
+    const you = APP.net ? k === APP.net.seat : (APP.mode === 'you-ai' && k === 0) || (APP.human && G.turn === k);
+    setText('p' + k + 'n', `${p.name}${you ? ' (you)' : ''}`);
+    const dot = el.firstElementChild;
+    if (dot) { dot.classList.toggle('net-on', !!(APP.net && APP.net.online[k])); dot.classList.toggle('net-off', !!(APP.net && !APP.net.online[k])); }
     setText('p' + k + 'g', `${grp}${grp ? ' · ' : ''}${p.potted} down`);
   }
-  const phaseWord = { think: 'thinking', aim: 'aiming', roll: 'balls rolling', settle: 'judging', plan: 'your shot', over: 'game over', idle: '' }[APP.phase] || '';
+  const phaseWord = { think: 'thinking', aim: 'aiming', roll: 'balls rolling', settle: 'judging', plan: 'your shot', wait: 'waiting for the other player', over: 'game over', idle: '' }[APP.phase] || '';
   setText('status', `${gameStatus(G)} · ${phaseWord}`);
   setText('msg', APP.msg || '');
   const plan = APP.phase === 'plan';
   document.body.classList.toggle('planning', plan);
-  setText('bannerText', plan ? 'You have the table. Tap a ball, then a pocket, or drag to aim. Set the tip and the speed, then shoot.' : APP.takeover ? 'You take the next shot when the balls stop.' : APP.phase === 'over' ? 'Game over. A new rack starts soon. Tap to break yourself.' : 'The computer plays itself. Tap or click the table to take over.');
-  const tb = $('tTake'); if (tb) tb.textContent = plan ? 'Shoot' : 'Take over';
-  const db = $('dockTake'); if (db) db.lastElementChild.textContent = plan ? 'Shoot' : 'Take over';
+  document.body.classList.toggle('online', !!APP.net);
+  if (APP.net) setText('bannerText', APP.net.banner(APP.phase));
+  else setText('bannerText', plan ? 'You have the table. Tap a ball, then a pocket, or drag to aim. Set the tip and the speed, then shoot.' : APP.takeover ? 'You take the next shot when the balls stop.' : APP.phase === 'over' ? 'Game over. A new rack starts soon. Tap to break yourself.' : 'The computer plays itself. Tap or click the table to take over.');
+  const take = plan ? 'Shoot' : APP.net ? (APP.phase === 'over' ? 'New rack' : 'Wait') : 'Take over';
+  const tb = $('tTake'); if (tb) tb.textContent = take;
+  const db = $('dockTake'); if (db) db.lastElementChild.textContent = take;
 }
 
 // ── layout ──────────────────────────────────────────────────────────────────
@@ -595,14 +667,19 @@ let strikeA = null, strikeB = null;
 function buildPanel() {
   panel = createPanel($('panelBody'), { store: 'billiard' });
   const game = panel.section({ id: 'game', title: 'Game', open: true });
-  game.segmented({ id: 'gtype', label: 'Game', items: [{ id: '8', label: '8-ball' }, { id: '9', label: '9-ball' }], value: APP.type, onChange: v => startGame(APP.seed + 1, v) });
+  game.segmented({ id: 'gtype', label: 'Game', items: [{ id: '8', label: '8-ball' }, { id: '9', label: '9-ball' }], value: APP.type, onChange: v => { if (APP.net) { APP.type = v; APP.msg = `Online: the next new rack is ${v}-ball`; return; } startGame(APP.seed + 1, v); } });
   game.segmented({ id: 'players', label: 'Players', items: [{ id: 'ai-ai', label: 'AI vs AI' }, { id: 'you-ai', label: 'You vs AI' }], value: APP.mode,
     onChange: v => { APP.mode = v; APP.takeover = false; startGame(APP.seed + 1); } });
   game.select({ id: 'skill', label: 'AI skill', options: Object.entries(SKILLS).map(([id, s]) => ({ id, label: s.label })), value: APP.skill, onChange: v => { APP.skill = v; }, hint: 'The stroke error (sigma): near perfect 0.05 deg and 1 % speed, Pro 0.25 deg, Club 0.6 deg. The maths shows the aimed and the observed stroke.' });
   game.slider({ id: 'flair', label: 'Flair (banks, kicks, combos)', min: 0, max: 1, step: 0.05, value: APP.flair, format: v => `${Math.round(v * 100)} %`, onInput: v => { APP.flair = v; }, hint: 'How often the AI looks for a makeable bank, kick or combination instead of the plain pot.' });
   game.slider({ id: 'pace', label: 'Pace', min: 0.4, max: 2.5, step: 0.05, value: APP.pace, format: v => `${v.toFixed(2)}x`, onInput: v => { APP.pace = v; }, hint: 'How long the AI thinks and aims, and how long each maths step stays before the next one.' });
-  game.actions([{ id: 'newRack', label: 'New rack', icon: 'regrow', onClick: () => startGame(APP.seed + 1) }, { id: 'takeBtn', label: 'Take over', icon: 'target', onClick: () => (APP.phase === 'plan' ? shootPlan() : takeOver()) }]);
+  game.actions([{ id: 'newRack', label: 'New rack', icon: 'regrow', onClick: newRack }, { id: 'takeBtn', label: 'Take over', icon: 'target', onClick: () => (APP.phase === 'plan' ? shootPlan() : takeOver()) }]);
   game.note({ id: 'gameNote', text: 'Tap or click the table to take over. In AI vs AI the AI resumes after your shot.' });
+
+  const net = panel.section({ id: 'online', title: 'Online', open: online.wantOpen() });
+  const nh = doc.createElement('div');
+  net.slot({ id: 'onlineSlot', el: nh, hint: 'Play one other person anywhere, like chess by mail: create a game, send the room code, and each of you shoots on your own turn. The game waits for days between shots. Both need the password.' });
+  online.mount(nh);
 
   const shot = panel.section({ id: 'shot', title: 'Shot', open: true });
   const host = doc.createElement('div');
@@ -648,7 +725,7 @@ function bindChrome() {
     for (const o of document.querySelectorAll('#tSpeed button')) { o.classList.toggle('on', o === b); o.setAttribute('aria-pressed', String(o === b)); }
   });
   $('tTake').addEventListener('click', () => (APP.phase === 'plan' ? shootPlan() : takeOver()));
-  $('tNew').addEventListener('click', () => startGame(APP.seed + 1));
+  $('tNew').addEventListener('click', newRack);
   $('bShoot').addEventListener('click', shootPlan);
   $('bBack').addEventListener('click', handBack);
   $('dockPlay').addEventListener('click', () => setPaused(!APP.paused));
@@ -666,10 +743,16 @@ function bindChrome() {
   if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(() => layoutSoon()); ro.observe($('pane2d')); ro.observe($('pane3d')); }
   addEventListener('resize', layoutSoon);
 }
+// a new local rack; online: a new rack only after the game is over
+function newRack() {
+  if (APP.net) { if (APP.phase === 'over') online.newGame(); else { APP.msg = 'Online game: leave it in the Online section first'; updateHud(); } return; }
+  startGame(APP.seed + 1);
+}
 let layoutQ = 0;
 function layoutSoon() { if (layoutQ) return; layoutQ = requestAnimationFrame(() => { layoutQ = 0; layout(); }); }
 
 // ── boot ────────────────────────────────────────────────────────────────────
+const online = installOnline();
 buildPanel();
 bindChrome();
 bindViews();
@@ -686,5 +769,7 @@ window.__pool = {
   APP, T, D, maths, get V() { return V; }, ready,
   startGame, takeOver, shootPlan, handBack, enterPlan, planPointer, layout, frame2d, scene3dState, setPaused,
   planShot: () => APP.pl && planShot(),
+  playNet, enterNet, startTurn, updateHud, online,
 };
 installSaver(window.__pool);
+online.attach(window.__pool);

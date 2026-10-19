@@ -40,7 +40,7 @@ if (!loadJsdom()) { ok(false, 'jsdom: not found (set JSDOM_DIR or NODE_PATH)'); 
   const P = await bootPage({ w: 1280, h: 800 });
   const { pool, doc } = P, A = pool.APP;
   const secs = [...doc.querySelectorAll('#panelBody .snp-sec')].map(s => s.dataset.sec).join(',');
-  ok(secs === 'game,shot,maths,view,about', 'desktop: the panel has the sections Game, Shot, Maths, View, About', secs);
+  ok(secs === 'game,online,shot,maths,view,about', 'desktop: the panel has the sections Game, Online, Shot, Maths, View, About', secs);
   ok(!!pool.V && P.errors.length === 0, 'desktop: boots with the 3D scene on a fake WebGL2 and no errors', P.errors.slice(0, 2).join(' | '));
   const seen = new Set();
   for (let k = 0; k < 900; k++) { P.frames(1); seen.add(A.phase); }

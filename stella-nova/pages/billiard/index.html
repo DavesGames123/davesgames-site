@@ -32,7 +32,8 @@
                       #banner (hand-off), #strikeCard (planning)
                #maths: #steps (equation cards), #readout (live table)
                #bar (desktop transport: #tPlay #tStep #tSpeed #tTake #tNew)
-     #panel    lib/sn-panel.js sections Game, Shot, Maths, View, About
+     #panel    lib/sn-panel.js sections Game, Online, Shot, Maths, View, About
+               (Online: online.js fills #onlineSlot)
      #dock     the phone dock: play, take over or shoot, view, maths, menu
      #saverCanvas  the screensaver frame (saver.js)
 
@@ -45,6 +46,8 @@
      core/ai.js  core/shot.js  core/cue.js   (no DOM; node tests in tests/)
      view/diagram.js  view/scene3d.js  view/maths.js  view/strike.js
      main.js  saver.js  style.css
+     online.js  core/netstate.js  (online play against one person; the
+     server is worker/, worker/README.md has the deploy steps)
      tex/ (CC0 woods, tex/CREDITS.md)  artwork/ (CC0 felt and ball
      smudge scans, CREDITS.md; tools/credits-check.mjs billiard)
 
@@ -56,6 +59,7 @@
      grep -n 'function\* fancy'      core/ai.js  banks, kicks, combinations
      grep -n 'export function cuePose' core/cue.js  the cue over the rail
      grep -n 'export function regions' saver.js  the saver frame
+     grep -n 'export const POOL_URL' online.js  the server URL (empty: not deployed)
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A regulation American pool table in 2D and 3D. The computer plays 8-ball against itself, with banks, kicks and combinations, while the maths of every shot draws itself: ghost ball, cut angle, the stroke error (aimed vs observed), line of centres, v cos θ and v sin θ, sliding to rolling, cushion angles. Tap to take over and plan your own shot.">
