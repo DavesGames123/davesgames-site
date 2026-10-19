@@ -173,7 +173,7 @@ let input = null, camChoice = null;
 
 // ── the world ───────────────────────────────────────────────────────────────
 let W = null, pool = null, streamer = null, P = null, squad = null, rovs = null, WB = null;
-let cables = null;                     // rov/cables.js: the ship, the cage and the tethers
+let cables = null;                     // rov/cables.js: the ship and the tethers
 let origin = [0, 0], worldGen = 0, worldReady = false;
 const coral = new Map();           // chunk key -> { co, M, T, hidden: Set of k }
 const fineK = new Map();           // fine key -> { chunk, k }
@@ -453,8 +453,8 @@ function buildROVs() {
     });
   } catch (e) { console.error('coral-reef: no ROVs', e); rovs = null; }
   if (!rovs) { S.setLights([]); return; }
-  // the cables (rov/cables.js): a support ship follows the squad, a main
-  // umbilical to the cage, an excursion tether to each ROV. The solid in
+  // the cables (rov/cables.js): a support ship follows the squad, and a
+  // tether goes up from each ROV toward the ship (no cage). The solid in
   // metres: rock and sand (P.rockSdf) and the coral (P.coralDist).
   if (!cables) {
     try {
@@ -647,7 +647,7 @@ function buildUI() {
     items: [{ id: 'r36', label: 'Robot 36' }, { id: 'm1', label: 'Martin M1' }],
     onChange: id => { G.sstv = id; G.feedMode = 'sstv'; applyFeedMode(); },
   });
-  vw.toggle({ id: 'tCables', label: 'Cables', value: G.cables, onChange: v => { G.cables = v; if (cables) cables.setEnabled(v); }, hint: 'A support ship follows the squad. Its umbilical goes down to a cage, and a tether goes from the cage to each ROV. The camera feed goes up the cables.' });
+  vw.toggle({ id: 'tCables', label: 'Cables', value: G.cables, onChange: v => { G.cables = v; if (cables) cables.setEnabled(v); }, hint: 'A support ship follows the squad. Each ROV has its own slack tether that goes up to the ship. The camera feed goes up the tether.' });
   vw.toggle({ id: 'tOrbit', label: 'Slow orbit', value: G.orbit, onChange: v => { G.orbit = v; if (cam) cam.setAutoRotate(v); }, hint: 'The camera turns slowly round what it looks at.' });
 
   const lk = panel.section({ id: 'look', title: 'Look', open: true });

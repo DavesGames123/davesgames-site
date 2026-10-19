@@ -53,7 +53,7 @@
 //                           steps them; update() only poses the models)
 //    sdf: f(x, y, z)        the solid (world/physics.js); no coral grid
 //    tether: false          no tether of its own: the page draws the
-//                           ship, cage and tethers with rov/cables.js
+//                           ship and the tethers with rov/cables.js
 //    root: THREE.Group      the vehicles go under it (the page puts it at
 //                           minus the floating origin); the wash stays in
 //                           the scene, in render space
@@ -84,8 +84,8 @@
 //                     "export function createTetherTube"): high 56 points, 240 rings
 //                     x 16 sides; low 30 points, 96 rings x 8 sides; one geometry each,
 //                     updated in place every frame
-//    cables.js ...... the world cables: ship, umbilical, cage (TMS) and an excursion
-//                     tether per ROV ("export function createCables")
+//    cables.js ...... the world cables: the ship and one tether a vehicle
+//                     (no cage) ("export function createCables")
 //    wash.js ........ thruster wash and silt ("export function createWash")
 //    link.js ........ the SSTV link over pages/sstv ("export class SstvLink")
 //    hud.js ......... the feed panel ("export function drawHud")

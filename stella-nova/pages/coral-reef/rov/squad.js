@@ -37,7 +37,7 @@
 //  point of its own sector (exploreYaw + i 2 pi / n, a bearing from the
 //  centroid). spreadScore pushes a point away from the other ROVs and
 //  their aims (minSep, 18 m) and holds it in the leash (180 m from the
-//  centroid: the support cage of rov/tether.js follows the centroid).
+//  centroid: the support ship of rov/cables.js follows the centroid).
 //  Every regroupEvery s (480) they regroup near the leader for 10 s.
 //  S.tasks() gives the task, the aim and the subject of each ROV;
 //  S.overlap() the share of the cells that two or more ROVs saw.
@@ -199,7 +199,7 @@ export function createSquad(o = {}) {
   }
   const KIND_TEXT = { frontier: d => `surveying ${d} ground`, ridge: d => `surveying the ${d} ridge`, dropoff: d => `dropping down the ${d} cliff`, climb: d => `climbing the ${d} flank` };
   // the other ROVs and their aims push a point away; the leash (from the
-  // centroid, where the support cage is) holds it in
+  // centroid, under the support ship) holds it in
   function spreadScore(vi, x, z, c) {
     let sc = 0;
     S.vehicles.forEach((u, j) => {
@@ -419,7 +419,7 @@ export function createSquad(o = {}) {
     return true;
   }
   // every regroupEvery s the others fly to a slot near the leader and hold
-  // 10 s, so the operation (and its cage) can move on to a new region
+  // 10 s, so the operation (and its ship) can move on to a new region
   function regroup() {
     const L = S.vehicles[0].state;
     for (let i = 1; i < S.vehicles.length; i++) {

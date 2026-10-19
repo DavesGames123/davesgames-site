@@ -2,7 +2,7 @@
 //  CORAL REEF  ·  ROV  ·  the tether (DOM-free rope, node and browser)
 // ----------------------------------------------------------------------------
 //  A verlet rope of n segments. Point 0 is fixed to the ROV termination,
-//  point n to the cage or ship far above in the dark. Each step: verlet
+//  point n to its top far above in the dark (rov/cables.js). Each step: verlet
 //  integration with a small net weight and drag, then distance
 //  constraints; half way through the constraints and at the end, the
 //  rock: every point inside the SDF shell (2 radii) goes out along the

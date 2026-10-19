@@ -1,14 +1,15 @@
 // ============================================================================
-//  CORAL REEF  ·  tests/cables.test.mjs  ·  the ship, cage and tethers (node)
+//  CORAL REEF  ·  tests/cables.test.mjs  ·  the ship and the tethers (node)
 // ----------------------------------------------------------------------------
 //  The user said (2026-10-18): "what happened to the cables attached to
-//  ROV/s ?". rov/cables.js on the real world field (world/field.js, rock
+//  ROV/s ?", then "we should remove the giant mesh we're attaching all the
+//  rov's to". rov/cables.js on the real world field (world/field.js, rock
 //  and sand) with the real squad (rov/squad.js, 4 ROVs): a long run with
 //  floating-origin shifts. Checks: the ropes are continuous (no jump of a
 //  point from one step to the next, the tubes in render space plus the
 //  origin are the world ropes), the clearance from the rock, no cable in
-//  an ROV body, the cage over the squad, the ship over the cage, and the
-//  cost per device profile. The coral term of the page solid (P.coralDist)
+//  an ROV body, no cage mesh in the scene graph, each tether rises from its
+//  ROV toward the ship, the ship over the squad, and the cost per profile. The coral term of the page solid (P.coralDist)
 //  is not in this run (no streamer).
 // ============================================================================
 import * as THREE from '../../../vendor/three@0.160.0/build/three.module.js';
@@ -16,7 +17,7 @@ import { createWorld } from '../world/field.js';
 import { WORLD_BUDGET, fineFor } from '../world/stream.js';
 import { worldPhysics } from '../world/physics.js';
 import { createSquad } from '../rov/squad.js';
-import { createCables, cableCost, CABLE_Q, BODY_R, CAGE_SURF } from '../rov/cables.js';
+import { createCables, cableCost, CABLE_Q, BODY_R, RISE, LEASH } from '../rov/cables.js';
 
 let pass = 0, fail = 0;
 function ok(c, name, info = '') { if (c) { pass++; console.log(`ok   ${name}${info !== '' ? '  ' + info : ''}`); } else { fail++; console.log(`FAIL ${name}${info !== '' ? '  ' + info : ''}`); } }
@@ -38,7 +39,7 @@ const K = createCables(THREE, { scene, sdf: metric, profile: 'desktop', surfaceY
 const rovsOf = () => S.vehicles.map(v => ({ id: v.id, p: v.state.p.slice(), term: [v.state.p[0], v.state.p[1] + 0.62, v.state.p[2]] }));
 
 const dt = 1 / 30, N = Math.round((process.argv.includes('--quick') ? 1 : 4) * 60 / dt);
-let maxMove = 0, minRock = Infinity, minCurve = Infinity, minBody = Infinity, shifts = 0, renderErr = 0, cageOver = Infinity, shipOff = 0, ms = 0;
+let maxMove = 0, minRock = Infinity, minCurve = Infinity, minBody = Infinity, shifts = 0, renderErr = 0, topRise = Infinity, topFar = 0, shipOff = 0, ms = 0;
 let prev = null;
 for (let s = 0; s < N; s++) {
   S.step(dt);
@@ -68,31 +69,40 @@ for (let s = 0; s < N; s++) {
       for (let k = 3; k < L - 3; k += 2) {
         const x = C[k * 3] + origin[0], y = C[k * 3 + 1], z = C[k * 3 + 2] + origin[1];
         minCurve = Math.min(minCurve, metric(x, y, z));
-        if (r.kind === 'excursion') for (const v of R) { if (v.id === r.id && Math.hypot(x - v.p[0], y - v.p[1], z - v.p[2]) < 1.5 && k < 12) continue; minBody = Math.min(minBody, Math.hypot(x - v.p[0], y - v.p[1], z - v.p[2]) + 0.03); }
+        if (r.kind === 'tether') for (const v of R) { if (v.id === r.id && Math.hypot(x - v.p[0], y - v.p[1], z - v.p[2]) < 1.5 && k < 12) continue; minBody = Math.min(minBody, Math.hypot(x - v.p[0], y - v.p[1], z - v.p[2]) + 0.03); }
       }
     }
   });
-  const top = Math.max(...R.map(v => v.p[1]));
-  cageOver = Math.min(cageOver, Math.min(K.sim.cage[1] - top, 55 - CAGE_SURF - top));
-  shipOff = Math.max(shipOff, Math.hypot(K.sim.ship[0] - K.sim.cage[0], K.sim.ship[2] - K.sim.cage[2]));
+  R.forEach((v, i) => { const t = K.sim.tops[i]; topRise = Math.min(topRise, t[1] - v.term[1]); topFar = Math.max(topFar, Math.hypot(t[0] - v.term[0], t[1] - v.term[1], t[2] - v.term[2])); });
+  const cx = R.reduce((a, v) => a + v.p[0], 0) / R.length, cz = R.reduce((a, v) => a + v.p[2], 0) / R.length;
+  shipOff = Math.max(shipOff, Math.hypot(K.sim.ship[0] - cx, K.sim.ship[2] - cz));
 }
 const travel = Math.hypot(S.vehicles[0].state.p[0] - start[0], S.vehicles[0].state.p[2] - start[2]);
 console.log(`cables: ${N} steps (${(N * dt / 60).toFixed(1)} min), ${shifts} origin shifts, lead travel ${travel.toFixed(0)} m, ${K.sim.ropes.length} ropes, ${f3(ms / N)} ms a step (desktop), ${K.sim.jumps} resets`);
-ok(K.sim.ropes.length === 5 && K.sim.ropes.filter(r => r.kind === 'excursion').length === 4, 'cables: one umbilical and 4 excursion tethers for 4 ROVs');
+ok(K.sim.ropes.length === 4 && K.sim.ropes.every((r, i) => r.kind === 'tether' && r.id === S.vehicles[i].id), 'cables: one tether for each of the 4 ROVs, no umbilical');
+{
+  // no cage (TMS) in the scene graph: under the ship only the tether tubes
+  const bad = [];
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => { if (/cage|tms|umbilical/i.test(o.name)) bad.push(o.name); if (o.isMesh && !/^rov-cable-tether/.test(o.name)) { const w = new THREE.Vector3(); o.getWorldPosition(w); if (w.y < 55 - 12) bad.push(o.name || o.geometry.type); } });
+  ok(bad.length === 0 && K.tubes.length === 4, 'cables: no cage mesh in the scene graph (in the water only the 4 tether tubes)', bad.join(',') || `${K.group.children.length} children`);
+  ok(!('cage' in K.sim), 'cables: the sim has no cage');
+}
+ok(topRise > 5 && topFar < RISE + 0.5, 'cables: each tether rises from its ROV toward the ship (top over the ROV: the sheave in the shallows, else RISE m up)', `least rise ${f3(topRise)} m, longest ${f3(topFar)} m`);
+ok(K.sim.leash === LEASH && LEASH === 180, 'cables: the leash stays 180 m');
 ok(shifts >= 2 && maxMove < 1.5 && K.sim.jumps === 0, 'cables: continuous over the run and across the origin shifts (no point jumps)', `largest point move in one step ${f3(maxMove)} m`);
 ok(renderErr < 0.01, 'cables: the tubes in render space plus the origin are the world ropes', `${renderErr.toExponential(1)} m`);
 ok(minRock > -0.05 && minCurve > -0.06, 'cables: the ropes and the tube curve stay out of the rock', `min sdf rope ${f3(minRock)} m, curve ${f3(minCurve)} m`);
 ok(minBody > BODY_R - 0.1, 'cables: no cable through an ROV body', `nearest rope point or curve to a body centre ${f3(minBody)} m (body ${BODY_R} m)`);
-ok(cageOver > -0.5, 'cables: the cage hangs over the squad (or under the surface in the shallows)', `${f3(cageOver)} m`);
-ok(shipOff < 60, 'cables: the ship follows the cage', `largest offset ${shipOff.toFixed(1)} m`);
+ok(shipOff < 60, 'cables: the ship follows the squad centroid', `largest offset ${shipOff.toFixed(1)} m`);
 ok(ms / N < 4, 'cables: the step of the desktop cables in the frame budget', `${f3(ms / N)} ms`);
 
 // a region jump (behind the fade): ropes reset, then continuous again
 {
   const R = rovsOf().map(v => ({ ...v, p: [v.p[0] + 3000, v.p[1], v.p[2]], term: [v.term[0] + 3000, v.term[1], v.term[2]] }));
   K.update(dt, R);
-  const c = K.sim.cage;
-  ok(K.sim.jumps === 1 && Math.abs(c[0] - R.reduce((a, v) => a + v.p[0], 0) / R.length) < 1, 'cables: a region jump resets the ship, the cage and the ropes', `cage x ${c[0].toFixed(1)}`);
+  const c = K.sim.ship;
+  ok(K.sim.jumps === 1 && Math.abs(c[0] - R.reduce((a, v) => a + v.p[0], 0) / R.length) < 1, 'cables: a region jump resets the ship and the ropes', `ship x ${c[0].toFixed(1)}`);
 }
 
 // cost per profile: phones get the low tube and fewer points
@@ -105,7 +115,7 @@ ok(ms / N < 4, 'cables: the step of the desktop cables in the frame budget', `${
   const R = rovsOf();
   Kp.update(dt, R);
   const tris = Kp.tubes.reduce((a, t) => a + t.mesh.geometry.index.count / 3, 0);
-  ok(Kp.tubes.length === 5 && tris === cableCost('phone-min').tris, 'cables cost: the phone-min meshes have the budget triangles', `${tris}`);
+  ok(Kp.tubes.length === 4 && tris === cableCost('phone-min').tris, 'cables cost: the phone-min meshes have the budget triangles', `${tris}`);
   Kp.setEnabled(false);
   ok(!Kp.group.visible, 'cables: off hides the cables');
   Kp.dispose();
