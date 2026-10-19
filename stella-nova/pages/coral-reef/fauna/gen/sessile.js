@@ -11,13 +11,17 @@
 //    whaleFallMesh(p) the bones of a whale: skull, a curved spine of
 //                     vertebrae and ribs, with the red plumes of Osedax;
 //                     p = { length (in the unit box: 1), seed }
+//    seaPenMesh(p)    a sea pen (Pennatula): a stalk in the sand, a rachis
+//                     with leaves, polyps on the leaf edges that glow when
+//                     touched (a wave up the colony: wave = height);
+//                     p = { leaves, col, glow: { colour, k } }
 //  The size is 1 (the widest span), y = 0 on the ground. The plumes have
 //  w = 1 (the sway); the tubes and bones w = 0.
 //
 //  grep -n targets: "export function tubeWormMesh", "export function musselMesh",
-//  "export function whaleFallMesh"
+//  "export function whaleFallMesh", "export function seaPenMesh"
 // ============================================================================
-import { builder, tube, blob, fin, hex, mix3, lerp } from './mesh.js';
+import { builder, tube, blob, fin, hex, mix3, lerp, organ } from './mesh.js';
 
 const TAU = Math.PI * 2;
 function rng(seed) { let a = seed >>> 0 || 1; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -71,5 +75,26 @@ export function whaleFallMesh(params = {}) {
   }
   // a white bacterial mat round the bones
   fin(B, [[0, 0.002, 0], ...Array.from({ length: 13 }, (_, j) => { const a = (j / 12) * TAU; return [Math.cos(a) * 0.3 * (0.8 + 0.3 * Math.sin(j * 3.1)), 0.002, Math.sin(a) * 0.5 * (0.8 + 0.3 * Math.cos(j * 2.3)) - 0.08]; })], 0.001, { col: () => mix3(mat, [0.4, 0.4, 0.35], 0.4), anim: () => [0, 0, 0, 0] });
+  return B.mesh();
+}
+
+export function seaPenMesh(params = {}) {
+  const p = Object.assign({ leaves: 16, col: { stalk: 0xd8b0a0, rachis: 0xe07850, leaf: 0xe89070, polyp: 0xfff0e0 }, glow: null }, params);
+  const st = hex(p.col.stalk), ra = hex(p.col.rachis), lf = hex(p.col.leaf), po = hex(p.col.polyp), B = builder();
+  const G = p.glow, g = G ? hex(G.colour ?? 0x50ffa0) : null;
+  // the stalk (peduncle) and the rachis: a straight shaft, sway with height (s)
+  const H = 1, y0 = 0.12;
+  tube(B, [[0, 0, 0], [0, y0, 0]], () => 0.035, { nu: 6, col: () => st, anim: t => [t * y0, 0, 0, 0] });
+  const shaft = []; for (let i = 0; i <= 8; i++) shaft.push([0, y0 + (H - y0) * (i / 8), 0]);
+  tube(B, shaft, t => 0.03 * (1 - 0.6 * t), { nu: 6, col: () => ra, anim: t => [y0 + (H - y0) * t, 0, 0, 0] });
+  // the leaves: pairs of fans on the upper rachis, polyps on the edge
+  for (let k = 0; k < p.leaves; k++) {
+    const t = 0.25 + 0.7 * (k / Math.max(1, p.leaves - 1)), y = y0 + (H - y0) * t, L = 0.2 * Math.sin(Math.PI * Math.min(1, (t - 0.2) / 0.8)) + 0.04;
+    for (const sd of [1, -1]) {
+      const edge = [0, 1, 2, 3].map(j => [sd * L * (0.3 + 0.7 * j / 3), y + 0.05 - 0.02 * j, (j - 1.5) * 0.012]);
+      fin(B, [[0, y, 0], ...edge], 0.004, { col: () => lf, anim: () => [y, 0.4, k / p.leaves, 0.4] });
+      for (const q of edge) blob(B, q, [0.008, 0.008, 0.008], { nu: 4, nv: 3, col: () => po, anim: () => [y, 0.4, k / p.leaves, 0.4], glow: () => (G ? [g[0] * G.k * 4, g[1] * G.k * 4, g[2] * G.k * 4] : null), pho: () => organ(y) });
+    }
+  }
   return B.mesh();
 }

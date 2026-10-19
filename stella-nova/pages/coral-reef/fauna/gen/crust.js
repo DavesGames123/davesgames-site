@@ -17,7 +17,7 @@
 //  grep -n targets: "export function crabMesh", "export function shrimpMesh",
 //  "export function isopodMesh"
 // ============================================================================
-import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp } from './mesh.js';
+import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, dots } from './mesh.js';
 
 const TAU = Math.PI * 2;
 const h2 = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -70,7 +70,9 @@ export function shrimpMesh(params = {}) {
   loft(B, s => ({ o: [0, y0 + p.h * (s < 0.4 ? 1 : 1 - 0.3 * Math.sin((s - 0.4) / 0.6 * Math.PI)) * (plan === 'shrimp' ? 1 : 0.8), 0.5 - s * (plan === 'squat' ? 0.75 : 0.92)], x: [-1, 0, 0], y: [0, 1, 0], z: [0, 0, -1] }),
     (s, u) => { const a = u * TAU, ring = s > 0.4 ? 1 - 0.12 * Math.pow(Math.abs(Math.sin(((s - 0.4) / 0.5) * p.segs * Math.PI)), 6) : 1, sh = Math.sqrt(Math.sin(clamp(s / 0.12, 0, 1) * Math.PI / 2)); return [Math.cos(a) * p.w * R(s) * ring * sh, Math.sin(a) * p.h * R(s) * ring * sh * (Math.sin(a) < 0 ? 0.6 : 1)]; },
     { ns: 20, nu: 10, cap0: true, cap1: true, col: (s, u) => (Math.sin(u * TAU) < -0.3 ? under : top), anim: s => [s, 0, 0, 0],
-      glow: (s, u) => (G && Math.sin(u * TAU) < -0.5 && (s * 14) % 1 < 0.3 ? [g[0] * G.k * 3, g[1] * G.k * 3, g[2] * G.k * 3] : null) });
+      // ventral photophores (sergestid and oplophorid shrimps): dot rows
+      glow: (s, u) => (G && Math.sin(u * TAU) < -0.4 ? [g[0] * G.k * 3, g[1] * G.k * 3, g[2] * G.k * 3] : null),
+      pho: (s, u) => dots(s * 14, Math.abs(u - 0.75) * 12, 2, 0, s) });
   const tz = 0.5 - (plan === 'squat' ? 0.75 : 0.92);
   fin(B, [[0, y0 + p.h * 0.6, tz + 0.02], [0.08, y0 + p.h * 0.5, tz - 0.08], [0, y0 + p.h * 0.5, tz - 0.11], [-0.08, y0 + p.h * 0.5, tz - 0.08]], 0.004, { col: () => top, anim: () => [1, 0.6, 0, 0.5] });
   for (const sd of [1, -1]) blob(B, [sd * p.w * 0.6, y0 + p.h * 0.9, 0.47], [0.02, 0.02, 0.02], { nu: 6, nv: 4, col: () => [0.05, 0.03, 0.02], anim: () => [0, 0, 0, 0] });

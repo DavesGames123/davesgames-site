@@ -19,7 +19,7 @@
 //  grep -n targets: "export function starMesh", "export function brittleMesh",
 //  "export function urchinMesh", "export function cucumberMesh"
 // ============================================================================
-import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, norm, cross, add, scale } from './mesh.js';
+import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, norm, cross, add, scale, dots } from './mesh.js';
 
 const TAU = Math.PI * 2;
 const h2 = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -98,7 +98,8 @@ export function cucumberMesh(params = {}) {
   loft(B, s => ({ o: [0, R(s) * 0.8, 0.5 - s], x: [-1, 0, 0], y: [0, 1, 0], z: [0, 0, -1] }),
     (s, u) => { const a = u * TAU, r = R(s); return [Math.cos(a) * r, Math.sin(a) * r * (Math.sin(a) < 0 ? 0.55 : 0.85)]; },
     { ns: 16, nu: 12, cap0: true, cap1: true, col: (s, u) => (Math.sin(u * TAU) < -0.3 ? under : body), anim: s => [s, 0, 0, 0],
-      glow: (s, u) => (G && h2(Math.floor(s * 20), Math.floor(u * 12)) > 0.85 ? [g[0] * G.k * 2, g[1] * G.k * 2, g[2] * G.k * 2] : null) });
+      // scattered luminous spots over the skin (Enypniastes), wave along s
+      glow: () => (G ? [g[0] * G.k * 2, g[1] * G.k * 2, g[2] * G.k * 2] : null), pho: (s, u) => dots(s * 20, u * 12, 64, 0.8, s) });
   if (plan === 'holothuria' || plan === 'psychropotes') {
     for (let i = 0; i < 26; i++) { const s = 0.1 + 0.8 * h2(i, 1.1), a = Math.PI * (0.15 + 0.7 * h2(i, 2.2)); const r = R(s); blob(B, [Math.cos(a) * r, R(s) * 0.8 + Math.sin(a) * r * 0.85, 0.5 - s], [0.012, 0.012, 0.012], { nu: 5, nv: 3, col: () => pap, anim: () => [s, 0, 0, 0] }); }
   }

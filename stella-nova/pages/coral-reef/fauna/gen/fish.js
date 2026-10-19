@@ -25,12 +25,16 @@
 //    col ...... { back, belly, fin, pattern: 'plain' | 'bars' | 'stripes' |
 //                 'spots' | 'saddle', accent, n (pattern count), eye }
 //               colours are 0xRRGGBB (sRGB)
-//    glow ..... { rows: number of ventral photophore rows, colour, k (0..1) }
+//    glow ..... { rows: number of ventral photophore rows, colour, k (0..1),
+//                 per (dots along the body), lateral (a lower flank row) }:
+//                 dots of the photophore map (gen/mesh.js dots)
+//    organs ... [{ s, up, r, colour, k, mid }] solid light organs (a pair,
+//               or one on the midline with mid: the gulper eel tail organ)
 //
 //  grep -n targets: "export function fishMesh", "function bodyProfile",
 //  "export function rayMesh", "export function turtleMesh"
 // ============================================================================
-import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp } from './mesh.js';
+import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, dots, organ } from './mesh.js';
 
 export const FISH_DEFAULTS = {
   body: 'fusiform', h: 0.12, w: 0.07, peak: 0.32, ped: 0.025, head: 1, jaw: 0,
@@ -91,19 +95,23 @@ export function fishMesh(params = {}) {
   const p = Object.assign({}, FISH_DEFAULTS, params, { col: Object.assign({}, FISH_DEFAULTS.col, params.col || {}) });
   const B = builder();
   const G = p.glow, gcol = G ? hex(G.colour ?? 0x40a0ff) : null;
+  // the photophore rows: the vertex glow covers a band on each side of the
+  // ventral midline (and the lower flank with G.lateral); the photophore
+  // map (gen/mesh.js dots) cuts it into G.per dots along the body in rows
+  // that go out from the midline (ROW_K cells in one turn round the body)
+  const ROW_K = 12, rows = G ? (G.lateral ? 3 : Math.max(1, G.rows || 1)) : 0;
+  const offMid = u => { const a = Math.abs(u - 0.75); return Math.min(a, 1 - a); };
   const glowAt = (s, u) => {
     if (!G || !G.rows) return null;
-    const up = Math.sin(u * TAU);
-    if (up > -0.55 || s < 0.08 || s > 0.9) return null;
-    const row = Math.floor((up + 1) / 0.45 * G.rows) % G.rows;
-    const spot = (s * (G.per || 18)) % 1;
-    return spot < 0.42 && row < G.rows ? [gcol[0] * G.k * 3, gcol[1] * G.k * 3, gcol[2] * G.k * 3] : null;
+    if (s < 0.08 || s > 0.9 || offMid(u) * ROW_K > rows + 0.2) return null;
+    return [gcol[0] * G.k * 3, gcol[1] * G.k * 3, gcol[2] * G.k * 3];
   };
+  const phoAt = (s, u) => (G && G.rows ? dots(s * (G.per || 18), offMid(u) * ROW_K, rows, 0, s) : null);
   // body
   loft(B,
     s => { const [, , lift] = bodyProfile(p, s); return { o: [0, lift, zOf(s)], x: [-1, 0, 0], y: [0, 1, 0], z: [0, 0, -1] }; },
     (s, u) => { const [h, w] = bodyProfile(p, s); const a = u * TAU; return [Math.cos(a) * w, Math.sin(a) * h * (Math.sin(a) < 0 && p.body === 'shark' ? 0.8 : 1)]; },
-    { ns: p.ns, nu: p.nu, cap0: true, cap1: true, col: (s, u) => bodyColour(p, s, u), anim: s => [s, 0, 0, 0], glow: glowAt });
+    { ns: p.ns, nu: p.nu, cap0: true, cap1: true, col: (s, u) => bodyColour(p, s, u), anim: s => [s, 0, 0, 0], glow: glowAt, pho: phoAt });
   const finCol = hex(p.col.fin);
   const finAnim = (s, w = 1) => [s, w, 0, 0.6];
   // median fins along the top / bottom
@@ -158,8 +166,14 @@ export function fishMesh(params = {}) {
     const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push([base[0] + dir[0] * L * t, base[1] + dir[1] * L * t + Math.sin(t * 2.4) * L * 0.25, base[2] + dir[2] * L * t]); }
     tube(B, pts, () => 0.004, { nu: 4, col: () => hex(p.col.fin), anim: t => [0.05, t, 0.5, 1] });
     const g = hex(c), tip = pts[pts.length - 1];
-    blob(B, tip, [0.018, 0.018, 0.018], { nu: 6, nv: 4, col: () => [0.9, 0.95, 1], anim: () => [0.05, 1, 0.5, 1], glow: () => [g[0] * 6, g[1] * 6, g[2] * 6] });
+    blob(B, tip, [0.018, 0.018, 0.018], { nu: 6, nv: 4, col: () => [0.9, 0.95, 1], anim: () => [0.05, 1, 0.5, 1], glow: () => [g[0] * 6, g[1] * 6, g[2] * 6], pho: () => organ(0) });
   };
+  // light organs by the eye (dragonfishes: the red suborbital organ and the
+  // blue postorbital organ of Malacosteus), [{ s, up, r, colour, k }]
+  for (const O of p.organs || []) {
+    const [h, w, l] = bodyProfile(p, O.s), c = hex(O.colour);
+    for (const sd of O.mid ? [0] : [1, -1]) blob(B, [sd * w * 0.9, l + h * O.up, zOf(O.s)], [O.r * 0.4, O.r, O.r * 1.3], { nu: 6, nv: 4, col: () => [0.5, 0.3, 0.3], anim: () => [O.s, 0, 0, 0], glow: () => [c[0] * O.k * 6, c[1] * O.k * 6, c[2] * O.k * 6], pho: () => organ(O.s) });
+  }
   if (p.lure) { const [h, , l] = bodyProfile(p, 0.1); glowTip([0, l + h * 0.95, zOf(0.1)], [0, 0.6, 0.8], p.lure, p.lureColour ?? 0x60e0ff); }
   if (p.barbel) { const [h, , l] = bodyProfile(p, 0.06); glowTip([0, l - h, zOf(0.06)], [0, -0.85, 0.2], p.barbel, p.lureColour ?? 0x6080ff); }
   // a rostrum (swordfish)

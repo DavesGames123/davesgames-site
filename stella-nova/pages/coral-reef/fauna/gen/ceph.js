@@ -17,7 +17,7 @@
 //
 //  grep -n targets: "export function cephMesh"
 // ============================================================================
-import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, add, scale } from './mesh.js';
+import { builder, loft, tube, blob, fin, hex, mix3, sstep, clamp, lerp, add, scale, dots, organ } from './mesh.js';
 
 const TAU = Math.PI * 2;
 const h2 = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
@@ -48,11 +48,15 @@ export function cephMesh(params = {}) {
     const neck = s > 0.85 ? lerp(mR, mR * 0.75, sstep(0.85, 1, s)) : mantle;
     return Math.max(0.006, s > 0.85 ? neck : mantle);
   };
-  const glowSpot = (s, u) => (G && G.spots && h2(Math.floor(s * 18), Math.floor(u * 14)) > 1 - G.spots ? [gcol[0] * G.k * 3, gcol[1] * G.k * 3, gcol[2] * G.k * 3] : null);
+  // photophores scattered over the mantle (jewel squid, firefly squid):
+  // the vertex glow covers the mantle, the photophore map lights a share
+  // G.spots of the cells (more on the under side: a ventral bias)
+  const glowSpot = (s, u) => (G && G.spots ? scale(gcol, G.k * 3 * (0.45 + 0.55 * sstep(0.3, -0.6, Math.sin(u * TAU)))) : null);
+  const phoSpot = (s, u) => (G && G.spots ? dots(s * 18, u * 14, 64, 1 - G.spots, s) : null);
   loft(B, spine, (s, u) => { const r = radius(s), a = u * TAU; return [Math.cos(a) * r, Math.sin(a) * r * (plan === 'dumbo' ? 1.15 : 1)]; }, {
     ns: 14, nu: 14, cap0: true, cap1: false,
     col: (s, u) => { let c = mix3(under, body, sstep(-0.4, 0.5, Math.sin(u * TAU))); if (h2(Math.floor(s * 22), Math.floor(u * 16)) > 0.86) c = mix3(c, spot, 0.6); return c; },
-    anim: s => [s, 0, 0, 0], glow: glowSpot,
+    anim: s => [s, 0, 0, 0], glow: glowSpot, pho: phoSpot,
   });
   // eyes at the head
   const head = squidLike ? [0, 0, headZ] : [0, 0.5 - mL - 0.02, 0];
@@ -86,7 +90,10 @@ export function cephMesh(params = {}) {
       col: (t, u) => { let c = mix3(body, under, u > 0.5 ? 0.6 : 0.1); if (u > 0.4 && u < 0.6 && (t * 20) % 1 < 0.4) c = mix3(c, spot, 0.7); return c; },
       anim: t => [0.6 + 0.4 * t, clamp(t * 1.4, 0, 1), k / nA, t],
       glow: t => (G && plan === 'vampire' && t > 0.92 ? [gcol[0] * G.k * 4, gcol[1] * G.k * 4, gcol[2] * G.k * 4] : null),
+      pho: t => organ(t),
     });
+    // the vampire squid: a light organ at each arm tip (the tube tip glows too)
+    if (G && plan === 'vampire') blob(B, pts[N], [0.012, 0.012, 0.012], { nu: 5, nv: 3, col: () => body, anim: () => [1, 1, k / nA, 1], glow: () => scale(gcol, G.k * 5), pho: () => organ(1) });
   }
   // the web between the arms (a skirt of fans)
   if (p.web > 0) {
@@ -104,7 +111,9 @@ export function cephMesh(params = {}) {
       let pts;
       if (squidLike) { const z0 = tipZ, fl = mL * 0.45 * p.fins * 2; pts = [[0, 0, z0 + 0.01], [sd * mR * 0.6, 0, z0 + fl], [sd * (mR + fl * 0.55), 0, z0 + fl * 0.45], [sd * mR * 0.3, 0, z0 - 0.01]]; }
       else { const y0 = 0.5 - mL * 0.35, fs = 0.16 * p.fins; pts = [[sd * mR * 0.85, y0, 0], [sd * (mR + fs * 0.7), y0 + fs * 0.6, 0], [sd * (mR + fs), y0 + fs * 0.1, 0], [sd * (mR + fs * 0.6), y0 - fs * 0.5, 0], [sd * mR * 0.8, y0 - fs * 0.3, 0]]; }
-      fin(B, pts, 0.006, { col: () => body, anim: (i, q) => [0.3, i === 0 ? 0 : 1, sd > 0 ? 0.25 : 0.75, 0.9], glow: () => (G && plan === 'vampire' ? [gcol[0] * G.k * 1.5, gcol[1] * G.k * 1.5, gcol[2] * G.k * 1.5] : null) });
+      fin(B, pts, 0.006, { col: () => body, anim: (i, q) => [0.3, i === 0 ? 0 : 1, sd > 0 ? 0.25 : 0.75, 0.9] });
+      // the vampire squid: a large light organ at the base of each fin
+      if (G && plan === 'vampire') blob(B, pts[0], [0.03, 0.035, 0.03], { nu: 7, nv: 4, col: () => body, anim: () => [0.3, 0, 0, 0], glow: () => scale(gcol, G.k * 4), pho: () => organ(0) });
     }
   }
   return B.mesh();

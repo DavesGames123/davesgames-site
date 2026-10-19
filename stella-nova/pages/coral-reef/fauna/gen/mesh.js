@@ -8,8 +8,10 @@
 //    B.v(p, n, c, a, g) -> index   p, n: [x, y, z]; c: [r, g, b] (linear);
 //                                   a: [s, w, ph, f] animation (below);
 //                                   g: [r, g, b] emissive (photophores)
+//                                   ph: [a, b, kind, wave] the photophore
+//                                   map (PHOTOPHORE MAP, below)
 //    B.t(a, b, c)                   a triangle (counter-clockwise outside)
-//    B.mesh() -> { positions, normals, colors, anim, glow, indices, tris,
+//    B.mesh() -> { positions, normals, colors, anim, glow, pho, indices, tris,
 //                  vertexCount, bounds }   (typed arrays, normals smoothed
 //                  where the generator gave none)
 //
@@ -20,6 +22,19 @@
 //    ph .. the phase of the appendage (arm or leg index / count)
 //    f ... the flex of the appendage (0 stiff .. 1 limp); for an arm the
 //          distance along the arm 0..1
+//
+//  PHOTOPHORE MAP (ph, per vertex; fauna/glsl.js phoMask reads it). The
+//  emissive g gives the colour and the area that can glow. ph cuts the
+//  area into dots on the body, so the light comes from photophores:
+//    kind 0 ...... a solid light organ (the esca of a lure, a cheek organ)
+//    kind >= 1 ... dots: one dot in each cell of the grid (a, b); the
+//                  cells with 0 <= b < floor(kind) can glow (the rows), and
+//                  a fraction fract(kind) of the cells is dark (scattered
+//                  spots). The dots are round on the body (the shader
+//                  scales the cell by its screen derivatives).
+//    wave ........ the coordinate that a flash wave runs along (s along the
+//                  body, u round a ring): fauna/glow.js sets its phase.
+//    dots(a, b, rows, sparse, wave) gives a ph value.
 //
 //  SHAPES (each adds to B; frames are { o, x, y, z } with unit axes)
 //    loft(B, spine(s) -> frame, section(s, u) -> [px, py] in the frame,
@@ -47,19 +62,25 @@ export const norm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[
 // sRGB hex (0xRRGGBB) to linear rgb
 export function hex(h) { const f = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }; return [f((h >> 16) & 255), f((h >> 8) & 255), f(h & 255)]; }
 
-const NO_ANIM = [0, 0, 0, 0], NO_GLOW = [0, 0, 0];
+const NO_ANIM = [0, 0, 0, 0], NO_GLOW = [0, 0, 0], NO_PHO = [0, 0, 0, 0];
+// a photophore map value: dots in cells (a, b), rows 0 <= b < rows, a
+// fraction sparse (0 .. 0.9) of the cells dark, the wave coordinate
+export const dots = (a, b, rows, sparse = 0, wave = 0) => [a, b, Math.max(1, Math.min(64, Math.floor(rows))) + Math.min(0.9, Math.max(0, sparse)), wave];
+// a solid organ, with its wave coordinate
+export const organ = (wave = 0) => [0, 0, 0, wave];
 
 export function builder() {
-  let P = [], N = [], C = [], A = [], G = [], I = [];
+  let P = [], N = [], C = [], A = [], G = [], H = [], I = [];
   let hasN = [];
   return {
-    v(p, n, c, a, g) {
+    v(p, n, c, a, g, ph) {
       const i = P.length / 3;
       P.push(p[0], p[1], p[2]);
       if (n) { N.push(n[0], n[1], n[2]); hasN.push(1); } else { N.push(0, 0, 0); hasN.push(0); }
       C.push(c[0], c[1], c[2]);
       a = a || NO_ANIM; A.push(a[0], a[1], a[2], a[3]);
       g = g || NO_GLOW; G.push(g[0], g[1], g[2]);
+      ph = ph || NO_PHO; H.push(ph[0], ph[1], ph[2], ph[3]);
       return i;
     },
     t(a, b, c) { I.push(a, b, c); },
@@ -84,8 +105,8 @@ export function builder() {
       const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) { const v = positions[i * 3 + k]; if (v < mn[k]) mn[k] = v; if (v > mx[k]) mx[k] = v; }
       const indices = n < 65536 ? new Uint16Array(I) : new Uint32Array(I);
-      const out = { positions, normals, colors: new Float32Array(C), anim: new Float32Array(A), glow: new Float32Array(G), indices, tris: I.length / 3, vertexCount: n, bounds: { min: mn, max: mx } };
-      P = N = C = A = G = I = hasN = null;
+      const out = { positions, normals, colors: new Float32Array(C), anim: new Float32Array(A), glow: new Float32Array(G), pho: new Float32Array(H), indices, tris: I.length / 3, vertexCount: n, bounds: { min: mn, max: mx } };
+      P = N = C = A = G = H = I = hasN = null;
       return out;
     },
   };
@@ -110,7 +131,7 @@ export function loft(B, spine, section, o = {}) {
     for (let j = 0; j < nu; j++) {
       const u = j / nu, q = section(s, u);
       const p = add(F.o, add(scale(F.x, q[0]), scale(F.y, q[1])));
-      B.v(p, null, o.col ? o.col(s, u, p) : [0.5, 0.5, 0.5], o.anim ? o.anim(s, u, p) : [s, 0, 0, 0], o.glow ? o.glow(s, u, p) : null);
+      B.v(p, null, o.col ? o.col(s, u, p) : [0.5, 0.5, 0.5], o.anim ? o.anim(s, u, p) : [s, 0, 0, 0], o.glow ? o.glow(s, u, p) : null, o.pho ? o.pho(s, u, p) : null);
     }
   }
   for (let i = 0; i < ns; i++) for (let j = 0; j < nu; j++) {
@@ -142,7 +163,7 @@ export function tube(B, pts, radius, o = {}) {
     const y = cross(tan, x), r = radius(t);
     for (let j = 0; j < nu; j++) {
       const a = (j / nu) * Math.PI * 2, d = add(scale(x, Math.cos(a)), scale(y, Math.sin(a)));
-      B.v(add(pts[i], scale(d, r)), d, o.col ? o.col(t, j / nu) : [0.5, 0.5, 0.5], o.anim ? o.anim(t) : [t, 0, 0, 0], o.glow ? o.glow(t) : null);
+      B.v(add(pts[i], scale(d, r)), d, o.col ? o.col(t, j / nu) : [0.5, 0.5, 0.5], o.anim ? o.anim(t) : [t, 0, 0, 0], o.glow ? o.glow(t) : null, o.pho ? o.pho(t, j / nu) : null);
     }
   }
   for (let i = 0; i < n - 1; i++) for (let j = 0; j < nu; j++) {
@@ -150,7 +171,7 @@ export function tube(B, pts, radius, o = {}) {
     B.t(a, b, c); B.t(b, d, c);
   }
   if (o.capEnd) {
-    const ci = B.v(pts[n - 1], norm(sub(pts[n - 1], pts[n - 2])), o.col ? o.col(1, 0) : [0.5, 0.5, 0.5], o.anim ? o.anim(1) : [1, 0, 0, 0], o.glow ? o.glow(1) : null);
+    const ci = B.v(pts[n - 1], norm(sub(pts[n - 1], pts[n - 2])), o.col ? o.col(1, 0) : [0.5, 0.5, 0.5], o.anim ? o.anim(1) : [1, 0, 0, 0], o.glow ? o.glow(1) : null, o.pho ? o.pho(1, 0) : null);
     const ring = base + (n - 1) * nu;
     for (let j = 0; j < nu; j++) B.t(ring + j, ring + (j + 1) % nu, ci);
   }
@@ -165,7 +186,7 @@ export function blob(B, c, r, o = {}) {
       const ph = (j / nu) * Math.PI * 2;
       const n = [Math.sin(th) * Math.cos(ph), Math.cos(th), Math.sin(th) * Math.sin(ph)];
       const p = [c[0] + n[0] * r[0], c[1] + n[1] * r[1], c[2] + n[2] * r[2]];
-      B.v(p, norm([n[0] / r[0], n[1] / r[1], n[2] / r[2]]), o.col ? o.col(p, n) : [0.5, 0.5, 0.5], o.anim ? o.anim(p, n) : [0, 0, 0, 0], o.glow ? o.glow(p, n) : null);
+      B.v(p, norm([n[0] / r[0], n[1] / r[1], n[2] / r[2]]), o.col ? o.col(p, n) : [0.5, 0.5, 0.5], o.anim ? o.anim(p, n) : [0, 0, 0, 0], o.glow ? o.glow(p, n) : null, o.pho ? o.pho(p, n) : null);
     }
   }
   for (let i = 0; i < nv; i++) for (let j = 0; j < nu; j++) {

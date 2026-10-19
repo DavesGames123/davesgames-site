@@ -8,9 +8,16 @@
 //
 //  ATTRIBUTES
 //    position, normal (three), uv (scans), aCol (vec3, linear albedo),
-//    aAnim (vec4: s, w, ph, f; fauna/gen/mesh.js), aGlow (vec3 emissive)
+//    aAnim (vec4: s, w, ph, f; fauna/gen/mesh.js), aGlow (vec3 emissive),
+//    aPho (vec4: the photophore map a, b, kind, wave; gen/mesh.js)
 //    instanceMatrix (three), iAnim (vec4: phase, rate, amp, kind),
-//    iTint (vec4: albedo factor rgb, glow factor)
+//    iTint (vec4: albedo factor rgb, unused), iGlow (vec4: steady, counter,
+//    flash, wave phase; fauna/glow.js)
+//  BIOLUMINESCENCE. The light comes from the body: aGlow (colour and the
+//  area that can glow) times phoMask (round dots in the cells of the map,
+//  or a solid organ), times the levels of iGlow: steady + counter x the
+//  ventral share (world normal down) + flash x a wave that runs along the
+//  wave coordinate. The bloom pass of scene.js spreads the bright dots.
 //  KINDS (species.js ANIM): 0 still (sway with height), 1 fish, 2 eel,
 //    3 flap (rays, turtles, chimaera fins), 4 bell (medusae), 5 cephalopod,
 //    6 walk (legs), 7 arms (sea stars, brittle stars), 8 drift
@@ -23,12 +30,36 @@
 //                            bright rim, the comb rows diffract the lamps
 //                            into a rainbow (comb rows have f = 2)
 //    HALO_VS + HALO_FS ..... the glow halo: a camera-facing quad, added
-//                            (our cheap stand-in for bloom)
 //
-//  grep -n targets: "vec3 swim(", "export const FAUNA_VS", "export const FAUNA_FS",
+//  grep -n targets: "vec3 swim(", "float phoMask(", "export const FAUNA_VS", "export const FAUNA_FS",
 //  "export const GEL_FS", "export const HALO_VS"
 // ============================================================================
 import { WATER, NOISE2 } from '../shaders.js';
+
+// the photophore mask of fauna/gen/mesh.js (PHOTOPHORE MAP); P = aPho
+const PHO = /* glsl */`
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float phoMask(vec4 P) {
+  if (P.z < 0.5) return 1.0;
+  float rows = floor(P.z + 1e-3), sparse = clamp(P.z - rows, 0.0, 0.95);
+  // round dots: the radius is 0.3 of the smaller cell side on the screen
+  vec2 ga = vec2(length(vec2(dFdx(P.x), dFdy(P.x))), length(vec2(dFdx(P.y), dFdy(P.y))));
+  vec2 rad = max(0.3 * ga / max(max(ga.x, ga.y), 1e-6), vec2(0.02));
+  vec2 cell = floor(P.xy), f = fract(P.xy) - 0.5;
+  float on = (cell.y >= 0.0 && cell.y < rows && h21(cell) >= sparse) ? 1.0 : 0.0;
+  float d = length(f / rad), px = max(length(ga / rad), 1e-4);
+  float m = on * (1.0 - smoothstep(1.0 - px, 1.0 + px, d));
+  // dots under a pixel: the mean cover of the cells (no shimmer, the same light)
+  float far = clamp(max(ga.x, ga.y) * 2.0 - 0.5, 0.0, 1.0);
+  float rowOn = (P.y >= 0.0 && P.y < rows) ? 1.0 : 0.0;
+  return mix(m, (1.0 - sparse) * 3.14159 * rad.x * rad.y * rowOn, far);
+}
+// the level of the photophores: steady, counter on the belly, flash wave
+float phoLevel(vec4 G, vec4 P, float ny) {
+  float ventral = smoothstep(0.15, 0.75, -ny);
+  float wv = pow(0.5 + 0.5 * cos(6.2831853 * (P.w - G.w)), 8.0);
+  return G.x + G.y * ventral + G.z * (0.3 + 0.7 * wv);
+}`;
 
 const MOTION = /* glsl */`
 const float TAU = 6.2831853;
@@ -86,9 +117,12 @@ uniform float uTime;
 in vec3 aCol;
 in vec4 aAnim;
 in vec3 aGlow;
+in vec4 aPho;
 in vec4 iAnim;
 in vec4 iTint;
+in vec4 iGlow;
 out vec3 vW, vN, vCol, vGlow;
+out vec4 vPho, vGA;
 out vec2 vUv;
 out float vComb, vS;
 ${MOTION}
@@ -99,7 +133,9 @@ void main() {
   vW = w.xyz;
   vN = normalize(mat3(m) * normal);
   vCol = aCol * iTint.rgb;
-  vGlow = aGlow * iTint.w;
+  vGlow = aGlow;
+  vPho = aPho;
+  vGA = iGlow;
   vUv = uv;
   vComb = step(1.5, aAnim.w) * aAnim.z;
   vS = aAnim.x;
@@ -112,18 +148,22 @@ ${WATER}
 uniform sampler2D uMap;
 uniform float uUseMap, uGlowK;
 in vec3 vW, vN, vCol, vGlow;
+in vec4 vPho, vGA;
 in vec2 vUv;
 in float vComb, vS;
 out vec4 oCol;
+${PHO}
 void main() {
   vec3 n = normalize(vN);
+  float ny = n.y;
   vec3 V = normalize(cameraPosition - vW);
   if (!gl_FrontFacing) n = -n;
   vec3 base = vCol;
   if (uUseMap > 0.5) base *= texture(uMap, vUv).rgb;
   // wet skin: a soft wrap, a glossy lobe, a little light through thin parts
   vec3 col = lightSurf(base, vW, n, V, 0.3, 0.55, 0.42, 0.25, 1.0);
-  col += vGlow * uGlowK * (0.85 + 0.15 * sin(uTime * 3.1 + vW.x * 7.0 + vW.z * 5.0));
+  // the photophores: emissive dots on the body (the bloom pass spreads them)
+  col += vGlow * uGlowK * phoMask(vPho) * phoLevel(vGA, vPho, ny);
   oCol = linearToOutputTexel(vec4(underwater(col, vW), 1.0));
 }`;
 
@@ -132,12 +172,15 @@ ${NOISE2}
 ${WATER}
 uniform float uGlowK;
 in vec3 vW, vN, vCol, vGlow;
+in vec4 vPho, vGA;
 in vec2 vUv;
 in float vComb, vS;
 out vec4 oCol;
+${PHO}
 vec3 rainbow(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
 void main() {
   vec3 n = normalize(vN);
+  float ny = n.y;
   vec3 V = normalize(cameraPosition - vW);
   if (!gl_FrontFacing) n = -n;
   float fres = pow(1.0 - abs(dot(n, V)), 2.0);
@@ -148,7 +191,9 @@ void main() {
     vec3 white = lightSurf(vec3(1.0), vW, n, V, 0.8, 0.0, 0.5, 0.0, 1.0);
     col += white * rainbow(fract(vComb + vS * 2.0 - uTime * 0.9)) * 1.6;
   }
-  vec3 glow = vGlow * uGlowK * (0.7 + 0.3 * sin(uTime * 2.3 + vW.y * 4.0));
+  // the photophores (Atolla's ring, Periphylla's spots, Nanomia's lures);
+  // the comb rows above are reflected lamp light, not glow
+  vec3 glow = vGlow * uGlowK * phoMask(vPho) * phoLevel(vGA, vPho, ny);
   col += glow;
   float a = clamp(0.14 + 0.75 * fres + dot(glow, vec3(0.3)) + (vComb > 0.0 ? 0.4 : 0.0), 0.0, 0.92);
   vec3 d = vW - cameraPosition;

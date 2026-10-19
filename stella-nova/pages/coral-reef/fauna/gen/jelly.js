@@ -20,7 +20,7 @@
 //  grep -n targets: "export function medusaMesh", "export function ctenoMesh",
 //  "export function siphoMesh"
 // ============================================================================
-import { builder, loft, tube, blob, hex, mix3, sstep, clamp, lerp } from './mesh.js';
+import { builder, loft, tube, blob, hex, mix3, sstep, clamp, lerp, dots, organ } from './mesh.js';
 
 const TAU = Math.PI * 2;
 
@@ -41,7 +41,12 @@ export function medusaMesh(params = {}) {
       t => { const [, y] = prof(t); return { o: [0, y - (side < 0 ? 0.03 : 0), 0], x: [1, 0, 0], y: [0, 0, side], z: [0, -side, 0] }; },
       (t, u) => { const [r] = prof(t), a = u * TAU, sc = 1 + (p.form === 'crown' ? 0.05 * Math.cos(a * 16) * t : 0.03 * Math.cos(a * 8) * t * t); const rr = Math.max(0.004, (r - (side < 0 ? 0.03 : 0)) * sc); return [Math.cos(a) * rr, Math.sin(a) * rr]; },
       { ns: 10, nu: 24, cap0: false, col: t => mix3(bell, rim, sstep(0.6, 1, t)), anim: t => [0, sstep(0.3, 1, t), 0, t],
-        glow: (t, u) => (G && (p.form === 'crown' ? t > 0.82 && (u * 20) % 1 < 0.5 : t > 0.9) ? [g[0] * gk * 3, g[1] * gk * 3, g[2] * gk * 3] : null) });
+        // the photophores: Atolla, a ring of dots on the coronal groove (the
+        // flash wave runs round it, wave = u); Periphylla, scattered spots
+        // over the outer bell (the wave runs from the apex, wave = t); a
+        // plain bell, dots on the margin
+        glow: (t, u) => (G && (p.form === 'crown' ? t > 0.74 : p.form === 'helmet' ? side > 0 && t > 0.15 : t > 0.82) ? [g[0] * gk * 3, g[1] * gk * 3, g[2] * gk * 3] : null),
+        pho: (t, u) => (p.form === 'crown' ? dots(u * 40, (t - 0.8) / 0.12, 1, 0, u) : p.form === 'helmet' ? dots(u * 36, t * 14, 64, 0.6, t) : dots(u * 32, (t - 0.88) / 0.1, 1, 0, u)) });
   }
   // oral arms (frilly, short) and the marginal tentacles (long, thin)
   const [rM, yM] = prof(1);
@@ -53,7 +58,7 @@ export function medusaMesh(params = {}) {
   for (let k = 0; k < p.tentacles; k++) {
     const a = (k / p.tentacles) * TAU, L = p.tentL * (p.form === 'crown' && k === 0 ? 3 : 1) * (0.7 + 0.3 * Math.sin(k * 7.1) ** 2), pts = [];
     for (let i = 0; i <= 12; i++) { const t = i / 12; pts.push([Math.cos(a) * rM * (1 - 0.15 * t), yM - t * L, Math.sin(a) * rM * (1 - 0.15 * t)]); }
-    tube(B, pts, () => 0.004, { nu: 3, col: () => rim, anim: t => [t, 1, k / p.tentacles, t], glow: t => (G && G.tent ? [g[0] * gk * 2, g[1] * gk * 2, g[2] * gk * 2] : null) });
+    tube(B, pts, () => 0.004, { nu: 3, col: () => rim, anim: t => [t, 1, k / p.tentacles, t], glow: t => (G && G.tent ? [g[0] * gk * 2, g[1] * gk * 2, g[2] * gk * 2] : null), pho: (t, u) => dots(t * 30, u * 3, 64, 0.5, t) });
   }
   // the stomach (deep red in the twilight and the abyss: it hides the glow of the prey)
   blob(B, [0, prof(0.3)[1] - 0.12, 0], [0.12, 0.1, 0.12], { nu: 10, nv: 6, col: () => hex(C.gut ?? C.rim), anim: () => [0, 0, 0, 0] });
@@ -96,7 +101,9 @@ export function siphoMesh(params = {}) {
   for (let i = 1; i <= 8; i++) {
     const z = z0 - (i / 8.5) * (z0 + 0.5), pts = [];
     for (let j = 0; j <= 6; j++) { const t = j / 6; pts.push([Math.sin(i * 1.7) * 0.02 * t, -t * 0.18, z - t * 0.04]); }
-    tube(B, pts, () => 0.002, { nu: 3, col: () => ten, anim: t => [0.5 - z + t * 0.05, 1, i / 8, t], glow: t => (G && t > 0.8 ? [g[0] * G.k * 4, g[1] * G.k * 4, g[2] * G.k * 4] : null) });
+    tube(B, pts, () => 0.002, { nu: 3, col: () => ten, anim: t => [0.5 - z + t * 0.05, 1, i / 8, t], glow: t => (G && t > 0.8 ? [g[0] * G.k * 4, g[1] * G.k * 4, g[2] * G.k * 4] : null), pho: () => organ(0.5 - z) });
+    // Nanomia: a small light point at the tip of each tentacle cluster
+    if (G) blob(B, pts[pts.length - 1], [0.006, 0.006, 0.006], { nu: 4, nv: 3, col: () => ten, anim: () => [0.5 - z, 1, i / 8, 1], glow: () => [g[0] * G.k * 5, g[1] * G.k * 5, g[2] * G.k * 5], pho: () => organ(0.5 - z) });
   }
   return B.mesh();
 }

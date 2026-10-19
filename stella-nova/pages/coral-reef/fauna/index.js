@@ -48,6 +48,7 @@ import { faunaBudget } from './budget.js';
 import { ANIM, SPECIES_BY_ID, regionOfDepth } from './species.js';
 import { FAUNA_VS, FAUNA_FS, GEL_FS, HALO_VS, HALO_FS } from './glsl.js';
 import { hex } from './gen/mesh.js';
+import { glowParams, createGlowState, lampAt, downwelling, GLOW_GAIN } from './glow.js';
 import { parseGLB } from '../../../lib/glb-lite.js';
 
 const WATER_KEYS = ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel', 'uFow', 'uFowBox'];
@@ -146,7 +147,7 @@ export function createFauna(o) {
     const gel = !!sp.gel;
     const m = new THREE.ShaderMaterial({
       glslVersion: THREE.GLSL3, vertexShader: FAUNA_VS, fragmentShader: gel ? GEL_FS : FAUNA_FS, side: THREE.DoubleSide,
-      uniforms: Object.assign(sharedUniforms(), { uMap: { value: tex || null }, uUseMap: { value: tex ? 1 : 0 }, uGlowK: { value: 1 } }),
+      uniforms: Object.assign(sharedUniforms(), { uMap: { value: tex || null }, uUseMap: { value: tex ? 1 : 0 }, uGlowK: { value: GLOW_GAIN } }),
       transparent: gel, depthWrite: !gel,
     });
     if (gel) m.blending = THREE.NormalBlending;
@@ -161,6 +162,8 @@ export function createFauna(o) {
     g.setAttribute('aCol', new THREE.BufferAttribute(mesh.colors && mesh.colors.length === n * 3 ? mesh.colors : new Float32Array(n * 3).fill(1), 3));
     g.setAttribute('aAnim', new THREE.BufferAttribute(anim || mesh.anim, 4));
     g.setAttribute('aGlow', new THREE.BufferAttribute(mesh.glow || new Float32Array(n * 3), 3));
+    // the photophore map (gen/mesh.js); a scan has none (kind 0, no glow)
+    g.setAttribute('aPho', new THREE.BufferAttribute(mesh.pho && mesh.pho.length === n * 4 ? mesh.pho : new Float32Array(n * 4), 4));
     g.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
     g.computeBoundingSphere();
     return g;
@@ -171,6 +174,7 @@ export function createFauna(o) {
     m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('iAnim', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('iTint', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
+    geo.setAttribute('iGlow', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
     m.count = 0; m.frustumCulled = false; m.name = 'fauna:' + sp.id;
     m.castShadow = !!B.shadows && !sp.gel; m.receiveShadow = false;
     return m;
@@ -210,7 +214,7 @@ export function createFauna(o) {
       const old = b.meshes[l];
       root.remove(old);
       old.dispose();
-      b.geos[l].deleteAttribute('iAnim'); b.geos[l].deleteAttribute('iTint');
+      b.geos[l].deleteAttribute('iAnim'); b.geos[l].deleteAttribute('iTint'); b.geos[l].deleteAttribute('iGlow');
       b.meshes[l] = makeInstanced(b.geos[l], b.mat, cap, b.sp);
       root.add(b.meshes[l]);
     }
@@ -260,6 +264,8 @@ export function createFauna(o) {
   // ── the per-frame fill ────────────────────────────────────────────────────
   const frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), sph = new THREE.Sphere();
   const lodOf = new Int8Array(sim.capacity);          // per animal: -1 hidden, 0, 1, 2 (halo only)
+  const glowS = createGlowState(sim.capacity);        // per animal: the photophore flash (fauna/glow.js)
+  const PW = [0, 0, 0];
   let halo = null;
   function makeHalo() {
     const geo = new THREE.InstancedBufferGeometry();
@@ -278,7 +284,8 @@ export function createFauna(o) {
   const glowCol = new Map();
   function glowRGB(sp) { let c = glowCol.get(sp.id); if (!c) { c = hex(sp.glow.colour); glowCol.set(sp.id, c); } return c; }
 
-  function fill(camera, eye, origin, t) {
+  function fill(camera, eye, origin, t, dt = 0, rovs = null) {
+    const uDown = U && U.uDown ? U.uDown.value : 0;
     statsN.drawn = 0; statsN.halos = 0;
     if (camera) { pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv); }
     const ox = origin ? origin[0] : 0, oz = origin ? origin[1] : 0;
@@ -340,7 +347,15 @@ export function createFauna(o) {
       const cy0 = sim.cyc[i] * rate * (0.9 + 0.2 * sim.phase[i]);
       IA[q] = sim.phase[i] * 7.0 + (cy0 - Math.floor(cy0 / 100) * 100); IA[q + 1] = 0; IA[q + 2] = amp; IA[q + 3] = sp.anim;
       const tint = 0.92 + 0.16 * sim.phase[i];
-      IT[q] = tint; IT[q + 1] = tint; IT[q + 2] = tint; IT[q + 3] = 1 + sim.glow[i] * 3;
+      IT[q] = tint; IT[q + 1] = tint; IT[q + 2] = tint; IT[q + 3] = 1;
+      // the photophore levels (fauna/glow.js): steady, counter, flash, wave
+      const IG = mesh.geometry.attributes.iGlow.array, GP = glowParams(sp);
+      if (GP) {
+        PW[0] = sim.px[i]; PW[1] = sim.py[i]; PW[2] = sim.pz[i];
+        let dr = 1e9; if (rovs) for (const r of rovs) if (r && r.p) dr = Math.min(dr, Math.hypot(PW[0] - r.p[0], PW[1] - r.p[1], PW[2] - r.p[2]) - s * 0.5);
+        const g4 = glowS.step(i, GP, { dt, t, phase: sim.phase[i], d: dr, lamp: lampAt(PW, rovs), startle: sim.glow[i], down: downwelling(uDown, PW[1]) });
+        IG[q] = g4[0]; IG[q + 1] = g4[1]; IG[q + 2] = g4[2]; IG[q + 3] = g4[3];
+      } else { IG[q] = 1; IG[q + 1] = 0; IG[q + 2] = 0; IG[q + 3] = 0; }
       statsN.drawn++;
     }
     for (const b of buckets.values()) {
@@ -348,7 +363,7 @@ export function createFauna(o) {
       for (let l = 0; l < 2; l++) {
         const m = b.meshes[l], n = l ? b.k1 : b.k0;
         m.count = n;
-        if (n) { m.instanceMatrix.needsUpdate = true; m.geometry.attributes.iAnim.needsUpdate = true; m.geometry.attributes.iTint.needsUpdate = true; }
+        if (n) { m.instanceMatrix.needsUpdate = true; m.geometry.attributes.iAnim.needsUpdate = true; m.geometry.attributes.iTint.needsUpdate = true; m.geometry.attributes.iGlow.needsUpdate = true; }
       }
     }
     if (halo) { halo.geo.instanceCount = nh; halo.geo.attributes.iHalo.needsUpdate = true; halo.geo.attributes.iHaloC.needsUpdate = true; statsN.halos = nh; }
@@ -398,7 +413,7 @@ export function createFauna(o) {
     const cur = U && U.uCur ? [U.uCur.value.x, U.uCur.value.y] : [0, 0];
     sim.step(dt, { t: clock, rovs, current: cur });
     tickEscort(dt);
-    fill(camera, eye, origin, clock);
+    fill(camera, eye, origin, clock, dt, rovs);
   }
 
   // the animal on a view ray (the ROV HUD): the nearest within a 9 degree cone
@@ -423,7 +438,7 @@ export function createFauna(o) {
     for (const b of buckets.values()) {
       if (b.state !== 'ready') continue;
       ready++; if (b.sp.src === 'scan') scans++;
-      bytes += b.bytes + b.cap * 2 * (64 + 32);
+      bytes += b.bytes + b.cap * 2 * (64 + 48);
       tris += b.meshes[0].count * b.tris[0] + b.meshes[1].count * b.tris[1];
     }
     if (halo) bytes += halo.n * 32;
@@ -451,6 +466,6 @@ export function createFauna(o) {
   return {
     update, lookAt, stats, setEnabled, dispose, addColonies, removeColonies,
     setEscort(fn) { escort = fn; escortT = 0; if (!fn) sim.removeChunk('escort'); },
-    get enabled() { return enabled; }, sim, budget: B, buckets,
+    get enabled() { return enabled; }, sim, budget: B, buckets, glowState: glowS,
   };
 }

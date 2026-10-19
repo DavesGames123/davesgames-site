@@ -20,13 +20,13 @@ import { cephMesh } from './gen/ceph.js';
 import { medusaMesh, ctenoMesh, siphoMesh } from './gen/jelly.js';
 import { starMesh, brittleMesh, urchinMesh, cucumberMesh } from './gen/echino.js';
 import { crabMesh, shrimpMesh, isopodMesh } from './gen/crust.js';
-import { tubeWormMesh, musselMesh, whaleFallMesh } from './gen/sessile.js';
+import { tubeWormMesh, musselMesh, whaleFallMesh, seaPenMesh } from './gen/sessile.js';
 import { ANIM } from './species.js';
 
 export const GENERATORS = {
   fish: fishMesh, ray: rayMesh, turtle: turtleMesh, ceph: cephMesh, medusa: medusaMesh, cteno: ctenoMesh, sipho: siphoMesh,
   star: starMesh, brittle: brittleMesh, urchin: urchinMesh, cucumber: cucumberMesh, crab: crabMesh, shrimp: shrimpMesh, isopod: isopodMesh,
-  tubeworm: tubeWormMesh, mussel: musselMesh, whalefall: whaleFallMesh,
+  tubeworm: tubeWormMesh, mussel: musselMesh, whalefall: whaleFallMesh, seapen: seaPenMesh,
 };
 
 // lower ring counts for the far model (only the params that the generators read)
