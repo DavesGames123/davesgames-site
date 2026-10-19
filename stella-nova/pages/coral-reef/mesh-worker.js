@@ -92,7 +92,9 @@ export function createReefRunner({ post, makeRock, timers, clock: clockFn } = {}
   const T0 = clock();
 
   function newMesher() {
-    M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false, clock, gapMs: cfg.gapMs });
+    // solid: no polyp in the rock (coral-sdf.js keepPolyp; the Coral
+    // Species base, where the colony meets the rock)
+    M = createCoralMesher({ fine: R.fine, radius: R.radius, polyps: R.Q.polyps, lod: cfg.lod !== false, clock, gapMs: cfg.gapMs, solid: rock && rock.sdf ? (x, y, z) => rock.sdf(x, y, z) : null });
     sent = 0; fed = 0; held = new Map();
   }
   // one particle to the mesher, with its fuse bridge (reef.js R.bridges)

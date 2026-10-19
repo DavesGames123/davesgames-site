@@ -376,9 +376,12 @@ export function createSdf(opts = {}) {
   }
 
   // The field at any point: the same fold as the lattice (no post).
-  function distance(x, y, z) {
+  // out (optional): out[0] gets the nearest primitive id (-1 for none), the
+  // id that the lattice keeps for a post term.
+  function distance(x, y, z, out) {
     const gx = Math.floor(x / cell / B), gy = Math.floor(y / cell / B), gz = Math.floor(z / cell / B);
     const b = brickAt(gx, gy, gz, false);
+    if (out) out[0] = -1;
     if (!b) return QT * QS;
     let v = QT * QS, id = 0;
     for (const c of b.prims) {
@@ -389,6 +392,7 @@ export function createSdf(opts = {}) {
       if (d < v || id === 0) id = c + 1;
       v = quant(blend(v, d, id0, c)) * QS;
     }
+    if (out) out[0] = id - 1;
     return v;
   }
 

@@ -1134,6 +1134,9 @@ export function createReef(opts = {}) {
     const cl = Math.hypot(env.cur[0], env.cur[1]) || 1;
     const colony = {
       k, id, sp, base, normal: n.slice(), plane: [env.cur[0] / cl, env.cur[1] / cl], size,
+      // foot: the distance from the root down to the rock site (along -n);
+      // coral-sdf.js extends the root cone that far, so no colony floats
+      foot: Math.hypot(base[0] - site.p[0], base[1] - site.p[1], base[2] - site.p[2]),
       cap: Math.max(20, Math.min(o.cap ?? capFor(id, size), R.limit - R.count)),
       count: 0, ids: [], top: base[1], ext: 0, roots: 1, born: R.now, full: false, tries: 0, lastTry: 0, winT: 0, winN: 0,
       stalk: Math.max(3, Math.round((sp.stalkM || 0) * (0.6 + 0.5 * size / (3 * sp.scale)) / params[id].particleSpacing)),
@@ -1681,7 +1684,7 @@ export function packParticles(R, from, to) {
 }
 // The colony list in the worker messages (plain data).
 export function colonyInfo(c) {
-  return { k: c.k, id: c.id, base: c.base.slice(), normal: c.normal.slice(), plane: c.plane.slice(), size: c.size, cap: c.cap, stalk: c.stalk, tilt: c.tilt || 0, morph: c.morph || 0 };
+  return { k: c.k, id: c.id, base: c.base.slice(), normal: c.normal.slice(), plane: c.plane.slice(), size: c.size, cap: c.cap, stalk: c.stalk, tilt: c.tilt || 0, morph: c.morph || 0, foot: c.foot || 0 };
 }
 
 // Size measures of one colony (metres, from its base): width (the largest

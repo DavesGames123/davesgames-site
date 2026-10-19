@@ -31,8 +31,12 @@
 //        'phone'), o.seed (world seed), o.slice (main thread: a generator
 //        that yields between time slices)
 //    meshCoarse(colonies, particles, bridges, Q) -> { sp: merged } per species
-//    meshFine(colony, particles, bridges, Q) -> merged fine mesh + polyps of
-//        one colony (meshed in colony metres, given back in the chunk frame)
+//    meshFine(colony, particles, bridges, Q, all?) -> merged fine mesh +
+//        polyps of one colony (meshed in colony metres, given back in the
+//        chunk frame); all: the chunk colonies, fused at contacts
+//    fineMesher(colony, particles, bridges, Q, all?) -> { M, ids } and
+//    coarseMesher(colonies, particles, bridges, Q, fuse = true) -> M: the
+//        meshers of meshFine and meshCoarse before meshAll (tests)
 //    result = { key, ci, cj, cx, cz, oy, colonies: [colonyInfo + count, top,
 //        ext], count, particles (PARTICLE_FLOATS each), bridges (Int32 pairs),
 //        coarse: { [sp]: { positions, normals, gids, indices, tris } },
@@ -273,13 +277,17 @@ function merge(list, withPolyps) {
 
 // colony list items: { k, id, base, plane, stalk, ... }; particles:
 // PARTICLE_FLOATS per particle (packParticles); bridges: Int32 pairs g, j.
-export function meshCoarse(colonies, particles, bridges, Q) {
+export function coarseMesher(colonies, particles, bridges, Q, fuse = true) {
   const M = createCoralMesher({ polyps: Q.polyps, fine: Q.fine, radius: 44, lod: true });
   for (const c of colonies) M.addColony(c);
   const n = particles.length / PARTICLE_FLOATS;
   for (let g = 0; g < n; g++) { const o = g * PARTICLE_FLOATS; M.add(g, particles[o + 4], particles[o], particles[o + 1], particles[o + 2], particles[o + 3]); }
   if (bridges) for (let q = 0; q < bridges.length; q += 2) M.bridge(bridges[q], bridges[q + 1]);
-  M.fuse();                 // two species that touch: one surface (coral-sdf.js fuse)
+  if (fuse) M.fuse();       // two species that touch: one surface (coral-sdf.js fuse)
+  return M;
+}
+export function meshCoarse(colonies, particles, bridges, Q) {
+  const M = coarseMesher(colonies, particles, bridges, Q);
   const by = {};
   for (const b of M.meshAll(1)) if (b.indices && b.indices.length) (by[b.sp] || (by[b.sp] = [])).push(b);
   const out = {};
@@ -289,38 +297,47 @@ export function meshCoarse(colonies, particles, bridges, Q) {
 
 // One colony (k) in its own frame (metres from colony.base): the fine
 // SDF mesh (coral-sdf.js lod: false) and its polyps. gids are the chunk
-// particle ids (g), so the page reads the same data texels. The other
-// colonies of the chunk (all of them: o.colonies, else only this one) go
-// in as contact guests (coral-sdf.js fuse): where they touch this colony,
-// its mesh is its part of one fused surface, with no face in the other.
-export function meshFine(colony, particles, bridges, Q, all = null) {
-  const n = particles.length / PARTICLE_FLOATS;
+// particle ids (g), so the page reads the same data texels. all: the
+// colony list of the chunk (result.colonies): the other colonies go in as
+// contact guests (coral-sdf.js fuse), so where they touch this colony its
+// mesh is its part of one fused surface, with no face in the other.
+export function fineMesher(colony, particles, bridges, Q, all = null) {
+  const n = particles.length / PARTICLE_FLOATS, ids = [], local = new Map();
+  const list = (all && all.length ? all : [colony]).filter(c => c.k !== colony.k);
+  const known = new Set(list.map(c => c.k)); known.add(colony.k);
   let mine = 0;
-  for (let g = 0; g < n; g++) if (particles[g * PARTICLE_FLOATS + 3] === colony.k) mine++;
+  for (let g = 0; g < n; g++) {
+    const k = particles[g * PARTICLE_FLOATS + 3];
+    if (!known.has(k)) continue;
+    local.set(g, ids.length); ids.push(g);
+    if (k === colony.k) mine++;
+  }
   if (!mine) return null;
   const b = colony.base;
   const rel = c => ({ k: c.k, id: c.id, base: [c.base[0] - b[0], c.base[1] - b[1], c.base[2] - b[2]], normal: c.normal, foot: c.foot, plane: c.plane, stalk: c.stalk, tilt: c.tilt });
-  const M = createCoralMesher({ polyps: Q.polyps, fine: Q.fine, radius: Math.max(4, colony.size * 1.2), lod: false });
+  const M = createCoralMesher({ polyps: Q.polyps, fine: Q.fine, radius: Math.max(4, colony.size * 1.2), lod: false, frame: b });
   M.addColony(rel(colony));
-  for (const c of all || []) if (c.k !== colony.k) M.addColony(Object.assign(rel(c), { guest: true }));
-  // every particle in chunk order (ids = chunk particle ids); the
-  // particles of colonies that are not in are skipped
-  for (let g = 0, q = 0; g < n; g++) {
-    const o = g * PARTICLE_FLOATS, k = particles[o + 3];
-    if (!M.cols.has(k)) continue;
-    if (q !== g) break;     // a colony left out before this one: no guests past it
-    M.add(g, particles[o + 4], particles[o] - b[0], particles[o + 1] - b[1], particles[o + 2] - b[2], k);
-    q++;
+  for (const c of list) M.addColony(Object.assign(rel(c), { guest: true }));
+  for (let q = 0; q < ids.length; q++) {
+    const o = ids[q] * PARTICLE_FLOATS, par = particles[o + 4];
+    M.add(q, par >= 0 && local.has(par) ? local.get(par) : -1, particles[o] - b[0], particles[o + 1] - b[1], particles[o + 2] - b[2], particles[o + 3]);
   }
-  if (bridges) for (let q = 0; q < bridges.length; q += 2) M.bridge(bridges[q], bridges[q + 1]);
-  if (all) M.fuse();
-  const list = M.meshAll().filter(r => r.indices && r.indices.length);
-  const m = merge(list, true);
+  if (bridges) for (let q = 0; q < bridges.length; q += 2) { const g = local.get(bridges[q]), j = local.get(bridges[q + 1]); if (g !== undefined && j !== undefined) M.bridge(g, j); }
+  if (list.length) M.fuse();
+  return { M, ids };
+}
+export function meshFine(colony, particles, bridges, Q, all = null) {
+  const fm = fineMesher(colony, particles, bridges, Q, all);
+  if (!fm) return null;
+  const { M, ids } = fm, b = colony.base;
+  const out = M.meshAll().filter(r => r.indices && r.indices.length);
+  const m = merge(out, true);
   if (!m) return null;
-  // the gids are the chunk particle ids; to the chunk frame (the coarse
-  // mesh and the fine mesh then have the same local positions: the
-  // surface detail of shaders.js, which reads the mesh position, does not
-  // jump at a swap)
+  // back to chunk particle ids, and to the chunk frame (the coarse mesh and
+  // the fine mesh then have the same local positions: the surface detail
+  // of shaders.js, which reads the mesh position, does not jump at a swap)
+  for (let v = 0; v < m.gids.length; v++) m.gids[v] = m.gids[v] >= 0 ? ids[m.gids[v]] : -1;
+  for (let p = 6; p < m.polyps.length; p += 8) m.polyps[p] = ids[m.polyps[p]] ?? 0;
   for (let v = 0; v < m.positions.length; v += 3) { m.positions[v] += b[0]; m.positions[v + 1] += b[1]; m.positions[v + 2] += b[2]; }
   for (let p = 0; p < m.polyps.length; p += 8) { m.polyps[p] += b[0]; m.polyps[p + 1] += b[1]; m.polyps[p + 2] += b[2]; }
   m.k = colony.k; m.sp = colony.id; m.polypN = m.polyps.length / 8;

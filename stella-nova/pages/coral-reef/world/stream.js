@@ -359,7 +359,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     const ch = chunks.get(col.chunk); if (!ch || !ch.coral) return;
     const co = ch.coral, info = co.colonies.find(q => q.k === col.k);
     const t = token++;
-    const job = { type: 'fine', colony: info, particles: co.particles.slice(), bridges: co.bridges.slice(), quality: co.quality || B.coral.quality };
+    const job = { type: 'fine', colony: info, colonies: co.colonies, particles: co.particles.slice(), bridges: co.bridges.slice(), quality: co.quality || B.coral.quality };
     const dist = () => Math.hypot(col.center[0] - eye[0], col.center[1] - eye[1], col.center[2] - eye[2]);
     const h = pool.submit(job, () => dist() * 0.5 + 10);
     const rec = { key: col.key, chunk: col.chunk, k: col.k, token: t, h, shown: false, bytes: 0, at: now() };
