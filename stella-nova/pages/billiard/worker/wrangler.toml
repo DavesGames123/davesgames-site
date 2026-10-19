@@ -1,0 +1,38 @@
+# Cloudflare Worker config for the online pool rooms (worker.js).
+# Deploy steps: README.md in this folder. In short, from this folder:
+#   npx wrangler login
+#   npx wrangler secret put PASS_SALT     (random text)
+#   npx wrangler secret put PASS_HASH     (SHA-256 of "salt:password", hex)
+#   npx wrangler deploy
+# Then put the printed https://pool-rooms.<you>.workers.dev URL into
+# POOL_URL in ../online.js.
+name = "pool-rooms"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# One Durable Object per room (SQLite storage, also on the free plan).
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "PoolRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PoolRoom"]
+
+# Caps per minute on create and join, keyed by a hash of the IP address.
+# worker.js also keeps an hourly cap in memory, so these are optional.
+[[ratelimits]]
+name = "RL_CREATE"
+namespace_id = "4801"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "RL_JOIN"
+namespace_id = "4802"
+simple = { limit = 20, period = 60 }
+
+# Workers Logs can store request headers (IP address, user agent). Keep it
+# off: the rooms hold no personal data and the logs must not either.
+[observability]
+enabled = false
