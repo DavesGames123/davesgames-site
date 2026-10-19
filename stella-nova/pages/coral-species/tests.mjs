@@ -347,6 +347,20 @@ async function boot({ w = 1280, h = 720, coarse = false, dpr = 2 } = {}) {
     d.querySelector('#panel .sp-group button[data-id="table"]').click();
     await P.run(2500);
     ok(d.getElementById('rSp').textContent === 'Table coral' && [...d.querySelectorAll('#panel .sp-group button.on')].map(b => b.dataset.id).join() === 'table' && /Acropora hyacinthus/.test(d.getElementById('spNote').textContent), 'a species chip starts a new table coral, one chip on, the card follows');
+    {
+      // Randomize (the user: "coral species page randomize button please!")
+      const rb = d.getElementById('bRandom');
+      const seen = new Set();
+      let okAll = !!rb;
+      for (let k = 0; rb && k < 6; k++) {
+        const before = [...d.querySelectorAll('#panel .sp-group button.on')].map(b => b.dataset.id).join();
+        rb.click(); await P.run(250);
+        const after = [...d.querySelectorAll('#panel .sp-group button.on')].map(b => b.dataset.id).join();
+        if (!after || after === before) okAll = false;
+        seen.add(after);
+      }
+      ok(okAll && seen.size >= 3 && !P.errors.length, `the Randomize button picks a different species each time (${[...seen].join(', ')})${P.errors.length ? ': ' + P.errors[0].slice(0, 200) : ''}`);
+    }
     d.getElementById('bPlay').click();
     await P.run(300);
     const nP = d.getElementById('rN').textContent; await P.run(1500);

@@ -56,7 +56,7 @@ import { createPanel, mountSheet, fillIcons, icon } from '../../lib/sn-panel.js'
 import { PROFILES, detectProfile, pageEnv, profileFor, pixelRatioFor } from '../coral-reef/budget.js';
 import { frameFit } from '../coral-reef/saver.js';
 import { mountErrorBox, installErrorHandlers } from '../coral-reef/crash.js';
-import { lut, cssGradient, mountGradientPicker } from '../../lib/growth-gradients.js';
+import { lut, cssGradient, mountGradientPicker, GRADIENT_IDS } from '../../lib/growth-gradients.js';
 import { createActionCamera } from '../../lib/action-camera.js';
 import { createBase, PLOT_R } from './base.js';
 import {
@@ -403,6 +403,24 @@ function setSpecies(id, regrow = true) {
 }
 let spPicker = null;
 function setPanel(open) { if (sheet) sheet.setOpen(open); }
+// Randomize: a different species, a new seed, and a colour look (natural
+// half the time, else a random mode and gradient), then a new colony.
+// The user said: "coral species page randomize button please!"
+export function randomPick(cur, rnd = Math.random) {
+  const ids = Object.keys(SPECIES).filter(id => id !== cur.species);
+  const species = ids[Math.floor(rnd() * ids.length)] || cur.species;
+  const seed = 1 + Math.floor(rnd() * 9973);
+  const modes = PAGE_MODES.map(m => m.id).filter(id => id !== 'natural');
+  const natural = rnd() < 0.5;
+  return { species, seed, mode: natural ? 'natural' : modes[Math.floor(rnd() * modes.length)], gradient: GRADIENT_IDS[Math.floor(rnd() * GRADIENT_IDS.length)], rev: rnd() < 0.25 };
+}
+function randomize() {
+  const r = randomPick(G);
+  G.seed = r.seed;
+  setGradient(r.gradient, r.rev);
+  setMode(r.mode);
+  setSpecies(r.species);      // starts the new colony
+}
 function buildUI() {
   fillIcons(document);
   panel = createPanel($('panelBody'), { store: 'coral-species' });
@@ -416,6 +434,7 @@ function buildUI() {
     { id: 'bPlay', label: 'Pause', icon: 'pause', kind: 'primary', onClick: () => setPlaying(!G.playing) },
     { id: 'bRegrow', label: 'Regrow', icon: 'regrow', onClick: regrow },
     { id: 'bSeed', label: 'New seed', icon: 'dice', onClick: () => { G.seed = (G.seed % 9973) + 1; regrow(); } },
+    { id: 'bRandom', label: 'Randomize', icon: 'dice', onClick: randomize },
   ]);
   gr.slider({ id: 'sSpeed', valueId: 'vSpeed', label: 'Growth speed', min: 0.25, max: 4, step: 0.05, value: G.speed, format: v => `${v.toFixed(2)}×`, onInput: v => { G.speed = v; if (coral) coral.post({ type: 'env', env: { speed: v } }); } });
 
