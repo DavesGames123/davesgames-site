@@ -26,7 +26,9 @@
 //                 so hard beds stand out as ledges and overhangs
 //    features ... per 48 m cell (hash): natural arches (half tori with a
 //                 carved gap), pinnacles and hoodoos (with caps); per 16 m
-//                 cell: boulders and scree
+//                 cell: boulders and scree; by depth reef rubble, deep
+//                 boulders, pillow lava mounds (over 1100 m), manganese
+//                 nodule fields (over 2200 m); deep sand has burrow mounds
 //    crag ....... domain-warped noise and Worley joints in a band near the
 //                 surface (rock/geology.js crag, our own code)
 //
@@ -255,6 +257,20 @@ export function createWorld(opts = {}) {
     return out;
   }
 
+  // burrow mounds on a 3 m lattice: a low cone with a pit in the middle
+  // (an animal burrow in the deep mud), on some cells only; 0 elsewhere
+  function burrows(x, z) {
+    const i = Math.floor(x / 3), j = Math.floor(z / 3);
+    let h = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const q = hash3(i + di, j + dj, seed ^ 0xb0b0), u = (q & 1023) / 1024;
+      if (u > 0.4) continue;
+      const cx = (i + di + 0.2 + 0.6 * ((q >>> 10) & 255) / 255) * 3, cz = (j + dj + 0.2 + 0.6 * ((q >>> 18) & 255) / 255) * 3;
+      const rad = 0.5 + 0.5 * u / 0.4, t = Math.hypot(x - cx, z - cz) / rad;
+      if (t < 1) h = Math.max(h, 0.18 * (1 - t * t) * (1 - t * t) - 0.12 * Math.exp(-t * t * 40));
+    }
+    return h;
+  }
   // ── a column: the 2D values at (x, z) ────────────────────────────────────
   // T top of the rock, gT the slope, S sand, C the canyon values, U the
   // strata phase, feats the 3D features whose bounds hold the column.
@@ -272,7 +288,9 @@ export function createWorld(opts = {}) {
     const hwRim = C.w + 1 + 0.22 * Math.max(0, T - C.floor - 4);
     const inCh = C.mask * (1 - sstep(hwRim, hwRim + 3, C.d));
     const rip = 0.035 * Math.sin(x * 2.9 + z * 0.8 + 3 * N.g2(x * 0.08, z * 0.08)) + 0.25 * N.fbm2(x / 30 + 1.1, z / 30 + 2.3, 2);
-    let S = TL + 0.3 * rb + (sed - 0.42) * 1.3 + rip * sed;
+    // deep sediment: stronger current ripples and burrow mounds (Lebensspuren)
+    const deepS = sstep(300, 900, SURFACE_Y - TL);
+    let S = TL + 0.3 * rb + (sed - 0.42) * 1.3 + rip * sed * (1 + 0.8 * deepS) + (deepS > 0 ? burrows(x, z) * deepS * sed : 0);
     // canyon floor: sand a little over the floor
     if (inCh > 0) S = S + (Math.min(S, C.floor + 0.35 + rip) - S) * inCh;
     out.T = T; out.tx = tx; out.tz = tz; out.slope = slope; out.S = S; out.sed = sed; out.inCh = inCh;
@@ -363,6 +381,30 @@ export function createWorld(opts = {}) {
         const a = r() * 6.283, d = rad + 0.3 + r() * 1.4, rs2 = 0.18 + r() * 0.25, sx = x + Math.cos(a) * d, sz = z + Math.sin(a) * d;
         L.push({ x: sx, z: sz, y: groundAt(sx, sz) + rs2 * 0.2, rx: rs2, ry: rs2 * 0.7, rz: rs2 * 0.9, c: 1, s: 0, R: rs2 * 1.2 + REACH });
       }
+    }
+    // the seafloor by depth (the user, 2026-10-18: deep water "is not very
+    // visually interesting"): reef rubble, pillow lava mounds on the deep
+    // rock, manganese nodule fields on the abyssal plain
+    const d = SURFACE_Y - groundAt(x0 + BOULDER_CELL / 2, z0 + BOULDER_CELL / 2);
+    const lump = (x, z, rad, flat, stack, lng = 1) => {
+      const rot = r() * 3.1416, g = groundAt(x, z);
+      L.push({ x, z, y: g + rad * stack, rx: rad * lng, ry: rad * flat, rz: rad * (0.8 + r() * 0.3), c: Math.cos(rot), s: Math.sin(rot), R: rad * lng * 1.4 + REACH });
+    };
+    if (d > 3 && d < 45 && r() < 0.5) {
+      const cx = x0 + r() * BOULDER_CELL, cz = z0 + r() * BOULDER_CELL, m = 5 + Math.floor(r() * 6);
+      for (let q = 0; q < m; q++) { const a = r() * 6.283, dd = r() * 2.6; lump(cx + Math.cos(a) * dd, cz + Math.sin(a) * dd, 0.16 + r() * 0.2, 0.55, 0.15); }
+    }
+    if (d > 150 && r() < 0.35) {
+      const m = 1 + Math.floor(r() * 3);
+      for (let q = 0; q < m; q++) lump(x0 + r() * BOULDER_CELL, z0 + r() * BOULDER_CELL, 0.5 + r() * r() * 1.6, 0.6 + r() * 0.25, 0.25);
+    }
+    if (d > 1100 && r() < 0.3) {
+      const cx = x0 + 3 + r() * (BOULDER_CELL - 6), cz = z0 + 3 + r() * (BOULDER_CELL - 6), m = 6 + Math.floor(r() * 6);
+      for (let q = 0; q < m; q++) { const a = r() * 6.283, dd = Math.sqrt(r()) * 2.8; lump(cx + Math.cos(a) * dd, cz + Math.sin(a) * dd, 0.45 + r() * 0.45, 0.7, 0.2 + 0.6 * r() * (1 - dd / 2.8), 1.3 + r() * 0.5); }
+    }
+    if (d > 2200 && r() < 0.45) {
+      const cx = x0 + r() * BOULDER_CELL, cz = z0 + r() * BOULDER_CELL, m = 8 + Math.floor(r() * 7);
+      for (let q = 0; q < m; q++) { const a = r() * 6.283, dd = Math.sqrt(r()) * 5; lump(cx + Math.cos(a) * dd, cz + Math.sin(a) * dd, 0.13 + r() * 0.1, 0.6, 0.1); }
     }
     if (bouldCache.size > 16384) bouldCache.clear();
     bouldCache.set(key, L);

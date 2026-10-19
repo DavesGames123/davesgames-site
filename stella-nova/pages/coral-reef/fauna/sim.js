@@ -244,7 +244,9 @@ export function createSim({ sdf = null, sdfScale = 0.4, maxAgents = 1000, simEve
         const nx = px[i] + Math.sin(yaw[i]) * v * dt, nz = pz[i] + Math.cos(yaw[i]) * v * dt;
         const inside = !gr || (nx > gr.x0 + 0.5 && nx < gr.x0 + 31.5 && nz > gr.z0 + 0.5 && nz < gr.z0 + 31.5);
         const gy = inside ? groundOf(G, nx, nz) : -Infinity;
-        const steep = gy > -Infinity && Math.abs(gy - groundOf(G, px[i], pz[i])) > Math.max(v * dt * 1.5, 1e-4) + 0.003;
+        // steep: a slope over about 1.3 (the old 3 mm slack let a slow walker
+        // take a 2.8 slope, and the smoothed height lagged 5 cm off the ground)
+        const steep = gy > -Infinity && Math.abs(gy - groundOf(G, px[i], pz[i])) > Math.max(v * dt * 1.2, 1e-4) + 0.0004;
         if (gy > -Infinity && !steep && SURF - gy >= sp.depth[0] && SURF - gy <= sp.depth[1]) { px[i] = nx; pz[i] = nz; }
         else { v = 0; yaw[i] = yaw0; jet[i] = -(1 + R() * 3); wantYaw[i] = yaw[i] + (R() < 0.5 ? 1 : -1) * (1.2 + R() * 1.4); }
       }

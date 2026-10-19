@@ -22,19 +22,31 @@
 //    - a swimmer keeps clear of the rock (sdf >= CLEAR m) or is not put
 //    - features (FEATURES of species.js) come first, then the background
 //      groups; the count is capped by budget.maxPerChunk
-//    - richness grows with depth (BASE groups per chunk), as the user asked
+//    - richness grows with depth (BASE groups per chunk), as the user asked;
+//      the deep feature chances go up (deepChance, MORE_FEATURES)
 //  W: world/field.js (ground, sdfAll, normal, sandAt, habitat, surfaceY).
 //  sdf (optional): the solid with the coral (world/physics.js P.sdf in field
 //  units), else W.sdfAll.
 //
 //  grep -n targets: "export function spawnChunk", "export function spawnColony",
-//  "export function poolAt", "const BASE"
+//  "export function poolAt", "const BASE", "export const DEEP_K"
 // ============================================================================
 import { SPECIES, SPECIES_BY_ID, FEATURES, PROVINCE, generatedSpecies, regionOfDepth, hashInts } from './species.js';
 
 export const FAUNA_CH = 32;                 // = world/mesh.js CH (tests check it)
 export const CLEAR = 0.6;                   // m, swimmers keep this from the rock
-const BASE = { shallows: 5, reef: 7, twilight: 8, abyss: 9 };   // background groups per chunk
+const BASE = { shallows: 5, reef: 7, twilight: 12, abyss: 14 };   // background groups per chunk
+// The user said (2026-10-18): "deep water is also sparse that might be
+// scientifially accurate or by specific creation, but it's not very
+// visually interesting". The deep chunks get more of everything: the
+// feature chances go up to DEEP_K times below 150 m (full at 700 m), and
+// the deep chunks may take more features (MORE_FEATURES).
+export const DEEP_K = 2.4, MORE_FEATURES = [
+  { id: 'food-fall', name: 'crabs and scavengers at a food fall', depth: [200, 4000], chance: 0.08, members: [['chaceon-quinquedens', [18, 40]], ['generated:crab', [14, 36]], ['generated:amphipod', [30, 80]], ['myxine-glutinosa', [4, 10]], ['bathynomus-giganteus', [1, 4]]] },
+  { id: 'jelly-drift', name: 'a drift of glowing jellies', depth: [150, 4000], chance: 0.16, members: [['atolla-wyvillei', [3, 8]], ['periphylla-periphylla', [3, 8]], ['nanomia-bijuga', [3, 8]], ['generated:jelly', [6, 14]], ['generated:sipho', [3, 8]]] },
+];
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+export const deepChance = (c, depth) => Math.min(0.9, c * (1 + (DEEP_K - 1) * sstep(150, 700, depth)));
 const SURF = 55;
 
 export function rngOf(seed) { let a = seed >>> 0 || 1; return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -107,6 +119,9 @@ function placeMember(W, sdf, sp, R, cx, cz, spread, opt = {}) {
     if (benthic) {
       if (!inDepth(sp, gd)) continue;
       if (sp.place === 'sand' && GR && !GR.isSand(x, z)) continue;
+      // a walker keeps off the cliffs (slope over 1.3): fauna/sim.js lets it
+      // walk there, and its smoothed height lags off the ground
+      if (sp.habit === 'crawl' && Math.max(Math.abs(ground(x + 0.5, z) - ground(x - 0.5, z)), Math.abs(ground(x, z + 0.5) - ground(x, z - 0.5))) > 1.3) continue;
       return { x, y: gy, z, yaw, size };
     }
     // a swimmer: an altitude over the ground, inside its depth, clear of rock
@@ -151,9 +166,9 @@ export function spawnChunk({ W, seed = 1, i, j, budget, sdf = null }) {
   let left = budget.maxPerChunk;
   const K = budget.groupK ?? 1;
   // features first (their members may be generated families)
-  for (const f of FEATURES) {
+  for (const f of [...FEATURES, ...MORE_FEATURES]) {
     if (depth < f.depth[0] || depth > f.depth[1]) continue;
-    if (R() >= f.chance) continue;
+    if (R() >= deepChance(f.chance, depth)) continue;
     const fx = x0 + 6 + R() * (FAUNA_CH - 12), fz = z0 + 6 + R() * (FAUNA_CH - 12);
     const pool = poolAt(seed, fx, fz, depth);
     if (f.landmark) { const lm = SPECIES_BY_ID.get(f.landmark); if (lm && inDepth(lm, depth)) left -= addGroup(out, W, S, lm, R, fx, fz, 1, f.id, left, GR); }
