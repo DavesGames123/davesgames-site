@@ -50,6 +50,7 @@
 //    H.select(id, { follow = true })   H.selectNext(+1 | -1)   H.selected
 //    H.tick(dt)        each frame (tags; minimap at 4 Hz)
 //    H.present()       each frame after the main render (live pictures)
+//    H.gauge           the depth gauge over the minimap (depth-gauge.js)
 //    H.map             the large map (map-view.js); H.mapCovers() is true
 //                      while it is open (main.js draws no 3D frame then)
 //    H.debug()         state for the tests
@@ -67,6 +68,7 @@
 import { rovColour } from './rov/hud.js';
 import { createFogMap, drawMinimap, coneOf, SPANS } from './minimap.js';
 import { mountExploreMap } from './map-view.js';
+import { mountDepthGauge } from './depth-gauge.js';
 
 const CARD_AR = 322 / 352;           // rov/hud.js HUD.H / HUD.W
 
@@ -178,6 +180,7 @@ export function mountSquadHud(o) {
   const trails = new Map();          // id -> [[x, z], ...]
   const mm = { fog: null, squad: null, W: null, known: -1, target: null, arrows: [], last: null };
   let big = null;                    // map-view.js: the large map (a click on the minimap or M)
+  let gauge = null;                  // depth-gauge.js: the region picker over the minimap
   const V3 = o.THREE ? new o.THREE.Vector3() : null;
 
   const ids = () => (rovs && rovs.vehicles ? rovs.vehicles.map(v => v.id) : []);
@@ -548,6 +551,7 @@ export function mountSquadHud(o) {
     if ((trailT += dt) > 1.5) { trailT = 0; stepTrails(); }
     if ((mapT += dt) > 0.25) { mapT = 0; if (!fold && !o.isSaver()) drawMap(); }
     if (big) big.tick(dt);
+    if (gauge) gauge.tick(dt);
     // the large map covers the view: the ROV feeds rest too (present() wakes them)
     if (big && big.covers() && rovs && rovs.feed && rovs.feed.setActive) { rovs.feed.setActive(false); frameN = 0; }
   }
@@ -569,6 +573,19 @@ export function mountSquadHud(o) {
   // the panel opens or closes: the view width changes (sn-panel.js)
   try { if (win.MutationObserver) new win.MutationObserver(layout).observe(doc.body, { attributes: true, attributeFilter: ['class'] }); } catch { /* no observer */ }
   bindMap();
+  // the depth gauge over the minimap: the region bands send the squad
+  // (main.js goRegion, as the panel chips); it folds with the map
+  gauge = mountDepthGauge({
+    doc, win, phoneQ: o.phoneQ, isSaver: o.isSaver, mapFolded: () => fold,
+    goRegion: (id) => (o.goRegion ? o.goRegion(id) : false),
+    state: () => {
+      const sq = o.getSquad(), W = o.getField();
+      if (!sq || !sq.vehicles || !sq.vehicles.length) return { rovs: [], region: null };
+      const L = (sq.vehicles.find(v => v.id === sel) || sq.vehicles[0]).state.p;
+      const rg = W && W.regionAt ? W.regionAt(L[0], L[2]) : null;
+      return { region: rg ? rg.id : null, rovs: sq.vehicles.map(v => ({ id: v.id, depth: o.surfaceY - v.state.p[1], colour: rovColour(v.id), sel: v.id === sel })) };
+    },
+  });
   big = mountExploreMap({
     doc, win, getSquad: o.getSquad, getField: o.getField, getCam: o.getCam, camera: o.camera, canvas: o.canvas,
     surfaceY: o.surfaceY, phoneQ: o.phoneQ, isSaver: o.isSaver, flash: o.flash,
@@ -589,7 +606,7 @@ export function mountSquadHud(o) {
   return {
     get selected() { return sel; },
     select, selectNext, setRovs, tick, present, layout, sendTo, drawMap, setFeedSize, setCycle, cycle: cyc,
-    map: big, mapCovers: () => !!big && big.covers(),
+    map: big, mapCovers: () => !!big && big.covers(), gauge,
     colourOf: rovColour,
     debug() {
       const set = rovs && rovs.feed;

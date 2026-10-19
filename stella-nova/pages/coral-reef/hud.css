@@ -8,6 +8,7 @@
      grep -n 'CARDS'       the feed card stack (#feed, .fcard, #feedTabs)
      grep -n 'TAGS'        the 3D tags (#rovTags)
      grep -n 'MINIMAP'     #minimap
+     grep -n 'DEPTH GAUGE' #depthGauge over the minimap (depth-gauge.js)
      grep -n 'PHONE'       one card, the folded map
      grep -n 'SAVER'       the saver keeps one card, no tags, no map
      grep -n 'NO SELECT'   no text selection on the view and the HUD
@@ -100,6 +101,55 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
 #minimap.fold #mmFold .when-fold{display:inline}
 #minimap.fold #mmFold .when-open{display:none}
 
+/* DEPTH GAUGE (depth-gauge.js): the five regions as bands of an ocean
+   cross-section over the minimap. depth-gauge.js gaugePlace sets left,
+   top, width and height; on phones it sets --dg-h and --dg-hr too. */
+#depthGauge{position:fixed;z-index:24;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;background:var(--snp-bg,rgba(3,18,27,0.85));border:1px solid var(--snp-line,var(--line));border-radius:var(--snp-r-l,14px);box-shadow:var(--snp-shadow,0 6px 30px rgba(0,0,0,0.5));backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--snp-ink,var(--ink));-webkit-user-select:none;user-select:none}
+#depthGauge[hidden]{display:none!important}
+.dg-head{flex:0 0 22px;display:flex;align-items:center;gap:6px;padding:0 2px 0 9px;font:600 10px/1 var(--sci-mono,ui-monospace,monospace);color:var(--snp-dim,var(--dim))}
+.dg-head .dg-now{flex:1;font-weight:600;color:var(--snp-ink,var(--ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#dgFold{width:22px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--snp-ink,var(--ink));font-size:0.8rem;line-height:1;cursor:pointer}
+#dgFold:hover{background:var(--snp-raise-h,rgba(255,255,255,0.08))}
+#dgFold:focus-visible{outline:2px solid var(--snp-accent,var(--accent));outline-offset:-2px}
+#depthGauge.dg-fold #dgFold span:first-child{display:inline-block;transform:rotate(-90deg)}
+.dg-body{position:relative;flex:1 1 auto;min-height:0;overflow:hidden}
+#depthGauge.dg-fold .dg-body{display:none}
+.dg-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.dg-bands{position:absolute;inset:0;display:flex;flex-direction:column}
+.dg-band{flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:0 8px;border:0;margin:0;background:transparent;color:var(--snp-ink,#dcecef);cursor:pointer;text-shadow:0 1px 3px rgba(0,0,0,0.85),0 0 2px rgba(0,0,0,0.8)}
+.dg-band b{font:600 11px/1 var(--sci-sans,Inter,system-ui,sans-serif)}
+.dg-band span{font:500 10px/1 var(--sci-mono,ui-monospace,monospace);color:rgba(220,236,239,0.78)}
+.dg-band:hover{background:rgba(255,255,255,0.06)}
+.dg-band.on{box-shadow:inset 3px 0 0 var(--snp-accent,#7fe0cf)}
+.dg-band.on b{color:#fff}
+.dg-band:focus-visible{outline:2px solid var(--snp-accent,var(--accent));outline-offset:-2px}
+.dg-marks{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.dg-mark,.dg-dot{position:absolute;left:0;top:0;will-change:transform;transition:transform 0.45s linear}
+.dg-mark{right:0;height:0;border-top:1.5px solid var(--c);box-shadow:0 0 6px var(--c)}
+.dg-mark i{position:absolute;left:3px;top:-4.75px;width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 0 1.5px rgba(2,7,12,0.9)}
+.dg-mark b{position:absolute;left:15px;top:-8px;padding:2px 5px;border-radius:5px;background:rgba(2,10,16,0.82);color:var(--c);font:600 10px/1 var(--sci-mono,ui-monospace,monospace);white-space:nowrap}
+.dg-dot{width:0;height:0}
+.dg-dot i{position:absolute;left:4px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 0 1px rgba(2,7,12,0.9)}
+.dg-dot b{display:none}
+/* the horizontal strip (phones): surface left, deep right; the fold at the right end */
+#depthGauge.dg-horiz{flex-direction:row}
+#depthGauge.dg-horiz .dg-head{order:2;flex:0 0 44px;padding:0;justify-content:center}
+#depthGauge.dg-horiz:not(.dg-fold) .dg-head .dg-title,#depthGauge.dg-horiz:not(.dg-fold) .dg-head .dg-now{display:none}
+#depthGauge.dg-horiz #dgFold{width:44px;height:44px;font-size:1rem}
+#depthGauge.dg-horiz:not(.dg-fold) #dgFold span:first-child{display:inline-block;transform:rotate(90deg)}
+#depthGauge.dg-horiz.dg-fold .dg-head{order:0;flex:1 1 auto;padding-left:12px;font-size:12px}
+#depthGauge.dg-horiz.dg-fold #dgFold span:first-child{transform:rotate(-90deg)}
+#depthGauge.dg-horiz .dg-bands{flex-direction:row}
+#depthGauge.dg-horiz .dg-band{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;padding:7px 5px;min-width:44px;min-height:44px}
+#depthGauge.dg-horiz .dg-band b{font-size:12px}
+#depthGauge.dg-horiz .dg-band.on{box-shadow:inset 0 3px 0 var(--snp-accent,#7fe0cf)}
+#depthGauge.dg-horiz .dg-mark{top:0;bottom:0;right:auto;width:0;height:auto;border-top:0;border-left:1.5px solid var(--c)}
+#depthGauge.dg-horiz .dg-mark i{left:-4.75px;top:auto;bottom:3px}
+#depthGauge.dg-horiz .dg-mark b{left:6px;top:auto;bottom:2px}
+#depthGauge.dg-horiz .dg-mark.flip b{left:auto;right:6px}
+#depthGauge.dg-horiz .dg-dot i{left:-3px;top:4px}
+@media (prefers-reduced-motion:reduce){.dg-mark,.dg-dot{transition:none}}
+
 /* TOUCH */
 @media (pointer:coarse){
   .mm-tools button{width:40px;height:40px}
@@ -116,9 +166,19 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
   html #feed{right:calc(8px + env(safe-area-inset-right));bottom:calc(var(--dock-h) + 8px);width:auto}
   html #feed .fcard.main{width:var(--fc-main,150px)}
   html #feed.big .fcard.main{width:calc(100vw - 16px)}
-  #minimap{left:calc(8px + env(safe-area-inset-left));right:auto;top:calc(52px + env(safe-area-inset-top));bottom:auto;padding:4px}
-  html.in-frame #minimap{top:8px}
-  #legend:not(.off) ~ #minimap{top:calc(118px + env(safe-area-inset-top))}
+  #minimap{left:calc(8px + env(safe-area-inset-left));right:auto;top:calc(52px + var(--dg-h,0px) + env(safe-area-inset-top));bottom:auto;padding:4px}
+  html.in-frame #minimap{top:calc(8px + var(--dg-h,0px))}
+  #legend:not(.off) ~ #minimap{top:calc(118px + var(--dg-h,0px) + env(safe-area-inset-top))}
+  /* the depth strip at the top: the cards under it move down by its height */
+  #depthGauge{margin:env(safe-area-inset-top) 0 0 env(safe-area-inset-left)}
+  html.in-frame #depthGauge{margin:0}
+  #read,html:not(.in-frame) #read{top:calc(52px + var(--dg-hr,0px) + env(safe-area-inset-top))}
+  html.in-frame #read{top:calc(8px + var(--dg-hr,0px))}
+  #legend{top:calc(52px + var(--dg-h,0px) + env(safe-area-inset-top))}
+  html.in-frame #legend{top:calc(8px + var(--dg-h,0px))}
+  #hint{top:calc(52px + var(--dg-h,0px) + env(safe-area-inset-top))}
+  html.in-frame #hint{top:calc(8px + var(--dg-h,0px))}
+  body:not(.panel-closed) #depthGauge{opacity:0;pointer-events:none}
   #mmCanvas{width:140px;height:140px}
   .mm-legend{display:none}
   body:not(.panel-closed) #minimap,body:not(.panel-closed) #rovTags{opacity:0;pointer-events:none}
@@ -126,12 +186,18 @@ html #feed.big .fcard.main{width:min(704px,calc(100vw - 28px))}
 @media (max-height:500px) and (orientation:landscape){
   #rovPick{flex-direction:row;border:0}
   html #feed .fcard.main{width:var(--fc-main,132px)}
-  #minimap,html.in-frame #minimap{top:8px}
+  #minimap,html.in-frame #minimap{top:calc(8px + var(--dg-h,0px))}
+  #legend,html.in-frame #legend{top:calc(8px + var(--dg-h,0px))}
+  #read,html:not(.in-frame) #read,html.in-frame #read{top:8px}
+  #hint,html.in-frame #hint{top:auto}
+  #depthGauge,html.in-frame #depthGauge{margin:0 0 0 env(safe-area-inset-left)}
   #mmCanvas{width:110px;height:110px}
+  /* the map under the strip keeps clear of the camera bar over the dock */
+  html #minimap.mm-s #mmCanvas,html #minimap.mm-m #mmCanvas,html #minimap.mm-l #mmCanvas{max-width:calc(100vh - 220px);max-height:calc(100vh - 220px)}
 }
 
 /* SAVER: the main card alone at the cardRect place (main.js placeCard) */
-html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #feedTools,html.sn-saver #minimap,html.sn-saver #rovTags{display:none!important}
+html.sn-saver #feed .fcard:not(.main),html.sn-saver #feedTabs,html.sn-saver #feedTools,html.sn-saver #minimap,html.sn-saver #depthGauge,html.sn-saver #rovTags{display:none!important}
 html.sn-saver #feed .fcard.main{width:100%!important;max-width:none}
 html.sn-saver #feedSlot{display:block!important}
 html.sn-saver #feed .fpick{pointer-events:none}
@@ -139,4 +205,4 @@ html.sn-saver #feed .fpick{pointer-events:none}
 
 /* NO SELECT. A drag on the view must not select the HUD text (the user's
    screenshot of 2026-10-18 showed the readout and a tag selected). */
-#view,#read,#rovTags,#feed,#minimap,#camBar,#hint{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#view,#read,#rovTags,#feed,#minimap,#depthGauge,#camBar,#hint{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
