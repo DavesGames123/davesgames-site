@@ -85,10 +85,10 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // The coral budgets of a profile id (CONTRACT-V4.md table).
 export const CORAL_BUDGET = {
-  desktop: { colonies: 8, particles: 12000, quality: 'mid' },
-  'laptop-low': { colonies: 6, particles: 8000, quality: 'phone' },
-  phone: { colonies: 4, particles: 4500, quality: 'phone' },
-  'phone-min': { colonies: 3, particles: 3000, quality: 'phone' },
+  desktop: { colonies: 30, particles: 22000, quality: 'mid' },
+  'laptop-low': { colonies: 20, particles: 13000, quality: 'phone' },
+  phone: { colonies: 12, particles: 7000, quality: 'phone' },
+  'phone-min': { colonies: 8, particles: 4500, quality: 'phone' },
 };
 
 // ── sites ───────────────────────────────────────────────────────────────────
@@ -136,61 +136,122 @@ export function chunkSites(W, ci, cj, n, rand) {
 }
 
 // ── the colony plan of a chunk ──────────────────────────────────────────────
+// The user said (2026-10-18): "coral and object desinty is not high enough
+// in the reef and the deep sea". A chunk now holds a dense framework:
+//   gardens . a slow value noise (GARDEN_CELL m) sets the patches of the
+//             world: a chunk in a garden core gets all its colonies, a
+//             chunk between two gardens gets few (clumps, not an even
+//             scatter). Deep chunks (over DEEP_FROM m) take the garden
+//             noise in place of the low deep habitat of W.habitat.
+//   patches . farthest-point centres (one for each PATCH_N colonies), then
+//             a large core colony and smaller colonies close round it:
+//             the gap is small, so neighbours touch and overgrow.
+//   fillers . small colonies (FILL_SIZE of the species size) in the gaps.
+//   meadows . on deep sediment, sea pens, sea lilies and Venus flower
+//             baskets in clusters on the sand (SAND_SHARE of the colonies).
+export const GARDEN_CELL = 96, DEEP_FROM = 60, PATCH_N = 7, FILL_SIZE = [0.4, 0.75], SAND_SHARE = 0.3;
+const MEADOW = ['seapen', 'crinoid', 'venus'];
+const smooth = t => t * t * (3 - 2 * t);
+// 0..1, a value noise on GARDEN_CELL m cells (two octaves), deterministic
+export function gardenAt(x, z, seed = 1) {
+  let v = 0, a = 0.65, f = 1 / GARDEN_CELL;
+  for (let o = 0; o < 2; o++) {
+    const u = x * f, w = z * f, i = Math.floor(u), j = Math.floor(w), fu = smooth(u - i), fw = smooth(w - j);
+    const h = (p, q) => hash3(p, q, (seed ^ 0x9a7d) + o * 131) / 4294967296;
+    v += a * ((h(i, j) * (1 - fu) + h(i + 1, j) * fu) * (1 - fw) + (h(i, j + 1) * (1 - fu) + h(i + 1, j + 1) * fu) * fw);
+    a *= 0.35 / 0.65; f *= 2.7;
+  }
+  return clamp(v, 0, 1);
+}
+// The colony share of a chunk 0..1 from the habitat, the garden and the depth.
+export function chunkShare(hab, garden, depth) {
+  const g = smooth(clamp((garden - 0.22) / 0.5, 0, 1));
+  if (depth > DEEP_FROM) return clamp(0.08 + 0.78 * g, 0, 1);
+  return clamp((0.35 + 0.9 * hab) * (0.3 + 0.85 * g), 0, 1);
+}
 // The local frame: x - cx, y - oy, z - cz.
 export function planColonies(W, ci, cj, budget, seed) {
   const rand = mulberry32(hash3(ci, cj, seed ^ 0xc0a1) || 1);
   const cx = (ci + 0.5) * CH, cz = (cj + 0.5) * CH;
   let hab = 0;
   for (const [u, v] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75], [0.5, 0.5]]) hab += W.habitat(ci * CH + u * CH, cj * CH + v * CH) / 5;
-  const want = clamp(Math.round(budget.colonies * hab * (0.75 + 0.5 * rand())), 0, budget.colonies);
-  const res = { cx, cz, oy: 0, hab, want, sites: [] };
+  const depth = SURFACE_Y - W.ground(cx, cz), garden = gardenAt(cx, cz, seed);
+  const share = chunkShare(hab, garden, depth);
+  const want = clamp(Math.round(budget.colonies * share * (0.85 + 0.3 * rand())), 0, budget.colonies);
+  const res = { cx, cz, oy: 0, hab, garden, depth, want, sites: [] };
   if (!want) return res;
-  const raw = chunkSites(W, ci, cj, want * 12, rand).filter(s => s.n[1] > -0.2 && !s.overhang);
-  if (!raw.length) return res;
+  const deep = depth > DEEP_FROM + 60;
+  const nSand = deep ? Math.round(want * SAND_SHARE) : 0, nRock = want - nSand;
+  const raw = chunkSites(W, ci, cj, Math.max(24, nRock * 7), rand).filter(s => s.n[1] > -0.2 && !s.overhang);
+  const sand = nSand ? sandSites(W, ci, cj, nSand * 4, rand) : [];
+  if (!raw.length && !sand.length) return res;
   let y0 = Infinity, y1 = -Infinity;
-  for (const s of raw) { y0 = Math.min(y0, s.p[1]); y1 = Math.max(y1, s.p[1]); }
+  for (const s of raw.length ? raw : sand) { y0 = Math.min(y0, s.p[1]); y1 = Math.max(y1, s.p[1]); }
   res.oy = Math.round((y0 + y1) / 2);
-  // patch centres by farthest-point sampling, then seeds near each centre
-  const nPatch = Math.max(1, Math.min(raw.length, Math.round(want / 3)));
-  const centres = [], dmin = new Float64Array(raw.length).fill(Infinity);
-  let next = Math.floor(rand() * raw.length);
-  while (centres.length < nPatch) {
-    const c = raw[next].p; centres.push(c);
-    let best = -1, bd = -1;
-    for (let t = 0; t < raw.length; t++) { const d = Math.hypot(raw[t].p[0] - c[0], raw[t].p[2] - c[2]); if (d < dmin[t]) dmin[t] = d; if (dmin[t] > bd) { bd = dmin[t]; best = t; } }
-    if (bd <= 0) break;
-    next = best;
-  }
   const chosen = [];
-  const tryAdd = (s, gap) => {
+  const edgeOf = s => Math.min(s.p[0] - ci * CH, (ci + 1) * CH - s.p[0], s.p[2] - cj * CH, (cj + 1) * CH - s.p[2]);
+  // k: the size factor (1 a core colony, FILL_SIZE a filler); only: the
+  // species weights for a meadow site
+  const tryAdd = (s, gap, k, only) => {
     const y01 = (s.p[1] - y0) / Math.max(1e-6, y1 - y0);
     const mix = depthMix(SURFACE_Y - s.p[1]);
-    const id = pickSpecies(s, y01, rand(), mix.weights);
+    let wts = mix.weights;
+    if (only) { wts = {}; for (const id of Object.keys(SPECIES)) wts[id] = only.includes(id) ? (mix.weights[id] ?? 1) : 0; }
+    const id = pickSpecies(s, y01, rand(), wts);
     if (!id) return false;
     const sp = SPECIES[id], ex = s.exposure ?? 0.5;
-    let size = (sp.size[0] + (sp.size[1] - sp.size[0]) * clamp(0.2 + 0.7 * ex + 0.35 * (rand() - 0.5), 0, 1)) * (mix.size[id] || 1);
+    let size = (sp.size[0] + (sp.size[1] - sp.size[0]) * clamp(0.2 + 0.7 * ex + 0.35 * (rand() - 0.5), 0, 1)) * (mix.size[id] || 1) * k;
     // stay in the chunk square (+ EDGE): a site near the edge gets a smaller colony
-    const edge = Math.min(s.p[0] - ci * CH, (ci + 1) * CH - s.p[0], s.p[2] - cj * CH, (cj + 1) * CH - s.p[2]);
-    size = Math.min(size, 2 * (edge + EDGE));
-    if (size < sp.size[0] * 0.45) return false;
+    size = Math.min(size, 2 * (edgeOf(s) + EDGE));
+    if (size < sp.size[0] * 0.38) return false;
     for (const q of chosen) {
       const d = Math.hypot(q.p[0] - s.p[0], q.p[1] - s.p[1], q.p[2] - s.p[2]);
-      if (d < gap * (q.size + size) * 0.5 + 0.3) return false;
+      if (d < gap * (q.size + size) * 0.5 + 0.15) return false;
     }
     chosen.push({ p: s.p, n: s.n, exposure: s.exposure, id, size });
     return true;
   };
-  for (let pass = 0; pass < 3 && chosen.length < want; pass++) {
-    const gap = 0.4 * (1 - pass * 0.2);
-    for (const c of centres) {
-      if (chosen.length >= want) break;
-      const near = raw.filter(s => Math.hypot(s.p[0] - c[0], s.p[2] - c[2]) < 8);
-      for (const s of near) if (tryAdd(s, gap)) break;
+  const filler = () => FILL_SIZE[0] + (FILL_SIZE[1] - FILL_SIZE[0]) * rand();
+  // rock: patch centres by farthest-point sampling, a core, then a tight ring
+  if (raw.length && nRock) {
+    const nPatch = Math.max(1, Math.min(raw.length, Math.round(nRock / PATCH_N)));
+    const centres = [], dmin = new Float64Array(raw.length).fill(Infinity);
+    let next = Math.floor(rand() * raw.length);
+    while (centres.length < nPatch) {
+      const c = raw[next].p; centres.push(c);
+      let best = -1, bd = -1;
+      for (let t = 0; t < raw.length; t++) { const d = Math.hypot(raw[t].p[0] - c[0], raw[t].p[2] - c[2]); if (d < dmin[t]) dmin[t] = d; if (dmin[t] > bd) { bd = dmin[t]; best = t; } }
+      if (bd <= 0) break;
+      next = best;
     }
+    const near = centres.map(c => raw.map(s => [Math.hypot(s.p[0] - c[0], s.p[2] - c[2]), s]).filter(q => q[0] < 7).sort((a, b) => a[0] - b[0]).map(q => q[1]));
+    for (let t = 0; t < centres.length && chosen.length < nRock; t++) for (const s of near[t]) if (tryAdd(s, 0.35, 1)) break;
+    for (let pass = 0; pass < 3 && chosen.length < nRock; pass++) {
+      for (let t = 0; t < centres.length && chosen.length < nRock; t++) {
+        let added = 0;
+        for (const s of near[t]) { if (chosen.length >= nRock || added >= 3) break; if (tryAdd(s, 0.22 - pass * 0.05, pass === 0 ? 0.85 : filler())) added++; }
+      }
+    }
+    for (let t = 0; t < raw.length && chosen.length < nRock; t++) tryAdd(raw[t], 0.18, filler());
   }
-  for (let t = 0; t < raw.length && chosen.length < want; t++) tryAdd(raw[t], 0.3);
+  // sand: meadows in one or two clusters
+  if (sand.length) {
+    const goal = chosen.length + nSand, c0 = sand[0].p;
+    sand.sort((a, b) => Math.hypot(a.p[0] - c0[0], a.p[2] - c0[2]) - Math.hypot(b.p[0] - c0[0], b.p[2] - c0[2]));
+    for (const s of sand) { if (chosen.length >= goal) break; tryAdd(s, 0.5, 0.8 + 0.4 * rand(), MEADOW); }
+  }
   res.sites = chosen.map(q => ({ id: q.id, size: q.size, site: { p: [q.p[0] - cx, q.p[1] - res.oy, q.p[2] - cz], n: q.n, exposure: q.exposure } }));
   return res;
+}
+// Sand sites of a chunk (meadows): flat sediment over the rock, open water above.
+export function sandSites(W, ci, cj, n, rand) {
+  const out = [], x0 = ci * CH, z0 = cj * CH;
+  for (let t = 0; t < n * 4 && out.length < n; t++) {
+    const x = x0 + 1 + rand() * (CH - 2), z = z0 + 1 + rand() * (CH - 2), y = W.sandAt(x, z);
+    if (W.sdf(x, y + 0.2, z) < 0.3 * W.sdfScale || W.sdf(x, y + 2.5, z) < 0.8 * W.sdfScale) continue;
+    out.push({ p: [x, y, z], n: [0, 1, 0], exposure: 0.6, overhang: false, sand: true });
+  }
+  return out;
 }
 
 // ── merge bricks into one array set per key ─────────────────────────────────
@@ -218,6 +279,7 @@ export function meshCoarse(colonies, particles, bridges, Q) {
   const n = particles.length / PARTICLE_FLOATS;
   for (let g = 0; g < n; g++) { const o = g * PARTICLE_FLOATS; M.add(g, particles[o + 4], particles[o], particles[o + 1], particles[o + 2], particles[o + 3]); }
   if (bridges) for (let q = 0; q < bridges.length; q += 2) M.bridge(bridges[q], bridges[q + 1]);
+  M.fuse();                 // two species that touch: one surface (coral-sdf.js fuse)
   const by = {};
   for (const b of M.meshAll(1)) if (b.indices && b.indices.length) (by[b.sp] || (by[b.sp] = [])).push(b);
   const out = {};
@@ -227,27 +289,38 @@ export function meshCoarse(colonies, particles, bridges, Q) {
 
 // One colony (k) in its own frame (metres from colony.base): the fine
 // SDF mesh (coral-sdf.js lod: false) and its polyps. gids are the chunk
-// particle ids (g), so the page reads the same data texels.
-export function meshFine(colony, particles, bridges, Q) {
-  const n = particles.length / PARTICLE_FLOATS, ids = [], local = new Map();
-  for (let g = 0; g < n; g++) if (particles[g * PARTICLE_FLOATS + 3] === colony.k) { local.set(g, ids.length); ids.push(g); }
-  if (!ids.length) return null;
+// particle ids (g), so the page reads the same data texels. The other
+// colonies of the chunk (all of them: o.colonies, else only this one) go
+// in as contact guests (coral-sdf.js fuse): where they touch this colony,
+// its mesh is its part of one fused surface, with no face in the other.
+export function meshFine(colony, particles, bridges, Q, all = null) {
+  const n = particles.length / PARTICLE_FLOATS;
+  let mine = 0;
+  for (let g = 0; g < n; g++) if (particles[g * PARTICLE_FLOATS + 3] === colony.k) mine++;
+  if (!mine) return null;
   const b = colony.base;
+  const rel = c => ({ k: c.k, id: c.id, base: [c.base[0] - b[0], c.base[1] - b[1], c.base[2] - b[2]], normal: c.normal, foot: c.foot, plane: c.plane, stalk: c.stalk, tilt: c.tilt });
   const M = createCoralMesher({ polyps: Q.polyps, fine: Q.fine, radius: Math.max(4, colony.size * 1.2), lod: false });
-  M.addColony({ k: 0, id: colony.id, base: [0, 0, 0], plane: colony.plane, stalk: colony.stalk });
-  for (let q = 0; q < ids.length; q++) {
-    const o = ids[q] * PARTICLE_FLOATS, par = particles[o + 4];
-    M.add(q, par >= 0 && local.has(par) ? local.get(par) : -1, particles[o] - b[0], particles[o + 1] - b[1], particles[o + 2] - b[2], 0);
+  M.addColony(rel(colony));
+  for (const c of all || []) if (c.k !== colony.k) M.addColony(Object.assign(rel(c), { guest: true }));
+  // every particle in chunk order (ids = chunk particle ids); the
+  // particles of colonies that are not in are skipped
+  for (let g = 0, q = 0; g < n; g++) {
+    const o = g * PARTICLE_FLOATS, k = particles[o + 3];
+    if (!M.cols.has(k)) continue;
+    if (q !== g) break;     // a colony left out before this one: no guests past it
+    M.add(g, particles[o + 4], particles[o] - b[0], particles[o + 1] - b[1], particles[o + 2] - b[2], k);
+    q++;
   }
-  if (bridges) for (let q = 0; q < bridges.length; q += 2) { const g = local.get(bridges[q]), j = local.get(bridges[q + 1]); if (g !== undefined && j !== undefined) M.bridge(g, j); }
+  if (bridges) for (let q = 0; q < bridges.length; q += 2) M.bridge(bridges[q], bridges[q + 1]);
+  if (all) M.fuse();
   const list = M.meshAll().filter(r => r.indices && r.indices.length);
   const m = merge(list, true);
   if (!m) return null;
-  // back to chunk particle ids, and to the chunk frame (the coarse mesh and
-  // the fine mesh then have the same local positions: the surface detail
-  // of shaders.js, which reads the mesh position, does not jump at a swap)
-  for (let v = 0; v < m.gids.length; v++) m.gids[v] = m.gids[v] >= 0 ? ids[m.gids[v]] : -1;
-  for (let p = 6; p < m.polyps.length; p += 8) m.polyps[p] = ids[m.polyps[p]] ?? 0;
+  // the gids are the chunk particle ids; to the chunk frame (the coarse
+  // mesh and the fine mesh then have the same local positions: the
+  // surface detail of shaders.js, which reads the mesh position, does not
+  // jump at a swap)
   for (let v = 0; v < m.positions.length; v += 3) { m.positions[v] += b[0]; m.positions[v + 1] += b[1]; m.positions[v + 2] += b[2]; }
   for (let p = 0; p < m.polyps.length; p += 8) { m.polyps[p] += b[0]; m.polyps[p + 1] += b[1]; m.polyps[p + 2] += b[2]; }
   m.k = colony.k; m.sp = colony.id; m.polypN = m.polyps.length / 8;
