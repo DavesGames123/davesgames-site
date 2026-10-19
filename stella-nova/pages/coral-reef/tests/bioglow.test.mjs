@@ -20,6 +20,8 @@
 //                    exposure gives 0, a photophore pixel gives; the chain
 //                    and the composite keep the energy; a small radius;
 //                    the bloom pass is before the composite in the frame
+//    halo .......... the far glow sprite only for the lod 2 animals; fewer
+//                    sprites than glowing animals
 // ============================================================================
 import fs from 'node:fs';
 import { SPECIES, SPECIES_BY_ID, generatedSpecies } from '../fauna/species.js';
@@ -202,6 +204,41 @@ function emissive(M) {
   ok(S.passes.compU.uBloomK.value === 0, 'frame: bloom 0 sets the composite bloom term to 0');
   const pm = createScene({ canvas: fakeCanvas({ w: 320, h: 200 }).canvas, coarse: true, R: 30, maxParticles: 4096, profile: profileFor('phone-min') });
   ok(pm && pm.bloomStrength === 0, 'frame: phone-min starts with the bloom off');
+}
+
+// ── the far glow sprites (fauna/index.js): only where no mesh is drawn ─────
+{
+  const THREE = await import('../../../vendor/three@0.160.0/build/three.module.js');
+  const { createFauna } = await import('../fauna/index.js');
+  const { createWorld } = await import('../world/field.js');
+  const { FAUNA_BUDGET } = await import('../fauna/budget.js');
+  const W = createWorld({ seed: 7 });
+  const root = new THREE.Group(), cam = new THREE.PerspectiveCamera(60, 1.5, 0.1, 400);
+  const F = createFauna({ THREE, root, U: null, world: W, physics: null, profile: 'desktop', seed: 7, makeWorker: null });
+  const e = [20000, W.ground(20000, 0) + 20, 0];
+  cam.position.set(e[0], e[1], e[2]); cam.lookAt(e[0] + 1, e[1], e[2]); cam.updateMatrixWorld(true);
+  // 40 Atolla jellies in a line ahead of the camera, 3 m to 120 m
+  const sp = SPECIES_BY_ID.get('atolla-wyvillei');
+  const members = Array.from({ length: 40 }, (_, k) => ({ x: e[0] + 3 + k * 3, y: e[1], z: e[2] + (k % 2 ? 0.5 : -0.5), yaw: 0, size: 0.14 }));
+  F.sim.addGroup({ sp, feature: null, centre: [e[0] + 60, e[1], e[2]], members }, 'test', null);
+  for (let k = 0; k < 4; k++) F.update(1 / 30, cam, e, [0, 0]);
+  const st = F.stats(), B = FAUNA_BUDGET.desktop;
+  let far = 0, near = 0, glowing = 0;
+  for (let i = 0; i < F.sim.capacity; i++) {
+    if (!F.sim.alive[i] || !glowParams(F.sim.species[F.sim.spec[i]])) continue;
+    const d = Math.hypot(F.sim.px[i] - e[0], F.sim.py[i] - e[1], F.sim.pz[i] - e[2]);
+    if (d > B.draw) continue;
+    glowing++;
+    if (d >= B.lod1 || d >= F.sim.size[i] * 260) far++; else near++;
+  }
+  ok(st.glowMesh > 0 && st.halos > 0 && st.halos <= far && st.glowMesh >= near - 2, 'halo: only the far glowing animals (lod 2) get a glow sprite; the near ones glow from their photophores', `${glowing} glowing in range: ${st.glowMesh} meshes, ${st.halos} sprites, ${far} far`);
+  ok(st.halos < glowing, 'halo: the sprite count dropped (it was one per glowing animal in range)', `${st.halos} sprites for ${glowing} glowing animals`);
+  ok(B.halos <= 200 && FAUNA_BUDGET['phone-min'].halos <= 30, 'halo: smaller sprite budgets', Object.values(FAUNA_BUDGET).map(b => b.halos).join(','));
+  const G = await import('../fauna/glsl.js');
+  ok(/exp\(-r2 \* 9\.0\)/.test(G.HALO_FS) && !/0\.25 \* exp/.test(G.HALO_FS), 'halo: the sprite is a tight core (no wide skirt; the bloom spreads it)');
+  const r = checkPrograms([{ name: 'halo', vs: G.HALO_VS, fs: G.HALO_FS, instanced: true }]);
+  ok(r[0].ok === true, 'glsl: naga reads the halo program', r[0].ok === null ? 'naga not found' : (r[0].log || '').slice(0, 400));
+  F.dispose();
 }
 
 console.log(`\nbioglow: ${pass} passed, ${fail} failed`);

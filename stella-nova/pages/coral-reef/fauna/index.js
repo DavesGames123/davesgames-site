@@ -24,14 +24,20 @@
 //    F.setEnabled(on), F.enabled
 //    F.setEscort(fn | null)  fn() -> [x, y, z]: bring up to three swimming
 //                            groups near that point (the saver shots)
-//    F.stats() -> { chunks, pending, agents, drawn, halos, species, tris,
+//    F.stats() -> { chunks, pending, agents, drawn, halos, glowMesh, species, tris,
 //                   bytes, scans, regions, capacity }
 //    F.dispose()
 //
 //  FRAME. sim.step, then each live animal goes to the bucket of its species:
 //  near (< budget.lod0) the full model, far (< lod1) the low model, past
-//  that only the glow halo of a glowing animal, past `draw` nothing; a
+//  that only the glow sprite of a glowing animal, past `draw` nothing; a
 //  frustum test drops the rest. Buckets grow in powers of 2.
+//
+//  GLOW. A glowing animal with a mesh glows from the photophore map on its
+//  body (fauna/glsl.js phoMask, fauna/glow.js levels), and the bloom pass
+//  of scene.js spreads the light. Only an animal too far or too small to
+//  show its photophores (lod 2) gets a tiny glow sprite, so distant
+//  glowing animals still twinkle.
 //
 //  MEMORY. A chunk that leaves the ring frees its agents; a species bucket
 //  with no animal for 20 s frees its geometry, its material and its texture
@@ -68,7 +74,7 @@ export function createFauna(o) {
   const genSpecies = new Map();      // generated species id -> object (one per id)
   let enabled = true, disposed = false, token = 0, escort = null, escortT = 0;
   let manifest = null, manifestP = null;
-  const statsN = { drawn: 0, halos: 0, built: 0, freed: 0, scanFails: 0 };
+  const statsN = { drawn: 0, halos: 0, glowMesh: 0, built: 0, freed: 0, scanFails: 0 };
 
   // ── the spawn worker ──────────────────────────────────────────────────────
   let worker = null, nextId = 1;
@@ -281,12 +287,12 @@ export function createFauna(o) {
     root.add(mesh);
     return { geo, mat, mesh, n };
   }
-  const glowCol = new Map();
-  function glowRGB(sp) { let c = glowCol.get(sp.id); if (!c) { c = hex(sp.glow.colour); glowCol.set(sp.id, c); } return c; }
+  const glowCol = new WeakMap();
+  function glowRGB(GP) { let c = glowCol.get(GP); if (!c) { c = hex(GP.colour); glowCol.set(GP, c); } return c; }
 
   function fill(camera, eye, origin, t, dt = 0, rovs = null) {
     const uDown = U && U.uDown ? U.uDown.value : 0;
-    statsN.drawn = 0; statsN.halos = 0;
+    statsN.drawn = 0; statsN.halos = 0; statsN.glowMesh = 0;
     if (camera) { pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv); }
     const ox = origin ? origin[0] : 0, oz = origin ? origin[1] : 0;
     // pass 1: count per bucket and lod
@@ -323,13 +329,27 @@ export function createFauna(o) {
       if (lod < 0) continue;
       const b = slotB[sim.spec[i]], sp = b.sp;
       const x = sim.px[i] - ox, y = sim.py[i], z = sim.pz[i] - oz, s = sim.size[i];
-      if (sp.glow && halo && nh < halo.n) {
-        const c = glowRGB(sp), k = sp.glow.k * (0.65 + 0.35 * Math.sin(t * (1.3 + sim.phase[i]) + sim.phase[i] * 40)) * (1 + sim.glow[i] * 2.5);
-        HA[nh * 4] = x; HA[nh * 4 + 1] = y + s * 0.1; HA[nh * 4 + 2] = z; HA[nh * 4 + 3] = s * (sp.glow.halo || 0.5) * 1.6 + 0.06;
-        HC[nh * 4] = c[0]; HC[nh * 4 + 1] = c[1]; HC[nh * 4 + 2] = c[2]; HC[nh * 4 + 3] = k * 0.5;
-        nh++;
+      // the photophore levels (fauna/glow.js): steady, counter, flash, wave
+      const GP = glowParams(sp);
+      let g4 = null;
+      if (GP) {
+        PW[0] = sim.px[i]; PW[1] = sim.py[i]; PW[2] = sim.pz[i];
+        let dr = 1e9; if (rovs) for (const r of rovs) if (r && r.p) dr = Math.min(dr, Math.hypot(PW[0] - r.p[0], PW[1] - r.p[1], PW[2] - r.p[2]) - s * 0.5);
+        g4 = glowS.step(i, GP, { dt, t, phase: sim.phase[i], d: dr, lamp: lampAt(PW, rovs), startle: sim.glow[i], down: downwelling(uDown, PW[1]) });
+      }
+      // the far glow sprite: only where the mesh is not drawn (lod 2). A
+      // small bright core (the bloom spreads it), the photophore colour
+      // and level, so a far animal twinkles as it breathes and flashes
+      if (GP && lod === 2 && halo && nh < halo.n) {
+        const c = glowRGB(GP), lv = g4[0] + g4[2] * 0.6;
+        if (lv > 0.01) {
+          HA[nh * 4] = x; HA[nh * 4 + 1] = y; HA[nh * 4 + 2] = z; HA[nh * 4 + 3] = s * (GP.halo || 0.3) * 0.5 + 0.02;
+          HC[nh * 4] = c[0]; HC[nh * 4 + 1] = c[1]; HC[nh * 4 + 2] = c[2]; HC[nh * 4 + 3] = GP.k * lv * 3 * GLOW_GAIN;
+          nh++;
+        }
       }
       if (lod === 2 || b.state !== 'ready') continue;
+      if (GP) statsN.glowMesh++;
       const mesh = b.meshes[lod], k = lod === 0 ? b.k0++ : b.k1++;
       const M = mesh.instanceMatrix.array, o16 = k * 16;
       const cy = Math.cos(sim.yaw[i]), sy = Math.sin(sim.yaw[i]), cp = Math.cos(sim.pitch[i]), spch = Math.sin(sim.pitch[i]);
@@ -349,13 +369,9 @@ export function createFauna(o) {
       const tint = 0.92 + 0.16 * sim.phase[i];
       IT[q] = tint; IT[q + 1] = tint; IT[q + 2] = tint; IT[q + 3] = 1;
       // the photophore levels (fauna/glow.js): steady, counter, flash, wave
-      const IG = mesh.geometry.attributes.iGlow.array, GP = glowParams(sp);
-      if (GP) {
-        PW[0] = sim.px[i]; PW[1] = sim.py[i]; PW[2] = sim.pz[i];
-        let dr = 1e9; if (rovs) for (const r of rovs) if (r && r.p) dr = Math.min(dr, Math.hypot(PW[0] - r.p[0], PW[1] - r.p[1], PW[2] - r.p[2]) - s * 0.5);
-        const g4 = glowS.step(i, GP, { dt, t, phase: sim.phase[i], d: dr, lamp: lampAt(PW, rovs), startle: sim.glow[i], down: downwelling(uDown, PW[1]) });
-        IG[q] = g4[0]; IG[q + 1] = g4[1]; IG[q + 2] = g4[2]; IG[q + 3] = g4[3];
-      } else { IG[q] = 1; IG[q + 1] = 0; IG[q + 2] = 0; IG[q + 3] = 0; }
+      const IG = mesh.geometry.attributes.iGlow.array;
+      if (g4) { IG[q] = g4[0]; IG[q + 1] = g4[1]; IG[q + 2] = g4[2]; IG[q + 3] = g4[3]; }
+      else { IG[q] = 1; IG[q + 1] = 0; IG[q + 2] = 0; IG[q + 3] = 0; }
       statsN.drawn++;
     }
     for (const b of buckets.values()) {
@@ -445,7 +461,7 @@ export function createFauna(o) {
     const regions = {};
     for (const c of chunks.values()) if (c.state === 'live') regions[c.region] = (regions[c.region] || 0) + (c.count || 0);
     let pending = 0; for (const c of chunks.values()) if (c.state === 'pending') pending++;
-    return { chunks: chunks.size, pending, agents: sim.count, capacity: sim.capacity, drawn: statsN.drawn, halos: statsN.halos, species: ready, scans, tris, bytes, built: statsN.built, freed: statsN.freed, scanFails: statsN.scanFails, regions, sim: Object.assign({}, sim.stats) };
+    return { chunks: chunks.size, pending, agents: sim.count, capacity: sim.capacity, drawn: statsN.drawn, halos: statsN.halos, glowMesh: statsN.glowMesh, species: ready, scans, tris, bytes, built: statsN.built, freed: statsN.freed, scanFails: statsN.scanFails, regions, sim: Object.assign({}, sim.stats) };
   }
 
   function setEnabled(on) {

@@ -29,7 +29,9 @@
 //                            siphonophores, Enypniastes, the snailfish): a
 //                            bright rim, the comb rows diffract the lamps
 //                            into a rainbow (comb rows have f = 2)
-//    HALO_VS + HALO_FS ..... the glow halo: a camera-facing quad, added
+//    HALO_VS + HALO_FS ..... the far glow sprite: a small camera-facing quad,
+//                            added, only for a glowing animal with no mesh
+//                            drawn (lod 2); the bloom pass spreads its core
 //
 //  grep -n targets: "vec3 swim(", "float phoMask(", "export const FAUNA_VS", "export const FAUNA_FS",
 //  "export const GEL_FS", "export const HALO_VS"
@@ -229,7 +231,7 @@ out vec4 oCol;
 void main() {
   float r2 = dot(vQ, vQ);
   if (r2 > 1.0) discard;
-  float g = exp(-r2 * 5.0) + 0.25 * exp(-r2 * 1.4);
+  float g = exp(-r2 * 9.0);
   vec3 tr = exp(-vD * uFogK * 0.8);
   oCol = linearToOutputTexel(vec4(vC * vI * g * tr, 1.0));
 }`;
