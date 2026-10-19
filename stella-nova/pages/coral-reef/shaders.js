@@ -423,7 +423,9 @@ export function coralSwayJS(x, y, z, gy, lvl, t, cur = [1, 0], swayK = 1, out = 
 // parent along the branch (position + C.xyz x (1 - g)), so a branch tip
 // extends smoothly; it does not pop out along the normals (the user: "grows
 // in a speckly-kind of way instead of an organic natural kind of way").
-// coralHide 1: the coarse mesh of a focus colony (B.y < 0) does not draw.
+// coralHide 1: the coarse mesh of a focus colony (B.y < 0) does not draw,
+// and no mesh draws a particle before its birth (age < 0: a planted
+// colony that grows in, world/plant.js plantBirths).
 // The vertex stays in place and the fragment shader discards where the
 // interpolated vHide passes 0.5: a coarse face that joins a hidden colony
 // and a shown one (a fused contact) is cut half way. (A vertex sent out of
@@ -442,6 +444,7 @@ bool coralWorld(float gid, out vec4 w, out vec4 A, out vec4 B, out float age, ou
   w = vec4(0.0); age = 0.0; tip = 0.0; ax = vec3(0.0);
   coralHide = uCoarse > 0.5 && B.y < 0.0 ? 1.0 : 0.0;
   age = uTime - B.x;
+  if (age < 0.0) coralHide = 1.0;     // a planted colony: not born yet (world/plant.js)
   float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
   vec3 p = position + C.xyz * (1.0 - g);
   w = modelMatrix * vec4(p, 1.0);
@@ -677,6 +680,7 @@ bool polypWorld(out vec4 w, out vec4 A, out float age, out vec3 nn, out vec3 t, 
   A = texelFetch(uPartA, tc, 0);
   vec4 B = texelFetch(uPartB, tc, 0), C = texelFetch(uPartC, tc, 0);
   age = uTime - B.x;
+  if (age < 0.0) return false;        // a planted colony: not born yet
   float grow = clamp((age - 0.6) / 1.5, 0.0, 1.0);
   float g = clamp(age / 1.4, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g);
   nn = normalize(iNrm);

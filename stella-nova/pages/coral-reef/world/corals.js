@@ -38,11 +38,20 @@
 //    coarseMesher(colonies, particles, bridges, Q, fuse = true) -> M: the
 //        meshers of meshFine and meshCoarse before meshAll (tests)
 //    result = { key, ci, cj, cx, cz, oy, colonies: [colonyInfo + count, top,
-//        ext], count, particles (PARTICLE_FLOATS each), bridges (Int32 pairs),
+//        ext, planted (uid, a planted colony)], count, particles
+//        (PARTICLE_FLOATS each), bridges (Int32 pairs), added (the plants),
 //        coarse: { [sp]: { positions, normals, gids, indices, tris } },
 //        stats: { growMs, meshMs, tris } }
 //
+//    chunkCurrent(W, cx, cz), chunkForm(R, ci, cj, seed): the current and
+//        the per-chunk species form (growChunk and the planted colonies)
+//    growPlant(W, plant, ctx), appendPlants(W, base, plants, ctx),
+//    dropColonies(base, drop), plantChunk(W, co, add, drop, seed): the
+//        planted colonies of world/plant.js (grep -n 'planted colonies');
+//        o.plants of growChunk grows them at once after the chunk
+//
 //  grep -n targets: "export function chunkSites", "export function planColonies",
+//  "export function plantChunk", "export function appendPlants", "export function dropColonies",
 //  "export function growChunk", "export function meshCoarse",
 //  "export function meshFine", "function merge("
 // ============================================================================
@@ -182,7 +191,9 @@ export function planColonies(W, ci, cj, budget, seed) {
   const depth = SURFACE_Y - W.ground(cx, cz), garden = gardenAt(cx, cz, seed);
   const share = chunkShare(hab, garden, depth);
   const want = clamp(Math.round(budget.colonies * share * (0.85 + 0.3 * rand())), 0, budget.colonies);
-  const res = { cx, cz, oy: 0, hab, garden, depth, want, sites: [] };
+  // oy: the chunk frame height; with no site, the ground at the centre (a
+  // colony planted later, world/plant.js, grows in this frame)
+  const res = { cx, cz, oy: Math.round(W.ground(cx, cz)), hab, garden, depth, want, sites: [] };
   if (!want) return res;
   const deep = depth > DEEP_FROM + 60;
   const nSand = deep ? Math.round(want * SAND_SHARE) : 0, nRock = want - nSand;
@@ -365,18 +376,14 @@ function* growSteps(W, ci, cj, budget, o) {
   const plan = planColonies(W, ci, cj, budget, seed);
   const key = `${ci},${cj}`;
   const empty = { key, ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, colonies: [], count: 0, particles: new Float32Array(0), bridges: new Int32Array(0), coarse: {}, stats: { growMs: 0, meshMs: 0, tris: 0, hab: plan.hab, want: plan.want } };
-  if (!plan.sites.length) return empty;
+  if (!plan.sites.length && !(o.plants && o.plants.length)) return empty;
   const quality = budget.quality || o.quality || 'mid';
   const Q = Object.assign({}, QUALITY[quality] || QUALITY.mid);
   const rock = W.localRock(plan.cx, plan.oy, plan.cz, { half: CH / 2 + 8 });
   const R = createReef({ rock, seed: hash3(ci, cj, seed ^ 0x5eed), quality, radius: 1e4, budget: { particles: budget.particles, colonies: budget.colonies } });
   // the current of the chunk: a slow field over the world (the fans face it)
-  const cur = Math.atan2(W.height(plan.cx + 200, plan.cz) - W.height(plan.cx - 200, plan.cz), 1) * 57.3 * 4 + 20 + 160 * Math.sin(plan.cx / 3000 + plan.cz / 4100);
-  R.setCurrent(cur, 0.5);
-  // the form varies per chunk from the seed: stickiness and reach of each
-  // species (less reach and stickiness: thinner, more open branches)
-  const vr = mulberry32(hash3(ci, cj, seed ^ 0xf0f0) || 1);
-  for (const id of Object.keys(R.params)) { const p = R.params[id]; R.setParams(id, { stickiness: Math.min(1, p.stickiness * (0.8 + 0.3 * vr())), attractionDistance: p.attractionDistance * (0.85 + 0.15 * vr()) }); }
+  R.setCurrent(chunkCurrent(W, plan.cx, plan.cz), 0.5);
+  chunkForm(R, ci, cj, seed);
   for (const s of plan.sites) R.addColony(s.id, s.site, { size: s.size });
   // caps in the particle budget (each colony keeps at least 25 % of its wish)
   let sum = 0;
@@ -391,12 +398,18 @@ function* growSteps(W, ci, cj, budget, o) {
   const particles = packParticles(R, 0, R.count);
   const br = [];
   for (const [g, j] of R.bridges) br.push(g, j);
-  const bridges = Int32Array.from(br);
+  let bridges = Int32Array.from(br);
+  // the planted colonies of this chunk (world/plant.js), grown again at once
+  let cols = colonies, parts = particles, added = [];
+  if (o.plants && o.plants.length) {
+    const ctx = { ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, seed, quality };
+    ({ colonies: cols, particles: parts, bridges, added } = appendPlants(W, { colonies, particles, bridges }, o.plants, ctx));
+  }
   if (o.slice) yield;
-  const coarse = meshCoarse(colonies, particles, bridges, Q);
+  const coarse = meshCoarse(cols, parts, bridges, Q);
   let tris = 0;
   for (const sp of Object.keys(coarse)) tris += coarse[sp].tris;
-  return { key, ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, depth: SURFACE_Y - plan.oy, colonies, count: R.count, particles, bridges, coarse, quality,
+  return { key, ci, cj, cx: plan.cx, cz: plan.cz, oy: plan.oy, depth: SURFACE_Y - plan.oy, colonies: cols, count: parts.length / PARTICLE_FLOATS, particles: parts, bridges, coarse, quality, added,
     stats: { growMs, meshMs: now() - t1, tris, hab: plan.hab, want: plan.want } };
 }
 export const growChunk = growChunkSync;
@@ -410,4 +423,108 @@ export function transfers(r) {
   if (r.coarse) for (const m of Object.values(r.coarse)) if (m) { add(m.positions); add(m.normals); add(m.gids); add(m.indices); }
   for (const k of ['positions', 'normals', 'gids', 'indices', 'polyps', 'cavity', 'band']) add(r[k]);
   return out;
+}
+
+// ── the current and the form of a chunk (growChunk and the planted colonies) ─
+// The current: a slow field over the world (the fans face it), in degrees.
+export function chunkCurrent(W, cx, cz) {
+  return Math.atan2(W.height(cx + 200, cz) - W.height(cx - 200, cz), 1) * 57.3 * 4 + 20 + 160 * Math.sin(cx / 3000 + cz / 4100);
+}
+// The form varies per chunk from the seed: stickiness and reach of each
+// species (less reach and stickiness: thinner, more open branches).
+export function chunkForm(R, ci, cj, seed) {
+  const vr = mulberry32(hash3(ci, cj, seed ^ 0xf0f0) || 1);
+  for (const id of Object.keys(R.params)) { const p = R.params[id]; R.setParams(id, { stickiness: Math.min(1, p.stickiness * (0.8 + 0.3 * vr())), attractionDistance: p.attractionDistance * (0.85 + 0.15 * vr()) }); }
+}
+
+// ── planted colonies (world/plant.js) ───────────────────────────────────────
+// The user said (2026-10-18): "my girlfriend really liked when we could
+// plant corals by clicking can we bring that back to the ROV section?"
+// A plant is { uid, p (world m), n, id, size, cap, seed }. It grows ALONE
+// in a reef of its own on the rock of the chunk (the same frame, current
+// and chunk form as growChunk), so the same plant always gives the same
+// colony. appendPlants puts its particles after the chunk particles (the
+// colony k = the next index, colony.planted = uid); the chunk mesh is made
+// again with fuse (coral-sdf.js), so it joins its neighbours in one
+// surface. ctx: { ci, cj, cx, cz, oy, seed (world), quality }.
+export function growPlant(W, pl, ctx) {
+  const rock = W.localRock(ctx.cx, ctx.oy, ctx.cz, { half: CH / 2 + 8 });
+  const cap = Math.max(20, pl.cap | 0);
+  const R = createReef({ rock, seed: pl.seed >>> 0 || 1, quality: ctx.quality || 'mid', radius: 1e4, budget: { particles: cap, colonies: 1 } });
+  R.setCurrent(chunkCurrent(W, ctx.cx, ctx.cz), 0.5);
+  chunkForm(R, ctx.ci, ctx.cj, ctx.seed);
+  const site = { p: [pl.p[0] - ctx.cx, pl.p[1] - ctx.oy, pl.p[2] - ctx.cz], n: pl.n || [0, 1, 0] };
+  const c = R.addColony(pl.id, site, { size: pl.size, cap });
+  if (!c) return null;
+  // the walker bound: a colony gets about 90 % of its particles in the
+  // first 20 x cap walkers, and the slow tail costs seconds (measured)
+  R.growAll(Infinity, Math.max(12000, cap * 20));
+  if (c.count < 2) return null;
+  const br = [];
+  for (const [g, j] of R.bridges) br.push(g, j);
+  return { info: Object.assign(colonyInfo(c), { count: c.count, top: c.top, ext: c.ext }), particles: packParticles(R, 0, R.count), bridges: br, count: R.count };
+}
+// base: { colonies, particles, bridges } of a chunk -> the same with the
+// plants after it, and added: [{ uid, ok, k, from, to }] (from, to: the
+// particle ids of the new colony).
+export function appendPlants(W, base, plants, ctx) {
+  let cols = base.colonies.slice(), parts = base.particles, br = Array.from(base.bridges || []);
+  const added = [];
+  for (const pl of plants) {
+    const g = growPlant(W, pl, ctx);
+    if (!g) { added.push({ uid: pl.uid, ok: false }); continue; }
+    const g0 = parts.length / PARTICLE_FLOATS, K = cols.length, n = g.count;
+    const P2 = new Float32Array(parts.length + n * PARTICLE_FLOATS);
+    P2.set(parts);
+    P2.set(g.particles, parts.length);
+    for (let q = 0; q < n; q++) {
+      const o = (g0 + q) * PARTICLE_FLOATS;
+      P2[o + 3] = K;
+      if (P2[o + 4] >= 0) P2[o + 4] += g0;
+    }
+    for (let q = 0; q < g.bridges.length; q++) br.push(g.bridges[q] + g0);
+    parts = P2;
+    cols.push(Object.assign(g.info, { k: K, planted: pl.uid }));
+    added.push({ uid: pl.uid, ok: true, k: K, from: g0, to: g0 + n });
+  }
+  return { colonies: cols, particles: parts, bridges: Int32Array.from(br), added };
+}
+// The chunk without the colonies that drop(colony) says: the particle ids
+// and the colony k close up (k = the index in the list again).
+export function dropColonies(base, drop) {
+  const kmap = new Map(), cols = [];
+  for (const c of base.colonies) if (!drop(c)) { kmap.set(c.k, cols.length); cols.push(Object.assign({}, c, { k: cols.length })); }
+  const P = base.particles, n = P.length / PARTICLE_FLOATS, gmap = new Int32Array(n).fill(-1);
+  let m = 0;
+  for (let g = 0; g < n; g++) if (kmap.has(P[g * PARTICLE_FLOATS + 3])) gmap[g] = m++;
+  const P2 = new Float32Array(m * PARTICLE_FLOATS);
+  for (let g = 0; g < n; g++) {
+    const t = gmap[g]; if (t < 0) continue;
+    const o = g * PARTICLE_FLOATS, o2 = t * PARTICLE_FLOATS;
+    P2.set(P.subarray(o, o + PARTICLE_FLOATS), o2);
+    P2[o2 + 3] = kmap.get(P[o + 3]);
+    const par = P[o + 4];
+    P2[o2 + 4] = par >= 0 && gmap[par] >= 0 ? gmap[par] : -1;
+  }
+  const B = base.bridges || [], br = [];
+  for (let q = 0; q < B.length; q += 2) { const a = gmap[B[q]], b = gmap[B[q + 1]]; if (a >= 0 && b >= 0) br.push(a, b); }
+  return { colonies: cols, particles: P2, bridges: Int32Array.from(br) };
+}
+// The plant job (world/worker.js 'plant'): co is the shown chunk result;
+// first drop (the plant uids that go), then add (plants). The result has
+// the form of a growChunk result, with the coarse mesh made again.
+export function plantChunk(W, co, add = [], drop = [], seed = 1) {
+  const t0 = now();
+  const quality = co.quality || 'mid';
+  let base = { colonies: co.colonies, particles: co.particles, bridges: co.bridges };
+  if (drop.length) { const d = new Set(drop); base = dropColonies(base, c => c.planted != null && d.has(c.planted)); }
+  const ctx = { ci: co.ci, cj: co.cj, cx: co.cx, cz: co.cz, oy: co.oy, seed, quality };
+  const r = appendPlants(W, base, add, ctx);
+  const growMs = now() - t0, t1 = now();
+  const coarse = meshCoarse(r.colonies, r.particles, r.bridges, Object.assign({}, QUALITY[quality] || QUALITY.mid));
+  let tris = 0;
+  for (const sp of Object.keys(coarse)) tris += coarse[sp].tris;
+  return { key: co.key || `${co.ci},${co.cj}`, ci: co.ci, cj: co.cj, cx: co.cx, cz: co.cz, oy: co.oy, depth: co.depth ?? SURFACE_Y - co.oy,
+    colonies: r.colonies, count: r.particles.length / PARTICLE_FLOATS, particles: r.particles, bridges: r.bridges, coarse, quality, added: r.added,
+    stats: { growMs, meshMs: now() - t1, tris } };
 }

@@ -7,8 +7,12 @@
 //  per (seed, fine), so the noise tables and the tile caches live on.
 //    { id, type: 'rock', seed, ci, cj, lod, c0, fine }
 //        -> world/mesh.js meshChunk: { rock, sand, lod, cell, bytes }
-//    { id, type: 'coral', seed, ci, cj, budget, fine }
+//    { id, type: 'coral', seed, ci, cj, budget, fine, plants? }
 //        -> world/corals.js growChunk: the grown, meshed corals of the chunk
+//           (plants: the planted colonies of the chunk, grown at once after)
+//    { id, type: 'plant', seed, fine, co, add, drop }
+//        -> world/corals.js plantChunk: the shown chunk co with the plants
+//           of drop (uids) taken out and the plants of add grown in
 //    { id, type: 'fine', colony, colonies, particles, bridges, quality }
 //        -> world/corals.js meshFine: one colony, fine mesh and polyps
 //  runJob(msg) is the same job on any thread (node tests, the main-thread
@@ -18,7 +22,7 @@
 // ============================================================================
 import { createWorld } from './field.js';
 import { meshChunk } from './mesh.js';
-import { growChunkSync, growChunkAsync, meshFine, transfers } from './corals.js';
+import { growChunkSync, growChunkAsync, meshFine, plantChunk, transfers } from './corals.js';
 import { QUALITY } from '../reef.js';
 
 const worlds = new Map();
@@ -38,7 +42,10 @@ export async function runJob(msg, o = {}) {
     result = meshChunk(worldFor(msg.seed, msg.fine), msg.ci, msg.cj, msg.lod, msg.c0);
   } else if (msg.type === 'coral') {
     const W = worldFor(msg.seed, msg.fine ?? 1);
-    result = o.slice ? await growChunkAsync(W, msg.ci, msg.cj, msg.budget, { seed: msg.seed, slice: o.slice, wait: o.slice.wait }) : growChunkSync(W, msg.ci, msg.cj, msg.budget, { seed: msg.seed });
+    const plants = msg.plants || null;
+    result = o.slice ? await growChunkAsync(W, msg.ci, msg.cj, msg.budget, { seed: msg.seed, plants, slice: o.slice, wait: o.slice.wait }) : growChunkSync(W, msg.ci, msg.cj, msg.budget, { seed: msg.seed, plants });
+  } else if (msg.type === 'plant') {
+    result = plantChunk(worldFor(msg.seed, msg.fine ?? 1), msg.co, msg.add || [], msg.drop || [], msg.seed);
   } else if (msg.type === 'fine') {
     result = meshFine(msg.colony, msg.particles, msg.bridges, QUALITY[msg.quality] || QUALITY.mid, msg.colonies);
   } else throw new Error('world worker: unknown job ' + msg.type);

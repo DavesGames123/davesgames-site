@@ -51,24 +51,43 @@
 //    st.on(event, fn)        'rock' (key, i, j, lod), 'unload' (key, i, j),
 //                            'coral' (key, colonies), 'uncoral' (key)
 //
+//    st.plant({ p, n, id }) -> { ok, why, rec }   plant a colony at p (world
+//                            m) in a chunk that shows its corals (PLANTS below)
+//    st.unplant(uid), st.plants() the records of this session, oldest first
+//    events 'plant' ({ uid, ok, key, colony }), 'unplant' (uid, key)
+//
+//  PLANTS (world/plant.js). The user said (2026-10-18): "ok my girlfriend
+//  really liked when we could plant corals by clicking can we bring that
+//  back to the ROV section?" A record goes into the session list; a
+//  'plant' job (one at a time per chunk, c.ops) grows it into the shown
+//  chunk and the result replaces the chunk coral in one view.addCoral
+//  call, with co.grow (the new colony grows in on the page). A chunk that
+//  loads again sends its records in the coral job: the same colony, at
+//  once. budget.plant: max records (the oldest goes), particles per
+//  colony, and the slab reserve per chunk (slabOf: the slab is
+//  coral.particles + reserve slots; a full chunk drops its oldest plant).
+//
 //    worldEstimate(budget) the GPU bytes of the world at most (budget.js tests)
+//    slabOf(budget)        the slots of one coral slab
 //
 //  grep -n targets: "export function createStreamer", "function wantLod", "export function worldEstimate",
 //  "function onRock", "function onCoral", "function updateFocus",
-//  "function coralDist", "export const WORLD_BUDGET", "export const rovRing", "function rovDist"
+//  "function coralDist", "export const WORLD_BUDGET", "export const rovRing", "function rovDist",
+//  "function plant(", "function pumpOps", "function onPlant", "export const slabOf"
 // ============================================================================
 import { CH } from './mesh.js';
 import { holdFocus, SPECIES, PARTICLE_FLOATS } from '../reef.js';
 import { CORAL_BUDGET } from './corals.js';
+import { PLANT_BUDGET, plantRecord } from './plant.js';
 
 export const HYST = 16, UNLOAD = 32, CORAL_HYST = 24, REACH = 2.5;
 
 // The world budget of each device profile (CONTRACT-V4.md table).
 export const WORLD_BUDGET = {
-  desktop: { c0: 0.25, rings: [36, 80, 150], coralR: 44, fineTris: 1200000, maxCoral: 16, maxFine: 8, workers: 4, coral: CORAL_BUDGET.desktop },
-  'laptop-low': { c0: 0.32, rings: [30, 66, 120], coralR: 36, fineTris: 600000, maxCoral: 12, maxFine: 5, workers: 3, coral: CORAL_BUDGET['laptop-low'] },
-  phone: { c0: 0.4, rings: [24, 56], coralR: 28, fineTris: 250000, maxCoral: 8, maxFine: 3, workers: 2, coral: CORAL_BUDGET.phone },
-  'phone-min': { c0: 0.5, rings: [16, 44], coralR: 20, fineTris: 120000, maxCoral: 5, maxFine: 2, workers: 1, coral: CORAL_BUDGET['phone-min'] },
+  desktop: { c0: 0.25, rings: [36, 80, 150], coralR: 44, fineTris: 1200000, maxCoral: 16, maxFine: 8, workers: 4, coral: CORAL_BUDGET.desktop, plant: PLANT_BUDGET.desktop },
+  'laptop-low': { c0: 0.32, rings: [30, 66, 120], coralR: 36, fineTris: 600000, maxCoral: 12, maxFine: 5, workers: 3, coral: CORAL_BUDGET['laptop-low'], plant: PLANT_BUDGET['laptop-low'] },
+  phone: { c0: 0.4, rings: [24, 56], coralR: 28, fineTris: 250000, maxCoral: 8, maxFine: 3, workers: 2, coral: CORAL_BUDGET.phone, plant: PLANT_BUDGET.phone },
+  'phone-min': { c0: 0.5, rings: [16, 44], coralR: 20, fineTris: 120000, maxCoral: 5, maxFine: 2, workers: 1, coral: CORAL_BUDGET['phone-min'], plant: PLANT_BUDGET['phone-min'] },
 };
 // The fine field (crag octaves) of a rock LOD cell: 1 at 0.25 m.
 export const fineFor = cell => Math.max(0.3, Math.min(1, 0.25 / cell * 1.0));
@@ -95,10 +114,15 @@ export function worldEstimate(B) {
   const nc = Math.min(B.maxCoral, area(B.coralR + CORAL_HYST));
   out.coral = nc * B.coral.particles * BYTES.coarseTrisPerParticle * BYTES.coralTri;
   out.fine = B.fineTris * (BYTES.coralTri + BYTES.polypsPerFineTri * BYTES.polyp);
-  out.data = B.maxCoral * B.coral.particles * BYTES.slot;
-  out.total = out.rock + out.coral + out.fine + out.data;
+  out.data = B.maxCoral * slabOf(B) * BYTES.slot;
+  // the planted colonies: at most plant.max colonies of plant.particles
+  out.plant = B.plant ? Math.min(B.plant.max * B.plant.particles, B.maxCoral * B.plant.reserve) * BYTES.coarseTrisPerParticle * BYTES.coralTri : 0;
+  out.total = out.rock + out.coral + out.fine + out.data + out.plant;
   return out;
 }
+
+// The slots of one coral slab: the chunk particles and the plant reserve.
+export const slabOf = B => B.coral.particles + (B.plant ? B.plant.reserve : 0);
 
 // The radius of chunks kept round each ROV (m): B.rovR, else 60 % of the
 // last ring, at most 72 m (the ROV camera far plane is 60 m, rov/build.js).
@@ -110,13 +134,13 @@ export function chunkDist(i, j, x, z) {
   return Math.hypot(dx, dz);
 }
 
-export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, view = {}, now = () => Date.now() } = {}) {
+export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, view = {}, now = () => Date.now(), plants: keep = null } = {}) {
   const B = budget, rings = B.rings, last = rings.length - 1, outer = rings[last];
   const rovR = rovRing(B), rovCoral = Math.min(B.coralR, rovR) * 0.5;
   const chunks = new Map();
-  const slabSize = B.coral.particles, slabs = new Array(B.maxCoral).fill(null);
+  const slabSize = slabOf(B), slabs = new Array(B.maxCoral).fill(null);
   const bytes = { rock: 0, coral: 0, fine: 0, data: 0 };
-  const stats = { rockJobs: 0, coralJobs: 0, fineJobs: 0, rockShown: 0, coralShown: 0, fineShown: 0, dropped: 0, unloads: 0, rockMs: [], coralMs: [], bytes };
+  const stats = { rockJobs: 0, coralJobs: 0, fineJobs: 0, plantJobs: 0, rockShown: 0, coralShown: 0, fineShown: 0, plantShown: 0, dropped: 0, unloads: 0, rockMs: [], coralMs: [], bytes };
   let eye = [0, 0, 0], token = 1;
   const held = new Map(), fine = new Map();       // focus: k -> hold; fine: fkey -> rec
   const call = (f, ...a) => (typeof view[f] === 'function' ? view[f](...a) : 0);
@@ -216,6 +240,8 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     const t = token++;
     // the corals grow on the field of the LOD 0 rock (the same crag detail)
     const job = { type: 'coral', seed, ci: c.i, cj: c.j, budget: B.coral, fine: fineFor(B.c0) };
+    const own = plantsIn(c.key);
+    if (own.length) job.plants = own.map(plainPlant);
     const h = pool.submit(job, () => c.d + 20);
     c.coralJob = { h, token: t, at: now() };
     stats.coralJobs++;
@@ -252,6 +278,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     const s = takeSlab(c);
     if (s < 0) { stats.dropped++; return; }
     c.coral = Object.assign({ base: s * slabSize, slab: s }, r);
+    failPlants(r);
     c.coral.hash = buildHash(c.coral);
     c.dataBytes = r.particles.byteLength + r.bridges.byteLength + c.coral.hash.bytes + r.colonies.length * 200;
     bytes.data += c.dataBytes;
@@ -262,6 +289,8 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
   }
   function unloadCoral(c) {
     if (c.coralJob) { c.coralJob.h.cancel(); c.coralJob = null; }
+    if (c.plantJob) { c.plantJob.h.cancel(); c.plantJob = null; }
+    c.ops = null;
     c.coralWait = null;
     for (const [fk, f] of [...fine]) if (f.chunk === c.key) dropFine(fk);
     if (c.coral) { call('removeCoral', c.key); c.coral = null; emit('uncoral', c.key); }
@@ -327,7 +356,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
       for (const k of co.colonies) {
         const base = [k.base[0] + co.cx, k.base[1] + co.oy, k.base[2] + co.cz];
         const h = Math.max(0.2, (k.top ?? k.base[1]) - k.base[1]), ext = Math.max(0.3, k.ext ?? k.size * 0.4);
-        out.push({ key: `${c.key}#${k.k}`, chunk: c.key, k: k.k, id: k.id, base, size: k.size, count: k.count, cap: k.cap,
+        out.push({ key: `${c.key}#${k.k}`, chunk: c.key, k: k.k, id: k.id, base, size: k.size, count: k.count, cap: k.cap, planted: k.planted ?? null,
           center: [base[0], base[1] + h * 0.5, base[2]], radius: Math.hypot(ext, h * 0.5) + 0.05, top: base[1] + h, ext });
       }
     }
@@ -385,11 +414,92 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     fine.delete(fk);
   }
 
+  // ── planted colonies (world/plant.js) ─────────────────────────────────────
+  // planted: the records of this session, oldest first (world metres). A
+  // chunk with coral takes its plants in a 'plant' job (one at a time per
+  // chunk, c.ops waits); the result replaces the chunk coral in one
+  // view.addCoral call, with co.grow (the new colonies grow in). A coral
+  // job of a chunk that loads again carries its plants (job.plants).
+  const PB = B.plant || { max: 0, particles: 0, reserve: 0 };
+  const planted = [];
+  if (keep) for (const r of keep.slice(-PB.max)) planted.push(Object.assign({}, r, { cap: Math.min(r.cap, PB.particles) }));
+  const plantsIn = key => planted.filter(q => q.key === key);
+  const plainPlant = r => ({ uid: r.uid, p: r.p, n: r.n, id: r.id, size: r.size, cap: r.cap, seed: r.seed });
+  // o: { p, n, id } (world) or a record -> { ok, why, rec }
+  function plant(o) {
+    if (!PB.max) return { ok: false, why: 'Plant mode is off at this detail.' };
+    const key = chunkKey(Math.floor(o.p[0] / CH), Math.floor(o.p[2] / CH)), c = chunks.get(key);
+    if (!c || !c.coral) return { ok: false, why: c && (c.coralJob || c.coralWait) ? 'The corals here are still loading. Try again in a moment.' : 'Plant nearer to the camera.' };
+    const rec = o.uid && o.cap ? o : plantRecord({ p: o.p, n: o.n, id: o.id, B, seed: o.seed });
+    rec.at = now();
+    // the slab reserve of the chunk: its oldest plants go first
+    const own = plantsIn(key);
+    let used = own.reduce((a, q) => a + q.cap, 0);
+    while (own.length && used + rec.cap > PB.reserve) { const q = own.shift(); used -= q.cap; unplant(q.uid); }
+    while (planted.length >= PB.max) unplant(planted[0].uid);
+    planted.push(rec);
+    queueOp(c, { add: rec });
+    return { ok: true, rec };
+  }
+  function unplant(uid) {
+    const i = planted.findIndex(q => q.uid === uid); if (i < 0) return false;
+    const rec = planted[i];
+    planted.splice(i, 1);
+    const c = chunks.get(rec.key);
+    if (c && (c.coral || c.plantJob)) queueOp(c, { drop: uid });
+    emit('unplant', uid, rec.key);
+    return true;
+  }
+  function queueOp(c, op) { (c.ops || (c.ops = [])).push(op); pumpOps(c); }
+  function pumpOps(c) {
+    if (c.plantJob || !c.ops || !c.ops.length || !c.coral) return;
+    const ops = c.ops.splice(0);
+    const has = new Set(c.coral.colonies.filter(q => q.planted != null).map(q => q.planted));
+    // a plant dropped before its job went out does not grow
+    const add = ops.filter(q => q.add && planted.includes(q.add)).map(q => q.add);
+    const drop = ops.filter(q => q.drop != null && has.has(q.drop)).map(q => q.drop);
+    if (!add.length && !drop.length) return;
+    const co = c.coral, t = token++;
+    const job = { type: 'plant', seed, fine: fineFor(B.c0), add: add.map(plainPlant), drop,
+      co: { key: c.key, ci: co.ci, cj: co.cj, cx: co.cx, cz: co.cz, oy: co.oy, depth: co.depth, quality: co.quality || B.coral.quality, colonies: co.colonies, particles: co.particles.slice(), bridges: co.bridges.slice() } };
+    const h = pool.submit(job, () => -100);          // a user plant goes first
+    c.plantJob = { h, token: t, co, at: now() };
+    stats.plantJobs++;
+    h.promise.then(r => onPlant(c, t, r), err => { if (c.plantJob && c.plantJob.token === t) { c.plantJob = null; pumpOps(c); } stats.errors = (stats.errors || 0) + 1; stats.lastError = String(err); });
+  }
+  // a plant that could not grow (no room on the rock): out of the list
+  function failPlants(r) {
+    for (const a of r.added || []) if (!a.ok) { const i = planted.findIndex(q => q.uid === a.uid); if (i >= 0) { const q = planted[i]; planted.splice(i, 1); emit('plant', { uid: a.uid, ok: false, key: q.key }); } }
+  }
+  function onPlant(c, t, r) {
+    if (!c.plantJob || c.plantJob.token !== t || chunks.get(c.key) !== c || c.coral !== c.plantJob.co) { stats.dropped++; return; }
+    c.plantJob = null;
+    if (!r) { pumpOps(c); return; }
+    failPlants(r);
+    const old = c.coral;
+    for (const [fk, f] of [...fine]) if (f.chunk === c.key) dropFine(fk);
+    bytes.coral -= c.coralBytes; bytes.data -= c.dataBytes;
+    c.coral = Object.assign({ base: old.base, slab: old.slab }, r);
+    c.coral.grow = (r.added || []).filter(a => a.ok).map(a => ({ uid: a.uid, k: a.k, from: a.from, to: a.to }));
+    c.coral.hash = buildHash(c.coral);
+    c.dataBytes = r.particles.byteLength + r.bridges.byteLength + c.coral.hash.bytes + r.colonies.length * 200;
+    bytes.data += c.dataBytes;
+    c.coralBytes = call('addCoral', c.key, c.coral) || 0;
+    bytes.coral += c.coralBytes;
+    stats.plantShown++;
+    const cols = coloniesOf(c);
+    emit('uncoral', c.key);
+    emit('coral', c.key, cols);
+    for (const g of c.coral.grow) emit('plant', { uid: g.uid, ok: true, key: c.key, colony: cols.find(q => q.k === g.k) || null });
+    pumpOps(c);
+  }
+
   function dispose() { for (const c of [...chunks.values()]) unload(c); }
   function ready(e = eye) { const c = chunks.get(chunkKey(Math.floor(e[0] / CH), Math.floor(e[2] / CH))); return !!(c && c.lod >= 0); }
 
   return {
-    update, colonies, coralDist, dispose, ready, chunks, fine, held, slabs, slabSize, on,
+    update, colonies, coralDist, dispose, ready, chunks, fine, held, slabs, slabSize, on, plant, unplant, seed,
+    plants: () => planted.slice(),
     chunk: key => chunks.get(key),
     get stats() {
       let rock = 0, coral = 0, pend = 0;

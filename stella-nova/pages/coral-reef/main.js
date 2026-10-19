@@ -26,7 +26,9 @@
 //
 //  NO GROWTH. The corals of a chunk show only when the chunk result has
 //  every colony grown; every texel has a birth far in the past (world/
-//  coral-data.js BIRTH_PAST), so the shaders draw no grow-in.
+//  coral-data.js BIRTH_PAST), so the shaders draw no grow-in. Only a
+//  colony that the user plants (plant mode, world/plant.js) grows in
+//  once, from its root, over GROW_S s; then it is locked too.
 //
 //  PROFILE. budget.js picks a device profile; WORLD_BUDGET (world/stream.js)
 //  has the rings, coral budgets and workers of each. "World detail" picks
@@ -51,10 +53,11 @@
 //    grep -n 'function frame'         the loop (no 3D frame while the large map is open)
 //    grep -n 'function moveCamTo'     the large map moves the free camera (map-view.js)
 //    grep -n 'mountDiscoveries'       discoveries.js: found things on the maps, orbit, highlight
+//    grep -n 'plant mode (world'      plant mode: a click or tap plants a colony
 //    grep -n 'window.snSaver'         the screensaver: the squad explores
 // ============================================================================
 import { createScene } from './scene.js';
-import { SPECIES, bleachLevel } from './reef.js';
+import { SPECIES, SPECIES_IDS, SPECIES_GROUPS, bleachLevel } from './reef.js';
 import { MODES } from './colour.js';
 import { SHAPES } from './coral-sdf.js';
 import { createROVs } from './rov/index.js';
@@ -76,7 +79,8 @@ import { PROFILES, PROFILE_ORDER, detectProfile, pageEnv, profileFor, pixelRatio
 import { BLOOM_PROFILE } from './bloom.js';
 import { mountErrorBox, installErrorHandlers } from './crash.js';
 import { createWorld } from './world/field.js';
-import { createStreamer, WORLD_BUDGET, fineFor } from './world/stream.js';
+import { createStreamer, WORLD_BUDGET, fineFor, slabOf } from './world/stream.js';
+import { createPlanter, plantBirths, GROW_S } from './world/plant.js';
 import { createPool } from './world/pool.js';
 import { worldPhysics } from './world/physics.js';
 import { chunkMirror, chunkColours, writeChunk, writeHidden } from './world/coral-data.js';
@@ -114,6 +118,7 @@ const G = {
   caust: 0.5, beam: true, snow: true, feed: true, orbit: false, polyps: true, surface: !COARSE,
   bloom: (BLOOM_PROFILE[PROFILE_ID] || BLOOM_PROFILE.desktop).strength,
   feedMode: 'live', cables: true,
+  plant: false, plantSp: 'random',     // plant mode (world/plant.js) and the species choice
 };
 let shell = null, saverOn = false, saver = null;
 let hud = null;                        // squad-hud.js: ROV selection, feed cards, tags, minimap
@@ -136,7 +141,7 @@ window.snWorld = {
 const canvas = $('view');
 const WB_MAX = WORLD_BUDGET[PROFILE_ID] || WORLD_BUDGET.desktop;
 const S = createScene({
-  canvas, coarse: COARSE, R: 30, profile: PROF, maxParticles: WB_MAX.maxCoral * WB_MAX.coral.particles + 512,
+  canvas, coarse: COARSE, R: 30, profile: PROF, maxParticles: WB_MAX.maxCoral * slabOf(WB_MAX) + 512,
   onNoGL: () => { $('nogl').hidden = false; },
   onShaderError: text => box.show({ title: 'A shader did not compile on this GPU', text: `${text}\n\nPlease report this text (the Copy button).` }),
 });
@@ -187,10 +192,11 @@ const view = {
   removeRock(key) { if (S) S.removeWorldRock(key); },
   addCoral(key, co) {
     const M = chunkMirror(co), T = chunkColours(co, M, G.mode);
-    const rec = { co, M, T, hidden: new Set() };
+    // a planted colony grows in: births from the shader clock (world/plant.js)
+    const rec = { co, M, T, hidden: new Set(), birth: plantBirths(co, M.count, S ? S.U.uTime.value : 0) };
     coral.set(key, rec);
     if (!S) return 0;
-    writeChunk(S.setParticles, co, M, T, rec.hidden);
+    writeChunk(S.setParticles, co, M, T, rec.hidden, rec.birth);
     S.uploadParticles(nowMs(), true);           // the texels and the meshes in one frame
     const b = S.addWorldCoral(key, co);
     return b + M.count * 40;
@@ -408,6 +414,9 @@ async function buildWorld({ seed = G.seed, keepSquad = false } = {}) {
   const my = ++worldGen;
   worldReady = false;
   const lead = keepSquad && squad ? squad.vehicles[0].state.p.slice() : null;
+  // the planted colonies stay for the session in the same world (a new
+  // detail level keeps them; a new seed is a new world)
+  const keepPlants = streamer && streamer.seed === seed ? streamer.plants() : null;
   stopWorld();
   if (!keepSquad) camChoice = null;
   G.seed = seed;
@@ -417,13 +426,14 @@ async function buildWorld({ seed = G.seed, keepSquad = false } = {}) {
   const start = lead || findStart(W);
   setOrigin(start[0], start[2]);
   pool = makePool(WB);
-  streamer = createStreamer({ seed, budget: WB, pool, view, now: nowMs });
+  streamer = createStreamer({ seed, budget: WB, pool, view, now: nowMs, plants: keepPlants });
+  streamer.on('plant', onPlanted);
   if (fauna) fauna.start({ W, streamer, seed, profile: G.detail, physics: () => P, squad: () => squad, origin: () => origin });
   P = worldPhysics(W, streamer, { clear: SQUAD_CLEAR, eye: () => (cam ? cam.eye : start) });
   squad = createSquad({ field: P, seed, count: G.rovs, clear: SQUAD_CLEAR, start, target: wanderTarget });
   wander.p = null; wander.at = 0;
   pageEmit('world', { seed, field: W, streamer, physics: P, squad });
-  for (const ev of ['rock', 'unload', 'coral', 'uncoral']) streamer.on(ev, (...a) => pageEmit(ev, ...a));
+  for (const ev of ['rock', 'unload', 'coral', 'uncoral', 'plant', 'unplant']) streamer.on(ev, (...a) => pageEmit(ev, ...a));
   if (cam) {
     cam.setRock(P, Infinity);
     const L = squad.vehicles[0].state;
@@ -539,7 +549,7 @@ function setGradient(id, rev) {
 }
 function recolour() {
   if (!S) return;
-  for (const rec of coral.values()) { rec.T = chunkColours(rec.co, rec.M, G.mode, rec.T.F); writeChunk(S.setParticles, rec.co, rec.M, rec.T, rec.hidden); }
+  for (const rec of coral.values()) { rec.T = chunkColours(rec.co, rec.M, G.mode, rec.T.F); writeChunk(S.setParticles, rec.co, rec.M, rec.T, rec.hidden, rec.birth); }
   S.uploadParticles(nowMs(), true);
 }
 function setMode(m) {
@@ -580,6 +590,74 @@ function clearArea(w, h) {
 function fitNow(radius = 1) {
   const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1;
   return frameFit({ w, h, clear: clearArea(w, h), fov: S ? S.camera.fov : 50, radius });
+}
+
+// ── plant mode (world/plant.js) ─────────────────────────────────────────────
+// The user said (2026-10-18): "ok my girlfriend really liked when we could
+// plant corals by clicking can we bring that back to the ROV section?"
+// Plant mode (the Explore toggle, the dock button on a phone): a click or
+// a tap on the rock or the sand plants a colony of the chosen species (or
+// a random one). The colony grows in a worker, fused with its neighbours,
+// and grows in from its root over GROW_S s (plantBirths). The nearest free
+// ROV turns its lamps to it. Out of plant mode a click keeps its meaning.
+const plantVerb = () => (COARSE ? 'tap' : 'click');
+const spLabel = id => ((SPECIES[id] && SPECIES[id].label) || id).toLowerCase();
+const plantName = () => (G.plantSp === 'random' ? 'a random species' : `a ${spLabel(G.plantSp)}`);
+function plantOptions() {
+  const out = [{ id: 'random', label: 'Random' }];
+  for (const g of SPECIES_GROUPS) for (const id of SPECIES_IDS) if ((SPECIES[id].group || 'branching') === g.id) out.push({ id, label: SPECIES[id].label || id, group: g.label });
+  for (const id of SPECIES_IDS) if (!out.some(q => q.id === id)) out.push({ id, label: SPECIES[id].label || id, group: 'Other' });
+  return out;
+}
+// The eye ray through a client point, in world metres (the render camera
+// is in render space: world minus the floating origin).
+function eyeRay(cx, cy) {
+  if (!S) return null;
+  const r = canvas.getBoundingClientRect(), c = S.camera;
+  if (!(r.width > 0 && r.height > 0)) return null;
+  c.updateMatrixWorld();
+  const v = new S.THREE.Vector3(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1, 0.5).unproject(c);
+  const d = [v.x - c.position.x, v.y - c.position.y, v.z - c.position.z], l = Math.hypot(d[0], d[1], d[2]) || 1;
+  return { o: [c.position.x + origin[0], c.position.y, c.position.z + origin[1]], d: [d[0] / l, d[1] / l, d[2] / l] };
+}
+const planter = createPlanter({ on: () => G.plant && !saverOn, species: () => G.plantSp, ray: eyeRay, field: () => W, streamer: () => streamer });
+let plantLight = null;                 // { id, t }: the ROV that lights the newest plant
+function setPlantMode(v, quiet = false) {
+  G.plant = !!v && !saverOn;
+  const t = panel && panel.find('tPlant'); if (t) t.set(G.plant);
+  const b = $('dockPlant'); if (b) b.setAttribute('aria-pressed', String(G.plant));
+  document.body.classList.toggle('planting', G.plant);
+  if (G.plant && document.pointerLockElement === canvas && document.exitPointerLock) document.exitPointerLock();
+  if (!quiet) flash(G.plant ? `Plant mode: ${plantVerb()} the rock or the sand to plant ${plantName()}.` : 'Plant mode is off.');
+}
+function plantTap(cx, cy, kind) {
+  const r = planter.tap(cx, cy, kind);
+  if (!r) return;
+  if (!r.ok) { tapFeedback(cx, cy, false, r.why); return; }
+  tapFeedback(cx, cy, true, `Planted: a ${spLabel(r.id)}. It grows in a few seconds.`);
+}
+// the streamer event: the colony is in the chunk mesh (ok), or no room
+function onPlanted(e) {
+  if (!e.ok) { flash('No room for a colony there. Try open rock.'); return; }
+  if (!e.colony || !squad || !squad.inspect || saverOn || (disc && disc.selected)) return;
+  // the nearest free ROV (not the lead) turns its lamps to the new colony
+  if (plantLight) { clearTimeout(plantLight.t); if (squad.release) squad.release(plantLight.id); plantLight = null; }
+  const id = squad.inspect(-1, e.colony.center, e.colony.radius);
+  if (id == null) return;
+  plantLight = { id, t: setTimeout(() => { if (squad && squad.release) squad.release(id); plantLight = null; }, (GROW_S + 10) * 1000) };
+}
+// A ring at the tap point (accent: done, warm: refused) and the message.
+let markT = 0;
+function tapFeedback(cx, cy, good, msg) {
+  const m = $('tapMark');
+  if (m) {
+    m.style.left = `${cx}px`; m.style.top = `${cy}px`;
+    m.classList.remove('go'); m.classList.toggle('bad', !good);
+    void m.offsetWidth;                   // restart the animation
+    m.classList.add('go');
+    clearTimeout(markT); markT = setTimeout(() => m.classList.remove('go'), 1300);
+  }
+  if (msg) flash(msg);
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────
@@ -641,6 +719,11 @@ function buildUI() {
   });
   ex.button({ id: 'bLead', label: 'Follow the lead ROV', kind: 'primary', icon: 'target', onClick: () => { camChoice = null; $('tourList').hidden = true; if (hud && rovs && rovs.vehicles[0]) hud.select(rovs.vehicles[0].id, { source: 'api' }); followDefault(); flash('Following the lead ROV.'); } });
 
+  ex.label('Plant corals');
+  ex.toggle({ id: 'tPlant', label: 'Plant mode', value: G.plant, onChange: v => setPlantMode(v),
+    hint: 'In plant mode, a click or a tap on the rock or the sand plants a colony there. It grows from its root in a few seconds and then stays for this visit. Out of plant mode, a click only moves the view.' });
+  ex.select({ id: 'sPlant', label: 'Species to plant', value: G.plantSp, options: plantOptions(), onChange: id => { G.plantSp = id; if (G.plant) flash(`Plant mode: ${plantVerb()} the rock or the sand to plant ${plantName()}.`); } });
+
   const vw = panel.section({ id: 'view', title: 'View', open: true });
   vw.toggle({ id: 'tFeed', label: 'Camera feed', value: G.feed, onChange: v => { G.feed = v; showFeed(); syncFeedUI(); } });
   vw.segmented({
@@ -697,7 +780,7 @@ function buildUI() {
   shell = mountShell({
     phoneQ: PHONE_Q,
     on: {
-      cam: cycleCam, feedNext: nextFeed, seed: newWorld,
+      cam: cycleCam, feedNext: nextFeed, seed: newWorld, plant: () => setPlantMode(!G.plant),
       mode: () => { const i = MODES.findIndex(m => m.id === G.mode); setMode(MODES[(i + 1) % MODES.length].id); },
       about: open => {
         if (!open) { if (diag) diag.stop(); return; }
@@ -708,7 +791,7 @@ function buildUI() {
       feed: () => { feedT = 0; },
     },
   });
-  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: () => {}, onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => true,
+  if (cam) input = createInput({ canvas, cam, hint: $('hint'), onTap: (x, y, k) => plantTap(x, y, k), onMode: m => { if (!saverOn) camChoice = m; camUI(); }, flyOk: () => !G.plant, lockOk: () => !G.plant,
     drive: cmd => !!manual && manual.drive(cmd), onEscape: () => manual && manual.escape() });
   manual = mountManual({ doc: document, getSquad: () => squad, getCam: () => cam, flash, coarse: COARSE });
   bindCamBar();
@@ -737,7 +820,7 @@ function buildUI() {
     onClear: () => { if (cam) cam.setAutoRotate(G.orbit); },
     // the inspection light (focus-light.js): the selected ROV (else the
     // nearest free one) lights the orbit subject; a soft key light meanwhile
-    inspect: e => (squad && squad.inspect && !saverOn ? squad.inspect(selectedId(), e.p, e.r) : null),
+    inspect: e => { if (plantLight) { clearTimeout(plantLight.t); plantLight = null; } return squad && squad.inspect && !saverOn ? squad.inspect(selectedId(), e.p, e.r) : null; },
     release: id => { if (squad && squad.release) squad.release(id); },
     keyLight: K => { if (S && S.setKeyLight) S.setKeyLight(K); },
     mapOpen: () => !!(hud && hud.mapCovers()), closeMap: () => { if (hud && hud.map) hud.map.close(); },
@@ -961,6 +1044,7 @@ if (S) {
 window.snSaver = {
   enter(o = {}) {
     if (!S) return { canvas, warmupMs: 0 };
+    if (G.plant) setPlantMode(false, true);
     saverOn = true;
     if (fauna) fauna.saver(true);
     document.documentElement.classList.add('sn-saver');

@@ -4,11 +4,13 @@
 //  No three.js and no world here, so mobile-check.mjs runs this module in
 //  jsdom at each phone viewport. main.js gives the callbacks.
 //
-//  DOCK (phone). Four one-tap buttons: #dockCam (the camera: follow, orbit,
+//  DOCK (phone). Five one-tap buttons: #dockCam (the camera: follow, orbit,
 //  swim), #dockFeed (the next ROV on the camera feed), #dockMode (the next
-//  colour mode) and #dockMenu (the sheet with all the other controls). New
-//  world is in the World section of the sheet. There is no growth control:
-//  the corals grew once and are just there (CONTRACT-V4.md).
+//  colour mode), #dockPlant (plant mode on or off: a tap on the rock plants
+//  a colony, world/plant.js; the species is in the Explore section) and
+//  #dockMenu (the sheet with all the other controls). New world is in the
+//  World section of the sheet. The world corals grew once and are just
+//  there (CONTRACT-V4.md); only a planted colony grows in.
 //
 //  SHEET. lib/sn-panel.js mountSheet opens and closes the panel. In
 //  portrait the panel is a bottom sheet above the dock. The grip
@@ -77,6 +79,7 @@ export function mountShell({ doc = document, phoneQ, on = {} }) {
   click('dockCam', () => call('cam'));
   click('dockFeed', () => call('feedNext'));
   click('dockMode', () => call('mode'));
+  click('dockPlant', () => call('plant'));
   click('feedSize', () => setFeedBig(!st.feedBig));
   click('aboutOpen', openAbout);
   click('aboutClose', closeAbout);

@@ -146,11 +146,11 @@ async function boot(w, h, coarse, store = {}) {
 // The old control ids. A kept id has the same purpose; the removed ones say why.
 const KEPT = ['rovCount', 'bLead', 'bSeed', 'quality', 'feedMode', 'sstvMode', 'tFeed', 'tOrbit', 'modes', 'modeNote', 'gradPick',
   'tBeam', 'tSnow', 'tPolyps', 'tDetail', 'sCaust', 'vCaust', 'sDir', 'vDir', 'sCur', 'vCur', 'sTemp', 'vTemp', 'bleachNote', 'aboutOpen',
-  'panelClose', 'sheetGrip', 'gear', 'dockCam', 'dockFeed', 'dockMode', 'dockMenu', 'camBar', 'feedSize', 'rDist', 'rDepth', 'rCol', 'rTask', 'rState'];
+  'panelClose', 'sheetGrip', 'gear', 'dockCam', 'dockFeed', 'dockMode', 'dockPlant', 'dockMenu', 'tPlant', 'sPlant', 'camBar', 'feedSize', 'rDist', 'rDepth', 'rCol', 'rTask', 'rState'];
 const REMOVED = {
   regionNote: 'a hint of the region chips (info button)',
   worldNote: 'a hint of the detail control (info button)',
-  dockSeed: 'New world is in the World section; the dock keeps 4 key actions',
+  dockSeed: 'New world is in the World section; the dock keeps 5 key actions',
   rChunks: 'a debug count; window.__coralDebug().stream has it',
 };
 // The region picker comes with the region code of WORLD (goRegion in main.js).

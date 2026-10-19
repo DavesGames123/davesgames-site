@@ -11,8 +11,9 @@
 //  real main.js. jsdom has no WebGL, so scene.js gives no scene and the
 //  page runs without the reef render. The shell, the dock, the sheet, the
 //  chips, the gradient picker and the reef model run as on a phone.
-//    dock ......... four buttons with labels: camera, feed, colour mode,
-//                   menu; no growth control is left (v4)
+//    dock ......... five buttons with labels: camera, feed, colour mode,
+//                   plant mode, menu; no other growth control is left (v4);
+//                   plant mode turns on and off from the dock
 //    sheet ........ menu opens the half sheet; the grip drags it to full,
 //                   back to half and closed; Escape closes it
 //    explainer .... opens over the sheet, closes with Escape
@@ -110,11 +111,17 @@ for (const [w, h, coarse] of VIEWS) {
 
   // dock (v4: no growth controls, CONTRACT-V4.md)
   const dock = [...doc.querySelectorAll('#dock > button')];
-  ok(dock.map(b => b.id).join() === 'dockCam,dockFeed,dockMode,dockMenu', `${tag}: the dock has camera, feed, colour mode, menu`, dock.map(b => b.id).join());
+  ok(dock.map(b => b.id).join() === 'dockCam,dockFeed,dockMode,dockPlant,dockMenu', `${tag}: the dock has camera, feed, colour mode, plant, menu`, dock.map(b => b.id).join());
   ok(dock.every(b => b.getAttribute('aria-label') && b.querySelector('span').textContent.trim()), `${tag}: each dock button has a label`);
   const panel = $('panel');
   ok(panel.classList.contains('open') === !phone, `${tag}: the panel is ${phone ? 'closed' : 'open'} at load`);
-  ok(!$('dockPlay') && !$('dockPlant') && !$('bRegrow') && !$('sSpeed') && !$('sNut') && !$('plantBar') && !$('spParams'), `${tag}: no growth control is left (grow, plant, regrow, speed, nutrients, dlaf parameters)`);
+  ok(!$('dockPlay') && !$('bRegrow') && !$('sSpeed') && !$('sNut') && !$('plantBar') && !$('spParams'), `${tag}: no growth control is left (grow, regrow, speed, nutrients, dlaf parameters)`);
+  // plant mode (world/plant.js): the dock button and the panel switch agree
+  click('dockPlant');
+  const pOn = $('dockPlant').getAttribute('aria-pressed') === 'true' && $('tPlant').checked && doc.body.classList.contains('planting');
+  click('dockPlant');
+  const pOff = $('dockPlant').getAttribute('aria-pressed') === 'false' && !$('tPlant').checked && !doc.body.classList.contains('planting');
+  ok(pOn && pOff && $('sPlant') && $('sPlant').value === 'random' && $('sPlant').options.length > 30, `${tag}: the dock plant button turns plant mode on and off; the species list starts at Random`, `${pOn} ${pOff} ${$('sPlant') ? $('sPlant').options.length : 0} options`);
 
   // colour mode
   const m0 = $('dockModeName').textContent;

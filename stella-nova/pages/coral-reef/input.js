@@ -1,7 +1,7 @@
 // ============================================================================
 //  CORAL REEF  ·  input.js  ·  pointer, touch, wheel and keys for camera.js
 // ----------------------------------------------------------------------------
-//  createInput({ canvas, cam, onTap, onMode, hint, flyOk, drive, onEscape }) -> { take(dt), keys,
+//  createInput({ canvas, cam, onTap, onMode, hint, flyOk, lockOk, drive, onEscape }) -> { take(dt), keys,
 //  dispose() }. main.js calls take(dt) each frame before cam.update.
 //
 //  ORBIT  mouse: a left drag turns round the rock under the pointer; a
@@ -28,6 +28,7 @@
 //  onTap(x, y, kind): kind 'tap' or 'double' (client px), for the plant
 //  mode of main.js. onMode(mode) after a key or a take-over changes mode.
 //  flyOk() -> false stops the double tap fly (main.js: in plant mode).
+//  lockOk() -> false stops the swim pointer lock (plant mode: a click plants).
 //
 //  grep -n targets: "export function createInput", "function onDown",
 //  "function onMove", "function onUp", "function onWheel", "function take",
@@ -98,7 +99,7 @@ export function createInput(o) {
     if (ptrs.size > 2) return;
     if (m === 'swim' || m === 'tour') {
       if (p.type === 'touch' && e.clientX - r.x < r.w * 0.42) { stick = { id: p.id, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }; stickUI(true, e.clientX, e.clientY); dragKind = 'stick'; return; }
-      if (p.type === 'mouse' && m === 'swim' && !locked() && canvas.requestPointerLock && e.button === 0) { try { const q = canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (x) { /* no lock: drag to look */ } }
+      if (p.type === 'mouse' && m === 'swim' && !locked() && canvas.requestPointerLock && e.button === 0 && (!o.lockOk || o.lockOk())) { try { const q = canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (x) { /* no lock: drag to look */ } }
       look = { id: p.id }; dragKind = 'look';
       return;
     }

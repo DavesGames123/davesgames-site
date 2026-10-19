@@ -15,8 +15,9 @@
 //
 //    const M = chunkMirror(co)        // reef.js createReefMirror of the chunk
 //    const T = chunkColours(co, M, mode)   // { nat, t, rad, F } (colour.js)
-//    writeChunk(setParticles, co, M, T, hidden)   // hidden: Set of colony k
-//                                     // whose fine mesh shows (negative radius)
+//    writeChunk(setParticles, co, M, T, hidden, birth)   // hidden: Set of colony k
+//                                     // whose fine mesh shows (negative radius);
+//                                     // birth: per particle (s) or null (BIRTH_PAST)
 //    HEIGHT_SCALE: the height mode is over this many metres (the same scale
 //    in every chunk, so the colours match across the chunk borders)
 //
@@ -79,7 +80,9 @@ export function deepColours(co, M, nat) {
     const sp = SPECIES[c.id];
     if ((sp && sp.deepColour === false) || !DEEP[c.id]) continue;
     const P = DEEP[c.id];
-    let h = Math.imul((c.k + 1) * 2654435761, 0x9e3779b1) ^ Math.imul(co.ci | 0, 0x85ebca6b) ^ Math.imul(co.cj | 0, 0xc2b2ae35);
+    // a planted colony (world/plant.js) keys its colour by its uid, so a
+    // drop of an older plant (its k moves down) does not change it
+    let h = Math.imul(((c.planted != null ? 4096 + c.planted : c.k) + 1) * 2654435761, 0x9e3779b1) ^ Math.imul(co.ci | 0, 0x85ebca6b) ^ Math.imul(co.cj | 0, 0xc2b2ae35);
     h = (h ^ (h >>> 15)) >>> 0;
     pick.set(c.k, P[h % P.length]);
   }
@@ -93,8 +96,10 @@ export function deepColours(co, M, nat) {
 }
 
 // The texels of the chunk. setParticles(from, to, f(slot, A, B, o, C)) is
-// scene.js setParticles. hidden: colony k with its fine mesh on.
-export function writeChunk(setParticles, co, M, T, hidden = null) {
+// scene.js setParticles. hidden: colony k with its fine mesh on. birth:
+// null (every particle BIRTH_PAST), or a birth (s) per particle g: a
+// planted colony grows in (world/plant.js plantBirths).
+export function writeChunk(setParticles, co, M, T, hidden = null, birth = null) {
   const n = M.count, base = co.base, oy = co.oy;
   if (!n) return 0;
   setParticles(base, base + n, (slot, A, B, o, C) => {
@@ -102,7 +107,7 @@ export function writeChunk(setParticles, co, M, T, hidden = null) {
     A[o] = T.nat[g * 3]; A[o + 1] = T.nat[g * 3 + 1]; A[o + 2] = T.nat[g * 3 + 2]; A[o + 3] = T.t[g];
     const tip = T.F ? Math.max(0, Math.min(0.999, 1 - Math.log2(T.F.sub[g]) / 5)) : 0.999;
     const r = T.rad[g] || 0.01;
-    B[o] = BIRTH_PAST; B[o + 1] = hidden && hidden.has(k) ? -r : r; B[o + 2] = (c ? SWAY(c.id) : 0) * 2 + tip; B[o + 3] = M.py[g] - M.gy[g];
+    B[o] = birth ? birth[g] : BIRTH_PAST; B[o + 1] = hidden && hidden.has(k) ? -r : r; B[o + 2] = (c ? SWAY(c.id) : 0) * 2 + tip; B[o + 3] = M.py[g] - M.gy[g];
     if (C) {
       const p = M.parent[g];
       C[o] = p >= 0 ? M.px[p] - M.px[g] : 0; C[o + 1] = p >= 0 ? M.py[p] - M.py[g] : 0; C[o + 2] = p >= 0 ? M.pz[p] - M.pz[g] : 0;

@@ -36,8 +36,8 @@
      panel ..... #panelBody is empty here: main.js buildUI declares the
                  sections and controls through lib/sn-panel.js (Explore,
                  View, Look, World, About). #aboutBlurb goes into About.
-     phone ..... #dock at the base: camera, next ROV feed, colour mode and
-                 menu. Menu opens #panel as a bottom sheet (portrait) or a
+     phone ..... #dock at the base: camera, next ROV feed, colour mode,
+                 plant mode and menu. Menu opens #panel as a bottom sheet (portrait) or a
                  drawer (landscape). #feed is a small card above the dock
                  at the right: a tap makes it large.
      camera .... #camBar: Orbit, Swim, #rovPick (one button per ROV: select
@@ -156,6 +156,7 @@
   <button id="dockCam" type="button" aria-label="Camera: follow, orbit or swim"><i data-icon="camera"></i><span id="dockCamName">Follow</span></button>
   <button id="dockFeed" type="button" aria-label="Show the next ROV camera"><i data-icon="feed"></i><span id="dockFeedName">ROV 1</span></button>
   <button id="dockMode" type="button" aria-label="Next colour mode"><i data-icon="palette"></i><span id="dockModeName">Natural</span></button>
+  <button id="dockPlant" type="button" aria-label="Plant mode: tap the rock to plant a coral" aria-pressed="false"><i data-icon="species"></i><span>Plant</span></button>
   <button id="dockMenu" type="button" aria-label="Menu" aria-controls="panel" aria-expanded="false"><i data-icon="menu"></i><span>Menu</span></button>
 </nav>
 
