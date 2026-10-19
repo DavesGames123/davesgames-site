@@ -15,8 +15,10 @@
 //  colour on all of them (rov/hud.js ROV_COLOURS).
 //
 //  FEED CARDS (#feed > #feedSlot > .fcard). One card per ROV in id order,
-//  at the right; the selected card is large (0.32 of the width at M), the
-//  others in a column at its left (hud.js compact). feedLayout() gives the
+//  at the right; the selected card is large (landscape: 0.24 of the 3D
+//  view width at M, the group 0.34 of it or less; portrait: 0.32 of the
+//  window width), the others in a column at its left (hud.js compact), or
+//  tabs when the view is narrow. feedLayout() gives the
 //  card widths so the stack fits under the readout and right of the
 //  minimap; #feedTools > #feedScale sets S, M or L (localStorage). A tap on a small card selects its ROV. Phones show the
 //  selected card only, with tabs (#feedTabs) and a swipe to change it; a
@@ -71,23 +73,48 @@ const CARD_AR = 322 / 352;           // rov/hud.js HUD.H / HUD.W
 // The card widths (CSS px). vw, vh: the window; n: the cards; top: the
 // first free y at the right (under the readout); bottom, right: the
 // margins of #feed; left: the first free x at the left (the right edge of
-// the minimap and a gap); size: the S/M/L choice of #feedScale.
+// the minimap and a gap); size: the S/M/L choice of #feedScale; view: the
+// visible part of the 3D view ({ x, w }: the window less the open panel).
 // The user said (2026-10-18): "the rov's feeds need to be bigger".
-// Desktop: the main card is FEED_SIZES[size] of the window width (M: 0.32)
-// at the right, the other cards in a column at its left (hud.css grid),
-// 0.62 of it or less, so that the column fits under the readout and the
-// tool row (#feedTools). When the two columns do not fit right of the
-// minimap, both scale down. Phone: one card, FEED_PHONE[size] of the width.
+// PORTRAIT (the window is higher than wide): the main card is
+// FEED_SIZES[size] of the window width (M: 0.32) at the right, the other
+// cards in a column at its left (hud.css grid), 0.62 of it or less, so
+// that the column fits under the readout and the tool row (#feedTools).
+// When the two columns do not fit right of the minimap, both scale down.
+// LANDSCAPE (the window). The user said (2026-10-18): "the amount of space the ROV
+// layer takes up is too considerable in this layout. in the veritcal
+// layout it's alright". The main card is FEED_VIEW[size] of the VIEW
+// width (M: 0.24), the other cards a narrow column (FEED_THUMB of the
+// view width), and the group is FEED_GROUP of the view width or less, at
+// its right. When the column falls under FEED_THUMB_MIN px, the other
+// cards collapse to the tabs (one: true, as on a phone).
+// PHONE: one card, FEED_PHONE[size] of the width.
 export const FEED_SIZES = { S: 0.26, M: 0.32, L: 0.38 };
+export const FEED_VIEW = { S: 0.19, M: 0.24, L: 0.28 };
+export const FEED_GROUP = 0.34, FEED_THUMB = 0.09, FEED_THUMB_MIN = 80;
 export const FEED_PHONE = { S: 0.4, M: 0.58, L: 0.8 };
 export const FEED_TOOLS_H = 34;
-export function feedLayout({ vw, vh, n, top = 0, bottom = 12, right = 12, left = 0, phone = false, gap = 8, size = 'M' }) {
+export function feedLayout({ vw, vh, n, top = 0, bottom = 12, right = 12, left = 0, phone = false, gap = 8, size = 'M', view = null }) {
   const sz = FEED_SIZES[size] ? size : 'M';
   if (phone) {
     const main = Math.round(Math.max(120, Math.min(vw * FEED_PHONE[sz], vw - 16, (vh * 0.45) / CARD_AR)));
     return { main, thumb: 0, one: true, size: sz, width: main, height: Math.round(main * CARD_AR) };
   }
   const A = Math.max(160, vh - top - bottom - FEED_TOOLS_H), m = Math.max(0, n - 1);
+  const vwid = Math.max(1, view && view.w > 0 ? view.w : vw);
+  if (vw > vh) {
+    // a landscape window: the group stays in the right FEED_GROUP of the view
+    const vx = view && view.w > 0 ? (view.x || 0) : 0;
+    const cap = Math.min(vwid * FEED_GROUP, vw - right - Math.max(left, vx + vwid * (1 - FEED_GROUP)));
+    let main = Math.min(vwid * FEED_VIEW[sz], A / CARD_AR, cap);
+    let thumb = m ? Math.min(vwid * FEED_THUMB, main, (A - gap * (m - 1)) / (m * CARD_AR)) : 0;
+    if (m && main + gap + thumb > cap) { const k = (cap - gap) / (main + thumb); main *= k; thumb *= k; }
+    const one = m > 0 && thumb < FEED_THUMB_MIN;
+    if (one) { thumb = 0; main = Math.min(vwid * FEED_VIEW[sz], A / CARD_AR, cap); }
+    main = Math.round(Math.max(120, main)); thumb = Math.round(thumb);
+    const colH = thumb ? m * thumb * CARD_AR + gap * (m - 1) : 0;
+    return { main, thumb, one, size: sz, width: main + (thumb ? gap + thumb : 0), height: Math.round(Math.max(main * CARD_AR, colH)) };
+  }
   let main = Math.min(vw * FEED_SIZES[sz], A / CARD_AR, 900);
   let thumb = m ? Math.min(main * 0.62, (A - gap * (m - 1)) / (m * CARD_AR)) : 0;
   const room = vw - right - left;
@@ -273,7 +300,14 @@ export function mountSquadHud(o) {
     // the first free x: right of the minimap (open, not in the saver)
     let left = 0;
     try { const mb = $('minimap'), r = mb && !mb.classList.contains('fold') && mb.getBoundingClientRect(); if (r && r.width > 0) left = r.right + 12; } catch { /* no layout */ }
-    const L = feedLayout({ vw, vh, n: Math.max(1, ids().length), top, bottom: 12, left, phone: phone(), size: feedSize });
+    // the visible 3D view: the canvas less the open panel at the left
+    let view = { x: 0, w: vw };
+    try {
+      const cr = o.canvas && o.canvas.getBoundingClientRect(); if (cr && cr.width > 0) view = { x: cr.left, w: cr.width };
+      const pn = $('panel'), pr = pn && !doc.body.classList.contains('panel-closed') && pn.getBoundingClientRect();
+      if (pr && pr.width > 0 && pr.right > view.x && pr.right < view.x + view.w) view = { x: pr.right, w: view.x + view.w - pr.right };
+    } catch { /* no layout */ }
+    const L = feedLayout({ vw, vh, n: Math.max(1, ids().length), top, bottom: 12, left, phone: phone(), size: feedSize, view });
     // on #feedSlot: the saver exit clears the style of #feed
     const sl = $('feedSlot');
     if (sl) { sl.style.setProperty('--fc-main', `${L.main}px`); sl.style.setProperty('--fc-thumb', `${L.thumb}px`); }
@@ -282,8 +316,8 @@ export function mountSquadHud(o) {
   }
 
   // ── the tool row over the cards (#feedTools): the card size S, M, L ─────
-  // kept in localStorage 'coral-reef-feed-size' (M: the main card 0.32 of
-  // the width). The saver hides the row (hud.css).
+  // kept in localStorage 'coral-reef-feed-size' (M: the main card 0.24 of
+  // the view width, portrait 0.32 of the window width). The saver hides the row (hud.css).
   const FS = ['S', 'M', 'L'], FS_NAMES = { S: 'small', M: 'medium', L: 'large' };
   let feedSize = 'M';
   try { const v = win.localStorage.getItem('coral-reef-feed-size'); if (FS.includes(v)) feedSize = v; } catch { /* private mode: the default */ }
@@ -347,7 +381,7 @@ export function mountSquadHud(o) {
         op = parseFloat(win.getComputedStyle(f).opacity); if (!(op >= 0)) op = 1;
         const cr = o.canvas.getBoundingClientRect();
         // one card (phone, a large card, the saver): the main card only
-        const one = phone() || f.classList.contains('big') || o.isSaver();
+        const one = phone() || f.classList.contains('one') || f.classList.contains('big') || o.isSaver();
         for (const c of f.querySelectorAll('.fcard')) {
           const id = +c.dataset.rov, cs = win.getComputedStyle(c);
           if ((one && id !== sel) || cs.display === 'none' || cs.visibility === 'hidden') continue;
@@ -532,6 +566,8 @@ export function mountSquadHud(o) {
   win.addEventListener('keydown', onKey);
   if (o.phoneQ && o.phoneQ.addEventListener) o.phoneQ.addEventListener('change', () => { layout(); frameN = 0; });
   win.addEventListener('resize', layout);
+  // the panel opens or closes: the view width changes (sn-panel.js)
+  try { if (win.MutationObserver) new win.MutationObserver(layout).observe(doc.body, { attributes: true, attributeFilter: ['class'] }); } catch { /* no observer */ }
   bindMap();
   big = mountExploreMap({
     doc, win, getSquad: o.getSquad, getField: o.getField, getCam: o.getCam, camera: o.camera, canvas: o.canvas,

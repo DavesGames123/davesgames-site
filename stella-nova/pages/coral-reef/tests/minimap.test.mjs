@@ -75,7 +75,7 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
 {
   for (const [vw, vh] of [[1440, 900], [1280, 720], [1024, 768]]) for (const n of [2, 3, 4]) {
     const top = 220, L = feedLayout({ vw, vh, n, top, bottom: 14 });
-    ok(L.height <= vh - top - 14 + 1 && L.main > L.thumb && L.thumb >= 96, `layout ${vw}x${vh}, ${n} cards: the stack fits under the readout, the main card is the largest`, JSON.stringify(L));
+    ok(L.height <= vh - top - 14 + 1 && L.main > L.thumb && (L.one ? L.thumb === 0 : L.thumb >= 80), `layout ${vw}x${vh}, ${n} cards: the stack fits under the readout, the main card is the largest`, JSON.stringify(L));
   }
   const P = feedLayout({ vw: 390, vh: 844, n: 3, phone: true });
   ok(P.one && P.thumb === 0, 'layout: a phone has one card');
