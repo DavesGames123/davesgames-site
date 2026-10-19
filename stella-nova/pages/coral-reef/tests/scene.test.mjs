@@ -24,6 +24,7 @@
 //  come with the v4 page.
 // ============================================================================
 import * as SH from '../shaders.js';
+import { BEAM_SNOW_VS } from '../beam-snow.js';
 import { squadPlan, squadShotPose, frameFit, projectSphere } from '../saver.js';
 import { checkPrograms } from '../glsl-check.mjs';
 import { execFileSync } from 'node:child_process';
@@ -228,6 +229,7 @@ function checkES(progs) {
     { name: 'rock', vs: SH.ROCK_VS, fs: SH.ROCK_FS },
     { name: 'sand', vs: SH.SURF_VS, fs: SH.SAND_FS },
     { name: 'snow', vs: SH.SNOW_VS, fs: SH.SNOW_FS },
+    { name: 'beam-snow', vs: BEAM_SNOW_VS, fs: SH.SNOW_FS },
     { name: 'caustic', vs: SH.CAUSTIC_VS, fs: SH.CAUSTIC_FS, raw: true },
     { name: 'volume', vs: SH.FULL_VS, fs: SH.VOL_FS, raw: true },
     { name: 'volume-history', vs: SH.FULL_VS, fs: SH.VOL_TAA_FS, raw: true },

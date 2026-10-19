@@ -111,7 +111,7 @@ export function fakeCanvas({ w = 800, h = 600, ext = DEFAULT_EXT, compileError =
     drawArrays: (mode, first, n) => { fbState(fb).drawn = true; log.push({ op: 'draw', fb: fb ? fb.id : 0, n }); },
     drawElements: (mode, n) => { fbState(fb).drawn = true; log.push({ op: 'draw', fb: fb ? fb.id : 0, n }); },
     drawArraysInstanced: (mode, first, n) => { fbState(fb).drawn = true; log.push({ op: 'draw', fb: fb ? fb.id : 0, n }); },
-    drawElementsInstanced: (mode, n) => { fbState(fb).drawn = true; log.push({ op: 'draw', fb: fb ? fb.id : 0, n }); },
+    drawElementsInstanced: (mode, n, type, offset, inst) => { fbState(fb).drawn = true; log.push({ op: 'draw', fb: fb ? fb.id : 0, n, inst }); },
     readPixels: (x, y, w2, h2, f, t, buf) => {
       const s = fbState(fb);
       const c = s.drawn ? [0.1, 0.12, 0.14, 1] : s.clear;

@@ -353,7 +353,11 @@ function depthLook(d) {
   S.U.uDown.value = L(a[3], b[3]);
   S.U.uCaust.value = G.caust * L(a[4], b[4]);
   const snowK = L(a[5], b[5]);
-  try { const g = S.snow && S.snow.geometry; if (g && g.attributes && g.attributes.position) g.setDrawRange(0, Math.round(g.attributes.position.count * snowK)); } catch (e) { /* the snow belongs to the SNOW package now */ }
+  // snowK is not a draw range: a draw range of round(4 x snowK) indices on
+  // the instanced quad (6 indices) drew half quads or nothing (snowK < 0.63:
+  // no snow at all above about 50 m). lib/marine-snow.js snowMix sets the
+  // depth density; the beam snow (beam-snow.js) fills the lamp cones.
+  void snowK;
   // the exposure may not lift the dark water past the cap of the depth:
   // scene.js autoExposure reads S.exposureMax (NOTES.md, WORLD -> SCENE)
   S.exposureMax = L(a[6], b[6]);

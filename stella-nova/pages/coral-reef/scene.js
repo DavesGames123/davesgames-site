@@ -10,6 +10,8 @@
 //                    (lod 0, k >= 0), one mesh per chunk of bricks. A
 //                    chunk rebuild swaps the geometry of its mesh in place.
 //    polyps ........ one instanced mesh per chunk (shaders.js POLYP_*)
+//    beam snow ..... dense snow in the first metres of each lamp cone
+//                    (beam-snow.js), drawn in the scene (HDR target)
 //    snow .......... marine snow round the eye (lib/marine-snow.js): flocs,
 //                    strings, pellets, bokeh near the eye, forward scatter
 //  The ROV package adds its vehicles to the scene. setLights() takes
@@ -78,6 +80,7 @@ import * as SH from './shaders.js';
 import { waveSpectrum, wavePhases, noiseOffsets, CAUSTIC_D, FADE_K, N_WAVES } from './water.js';
 import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
+import { createBeamSnow, BEAM_SNOW } from './beam-snow.js';
 import { blueNoise, lampPx, VOL_K } from './volume.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
 import { DOME_R, domeRadius, HAZE_GLSL, createExplored } from './haze.js';
@@ -229,7 +232,8 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     shadowExtra: profile ? profile.shadowExtra ?? 0 : coarse ? 0 : 1024,
     polypShadow: profile ? !!profile.polypShadow : !coarse,
     volScale: profile ? profile.vol.scale : coarse ? 0.4 : 0.5, volSteps: profile ? profile.vol.steps : coarse ? 14 : 30,
-    snow: profile ? profile.snow : coarse ? 2600 : 9000, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
+    snow: profile ? profile.snow : coarse ? 2600 : 9000,
+    beamSnow: profile ? profile.beamSnow ?? BEAM_SNOW[profile.id]?.perLamp ?? BEAM_SNOW.phone.perLamp : coarse ? BEAM_SNOW.phone.perLamp : BEAM_SNOW.desktop.perLamp, polypDraw: profile ? profile.polypDraw : coarse ? 30000 : 160000,
   };
   renderer.debug.checkShaderErrors = true;
   if (onShaderError) renderer.debug.onShaderError = (gl, program, vs, fs) => { try { onShaderError(shaderErrorText(gl, program, vs, fs)); } catch (e) { onShaderError(String(e)); } };
@@ -572,6 +576,10 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     vertexShader: SH.SNOW_VS, fragmentShader: SH.SNOW_FS, uniforms: waterU(), ext: U.uFogK,
   });
   const snow = snowFx.mesh; scene.add(snow);
+  // the dense snow in the lamp cones (beam-snow.js): in the scene, so it
+  // draws into the HDR scene target before the volume and the tone map
+  const beamSnow = createBeamSnow(THREE, { perLamp: LD.beamSnow, len: coarse ? 9 : 12, maxPx: coarse ? 14 : 24, uniforms: waterU(), snow: snowFx });
+  scene.add(beamSnow.mesh);
   let snowDepth = null;
 
   // ── lamps ─────────────────────────────────────────────────────────────────
@@ -936,6 +944,8 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     // the shadow matrices of this frame (the shadow pass of render() computes the same)
     for (const l of lamps) if (l.castShadow) l.shadow.updateMatrices(l);
     const wait = updateLamps();
+    beamSnow.setEnabled(opts.snow);
+    beamSnow.update(dt, U.uTime.value, W3.origin, [U.uCur.value.x * 0.1, 0, U.uCur.value.y * 0.1]);
     frameN++;
     if (!passes || !post.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     renderer.setRenderTarget(passes.rtScene);
@@ -996,7 +1006,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     get exposureMax() { return expoMax; }, set exposureMax(v) { expoMax = Number.isFinite(v) && v > 0 ? v : Infinity; },
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
     // marine snow (lib/marine-snow.js): depth in metres (null: from the eye height), density 0..1 (user)
-    marineSnow: snowFx, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },
+    marineSnow: snowFx, beamSnow, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },
     get sand() { return sandMesh; }, post,
     setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
