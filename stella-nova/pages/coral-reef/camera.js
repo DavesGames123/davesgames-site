@@ -377,7 +377,7 @@ export function createExploreCamera(o = {}) {
   const orbit = { target: look0.slice(), yaw: a0.yaw, pitch: a0.pitch, dist: len(sub(eye0, look0)), wYaw: 0, wPitch: 0, pivot: null, grip: null, plane: null, auto: false };
   const swim = { pos: eye0.slice(), vel: [0, 0, 0], yaw: 0, pitch: 0, yawT: 0, pitchT: 0, speedK: 1, move: [0, 0, 0], boost: false };
   const tour = { T: null, s: 0, spd: 0, wait: true, look: null };
-  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0, autoYaw: 0, autoPitch: 0, wantYaw: 0, wantPitch: 0, searchT: 0, snapNext: false, stuckT: 0, boomYaw: null, boomRate: 0, vYaw: 0, body: null };
+  const follow = { id: 1, dist: 3.4, yawOff: 0, pitchOff: 0.28, idle: 0, autoYaw: 0, autoPitch: 0, wantYaw: 0, wantPitch: 0, searchT: 0, snapNext: false, stuckT: 0, blockT: 0, boomYaw: null, boomRate: 0, vYaw: 0, body: null };
   const saver = { eye: eye0.slice(), look: look0.slice(), omega: 2.2 };
   let mode = 'orbit', blend = 0, idle = 0, tours = null, grid = null;
   let lastGood = eye0.slice();
@@ -773,9 +773,19 @@ export function createExploreCamera(o = {}) {
       if (mode === 'follow') {
         const far = len(sub(goal.eye, E.x)) > 0.6, moved = len(sub(E.x, prev)) / Math.max(dt, 1e-3);
         follow.stuckT = far && moved < 0.4 ? follow.stuckT + dt : 0;
-        if ((follow.snapNext || follow.stuckT > 0.4) && F.metres(goal.eye) >= CLEAR_HARD) {
+        // the eye can also slide slowly along rock after a boom that turns
+        // with a capped rate (0e13cd76), so it is never still; rock between
+        // the eye and the ROV for 0.6 s counts as stuck too
+        const B = follow.body, sees = (a) => {
+          if (!B) return true;
+          const t = sub(B.c, a), l = len(t);
+          return l < 0.7 || !Number.isFinite(F.trace(a, mul(t, 1 / l), l - 0.6, 0.05));
+        };
+        follow.blockT = far && !sees(E.x) ? (follow.blockT || 0) + dt : 0;
+        const cut = follow.snapNext || follow.stuckT > 0.4 || (follow.blockT > 0.6 && sees(goal.eye));
+        if (cut && F.metres(goal.eye) >= CLEAR_HARD) {
           E.x = goal.eye.slice(); L.x = goal.look.slice(); E.v = [0, 0, 0]; L.v = [0, 0, 0];
-          lastGood = E.x.slice(); follow.stuckT = 0; blend = 0;
+          lastGood = E.x.slice(); follow.stuckT = 0; follow.blockT = 0; blend = 0;
         }
         follow.snapNext = false;
       }
