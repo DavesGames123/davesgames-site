@@ -343,14 +343,19 @@ function advance(S, dt) {
   }
 }
 
-// q' = q + dt/2 (0, w) q, normalised (display only)
+// q <- exp(dt w / 2) q: the exact turn by |w| dt about w (display only:
+// the 3D balls and the 2D decals of view/diagram.js read it)
 function rotate(S, i, dt) {
   const q = S.q, o = 4 * i, wx = S.wx[i], wy = S.wy[i], wz = S.wz[i];
-  const w = q[o], x = q[o + 1], y = q[o + 2], z = q[o + 3], h = dt / 2;
-  const nw = w + h * (-wx * x - wy * y - wz * z);
-  const nx = x + h * (wx * w + wy * z - wz * y);
-  const ny = y + h * (wy * w + wz * x - wx * z);
-  const nz = z + h * (wz * w + wx * y - wy * x);
+  const wl = Math.hypot(wx, wy, wz);
+  if (wl < 1e-12) return;
+  const half = wl * dt / 2, c = Math.cos(half), k = Math.sin(half) / wl;
+  const ax = wx * k, ay = wy * k, az = wz * k;
+  const w = q[o], x = q[o + 1], y = q[o + 2], z = q[o + 3];
+  const nw = c * w - ax * x - ay * y - az * z;
+  const nx = c * x + ax * w + ay * z - az * y;
+  const ny = c * y + ay * w + az * x - ax * z;
+  const nz = c * z + az * w + ax * y - ay * x;
   const l = Math.hypot(nw, nx, ny, nz) || 1;
   q[o] = nw / l; q[o + 1] = nx / l; q[o + 2] = ny / l; q[o + 3] = nz / l;
 }

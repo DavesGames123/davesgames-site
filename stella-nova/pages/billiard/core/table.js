@@ -42,6 +42,8 @@ export const SPEC = {
   cornerHole: 2.3 * IN,      // hole radius
   sideHole: 2.4 * IN,
   bedH: 30 * IN,             // cloth height over the floor (3D only)
+  cushionTop: 0.042,         // the top of the cushion rubber over the cloth (3D, the cue)
+  railTop: 0.048,            // the top of the wood rail over the cloth (3D, the cue)
 };
 
 // One table. Every array is plain data, so a clone is cheap to share.

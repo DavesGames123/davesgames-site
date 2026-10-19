@@ -17,23 +17,33 @@
 //  5. CHOICE      score = chance x (0.35 + 0.65 x position). With no good
 //     pot it plays a safety (leave the other player the worst shot) or a
 //     one-rail kick when no legal ball is in sight.
-//  6. NOISE       a small seeded error on the aim, the speed and the tip.
+//  6. FLAIR       banks (one rail), kick pots (the cue ball off a rail;
+//     plan kind 'kickpot', not the 'kick' safety) and combinations: the mirror geometry of core/geometry.js gives the first
+//     aim; short simulations trim it (bankTrim), and a full simulation
+//     must pot the ball. With chance `flair` per turn (seeded) the AI
+//     looks for one and plays it when it is makeable and not much worse
+//     than the best plain pot. The user asked for "bank shots that would
+//     look very cool".
+//  7. STROKE ERROR a seeded error on the aim angle, the speed and the tip,
+//     by skill. plan.ideal is the aimed stroke and plan.err the error, so
+//     the page can show the aimed and the observed line (delta phi).
 //  think() is a generator: the page runs a few steps per frame; the tests
 //  run it to the end with plan().
 //
 //  grep -n targets: "export const SKILLS", "export function\* think",
 //  "function variantsFor", "function refineAim", "function evaluate",
-//  "function placeCue", "function safety", "export function plan"
+//  "function placeCue", "function safety", "function legMiss", "function
+//  bankTrim", "function\* fancy", "function noisy", "export function plan"
 // ============================================================================
 import { clone, beginShot, strike, simulate, PHYS } from './physics.js';
-import { shotGeometry, potChance, pathClear, wrap, pocketAim, ghost } from './geometry.js';
+import { shotGeometry, potChance, pathClear, wrap, pocketAim, ghost, bankGeometry, kickGeometry, comboGeometry, fancyChance, RAILS } from './geometry.js';
 import { legalTargets, judge, apply as applyVerdict, groupOf } from './rules.js';
 import { legalCuePlace } from './table.js';
 
 export const SKILLS = {
-  perfect: { label: 'Near perfect', aim: 0.03 * Math.PI / 180, speed: 0.01, tip: 0.01, top: 6 },
-  pro: { label: 'Pro', aim: 0.12 * Math.PI / 180, speed: 0.03, tip: 0.03, top: 5 },
-  club: { label: 'Club', aim: 0.4 * Math.PI / 180, speed: 0.07, tip: 0.06, top: 4 },
+  perfect: { label: 'Near perfect', aim: 0.05 * Math.PI / 180, speed: 0.01, tip: 0.01, top: 6 },
+  pro: { label: 'Pro', aim: 0.25 * Math.PI / 180, speed: 0.03, tip: 0.03, top: 5 },
+  club: { label: 'Club', aim: 0.6 * Math.PI / 180, speed: 0.07, tip: 0.06, top: 4 },
 };
 const PLAN_SIGMA = 0.22 * Math.PI / 180;   // the aim error the planner allows for
 
@@ -62,12 +72,14 @@ function firstDir(G, n, phi, vr) {
   if (C.first !== n) return null;
   return Math.atan2(C.vy[n], C.vx[n]);
 }
+// the first ball the cue ball must hit (a combination: not the called ball)
+const hitOf = geo => (geo.hit != null ? geo.hit : geo.n);
 
 // Newton steps on phi so that the object ball leaves along geo.psi.
 function refineAim(G, geo, vr, slope) {
   let phi = geo.phi;
   for (let k = 0; k < 3; k++) {
-    const psi = firstDir(G, geo.n, phi, vr);
+    const psi = firstDir(G, hitOf(geo), phi, vr);
     if (psi == null) return null;
     const e = wrap(psi - geo.psi);
     if (Math.abs(e) < 2e-5) break;
@@ -80,7 +92,7 @@ function refineAim(G, geo, vr, slope) {
 // Geometry alone gives about d1 / (2R cos theta).
 function aimSlope(G, geo) {
   const vr = { v: 2, a: 0, b: 0 }, h = 0.01 * 2 * G.T.R * Math.max(0.2, geo.cos) / Math.max(0.05, geo.d1);
-  const a = firstDir(G, geo.n, geo.phi - h, vr), b = firstDir(G, geo.n, geo.phi + h, vr);
+  const a = firstDir(G, hitOf(geo), geo.phi - h, vr), b = firstDir(G, hitOf(geo), geo.phi + h, vr);
   if (a == null || b == null) return null;
   const s = wrap(b - a) / (2 * h);
   return Math.abs(s) < 0.05 ? null : s;
@@ -115,6 +127,7 @@ function outcome(G, shot) {
 function evaluate(G, geo, vr, phi, place) {
   const shot = { phi, v: vr.v, a: vr.a, b: vr.b, n: geo.n, pocket: geo.pocket, place };
   const { C, v, Gc } = outcome(G, shot);
+  if (C.first !== hitOf(geo)) return null;
   const e = C.potted.find(x => x.i === geo.n);
   if (v.foul || v.lose || !e || e.pocket !== geo.pocket) return null;
   if (v.win) return { shot, score: 2, chance: 1, pos: 1, C, v };
@@ -123,7 +136,7 @@ function evaluate(G, geo, vr, phi, place) {
   const next = bestChance(Gc, C, G.turn);
   // more balls down on the same shot is a small plus
   const extra = C.potted.filter(x => x.i !== geo.n && x.i > 0 && (G.type === '9' || !Gc.players[G.turn].group || groupOf(x.i) === Gc.players[G.turn].group)).length;
-  const chance = potChance(geo, G.T, PLAN_SIGMA);
+  const chance = geo.kind && geo.kind !== 'pot' ? geo.chance : potChance(geo, G.T, PLAN_SIGMA);
   return { shot, chance, pos: next.best, score: chance * (0.35 + 0.65 * next.best) + 0.03 * extra, C, v };
 }
 
@@ -201,10 +214,107 @@ function* kick(G, legal) {
   return res;
 }
 
+// ── flair: banks, kicks and combinations ─────────────────────────────────────
+// The first contact of the cue ball for aim phi: the hit ball's direction
+// and speed after it (null when another ball is hit first, or none).
+function firstHit(G, n, phi, vr) {
+  const C = clone(G.S);
+  beginShot(C);
+  strike(C, 0, { phi, v: vr.v, a: vr.a, b: vr.b });
+  simulate(C, { maxT: 8, stopAtFirst: true });
+  if (C.first !== n) return null;
+  return { psi: Math.atan2(C.vy[n], C.vx[n]), v: Math.hypot(C.vx[n], C.vy[n]) };
+}
+
+// The moving leg alone (the cue ball off the table): ball `mover` leaves at
+// speed vo along psi. 0 when the called ball falls in the called pocket,
+// else its signed miss (m) at its closest pass to the pocket aim, null when
+// the leg breaks down (no rail on a bank, no contact on a combination).
+function legMiss(G, geo, psi, vo) {
+  const C = clone(G.S), mover = hitOf(geo), target = geo.n;
+  C.on[0] = 0;
+  beginShot(C, { log: true });
+  C.vx[mover] = vo * Math.cos(psi); C.vy[mover] = vo * Math.sin(psi);
+  simulate(C, { maxT: 12 });
+  const e = C.potted.find(x => x.i === target);
+  if (e && e.pocket === geo.pocket) return 0;
+  if (geo.kind === 'bank' && !C.events.length) return null;
+  if (geo.kind === 'bank' && !C.events.some(x => x.type === 'cushion' && x.i === target)) return null;
+  if (geo.kind === 'combo' && !C.events.some(x => x.type === 'ball' && (x.i === target || x.j === target))) return null;
+  const pts = C.paths[target];
+  if (!pts || pts.length < 9) return null;
+  // after the last cushion (bank) or from the start (combination)
+  let k0 = 0;
+  if (geo.kind === 'bank') { const c = C.events.filter(x => x.type === 'cushion' && x.i === target)[0]; while (k0 + 3 < pts.length && pts[k0 + 2] < c.t) k0 += 3; }
+  let best = Infinity, bk = -1;
+  for (let k = k0; k < pts.length; k += 3) { const d = Math.hypot(pts[k] - geo.aimX, pts[k + 1] - geo.aimY); if (d < best) { best = d; bk = k; } }
+  const a = Math.max(k0, bk - 3), b = Math.min(pts.length - 3, bk + 3);
+  const dx = pts[b] - pts[a], dy = pts[b + 1] - pts[a + 1], L = Math.hypot(dx, dy) || 1;
+  const cr = (dx * (geo.aimY - pts[bk + 1]) - dy * (geo.aimX - pts[bk])) / L;
+  return (cr >= 0 ? 1 : -1) * Math.max(best, 1e-4);
+}
+
+// Secant steps on the leaving direction psi until the leg pots the ball.
+function bankTrim(G, geo, vo) {
+  let p0 = geo.psi, f0 = legMiss(G, geo, p0, vo);
+  if (f0 == null) return null;
+  if (f0 === 0) return p0;
+  let p1 = p0 + (f0 > 0 ? 1 : -1) * 0.004, f1 = legMiss(G, geo, p1, vo);
+  for (let k = 0; k < 6; k++) {
+    if (f1 == null) return null;
+    if (f1 === 0) return p1;
+    if (Math.abs(f1 - f0) < 1e-7) break;
+    const p2 = p1 - f1 * (p1 - p0) / (f1 - f0);
+    if (Math.abs(wrap(p2 - geo.psi)) > 0.12) return null;
+    p0 = p1; f0 = f1; p1 = p2; f1 = legMiss(G, geo, p1, vo);
+  }
+  return f1 === 0 ? p1 : null;
+}
+
+function fancyVariants(geo, P) {
+  const base = baseSpeed(geo, P) * (geo.kind === 'kick' ? 1.35 : geo.kind === 'bank' ? 1.2 : 1.1), out = [];
+  for (const k of [1, 1.5]) for (const b of [0, 0.25]) out.push({ v: Math.min(8, base * k), a: 0, b });
+  return out;
+}
+
+// The makeable banks, kicks and combinations, each with its full outcome.
+function* fancy(G, legal, sigma) {
+  const S = G.S, T = G.T, geos = [];
+  for (const n of legal) for (const p of T.pockets) for (const rail of RAILS) {
+    const g = bankGeometry(S, T, n, p, rail); if (g) geos.push(g);
+    const k = kickGeometry(S, T, n, p, rail); if (k) geos.push(k);
+  }
+  for (const a of legal) {
+    const seconds = G.type === '9' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].filter(b => b !== a && S.on[b]) : legal.filter(b => b !== a && b !== 8);
+    for (const b of seconds) for (const p of T.pockets) { const g = comboGeometry(S, T, a, b, p); if (g) geos.push(g); }
+  }
+  for (const g of geos) { g.chance = fancyChance(g, T, sigma); g.cx = S.x[0]; g.cy = S.y[0]; }
+  geos.sort((a, b) => b.chance - a.chance);
+  const top = geos.filter(g => g.chance > 0.35).slice(0, 5), out = [];
+  yield { stage: 'flair', candidates: top.slice(0, 4) };
+  for (const geo of top) {
+    const slope = aimSlope(G, geo);
+    if (slope == null) continue;
+    for (const vr of fancyVariants(geo, S.P)) {
+      let g2 = geo, phi = refineAim(G, geo, vr, slope);
+      if (phi != null && geo.kind !== 'kick') {
+        const h = firstHit(G, hitOf(geo), phi, vr);
+        const psi = h ? bankTrim(G, geo, h.v) : null;
+        g2 = psi == null ? null : Object.assign({}, geo, { psi });
+        phi = g2 ? refineAim(G, g2, vr, slope) : null;
+      }
+      if (phi != null) { const e = evaluate(G, g2, vr, phi, null); if (e) { e.geo = g2; out.push(e); } }
+      yield { stage: 'flair', candidates: top.slice(0, 4), geo, tried: out.length };
+    }
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 // The planner. Yields while it works (the page draws the candidates);
 // returns the plan: { kind, phi, v, a, b, n, pocket, place, candidates,
 // chosen, est }.
-export function* think(G, { skill = 'perfect', seed = 1 } = {}) {
+export function* think(G, { skill = 'perfect', seed = 1, flair = 0 } = {}) {
   const sk = SKILLS[skill] || SKILLS.perfect;
   const r = G.r;
   if (G.phase === 'break') return noisy(breakPlan(G, sk, r), sk, r);
@@ -244,6 +354,22 @@ export function* think(G, { skill = 'perfect', seed = 1 } = {}) {
   }
   all.sort((a, b) => b.score - a.score);
   const best = all[0];
+  // flair: a bank, a kick or a combination, some turns (seeded), or when no
+  // plain pot is good enough
+  const weak = !best || best.chance <= 0.3;
+  if (!G.inHand && ((flair > 0 && r() < flair) || weak)) {
+    // the chance of a showy shot uses twice the skill's own aim error (the
+    // plain pots keep the wider PLAN_SIGMA): a near perfect player trusts a bank
+    const fx = yield* fancy(G, legal, Math.max(2 * sk.aim, 0.08 * Math.PI / 180));
+    fx.sort((a, b) => b.score - a.score);
+    const f = fx[0];
+    // a higher flair takes a showy shot against a better plain pot more often
+    if (f && f.chance >= 0.45 && (weak || f.score >= (0.75 - 0.4 * flair) * best.score)) {
+      const s = f.shot;
+      return noisy({ kind: f.geo.kind === 'kick' ? 'kickpot' : f.geo.kind, phi: s.phi, v: s.v, a: s.a, b: s.b, n: s.n, pocket: s.pocket, place: null,
+        candidates: fx.slice(0, 4).map(x => x.geo), chosen: f.geo, est: { chance: f.chance, pos: f.pos, score: f.score } }, sk, r);
+    }
+  }
   if (best && best.chance > 0.3) {
     const s = best.shot;
     return noisy({ kind: 'pot', phi: s.phi, v: s.v, a: s.a, b: s.b, n: s.n, pocket: s.pocket, place: s.place || null,
@@ -275,11 +401,14 @@ function withCue(G, place) {
   return Object.assign({}, G, { S });
 }
 
+// The stroke error: the aimed stroke stays in plan.ideal, the struck one is
+// the plan; plan.err = { dphi (rad), dv (m/s), da, db, sigma }.
 function noisy(plan, sk, r) {
   plan.ideal = { phi: plan.phi, v: plan.v, a: plan.a, b: plan.b };
   plan.phi += sk.aim * r.gauss();
   plan.v *= 1 + sk.speed * r.gauss();
   plan.a += sk.tip * r.gauss(); plan.b += sk.tip * r.gauss();
+  plan.err = { dphi: wrap(plan.phi - plan.ideal.phi), dv: plan.v - plan.ideal.v, da: plan.a - plan.ideal.a, db: plan.b - plan.ideal.b, sigma: sk.aim };
   return plan;
 }
 

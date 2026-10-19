@@ -7,6 +7,9 @@
 //                 no TeX in it, and drawing items; the numbers in them agree
 //                 with the geometry (cut angle, v cos theta, v sin theta,
 //                 the slide-to-roll time)
+//  showy shots .. banks (the mirror step), kicks, combinations (the chain
+//                 of two ghost balls) and the stroke error step (aimed vs
+//                 observed) go through the same checks
 //  TeX .......... every TeX string of 40 seeded shots typesets in MathJax
 //                 3.2.2 (mathjax-full from MATHJAX_DIR or NODE_PATH, with
 //                 the html extension for \class); a missing MathJax fails
@@ -31,6 +34,28 @@ for (let seed = 1; seed <= 10; seed++) {
     shots.push({ G, S, pl, geo, pred, steps: mathsOf(G.T, G.S, pl, pred, geo) });
     autoTurn(G, {});
   }
+}
+// banks, kicks and combinations (flair 0.9): their own steps (the mirror,
+// the chain of ghost balls) go through the same checks and MathJax
+const fancyKinds = {};
+for (let seed = 1; seed <= 12 && Object.keys(fancyKinds).length < 3; seed++) {
+  const G = newGame({ seed: seed * 13, type: seed % 2 ? '8' : '9' });
+  for (let k = 0; k < 14 && G.phase !== 'over'; k++) {
+    const pl = plan(G, { flair: 0.9 });
+    if (['bank', 'kickpot', 'combo'].includes(pl.kind) && !pl.place) {
+      fancyKinds[pl.kind] = (fancyKinds[pl.kind] || 0) + 1;
+      const S = clone(G.S), geo = pl.chosen, pred = predict(G.S, pl);
+      shots.push({ G, S, pl, geo, pred, steps: mathsOf(G.T, G.S, pl, pred, geo), fancy: true });
+    }
+    autoTurn(G, { flair: 0.9 });
+  }
+}
+{
+  const f = shots.filter(s => s.fancy), ids = new Set(f.flatMap(s => s.steps.map(x => x.id)));
+  const strokes = shots.filter(s => s.steps.some(x => x.id === 'stroke')).length;
+  ok(f.length >= 3 && ids.has('mirror') && (ids.has('chain') || fancyKinds.kickpot) && strokes === shots.length,
+    'steps: banks show the mirror, combinations the chain of ghost balls, and every AI shot the stroke error step',
+    `${f.length} showy shots ${JSON.stringify(fancyKinds)}; step ids ${[...ids].join(' ')}; ${strokes}/${shots.length} with the stroke step`);
 }
 {
   let bad = 0;
@@ -60,7 +85,9 @@ for (let seed = 1; seed <= 10; seed++) {
     const ct = contactOf(s.pred);
     if (ct) { comp = Math.max(comp, Math.abs(Math.hypot(ct.vn, ct.vt) - ct.v)); if (!lensOf(s.pred, s.geo)) lens++; }
     const a = s.pl.b || 0, slide = s.steps.find(x => x.id === 'slide'), r = s.pred.events.find(e => e.type === 'roll' && e.i === 0);
-    if (slide && r && (!ct || r.t < ct.t)) { const want = +/= ([\d.]+) s$/.exec(slide.plain)[1]; roll = Math.max(roll, Math.abs(want - r.t)); rollN++; }
+    // (a kick meets the rail before it rolls: the rail changes the slide)
+    const rail0 = s.pred.events.find(e => e.type === 'cushion' && e.i === 0);
+    if (slide && r && (!ct || r.t < ct.t) && (!rail0 || rail0.t > r.t)) { const want = +/= ([\d.]+) s$/.exec(slide.plain)[1]; roll = Math.max(roll, Math.abs(want - r.t)); rollN++; }
   }
   ok(worst < 1e-9, 'steps: the cut angle in the maths is the ghost ball geometry', `worst ${worst.toExponential(1)} deg`);
   ok(comp < 1e-9 && lens === 0, 'steps: |v| = sqrt((v cos theta)^2 + (v sin theta)^2) at every contact, and the zoom lens finds it', `worst ${comp.toExponential(1)}`);
