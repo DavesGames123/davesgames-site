@@ -61,6 +61,8 @@
 //    S.task = { kind, label, target?, t }; S.stats = { distance, cells,
 //      chunks, colonies, depth, legs, t }
 //    S.setCount(n), S.reset(start), S.goTo(id, [x, z]) (one ROV to a point)
+//    S.inspect(id, p, r) -> ROV id | null: one ROV lights the orbit subject p
+//      (discoveries.js) and holds there; S.release(id) ends it
 //    S.tasks() -> [{ id, kind, label, aim, subject }], S.overlap(), S.claims
 //    options: spread (true), leash (180 m), minSep (18 m), regroupEvery (480 s)
 //    S.setManual(id, on), S.drive(id, { fwd, lat, up, yaw, boost }),
@@ -84,7 +86,7 @@ const angDiff = (a, b) => { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if
 const CELL = 12, CHUNK = 32;
 export const TASK_LABEL = {
   frontier: 'surveying unexplored ground', ridge: 'following a ridge', dropoff: 'dropping down a cliff', climb: 'climbing a seamount flank',
-  canyon: 'following a canyon', arch: 'passing under an arch', inspect: 'inspecting a colony', regroup: 'regrouping', goto: 'going to the marked point',
+  canyon: 'following a canyon', arch: 'passing under an arch', inspect: 'inspecting a colony', regroup: 'regrouping', goto: 'going to the marked point', focus: 'lighting the orbit subject',
   manual: 'manual control',
 };
 
@@ -423,7 +425,7 @@ export function createSquad(o = {}) {
   function regroup() {
     const L = S.vehicles[0].state;
     for (let i = 1; i < S.vehicles.length; i++) {
-      if (S.vehicles[i].manual) continue;
+      if (S.vehicles[i].manual || (S.vehicles[i].leg && S.vehicles[i].leg.kind === 'focus')) continue;
       const v = S.vehicles[i], a = L.yaw + Math.PI + (i - (S.vehicles.length) / 2) * 0.9;
       const q = pushOut(sdf, [L.p[0] + Math.cos(a) * 6, L.p[1] + 0.6 * i, L.p[2] + Math.sin(a) * 6], clear);
       const path = marchPath(sdf, [v.state.p.slice(), q], clear, { budget: 30000, step: 0.3 });
@@ -608,6 +610,35 @@ export function createSquad(o = {}) {
     v.aim = goal;
     return true;
   }
+  // inspect(id, p, r): the user orbits a subject (discoveries.js). One ROV
+  // flies to a stand-off point beside p, aims its lamps at p and holds
+  // there until release(id). The leader, a manual ROV or an unknown id
+  // sends the nearest other free ROV. -> the id of that ROV, or null.
+  function inspect(id, p, r = 1.5) {
+    let v = S.vehicles.find(q => q.id === id);
+    if (!v || v.manual || v === S.vehicles[0]) {
+      let bd = Infinity; v = null;
+      for (let i = 1; i < S.vehicles.length; i++) { const q = S.vehicles[i]; if (q.manual) continue; const d = len(sub(q.state.p, p)); if (d < bd) { bd = d; v = q; } }
+    }
+    if (!v) return null;
+    for (const q of S.vehicles) if (q !== v && q.leg && q.leg.kind === 'focus') { q.leg = null; q.planT = 0; }
+    const st = v.state, off = sub(st.p, p); off[1] = 0;
+    const l = len(off) || 1, sd = Math.max(3, r * 1.6 + 2.5);
+    const gx = p[0] + off[0] / l * sd, gz = p[2] + off[2] / l * sd;
+    const goal = pushOut(sdf, [gx, Math.max(p[1] + r * 0.6 + 1, ground(gx, gz) + 1.5), gz], clear);
+    const path = marchPath(sdf, [st.p.slice(), goal], clear, { budget: 30000, step: 0.3 });
+    if (!path) return null;
+    claim(S.vehicles.indexOf(v), null);
+    v.leg = { path, s: 0, lastS: 0, stuckT: 0, hold: Infinity, kind: 'focus', label: TASK_LABEL.focus, look: p.slice(), lookR: Math.max(0.8, r), subject: null };
+    v.aim = goal;
+    return v.id;
+  }
+  // release(id): the orbit ended; the ROV goes back to its own plan
+  function release(id) {
+    let n = 0;
+    for (const v of S.vehicles) if ((id == null || v.id === id) && v.leg && v.leg.kind === 'focus') { v.leg = null; v.planT = 0; v.aim = null; n++; }
+    return n;
+  }
   function ownLegGoal(v, dt) {
     const L = v.leg, st = v.state;
     const lag = len(sub(pathAt(L.path, L.s).p, st.p));
@@ -639,7 +670,7 @@ export function createSquad(o = {}) {
     for (const m of owners.values()) if (m & (m - 1)) multi++;
     return owners.size ? multi / owners.size : 0;
   }
-  S.goTo = goTo;
+  S.goTo = goTo; S.inspect = inspect; S.release = release;
   S.setManual = setManual; S.drive = drive;
   S.isManual = id => { const v = S.vehicles.find(q => q.id === id); return !!(v && v.manual); };
   S.manualOf = id => { const v = S.vehicles.find(q => q.id === id); return v && v.manual ? v.manual : null; };

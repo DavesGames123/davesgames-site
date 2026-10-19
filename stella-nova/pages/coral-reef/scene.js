@@ -277,6 +277,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     uCur: { value: new THREE.Vector2(1, 0) },
     uCausN: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uPixAng: { value: 1e-3 },
     uSpotN: { value: 0 }, uSpotP: { value: [v4(), v4(), v4(), v4()] }, uSpotD: { value: [v4(), v4(), v4(), v4()] }, uSpotC: { value: [v4(), v4(), v4(), v4()] },
+    uKeyP: { value: v4() }, uKeyC: { value: v4() },
     uShadowM: { value: Array.from({ length: SH.MAX_SPOTS }, () => new THREE.Matrix4()) }, uShadowOn: { value: new THREE.Vector4() }, uShadowBias: { value: -0.0006 }, uShadowTexel: { value: new THREE.Vector4(1 / 2048, 1 / 2048, 1 / 2048, 1 / 2048) },
     uShadow0: { value: null }, uShadow1: { value: null }, uShadow2: { value: null }, uShadow3: { value: null },
     uLut: { value: lutTex }, uMode: { value: 0 }, uCount: { value: 1 }, uBleach: { value: 0 }, uSwayK: { value: 1 },
@@ -284,7 +285,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   };
   const waterU = () => {
     const o = {};
-    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCausN', 'uPixAng', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel']) o[k] = U[k];
+    for (const k of ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCausN', 'uPixAng', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel', 'uKeyP', 'uKeyC']) o[k] = U[k];
     o.uFow = U.uFow; o.uFowBox = U.uFowBox;
     return o;
   };
@@ -628,6 +629,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
         l.castShadow = true;
       } else { l.castShadow = false; dropMap(l); }
     });
+  }
+  // the inspection key light of an orbit (focus-light.js keyFrame, render
+  // space): K = { p, range, c } or null (off)
+  function setKeyLight(K) {
+    if (!K) { U.uKeyC.value.set(0, 0, 0, 0); return; }
+    U.uKeyP.value.set(K.p[0], K.p[1], K.p[2], K.range);
+    U.uKeyC.value.set(K.c[0], K.c[1], K.c[2], 1);
   }
   const P3 = new THREE.Vector3(), T3 = new THREE.Vector3();
   const shadowTex = [U.uShadow0, U.uShadow1, U.uShadow2, U.uShadow3];
@@ -1038,7 +1046,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     // marine snow (lib/marine-snow.js): depth in metres (null: from the eye height), density 0..1 (user)
     marineSnow: snowFx, beamSnow, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },
     get sand() { return sandMesh; }, post,
-    setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setLut, resize, render,
+    setRock, addRockMeshes, setPlot, setLoads, get loads() { return Object.assign({}, LD); }, setPolypSizes, setLights, setKeyLight, setLut, resize, render,
     clearColonies, addColonyGroup, applyBricks, flushChunks, setParticles, writeT, uploadParticles, setPolypsVisible,
     setFineGate, showFine, dropFine, takeShown, fineState, get fineGroups() { return fineGroups; }, get dyingGroups() { return dying.length; },
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },

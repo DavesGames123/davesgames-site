@@ -37,6 +37,13 @@
 //  highlight light), and a DOM label (#dscLabel). It fades in, and fades
 //  out when the camera leaves, when another one is selected, or on Esc.
 //
+//  INSPECTION LIGHT (focus-light.js). The user said (2026-10-18): "focusing
+//  on objects does not light them up in deep water". select() calls
+//  o.inspect(e) (main.js: one ROV flies to the subject and aims its lamps
+//  at it, rov/squad.js S.inspect), clear() calls o.release(id). Each frame
+//  tick() gives o.keyLight a soft key light near the orbit eye (keyFrame,
+//  times the highlight alpha), and null when the highlight has faded.
+//
 //  TOAST (#dscToast). "ROV 3 found a bubblegum coral", at most one each
 //  TOAST_GAP s; the newest waiting entry shows next with a count.
 //
@@ -50,6 +57,7 @@
 //    "export function mountDiscoveries"     the DOM part (card, toast, label, keys)
 // ============================================================================
 import { createMarineSnow, marineSnowVS, MS_LIGHT_SPOTS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
+import { keyFrame } from './focus-light.js';
 
 export const DISC_CAP = 300;
 export const TOAST_GAP = 4;          // s between two toasts
@@ -398,7 +406,8 @@ export function createHighlight(THREE, o = {}) {
 // o: { doc, win, THREE?, scene?, snowAtlas?, ext?, getSquad, env (scanSquad),
 //      colourOf(id), getCam() (camera.js), camera() (three camera), origin(),
 //      lamps(), current(), flyTo(frame, e), onClear(), isSaver(), phoneQ,
-//      mapOpen(), closeMap(), mmView() }
+//      mapOpen(), closeMap(), mmView(), inspect(e) -> id, release(id),
+//      keyLight(K | null) }
 export function mountDiscoveries(o) {
   const doc = o.doc, win = o.win || doc.defaultView;
   const log = o.log || createDiscoveryLog();
@@ -500,6 +509,8 @@ export function mountDiscoveries(o) {
     if (o.flyTo) o.flyTo(fr, e);
     D.sel = id; D.selAt = nowS(); D.frame = fr; D.dirty = true;
     if (HL) HL.attach(e, colour(e.rov));
+    if (o.release && D.inspector != null) o.release(D.inspector);
+    D.inspector = o.inspect ? o.inspect(e) : null;
     label.textContent = ''; const lb = doc.createElement('b'); lb.textContent = e.name; const ls = doc.createElement('span'); ls.textContent = `ROV ${e.rov} · ${e.depth} m`;
     label.append(lb, ls); label.style.setProperty('--c', colour(e.rov));
     return true;
@@ -508,6 +519,8 @@ export function mountDiscoveries(o) {
     if (!D.sel) return false;
     D.sel = null; D.dirty = true; D.cleared = why;
     if (HL) HL.clear();
+    if (o.release && D.inspector != null) o.release(D.inspector);
+    D.inspector = null;
     label.hidden = true;
     if (o.onClear) o.onClear(why);
     return true;
@@ -542,6 +555,15 @@ export function mountDiscoveries(o) {
       const og = o.origin ? o.origin() : [0, 0], tc = o.camera ? o.camera() : null;
       HL.update(dt, t3 ?? now, og, { lamps: o.lamps ? o.lamps() : null, current: o.current ? o.current() : null, focus: D.frame ? D.frame.dist : null, camera: tc, px: (win.innerHeight || 800) * 1.2 });
     }
+    // the inspection key light: on while the highlight shows, off after
+    if (o.keyLight) {
+      const he = HL ? HL.entry : D.sel ? log.get(D.sel) : null, ha = HL ? HL.alpha : D.sel ? 1 : 0, cc = o.camera ? o.camera() : null;
+      if (he && ha > 0.004 && cc && cc.position) {
+        const og = o.origin ? o.origin() : [0, 0], fk = o.ext && o.ext.value ? [o.ext.value.x, o.ext.value.y, o.ext.value.z] : undefined;
+        D.key = keyFrame([cc.position.x, cc.position.y, cc.position.z], [he.p[0] - og[0], he.p[1], he.p[2] - og[1]], he.r || 1, ha, fk);
+        o.keyLight(D.key);
+      } else if (D.key) { D.key = null; o.keyLight(null); }
+    }
     // the floating label
     const e = D.sel ? log.get(D.sel) : null, tc = o.camera ? o.camera() : null;
     if (e && tc && v3 && !(o.mapOpen && o.mapOpen())) {
@@ -558,7 +580,7 @@ export function mountDiscoveries(o) {
   return {
     log, marks, select, clear, tick, highlight: HL,
     get selected() { return D.sel; },
-    debug: () => ({ size: log.size, sel: D.sel, hover: D.hover, card: card.hidden ? null : card.dataset.id, toasts: D.toasts.slice(), waiting: D.waiting.length, flights: D.flights.slice(), cleared: D.cleared || null, hl: HL ? { alpha: HL.alpha, want: HL.want, visible: HL.group.visible, entry: HL.entry && HL.entry.id } : null, hits: { mini: D.hits.mini.length, big: D.hits.big.length } }),
+    debug: () => ({ size: log.size, sel: D.sel, key: D.key || null, inspector: D.inspector ?? null, hover: D.hover, card: card.hidden ? null : card.dataset.id, toasts: D.toasts.slice(), waiting: D.waiting.length, flights: D.flights.slice(), cleared: D.cleared || null, hl: HL ? { alpha: HL.alpha, want: HL.want, visible: HL.group.visible, entry: HL.entry && HL.entry.id } : null, hits: { mini: D.hits.mini.length, big: D.hits.big.length } }),
     dispose() { if (HL) HL.dispose(); card.remove(); toast.remove(); label.remove(); },
   };
 }

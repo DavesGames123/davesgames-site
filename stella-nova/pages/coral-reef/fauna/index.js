@@ -72,7 +72,7 @@ import { hex } from './gen/mesh.js';
 import { glowParams, createGlowState, lampAt, downwelling, GLOW_GAIN } from './glow.js';
 import { parseGLB } from '../../../lib/glb-lite.js';
 
-const WATER_KEYS = ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel', 'uFow', 'uFowBox'];
+const WATER_KEYS = ['uTime', 'uCaust', 'uR', 'uDown', 'uFogK', 'uFogCol', 'uSunXZ', 'uCaustBox', 'uCaustTex', 'uCaustScale', 'uCur', 'uSpotN', 'uSpotP', 'uSpotD', 'uSpotC', 'uShadow0', 'uShadow1', 'uShadow2', 'uShadow3', 'uShadowM', 'uShadowOn', 'uShadowBias', 'uShadowTexel', 'uFow', 'uFowBox', 'uKeyP', 'uKeyC'];
 const SURF = 55;
 // tail-beat or pulse rate (cycles/s) and amplitude of each motion kind
 const RATE = { 0: [0.25, 1], 1: [1.6, 1], 2: [0.8, 1], 3: [0.45, 1], 4: [0.55, 1], 5: [0.5, 1], 6: [1.2, 1], 7: [0.12, 1], 8: [0.2, 1], 9: [0.3, 1] };

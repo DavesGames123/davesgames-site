@@ -735,6 +735,11 @@ function buildUI() {
       return okk;
     },
     onClear: () => { if (cam) cam.setAutoRotate(G.orbit); },
+    // the inspection light (focus-light.js): the selected ROV (else the
+    // nearest free one) lights the orbit subject; a soft key light meanwhile
+    inspect: e => (squad && squad.inspect && !saverOn ? squad.inspect(selectedId(), e.p, e.r) : null),
+    release: id => { if (squad && squad.release) squad.release(id); },
+    keyLight: K => { if (S && S.setKeyLight) S.setKeyLight(K); },
     mapOpen: () => !!(hud && hud.mapCovers()), closeMap: () => { if (hud && hud.map) hud.map.close(); },
   });
   hud = mountSquadHud({

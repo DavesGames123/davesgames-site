@@ -69,6 +69,7 @@ import { HAZE_GLSL } from './haze.js';
 import { marineSnowVS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
 import { VOL_K } from './volume.js';
 import { BLOOM_BRIGHT } from './bloom.js';
+import { KEY_GLSL, KEY_WRAP } from './focus-light.js';
 
 export { SURFACE_Y };
 export const MAX_SPOTS = 4;
@@ -155,6 +156,7 @@ uniform vec2 uCur;
 uniform vec4 uCausN[8];
 uniform vec4 uSpotP[${MAX_SPOTS}], uSpotD[${MAX_SPOTS}], uSpotC[${MAX_SPOTS}];
 uniform mat4 uShadowM[${MAX_SPOTS}];
+${KEY_GLSL}
 uniform mediump sampler2D uCaustTex;
 uniform highp sampler2D ${SHADOW_IDS.map(i => 'uShadow' + i).join(', ')};
 const float SURF_Y = ${F1(SURFACE_Y)};
@@ -283,6 +285,15 @@ vec3 lightSurf(vec3 base, vec3 w, vec3 n, vec3 V, float wrap, float spec, float 
     float F = 0.04 + 0.96 * pow(1.0 - max(dot(H, V), 0.0), 5.0);
     col += R * spec * D * F * max(ndl, 0.0) * 0.25;
     col += base * base * R * trans * (pow(clamp(dot(V, -L), 0.0, 1.0), 3.0) * 1.4 + clamp(-ndl, 0.0, 1.0) * 0.35);
+  }
+  // the inspection key light of an orbit (focus-light.js): soft, no shadow
+  if (max(uKeyC.r, max(uKeyC.g, uKeyC.b)) > 1e-5) {
+    vec3 L;
+    vec3 R = keyRad(w, L);
+    float ndl = dot(n, L);
+    col += base * R * clamp((ndl + ${KEY_WRAP.toFixed(2)}) / ${(1 + KEY_WRAP).toFixed(2)}, 0.0, 1.0) * mix(1.0, ao, 0.5);
+    vec3 H = normalize(L + V);
+    col += R * spec * pow(max(dot(n, H), 0.0), 24.0) * max(ndl, 0.0) * 0.3;
   }
   return col;
 }
