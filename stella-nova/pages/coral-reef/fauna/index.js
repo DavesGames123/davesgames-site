@@ -18,20 +18,35 @@
 //      profile ... budget.js profile id; base: the URL of assets/fauna/
 //      makeWorker  () => Worker of fauna/worker.js, or null (main thread)
 //      rovs ...... () => [{ p: [x, y, z], look: [dx, dy, dz] }] (world m)
+//      rovRing ... m, the chunks within this of each ROV get animals too
+//                  (world/stream.js rovRing of the streamer budget; 0: none)
 //    F.update(dt, camera, eye, origin)   eye: world m; origin: [Ox, Oz]
+//    F.prepare(camera)   before each render of the scene (fauna/hook.js
+//                        scene.onBeforeRender): the draw list for that camera
 //    F.addColonies(chunkKey, colonies) / F.removeColonies(chunkKey)
 //    F.lookAt(p, dir, maxDist) -> { name, sci, src, family, dist } | null
 //    F.setEnabled(on), F.enabled
 //    F.setEscort(fn | null)  fn() -> [x, y, z]: bring up to three swimming
 //                            groups near that point (the saver shots)
 //    F.stats() -> { chunks, pending, agents, drawn, halos, glowMesh, species, tris,
-//                   bytes, scans, regions, capacity }
+//                   bytes, scans, regions, capacity, view }  view: the last
+//                   other-camera list { drawn, halos, near, renders }
 //    F.dispose()
 //
 //  FRAME. sim.step, then each live animal goes to the bucket of its species:
 //  near (< budget.lod0) the full model, far (< lod1) the low model, past
 //  that only the glow sprite of a glowing animal, past `draw` nothing; a
 //  frustum test drops the rest. Buckets grow in powers of 2.
+//
+//  CAMERAS. The user said (2026-10-18): "ROV cameras are culled much too
+//  aggresssively, theres a ton of black in their images". The chunks within
+//  rovRing of each ROV get animals, as round the eye. A render of the scene
+//  for another camera (a ROV feed, rov/feed.js drawScene) calls prepare(cam):
+//  one more fill for that camera, with its frustum, its distances (LOD and
+//  sprite) and the same budgets. That fill does not move the sim or the
+//  glow (it reads the levels of the main fill) and builds at most one
+//  species mesh a frame, and only when the main fill built none. The main
+//  render fills again for the main camera when the buffers hold another list.
 //
 //  GLOW. A glowing animal with a mesh glows from the photophore map on its
 //  body (fauna/glsl.js phoMask, fauna/glow.js levels), and the bloom pass
@@ -45,7 +60,7 @@
 //  arrays and textures (tests/fauna.test.mjs checks the release).
 //
 //  grep -n targets: "export function createFauna", "function wantChunks",
-//  "function bucketFor", "function loadScan", "function fill", "function lookAt"
+//  "function bucketFor", "function loadScan", "function fill", "function prepare", "function lookAt"
 // ============================================================================
 import { FAUNA_CH, spawnChunk, spawnColony, gridFrom } from './spawn.js';
 import { createSim } from './sim.js';
@@ -102,13 +117,22 @@ export function createFauna(o) {
   }
 
   // ── chunks round the eye ────────────────────────────────────────────────
-  function wantChunks(eye) {
-    const r = B.ring, i0 = Math.floor((eye[0] - r) / FAUNA_CH), i1 = Math.floor((eye[0] + r) / FAUNA_CH), j0 = Math.floor((eye[2] - r) / FAUNA_CH), j1 = Math.floor((eye[2] + r) / FAUNA_CH);
-    const want = [];
+  // the ring of the eye and the ring of each ROV, in one list nearest first
+  // (d: to the eye or to that ROV), so a full sim (maxAgents) does not give
+  // all the animals to the far chunks of the eye ring
+  const rovR = Math.min(B.ring, o.rovRing || 0);
+  function ringAround(p, r, want) {
+    const i0 = Math.floor((p[0] - r) / FAUNA_CH), i1 = Math.floor((p[0] + r) / FAUNA_CH), j0 = Math.floor((p[2] - r) / FAUNA_CH), j1 = Math.floor((p[2] + r) / FAUNA_CH);
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const d = Math.hypot((i + 0.5) * FAUNA_CH - eye[0], (j + 0.5) * FAUNA_CH - eye[2]);
+      const d = Math.hypot((i + 0.5) * FAUNA_CH - p[0], (j + 0.5) * FAUNA_CH - p[2]);
       if (d < r) want.push([d, i, j]);
     }
+  }
+  function rovDist(c, rovs) { let m = Infinity; if (rovR > 0 && rovs) for (const v of rovs) if (v && v.p) m = Math.min(m, Math.hypot((c.i + 0.5) * FAUNA_CH - v.p[0], (c.j + 0.5) * FAUNA_CH - v.p[2])); return m; }
+  function wantChunks(eye, rovs = null) {
+    const want = [];
+    ringAround(eye, B.ring, want);
+    if (rovR > 0 && rovs) for (const v of rovs) if (v && v.p && isFinite(v.p[0]) && isFinite(v.p[2])) ringAround(v.p, rovR, want);
     want.sort((a, b) => a[0] - b[0]);
     for (const [, i, j] of want) {
       const key = `${i},${j}`;
@@ -120,7 +144,7 @@ export function createFauna(o) {
     // unload
     for (const [key, c] of chunks) {
       const d = Math.hypot((c.i + 0.5) * FAUNA_CH - eye[0], (c.j + 0.5) * FAUNA_CH - eye[2]);
-      if (d > B.unload) { sim.removeChunk(key); chunks.delete(key); }
+      if (d > B.unload && rovDist(c, rovs) > rovR + B.unload - B.ring) { sim.removeChunk(key); chunks.delete(key); }
     }
   }
   function canonical(sp) {
@@ -193,11 +217,11 @@ export function createFauna(o) {
     return b;
   }
   let buildsThisFrame = 0;
-  function build(b) {
+  function build(b, most = 3) {
     if (b.state !== 'new') return;
     const sp = b.sp;
     if (sp.src === 'scan') { b.state = 'loading'; loadScan(b); return; }
-    if (buildsThisFrame >= 3) return;
+    if (buildsThisFrame >= most) return;
     buildsThisFrame++;
     const M = genModel(sp);
     b.geos = [geometryFrom(M.lod0, sp), geometryFrom(M.lod1, sp)];
@@ -271,6 +295,10 @@ export function createFauna(o) {
   const frustum = new THREE.Frustum(), pv = new THREE.Matrix4(), sph = new THREE.Sphere();
   const lodOf = new Int8Array(sim.capacity);          // per animal: -1 hidden, 0, 1, 2 (halo only)
   const glowS = createGlowState(sim.capacity);        // per animal: the photophore flash (fauna/glow.js)
+  const glowL = new Float32Array(sim.capacity * 4);   // per animal: the last glow levels
+  const glowT = new Float64Array(sim.capacity).fill(-1); // per animal: the clock of that glow step
+  const viewN = { drawn: 0, halos: 0, near: 0, renders: 0 };
+  let held = null, heldFrame = -1, mainCam = null, frameN = 0, lastEye = [0, 0, 0], lastOrigin = [0, 0], lastRovs = null;
   const PW = [0, 0, 0];
   let halo = null;
   function makeHalo() {
@@ -290,9 +318,13 @@ export function createFauna(o) {
   const glowCol = new WeakMap();
   function glowRGB(GP) { let c = glowCol.get(GP); if (!c) { c = hex(GP.colour); glowCol.set(GP, c); } return c; }
 
-  function fill(camera, eye, origin, t, dt = 0, rovs = null) {
+  // view: false for the main fill (the sim frame); true for another camera
+  // (prepare): one build at most, and a glow step only for an animal with
+  // no step at this clock (dt: the time since its last step, 0.5 s at most)
+  function fill(camera, eye, origin, t, dt = 0, rovs = null, view = false) {
     const uDown = U && U.uDown ? U.uDown.value : 0;
-    statsN.drawn = 0; statsN.halos = 0; statsN.glowMesh = 0;
+    const SN = view ? viewN : statsN;
+    SN.drawn = 0; SN.halos = 0; if (view) viewN.near = 0; else statsN.glowMesh = 0;
     if (camera) { pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); frustum.setFromProjectionMatrix(pv); }
     const ox = origin ? origin[0] : 0, oz = origin ? origin[1] : 0;
     // pass 1: count per bucket and lod
@@ -314,9 +346,9 @@ export function createFauna(o) {
       lodOf[i] = lod;
       if (lod === 0) b.n0++; else if (lod === 1) b.n1++;
     }
-    // build the buckets in need, grow them
-    buildsThisFrame = 0;
-    for (const b of slotB) if (b && (b.n0 || b.n1)) { build(b); if (b.state === 'ready') grow(b, Math.max(b.n0, b.n1)); }
+    // build the buckets in need, grow them (the main fill has priority)
+    if (!view) buildsThisFrame = 0;
+    for (const b of slotB) if (b && (b.n0 || b.n1)) { build(b, view ? 1 : 3); if (b.state === 'ready') grow(b, Math.max(b.n0, b.n1)); }
     // a new bucket counts as used now (the idle clock starts at its creation)
     for (const b of slotB) if (b && b.used === undefined) b.used = t;
     for (const b of buckets.values()) { b.k0 = 0; b.k1 = 0; }
@@ -332,10 +364,13 @@ export function createFauna(o) {
       // the photophore levels (fauna/glow.js): steady, counter, flash, wave
       const GP = glowParams(sp);
       let g4 = null;
-      if (GP) {
+      if (GP && view && glowT[i] === t) g4 = glowL.subarray(i * 4, i * 4 + 4);
+      else if (GP) {
         PW[0] = sim.px[i]; PW[1] = sim.py[i]; PW[2] = sim.pz[i];
         let dr = 1e9; if (rovs) for (const r of rovs) if (r && r.p) dr = Math.min(dr, Math.hypot(PW[0] - r.p[0], PW[1] - r.p[1], PW[2] - r.p[2]) - s * 0.5);
-        g4 = glowS.step(i, GP, { dt, t, phase: sim.phase[i], d: dr, lamp: lampAt(PW, rovs), startle: sim.glow[i], down: downwelling(uDown, PW[1]) });
+        const dti = view ? (glowT[i] < 0 ? 0 : Math.min(0.5, t - glowT[i])) : dt;
+        g4 = glowS.step(i, GP, { dt: dti, t, phase: sim.phase[i], d: dr, lamp: lampAt(PW, rovs), startle: sim.glow[i], down: downwelling(uDown, PW[1]) });
+        glowT[i] = t; glowL[i * 4] = g4[0]; glowL[i * 4 + 1] = g4[1]; glowL[i * 4 + 2] = g4[2]; glowL[i * 4 + 3] = g4[3];
       }
       // the far glow sprite: only where the mesh is not drawn (lod 2). A
       // small bright core (the bloom spreads it), the photophore colour
@@ -349,7 +384,8 @@ export function createFauna(o) {
         }
       }
       if (lod === 2 || b.state !== 'ready') continue;
-      if (GP) statsN.glowMesh++;
+      if (GP && !view) statsN.glowMesh++;
+      if (view && lod === 0) viewN.near++;
       const mesh = b.meshes[lod], k = lod === 0 ? b.k0++ : b.k1++;
       const M = mesh.instanceMatrix.array, o16 = k * 16;
       const cy = Math.cos(sim.yaw[i]), sy = Math.sin(sim.yaw[i]), cp = Math.cos(sim.pitch[i]), spch = Math.sin(sim.pitch[i]);
@@ -372,7 +408,7 @@ export function createFauna(o) {
       const IG = mesh.geometry.attributes.iGlow.array;
       if (g4) { IG[q] = g4[0]; IG[q + 1] = g4[1]; IG[q + 2] = g4[2]; IG[q + 3] = g4[3]; }
       else { IG[q] = 1; IG[q + 1] = 0; IG[q + 2] = 0; IG[q + 3] = 0; }
-      statsN.drawn++;
+      SN.drawn++;
     }
     for (const b of buckets.values()) {
       if (b.state !== 'ready') continue;
@@ -382,7 +418,9 @@ export function createFauna(o) {
         if (n) { m.instanceMatrix.needsUpdate = true; m.geometry.attributes.iAnim.needsUpdate = true; m.geometry.attributes.iTint.needsUpdate = true; m.geometry.attributes.iGlow.needsUpdate = true; }
       }
     }
-    if (halo) { halo.geo.instanceCount = nh; halo.geo.attributes.iHalo.needsUpdate = true; halo.geo.attributes.iHaloC.needsUpdate = true; statsN.halos = nh; }
+    if (halo) { halo.geo.instanceCount = nh; halo.geo.attributes.iHalo.needsUpdate = true; halo.geo.attributes.iHaloC.needsUpdate = true; SN.halos = nh; }
+    held = camera; heldFrame = frameN;
+    if (view) return;
     // free idle buckets (20 s) and keep the scan slots
     let scans = 0;
     for (const b of buckets.values()) if (b.sp.src === 'scan' && b.state === 'ready') scans++;
@@ -391,6 +429,20 @@ export function createFauna(o) {
       if (b.state === 'ready' && (idle > 20 || (b.sp.src === 'scan' && scans > B.scanSlots && idle > 2))) { if (b.sp.src === 'scan') scans--; freeBucket(b); }
       else if ((b.state === 'failed' || b.state === 'new') && idle > 60) buckets.delete(b.sp.id);
     }
+  }
+
+  // Before a render of the scene for camera cam: the draw list of cam. The
+  // main camera after its own fill this frame, or the same camera again in
+  // one frame, keeps the list in the buffers (no second fill).
+  const camW = new THREE.Vector3();
+  function prepare(cam) {
+    if (disposed || !enabled || !cam || !cam.isCamera) return false;
+    if (held === cam && heldFrame === frameN) return false;
+    cam.getWorldPosition(camW);
+    const eye = cam === mainCam ? lastEye : [camW.x + lastOrigin[0], camW.y, camW.z + lastOrigin[1]];
+    fill(cam, eye, lastOrigin, clock, 0, lastRovs, cam !== mainCam);
+    if (cam !== mainCam) viewN.renders++;
+    return true;
   }
 
   // ── the saver escort: a few animals near a point ──────────────────────────
@@ -422,10 +474,11 @@ export function createFauna(o) {
   let clock = 0;
   function update(dt, camera, eye, origin) {
     if (disposed || !enabled) return;
-    clock += dt;
-    wantChunks(eye);
-    if (!worker && localQueue.length) runLocal(6);
+    clock += dt; frameN++;
     const rovs = o.rovs ? o.rovs() : null;
+    wantChunks(eye, rovs);
+    if (!worker && localQueue.length) runLocal(6);
+    mainCam = camera; lastEye = eye.slice(); lastRovs = rovs; lastOrigin = origin ? [origin[0], origin[1]] : [0, 0];
     const cur = U && U.uCur ? [U.uCur.value.x, U.uCur.value.y] : [0, 0];
     sim.step(dt, { t: clock, rovs, current: cur });
     tickEscort(dt);
@@ -461,7 +514,7 @@ export function createFauna(o) {
     const regions = {};
     for (const c of chunks.values()) if (c.state === 'live') regions[c.region] = (regions[c.region] || 0) + (c.count || 0);
     let pending = 0; for (const c of chunks.values()) if (c.state === 'pending') pending++;
-    return { chunks: chunks.size, pending, agents: sim.count, capacity: sim.capacity, drawn: statsN.drawn, halos: statsN.halos, glowMesh: statsN.glowMesh, species: ready, scans, tris, bytes, built: statsN.built, freed: statsN.freed, scanFails: statsN.scanFails, regions, sim: Object.assign({}, sim.stats) };
+    return { chunks: chunks.size, pending, agents: sim.count, capacity: sim.capacity, drawn: statsN.drawn, halos: statsN.halos, glowMesh: statsN.glowMesh, species: ready, scans, tris, bytes, built: statsN.built, freed: statsN.freed, scanFails: statsN.scanFails, regions, sim: Object.assign({}, sim.stats), view: Object.assign({}, viewN) };
   }
 
   function setEnabled(on) {
@@ -480,7 +533,7 @@ export function createFauna(o) {
   }
 
   return {
-    update, lookAt, stats, setEnabled, dispose, addColonies, removeColonies,
+    update, prepare, lookAt, stats, setEnabled, dispose, addColonies, removeColonies, chunks,
     setEscort(fn) { escort = fn; escortT = 0; if (!fn) sim.removeChunk('escort'); },
     get enabled() { return enabled; }, sim, budget: B, buckets, glowState: glowS,
   };

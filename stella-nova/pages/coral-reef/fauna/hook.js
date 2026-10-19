@@ -16,6 +16,10 @@
 //                       the creature that the feed camera of v looks at
 //                       (rov/index.js createROVs option feedTag)
 //    fauna.F                                           createFauna (or null)
+//  Each render of S.scene (the main view, each ROV feed: rov/feed.js
+//  drawScene) calls F.prepare(camera) from scene.onBeforeRender (after the
+//  scene.js hook): the creature draw list of that camera. The chunks round
+//  each ROV get animals within rovRing of the streamer budget.
 //  The toggle state is kept in sessionStorage ('coral-reef-fauna').
 //  A failure in the creatures turns them off with one console error; the
 //  dive goes on.
@@ -23,6 +27,7 @@
 //  grep -n targets: "export function mountFauna"
 // ============================================================================
 import { createFauna } from './index.js';
+import { rovRing } from '../world/stream.js';
 
 const KEY = 'coral-reef-fauna';
 const store = (v) => { try { if (v === undefined) return sessionStorage.getItem(KEY); sessionStorage.setItem(KEY, v); } catch (e) { /* no storage */ } return null; };
@@ -31,6 +36,11 @@ export function mountFauna({ S, profile, onError = null }) {
   const THREE = S.THREE;
   const root = new THREE.Group(); root.name = 'fauna';
   S.scene.add(root);
+  const prevBR = S.scene.onBeforeRender;
+  S.scene.onBeforeRender = function (r, sc, cam, rt) {
+    if (prevBR) prevBR.call(this, r, sc, cam, rt);
+    if (F && enabled) { try { F.prepare(cam); } catch (e) { fail('view', e); } }
+  };
   let F = null, ctx = null, enabled = store() !== '0', broken = false;
   const tags = new Map(), tp = new THREE.Vector3(), td = new THREE.Vector3();
   const fail = (where, e) => {
@@ -50,7 +60,7 @@ export function mountFauna({ S, profile, onError = null }) {
       F = createFauna({
         THREE, root, U: S.U, world: ctx.W, physics: ctx.physics(), profile: ctx.profile || profile, seed: ctx.seed,
         makeWorker: HAS_WORKER ? () => new Worker(new URL('./worker.js', import.meta.url), { type: 'module' }) : null,
-        rovs, onError: m => console.warn('coral-reef: fauna', m),
+        rovs, rovRing: ctx.streamer && ctx.streamer.budget ? rovRing(ctx.streamer.budget) : 0, onError: m => console.warn('coral-reef: fauna', m),
       });
       // the dwellers of the coral colonies (basket stars on the fans, crabs at the bases)
       if (ctx.streamer && ctx.streamer.on) {
@@ -94,6 +104,6 @@ export function mountFauna({ S, profile, onError = null }) {
       tags.set(v.id, { t: now, tag });
       return tag;
     },
-    dispose() { teardown(); S.scene.remove(root); },
+    dispose() { teardown(); S.scene.remove(root); S.scene.onBeforeRender = prevBR; },
   };
 }
