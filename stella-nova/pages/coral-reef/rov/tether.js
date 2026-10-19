@@ -135,7 +135,10 @@ export function createTetherTube({ rings = 240, radial = 16, radius = 0.024, max
   const indices = NV > 65535 ? new Uint32Array((rings - 1) * radial * 6) : new Uint16Array((rings - 1) * radial * 6);
   for (let r = 0, o = 0; r < rings - 1; r++) for (let j = 0; j < radial; j++) {
     const a = r * RV + j, b = a + 1, c = a + RV, d = c + 1;
-    indices[o++] = a; indices[o++] = c; indices[o++] = b; indices[o++] = b; indices[o++] = c; indices[o++] = d;
+    // counter-clockwise seen from outside: the ring goes round the tangent
+    // by the right hand (e = cos n + sin b, b = t x n), so (a, b, c) faces
+    // along +e, the stored normal (a, c, b faced into the tube)
+    indices[o++] = a; indices[o++] = b; indices[o++] = c; indices[o++] = b; indices[o++] = d; indices[o++] = c;
   }
   const COS = new Float64Array(RV), SIN = new Float64Array(RV);
   for (let j = 0; j <= radial; j++) { const a = j / radial * Math.PI * 2; COS[j] = Math.cos(a); SIN[j] = Math.sin(a); }

@@ -120,6 +120,30 @@ ok(ms / N < 4, 'cables: the step of the desktop cables in the frame budget', `${
   ok(!Kp.group.visible, 'cables: off hides the cables');
   Kp.dispose();
 }
+// the tube faces: every normal points out of its curve point, and the
+// triangle winding (counter-clockwise, three FrontSide) agrees with it
+{
+  let minOut = Infinity, wrong = 0, tris = 0;
+  for (const { tube: T, mesh } of K.tubes) {
+    const Pp = T.positions, Nn = T.normals, C = T.curve, RV = T.radial + 1;
+    for (let r = 0; r < T.rings; r++) for (let j = 0; j < RV; j++) {
+      const w = (r * RV + j) * 3, o = [Pp[w] - C[r * 3], Pp[w + 1] - C[r * 3 + 1], Pp[w + 2] - C[r * 3 + 2]], l = Math.hypot(...o) || 1;
+      minOut = Math.min(minOut, (o[0] * Nn[w] + o[1] * Nn[w + 1] + o[2] * Nn[w + 2]) / l);
+    }
+    const I = T.indices;
+    for (let k = 0; k < I.length; k += 3) {
+      const [a, b, c] = [I[k] * 3, I[k + 1] * 3, I[k + 2] * 3];
+      const e1 = [0, 1, 2].map(q => Pp[b + q] - Pp[a + q]), e2 = [0, 1, 2].map(q => Pp[c + q] - Pp[a + q]);
+      const f = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      if (Math.hypot(...f) < 1e-12) continue;
+      const nn = [0, 1, 2].map(q => Nn[a + q] + Nn[b + q] + Nn[c + q]);
+      tris++; if (f[0] * nn[0] + f[1] * nn[1] + f[2] * nn[2] <= 0) wrong++;
+    }
+    if (mesh.material.side !== THREE.FrontSide) wrong++;
+  }
+  ok(minOut > 0.99, 'cables: every tube normal points out of its curve point', `least dot ${minOut.toFixed(4)}`);
+  ok(tris > 0 && wrong === 0, 'cables: the triangle winding faces along the normals (FrontSide)', `${wrong} of ${tris} triangles face inward`);
+}
 K.dispose();
 console.log(`cables: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
