@@ -28,8 +28,14 @@
 //                  (spotRad: cone, distance falloff, water; shadowTap;
 //                  the near-lamp fade; BEAM_PHASE forward scatter). A
 //                  flake out of all cones gets only the dim sky trace.
+//    matter ...... real particulate sizes (bsSizeJS: many sub-mm silt
+//                  specks, fewer 1-5 mm flocs and pellets, rare cm flocs
+//                  and mucus strings); the size picks the cell of the
+//                  aggregate atlas (porous flocs, fibres, strings, beads)
+//                  that MARINE_SNOW_FS samples. Flocs and strings tumble.
 //    lens ........ the thin-lens disc of lib/marine-snow.js: near flakes
-//                  become soft bokeh discs, far flakes stay tiny and dim.
+//                  show their shape or a soft bokeh disc, mid flakes are
+//                  small sparkles, far flakes are fine dust.
 //    draw ........ MARINE_SNOW_FS (no soft, no post tone map): additive,
 //                  depth test, no depth write, in the scene. So it draws
 //                  into the HDR scene target before the volume and the
@@ -49,7 +55,7 @@
 //    "export function createBeamSnow"
 // ============================================================================
 import { SNOW_LIGHT, NOISE2, WATER, MAX_SPOTS } from './shaders.js';
-import { MARINE_SNOW_FS, MS_SIZE_MIN, MS_SIZE_MAX, MS_CELL_BASE, MS_CELL_COUNT } from '../../lib/marine-snow.js';
+import { MARINE_SNOW_FS, MS_CELL_BASE, MS_CELL_COUNT } from '../../lib/marine-snow.js';
 import { snowLight } from './volume.js';
 
 export const BEAM_SNOW = {
@@ -65,7 +71,16 @@ export const BS_EDDY_PERIOD = 6;             // the origin offset mod this (both
 export const BS_WASH = 3, BS_WASH_R = 2;     // the prop wash: phi weight per m/s of the ROV, radius (m)
 export const BS_SINK = 0.002;                // m/s
 export const BS_SIZE = 1.8, BS_GAIN = 9;     // the flakes: size and light over the ambient snow
-export const BS_SHARE = [0.45, 0.8, 0.88, 1]; // cumulative: motes, flocs, strings, pellets
+// The size of real marine snow (the user: "marine snow should actually
+// have particulate matter in it?"): a power law, n(d) ~ d^-3 from 0.3 mm
+// to 30 mm, so P(D > d) = ((d / dmin)^-2 - c) / (1 - c). About 91 % are
+// sub-mm silt specks, 8 % are 1-5 mm flocs and pellets, 0.4 % are over
+// 5 mm (big flocs and mucus strings), 0.1 % over 1 cm. The size picks the
+// type and so the aggregate atlas cell (lib/marine-snow.js makeSnowAtlas).
+export const BS_DMIN = 0.0003, BS_DMAX = 0.03;
+export function bsSizeJS(u) { const c = (BS_DMIN / BS_DMAX) ** 2; return BS_DMIN / Math.sqrt(1 - u * (1 - c)); }
+// d (m, real), ux (0..1) -> type: 0 mote / silt, 1 floc, 2 string, 3 pellet
+export function bsTypeJS(d, ux) { return d < 0.001 ? 0 : d < 0.005 ? (ux < 0.7 ? 1 : 3) : (ux < 0.6 ? 1 : 2); }
 
 // ── CPU copies of the shader maths (the tests use them) ───────────────────
 // ABC flow: u = (sin a + 0.6 cos c, 0.8 sin b + cos a, 0.6 sin c + 0.8 cos b)
@@ -195,11 +210,8 @@ vec3 bsRot(vec3 v, vec3 th) {
   vec3 k = th / a;
   return v * cos(a) + cross(k, v) * sin(a) + k * dot(k, v) * (1.0 - cos(a));
 }
-const vec4 MS_SMIN = ${V4(MS_SIZE_MIN)};
-const vec4 MS_SMAX = ${V4(MS_SIZE_MAX)};
 const vec4 MS_CB = ${V4(MS_CELL_BASE)};
 const vec4 MS_CN = ${V4(MS_CELL_COUNT)};
-const vec4 BS_SHARE = ${V4(BS_SHARE)};
 void main() {
   float li = floor(aSeed.w);
   int i = int(li);
@@ -229,13 +241,13 @@ void main() {
   }
   float env = smoothstep(0.0, 0.12, a) * (1.0 - smoothstep(0.75, 1.0, a));
   // the type, the cell, the size (lib/marine-snow.js, larger)
-  float u = aRand.x;
-  float ty = u < BS_SHARE.x ? 0.0 : (u < BS_SHARE.y ? 1.0 : (u < BS_SHARE.z ? 2.0 : 3.0));
+  // the real size (power law, bsSizeJS), then the type from the size
+  float dReal = ${F(BS_DMIN)} / sqrt(1.0 - aRand.z * (1.0 - ${F((BS_DMIN / BS_DMAX) ** 2)}));
+  float ty = dReal < 0.001 ? 0.0 : (dReal < 0.005 ? (aRand.x < 0.7 ? 1.0 : 3.0) : (aRand.x < 0.6 ? 1.0 : 2.0));
   vec4 oh = vec4(equal(vec4(ty), vec4(0.0, 1.0, 2.0, 3.0)));
   float cn = dot(MS_CN, oh);
   float cell = dot(MS_CB, oh) + min(floor(aRand.y * cn), cn - 1.0);
-  float smin = dot(MS_SMIN, oh);
-  float size = smin * pow(dot(MS_SMAX, oh) / smin, pow(aRand.z, 1.7)) * dot(uMsSizeK, oh) * ${F(BS_SIZE)};
+  float size = dReal * dot(uMsSizeK, oh) * ${F(BS_SIZE)};
   vec4 mv = viewMatrix * vec4(q, 1.0);
   float z = -mv.z;
   vec3 dq = cameraPosition - q;
@@ -256,9 +268,10 @@ void main() {
   float R = 0.5 * dPx;
   vec2 cq = position.xy;
   cNow.xy += cq * R * 2.0 / uMsView * cNow.w;
-  float spin = (aRand.w - 0.5) * 0.5;
+  // turn and tumble (flat flocs and strings change shape edge-on)
+  float spin = (aRand.w - 0.5) * (0.4 + 0.8 * oh.y + 0.6 * oh.z);
   float th = fract(aRand.w * 7.13) * 6.2831853 + uBsTime * spin;
-  float sq = 1.0 - 0.6 * (1.0 - oh.x) * (0.5 - 0.5 * cos(uBsTime * spin * 1.3 + aRand.x * 37.0));
+  float sq = 1.0 - dot(vec4(0.0, 0.65, 0.8, 0.5), oh) * (0.5 - 0.5 * cos(uBsTime * spin * 1.3 + aRand.x * 37.0));
   vMsRot = vec4(cos(th), sin(th), max(sq, 0.25), z);
   vMsQuad = vec4(cq.x, cq.y, 0.0, bok);
   vMsCell = vec4(vec2(mod(cell, 4.0), floor(cell / 4.0)) * 0.25, min(sE / dPx, 1.0), cover / max(coverS, 1e-6));

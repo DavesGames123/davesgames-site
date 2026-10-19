@@ -137,11 +137,27 @@ const seeds = Array.from({ length: 600 }, () => [R(), R(), R(), R()]);
   ok(S.post && S.post.on && !!S.passes, 'draw: the post chain is on (the snow goes through the composite)');
   const m = S.beamSnow.material;
   ok(m.blending === THREE.AdditiveBlending && m.depthTest && !m.depthWrite && !S.beamSnow.mesh.frustumCulled && m.uniforms.uMsFrag.value.z === 0, 'draw: additive, depth test against the scene, no depth write, not frustum culled, no second tone map');
+  const at = m.uniforms.uMsAtlas;
+  ok(at === S.marineSnow.uniforms.uMsAtlas && at.value === S.marineSnow.texture && S.marineSnow.atlas.size >= 256 && /texture\(uMsAtlas/.test(m.fragmentShader) && /vMsCell = vec4\(vec2\(mod\(cell/.test(m.vertexShader), 'matter: the beam snow samples the aggregate atlas of lib/marine-snow.js (porous flocs, fibres, strings, pellets)', `atlas ${S.marineSnow.atlas.size} px`);
   ok(!/uFow|fowSeen|underwater\(/.test(BS.BEAM_SNOW_VS.split('void main')[1]), 'draw: the fog-of-war fade does not touch the beam snow');
   S.opts.snow = false; const n0 = f.log.length; S.render(1 / 60, 80);
   ok(!f.log.slice(n0).some(e => e.inst === per * 2), 'draw: the Marine snow toggle hides the beam snow');
   S.opts.snow = true; S.setLights([], 0); const n1 = f.log.length; S.render(1 / 60, 96);
   ok(!f.log.slice(n1).some(e => e.op === 'draw' && e.n === 6 && e.inst > 0 && e.inst % per === 0 && e.inst >= per), 'draw: no lamps, no beam snow draw');
+}
+
+// ── particulate matter: the size tail and the aggregate atlas ─────────────
+{
+  const per = BS.BEAM_SNOW.desktop.perLamp, inst = BS.bsInstances(per, 4, 7), n = inst.n, d = [], ty = [0, 0, 0, 0];
+  for (let i = 0; i < n; i++) { const v = BS.bsSizeJS(inst.rand[i * 4 + 2]); d.push(v); ty[BS.bsTypeJS(v, inst.rand[i * 4])]++; }
+  const fr = (lo, hi) => d.filter(v => v >= lo && v < hi).length / n;
+  const sub = fr(0, 0.001), mid = fr(0.001, 0.005), big = fr(0.005, 1), cm = d.filter(v => v >= 0.01).length;
+  console.log(`sizes (${n} desktop flakes): sub-mm ${(sub * 100).toFixed(1)} %, 1-5 mm ${(mid * 100).toFixed(1)} %, > 5 mm ${(big * 100).toFixed(2)} %, >= 1 cm ${cm}, max ${(Math.max(...d) * 1000).toFixed(1)} mm; types mote ${ty[0]} floc ${ty[1]} string ${ty[2]} pellet ${ty[3]}`);
+  ok(sub > 0.8 && mid > 0.04 && mid < 0.2 && big > 0.001 && big < 0.02 && cm >= 3 && Math.max(...d) <= BS.BS_DMAX + 1e-9, 'matter: many sub-mm specks, fewer 1-5 mm flocs, a rare cm tail (power law to 30 mm)');
+  ok(ty.every(v => v > 0) && ty[0] > ty[1] && ty[1] > ty[2], 'matter: silt specks, flocs, pellets and strings, the large sizes as flocs and strings');
+  // on screen (about 1160 px a metre at 1 m): near aggregates show their shape, far ones are dust
+  const px = (dm, z) => dm * BS.BS_SIZE * 1160 / z;
+  ok(px(0.01, 1) > 15 && px(0.003, 6) < 2 && px(0.0005, 10) < 0.2, 'matter: a near cm aggregate is large on screen, mid flocs are sparkles, far silt is dust', `${px(0.01, 1).toFixed(1)} px, ${px(0.003, 6).toFixed(2)} px, ${px(0.0005, 10).toFixed(3)} px`);
 }
 
 // ── naga ──────────────────────────────────────────────────────────────────
