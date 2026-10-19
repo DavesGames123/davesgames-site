@@ -101,16 +101,20 @@ html:not(.in-frame) .snp-gear{top:56px}
 .snp-note:empty{display:none}
 .snp-note.snp-warn{color:#ffc4a3}
 
-/* segmented: one row, equal cells, on a sunk well */
-.snp-seg{display:grid;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:2px;padding:2px;border-radius:var(--snp-r);background:rgba(0,0,0,0.28);box-shadow:inset 0 0 0 1px var(--snp-line)}
-.snp-seg .snp-opt{min-height:28px;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--snp-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* segmented and chips: the label is on its own line above the control, and
+   the control uses the full width of the panel. No label is cut off: no
+   ellipsis, no fixed width on an option. */
+.snp-choice{display:flex;flex-direction:column;gap:8px}
+/* segmented: one row, equal cells, on a sunk well; a long label wraps */
+.snp-seg{display:grid;width:100%;box-sizing:border-box;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr));gap:2px;padding:2px;border-radius:var(--snp-r);background:rgba(0,0,0,0.28);box-shadow:inset 0 0 0 1px var(--snp-line)}
+.snp-seg .snp-opt{min-height:28px;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--snp-dim);white-space:normal;overflow-wrap:break-word;line-height:1.2;text-align:center}
 .snp-seg .snp-opt:hover:not(:disabled){color:var(--snp-ink)}
-.snp-seg .snp-opt.on{background:var(--snp-accent-soft);color:var(--snp-ink);box-shadow:inset 0 0 0 1px rgba(127,224,207,0.45)}
-/* chips: a grid for many options */
-.snp-chips{display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));gap:4px}
-.snp-chips .snp-opt{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 8px;border:0;border-radius:var(--snp-r);background:var(--snp-raise);color:var(--snp-ink);text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.snp-seg .snp-opt.on{background:var(--snp-accent-soft);color:var(--snp-ink);font-weight:600;box-shadow:inset 0 0 0 1.5px var(--snp-accent)}
+/* chips: each chip as wide as its text; the chips wrap with even gaps */
+.snp-chips{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;width:100%}
+.snp-chips .snp-opt{display:inline-flex;flex:0 1 auto;max-width:100%;align-items:center;gap:8px;min-height:32px;padding:4px 12px;border:0;border-radius:var(--snp-r);background:var(--snp-raise);color:var(--snp-ink);text-align:left;white-space:normal;overflow-wrap:break-word;line-height:1.2;box-shadow:inset 0 0 0 1px var(--snp-line)}
 .snp-chips .snp-opt:hover:not(:disabled){background:var(--snp-raise-h)}
-.snp-chips .snp-opt.on{background:var(--snp-accent-soft);box-shadow:inset 0 0 0 1px rgba(127,224,207,0.45)}
+.snp-chips .snp-opt.on{background:var(--snp-accent-soft);box-shadow:inset 0 0 0 1.5px var(--snp-accent)}
 .snp-sw{width:10px;height:10px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1px rgba(255,255,255,0.15)}
 .snp-opt:disabled{opacity:0.4;cursor:not-allowed}
 

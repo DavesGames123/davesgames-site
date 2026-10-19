@@ -15,7 +15,8 @@
 //
 //  CONTROL VOCABULARY
 //    segmented . 2 to 4 options in one row (a group of pressed buttons)
-//    chips ..... 5 or more options in a grid of 2 or 3 columns
+//    chips ..... 5 or more options; each chip is as wide as its text and
+//                the chips wrap onto new lines (columns is now a no-op)
 //    slider .... label at the left, value at the right (tabular numerals,
 //                with a unit), the range under them
 //    toggle .... a switch (checkbox with role switch), label at the left
@@ -169,7 +170,9 @@ export function createPanel(root, { store: key = 'page', doc = root.ownerDocumen
   // segmented (cols = items) and chips (a grid). Items: { id, label,
   // disabled, title, swatch }. value null: no item is on (action chips).
   function choice(S, o, kind) {
-    const r = row(S, `snp-choice snp-${kind}`, o);
+    // The row class must not be snp-seg or snp-chips: those are grids, and
+    // the label then sat in a column beside the cut-off options.
+    const r = row(S, `snp-choice snp-choice-${kind}`, o);
     const lid = nid('l');
     if (o.label) {
       const lab = el('div', 'snp-label', { id: lid });
@@ -193,7 +196,7 @@ export function createPanel(root, { store: key = 'page', doc = root.ownerDocumen
       if (kind === 'chips') g.style.setProperty('--cols', o.columns || (items.length > 6 ? 3 : 2));
       else g.style.setProperty('--cols', items.length);
       for (const it of items) {
-        const b = el('button', 'snp-opt', { type: 'button', 'data-id': String(it.id), title: it.title || null });
+        const b = el('button', 'snp-opt', { type: 'button', 'data-id': String(it.id), title: it.title || (kind === 'seg' ? String(it.label) : null) });
         if (it.swatch) { const s = el('span', 'snp-sw', { 'aria-hidden': 'true' }); s.style.background = it.swatch; b.appendChild(s); }
         b.appendChild(doc.createTextNode(it.label));
         if (it.disabled) b.disabled = true;

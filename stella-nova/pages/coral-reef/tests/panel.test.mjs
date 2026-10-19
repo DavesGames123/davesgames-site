@@ -258,5 +258,52 @@ for (const [w, h, coarse] of [[1440, 900, false], [390, 844, true]]) {
   ok(onAcc >= 4.5, `css: primary button text on the accent: ${onAcc.toFixed(1)}`);
 }
 
+// ── chips and segments: no label cut off ───────────────────────────────────
+// The user said "interface is really bad for selecting different objects"
+// (2026-10-18): the choice row was itself a grid (class snp-seg or
+// snp-chips), so the label sat in a column and the options showed
+// "Shallo", "Twilig", "L...". The label is now above the control, the
+// chips wrap at their text width, and the segments share the full width.
+{
+  const lib = fs.readFileSync(path.join(LIB, 'sn-panel.css'), 'utf8');
+  const rule = sel => { const m = lib.match(new RegExp('(?:^|\\n)' + sel.replace(/[.*]/g, '\\$&') + '\\{([^}]*)\\}')); return m ? m[1] : ''; };
+  const chip = rule('.snp-chips .snp-opt'), segO = rule('.snp-seg .snp-opt'), chips = rule('.snp-chips'), seg = rule('.snp-seg');
+  ok(chip && segO && !/ellipsis|nowrap|overflow:hidden/.test(chip + segO), 'css: no ellipsis, nowrap or overflow:hidden on a chip or a segment');
+  ok(!/(?:^|;)(?:width|min-width|flex-basis):\s*\d/.test(chip) && !/grid-template-columns/.test(chips), 'css: no fixed width on a chip, no chip grid');
+  ok(/display:flex/.test(chips) && /flex-wrap:wrap/.test(chips) && /gap:\d+px/.test(chips) && /align-items:stretch/.test(chips), 'css: the chips wrap with even gaps and stretch to one height in a line');
+  ok(/width:100%/.test(seg) && /repeat\(var\(--cols,3\),minmax\(0,1fr\)\)/.test(seg), 'css: the segments share the full width evenly');
+  ok(/flex-direction:column/.test(rule('.snp-choice')), 'css: a choice row is a column (label above the control)');
+  ok(/\.on\{[^}]*inset 0 0 0 1\.5px var\(--snp-accent\)/.test(lib), 'css: a clear selected state (accent ring)');
+
+  // Boot the page at the desktop panel and the phone sheet. Estimate the
+  // text width at 13 px (7.2 px a character, the wide case of Inter).
+  const CH = 7.2;
+  for (const [w, h, coarse, inner] of [[1440, 900, false, 300 - 32], [390, 844, true, 390 - 32]]) {
+    const { doc } = await boot(w, h, coarse);
+    const rows = [...doc.querySelectorAll('.snp-choice')];
+    ok(rows.length >= 4, `page ${w}: the choice rows are present`, rows.length);
+    ok(rows.every(r => !r.classList.contains('snp-seg') && !r.classList.contains('snp-chips')), `page ${w}: no choice row is itself a grid`);
+    ok(rows.every(r => { const l = r.querySelector('.snp-label'), g = r.querySelector('[role="group"]'); return !l || (l.compareDocumentPosition(g) & 4); }), `page ${w}: the label is before (above) the control`);
+    ok(rows.every(r => !r.querySelector('.snp-info') || r.querySelector('.snp-label .snp-info')), `page ${w}: the info buttons stay next to the label`);
+    const bad = [];
+    for (const r of rows) {
+      const g = r.querySelector('[role="group"]'), opts = [...g.children];
+      const cell = g.classList.contains('snp-seg') ? (inner - 4) / opts.length - 12 : inner - 24;
+      for (const b of opts) {
+        const t = b.textContent.trim();
+        if (!t || /\.\.\.|…/.test(t)) bad.push(`${g.id}:"${t}" empty or cut`);
+        // a word longer than its cell would break; the title then has the label
+        const word = Math.max(...t.split(/\s+/).map(x => x.length)) * CH;
+        if (word > cell && !b.title) bad.push(`${g.id}:"${t}" ${word.toFixed(0)}>${cell.toFixed(0)} px, no title`);
+      }
+    }
+    ok(!bad.length, `page ${w}: every chip and segment label is whole and fits its cell`, bad.join('; '));
+    const fm = doc.getElementById('feedMode');
+    ok(fm && [...fm.children].map(b => b.textContent).join('|') === 'Live|Fast scan|Slow scan', `page ${w}: the feed segments say Live, Fast scan, Slow scan`);
+    const rg = doc.getElementById('regions');
+    if (rg) ok([...rg.children].map(b => b.textContent).join('|') === 'Shallows|Reef|Twilight|Abyss|Trench', `page ${w}: the region chips have full names`);
+  }
+}
+
 console.log(`panel: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
