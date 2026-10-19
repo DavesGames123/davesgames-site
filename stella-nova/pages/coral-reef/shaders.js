@@ -60,7 +60,7 @@
 //    marine snow ........... "export const SNOW_VS" (lib/marine-snow.js + SNOW_LIGHT)
 //    volume pass ........... "export const VOL_FS"
 //    volume history ........ "export const VOL_TAA_FS"
-//    composite ............. "export const COMP_FS"
+//    composite ............. "export const COMP_FS" (bloom: bloom.js, before the tone map)
 //    luminance (exposure) .. "export const LUM_FS"
 // ============================================================================
 import { SURFACE_Y, FADE_K, N_WAVES } from './water.js';
@@ -68,6 +68,7 @@ import { ROCK_GLSL } from './rock/material.js';
 import { HAZE_GLSL } from './haze.js';
 import { marineSnowVS, MARINE_SNOW_FS } from '../../lib/marine-snow.js';
 import { VOL_K } from './volume.js';
+import { BLOOM_BRIGHT } from './bloom.js';
 
 export { SURFACE_Y };
 export const MAX_SPOTS = 4;
@@ -1100,6 +1101,10 @@ uniform sampler2D uScene;
 uniform highp sampler2D uVol, uDepth;
 uniform vec2 uVolTexel, uNearFar;
 uniform float uExposure, uGrain, uTime, uVig, uDebugNaN, uSigRel, uSigAbs;
+// the bloom (bloom.js): the half-size mip chain of the bright part
+uniform sampler2D uBloom;
+uniform float uBloomK, uBloomT, uBloomKnee;
+${BLOOM_BRIGHT}
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 float h12(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -1125,11 +1130,15 @@ vec3 volUp() {
   return ws > 1e-4 ? acc / ws : nc;
 }
 void main() {
-  vec3 c = texture(uScene, vUv).rgb + volUp();
+  vec3 s0 = texture(uScene, vUv).rgb;
+  vec3 c = s0 + volUp();
   // NaN guard: a NaN or an Inf (a half float overflow) gives magenta with
   // uDebugNaN (the ?debug URL), else black; the rest clamps to 0 .. 64
   if (bad3(c)) { oCol = uDebugNaN > 0.5 ? vec4(1.0, 0.0, 1.0, 1.0) : vec4(0.0, 0.0, 0.0, 1.0); return; }
   c = clamp(c, 0.0, 64.0);
+  // the bloom, before the tone map: the bright part of this pixel goes
+  // out and its spread comes in (the sum of the frame stays the same)
+  if (uBloomK > 0.0) c = max(c + uBloomK * (texture(uBloom, vUv).rgb - bright(clamp(s0, 0.0, 64.0), uExposure, uBloomT, uBloomKnee)), 0.0);
   c = aces(c * uExposure);
   vec2 d = vUv - 0.5;
   c *= 1.0 - uVig * dot(d, d) * 1.6;

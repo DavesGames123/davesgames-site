@@ -73,6 +73,7 @@ import { mountShell } from './shell.js';
 import { createExploreCamera } from './camera.js';
 import { createInput } from './input.js';
 import { PROFILES, PROFILE_ORDER, detectProfile, pageEnv, profileFor, pixelRatioFor, lostPolicy, frameGovernor } from './budget.js';
+import { BLOOM_PROFILE } from './bloom.js';
 import { mountErrorBox, installErrorHandlers } from './crash.js';
 import { createWorld } from './world/field.js';
 import { createStreamer, WORLD_BUDGET, fineFor } from './world/stream.js';
@@ -111,6 +112,7 @@ const G = {
   seed: 1, rovs: Math.min(4, Math.max(2, PROF.rovs)), sstv: 'r36', detail: HAS_WORKER ? PROFILE_ID : 'phone-min',
   mode: 'natural', gradient: 'reef', rev: false, dir: 20, cur: 0.5, temp: 27,
   caust: 0.5, beam: true, snow: true, feed: true, orbit: false, polyps: true, surface: !COARSE,
+  bloom: (BLOOM_PROFILE[PROFILE_ID] || BLOOM_PROFILE.desktop).strength,
   feedMode: 'live', cables: true,
 };
 let shell = null, saverOn = false, saver = null;
@@ -586,7 +588,7 @@ function fitNow(radius = 1) {
 // their controls here through the panel API, not by hand (NOTES.md).
 //   Explore ... region, squad size, follow the lead
 //   View ...... the camera feed (show, signal, slow-scan mode), slow orbit
-//   Look ...... colour by, gradient, lamps, snow, polyps, detail, caustics
+//   Look ...... colour by, gradient, lamps, snow, polyps, detail, bloom, caustics
 //   World ..... detail level, new world, the water (current, temperature)
 //   About ..... a short text, How it works, the credit
 // The camera modes are the #camBar toolbar over the view (not in the panel).
@@ -665,6 +667,7 @@ function buildUI() {
   lk.toggle({ id: 'tFauna', label: 'Creatures', value: !fauna || fauna.enabled, onChange: v => { if (fauna) fauna.setEnabled(v); }, hint: 'Animals of each depth: scans of museum specimens and generated species. Off is faster on a small device.' });
   lk.toggle({ id: 'tPolyps', label: 'Polyps', value: G.polyps, onChange: v => { G.polyps = v; if (S) { S.setPolypsVisible(v); S.setWorldPolyps(v); } } });
   lk.toggle({ id: 'tDetail', label: 'Surface detail', value: G.surface, onChange: v => { G.surface = v; if (S) S.U.uDetail.value = v ? 1 : 0; }, hint: 'Fine bumps on the rock and the coral skin. Off is faster on a small device.' });
+  lk.slider({ id: 'sBloom', valueId: 'vBloom', label: 'Bloom', min: 0, max: 1.2, step: 0.05, value: G.bloom, format: v => (v ? fmt(v) : 'Off'), onInput: v => { G.bloom = v; if (S) S.setBloom(v); }, hint: 'The soft glow round bright light: photophores, lures, glowing jellies, the ROV lamps. Off is faster on a small device.' });
   lk.slider({ id: 'sCaust', valueId: 'vCaust', label: 'Caustics', min: 0, max: 1.5, step: 0.05, value: G.caust, format: v => (v ? fmt(v) : 'Off'), onInput: v => { G.caust = v; if (S) S.U.uCaust.value = v; } });
 
   const wd = panel.section({ id: 'world', title: 'World', open: false });
@@ -938,7 +941,7 @@ setGradient(G.gradient, G.rev);
 setMode(G.mode);
 setCurrent(); setTemp(G.temp);
 if (S) {
-  S.opts.volume = G.beam; S.opts.snow = G.snow; S.U.uCaust.value = G.caust; S.U.uDetail.value = G.surface ? 1 : 0;
+  S.opts.volume = G.beam; S.opts.snow = G.snow; S.U.uCaust.value = G.caust; S.U.uDetail.value = G.surface ? 1 : 0; S.setBloom(G.bloom);
   onResize();
   requestAnimationFrame(frame);
   buildWorld().catch(worldError);

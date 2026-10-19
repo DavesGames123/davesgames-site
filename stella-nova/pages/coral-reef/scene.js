@@ -31,9 +31,12 @@
 //    3b. history .. VOL_TAA_FS: a depth-aware blur, a variance box, a
 //                   camera candidate and a lamp candidate (the spots of
 //                   the last frame), two ping-pong targets
+//    3c. bloom .... bloom.js: a half-size mip chain of the bright part of
+//                   the scene (a soft-knee threshold in exposed units:
+//                   photophores, lamp bezels, LEDs), energy conserving
 //    4. frame ..... COMP_FS: scene + volume (joint bilateral upsample
-//                   with the full-res depth), ACES, vignette, grain,
-//                   dither, sRGB
+//                   with the full-res depth), the bloom, ACES, vignette,
+//                   grain, dither, sRGB
 //    5. exposure .. every 12 frames LUM_FS fills a 32 x 32 log-luminance
 //                   target; gpu-safe.js exposureFrom sets uExposure
 //  With no float target (old phones) the scene goes straight to the
@@ -82,6 +85,7 @@ import { fullTri, SENTINEL, isSentinel, exposureFrom } from './gpu-safe.js';
 import { createMarineSnow } from '../../lib/marine-snow.js';
 import { createBeamSnow, BEAM_SNOW } from './beam-snow.js';
 import { blueNoise, lampPx, VOL_K } from './volume.js';
+import { createBloom } from './bloom.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
 import { DOME_R, domeRadius, HAZE_GLSL, createExplored } from './haze.js';
 
@@ -674,9 +678,13 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     };
     const taaMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.VOL_TAA_FS, uniforms: taaU, depthTest: false, depthWrite: false });
     const debugNaN = typeof location !== 'undefined' && /[?&]debug\b/.test(location.search || '') ? 1 : 0;
+    // the bloom of the bright emissive light (bloom.js), before the tone map
+    const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const bloom = createBloom(THREE, { tri, ortho, vs: SH.FULL_VS, profile: profile ? profile.id : coarse ? 'phone' : 'desktop' });
     const compU = {
       uScene: { value: rtScene.texture }, uVol: { value: rtHist[0].texture }, uDepth: { value: depthTex }, uVolTexel: { value: new THREE.Vector2() }, uNearFar: { value: new THREE.Vector2(0.08, 400) },
       uSigRel: { value: VOL_K.sigmaRel }, uSigAbs: { value: VOL_K.sigmaAbs }, uExposure: { value: 4 }, uGrain: { value: 0.012 }, uTime: U.uTime, uVig: { value: 0.55 }, uDebugNaN: { value: debugNaN },
+      uBloom: { value: bloom.texture }, uBloomK: { value: 0 }, uBloomT: bloom.thresh, uBloomKnee: bloom.knee,
     };
     const compMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.COMP_FS, uniforms: compU, depthTest: false, depthWrite: false });
     const volMesh = new THREE.Mesh(tri, volMat), compMesh = new THREE.Mesh(tri, compMat), taaMesh = new THREE.Mesh(tri, taaMat);
@@ -690,10 +698,9 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     const lumMat = new THREE.RawShaderMaterial({ glslVersion: THREE.GLSL3, vertexShader: SH.FULL_VS, fragmentShader: SH.LUM_FS, uniforms: lumU, depthTest: false, depthWrite: false });
     const lumMesh = new THREE.Mesh(tri, lumMat); lumMesh.frustumCulled = false;
     const lumScene = new THREE.Scene(); lumScene.add(lumMesh);
-    const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     return {
       rtScene, rtVol, rtHist, rtLum, lumScene, lumBuf: new Uint8Array(LUM_N * LUM_N * 4), LUM_N, lumU, blueTex,
-      volU, taaU, compU, volScene, taaScene, compScene, ortho, scale: LD.volScale,
+      volU, taaU, compU, volScene, taaScene, compScene, ortho, scale: LD.volScale, bloom,
       // the history state: which target to read, the last view-projection
       // and floating origin, and whether the history is good
       hist: { read: 0, valid: false, prevVP: new THREE.Matrix4(), origin: [0, 0], spotN: -1, spotP: [0, 1, 2, 3].map(() => new THREE.Vector4()), spotD: [0, 1, 2, 3].map(() => new THREE.Vector4()) },
@@ -704,6 +711,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
         compU.uVolTexel.value.set(1 / vw, 1 / vh); taaU.uTexel.value.set(1 / vw, 1 / vh);
         this.hist.valid = false;
         lumU.uTap.value.set(0.25 / LUM_N, 0.25 / LUM_N);
+        bloom.size(w, h);
       },
     };
   }
@@ -746,7 +754,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   // post: the state of the post chain. checks: the first frames read the
   // centre pixel after the composite (gpu-safe.js SENTINEL); two misses
   // and the page draws the scene straight to the canvas.
-  const post = { on: !!passes, checks: 0, misses: 0, failed: false, exposure: passes ? passes.compU.uExposure.value : 1, reason: '' };
+  const post = { on: !!passes, checks: 0, misses: 0, failed: false, exposure: passes ? passes.compU.uExposure.value : 1, reason: '', graph: [] };
   scene.userData.exposure = post.exposure;
   let expoMax = Infinity;                                // S.exposureMax (WORLD, per depth region)
   const px1 = new Uint8Array(4);
@@ -947,7 +955,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     beamSnow.setEnabled(opts.snow);
     beamSnow.update(dt, U.uTime.value, W3.origin, [U.uCur.value.x * 0.1, 0, U.uCur.value.y * 0.1]);
     frameN++;
-    if (!passes || !post.on) { renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
+    if (!passes || !post.on) { post.graph = ['direct']; renderer.setRenderTarget(null); renderer.render(scene, camera); return; }
     renderer.setRenderTarget(passes.rtScene);
     snow.visible = false;                                  // snowPost draws it, after the tone map
     renderer.render(scene, camera);
@@ -994,6 +1002,10 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     }
     passes.compU.uNearFar.value.set(camera.near, camera.far);
     if (frameN % 12 === 3) autoExposure();
+    // the bloom: from the HDR scene target, before the composite (the tone map)
+    const bl = passes.bloom, bloomOn = bl.render(renderer, passes.rtScene.texture, passes.compU.uExposure.value);
+    passes.compU.uBloom.value = bl.texture; passes.compU.uBloomK.value = bloomOn ? bl.strength : 0;
+    post.graph = ['scene', opts.volume ? 'volume' : null, opts.volume ? 'history' : null, bloomOn ? 'bloom' : null, 'composite', opts.snow ? 'snow' : null].filter(Boolean);
     renderer.setRenderTarget(null);
     const check = post.checks < 4 && frameN > 1;
     if (check) renderer.setClearColor(new THREE.Color(SENTINEL[0], SENTINEL[1], SENTINEL[2]), 1);
@@ -1005,6 +1017,8 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   return {
     get exposureMax() { return expoMax; }, set exposureMax(v) { expoMax = Number.isFinite(v) && v > 0 ? v : Infinity; },
     renderer, scene, camera, controls, U, THREE, view, opts, rockGroup, coralRoot, snow, caustics: caus, passes,
+    // the bloom strength (Look panel; 0: off, no bloom passes)
+    setBloom(v) { if (passes) passes.bloom.strength = Math.max(0, Number(v) || 0); }, get bloomStrength() { return passes ? passes.bloom.strength : 0; },
     // marine snow (lib/marine-snow.js): depth in metres (null: from the eye height), density 0..1 (user)
     marineSnow: snowFx, beamSnow, setSnowDepth(d) { snowDepth = Number.isFinite(d) ? d : null; }, setSnowDensity(v) { snowFx.setDensity(v); },
     get sand() { return sandMesh; }, post,

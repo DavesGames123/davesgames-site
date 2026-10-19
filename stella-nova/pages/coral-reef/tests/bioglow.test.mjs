@@ -16,6 +16,10 @@
 //                    ROV does not; the sea pen glows only when touched; a
 //                    lamp beam dims the display glow
 //    shaders ....... naga reads the fauna programs with the photophore mask
+//    bloom ......... the CPU twin of bloom.js: lit rock at the typical
+//                    exposure gives 0, a photophore pixel gives; the chain
+//                    and the composite keep the energy; a small radius;
+//                    the bloom pass is before the composite in the frame
 // ============================================================================
 import fs from 'node:fs';
 import { SPECIES, SPECIES_BY_ID, generatedSpecies } from '../fauna/species.js';
@@ -141,6 +145,63 @@ function emissive(M) {
   ok(G.FAUNA_FS.includes('phoMask(vPho) * phoLevel(vGA, vPho, ny)') && G.GEL_FS.includes('phoMask(vPho) * phoLevel(vGA, vPho, ny)'), 'shaders: the opaque and gel animals draw the photophore mask with the glow levels');
   const r = checkPrograms([{ name: 'fauna', vs: G.FAUNA_VS, fs: G.FAUNA_FS, instanced: true }, { name: 'gel', vs: G.FAUNA_VS, fs: G.GEL_FS, instanced: true }]);
   for (const x of r) ok(x.ok === true, `glsl: naga reads the ${x.name} program`, x.ok === null ? 'naga not found' : (x.log || '').slice(0, 600));
+}
+
+// ── bloom (bloom.js, the CPU twin and the frame) ───────────────────────────
+{
+  const BL = await import('../bloom.js');
+  const SH = await import('../shaders.js');
+  const E = 4, w = 64, h = 48;
+  // lit rock at the exposure key (0.25 exposed) with lamp-lit patches up to
+  // 0.9 exposed, and three photophore pixels of 2.5 scene units (10 exposed)
+  const img = new Float32Array(w * h * 3);
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const q = (j * w + i) * 3, l = (0.25 + 0.65 * Math.max(0, Math.sin(i * 0.2) * Math.cos(j * 0.17))) / E; img[q] = l * 0.9; img[q + 1] = l; img[q + 2] = l * 1.1; }
+  const dotsAt = [[20, 20], [33, 25], [40, 18]];
+  for (const [i, j] of dotsAt) { const q = (j * w + i) * 3; img[q] = 0.2; img[q + 1] = 1.2; img[q + 2] = 2.5; }
+  const rock = BL.brightCPU([0.9 / E, 1.0 / E, 1.1 / E], E), pho = BL.brightCPU([0.2, 1.2, 2.5], E);
+  ok(Math.max(...rock) === 0, 'bloom: lit rock at the typical exposure (up to 0.9 exposed) gives nothing to the bloom', rock.map(v => v.toFixed(4)).join(','));
+  ok(pho[2] > 1.5, 'bloom: a photophore pixel (10 exposed) gives most of its light to the bloom', pho.map(v => v.toFixed(3)).join(','));
+  const R = BL.bloomCPU(img, w, h, { exposure: E, levels: 4 });
+  const sum = a => { let s = 0; for (const v of a) s += v; return s; };
+  let rockB = 0; for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!dotsAt.some(([x, y]) => Math.abs(x - i) < 2 && Math.abs(y - j) < 2)) rockB += R.bright[(j * w + i) * 3 + 2];
+  ok(rockB === 0, 'bloom: no rock pixel goes over the threshold', rockB);
+  const sIn = sum(img), sOut = sum(R.out), sB = sum(R.bright), sBl = sum(R.bloom.img) * 4;
+  ok(Math.abs(sBl - sB) / sB < 0.02, 'bloom: the mip chain keeps the energy of the bright part (sum in = sum out)', `${sB.toFixed(3)} -> ${sBl.toFixed(3)}`);
+  ok(Math.abs(sOut - sIn) / sIn < 0.005, 'bloom: the composite keeps the light of the frame', `${sIn.toFixed(3)} -> ${sOut.toFixed(3)}`);
+  // tight: most of the spread light stays within 4 px of the photophore
+  const [ci, cj] = dotsAt[0]; let near = 0, all = 0;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const d = Math.hypot(i - ci, j - cj); if (d > 7) continue; const v = sampleB(R.bloom, (i + 0.5) / w, (j + 0.5) / h); all += v; if (d <= 4) near += v; }
+  function sampleB(b, u, v) { return BL.sampleCPU(b.img, b.w, b.h, u, v)[2]; }
+  ok(near / all > 0.6, 'bloom: the default radius is small (most of the glow within 4 px)', `${(100 * near / all).toFixed(0)} % within 4 px`);
+  ok(BL.BLOOM_PROFILE['phone-min'].strength === 0 && BL.BLOOM_PROFILE.phone.levels < BL.BLOOM_PROFILE.desktop.levels, 'bloom: off by default on phone-min, fewer mips on phones');
+  // COMP_FS: the bloom term comes before the tone map
+  const ib = SH.COMP_FS.indexOf('texture(uBloom, vUv)'), ia = SH.COMP_FS.indexOf('c = aces(c * uExposure)');
+  ok(ib > 0 && ia > ib && SH.COMP_FS.includes('- bright(clamp(s0, 0.0, 64.0), uExposure, uBloomT, uBloomKnee)'), 'bloom: COMP_FS adds the bloom minus the bright part before ACES');
+  const r = checkPrograms([['bloom-pre', BL.BLOOM_PRE_FS], ['bloom-down', BL.BLOOM_DOWN_FS], ['bloom-up', BL.BLOOM_UP_FS], ['composite', SH.COMP_FS]].map(([name, fs]) => ({ name, vs: SH.FULL_VS, fs, raw: true })));
+  for (const x of r) ok(x.ok === true, `glsl: naga reads the ${x.name} program`, x.ok === null ? 'naga not found' : (x.log || '').slice(0, 600));
+}
+{
+  // the frame graph on the fake WebGL2 (tests/fake-gl.mjs): the bloom passes
+  // draw into targets after the scene and before the composite
+  const { installThree, installDom, fakeCanvas } = await import('./fake-gl.mjs');
+  installThree(); installDom();
+  const { createScene } = await import('../scene.js');
+  const { profileFor } = await import('../budget.js');
+  const f = fakeCanvas({ w: 640, h: 400 });
+  const S = createScene({ canvas: f.canvas, coarse: false, R: 30, maxParticles: 4096, profile: profileFor('desktop') });
+  S.resize();
+  for (let i = 0; i < 4; i++) S.render(1 / 60, i * 16);
+  const g = S.post.graph;
+  ok(g.indexOf('bloom') > g.indexOf('scene') && g.indexOf('bloom') < g.indexOf('composite'), 'frame: the bloom pass is after the scene and before the composite (the tone map)', g.join(' > '));
+  const n0 = f.log.filter(e => e.op === 'draw').length;
+  S.render(1 / 60, 80);
+  const n1 = f.log.filter(e => e.op === 'draw').length;
+  S.setBloom(0); S.render(1 / 60, 96);
+  const n2 = f.log.filter(e => e.op === 'draw').length;
+  ok(S.post.graph.indexOf('bloom') < 0 && (n1 - n0) - (n2 - n1) === S.passes.bloom.targets, 'frame: bloom 0 skips the bloom passes', `${n1 - n0} draws with bloom, ${n2 - n1} without; ${S.passes.bloom.targets} bloom targets`);
+  ok(S.passes.compU.uBloomK.value === 0, 'frame: bloom 0 sets the composite bloom term to 0');
+  const pm = createScene({ canvas: fakeCanvas({ w: 320, h: 200 }).canvas, coarse: true, R: 30, maxParticles: 4096, profile: profileFor('phone-min') });
+  ok(pm && pm.bloomStrength === 0, 'frame: phone-min starts with the bloom off');
 }
 
 console.log(`\nbioglow: ${pass} passed, ${fail} failed`);
