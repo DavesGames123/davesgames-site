@@ -25,6 +25,14 @@
 //             leaves the focus: view.removeFine.
 //  A result for a chunk that is gone, or for an old request, is dropped.
 //
+//  ROV RINGS. The user said (2026-10-18): "ROV cameras are culled much too
+//  aggresssively, theres a ton of black in their images". A ROV feed camera
+//  150 to 180 m from the eye looked at chunks past the last ring: no rock.
+//  Now each ROV in update(eye, views, rovs) also keeps the chunks within
+//  rovRing(B) (smaller than the main rings) at the distance d + rings[0]:
+//  LOD 1 near the ROV, coarser out. A chunk of a ROV only gets coral when a
+//  slab is free, and it gives its slab first to a chunk near the eye.
+//
 //  BYTES. view.addRock / addCoral / addFine return the bytes they hold
 //  (GPU geometry and kept arrays); the streamer adds its own arrays (the
 //  particles, the colony lists, the coral hash). stats.bytes is the sum,
@@ -32,7 +40,9 @@
 //  2 km and back and checks the sum.
 //
 //    const st = createStreamer({ seed, budget, pool, view, now });
-//    st.update(eye, views)   eye [x, y, z]; views: [[x, y, z], ...] for the focus
+//    st.update(eye, views, rovs)   eye [x, y, z]; views: [[x, y, z], ...] for
+//                            the focus; rovs: [[x, y, z], ...] the ROV feed
+//                            cameras (ROV RINGS below)
 //    st.colonies()           shown colonies, world frame: { key, chunk, k, id,
 //                            base, size, count, center, radius, top, ext }
 //    st.coralDist(x, y, z)   metres to the nearest shown coral particle (max REACH)
@@ -45,7 +55,7 @@
 //
 //  grep -n targets: "export function createStreamer", "function wantLod", "export function worldEstimate",
 //  "function onRock", "function onCoral", "function updateFocus",
-//  "function coralDist", "export const WORLD_BUDGET"
+//  "function coralDist", "export const WORLD_BUDGET", "export const rovRing", "function rovDist"
 // ============================================================================
 import { CH } from './mesh.js';
 import { holdFocus, SPECIES, PARTICLE_FLOATS } from '../reef.js';
@@ -90,6 +100,10 @@ export function worldEstimate(B) {
   return out;
 }
 
+// The radius of chunks kept round each ROV (m): B.rovR, else 60 % of the
+// last ring, at most 72 m (the ROV camera far plane is 60 m, rov/build.js).
+export const rovRing = B => B.rovR ?? Math.min(72, Math.round(B.rings[B.rings.length - 1] * 0.6));
+
 export const chunkKey = (i, j) => `${i},${j}`;
 export function chunkDist(i, j, x, z) {
   const dx = Math.max(i * CH - x, 0, x - (i + 1) * CH), dz = Math.max(j * CH - z, 0, z - (j + 1) * CH);
@@ -98,6 +112,7 @@ export function chunkDist(i, j, x, z) {
 
 export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, view = {}, now = () => Date.now() } = {}) {
   const B = budget, rings = B.rings, last = rings.length - 1, outer = rings[last];
+  const rovR = rovRing(B), rovCoral = Math.min(B.coralR, rovR) * 0.5;
   const chunks = new Map();
   const slabSize = B.coral.particles, slabs = new Array(B.maxCoral).fill(null);
   const bytes = { rock: 0, coral: 0, fine: 0, data: 0 };
@@ -129,8 +144,12 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     return raw;
   }
 
-  function update(e, views = null) {
+  // the ROV distance of chunk c (m to the nearest ROV; Infinity: none)
+  let subs = [];
+  function rovDist(i, j) { let m = Infinity; for (const p of subs) { const d = chunkDist(i, j, p[0], p[2]); if (d < m) m = d; } return m; }
+  function update(e, views = null, rovs = null) {
     eye = e;
+    subs = (rovs || []).filter(p => p && isFinite(p[0]) && isFinite(p[2]));
     const x = e[0], z = e[2];
     const R = outer + UNLOAD + CH;
     const i0 = Math.floor((x - R) / CH), i1 = Math.floor((x + R) / CH), j0 = Math.floor((z - R) / CH), j1 = Math.floor((z + R) / CH);
@@ -140,15 +159,26 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
       const c = chunkOf(i, j);
       c.d = d;
     }
+    // the chunks round each ROV
+    for (const p of subs) {
+      const q = rovR + CH;
+      for (let j = Math.floor((p[2] - q) / CH); j <= Math.floor((p[2] + q) / CH); j++) for (let i = Math.floor((p[0] - q) / CH); i <= Math.floor((p[0] + q) / CH); i++)
+        if (chunkDist(i, j, p[0], p[2]) < rovR) chunkOf(i, j);
+    }
     for (const c of [...chunks.values()]) {
-      c.d = chunkDist(c.i, c.j, x, z);
+      const dm = chunkDist(c.i, c.j, x, z), dr = subs.length ? rovDist(c.i, c.j) : Infinity;
+      c.dr = dr;
+      c.d = Math.min(dm, dr < rovR + (c.lod >= 0 ? UNLOAD : 0) ? dr + rings[0] : Infinity);
       const w = wantLod(c, c.d);
       if (w < 0) { unload(c); continue; }
       c.want = w;
       if (c.lod !== w && (!c.rockJob || c.rockJob.lod !== w)) requestRock(c, w);
-      // corals
-      if (c.d < B.coralR && !c.coral && !c.coralJob && !c.coralWait) requestCoral(c);
-      else if (c.d > B.coralR + CORAL_HYST && (c.coral || c.coralJob || c.coralWait)) unloadCoral(c);
+      // corals: near the eye, or near a ROV when a slab is free
+      c.near = dm < B.coralR + CORAL_HYST;
+      c.dc = c.near ? dm : 1e6 + dr;          // the slab order: the eye first
+      const nearRov = dr < rovCoral && slabs.indexOf(null) >= 0;
+      if ((dm < B.coralR || nearRov) && !c.coral && !c.coralJob && !c.coralWait) requestCoral(c);
+      else if (!c.near && dr > rovCoral + CORAL_HYST && (c.coral || c.coralJob || c.coralWait)) unloadCoral(c);
       if (c.coralWait && c.lod >= 0) onCoral(c, c.coralWait.token, c.coralWait.r);
     }
     if (views) updateFocus(views);
@@ -200,7 +230,8 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     let s = slabs.indexOf(null);
     if (s < 0) {
       let far = null;
-      for (const o of chunks.values()) if (o.slab >= 0 && o.d > c.d && (!far || o.d > far.d)) far = o;
+      const k = o => o.dc ?? o.d;
+      for (const o of chunks.values()) if (o.slab >= 0 && k(o) > k(c) && (!far || k(o) > k(far))) far = o;
       if (!far) return -1;
       unloadCoral(far);
       s = slabs.indexOf(null);
@@ -217,7 +248,7 @@ export function createStreamer({ seed = 1, budget = WORLD_BUDGET.desktop, pool, 
     // hold the corals until the chunk has rock: no coral floats in the water
     if (c.lod < 0) { c.coralWait = { token: t, r }; return; }
     c.coralWait = null;
-    if (c.d > B.coralR + CORAL_HYST) return;
+    if (!c.near && !(c.dr < rovCoral + CORAL_HYST)) return;
     const s = takeSlab(c);
     if (s < 0) { stats.dropped++; return; }
     c.coral = Object.assign({ base: s * slabSize, slab: s }, r);

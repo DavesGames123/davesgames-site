@@ -64,6 +64,7 @@
 //    "export function analogFrame"  the live look on the CPU (node)
 //    "export function liveRate"     the frame accumulator and governor
 //    "function capture"  "function startFrame"  "function renderLive"
+//    "function drawScene"  the scene render, cleared to o.clearColour()
 //    "liveFrame(dt)"     one live frame now (the feed set of rov/feeds.js)
 //    "export function createFeed"
 // ============================================================================
@@ -271,7 +272,8 @@ const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Da
 // ('live' | 'r8' | 'r36' | 'm1'; default 'r36'), size ([w, h] or { w, h,
 // fps }, budget.js PROF.feed) and fps (live),
 // budgetMs, speed, hold, seed, noise, canvas, document, dpr, worker
-// (default true), source(vehicle), info(vehicle) -> { depth, heading, time }
+// (default true), source(vehicle), info(vehicle) -> { depth, heading, time },
+// clearColour() -> THREE.Color (linear) the clear colour of the scene render
 export function createFeed(THREE, o = {}) {
   const doc = o.document !== undefined ? o.document : (typeof document !== 'undefined' ? document : null);
   const dpr = o.dpr ?? Math.min(2, (typeof devicePixelRatio !== 'undefined' && devicePixelRatio) || 1);
@@ -296,6 +298,16 @@ export function createFeed(THREE, o = {}) {
   const ext = R && R.extensions;
   const half = !!(R && R.capabilities && R.capabilities.isWebGL2 && ext && (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float')));
   const quadCam = THREE && R ? new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1) : null;
+  // The scene into a target, cleared to o.clearColour() (scene.js
+  // hazeColour: the water, never black) when the page gives one. The old
+  // clear colour (the main view black) comes back after the render.
+  const clearWas = THREE && R ? new THREE.Color() : null;
+  function drawScene(target, cam) {
+    const cc = o.clearColour ? o.clearColour() : null, a = cc && R.getClearAlpha ? R.getClearAlpha() : 1;
+    if (cc && R.getClearColor) { R.getClearColor(clearWas); R.setClearColor(cc, 1); }
+    R.setRenderTarget(target); R.clear(true, true, false); R.render(o.scene, cam);
+    if (cc && R.getClearColor) R.setClearColor(clearWas, a);
+  }
   // the SSTV targets, on the first SSTV capture (live mode does not need them)
   function makeSstv() {
     if (rt || !R || !THREE) return;
@@ -375,7 +387,7 @@ export function createFeed(THREE, o = {}) {
       const prev = R.getRenderTarget();
       v.camera.aspect = RW / RH; v.camera.updateProjectionMatrix();
       if (o.beforeCapture) o.beforeCapture(v);
-      R.setRenderTarget(rt); R.clear(true, true, false); R.render(o.scene, v.camera);
+      drawScene(rt, v.camera);
       post.mat.uniforms.gain.value = agc.g;
       R.setRenderTarget(rt8); R.render(post.sc, post.cam);
       R.setRenderTarget(prev);
@@ -425,7 +437,7 @@ export function createFeed(THREE, o = {}) {
       v.camera.aspect = LW / LH; v.camera.updateProjectionMatrix();
       if (o.beforeCapture) o.beforeCapture(v);
       if (R.shadowMap) R.shadowMap.autoUpdate = false;           // the main frame made the shadow maps
-      R.setRenderTarget(L.rtLive); R.clear(true, true, false); R.render(o.scene, v.camera);
+      drawScene(L.rtLive, v.camera);
       if (R.shadowMap) R.shadowMap.autoUpdate = au;
       // AGC: B = mix(A, want); then swap so that prev is the newest
       L.agc.m.uniforms.prev.value = L.agcA.texture;

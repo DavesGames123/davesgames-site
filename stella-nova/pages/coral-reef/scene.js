@@ -61,7 +61,9 @@
 //
 //  grep -n targets
 //    world chunks ........... "the infinite world (CONTRACT-V4.md"
-//    fog of war ............. "function setExplored" (haze.js)
+//    fog of war ............. "function setExplored" (haze.js), main camera
+//                             only: "scene.onBeforeRender"
+//    feed clear colour ...... "function hazeColour"
 //    shared uniforms ........ "const U = {"
 //    caustic pass ........... "function makeCaustics"
 //    lamps .................. "function setLights"
@@ -87,7 +89,7 @@ import { createBeamSnow, BEAM_SNOW } from './beam-snow.js';
 import { blueNoise, lampPx, VOL_K } from './volume.js';
 import { createBloom } from './bloom.js';
 import { SKIN_CODE, POLYP_LOOK } from './coral-sdf.js';
-import { DOME_R, domeRadius, HAZE_GLSL, createExplored } from './haze.js';
+import { DOME_R, domeRadius, domeColour, HAZE_GLSL, createExplored } from './haze.js';
 
 export const SURFACE_Y = SH.SURFACE_Y;
 export const PART_W = 512;          // particle texture width
@@ -296,10 +298,24 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
   U.uFow = { value: fowTex }; U.uFowBox = { value: new THREE.Vector4(0, 0, 0, 0) };
   // visited: rov/squad.js S.visited; eye: world [x, y, z]; vehicles: the
   // squad states (p, look: the lamps). on = false: no fog of war.
+  let fowW = 0;
   function setExplored(visited, eye, vehicles, on = true) {
-    if (!on || !visited || !eye) { U.uFowBox.value.w = 0; return; }
+    if (!on || !visited || !eye) { U.uFowBox.value.w = fowW = 0; return; }
     if (fow.update({ visited, eye, vehicles })) fowTex.needsUpdate = true;
-    const b = fow.box(W3o); U.uFowBox.value.set(b[0], b[1], b[2], 1);
+    const b = fow.box(W3o); U.uFowBox.value.set(b[0], b[1], b[2], 1); fowW = 1;
+  }
+  // The fog of war is for the main view only. The user said (2026-10-18):
+  // "ROV cameras are culled much too aggresssively, theres a ton of black
+  // in their images". A ROV explores: its feed camera looks past the lit
+  // cells into the unexplored haze (near black in the deep). Each render
+  // of this scene sets it for its camera: the main camera on, others off.
+  scene.onBeforeRender = (r, sc, cam) => { U.uFowBox.value.w = cam === camera ? fowW : 0; };
+  // The clear colour of a feed render (rov/feed.js o.clearColour): the dome
+  // colour at the horizon (haze.js domeColour), linear, never black.
+  const hazeC = new THREE.Color();
+  function hazeColour() {
+    const c = domeColour([U.uFogCol.value.x, U.uFogCol.value.y, U.uFogCol.value.z], 0);
+    return hazeC.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
   }
   let W3o = [0, 0];          // the floating origin (setOrigin) for the caustic pass
   const PIXV = new THREE.Vector2();
@@ -1028,7 +1044,7 @@ export function createScene({ canvas, coarse, onNoGL, R = 30, maxParticles = 131
     get polypTotal() { return polypTotal; }, get dirtyChunks() { return dirtyChunks.size; }, get lamps() { return lamps; }, get shadowLamps() { return lamps.filter(l => l.castShadow).length; },
     PART_W, maxParticles: NP,
     // the infinite world (CONTRACT-V4.md)
-    worldRoot, setWorldMode, setOrigin, setExplored, fow, addWorldRock, removeWorldRock, addWorldCoral, removeWorldCoral, addWorldFine, removeWorldFine, clearWorld, setWorldPolyps,
+    worldRoot, setWorldMode, setOrigin, setExplored, hazeColour, fow, addWorldRock, removeWorldRock, addWorldCoral, removeWorldCoral, addWorldFine, removeWorldFine, clearWorld, setWorldPolyps,
     setCausticCentre: (x, z, size) => caus.setCentre(x, z, size),
     get world() { return { rock: W3.rock.size, coral: W3.coral.size, fine: W3.fine.size, dying: W3.dying.length, gpu: W3.gpu, origin: W3.origin.slice() }; },
   };

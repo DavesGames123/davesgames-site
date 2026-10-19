@@ -453,7 +453,7 @@ function buildROVs() {
       scene: S.scene, root: rovRoot, renderer: S.renderer, rock: P, sdf: P.sdf, reef: null, tether: false,
       pilots: squad.vehicles.map(v => v.state), seed: G.seed, quality: PROFILE_ID === 'desktop' ? 'high' : 'low', profile: PROF,
       origin: () => origin, depthBase: DEPTH_BASE,
-      feed: { mode: G.sstv, document, dpr: Math.min(2, devicePixelRatio || 1), size: PROF.feed },
+      feed: { mode: G.sstv, document, dpr: Math.min(2, devicePixelRatio || 1), size: PROF.feed, clearColour: S.hazeColour },
       // one feed per ROV (rov/feeds.js): the cards of squad-hud.js
       makeFeed: (base, ids) => createFeedSet(S.THREE, Object.assign({}, base, { ids, main: hud ? hud.selected : ids[0] })),
     });
@@ -880,13 +880,13 @@ function frame(t) {
     applyCamera();
     if ((tourT += dt) > 6 && !$('tourList').hidden) { tourT = 0; buildTourUI(); }
   }
-  // the world streams round the eye; the focus points are the main camera
-  // and the lead ROV camera
+  // the world streams round the eye and (smaller rings) round each ROV
+  // feed camera; the focus points are the main camera and the lead ROV camera
   if (streamer && (streamT += dt) > 0.25) {
     streamT = 0;
     const pts = [cam ? cam.eye.slice() : squad.vehicles[0].state.p.slice()];
     if (squad) pts.push(squad.vehicles[0].state.look.slice());
-    try { streamer.update(pts[0], pts); } catch (e) { console.error('coral-reef: stream', e); }
+    try { streamer.update(pts[0], pts, squad ? squad.vehicles.map(v => v.state.p) : null); } catch (e) { console.error('coral-reef: stream', e); }
   }
   if (disc) { try { disc.tick(dt, now / 1000); } catch (e) { console.error('coral-reef: discoveries', e); } }
   // the large map covers the view: no 3D frame (squad-hud.js map-view.js)
