@@ -36,20 +36,29 @@
      #dock     the phone dock: play, take over or shoot, view, maths, menu
      #saverCanvas  the screensaver frame (saver.js)
 
+   PHONE: one column that scrolls: the 2D diagram, the last four maths
+   steps, then the 3D table (style.css PHONE). No layout shift: the header
+   lines, the maths cards and their equation boxes have fixed heights.
+
    FILES
      core/table.js  core/physics.js  core/geometry.js  core/rules.js
-     core/ai.js  core/shot.js          (no DOM; node tests in tests/)
+     core/ai.js  core/shot.js  core/cue.js   (no DOM; node tests in tests/)
      view/diagram.js  view/scene3d.js  view/maths.js  view/strike.js
-     main.js  saver.js  style.css  tex/ (CC0 woods, tex/CREDITS.md)
+     main.js  saver.js  style.css
+     tex/ (CC0 woods, tex/CREDITS.md)  artwork/ (CC0 felt and ball
+     smudge scans, CREDITS.md; tools/credits-check.mjs billiard)
 
    GREP MAP
      grep -n 'function startTurn'   main.js   the turn loop
      grep -n 'export function think' core/ai.js  the AI planner
      grep -n 'export function mathsOf' core/shot.js  the maths steps
      grep -n 'export function tick'  core/physics.js  one physics tick
+     grep -n 'function\* fancy'      core/ai.js  banks, kicks, combinations
+     grep -n 'export function cuePose' core/cue.js  the cue over the rail
+     grep -n 'export function regions' saver.js  the saver frame
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A regulation American pool table in 2D and 3D. The computer plays 8-ball against itself near perfectly while the maths of every shot draws itself: ghost ball, cut angle, line of centres, v cos θ and v sin θ, sliding to rolling, cushion angles. Tap to take over and plan your own shot.">
+<meta name="description" content="A regulation American pool table in 2D and 3D. The computer plays 8-ball against itself, with banks, kicks and combinations, while the maths of every shot draws itself: ghost ball, cut angle, the stroke error (aimed vs observed), line of centres, v cos θ and v sin θ, sliding to rolling, cushion angles. Tap to take over and plan your own shot.">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 <link rel="stylesheet" href="../../lib/sn-panel.css">

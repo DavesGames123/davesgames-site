@@ -20,11 +20,19 @@
 //  A tap or a click on either view takes over from the AI (after the balls
 //  stop, if they roll). In "AI vs AI" the AI resumes after the user's shot;
 //  in "You vs AI" the user keeps the left player.
+//  The AI's flair (APP.flair, the panel slider) brings banks, kicks and
+//  combinations; its stroke error (plan.err) splits the shot in two: the
+//  aim phase shows the aimed stroke (APP.predAim, APP.ctAim), the roll
+//  plays the observed one (APP.pred), and the maths step "stroke" shows
+//  delta phi. The cue (core/cue.js cuePose) lifts over the rail and the
+//  balls in both views. layout() sizes the canvases only when a pane
+//  changes size (never from a caption), and fixes the contact inset in
+//  the bottom-right corner (view/diagram.js D.inset).
 //
 //  grep -n targets: "const APP", "function startTurn", "function beginAim",
 //  "function strikeNow", "function frame", "function draw2d", "function
 //  draw3d", "function enterPlan", "function planPointer", "function
-//  buildPanel", "function layout", "window.__pool"
+//  buildPanel", "function layout", "window.__pool", "APP.predAim"
 // ============================================================================
 import { buildTable } from './core/table.js';
 import { beginShot, strike, tick, anyMoving, settle, ballState, accel, enableOrientation } from './core/physics.js';
@@ -32,6 +40,7 @@ import { newGame, judge, apply, legalTargets, status as gameStatus } from './cor
 import { think, SKILLS } from './core/ai.js';
 import { shotGeometry, potChance } from './core/geometry.js';
 import { predict, mathsOf, contactOf, lensOf } from './core/shot.js';
+import { cuePose } from './core/cue.js';
 import { createDiagram } from './view/diagram.js';
 import { createMaths } from './view/maths.js';
 import { createStrike, spinWords } from './view/strike.js';
@@ -50,9 +59,9 @@ const APP = {
   T, G: null, seed: +hashArgs.seed || ((Date.now() % 100000) + 1),
   type: hashArgs.game === '9' ? '9' : '8',
   mode: hashArgs.mode === 'you' ? 'you-ai' : 'ai-ai',
-  skill: 'perfect', pace: 1, speed: 1, paused: false, stepOnce: 0,
+  skill: 'perfect', flair: 0.4, pace: 1, speed: 1, paused: false, stepOnce: 0, slowK: 0.3,
   phase: 'idle', phaseT: 0, ts: 0,
-  it: null, cands: [], plan: null, geo: null, pred: null, ct: null, steps: [], shown: -1, aimStepT: 0,
+  it: null, cands: [], plan: null, geo: null, pred: null, predAim: null, ct: null, steps: [], shown: -1, aimStepT: 0,
   items: [], trails: [], acc: 0, prevX: new Float64Array(16), prevY: new Float64Array(16),
   drops: {}, verdict: null, msg: '', takeover: false, human: false,
   view: PHONE ? 'both' : 'both', style: 'felt', cam: 'auto',
@@ -95,21 +104,23 @@ function startGame(seed = APP.seed, type = APP.type) {
 function snapPrev() { const S = APP.G.S; APP.prevX.set(S.x); APP.prevY.set(S.y); APP.acc = 0; }
 const setPhase = p => { APP.phase = p; APP.phaseT = APP.ts; };
 const humanTurn = () => APP.takeover || (APP.mode === 'you-ai' && APP.G.turn === 0);
-const pace = s => s * APP.pace * (APP.saver ? 1.15 : 1);
+// the saver keeps the gaps short (the user: "the shots on the screensaver
+// mode should not take long between things"): see saver.js SAVER_PACE
+const pace = s => s * APP.pace * (APP.saver ? APP.saver.pace : 1);
 
 function startTurn() {
   const G = APP.G;
   if (G.phase === 'over') { setPhase('over'); return; }
   if (humanTurn()) { enterPlan(); return; }
   APP.human = false;
-  APP.it = think(G, { skill: APP.skill });
+  APP.it = think(G, { skill: APP.skill, flair: APP.saver ? APP.saver.flair : APP.flair });
   APP.cands = [];
   setPhase('think');
 }
 
 // run the planner for a few ms of this frame
 function stepThink() {
-  const t0 = performance.now(), budget = APP.saver ? 6 : 9;
+  const t0 = performance.now(), budget = APP.saver ? 12 : 9;
   while (APP.it && performance.now() - t0 < budget) {
     const s = APP.it.next();
     if (s.done) { APP.plan = s.value; APP.it = null; break; }
@@ -123,11 +134,16 @@ function beginAim(plan, fast) {
   const G = APP.G, S = G.S;
   APP.plan = plan;
   if (plan.place) { S.x[0] = plan.place.x; S.y[0] = plan.place.y; S.on[0] = 1; snapPrev(); }
-  APP.geo = plan.n > 0 && plan.pocket >= 0 ? shotGeometry(S, T, plan.n, T.pockets[plan.pocket]) : null;
+  // a bank, kick or combination keeps its own geometry (core/geometry.js)
+  APP.geo = plan.chosen && plan.chosen.kind && plan.chosen.kind !== 'pot' ? plan.chosen : plan.n > 0 && plan.pocket >= 0 ? shotGeometry(S, T, plan.n, T.pockets[plan.pocket]) : null;
   APP.pred = predict(S, plan);
+  // the aimed stroke (no error): its paths show while the AI aims
+  APP.predAim = plan.ideal && plan.err ? predict(S, Object.assign({}, plan, plan.ideal)) : APP.pred;
   APP.ct = contactOf(APP.pred);
+  APP.ctAim = contactOf(APP.predAim);
   APP.lens = lensOf(APP.pred, APP.geo);
   APP.steps = mathsOf(T, S, plan, APP.pred, APP.geo);
+  if (APP.saver && APP.saver.kind) APP.saver.kind(plan.kind);
   fadeItems();
   maths.load(APP.steps);
   APP.shown = -1;
@@ -167,7 +183,7 @@ function strikeNow() {
 function stepRoll(dt) {
   const S = APP.G.S, h = S.P.h;
   let scale = APP.speed;
-  if (APP.show.slow && APP.ct && S.t > APP.ct.t - 0.1 && S.t < APP.ct.t + 0.22) scale = Math.min(scale, 0.3);
+  if (APP.show.slow && APP.ct && S.t > APP.ct.t - 0.1 && S.t < APP.ct.t + 0.22) scale = Math.min(scale, APP.slowK);
   APP.acc += dt * scale;
   let n = 0;
   while (APP.acc >= h && n++ < 4000) {
@@ -236,8 +252,8 @@ function refreshPlan() {
   const shot = planShot();
   const cx = p.place ? p.place.x : S.x[0], cy = p.place ? p.place.y : S.y[0];
   APP.geo = p.n > 0 && p.pocket != null && p.pocket >= 0 ? shotGeometry(S, T, p.n, T.pockets[p.pocket], cx, cy) : null;
-  APP.pred = predict(S, shot);
-  APP.ct = contactOf(APP.pred);
+  APP.pred = predict(S, shot); APP.predAim = APP.pred;
+  APP.ct = contactOf(APP.pred); APP.ctAim = APP.ct;
   APP.lens = lensOf(APP.pred, APP.geo);
   APP.plan = shot;
   APP.steps = mathsOf(T, S, shot, APP.pred, APP.geo);
@@ -390,17 +406,21 @@ export function frame2d(dpr) {
   if (APP.show.trails && S.paths && (APP.phase === 'roll' || APP.phase === 'settle')) for (let n = 0; n < 16; n++) { const pts = S.paths[n]; if (pts && pts.length > 3) trails.push({ n, pts: pts.filter((_, k) => k % 3 !== 2), alpha: 1 }); }
   const paths = [];
   if (APP.show.paths && APP.pred && (APP.phase === 'plan' || APP.phase === 'aim')) {
-    for (let n = 0; n < 16; n++) { const pts = APP.pred.paths && APP.pred.paths[n]; if (pts && pts.length > 6) paths.push({ n, pts, alpha: APP.phase === 'aim' ? 0.55 : 0.9, end: APP.pred.S.on[n] ? [APP.pred.S.x[n], APP.pred.S.y[n]] : null }); }
+    // while the AI aims: the aimed stroke (the error shows when it strikes)
+    const pr = APP.phase === 'aim' && APP.predAim ? APP.predAim : APP.pred;
+    for (let n = 0; n < 16; n++) { const pts = pr.paths && pr.paths[n]; if (pts && pts.length > 6) paths.push({ n, pts, alpha: APP.phase === 'aim' ? 0.55 : 0.9, end: pr.S.on[n] ? [pr.S.x[n], pr.S.y[n]] : null }); }
   }
   let cands = null;
   if (APP.phase === 'think') {
     const k = Math.min(1, (APP.ts - APP.phaseT) / 0.4);
-    cands = APP.cands.slice(0, 4).map((c, j) => ({ ...c, alpha: (j === 0 ? 0.85 : 0.4) * k, best: j === 0, text: j === 0 ? `${Math.round(c.chance * 100)} %` : '' }));
+    cands = APP.cands.slice(0, 4).map((c, j) => ({ ...c, alpha: (j === 0 ? 0.85 : 0.4) * k, best: j === 0, text: j === 0 ? `${c.kind && c.kind !== 'pot' ? c.kind + ' ' : ''}${Math.round(c.chance * 100)} %` : '' }));
   }
   let cue = null;
   if (APP.plan && (APP.phase === 'aim' || APP.phase === 'plan')) {
     const st = APP.phase === 'aim' ? Math.max(0, Math.sin((APP.ts - APP.phaseT) * 3.2)) : 0.5;
-    cue = { x: S.x[0], y: S.y[0], phi: APP.plan.phi, back: 0.025 + 0.07 * st };
+    const phi = APP.plan.ideal ? APP.plan.ideal.phi : APP.plan.phi;
+    cue = { x: S.x[0], y: S.y[0], phi, back: 0.025 + 0.07 * st };
+    cue.pose = cuePose(T, S, { x: cue.x, y: cue.y, phi, a: APP.plan.a, b: APP.plan.b, back: cue.back });
   }
   const pick = APP.phase === 'plan' && APP.pl ? { legal: legalTargets(APP.G), sel: APP.pl.n, pocket: APP.pl.pocket } : null;
   return { dpr, style: APP.style, balls, items, trails, paths, cands, cue, pick, lens, live: liveVectors(balls), kitchen: APP.G.inHand && APP.G.kitchen,
@@ -418,16 +438,18 @@ export function scene3dState() {
   let cue = null;
   if (APP.plan && (APP.phase === 'aim' || APP.phase === 'plan')) {
     const st = APP.phase === 'aim' ? Math.max(0, Math.sin((APP.ts - APP.phaseT) * 3.2)) : 0.4;
-    cue = { x: S.x[0], y: S.y[0], phi: APP.plan.phi, a: APP.plan.a, b: APP.plan.b, back: 0.02 + 0.09 * st };
+    const id = APP.plan.ideal || APP.plan;
+    cue = { x: S.x[0], y: S.y[0], phi: id.phi, a: id.a, b: id.b, back: 0.02 + 0.09 * st };
   } else if (APP.phase === 'roll' && APP.ts - APP.phaseT < 0.5 && APP.plan) {
     const k = (APP.ts - APP.phaseT) / 0.5, sx = APP.pred.start.x, sy = APP.pred.start.y;
     cue = { x: sx, y: sy, phi: APP.plan.phi, a: APP.plan.a, b: APP.plan.b, back: 0.005 + 0.05 * k, alpha: 1 - k };
   }
   const ov = {};
   if (APP.show.cons && APP.plan && (APP.phase === 'aim' || APP.phase === 'plan')) {
-    const ct = APP.ct, sx = APP.pred ? APP.pred.start.x : S.x[0], sy = APP.pred ? APP.pred.start.y : S.y[0];
+    // the aimed contact (not the observed one: the error shows when the cue strikes)
+    const ct = APP.ctAim || APP.ct, sx = APP.pred ? APP.pred.start.x : S.x[0], sy = APP.pred ? APP.pred.start.y : S.y[0];
     if (ct) { ov.aim = [[sx, sy], [ct.cx, ct.cy]]; ov.ghost = [ct.cx, ct.cy]; }
-    else ov.aim = [[sx, sy], [sx + Math.cos(APP.plan.phi) * 1.2, sy + Math.sin(APP.plan.phi) * 1.2]];
+    else { const ph = (APP.plan.ideal || APP.plan).phi; ov.aim = [[sx, sy], [sx + Math.cos(ph) * 1.2, sy + Math.sin(ph) * 1.2]]; }
   }
   ov.arrows = [];
   for (const L of liveVectors(balls)) {
@@ -440,7 +462,7 @@ export function scene3dState() {
 function draw3d(dt) {
   if (!V || !APP.G || APP.view === '2d') return;
   const st = scene3dState();
-  V.setBalls(st.balls); V.setCue(st.cue); V.setOverlay(st.ov);
+  V.setBalls(st.balls); V.setCue(st.cue, APP.G.S); V.setOverlay(st.ov);
   if (APP.phase === 'think' || APP.phase === 'settle' || APP.phase === 'over') V.focus({ phase: APP.phase });
   V.update(dt || 1 / 60);
   V.render();
@@ -486,7 +508,10 @@ function updateHud() {
 }
 
 // ── layout ──────────────────────────────────────────────────────────────────
-let dpr2d = 1;
+let dpr2d = 1, size2d = '';
+// The canvases change size only when their pane does (a resize, the view
+// buttons, the panel), never while a shot plays: the caption lines and the
+// maths cards have fixed boxes (style.css), so text never moves the panes.
 function layout() {
   const views = $('views');
   views.dataset.view = APP.view;
@@ -494,24 +519,38 @@ function layout() {
   const r2 = $('pane2d').getBoundingClientRect(), r3 = $('pane3d').getBoundingClientRect();
   const w2 = Math.round(r2.width || $('pane2d').clientWidth || innerWidth / 2), h2 = Math.round(r2.height || $('pane2d').clientHeight || innerHeight / 2);
   dpr2d = dpr;
-  c2d.width = Math.max(2, Math.round(w2 * dpr)); c2d.height = Math.max(2, Math.round(h2 * dpr));
+  const W = Math.max(2, Math.round(w2 * dpr)), H = Math.max(2, Math.round(h2 * dpr));
   // a portrait 2D pane turns the table up the screen
-  const rot = h2 > w2 * 1.15;
-  D.layout(c2d.width, c2d.height, rot, 10 * dpr);
+  const rot = h2 > w2 * 1.15, key = `${W}x${H}:${rot}`;
+  if (key !== size2d) {
+    size2d = key;
+    if (c2d.width !== W) c2d.width = W;
+    if (c2d.height !== H) c2d.height = H;
+    D.layout(W, H, rot, 10 * dpr, 0, 0, { min: 92 * dpr, max: 250 * dpr });
+  }
   if (V) { const w3 = Math.round(r3.width || $('pane3d').clientWidth || innerWidth / 2), h3 = Math.round(r3.height || $('pane3d').clientHeight || innerHeight / 2); V.resize(w3, h3, dpr); }
 }
+layout.reset = () => { size2d = ''; };
 
 // ── input ───────────────────────────────────────────────────────────────────
 function bindViews() {
   const w2 = e => { const r = c2d.getBoundingClientRect(); return D.toWorld((e.clientX - r.left) * dpr2d, (e.clientY - r.top) * dpr2d); };
+  // outside the planner a tap (not a swipe: the phone column scrolls) takes over
+  let tap2 = null;
+  const isTap = (t, e) => t && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 8 && performance.now() - t.t < 450;
   c2d.addEventListener('pointerdown', e => {
     if (APP.saver) return;
-    if (APP.phase !== 'plan') { takeOver(); return; }
+    if (APP.phase !== 'plan') { tap2 = { x: e.clientX, y: e.clientY, t: performance.now() }; return; }
     try { c2d.setPointerCapture(e.pointerId); } catch (x) { /* old */ }
     planPointer('down', w2(e));
   });
   c2d.addEventListener('pointermove', e => { if (APP.phase === 'plan' && APP.pl && APP.pl.drag) planPointer('move', w2(e)); });
-  c2d.addEventListener('pointerup', e => { if (APP.phase === 'plan') planPointer('up', w2(e)); });
+  c2d.addEventListener('pointerup', e => {
+    if (APP.phase === 'plan') { planPointer('up', w2(e)); return; }
+    if (!APP.saver && isTap(tap2, e)) takeOver();
+    tap2 = null;
+  });
+  c2d.addEventListener('pointercancel', () => { tap2 = null; });
   // 3D: a short tap (not an orbit drag) takes over or aims
   let down = null;
   c3d.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
@@ -559,7 +598,8 @@ function buildPanel() {
   game.segmented({ id: 'gtype', label: 'Game', items: [{ id: '8', label: '8-ball' }, { id: '9', label: '9-ball' }], value: APP.type, onChange: v => startGame(APP.seed + 1, v) });
   game.segmented({ id: 'players', label: 'Players', items: [{ id: 'ai-ai', label: 'AI vs AI' }, { id: 'you-ai', label: 'You vs AI' }], value: APP.mode,
     onChange: v => { APP.mode = v; APP.takeover = false; startGame(APP.seed + 1); } });
-  game.select({ id: 'skill', label: 'AI skill', options: Object.entries(SKILLS).map(([id, s]) => ({ id, label: s.label })), value: APP.skill, onChange: v => { APP.skill = v; }, hint: 'Near perfect aims within 0.03 deg and 1 % speed. Pro and Club miss more.' });
+  game.select({ id: 'skill', label: 'AI skill', options: Object.entries(SKILLS).map(([id, s]) => ({ id, label: s.label })), value: APP.skill, onChange: v => { APP.skill = v; }, hint: 'The stroke error (sigma): near perfect 0.05 deg and 1 % speed, Pro 0.25 deg, Club 0.6 deg. The maths shows the aimed and the observed stroke.' });
+  game.slider({ id: 'flair', label: 'Flair (banks, kicks, combos)', min: 0, max: 1, step: 0.05, value: APP.flair, format: v => `${Math.round(v * 100)} %`, onInput: v => { APP.flair = v; }, hint: 'How often the AI looks for a makeable bank, kick or combination instead of the plain pot.' });
   game.slider({ id: 'pace', label: 'Pace', min: 0.4, max: 2.5, step: 0.05, value: APP.pace, format: v => `${v.toFixed(2)}x`, onInput: v => { APP.pace = v; }, hint: 'How long the AI thinks and aims, and how long each maths step stays before the next one.' });
   game.actions([{ id: 'newRack', label: 'New rack', icon: 'regrow', onClick: () => startGame(APP.seed + 1) }, { id: 'takeBtn', label: 'Take over', icon: 'target', onClick: () => (APP.phase === 'plan' ? shootPlan() : takeOver()) }]);
   game.note({ id: 'gameNote', text: 'Tap or click the table to take over. In AI vs AI the AI resumes after your shot.' });
@@ -591,8 +631,8 @@ function buildPanel() {
   const about = panel.section({ id: 'about', title: 'About', open: false });
   const ab = doc.createElement('div');
   ab.innerHTML = `<p class="snp-text">A regulation 9 ft American pool table (WPA: 100 x 50 in bed, 2.25 in balls, 4.6 in corner and 5.06 in side pockets, cushion nose at 63.5 % of the ball height). The balls slide and roll on the cloth with spin (μ<sub>s</sub> 0.2, rolling 0.01), collide with e = 0.95 and friction that throws the object ball, and rebound from a raised cushion nose. The 90° rule and the 30° rule come out of that physics; they are not drawn in.</p>
-<p class="snp-text">The computer finds each pot by the ghost ball, corrects the throw with short simulations, then picks the speed and spin that leave the best next shot. Its error is small and seeded.</p>
-<p class="snp-fine">Our own code: physics, rules, AI, both views. three.js r160 (MIT). MathJax 3 (Apache-2.0). Woods: CC0 scans from Poly Haven (tex/CREDITS.md). References: Leckie and Greenspan, an event-based pool physics simulator (2005); D. G. Alciatore, technical proofs (throw, rolling); Mathavan et al. (2010), cushion impact; WPA equipment specifications. This page replaced an earlier port of Ten Minute Physics #03 (Matthias Müller, MIT); none of that code is left.</p>`;
+<p class="snp-text">The computer finds each pot by the ghost ball, corrects the throw with short simulations, then picks the speed and spin that leave the best next shot. Some turns it looks for a bank (the pocket mirrored in the rail), a kick or a combination, and plays it when a simulation pots it. Its stroke has a small seeded error: the maths shows the aimed and the observed stroke and the physics plays the observed one.</p>
+<p class="snp-fine">Our own code: physics, rules, AI, both views. three.js r160 (MIT). MathJax 3 (Apache-2.0). Woods: CC0 scans from Poly Haven (tex/CREDITS.md). Felt and ball smudges: CC0 scans from ambientCG, Fabric 034, Fingerprints 003 and Surface Imperfections 003 (CREDITS.md). References: Leckie and Greenspan, an event-based pool physics simulator (2005); D. G. Alciatore, technical proofs (throw, rolling); Mathavan et al. (2010), cushion impact; WPA equipment specifications. This page replaced an earlier port of Ten Minute Physics #03 (Matthias Müller, MIT); none of that code is left.</p>`;
   about.slot({ id: 'aboutSlot', el: ab });
   mountSheet({ panel: $('panel'), grip: $('sheetGrip'), menu: $('dockMenu'), close: $('panelClose'), gear: $('gear'), phoneQ: PHONE_Q, onOpen: () => layoutSoon() });
 }
@@ -638,6 +678,8 @@ startGame(APP.seed, APP.type);
 updateHud();
 requestAnimationFrame(frame);
 const ready = boot3d();
+// the felt scan on the 2D cloth too (no image: the plain colour)
+try { const img = new Image(); img.onload = () => D.setFelt(img); img.src = new URL('./artwork/felt-color.jpg', import.meta.url).href; } catch (e) { /* none */ }
 addEventListener('pagehide', () => { APP.paused = true; });
 
 window.__pool = {

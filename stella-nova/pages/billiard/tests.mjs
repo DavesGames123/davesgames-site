@@ -5,12 +5,19 @@
 //    physics.test.mjs  the 90 and 30 deg rules, energy, slide to roll,
 //                      cushions, the break, determinism, pockets
 //    rules.test.mjs    legal racks, fouls, ball in hand, the 8, groups, 9-ball
-//    ai.test.mjs       seeded whole games: pot rate, fouls, winners
+//    ai.test.mjs       seeded whole games: pot rate, fouls, winners; the
+//                      share of banks, kicks and combinations; the stroke
+//                      error (aimed vs observed)
+//    cue.test.mjs      the cue clears the rail and the balls (20000 poses);
+//                      bank, kick and combination geometry
 //    shot.test.mjs     predictions, the maths steps, TeX in MathJax
-//    page.test.mjs     the page in jsdom: desktop, take over and plan,
-//                      phone, the saver and its framing
+//    view.test.mjs     the 2D decals turn with w; the fixed contact inset
+//    scene.test.mjs    the 3D table in jsdom: pockets open, contact
+//                      shadows, shadow cameras, arrows from the centre, cue
+//    page.test.mjs     the page in jsdom: desktop, take over and plan, no
+//                      layout shift, phone order, the saver and its framing
 //  Needs (a missing one FAILS, it does not skip):
-//    JSDOM_DIR or NODE_PATH  a folder with jsdom 24 (page.test.mjs)
+//    JSDOM_DIR or NODE_PATH  a folder with jsdom 24 (page, scene)
 //    MATHJAX_DIR or NODE_PATH  a folder with mathjax-full 3.2.2 (shot.test.mjs)
 //  node tests.mjs physics rules   runs only the files whose names match.
 //  Exit code 1 if any file fails.

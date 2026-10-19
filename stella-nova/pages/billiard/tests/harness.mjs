@@ -5,7 +5,8 @@
 //    - the recording WebGL2 of ../coral-reef/tests/fake-gl.mjs on #c3d, so
 //      three r160 builds and "renders" the whole 3D table
 //    - a recording 2D context on #c2d and #saverCanvas (counts the calls,
-//      counts any argument that is not a finite number)
+//      counts any argument that is not a finite number, keeps the last
+//      fillText strings in __st.texts)
 //    - a manual requestAnimationFrame clock (P.frames(n, dtMs))
 //  jsdom comes from JSDOM_DIR or NODE_PATH; bootPage() gives null without it.
 //
@@ -48,7 +49,7 @@ function mediaFor(w, h, coarse) {
 }
 
 export function fake2d(name) {
-  const st = { calls: 0, bad: 0, name, ops: {} };
+  const st = { calls: 0, bad: 0, name, ops: {}, badOps: {}, texts: [] };
   const props = { canvas: null };
   const ctx = new Proxy({}, {
     get(_, p) {
@@ -58,7 +59,11 @@ export function fake2d(name) {
       if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
       if (p === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
       if (p === 'getImageData') return (x, y, w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) });
-      return (...a) => { st.calls++; st.ops[p] = (st.ops[p] || 0) + 1; for (const v of a) if (typeof v === 'number' && !Number.isFinite(v)) st.bad++; };
+      return (...a) => {
+        st.calls++; st.ops[p] = (st.ops[p] || 0) + 1; for (const v of a) if (typeof v === 'number' && !Number.isFinite(v)) { st.bad++; st.badOps[p] = (st.badOps[p] || 0) + 1; }
+        // the last 4000 drawn strings (the saver chalkboard check reads them)
+        if (p === 'fillText') { st.texts.push(String(a[0])); if (st.texts.length > 4000) st.texts.splice(0, 1000); }
+      };
     },
     set(_, p, v) { props[p] = v; return true; },
   });

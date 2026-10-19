@@ -6,8 +6,12 @@
 //  replaces it when it is ready (lib/sci-math.js, never KaTeX: KaTeX broke
 //  in the user's Safari). A step "writes" itself in when its moment comes
 //  (a left-to-right reveal, like Manim's Write), the newest card is the
-//  current one, and the older cards dim. On a phone only the current card
-//  shows.
+//  current one, and the older cards dim. On a phone the last RECENT (4)
+//  cards show (class "recent"), under the 2D diagram.
+//  No layout change from the maths: every card has a fixed height and its
+//  equation box (.meq) a fixed height too (style.css); the MathJax SVG is
+//  scaled into that box. The list scrolls inside itself (never the page).
+//  M.svg(k) gives the typeset SVG of step k (the saver draws it).
 //
 //  createMaths({ steps, read, typeset }) -> M
 //    M.load(list, { tex })  a new shot: cards for every step, all hidden
@@ -44,6 +48,12 @@ export function createMaths({ steps, read, typeset = null, doc = steps.ownerDocu
     }
     return a;
   }
+  // the last RECENT shown cards (the phone shows only these)
+  const RECENT = 4;
+  function markRecent() {
+    const shown = cards.filter(c => !c.hidden), keep = new Set(shown.slice(-RECENT));
+    for (const c of cards) c.classList.toggle('recent', keep.has(c));
+  }
   const M = {
     // tex false: plain text only (the planner while the user drags; the
     // MathJax pass follows when the input rests)
@@ -60,13 +70,21 @@ export function createMaths({ steps, read, typeset = null, doc = steps.ownerDocu
       if (!c) return;
       if (c.hidden) { c.hidden = false; c.classList.add('write'); }
       for (const o of cards) o.classList.toggle('current', o === c);
-      // keep the current card in view (the list scrolls, newest at the bottom)
-      try { if (c.scrollIntoView) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* jsdom */ }
+      markRecent();
+      // keep the current card in view: scroll the list itself, never the page
+      // (scrollIntoView also scrolls the page, which jumps on a phone)
+      try {
+        const top = c.offsetTop - steps.offsetTop, want = top + c.offsetHeight - steps.clientHeight;
+        if (want > steps.scrollTop) steps.scrollTop = want; else if (top < steps.scrollTop) steps.scrollTop = top;
+      } catch (e) { /* jsdom */ }
     },
     showAll() {
       for (const c of cards) { c.hidden = false; c.classList.remove('write'); c.classList.remove('current'); }
+      markRecent();
     },
     shownCount: () => cards.filter(c => !c.hidden).length,
+    svg: k => { const c = cards[k]; return c ? c.querySelector('.meq.typeset svg') : null; },
+    recent: () => cards.filter(c => c.classList.contains('recent')).map(c => +c.dataset.k),
     readouts(rows) {
       if (!read) return;
       const f = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d) : '–');
