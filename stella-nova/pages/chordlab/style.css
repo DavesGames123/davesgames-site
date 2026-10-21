@@ -274,3 +274,14 @@ html.mob #micGate.resume{padding:var(--s2)}
 #tuner{order:-1}
 #ringWrap{width:min(100%,26vh,240px)}
 #chordRoot{font-size:clamp(2rem,5vh,3.2rem)}
+/* Phone portrait tuner: a large gauge and note, full-width string buttons, the
+   spectrum fills the rest. The subtitle and the "Spectrum" label go. */
+@media (orientation:portrait){
+  html.mob #tuner .ph-sub,html.mob #tuner .subhead{display:none}
+  html.mob #gaugeWrap{max-width:440px}
+  html.mob #tunerNote{font-size:clamp(3rem,9vh,4.4rem)}
+  html.mob #tunerFreq{font-size:.85rem}
+  html.mob #stringRow{width:100%;max-width:440px;align-self:center}
+  html.mob .strBtn{max-width:none}
+  html.mob #specCanvas{min-height:120px}
+}

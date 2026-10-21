@@ -346,7 +346,7 @@ function png(page, id, name) {
   p.frames(3);
   ok('staff with 10 chords: no exceptions', !p.errors.length, p.errors.map(e => e.message).join(' | '));
   png(p, 'staffCanvas', 'prog-staff');
-  ok('phone layout class boots', (() => { const q = boot({ mob: true }); q.frames(5); q.$('mobTabs').children[2].click(); q.frames(2); return !q.errors.length && q.doc.body.classList.contains('mtab-tuner'); })());
+  ok('phone layout class boots', (() => { const q = boot({ mob: true }); q.frames(5); const opensOnTuner = q.doc.body.classList.contains('mtab-tuner'); [...q.$('mobTabs').children].find(b => b.dataset.t === 'now').click(); q.frames(2); return !q.errors.length && opensOnTuner && q.doc.body.classList.contains('mtab-now'); })());
 }
 
 ok('no NaN or Infinity in any canvas call', bad.length === 0, bad.slice(0, 5).join(', '));
