@@ -126,7 +126,7 @@ function setMTab(t){
 mobTabs.addEventListener('click',e=>{
   const b=e.target.closest('button');if(b)setMTab(b.dataset.t);
 });
-setMTab('now');
+setMTab('tuner');
 
 /* ═══════════ KEYBOARD ═══════════ */
 // Keys for hands that are busy with an instrument. Keys are ignored while

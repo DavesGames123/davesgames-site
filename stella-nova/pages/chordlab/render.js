@@ -1048,30 +1048,36 @@ function drawSpec(){
 // autocorrelation after the initial dip gives the period; sr/period is the pitch.
 let tdBuf=null;
 function autoCorrelate(buf,sr){
-  const SIZE=buf.length;
+  const N=buf.length;
   // Reject near-silence by RMS so noise never produces a spurious pitch.
-  let rms=0;for(let i=0;i<SIZE;i++)rms+=buf[i]*buf[i];
-  rms=Math.sqrt(rms/SIZE);
-  if(rms<0.006)return -1;
-  // Trim quiet head and tail to the first samples above a threshold (ACF2+ trick).
-  let r1=0,r2=SIZE-1;const thres=0.2;
-  for(let i=0;i<SIZE/2;i++)if(Math.abs(buf[i])<thres){r1=i;break;}
-  for(let i=1;i<SIZE/2;i++)if(Math.abs(buf[SIZE-i])<thres){r2=SIZE-i;break;}
-  const b2=buf.slice(r1,r2);const N=b2.length;
-  if(N<64)return -1;
-  // Autocorrelation: c[lag] is the overlap of the signal with itself at lag.
-  const c=new Float32Array(N);
-  for(let lag=0;lag<N;lag++){let s=0;for(let i=0;i<N-lag;i++)s+=b2[i]*b2[i+lag];c[lag]=s;}
-  // Skip past the descending zero-lag lobe, then take the tallest later peak.
-  let d=0;while(d<N-1&&c[d]>c[d+1])d++;
-  let maxval=-1,maxpos=-1;
-  for(let i=d;i<N;i++)if(c[i]>maxval){maxval=c[i];maxpos=i;}
-  let T0=maxpos;if(T0<=0)return -1;
+  let rms=0;for(let i=0;i<N;i++)rms+=buf[i]*buf[i];
+  if(Math.sqrt(rms/N)<0.004)return -1;
+  // McLeod NSDF over 55..1400 Hz lags. The normalisation removes the lag bias
+  // of a plain autocorrelation, so the strong 2nd harmonic of a low E string
+  // no longer wins over the fundamental.
+  const lo=Math.floor(sr/1400),hi=Math.min(N>>1,Math.ceil(sr/55));
+  const n=new Float32Array(hi+2);
+  for(let t=lo;t<=hi+1;t++){
+    let ac=0,m=0;
+    for(let i=0;i<N-t;i++){const x=buf[i],y=buf[i+t];ac+=x*y;m+=x*x+y*y;}
+    n[t]=m>0?2*ac/m:0;
+  }
+  // Key maxima: the highest point of each positive lobe after the first dip.
+  let t=lo;while(t<=hi&&n[t]>0)t++;
+  const keys=[];let best=0;
+  for(;t<=hi;t++){
+    if(n[t]>0&&n[t]>=n[t-1]&&n[t]>=n[t+1]){
+      if(!keys.length||t-keys[keys.length-1]>2||n[t]>n[keys[keys.length-1]])keys.push(t);
+      if(n[t]>best)best=n[t];
+    }
+  }
+  if(best<0.5)return -1;
+  // The first key maximum within 90 % of the best is the period.
+  let T0=keys.find(k=>n[k]>=0.9*best);
   // Parabolic interpolation around the peak refines the period to sub-sample.
-  const x1=c[T0-1],x2=c[T0],x3=T0+1<N?c[T0+1]:x2;
-  const a=(x1+x3-2*x2)/2,b=(x3-x1)/2;
-  if(a)T0=T0-b/(2*a);
-  return sr/T0;
+  const x1=n[T0-1],x2=n[T0],x3=n[T0+1];
+  const a=(x1+x3-2*x2)/2,b2=(x3-x1)/2;
+  return sr/(a?T0-b2/(2*a):T0);
 }
 
 // Run the pitch detector on the newest waveform and update the tuner readout:
@@ -1079,8 +1085,8 @@ function autoCorrelate(buf,sr){
 function updateTuner(){
   if(!tdBuf)tdBuf=new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(tdBuf);
-  // Use a 2048-sample window: enough cycles for low strings, still cheap.
-  const p=autoCorrelate(tdBuf.subarray(0,2048),AC.sampleRate);
+  // Use the newest 4096 samples: about 7 cycles of low E at 48 kHz.
+  const p=autoCorrelate(tdBuf.subarray(tdBuf.length-4096),AC.sampleRate);
   const nEl=$('tunerNote'),fEl=$('tunerFreq');
   // Outside the instrument's plausible range: blank the tuner and let the
   // needle spring back to centre.
