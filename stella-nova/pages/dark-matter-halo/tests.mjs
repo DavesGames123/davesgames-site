@@ -8,9 +8,13 @@
 //  rings against the Freeman thin disc, the spheroid against a sphere, and
 //  the halo quadrature against the Burkert and isothermal masses.
 //
+//  The data.js group checks the measured points: a weighted line fit
+//  to each table must give the fit that its paper reports.
+//
 //  grep -n targets: "section(" opens each group.
 // ============================================================================
 import * as M from './model.js';
+import * as D from './data.js';
 
 let pass = 0, fail = 0, cur = '';
 function section(s) { cur = s; console.log('\n# ' + s); }
@@ -118,6 +122,37 @@ section('curve shape');
   ok(again.v2.thin.every((v, i) => v === c.v2.thin[i]), 'opts.discs reuses the disc arrays');
   const t = performance.now(); M.curve(m, Array.from({ length: 120 }, (_, i) => 0.25 + i * 0.5)); const ms = performance.now() - t;
   ok(ms < 3000, `120-radius curve in ${ms.toFixed(0)} ms`);
+}
+
+section('data.js');
+{
+  // Weighted least-squares line v = a + b (R - R0), weights 1 / sigma^2.
+  const fit = (rows, r0) => {
+    let sw = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (const p of rows) { const s = (p.lo + p.hi) / 2, w = 1 / (s * s), x = p.R - r0; sw += w; sx += w * x; sy += w * p.v; sxx += w * x * x; sxy += w * x * p.v; }
+    const b = (sw * sxy - sx * sy) / (sw * sxx - sx * sx);
+    return { a: (sy - b * sx) / sw, b };
+  };
+  for (const T of [D.EILERS19, D.JIAO23]) {
+    ok(!!D.SOURCES[T.src], `${T.src} source resolves`);
+    ok(T.rows.every((p, i) => p.lo > 0 && p.hi > 0 && p.v > 100 && p.v < 300 && (!i || p.R > T.rows[i - 1].R)), `${T.src}: sorted by R, positive errors, speeds 100-300 km/s`);
+  }
+  ok(D.EILERS19.rows.length === 38 && D.JIAO23.rows.length === 18, `row counts ${D.EILERS19.rows.length} and ${D.JIAO23.rows.length} (tables: 38 and 18)`);
+  // Checksums of the copied speeds, so that a later typo shows.
+  ok(D.EILERS19.rows.reduce((s, p) => s + p.v, 0).toFixed(2) === '8171.47', 'Eilers speed checksum');
+  ok(D.JIAO23.rows.reduce((s, p) => s + p.v, 0).toFixed(2) === '3731.50', 'Jiao speed checksum');
+  const e = fit(D.EILERS19.rows, D.EILERS19.r0);
+  ok(Math.abs(e.a - 229.0) < 0.2 && Math.abs(e.b + 1.7) < 0.1, `Eilers line fit ${e.a.toFixed(2)} km/s, ${e.b.toFixed(2)} km/s/kpc (paper: 229.0, -1.7)`);
+  const j = fit(D.JIAO23.rows, D.JIAO23.r0);
+  ok(Math.abs(j.b + 2.18) < 0.05, `Jiao line slope ${j.b.toFixed(2)} km/s/kpc (paper: -2.18)`);
+  const drop = D.JIAO23.rows.find(p => p.R === 19.5).v - D.JIAO23.rows.find(p => p.R === 26.5).v;
+  ok(Math.abs(drop - D.ESTIMATES.jiaoDrop.dv) < 2, `Jiao drop 19.5 -> 26.5 kpc ${drop.toFixed(1)} km/s (abstract: about 30)`);
+  ok(Math.abs(D.cosmicDarkFraction() - 0.843) < 0.002, `cosmic dark share of matter ${D.cosmicDarkFraction().toFixed(4)}`);
+  ok(D.HISTORY.every((h, i) => !i || h.year >= D.HISTORY[i - 1].year), 'history sorted by year');
+  const cited = [...D.HISTORY, ...D.METHODS].flatMap(h => h.src).concat(Object.values(D.ESTIMATES).flat().filter(x => x && x.src).map(x => x.src));
+  ok(cited.every(id => D.SOURCES[id]), 'every cited source id resolves');
+  ok(Object.values(D.SOURCES).every(s => s.doi || s.arxiv), 'every source has a DOI or an arXiv id');
+  ok(Math.abs(D.ESTIMATES.localGeV[1].v - M.gev(M.haloDensity(m.halo, m.R0))) < 0.01, 'the McMillan local density in data.js matches model.js');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
