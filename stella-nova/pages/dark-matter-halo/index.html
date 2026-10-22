@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Dark matter in the Milky Way: where the missing mass is — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DARK MATTER HALO  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and text. The page shows why the Milky Way needs dark
+   matter (its rotation curve) and where the estimates put it (the halo),
+   from the McMillan (2017) mass model and measured rotation speeds.
+
+   FACTS
+     Model values: model.js (McMillan 2017, Table 3). Measured points and
+     published values: data.js, each with its source id. The tags mark
+     what is measured, what is a model and what is illustrative.
+
+   NO GPU
+     All figures are 2D canvases. gpu-guard still loads first, because
+     every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module). It imports model.js,
+   halo.js, data.js, draw-charts.js, draw-maps.js and ../../lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips      sticky section bar
+     #halo       halo controls: #famSeg #rsIn #rsOut #rhoIn #rhoOut
+                 #resetBtn #haloRead #sheetClose. Desktop: a sticky bar
+                 under #chips. Phone: a bottom sheet above #dock.
+     #dock       phone only: #dockHalo #dockFam #dockVis
+     hero        #heroStats
+     #s1 gap     #curveCv #visBtn #partsBtn #rangeSeg #fitOut
+     #s2 where   #mapCv #mapSeg #faceCv #facePlay
+     #s3 models  #rhoCv #famCv #rangeTable
+     #s4 share   #fracCv #fracRead
+     #s5 how     #methodList #histList
+     sources     #srcList
+
+   GREP MAP  (main.js)
+     grep -n 'function recompute'     halo controls -> every plot
+     grep -n 'function initControls'  #halo, dock and sheet
+     grep -n 'function initCurve'     section 01
+     grep -n 'function initMaps'      section 02
+     grep -n 'function initModels'    section 03
+     grep -n 'function initFraction'  section 04
+     grep -n 'function initHow'       section 05
+     grep -n 'function loop'          one rAF loop, visible canvases only
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Why the Milky Way spins too fast for its visible mass, and where the dark matter is thought to be: rotation curves against Gaia and APOGEE data, a density map of the halo, four halo models that agree near the Sun and disagree at the centre, and the dark share inside each radius.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Dark matter in the Milky Way</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>Too fast</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Where it is</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>The models disagree</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>How much is dark</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>How it is measured</a></li>
+    <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
+  </ol>
+</nav>
+
+<aside id="halo" aria-label="Dark halo controls">
+  <div class="halo-in">
+    <div class="hc-head"><b>Dark halo</b><span class="dim">changes every plot</span><button id="sheetClose" class="tgl" aria-label="Close the halo controls">Close</button></div>
+    <div class="seg" id="famSeg" role="group" aria-label="Halo family">
+      <button data-v="nfw" class="on">NFW</button><button data-v="einasto">Einasto</button><button data-v="burkert">Burkert</button><button data-v="isothermal">Cored isothermal</button>
+    </div>
+    <label class="ctrl"><span class="sym m4"><i>r</i><sub>s</sub></span><span class="lbl">scale radius</span><input type="range" id="rsIn" min="2" max="50" step="0.1" value="19.6"><output id="rsOut">19.6 kpc</output></label>
+    <label class="ctrl"><span class="sym m7"><i>ρ</i><sub>⊙</sub></span><span class="lbl">density at the Sun</span><input type="range" id="rhoIn" min="0.2" max="0.5" step="0.01" value="0.38"><output id="rhoOut">0.38 GeV/cm³</output></label>
+    <button class="tgl" id="resetBtn">Reset to McMillan 2017</button>
+    <div class="hc-read" id="haloRead"></div>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockHalo" aria-expanded="false" aria-controls="halo">Halo</button>
+  <button id="dockFam" aria-label="Next halo family">NFW</button>
+  <button id="dockVis" aria-pressed="false">Visible only</button>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Astronomy · galactic dynamics</p>
+  <h1>Dark matter in the Milky Way: where the missing mass is</h1>
+  <p class="lede">The Sun goes around the centre of the Galaxy at about 230 km/s. Add up every star and gas cloud that we can see, work out how hard they pull, and they can hold the Sun on its orbit at only about 177 km/s. Farther out the gap gets wider: at 20 kpc from the centre the stars still move at about 200 km/s, where the visible matter alone would allow about 125. The extra pull comes from mass that gives no light. Its estimated shape is a round, diffuse halo that reaches far beyond the disc of stars. How much of it there is, and how it is spread out near the centre, is still argued over.</p>
+  <div class="stats" id="heroStats"></div>
+  <p class="note">The curves come from the Milky Way mass model of McMillan (2017). The dots are measured speeds of real stars. The halo controls at the top let you change the halo; every plot follows. Items tagged <b>illustrative</b> show a shape or an idea, not data.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>Too fast: the rotation curve</h2><p>A rotation curve is the speed of a circular orbit at each distance from the centre. Each part of the Galaxy adds to the pull, and the speeds of the parts add as squares. Switch off the dark halo and see what the visible matter alone can do.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Speed of a circular orbit against radius</h3><span class="tag real">model: McMillan 2017 · dots: measured</span></div>
+      <div class="ctrls top">
+        <button class="tgl" id="visBtn" aria-pressed="false">Visible matter only</button>
+        <button class="tgl on" id="partsBtn" aria-pressed="true">Show each part</button>
+        <div class="seg" id="rangeSeg" role="group" aria-label="Radius range"><button data-v="30" class="on">to 30 kpc</button><button data-v="60">to 60 kpc</button></div>
+      </div>
+      <canvas class="fig chart tall" id="curveCv" aria-label="Rotation curve of the Milky Way: each part, the total, and measured speeds"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--c-total)"></i>total</span>
+        <span><i style="background:var(--c-baryons)"></i>all visible matter</span>
+        <span><i style="background:var(--c-halo)"></i>dark halo</span>
+        <span><i style="background:var(--c-bulge)"></i>bulge</span>
+        <span><i style="background:var(--c-thin)"></i>thin disc</span>
+        <span><i style="background:var(--c-thick)"></i>thick disc</span>
+        <span><i style="background:var(--c-hi)"></i>atomic gas</span>
+        <span><i style="background:var(--c-h2)"></i>molecular gas</span>
+        <span><b class="dot"></b>Eilers et al. 2019</span>
+        <span><b class="sq"></b>Jiao et al. 2023</span>
+      </div>
+      <p class="cap" id="fitOut"></p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Why the speeds add as squares</h3></div>
+      <div class="eqs">
+        <div class="sci-eq" data-tex="v_c^2(R) = R\,\frac{\partial \Phi}{\partial R}"></div>
+        <p>For a circular orbit, the pull toward the centre must equal the speed squared over the radius. The potential <span class="mi">Φ</span> is a sum over the parts, so the squares add:</p>
+        <div class="sci-eq" data-tex="v_c^2 = v_{\mathrm{bulge}}^2 + v_{\mathrm{disc}}^2 + v_{\mathrm{gas}}^2 + v_{\mathrm{halo}}^2"></div>
+        <p>For a round halo only the mass inside <span class="mi">r</span> counts:</p>
+        <div class="sci-eq" data-tex="v_{\mathrm{halo}}^2(r) = \frac{G\,M_{\mathrm{halo}}(&lt;r)}{r}"></div>
+        <p>Past the edge of the mass, the speed would fall as <span class="mi">r</span><sup>−1/2</sup>, the Keplerian law of the planets. The visible matter of the Galaxy is mostly inside 15 kpc, so without a halo the curve would follow that fall.</p>
+      </div>
+      <p class="body dim" id="videoNote"></p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>Where the dark matter is</h2><p>The visible matter is a thin disc and a small bulge. The dark matter is a round cloud around them. Near the Sun it is thin: about 0.01 solar masses per cubic parsec, less than one proton mass per two cubic centimetres. But it fills a volume thousands of times larger than the disc.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>A slice through the Galaxy, edge-on</h3><span class="tag real">model densities, log colour scale</span></div>
+      <div class="seg" id="mapSeg" role="group" aria-label="Map"><button data-v="split" class="on">Density: visible | dark</button><button data-v="share">Dark share of the density</button></div>
+      <canvas class="fig map" id="mapCv" aria-label="Density of visible matter (left) and dark matter (right) in a vertical slice through the Galaxy"></canvas>
+      <p class="cap">The slice contains the rotation axis (the vertical line). Left of it: stars and gas. Right of it: the dark halo, on the same scale. The dots are the Sun's distance on each side. The dashed circles are every 10 kpc from the centre. The visible matter falls off in a few kpc away from the midplane; the halo falls off the same way in every direction.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The disc inside its halo, face-on</h3><span class="tag toy">star positions and arms illustrative</span></div>
+      <canvas class="fig face" id="faceCv" aria-label="The Galactic disc seen from above, inside the glow of the dark halo, with the Sun marked"></canvas>
+      <div class="ctrls"><button class="tgl" id="facePlay">Pause</button><span class="readout" id="faceRead"></span></div>
+      <p class="cap">The violet glow is the dark matter that a line of sight through the halo would cross, on a log scale over three decades. The stars follow the scale length of the thin disc and turn at the speed of the total rotation curve, so the inner disc laps the outer disc. In this model the Sun takes <span id="yearOut">about 216</span> million years for one turn.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>The estimates disagree, mostly at the centre and the edge</h2><p>A rotation curve fixes the mass inside each radius well. It does not fix the shape of the halo. Four common halo families are drawn here, all set to the same density at the Sun. They are families of curves, not fits to the Milky Way: each one could be tuned to match the data near the Sun, and they still disagree by factors of ten or more at the centre.</p></div></div>
+  <div class="grid">
+    <article class="card span-6">
+      <div class="card-top"><h3>Density against distance</h3><span class="tag toy">profile families, same local density</span></div>
+      <canvas class="fig chart tall" id="rhoCv" aria-label="Dark matter density against distance for four halo families"></canvas>
+      <div class="legend" id="famLegend"></div>
+      <p class="cap">The gold bar at the Sun spans the measured local density, 0.30 to 0.38 GeV/cm³. Inside 1 kpc the cusp of NFW climbs while the cores of Burkert and the isothermal sphere stay flat.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Rotation curve with each halo family</h3><span class="tag toy">families, not fits</span></div>
+      <canvas class="fig chart tall" id="famCv" aria-label="Total rotation curve for each halo family"></canvas>
+      <p class="cap">Same visible matter (dashed gold), four halos. The grey band is the spread between them. At the Sun they agree by construction. Where the measured points stop, near 25 kpc, they already differ, and past that nothing ties them down. That is one reason why the published total masses span a factor of about seven.</p>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>Published estimates</h3><span class="tag real">from the papers</span></div>
+      <div class="tblwrap"><table class="range" id="rangeTable"></table></div>
+      <p class="cap">The masses are not all the same quantity. "Total" includes the visible matter. "Virial" is the mass inside the radius where the mean density is 200 times the critical density of the universe. Jiao et al. find a curve that falls almost as the Keplerian law beyond about 19 kpc, which leaves room for much less dark matter far out.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>The four families</h3></div>
+      <div class="eqs fam-eqs">
+        <div class="eq-row"><div class="sci-eq" data-tex="\rho = \frac{\rho_0}{x\,(1+x)^2}"></div><p><b class="fam nfw">NFW.</b> The shape found in cold dark matter simulations. A cusp: the density keeps rising as 1/<span class="mi">r</span> toward the centre.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\rho = \rho_{-2}\, e^{-\frac{2}{\alpha}\left(x^{\alpha}-1\right)}"></div><p><b class="fam einasto">Einasto.</b> Fits newer simulations a little better. The slope gets shallower toward the centre; here <span class="mi">α</span> = 0.17.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\rho = \frac{\rho_0}{(1+x)\,(1+x^2)}"></div><p><b class="fam burkert">Burkert.</b> A flat core. Fits the rotation curves of many dwarf galaxies.</p></div>
+        <div class="eq-row"><div class="sci-eq" data-tex="\rho = \frac{\rho_0}{1+x^2}"></div><p><b class="fam isothermal">Cored isothermal.</b> The oldest model. Gives a flat rotation curve far out, so its mass grows without limit.</p></div>
+        <p class="body dim">In all four, <span class="sci-sym" data-tex="x = r / r_s" data-inline></span>. The controls set <span class="sym m4"><i>r</i><sub>s</sub></span> and then pick <span class="mi">ρ</span><sub>0</sub> so that the density at the Sun is <span class="sym m7"><i>ρ</i><sub>⊙</sub></span>.</p>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>How much of the mass is dark</h2><p>Draw a sphere around the centre and ask what share of the mass inside it is dark. Near the centre the stars of the bulge and disc win. At the Sun's radius it is about half and half. Far out the halo dominates, and the share climbs toward the cosmic average that the Planck satellite measured from the early universe.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Dark share of the mass inside radius r</h3><span class="tag real">model, spherical sum</span></div>
+      <canvas class="fig chart tall" id="fracCv" aria-label="Fraction of the enclosed mass that is dark against radius"></canvas>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The numbers</h3></div>
+      <div class="sci-eq" data-tex="f(&lt;r) = \frac{M_{\mathrm{halo}}(&lt;r)}{M_{\mathrm{halo}}(&lt;r) + M_{\mathrm{vis}}(&lt;r)}"></div>
+      <div class="trials" id="fracRead"></div>
+      <p class="body dim">Why the evidence is strongest far out, not at the Sun: at the Sun the visible matter already gives about three quarters of the speed, so the halo needed there depends on how well we know the mass of the disc. At 20 kpc and beyond the visible matter cannot come close.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>How it is measured</h2><p>Nobody sees the halo. Its mass is read from how things move in it, and each method works over its own range of distance.</p></div></div>
+  <div class="grid" id="methodList"></div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>A short history</h3></div>
+      <ol class="tl" id="histList"></ol>
+    </article>
+  </div>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">¶</span><div><h2>Sources</h2><p>The measured points were copied from the tables in the papers' own source files. When we could not fetch a source, we left its numbers out.</p></div></div>
+  <ol class="refs" id="srcList"></ol>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
