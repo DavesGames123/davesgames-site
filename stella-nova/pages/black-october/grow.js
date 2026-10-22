@@ -20,6 +20,18 @@
 //  The edges are the drawing of a parent link, not events. Only the nodes
 //  carry data.
 //
+//  THE BEFORE BAND. One time scale cannot hold the data: the first event is
+//  540 days before the last, and 190 of 210 events are in the last 11 days.
+//  Thus the layout has a window. windowStart 'auto' is the first event in
+//  the UTC month of the last event (for the ledger: the first October
+//  event). Events before the window go in an inner band, from bandIn to
+//  bandOut, at even steps in time order (equal times share a radius). The
+//  window starts at bandOut + bandGap and keeps radius = time to 1. Between
+//  the knots radiusOf is linear, so the radius is monotone in time over the
+//  whole set. With no event before the window there is no band, and the
+//  layout is the same as with windowStart null (one scale from the first
+//  event).
+//
 //  DOM-free ES module. It runs in the page and in node tests.
 //
 //  USE
@@ -30,8 +42,11 @@
 //    L.nodes[i]  { id, ev, thread, parent, depth, t, r, a, x, y }
 //    L.edges[k]  { from, to, pts }   pts = Float32Array x,y,x,y,...
 //    L.threads   [{ id, root, count, a0, a1 }]
-//    L.rings     [{ t, r, label }]    one ring per UTC day
+//    L.rings     [{ t, r, label }]    one ring per UTC day in the window
 //    L.radiusOf(ms) -> r              the same time scale as the nodes
+//    L.tw                             the window start (ms)
+//    L.band      null, or { r0, r1, rMain, t0, t1, count, label, months }
+//                months = [{ t, r, label 'YYYY-MM' }], monthGap apart
 //
 //  grep -n targets
 //    data rules ............ "export function validate"
@@ -40,6 +55,7 @@
 //    angle walk ............ "function placeAngle"
 //    Brownian bridge ....... "function bridge"
 //    day rings ............. "function dayRings"
+//    before band ........... "function windowOf"  "function bandScale"
 // ============================================================================
 import { rng } from '../../lib/dla-engine.js';
 
@@ -57,7 +73,15 @@ export const DEFAULTS = Object.freeze({
   walkSteps: 600,    // the longest angle walk of one event
   bridgeStep: 0.008, // radial length of one bridge segment
   wiggle: 0.55,      // bridge amplitude, as a part of the parent-child angle room
+  windowStart: 'auto', // 'auto', null (no band), a time in ms or an ISO string
+  bandIn: 0.05,      // radius of the first event before the window
+  bandOut: 0.17,     // radius of the last event before the window
+  bandGap: 0.03,     // empty ring between the band and the window
+  monthGap: 0.01,    // the shortest radial step between two month rings
 });
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+  'September', 'October', 'November', 'December'];
 
 const DAY = 86400000;
 
@@ -189,6 +213,47 @@ export function dayRings(t0, t1, radiusOf) {
   return out;
 }
 
+// The window start in ms, or null. 'auto' is the first event in the UTC
+// month of the last event. order is sorted by t.
+export function windowOf(order, w) {
+  if (w == null || !order.length) return null;
+  if (w === 'auto') {
+    const last = new Date(order[order.length - 1].t);
+    const m0 = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), 1);
+    return order.find(x => x.t >= m0).t;
+  }
+  const ms = typeof w === 'number' ? w : Date.parse(w);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+// The scale with a band: knots at the distinct times before the window
+// (even radius steps from bandIn to bandOut), then the window start at
+// bandOut + bandGap, then main(ms) for the window. Linear between knots.
+export function bandScale(preTimes, tw, main, o) {
+  const ts = [...new Set(preTimes)].sort((a, b) => a - b), m = ts.length;
+  const rs = ts.map((_, i) => m === 1 ? o.bandOut : o.bandIn + (o.bandOut - o.bandIn) * i / (m - 1));
+  ts.push(tw); rs.push(o.bandOut + o.bandGap);
+  return ms => {
+    if (ms >= tw) return main(ms);
+    if (ms <= ts[0]) return rs[0];
+    let i = 1;
+    while (ts[i] < ms) i++;
+    return rs[i - 1] + (rs[i] - rs[i - 1]) * (ms - ts[i - 1]) / (ts[i] - ts[i - 1]);
+  };
+}
+
+// One ring per UTC month start before the window, dropped when it is nearer
+// than monthGap to the ring before it or to the window start.
+function monthRings(t0, tw, radiusOf, o) {
+  const out = [], d = new Date(t0), rw = radiusOf(tw);
+  for (let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); t < tw;) {
+    const r = radiusOf(t), prev = out.length ? out[out.length - 1].r : -Infinity;
+    if (r - prev >= o.monthGap && rw - r >= o.monthGap / 2) out.push({ t, r, label: new Date(t).toISOString().slice(0, 7) });
+    const n = new Date(t); t = Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 1);
+  }
+  return out;
+}
+
 export function layout(events, opts = {}) {
   const o = Object.assign({}, DEFAULTS, opts);
   const problems = validate(events);
@@ -197,7 +262,19 @@ export function layout(events, opts = {}) {
   const order = events.map((e, i) => ({ e, i, t: Date.parse(e.t) }))
     .sort((a, b) => a.t - b.t || a.i - b.i);
   const t0 = order.length ? order[0].t : 0, t1 = order.length ? order[order.length - 1].t : 0;
-  const radiusOf = timeScale(t0, t1, o);
+  const w = windowOf(order, o.windowStart);
+  const pre = w == null ? [] : order.filter(x => x.t < w).map(x => x.t);
+  let radiusOf, band = null, tw = t0;
+  if (pre.length) {
+    tw = w;
+    const rMain = o.bandOut + o.bandGap;
+    radiusOf = bandScale(pre, tw, timeScale(tw, t1, { ...o, inner: rMain }), o);
+    band = { r0: o.bandIn, r1: o.bandOut, rMain, t0, t1: tw,
+      count: pre.length, label: 'before ' + MONTHS[new Date(tw).getUTCMonth()], months: monthRings(t0, tw, radiusOf, o) };
+  } else {
+    if (w != null) tw = Math.min(w, t0);
+    radiusOf = timeScale(tw, t1, o);
+  }
 
   const byThread = new Map();
   for (const { e, t } of order) {
@@ -219,5 +296,5 @@ export function layout(events, opts = {}) {
     nodes.push(n); byId.set(n.id, n);
     if (p) edges.push({ from: p.id, to: n.id, pts: bridge(p, n, th, rand, o) });
   }
-  return { nodes, edges, threads, rings: dayRings(t0, t1, radiusOf), t0, t1, radiusOf, byId, opts: o };
+  return { nodes, edges, threads, rings: dayRings(tw, t1, radiusOf), t0, t1, tw, band, radiusOf, byId, opts: o };
 }

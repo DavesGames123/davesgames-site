@@ -136,5 +136,43 @@ section('seed and cost');
   ok(layout([]).nodes.length === 0, 'no events');
 }
 
+section('before-window band');
+{
+  // The fixture runs 4 days in January 2000. Five early events go 500 to 39
+  // days before it, in their own thread. Without a band they take most of
+  // the radius and the 4 days are a thin rim.
+  const ev = fixture(300), D0 = Date.UTC(2000, 0, 1), src = ev[0].sources;
+  const early = [-500, -300, -200, -40, -39].map((d, i) => ({ id: `early-${i}`, thread: 'early', parent: i ? `early-${i - 1}` : null,
+    t: new Date(D0 + d * 86400e3).toISOString(), tPrecision: 'day', kind: 'other', title: `early ${i}`, summary: '', sources: src, confidence: 'reported' }));
+  const all = [...ev, ...early], L = layout(all, { seed: 7 });
+  const B = L.band;
+  ok(B && B.count === 5, `auto window puts the 5 early events in the band (${B && B.count})`);
+  ok(B && B.label === 'before January', `band label (${B && B.label})`);
+  ok(B && L.tw === D0, 'auto window starts at the first event of the last month');
+  ok(L.rings.length > 0 && L.rings.length <= 5 && L.rings.every(g => g.t >= L.tw), `day rings only in the window (${L.rings.length})`);
+  const win = L.nodes.filter(n => n.t >= L.tw), pre = L.nodes.filter(n => n.t < L.tw);
+  ok(B && win.every(n => n.r >= B.rMain - 1e-12) && near(Math.min(...win.map(n => n.r)), B.rMain) && near(Math.max(...win.map(n => n.r)), 1), 'the window spans rMain to 1');
+  ok(B && B.rMain <= 0.25, `the window keeps most of the radius (rMain ${B && B.rMain})`);
+  ok(B && pre.every(n => n.r >= B.r0 - 1e-12 && n.r <= B.r1 + 1e-12), 'early events stay in the band');
+  const ps = [...pre].sort((a, b) => a.t - b.t);
+  ok(ps.every((n, i) => !i || n.r > ps[i - 1].r), 'the band orders the early events by time');
+  const s = [...L.nodes].sort((a, b) => a.t - b.t);
+  ok(s.every((n, i) => !i || n.r >= s[i - 1].r - 1e-12), 'radius is monotone in time over the whole set');
+  let mono = true;
+  for (let t = D0 - 520 * 86400e3; t < D0 + 5 * 86400e3; t += 3600e3) if (L.radiusOf(t + 3600e3) < L.radiusOf(t) - 1e-12) mono = false;
+  ok(mono, 'radiusOf is monotone from before the first event to after the last');
+  ok(L.nodes.every(n => near(n.r, L.radiusOf(n.t))), 'node radius = radiusOf(t) with a band');
+  ok(B && B.months.length >= 2 && B.months.every(m => /^\d{4}-\d\d$/.test(m.label) && m.r >= B.r0 && m.r <= B.rMain && m.t < L.tw), `month rings in the band (${B && B.months.length})`);
+  ok(B && B.months.every((m, i) => !i || m.r - B.months[i - 1].r >= L.opts.monthGap - 1e-12), 'month rings keep monthGap apart');
+  let back = 0;
+  for (const e of L.edges) { const q = e.pts; for (let k = 1; k < q.length / 2; k++) if (Math.hypot(q[k * 2], q[k * 2 + 1]) < Math.hypot(q[k * 2 - 2], q[k * 2 - 1]) - 1e-5) { back++; break; } }
+  ok(back === 0, `${back} edges go back in time with a band`);
+  const off = layout(all, { seed: 7, windowStart: null });
+  ok(off.band === null && off.rings.length > 400, `windowStart null keeps one time scale (${off.rings.length} rings)`);
+  const fix = layout(all, { seed: 7, windowStart: D0 - 100 * 86400e3 });
+  ok(fix.band && fix.band.count === 3, `an explicit windowStart (${fix.band && fix.band.count} early)`);
+  ok(layout(ev, { seed: 7 }).band === null, 'no band when no event is before the window');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
