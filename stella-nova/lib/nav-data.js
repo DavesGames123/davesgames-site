@@ -99,7 +99,8 @@ w.SN_NAV = [
       ["galaxy", "Galaxy", "SIM"],
       ["blackhole", "Black Hole", "GPU"],
       ["wormhole", "Wormhole", "GPU", "ellis-wormhole"],
-      ["chandrasekhar-limit", "Chandrasekhar Limit", "NEW"]
+      ["chandrasekhar-limit", "Chandrasekhar Limit", "NEW"],
+      ["dark-matter-halo", "Dark Matter Halo", "NEW"]
     ] }
   ] },
   { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [
@@ -260,6 +261,9 @@ w.SN_NAV = [
     ] }
   ] },
   { id: "papers", label: "Research", short: "Research", icon: "¶", color: "#ffa06e", color2: "#c9a7ff", groups: [
+    { h: "Security", p: [
+      ["black-october", "Black October", "NEW"]
+    ] },
     { h: "Physics", p: [
       ["gravitational-imaging", "Gravitational Imaging", "NEW"],
       ["circular-rydberg", "Circular Rydberg Atoms", "NEW"]
