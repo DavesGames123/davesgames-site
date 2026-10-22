@@ -64,6 +64,9 @@ section('validate');
   const loop = structuredClone(ev).slice(0, 7);
   loop.push({ ...loop[0], id: 'a', parent: 'b' }, { ...loop[0], id: 'b', parent: 'a' });
   ok(/loop/.test(validate(loop).join()), 'parent loop');
+  const rel = structuredClone(ev); rel[20].related = ['th0-0']; rel[21].related = ['ghost'];
+  const rp = validate(rel).join();
+  ok(!/th0-0"\] names/.test(rp) && /related \["ghost"\] names an unknown event/.test(rp), 'related ids must exist');
   let threw = false;
   try { layout(bad); } catch (e) { threw = /black-october data/.test(e.message); }
   ok(threw, 'layout throws on bad data');

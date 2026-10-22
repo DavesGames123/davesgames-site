@@ -24,6 +24,8 @@
 //
 //  USE
 //    const problems = validate(events);          // [] when the data is good
+//    A link between threads goes in e.related (ids), not in e.parent: the
+//    parent tree stays in one sector.
 //    const L = layout(events, { seed: 7, scale: 'sqrt' });
 //    L.nodes[i]  { id, ev, thread, parent, depth, t, r, a, x, y }
 //    L.edges[k]  { from, to, pts }   pts = Float32Array x,y,x,y,...
@@ -77,6 +79,7 @@ export function validate(events) {
     if (!CONFIDENCE.includes(e.confidence)) out.push(`${at} confidence "${e.confidence}"`);
     if (typeof e.title !== 'string' || !e.title || e.title.length > 90) out.push(`${at} title is empty or longer than 90`);
     if (!Array.isArray(e.sources) || !e.sources.length) out.push(`${at} no sources`);
+    if (e.related != null && (!Array.isArray(e.related) || e.related.some(r => !byId.has(r) || r === e.id))) out.push(`${at} related ${JSON.stringify(e.related)} names an unknown event`);
     else for (const s of e.sources) if (!s || !/^https?:\/\/\S+$/.test(s.url || '')) out.push(`${at} source url "${s && s.url}"`);
     if (e.parent == null) {
       if (roots.has(e.thread)) out.push(`${at} second root of thread ${e.thread} (first ${roots.get(e.thread)})`);
