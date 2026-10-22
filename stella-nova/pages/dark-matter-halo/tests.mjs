@@ -8,6 +8,9 @@
 //  rings against the Freeman thin disc, the spheroid against a sphere, and
 //  the halo quadrature against the Burkert and isothermal masses.
 //
+//  The shots.js group checks the saver: the seeded plan, the framing in
+//  the plate band at 16:9 and at 9:16, and that the shear test stars fly
+//  apart with the visible matter only and hold with the halo.
 //  The data.js group checks the measured points: a weighted line fit
 //  to each table must give the fit that its paper reports.
 //
@@ -15,6 +18,8 @@
 // ============================================================================
 import * as M from './model.js';
 import * as D from './data.js';
+import * as H from './halo.js';
+import * as Sh from './shots.js';
 
 let pass = 0, fail = 0, cur = '';
 function section(s) { cur = s; console.log('\n# ' + s); }
@@ -122,6 +127,47 @@ section('curve shape');
   ok(again.v2.thin.every((v, i) => v === c.v2.thin[i]), 'opts.discs reuses the disc arrays');
   const t = performance.now(); M.curve(m, Array.from({ length: 120 }, (_, i) => 0.25 + i * 0.5)); const ms = performance.now() - t;
   ok(ms < 3000, `120-radius curve in ${ms.toFixed(0)} ms`);
+}
+
+section('shots.js (saver)');
+{
+  const a = Sh.shotPlan(1, 40, 0.7), b = Sh.shotPlan(1, 40, 0.7), c = Sh.shotPlan(2, 40, 0.7);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'same seed, same plan');
+  ok(a.map(s => s.id).join() !== c.map(s => s.id).join(), 'another seed, another order');
+  ok(a.every(s => s.sec >= 5 && s.sec <= 12) && Sh.shotPlan(9, 40, 0).every(s => s.sec >= 5 && s.sec <= 12) && Sh.shotPlan(9, 40, 1).every(s => s.sec >= 5 && s.sec <= 12), 'every shot lasts 5 to 12 s at calm 0, 0.7 and 1');
+  ok(a.every((s, i) => !i || s.id !== a[i - 1].id), 'no shot follows itself');
+  ok(new Set(a.slice(0, 4).map(s => s.id)).size === 4, 'the first four shots are all four ids');
+  const starts = new Set(Array.from({ length: 12 }, (_, i) => Sh.shotPlan(i + 1, 1)[0].id));
+  ok(starts.size >= 3, `the first shot varies with the seed (${[...starts].join(', ')})`);
+  for (const id of Sh.SHOT_IDS) ok(!('code' in Sh.SHOTS[id]) && Sh.SHOTS[id].title && Sh.SHOTS[id].tex.length, `plate of ${id}: title and TeX, no code`);
+  // Framing: 16:9 and 9:16, with no plate and with a plate band.
+  const frames = [[1280, 720, 0.24, 0.30], [1280, 720, 0, 0], [720, 1280, 0.24, 0.32], [405, 720, 0.26, 0.34], [390, 844, 0, 0]];
+  for (const [w, h, ft, fb] of frames) {
+    const band = { t: h * ft, b: h * fb }, bh = h - band.t - band.b;
+    for (const id of Sh.SHOT_IDS) {
+      const L = Sh.shotLayout(id, w, h, band), tag = `${id} at ${w}x${h} band ${bh.toFixed(0)}px`;
+      ok(L.panels.every(p => p.x >= 0 && p.x + p.w <= w + 0.5 && p.y >= band.t - 0.5 && p.y + p.h <= h - band.b + 0.5), `${tag}: inside the clear band`);
+      const area = L.panels.reduce((s, p) => s + p.w * p.h, 0);
+      ok(area >= 0.3 * w * bh, `${tag}: fills ${(100 * area / (w * bh)).toFixed(0)} % of the band (>= 30 %)`);
+      ok(Math.abs(L.subject.x - w / 2) < 1 && Math.abs(L.subject.y - (band.t + bh / 2)) < 1, `${tag}: centred in the band`);
+      if (id === 'shear') {
+        const [p, q] = L.panels;
+        ok(p.x + p.w <= q.x + 0.5 || p.y + p.h <= q.y + 0.5, `${tag}: the two panels do not overlap`);
+      } else {
+        const p = L.panels[0];
+        ok(p.w / p.h <= 1.61 && p.h / p.w <= 1.11, `${tag}: chart aspect ${(p.w / p.h).toFixed(2)}`);
+      }
+    }
+  }
+  // The shear test: the same launch speeds, two pulls.
+  const base = H.baseOnce(), curve = H.curveFor(base, H.makeHalo('nfw', H.CONTROLS.rs.def, H.CONTROLS.local.def));
+  const sim = Sh.makeShear(curve, 400, 5);
+  for (let i = 0; i < 20; i++) Sh.stepShear(sim, 20);
+  const fv = Sh.spread(sim.sets.visible.stars), fh = Sh.spread(sim.sets.halo.stars);
+  ok(fv > 0.5, `visible matter only: ${(fv * 100).toFixed(0)} % of the stars go past 1.5 x their start radius in 400 Myr`);
+  ok(fh < 0.01, `with the halo: ${(fh * 100).toFixed(1)} % do`);
+  const rr = sim.sets.halo.stars.map(s => Math.hypot(s.x, s.y) / s.r0);
+  ok(Math.max(...rr) < 1.05 && Math.min(...rr) > 0.95, 'with the halo the stars stay on their circles (within 5 %)');
 }
 
 section('data.js');

@@ -9,8 +9,8 @@
 //  One state object (S) holds the controls. recompute() runs once per
 //  animation frame after a control changes, and marks every view dirty.
 //  One rAF loop redraws the views that are on screen and dirty, and the
-//  face-on view while it plays. The loop stops while the saver runs
-//  (window.__dmSaver).
+//  face-on view while it plays. saver.js installs window.snSaver; the loop
+//  stops while the saver runs (window.__dmSaver).
 //
 //  GREP MAP
 //      grep -n 'function fit'           canvas size from CSS size and DPR
@@ -32,6 +32,7 @@ import { SOURCES, EILERS19, JIAO23, ESTIMATES, PLANCK18, cosmicDarkFraction, HIS
 import { chartBox, drawCurve, drawProfiles, drawFamilyCurves, drawFraction } from './draw-charts.js';
 import { drawMeridional, drawFaceOn } from './draw-maps.js';
 import { typesetAll } from '../../lib/sci-math.js';
+import './saver.js';
 
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
