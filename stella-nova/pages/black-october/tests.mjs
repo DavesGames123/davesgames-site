@@ -5,8 +5,13 @@
 //  Covers grow.js on a synthetic event set (fake ids, fake times, example.org
 //  sources): the data rules, radius = time, the sectors, the node spacing,
 //  the edges (start on the parent, end on the child, radius does not
-//  decrease) and the seed. The real events in data/ are checked by
-//  tools/check-events.mjs, not here.
+//  decrease), the seed and the before-window band. The editorial rules of
+//  the real events in data/ are in tools/check-events.mjs.
+//  Then, on the real ledger: the saver shot plan, subjects and framing at
+//  16:9 and 9:16 (saver.js), the page logic (model.js, and render.js on a
+//  recording 2D context), and a link check of main.js: it must import up
+//  to its first browser global, every named import must exist, and every
+//  id it binds must be in index.html. No browser runs.
 //
 //  grep -n targets: "section(" opens each group.
 // ============================================================================
@@ -247,6 +252,112 @@ section('saver shots');
     const txt = [p.title, p.sub, ...(p.lines || [])].join(' ');
     ok(typeof p.title === 'string' && p.title && !p.eq && !p.tex && !p.code && !/[{}]|=>|function\s*\(|const |\$_/.test(txt), `plate for ${kind} is plain text: ${p.title.slice(0, 40)}`);
   }
+}
+
+section('page logic (model.js, render.js)');
+{
+  const { EVENTS } = await import('./data/events.js');
+  const M = await import('./model.js');
+  const R = await import('./render.js');
+  const L = layout(EVENTS, M.LAYOUT_OPTS), N = L.nodes.length;
+  ok(L.band && L.band.label === 'before October' && L.band.count === 20, `ledger band: ${L.band && L.band.label}, ${L.band && L.band.count} events`);
+  ok(L.rings.length === 10 && L.rings[0].label === '2026-10-13', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
+  ok(L.threads.every(t => M.THREAD_NAMES[t.id]), 'every thread has a display name');
+  const C = M.threadColors(L.threads);
+  ok(new Set(C.values()).size === L.threads.length, 'thread colours are distinct');
+  const c = M.counts(EVENTS);
+  ok(c.events === EVENTS.length && c.confirmed + c.reported + c.disputed === c.events, 'counts add up');
+  ok(c.sources === new Set(EVENTS.flatMap(e => e.sources.map(x => x.url))).size && c.threads === L.threads.length, 'counts: distinct sources and threads');
+  ok(M.fmtUTC(Date.UTC(2026, 9, 21, 7, 5)) === '2026-10-21 07:05 UTC' && M.fmtUTC(Date.UTC(2026, 9, 21, 12), 'day') === '2026-10-21', 'fmtUTC minute and day');
+  ok(M.fmtUTC(Date.parse('2026-10-12T21:03:58Z')) === '2026-10-12 21:03:58 UTC', 'fmtUTC keeps seconds');
+  ok(M.dayLabel(Date.UTC(2026, 9, 13)) === '13 Oct' && M.monthLabel(Date.UTC(2025, 4, 1)) === 'May 2025', 'ring labels');
+  ok(EVENTS.every(e => M.KIND_TEXT[e.kind] && M.CONF_TEXT[e.confidence] && M.PREC_TEXT[e.tPrecision]), 'every kind, confidence and precision has text');
+
+  const v = M.fitView({ x: 0, y: 44, w: 390, h: 700 });
+  const [sx, sy] = M.toScreen(v, 0.3, -0.2), [wx, wy] = M.toWorld(v, sx, sy);
+  ok(near(wx, 0.3) && near(wy, -0.2), 'toWorld inverts toScreen');
+  ok(near(M.toScreen(v, 1.14, 0)[0], 390) && near(M.toScreen(v, 0, 0)[1], 44 + 350), 'fit puts the disc in the rect');
+  const z = M.zoomAt(v, 2.5, 120, 300), [a1, b1] = M.toWorld(v, 120, 300), [a2, b2] = M.toWorld(z, 120, 300);
+  ok(near(a1, a2) && near(b1, b2) && near(z.s, v.s * 2.5), 'zoomAt keeps the point under the finger');
+  ok(M.zoomAt(v, 100, 0, 0, 0, v.s * 3).s === v.s * 3, 'zoomAt clamps');
+  const co = M.centreOn(v, 0.5, 0.5, 100, 200), [px, py] = M.toScreen(co, 0.5, 0.5);
+  ok(near(px, 100) && near(py, 200), 'centreOn');
+
+  // a tap on a node picks it (or one at the same spot) at 4x zoom on a phone
+  const v4 = { ...v, s: v.s * 4 };
+  let miss = 0;
+  for (const n of L.nodes) {
+    const [x, y] = M.toScreen(v4, n.x, n.y), p = M.pick(L.nodes, v4, x, y, 22);
+    if (!p || Math.hypot(p.x - n.x, p.y - n.y) > 1e-9) miss++;
+  }
+  ok(miss === 0, `pick at 4x zoom: ${miss} nodes not picked by a tap on them`);
+  ok(M.pick(L.nodes, v, -500, -500, 22) === null, 'pick far away gives null');
+  ok(M.pick(L.nodes, v4, ...M.toScreen(v4, L.nodes[0].x, L.nodes[0].y), 22, n => n !== L.nodes[0]) !== L.nodes[0], 'pick skips hidden nodes');
+
+  const pairs = M.relatedPairs(L);
+  const relIn = EVENTS.reduce((a, e) => a + (e.related || []).length, 0);
+  ok(pairs.length === relIn && pairs.every(([x, y]) => L.byId.get(x).thread !== L.byId.get(y).thread), `related pairs ${pairs.length}, each across threads`);
+  const lk = M.linksOf(L, pairs[0][1]);
+  ok(lk.related.includes(pairs[0][0]), 'linksOf sees a related link from the other end');
+  const deep = L.nodes.reduce((a, n) => n.depth > a.depth ? n : a);
+  const dl = M.linksOf(L, deep.id);
+  ok(dl.chain.length === deep.depth && L.byId.get(dl.chain.at(-1)).parent === null, `linksOf chain goes to the root (depth ${deep.depth})`);
+  ok(L.nodes.every(n => M.linksOf(L, n.id).children.every(ch => L.byId.get(ch).parent === n.id)), 'linksOf children');
+  ok(M.revealCount(L.nodes, -Infinity) === 0 && M.revealCount(L.nodes, Infinity) === N && M.revealCount(L.nodes, L.tw) === 21, 'revealCount (20 before the window, then the first October event)');
+
+  const items = L.nodes.map((n, i) => ({ x: (i * 37) % 390, y: (i * 53) % 700, w: 60 + (i % 5) * 20, h: 13, pri: i }));
+  const placed = M.placeLabels(items, [{ x0: 0, y0: 0, x1: 100, y1: 40 }], 500);
+  let over = 0;
+  const bx = placed.map(p => ({ x0: p.lx, y0: p.ly, x1: p.lx + p.w, y1: p.ly + p.h }));
+  for (let i = 0; i < bx.length; i++) for (let j = i + 1; j < bx.length; j++) { const A = bx[i], B = bx[j]; if (A.x0 < B.x1 && A.x1 > B.x0 && A.y0 < B.y1 && A.y1 > B.y0) over++; }
+  ok(placed.length > 20 && over === 0 && bx.every(b => !(b.x0 < 100 && b.y0 < 40 && b.x1 > 0 && b.y1 > 0)), `placeLabels: ${placed.length} labels, ${over} overlaps, none on the blocked box`);
+
+  // drawScene on a recording 2D context: every call gets finite numbers
+  let calls = 0, bad = 0;
+  const ctx = new Proxy({}, { get(t, k) {
+    if (k === 'measureText') return s => ({ width: String(s).length * 6 });
+    if (k in t) return t[k];
+    return (...a) => { calls++; if (a.some(x => typeof x === 'number' && !Number.isFinite(x))) bad++; };
+  }, set(t, k, val) { t[k] = val; return true; } });
+  const base = { w: 390, h: 844, view: v, zoom: 1, k: N, frac: 1, colors: C, hidden: new Set(), confOff: new Set(), hover: null, sel: null, front: null, labels: 'auto', font: 12, names: M.threadName };
+  const states = [base, { ...base, view: v4, zoom: 4 }, { ...base, sel: deep.id, hover: L.nodes[5].id },
+    { ...base, k: 21, frac: 0.4, front: L.tw }, { ...base, k: 0 }, { ...base, hidden: new Set(['php2shell']), confOff: new Set(['reported']) },
+    { ...base, labels: new Set(L.nodes.slice(0, 30).map(n => n.id)) }, { ...base, view: { ...v, s: v.s * 40, cx: deep.x, cy: deep.y }, zoom: 40 }];
+  for (const st of states) R.drawScene(ctx, L, { ...st });
+  ok(calls > 1000 && bad === 0, `drawScene: ${calls} canvas calls, ${bad} with a non-finite number`);
+  ok(R.nodeRadius(L.nodes[0], 1) > 0 && R.nodeRadius(L.nodes[0], 50) <= R.nodeRadius(L.nodes[0], 1) * 2.41, 'dot size grows with zoom, capped');
+}
+
+section('main.js link check');
+{
+  const fs = await import('node:fs'), path = await import('node:path'), url = await import('node:url');
+  const here = path.dirname(url.fileURLToPath(import.meta.url));
+  let err = null;
+  try { await import('./main.js'); } catch (e) { err = e; }
+  ok(err && err.name === 'ReferenceError' && !(err instanceof SyntaxError), `main.js parses and links; it stops on a browser global (${err && err.name}: ${err && err.message})`);
+  // every named import of the page modules is a real export
+  for (const f of ['main.js', 'saver.js', 'render.js', 'model.js', 'grow.js']) {
+    const src = fs.readFileSync(path.join(here, f), 'utf8');
+    for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']+)'/g)) {
+      const mod = await import(path.join(here, m[2]));
+      const names = m[1].split(',').map(x => x.trim().split(/\s+as\s+/)[0]).filter(Boolean);
+      const miss = names.filter(n => !(n in mod));
+      ok(!miss.length, `${f}: ${m[2]} exports ${miss.length ? 'no ' + miss.join(', ') : names.length + ' names'}`);
+    }
+    for (const m of src.matchAll(/import\(\s*'([^']+)'\s*\)/g)) ok(fs.existsSync(path.join(here, m[1])), `${f}: dynamic import ${m[1]} exists`);
+  }
+  // every id main.js binds to is in index.html
+  const html = fs.readFileSync(path.join(here, 'index.html'), 'utf8'), main = fs.readFileSync(path.join(here, 'main.js'), 'utf8');
+  const ids = [...new Set([...main.matchAll(/\$\('([\w-]+)'\)/g)].map(m => m[1]))];
+  const missing = ids.filter(id => !html.includes(`id="${id}"`));
+  ok(ids.length > 15 && !missing.length, `index.html has all ${ids.length} ids of main.js${missing.length ? ', missing ' + missing.join(', ') : ''}`);
+  const heads = ['gpu-guard.js', 'wishlist.js', 'stats-beacon.js'].map(s => html.indexOf(s));
+  ok(heads.every(i => i > 0) && heads[0] < heads[1] && heads[1] < heads[2] && heads[2] < html.indexOf('style.css'), 'head order gpu-guard, wishlist, stats-beacon, style');
+  ok(/<title>Black October/.test(html) && html.includes('src="main.js"'), 'title and main.js');
+  const css = fs.readFileSync(path.join(here, 'style.css'), 'utf8');
+  ok(/\[hidden\]\{display:none!important\}/.test(css), 'style.css has [hidden]{display:none!important}');
+  ok(/rel: 'noopener noreferrer'/.test(main) && !/\.innerHTML\s*=/.test(main), 'source links get rel noopener; main.js sets no innerHTML');
+  ok(!/text-transform:\s*uppercase|letter-spacing:\s*\.?[1-9]/.test(css), 'no uppercase letter-spaced labels');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
