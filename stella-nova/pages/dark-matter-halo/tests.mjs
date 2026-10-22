@@ -11,6 +11,10 @@
 //  The shots.js group checks the saver: the seeded plan, the framing in
 //  the plate band at 16:9 and at 9:16, and that the shear test stars fly
 //  apart with the visible matter only and hold with the halo.
+//  The halo.js group checks the page logic against model.js and closed
+//  forms. The page group links main.js in node (a SyntaxError or a
+//  missing export blanks the page) and checks that index.html has every
+//  id main.js binds, the head load order and the [hidden] guard.
 //  The data.js group checks the measured points: a weighted line fit
 //  to each table must give the fit that its paper reports.
 //
@@ -20,6 +24,10 @@ import * as M from './model.js';
 import * as D from './data.js';
 import * as H from './halo.js';
 import * as Sh from './shots.js';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const HERE = fileURLToPath(new URL('.', import.meta.url));
 
 let pass = 0, fail = 0, cur = '';
 function section(s) { cur = s; console.log('\n# ' + s); }
@@ -168,6 +176,61 @@ section('shots.js (saver)');
   ok(fh < 0.01, `with the halo: ${(fh * 100).toFixed(1)} % do`);
   const rr = sim.sets.halo.stars.map(s => Math.hypot(s.x, s.y) / s.r0);
   ok(Math.max(...rr) < 1.05 && Math.min(...rr) > 0.95, 'with the halo the stars stay on their circles (within 5 %)');
+}
+
+section('halo.js (page logic)');
+{
+  const R0 = m.R0, base = H.baseOnce();
+  ok(H.CURVE_R.every((r, i) => !i || r > H.CURVE_R[i - 1]) && H.CURVE_R.includes(R0), 'curve grid sorted and holds R0');
+  const def = H.makeHalo('nfw', H.CONTROLS.rs.def, H.CONTROLS.local.def);
+  ok(rel(def.rho0, m.halo.rho0) < 1e-9 && def.rs === m.halo.rs, 'the default controls give the McMillan halo');
+  for (const f of H.FAMILIES) for (const loc of [0.2, 0.3, 0.5]) {
+    const h = H.makeHalo(f, 12, loc);
+    ok(Math.abs(M.gev(M.haloDensity(h, R0)) - loc) < 1e-9, `${f} at ${loc} GeV/cm^3: density at the Sun matches`);
+  }
+  const bur = H.makeHalo('burkert', 9, 0.34);
+  const want = M.curve(H.withHalo(bur), [3, R0, 40]), got = H.curveFor(base, bur);
+  [3, R0, 40].forEach((r, i) => { const j = H.CURVE_R.indexOf(r); ok(j < 0 || rel(got.v.total[j], want.v.total[i]) < 1e-9, `curveFor (cached discs) = curve at R ${r}`); });
+  const mb = H.baseFractions(), c = H.curveFor(base, def), s = H.summary(base, def, c, mb);
+  ok(Math.abs(s.vSun - 233.2) < 0.2, `summary: ${s.vSun.toFixed(2)} km/s at the Sun`);
+  ok(Math.abs(s.vSunBaryons - 177) < 1, `summary: visible matter alone ${s.vSunBaryons.toFixed(1)} km/s (about 177)`);
+  ok(Math.abs(s.fracSun - 0.47) < 0.01 && Math.abs(s.frac50 - 0.87) < 0.01, `summary: dark ${(s.fracSun * 100).toFixed(1)} % inside R0, ${(s.frac50 * 100).toFixed(1)} % inside 50 kpc`);
+  ok(rel(s.Mv, m.derived.Mv) < 0.02, `summary: virial mass ${s.Mv.toExponential(3)}`);
+  for (const r of [3, 20, 100]) ok(Math.abs(H.at(H.FRAC_R, H.fractionCurve(def, mb), r) - M.darkFraction(m, r).frac) < 0.01, `fractionCurve at ${r} kpc matches darkFraction`);
+  const fr = H.fractionCurve(def, mb);
+  ok(fr.every((f, i) => H.FRAC_R[i] < 2 || f >= fr[i - 1]), 'dark share rises outward past 2 kpc');
+  const nx = 60, nz = 40, g = H.densityGrid(m, 'halo', nx, nz, 30, 20);
+  ok(g.every((v, k) => Math.abs(v - g[(nz - 1 - Math.floor(k / nx)) * nx + (k % nx)]) < 1e-6), 'density grid is symmetric in z');
+  const it = { family: 'isothermal', rho0: 1e7, rs: 4 };
+  for (const R of [0, 8, 25]) {
+    const a = Math.hypot(4, R), exact = 2 * 1e7 * 16 / a * Math.atan(300 / a) * 1e-6;
+    ok(rel(H.haloColumn(it, R), exact) < 0.01, `halo column at R ${R}: ${H.haloColumn(it, R).toFixed(2)} vs ${exact.toFixed(2)} Msun/pc^2`);
+  }
+  const e38 = H.misfit(c, D.EILERS19.rows), e30 = H.misfit(H.curveFor(base, H.makeHalo('nfw', H.CONTROLS.rs.def, 0.30)), D.EILERS19.rows);
+  ok(e38.mean > 0 && e30.rms < e38.rms, `the McMillan curve runs above Eilers (mean ${e38.mean.toFixed(1)}); 0.30 GeV/cm^3 fits better (rms ${e30.rms.toFixed(1)} vs ${e38.rms.toFixed(1)})`);
+  const st = H.discStars(500, 4), st2 = H.discStars(500, 4);
+  ok(st.length === 500 && st.every(x => x.R > 0 && x.R <= 22) && JSON.stringify(st) === JSON.stringify(st2), 'disc stars: seeded, inside 22 kpc');
+}
+
+section('page: link and markup');
+{
+  const run = spawnSync(process.execPath, ['--input-type=module', '-e', "await import('./main.js')"], { cwd: HERE, encoding: 'utf8', timeout: 60000 });
+  const err = run.stderr || '';
+  ok(!/SyntaxError/.test(err), 'main.js links (no SyntaxError)' + (/SyntaxError/.test(err) ? ': ' + err.split('\n').find(l => /SyntaxError/.test(l)) : ''));
+  ok(/ReferenceError: (matchMedia|window|document|IntersectionObserver|addEventListener|requestAnimationFrame) is not defined/.test(err), 'main.js ran in node until a browser global');
+  const html = readFileSync(HERE + 'index.html', 'utf8'), js = readFileSync(HERE + 'main.js', 'utf8'), css = readFileSync(HERE + 'style.css', 'utf8');
+  const ids = [...new Set([...js.matchAll(/\$\('([A-Za-z0-9_-]+)'\)/g)].map(x => x[1]))];
+  const missing = ids.filter(id => !html.includes(`id="${id}"`));
+  ok(ids.length > 20 && !missing.length, `index.html has all ${ids.length} ids main.js binds` + (missing.length ? ` (missing ${missing.join(', ')})` : ''));
+  const head = ['gpu-guard.js', 'wishlist.js', 'stats-beacon.js'].map(f => html.indexOf(f));
+  ok(head.every(i => i > 0) && head[0] < head[1] && head[1] < head[2] && head[2] < html.indexOf('<meta charset'), 'head order: gpu-guard, wishlist, stats-beacon');
+  ok(/\[hidden\]\{display:none!important\}/.test(css), 'style.css has the [hidden] guard');
+  ok(!/katex/i.test(html + js) && js.includes("../../lib/sci-math.js") && html.includes('../../lib/sci.css'), 'math through sci-math.js and sci.css, no KaTeX');
+  ok(js.includes("import './saver.js'"), 'main.js imports saver.js');
+  // rem is the root size (16px; style.css does not set it). Canvas text
+  // in draw-*.js uses fs >= 11 (see the fs defaults there).
+  const small = [...css.matchAll(/font(?:-size)?:\s*(?:[0-9]{3}\s+)?([0-9.]+)(px|rem)/g)].map(x => x[2] === 'rem' ? +x[1] * 16 : +x[1]);
+  ok(small.length > 10 && small.every(px => px >= 11), `no CSS text under 11px (${small.length} sizes, smallest ${Math.min(...small).toFixed(1)}px)`);
 }
 
 section('data.js');
