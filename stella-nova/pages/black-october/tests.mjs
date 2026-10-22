@@ -270,6 +270,7 @@ section('page logic (model.js, render.js)');
   ok(c.sources === new Set(EVENTS.flatMap(e => e.sources.map(x => x.url))).size && c.threads === L.threads.length, 'counts: distinct sources and threads');
   ok(M.fmtUTC(Date.UTC(2026, 9, 21, 7, 5)) === '2026-10-21 07:05 UTC' && M.fmtUTC(Date.UTC(2026, 9, 21, 12), 'day') === '2026-10-21', 'fmtUTC minute and day');
   ok(M.fmtUTC(Date.parse('2026-10-12T21:03:58Z')) === '2026-10-12 21:03:58 UTC', 'fmtUTC keeps seconds');
+  ok(M.fmtUTC(Date.UTC(2026, 9, 21, 9, 10), 'hour') === '2026-10-21 about 09:00 UTC' && M.fmtUTC(Date.UTC(2026, 9, 21, 14, 41), 'hour') === '2026-10-21 about 15:00 UTC', 'fmtUTC hour shows no minutes the source does not give');
   ok(M.dayLabel(Date.UTC(2026, 9, 13)) === '13 Oct' && M.monthLabel(Date.UTC(2025, 4, 1)) === 'May 2025', 'ring labels');
   ok(EVENTS.every(e => M.KIND_TEXT[e.kind] && M.CONF_TEXT[e.confidence] && M.PREC_TEXT[e.tPrecision]), 'every kind, confidence and precision has text');
 

@@ -74,9 +74,14 @@ export function threadColors(threads) {
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const p2 = n => String(n).padStart(2, '0');
 // UTC text of a time, cut to its precision. 'day' gives the date only.
+// 'hour' goes to the nearest hour with "about": some sources give an
+// approximate time with minutes (for example 09:10 from a liveblog), and
+// the minutes would show a precision that the source does not have.
 export function fmtUTC(ms, prec = 'minute') {
+  if (prec === 'hour') ms = Math.round(ms / 3600000) * 3600000;
   const d = new Date(ms), date = `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
   if (prec === 'day') return date;
+  if (prec === 'hour') return `${date} about ${p2(d.getUTCHours())}:00 UTC`;
   const s = d.getUTCSeconds() ? ':' + p2(d.getUTCSeconds()) : '';
   return `${date} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}${s} UTC`;
 }
