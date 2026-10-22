@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Black October — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BLACK OCTOBER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A record of the run of security incidents and disclosures that a post
+   on X named "Black October" in October 2026. The page draws the event
+   ledger as a growth: the distance from the centre is time, each thread
+   (one incident) has its own wedge, and each line is a parent link that
+   goes outward in time. Layout: grow.js. Records: data/events.js.
+
+   FACTS
+     Every date, name and count on the page comes from data/events.js. The
+     intro numbers and the counts strip are counted from it at load. The
+     thread names are a fixed table in model.js (THREAD_NAMES). The records
+     describe the bug class, the impact, the timing and the response. They
+     give no exploit steps.
+
+   NO GPU
+     The page draws on one 2D canvas. gpu-guard still loads first, because
+     every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts)
+   Script at the end of body: main.js (module). It imports grow.js,
+   model.js, render.js and data/events.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #cv        the growth, full window; drag pans, wheel and pinch zoom
+     #panel     intro (#lede), #counts, the key, #threadList (#thAll
+                #thNone), #confList. Desktop: a column on the left.
+                Phone portrait: a bottom sheet (#sheetGrip). Phone
+                landscape: a drawer on the right.
+     #timebar   #panelBtn #play #scrub #speed #tLabel #tCount
+     #zoomCtl   #zIn #zOut #zFit
+     #hint      the first-use hint; it fades after the first move
+     #card      the record of one event: #cardBody #cardPrev #cardNext
+                #cardClose
+
+   GREP MAP  (main.js)
+     grep -n 'function buildPanel'    intro, counts, key, filters
+     grep -n 'function showCard'      the record card
+     grep -n 'function setK'          the playhead and the time label
+     grep -n 'function tick'          play loop
+     grep -n 'function bindPointer'   pan, zoom, pinch, hover, tap
+     grep -n 'function draw'          one frame
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Black October, October 2026: a sourced record of the security incidents and disclosures given one name, drawn as a growth. Radius is time, each wedge is one incident, every dot links to its sources.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Black October</div>
+</div>
+
+<canvas id="cv" aria-label="The event growth. Distance from the centre is time; each wedge is one thread."></canvas>
+
+<aside id="panel" aria-label="About this record">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button id="panelClose" class="icon" aria-label="Close the panel">✕</button>
+  <header class="intro">
+    <p class="kicker">Security · a record of October 2026</p>
+    <h1>Black October</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+  <div id="counts" class="counts" aria-label="Counts"></div>
+
+  <section class="key">
+    <h2>How to read this</h2>
+    <ul>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><circle cx="20" cy="12" r="4" fill="none" stroke="#5a6072"/><circle cx="20" cy="12" r="9" fill="none" stroke="#5a6072"/><circle cx="20" cy="12" r="11.5" fill="none" stroke="#8b91a3" stroke-dasharray="1 2"/></svg><span>The distance from the centre is time. Each thin ring is one UTC day, and each day has the same width. The shaded band in the middle holds the events <span id="keyBefore">before the window</span>, in time order but not to scale, with a dashed ring at each month.</span></li>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><path d="M20 22 L4 2 M20 22 L36 2" stroke="#5a6072" fill="none"/><path d="M20 20 C 18 14, 22 10, 16 3" stroke="#e8a65c" fill="none" stroke-width="1.3"/></svg><span>Each wedge is one thread: one incident and the events that follow from it. A line joins an event to the event it follows from, and always runs outward in time.</span></li>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><circle cx="8" cy="12" r="4.2" fill="#9ccf6a"/><circle cx="20" cy="12" r="3.6" fill="none" stroke="#9ccf6a" stroke-width="1.2"/><circle cx="32" cy="12" r="3.6" fill="none" stroke="#9ccf6a" stroke-width="1.2"/><path d="M27.5 16.5 L36.5 7.5" stroke="#9ccf6a" stroke-width="1.3"/></svg><span><b>Filled</b>: confirmed, a primary source states it. <b>Hollow</b>: reported, news only. <b>Slashed</b>: disputed, the sources disagree or the claim is denied.</span></li>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><circle cx="9" cy="12" r="2.2" fill="#8b91a3"/><circle cx="20" cy="12" r="3.4" fill="#8b91a3"/><circle cx="32" cy="12" r="4.8" fill="#8b91a3"/></svg><span>A bigger dot has more sources. The first event of a thread is a little bigger.</span></li>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><path d="M4 20 Q 20 -4 36 20" stroke="rgba(225,228,240,0.6)" stroke-dasharray="3 3" fill="none"/></svg><span>A dashed arc is a link between two threads that a source makes.</span></li>
+      <li><svg viewBox="0 0 40 24" aria-hidden="true"><circle cx="20" cy="12" r="5" fill="#e6e8ee"/><circle cx="20" cy="12" r="8.5" fill="none" stroke="#fff" stroke-width="1.4"/></svg><span>Point at a dot, or tap it, for its record and every source. Drag to move, scroll or pinch to zoom. Press play to watch the record grow, one event at a time.</span></li>
+    </ul>
+  </section>
+
+  <section class="filters">
+    <div class="fhead"><h2>Threads</h2><div class="fbtns"><button id="thAll">All</button><button id="thNone">None</button></div></div>
+    <ul id="threadList" class="tlist"></ul>
+    <h2>Confidence</h2>
+    <div id="confList" class="clist"></div>
+  </section>
+
+  <p class="foot" id="foot">The ledger was gathered on 22 October 2026, while events were still going on. The records describe the class of each bug, its impact, its timing and the response. They do not give exploit steps. Organisations are named, private people are not. Source links open the publisher's page in a new tab.</p>
+</aside>
+
+<div id="zoomCtl">
+  <button id="zIn" aria-label="Zoom in">+</button>
+  <button id="zOut" aria-label="Zoom out">−</button>
+  <button id="zFit" aria-label="Fit the whole record">fit</button>
+</div>
+
+<div id="hint">Drag to move · scroll or pinch to zoom · point at or tap a dot for its record</div>
+
+<article id="card" hidden aria-live="polite">
+  <div class="card-nav">
+    <button id="cardPrev" aria-label="Earlier event">‹ earlier</button>
+    <button id="cardNext" aria-label="Later event">later ›</button>
+    <button id="cardClose" class="icon" aria-label="Close the record">✕</button>
+  </div>
+  <div id="cardBody"></div>
+</article>
+
+<div id="timebar">
+  <button id="panelBtn" class="icon" aria-label="About and filters" aria-expanded="false">☰</button>
+  <button id="play" class="icon" aria-label="Play the growth">▶</button>
+  <div class="tmid">
+    <input type="range" id="scrub" min="0" max="1" step="1" value="1" aria-label="Number of events shown, in time order">
+    <div class="tread"><span id="tLabel"></span><span id="tCount"></span></div>
+  </div>
+  <button id="speed" aria-label="Play speed">1×</button>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
