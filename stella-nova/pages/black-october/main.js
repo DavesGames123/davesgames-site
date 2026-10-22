@@ -23,6 +23,7 @@ import { EVENTS } from './data/events.js';
 import { layout } from './grow.js';
 import * as M from './model.js';
 import { drawScene, PAL } from './render.js';
+import './saver.js';
 
 const PHONE_Q = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
 const L = layout(EVENTS, M.LAYOUT_OPTS);

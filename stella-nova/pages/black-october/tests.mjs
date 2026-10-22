@@ -174,5 +174,80 @@ section('before-window band');
   ok(layout(ev, { seed: 7 }).band === null, 'no band when no event is before the window');
 }
 
+section('saver shots');
+{
+  const { EVENTS } = await import('./data/events.js');
+  const SV = await import('./saver.js');
+  const { LAYOUT_OPTS, relatedPairs } = await import('./model.js');
+  const L = layout(EVENTS, LAYOUT_OPTS), N = L.nodes.length;
+  for (const seed of [1, 7, 42, 12345]) for (const calm of [0, 0.7, 1]) {
+    const P = SV.shotPlan(seed, 50, calm);
+    ok(P.length === 50 && P.every(s => s.sec >= 5 && s.sec <= 12 && SV.SHOT_KINDS.includes(s.kind)), `plan cuts 5-12 s seed=${seed} calm=${calm}`);
+    ok(P.every((s, i) => !i || s.kind !== P[i - 1].kind), `no kind twice in a row seed=${seed} calm=${calm}`);
+  }
+  const orders = new Set([1, 2, 3, 4, 5, 6, 7, 8].map(s => SV.shotPlan(s, 10).map(x => x.kind).join()));
+  ok(orders.size >= 5, `plans vary with the seed (${orders.size} of 8)`);
+  ok(SV.shotPlan(9, 12).map(x => x.kind + x.sec).join() === SV.shotPlan(9, 12).map(x => x.kind + x.sec).join(), 'plan is the same for one seed');
+
+  // the subjects are real data in the replay at the cut
+  const pairs = new Set(relatedPairs(L).map(p => [...p].sort().join('|')));
+  let real = 0, total = 0;
+  for (const k of [1, 5, 20, 21, 60, 120, 170, N]) {
+    const rand = rng(k);
+    const nw = SV.shotTarget(L, k, 'newest', rand);
+    total++; if (nw.focus === L.nodes[k - 1].id) real++;
+    const th = SV.shotTarget(L, k, 'thread', rand), shown = L.nodes.slice(0, k);
+    const cnt = id => shown.filter(n => n.thread === id).length;
+    total++; if (th.ids.length === cnt(th.thread) && shown.every(n => cnt(n.thread) <= th.ids.length)) real++;
+    const dp = SV.shotTarget(L, k, 'disputed', rand);
+    total++; if (dp === null ? !shown.some(n => n.ev.confidence === 'disputed') : (L.byId.get(dp.focus).ev.confidence === 'disputed' && L.nodes.indexOf(L.byId.get(dp.focus)) < k)) real++;
+    const lk = SV.shotTarget(L, k, 'link', rand);
+    total++; if (lk === null ? true : (pairs.has([...lk.ids].sort().join('|')) && lk.ids.every(id => L.nodes.indexOf(L.byId.get(id)) < k))) real++;
+  }
+  ok(real === total, `shot subjects are shown events of the right kind (${real}/${total})`);
+  ok(SV.shotTarget(L, N, 'link', rng(1)) !== null && SV.shotTarget(L, N, 'disputed', rng(1)) !== null, 'the full record has a link and a disputed shot');
+  ok(SV.pickTarget(L, 1, 'link', rng(1)).kind === 'newest', 'a kind with no subject falls back to the newest event');
+
+  // framing: the target circle stays in the clear band at 16:9 and 9:16,
+  // with and without a plate, through the whole push-in and drift
+  const frames = [
+    ['16:9', 1920, 1080, { t: 0, b: 0 }], ['16:9 plate', 1920, 1080, { t: 260, b: 230 }],
+    ['9:16', 1080, 1920, { t: 0, b: 0 }], ['9:16 plate', 1080, 1920, { t: 420, b: 470 }],
+    ['phone 9:16 plate', 390, 844, { t: 190, b: 200 }],
+  ];
+  for (const [name, w, h, band] of frames) {
+    let out = 0, n = 0, small = 0;
+    for (const seed of [1, 7, 42]) {
+      const rand = rng(seed), P = SV.shotPlan(seed, 30, 0.7);
+      P.forEach((shot, i) => {
+        const k = Math.max(1, Math.round((i + 1) / P.length * N));
+        const T = SV.pickTarget(L, k, shot.kind, rand), drift = rand() * Math.PI * 2;
+        for (const u of [0, 0.25, 0.5, 0.75, 1]) {
+          const v = SV.shotView(T, w, h, band, u, drift);
+          const x = (T.cx - v.cx) * v.s + v.ox, y = (T.cy - v.cy) * v.s + v.oy, r = T.R * v.s;
+          n++;
+          if (x - r < -0.5 || x + r > w + 0.5 || y - r < band.t - 0.5 || y + r > h - band.b + 0.5) out++;
+          if (r < Math.min(w, h - band.t - band.b) * 0.35) small++;
+        }
+      });
+    }
+    ok(out === 0, `${name}: ${out} of ${n} frames put the subject outside the clear band`);
+    ok(small === 0, `${name}: ${small} frames make the subject small`);
+  }
+
+  // the replay runs from the first event to the last
+  const steps = SV.growthSteps(L);
+  const g0 = SV.growthAt(steps, 0), g1 = SV.growthAt(steps, 1);
+  ok(g0.k === 1 && g0.frac === 0 && g1.k === N && g1.frac === 1, `replay starts on the first event and ends on all ${N}`);
+  let mono = true, prev = 0;
+  for (let x = 0; x <= 1.0001; x += 0.002) { const G = SV.growthAt(steps, x), v = G.k - 1 + G.frac; if (v < prev - 1e-9) mono = false; prev = v; }
+  ok(mono, 'the replay never goes back');
+  for (const kind of SV.SHOT_KINDS) {
+    const T = SV.pickTarget(L, N, kind, rng(3)), p = SV.plateFor(L, T, N);
+    const txt = [p.title, p.sub, ...(p.lines || [])].join(' ');
+    ok(typeof p.title === 'string' && p.title && !p.eq && !p.tex && !p.code && !/[{}]|=>|function\s*\(|const |\$_/.test(txt), `plate for ${kind} is plain text: ${p.title.slice(0, 40)}`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
