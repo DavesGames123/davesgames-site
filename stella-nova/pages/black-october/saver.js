@@ -110,6 +110,9 @@ export function growthSteps(L) {
   return L.nodes.map((n, i) => i ? Math.min(0.9, Math.max(0.12, 0.12 + 2.6 * (n.r - L.nodes[i - 1].r))) : 0.3);
 }
 export function growthAt(steps, x) {
+  // The end is exact: the subtraction below can leave a rounding remainder
+  // inside the last step (seen with 401 events: frac 0.99999999999853).
+  if (x >= 1) return { k: steps.length, frac: 1 };
   const total = steps.reduce((a, b) => a + b, 0);
   let t = Math.min(1, Math.max(0, x)) * total;
   for (let i = 0; i < steps.length; i++) {
