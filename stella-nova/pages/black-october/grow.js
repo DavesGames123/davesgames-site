@@ -21,7 +21,7 @@
 //  carry data.
 //
 //  THE BEFORE BAND. One time scale cannot hold the data: the first event is
-//  540 days before the last, and 190 of 210 events are in the last 11 days.
+//  541 days before the last, and 256 of 297 events are in the last 11 days.
 //  Thus the layout has a window. windowStart 'auto' is the first event in
 //  the UTC month of the last event (for the ledger: the first October
 //  event). Events before the window go in an inner band, from bandIn to

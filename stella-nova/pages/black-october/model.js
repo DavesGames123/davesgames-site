@@ -39,6 +39,13 @@ export const THREAD_NAMES = Object.freeze({
   quest: 'Quest Diagnostics breach',
   'ca-students': 'California student data (ETS)',
   cairn: 'Cairn agent platform',
+  'fridge-attack': 'French supermarket refrigeration',
+  connectwise: 'ConnectWise Cloud Backup',
+  artex: 'ARTEX and Korean banks',
+  'claude-code-campaigns': 'Claude Code agent campaigns',
+  aomei: 'AOMEI update-server tampering',
+  paradigm: 'Paradigm Healthcare (Medi-Cal)',
+  pwnescape: 'PwnEscape KVM escape (Linux)',
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
