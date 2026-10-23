@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Octane number: why some fuels knock — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   OCTANE NUMBER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and text. The page explains the octane number: the scale
+   (a blend of two reference fuels), knock in the cylinder (a one-zone
+   engine model with the Douaud-Eyzat ignition delay and the Livengood-Wu
+   integral), why the shape of a molecule sets its number (C-H sites and
+   the low-temperature chain), and what RON, MON and the pump sign mean.
+
+   SHARED WITH THE CHEMISTRY PAGES
+     The 3D molecules are the Molecule Explorer view (molecules/view3d.js,
+     three.js r160) with its draw-then-lift intro (molecules/drawlift.js)
+     and model (molecules/chem.js). The records are the Explorer library
+     rows, plus five made the same way (build/fuels.mjs -> data/fuels.json).
+
+   FACTS
+     data.js: measured RON and MON, test conditions, bond energies, each
+     with its source id. Tags: "measured", "model", "illustrative".
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   End of body: the importmap for three r160, then main.js (module). The
+   page loads three.js and view3d.js only when a 3D view comes on screen.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips      sticky section bar
+     hero        #heroA #heroB (3D canvases) #heroLabA #heroLabB #heroStats
+     #s1 scale   #blendCv #blendIn #blendOut #sampleSeg #meterCv #meterRead #cfrTable
+     #s2 knock   #cylCv #presCv #knockPlay #knockRead #onIn #crIn #sparkIn
+                 #boostIn #rpmIn (+ Out) #presetSeg #reqCv #sparkCv
+     #s3 shape   #molCv #molLabels #fuelSeg #molInfo #siteBars #hTgl
+                 #ladderCv #mechCv #mechSeg #mechText #shiftCv #bdeList
+     #s4 pump    #ronMonCv #pumpTable #pumpIn #pumpOut #pumpSeg
+     #s5 history #histList #seeList
+     sources     #srcList
+
+   GREP MAP  (main.js)
+     grep -n 'function initHero'     two 3D molecules, draw then lift
+     grep -n 'function initScale'    01 blend and knock meter
+     grep -n 'function initKnock'    02 cylinder, pressure, controls
+     grep -n 'function initShape'    03 3D fuel, ladder, chain, shifts
+     grep -n 'function initPump'     04 RON-MON plot, pump converter
+     grep -n 'function loop'         one rAF loop, visible views only
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="What the octane number on the pump measures: a scale made from two reference fuels, knock in the cylinder from a live engine model, and why branched, ring and alcohol molecules resist it, shown on 3D molecules from the Molecule Explorer.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Octane number</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>The scale</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Knock</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Why shape matters</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>RON, MON, the pump</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>History</a></li>
+    <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
+  </ol>
+</nav>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <div class="hero-text">
+    <p class="kicker">Chemistry · fuels and combustion</p>
+    <h1>Octane number: why some fuels knock</h1>
+    <p class="lede">The number on a petrol pump is not a measure of energy. Every gasoline carries about the same energy per litre. The octane number says how well the fuel waits: how long the unburned mixture in the cylinder can be squeezed and heated before it ignites by itself, ahead of the flame from the spark plug. When it does not wait, the engine knocks. The scale runs between two molecules: n-heptane, a straight chain of seven carbons that ignites easily, and iso-octane, a compact, branched chain of eight that does not.</p>
+    <div class="stats" id="heroStats"></div>
+  </div>
+  <div class="hero-pair">
+    <figure class="mol-card">
+      <canvas class="mol3d" id="heroA" aria-label="3D model of n-heptane, a straight chain of seven carbons"></canvas>
+      <figcaption id="heroLabA"><b class="onum zero">0</b><span>n-Heptane</span><em>C<sub>7</sub>H<sub>16</sub>, a straight chain</em></figcaption>
+    </figure>
+    <figure class="mol-card">
+      <canvas class="mol3d" id="heroB" aria-label="3D model of iso-octane, 2,2,4-trimethylpentane, a branched chain"></canvas>
+      <figcaption id="heroLabB"><b class="onum hundred">100</b><span>Iso-octane</span><em>C<sub>8</sub>H<sub>18</sub>, 2,2,4-trimethylpentane</em></figcaption>
+    </figure>
+  </div>
+  <p class="note">The 3D molecules are the views of the <a href="../molecules/index.html">Molecule Explorer</a>: drag to turn them. The engine on this page is a <b>model</b> with one zone of gas; it shows the mechanism and the trends, not a particular engine. Values tagged <b>measured</b> come from the sources at the end.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>The scale is a mixture</h2><p>An octane number is the percentage of iso-octane in a blend with n-heptane. To rate a fuel, a test engine runs on it and its compression is raised until it knocks at a standard strength. Then blends of the two reference fuels are tried until one knocks the same way. A gasoline that matches 91 % iso-octane and 9 % heptane is 91 octane, whatever it is made of.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The reference blend</h3><span class="tag toy">molecules not to scale</span></div>
+      <canvas class="fig blend" id="blendCv" aria-label="A glass of reference fuel: n-heptane molecules (orange) and iso-octane molecules (blue) in the chosen ratio"></canvas>
+      <label class="ctrl"><span class="lbl">iso-octane in the blend</span><input type="range" id="blendIn" min="0" max="100" step="0.5" value="91"><output id="blendOut">91 %</output></label>
+      <p class="cap">Each orange zigzag is a heptane molecule, each blue cluster an iso-octane, drawn from their skeletal formulas. The octane number of the blend is its iso-octane percentage by volume.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Bracketing a sample</h3><span class="tag toy">model of the test</span></div>
+      <div class="seg" id="sampleSeg" role="group" aria-label="Sample fuel"></div>
+      <canvas class="fig meter" id="meterCv" aria-label="Critical compression ratio of the sample and of the reference blend"></canvas>
+      <p class="cap" id="meterRead"></p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Two tests, two numbers</h3><span class="tag real">ASTM D2699, D2700</span></div>
+      <div class="tblwrap"><table class="range" id="cfrTable"></table></div>
+      <p class="cap">Both tests use the same CFR engine: one cylinder, 3.25 in bore and 4.5 in stroke, with a head that moves to change the compression ratio while it runs. The Motor test is the harder one: a hotter mixture and a faster engine. Most fuels rate lower on it. The working range of the tests is about 40 to 120; numbers outside 0-100 are found with blends of the fuel in a reference fuel, or with lead added to iso-octane.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>Knock: the end gas ignites by itself</h2><p>The spark lights a flame that takes a few milliseconds to cross the chamber. As it burns, the hot gas behind it expands and squeezes the unburned mixture ahead of it, the end gas, to higher pressure and temperature. Hot, compressed fuel and air react on their own after a delay. If the delay runs out before the flame arrives, the end gas burns all at once. The pressure jumps and rings at the acoustic frequency of the cylinder: the metallic ping of knock. Heavy knock erodes pistons.</p></div></div>
+  <div class="grid">
+    <article class="card span-8 knock-card">
+      <div class="card-top"><h3>One cycle of one cylinder</h3><span class="tag toy">model: one zone, no heat loss in the end gas</span></div>
+      <div class="knock-figs">
+        <canvas class="fig cyl" id="cylCv" aria-label="Cross-section of the cylinder: piston, spark plug, flame front and end gas"></canvas>
+        <canvas class="fig pres" id="presCv" aria-label="Cylinder pressure and the knock integral against crank angle"></canvas>
+      </div>
+      <div class="ctrls top">
+        <button class="tgl on" id="knockPlay" aria-pressed="true">Pause</button>
+        <div class="seg" id="presetSeg" role="group" aria-label="Presets"><button data-v="clean">Clean burn</button><button data-v="knock">Knocking</button><button data-v="boost">Turbo, low octane</button><button data-v="lowrpm">Lugging</button></div>
+      </div>
+      <div class="kctrls">
+        <label class="ctrl"><span class="sym m5">ON</span><span class="lbl">fuel octane</span><input type="range" id="onIn"><output id="onOut"></output></label>
+        <label class="ctrl"><span class="sym m1">ε</span><span class="lbl">compression ratio</span><input type="range" id="crIn"><output id="crOut"></output></label>
+        <label class="ctrl"><span class="sym m4">θ<sub>s</sub></span><span class="lbl">spark advance</span><input type="range" id="sparkIn"><output id="sparkOut"></output></label>
+        <label class="ctrl"><span class="sym m3">p<sub>in</sub></span><span class="lbl">intake pressure</span><input type="range" id="boostIn"><output id="boostOut"></output></label>
+        <label class="ctrl"><span class="sym m2">N</span><span class="lbl">engine speed</span><input type="range" id="rpmIn"><output id="rpmOut"></output></label>
+      </div>
+      <div class="kread" id="knockRead"></div>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The delay and its sum</h3><span class="tag real">published correlations</span></div>
+      <div class="eqs">
+        <p>The ignition delay of a reference blend, fitted by Douaud and Eyzat to octane number, pressure and end-gas temperature:</p>
+        <div class="sci-eq" data-tex="\tau = 17.68\,\mathrm{ms}\left(\frac{ON}{100}\right)^{3.402} \left(\frac{p}{1\,\mathrm{atm}}\right)^{-1.7} e^{\,3800\,\mathrm{K}/T_u}"></div>
+        <p>A higher octane number makes the delay longer. Pressure and temperature make it shorter, and both climb fast once the flame is lit.</p>
+        <p>The delay changes through the cycle, so Livengood and Wu add up the share of it used in each instant. The end gas ignites when the sum reaches one:</p>
+        <div class="sci-eq" data-tex="I(\theta) = \int_{\theta_{\mathrm{ivc}}}^{\theta} \frac{dt}{\tau(p, T_u)} = 1"></div>
+        <p>Knock happens if <span class="mi">I</span> reaches 1 before the flame has burned the end gas. The pressure then rings at the first acoustic mode of the bore:</p>
+        <div class="sci-eq" data-tex="f \approx \frac{1.84\,c}{\pi B} \approx 6\,\mathrm{kHz}"></div>
+      </div>
+    </article>
+  </div>
+  <div class="grid">
+    <article class="card span-6">
+      <div class="card-top"><h3>Octane needed against compression ratio</h3><span class="tag toy">model</span></div>
+      <canvas class="fig chart" id="reqCv" aria-label="Lowest octane number that does not knock, against compression ratio, at three engine speeds"></canvas>
+      <p class="cap">Higher compression gives more work from the same fuel, and needs a fuel that waits longer. A slow engine at full load needs the most: the end gas has more milliseconds to react in each crank degree. The dot is the engine above.</p>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Spark timing and knock</h3><span class="tag toy">model</span></div>
+      <canvas class="fig chart" id="sparkCv" aria-label="Work per cycle against spark advance, with the advance limited by knock for the chosen fuel"></canvas>
+      <p class="cap">An earlier spark puts the peak pressure closer to top centre and gives more work, up to a point. It also heats the end gas sooner. The red band is where the chosen fuel knocks. A knock sensor in a modern engine hears the ring and moves the spark later, so a low-octane fuel costs power instead of pistons.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>Why the shape of the molecule matters</h2><p>Knock starts with chemistry at 700-900 K, cooler than a flame. A radical pulls a hydrogen atom off a fuel molecule; oxygen adds to the carbon that is left; the peroxy group then bends back and takes another hydrogen from further along the same molecule. That internal step, through a six- or seven-membered ring, leads to a branch in the chain: one radical becomes three. Long chains of CH<sub>2</sub> groups have many weak hydrogens in the right places. Branches, rings and alcohols do not.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Fuel molecule</h3><span class="tag real">3D: PubChem / OpenChemLib</span></div>
+      <div class="seg fuels" id="fuelSeg" role="group" aria-label="Fuel molecule"></div>
+      <div class="molwrap">
+        <canvas class="fig molbig" id="molCv" aria-label="3D model of the chosen fuel molecule, hydrogen atoms coloured by the kind of carbon they are on"></canvas>
+        <div class="mol-labels" id="molLabels"></div>
+      </div>
+      <div class="ctrls"><button class="tgl on" id="hTgl" aria-pressed="true">Colour the hydrogens</button><span class="readout dim">drag to turn · pinch or scroll to zoom</span></div>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3 id="molName">n-Heptane</h3><span class="tag real">RON, MON measured</span></div>
+      <div id="molInfo"></div>
+      <div id="siteBars" class="bars"></div>
+      <p class="body dim">Bond energies of the C-H bond, kJ/mol (Blanksby and Ellison 2003):</p>
+      <ul class="bde" id="bdeList"></ul>
+    </article>
+  </div>
+  <div class="grid">
+    <article class="card span-12">
+      <div class="card-top"><h3>The octane ladder</h3><span class="tag real">RON, measured</span></div>
+      <canvas class="fig ladder" id="ladderCv" aria-label="Research octane numbers of 18 fuel molecules on one scale; the four C8H18 isomers are joined"></canvas>
+      <div class="legend" id="famLegend"></div>
+      <p class="cap">Tap a molecule to load it above. The four joined dots all have the formula C<sub>8</sub>H<sub>18</sub>: the same atoms, from −20 to 106, only by how the carbons are joined. Straight chains fall fast as they grow; butane is 94, heptane 0.</p>
+    </article>
+  </div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The low-temperature chain, step by step</h3><span class="tag toy">illustrative, on heptane and iso-octane</span></div>
+      <div class="seg" id="mechSeg" role="group" aria-label="Step"></div>
+      <canvas class="fig mech" id="mechCv" aria-label="Reaction steps of the low-temperature oxidation chain on a heptane chain and an iso-octane skeleton"></canvas>
+      <p class="cap" id="mechText"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Count the easy paths</h3><span class="tag toy">structure count, not a rate</span></div>
+      <canvas class="fig chart" id="shiftCv" aria-label="Easy hydrogen-shift paths per hydrogen against research octane number, for the alkanes"></canvas>
+      <p class="cap">For each alkane: the number of ways a peroxy group on one carbon can reach a secondary or tertiary hydrogen two or three carbons away, per hydrogen in the molecule. The count follows the trend from octane to propane, with exceptions: butane and the two trimethylpentanes do not fall in line. Real rates need the full mechanisms (Curran et al. 1998: about 2,450 reactions for heptane alone).</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>RON, MON and the number on the pump</h2><p>A fuel gets two numbers because the two tests stress it differently. The difference, RON − MON, is the sensitivity. Paraffins have almost none. Alcohols and aromatics have a lot: they resist knock very well in a cool, slow engine and less well in a hot, fast one. Modern turbocharged engines with direct injection run cooler end gas than the Motor test, so for them RON tells more than MON.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Research against Motor octane number</h3><span class="tag real">measured</span></div>
+      <canvas class="fig chart tall" id="ronMonCv" aria-label="Motor octane number against research octane number for pure fuels and market gasolines"></canvas>
+      <p class="cap">On the diagonal, RON = MON: the reference fuels by definition. The distance below it is the sensitivity. Squares are market gasolines from the same table.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Read the pump</h3><span class="tag real">typical values</span></div>
+      <div class="seg" id="pumpSeg" role="group" aria-label="Pump sign"><button data-v="aki" class="on">US (R+M)/2</button><button data-v="ron">Europe RON</button></div>
+      <label class="ctrl"><span class="lbl">number on the pump</span><input type="range" id="pumpIn" min="85" max="100" step="1" value="87"><output id="pumpOut">87</output></label>
+      <div class="trials" id="pumpRead"></div>
+      <div class="tblwrap"><table class="range" id="pumpTable"></table></div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>A short history</h2><p>Knock limited the compression of engines from the start, and with it their efficiency. The answers came in two kinds: add something that stops the chain, or make molecules that do not start it.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <ol class="tl" id="histList"></ol>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>On this site</h3></div>
+      <ul class="see" id="seeList">
+        <li><a href="../molecules/index.html#isooctane">Molecule Explorer</a><span>every fuel here, and 1,100 more, in 2D and 3D</span></li>
+        <li><a href="../reactions/index.html">Reaction Explorer</a><span>bonds that break and form, step by step</span></li>
+        <li><a href="../four-stroke-engine/index.html">Four-Stroke Engine</a><span>the cylinder, valves and crank in 3D</span></li>
+        <li><a href="../molecular-bond/index.html">Molecular Bond</a><span>why a C-H bond holds: orbitals from atoms</span></li>
+        <li><a href="../periodic-table/index.html">Periodic Table</a><span>carbon, hydrogen, oxygen</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">¶</span><div><h2>Sources</h2><p>Octane numbers are copied from the table cited; the model constants are the published ones. The engine geometry, burn length and heat share are round values of a typical engine, set so that a 10.5:1 engine at full load and 2000 rpm needs about 91 octane.</p></div></div>
+  <ol class="refs" id="srcList"></ol>
+</section>
+
+</main>
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
