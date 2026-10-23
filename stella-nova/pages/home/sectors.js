@@ -132,7 +132,7 @@ const THUMBS = new Set(THUMB_KEYS);
 // lead is the page the inspector opens first. The game sector's lead is an
 // in-page anchor (#features).
 const SECTOR_TEXT = {
-  game: { at: [99, 118], tilt: 20, lead: 'features',
+  game: { at: [104, 118], tilt: 20, lead: 'features',
     blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.' },
   wiki: { at: [150, 300], tilt: -45, lead: 'wiki',
     blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
@@ -140,9 +140,9 @@ const SECTOR_TEXT = {
     blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool and the live flight board.' },
   space: { at: [317, 167], tilt: -15, lead: 'hohmann',
     blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
-  quantum: { at: [542, 75], tilt: 53, lead: 'orbital',
+  quantum: { at: [542, 75], tilt: 63, lead: 'orbital',
     blurb: 'Atoms and qubits: hydrogen orbitals in 3D, quantum circuits that encode and decode data and images, and a particle collider.' },
-  chemistry: { at: [567, 311], tilt: 15, lead: 'periodic-table',
+  chemistry: { at: [567, 296], tilt: 0, lead: 'periodic-table',
     blurb: 'The elements and what they make: a periodic table in eleven shapes with the live atom of every element, two atoms that share an electron, over a thousand molecules in 3D, and famous syntheses step by step.' },
   life: { at: [720, 150], tilt: -40, lead: 'protein-viewer',
     blurb: 'Real protein structures, a chain that folds and viruses in 3D, a human skull and skeleton you can pull apart, CT scans from the X-ray up, neurons that fire, and plants, coral and an epidemic that grow.' },
@@ -168,7 +168,7 @@ const SECTOR_TEXT = {
     blurb: 'The physics of motion: a pool table where the computer plays itself; cannonballs, pinball, pendulums, beads on wires, joints and rigid bodies from Ten Minute Physics by Matthias Müller; and a MuJoCo lab.' },
   softbody: { at: [611, 489], tilt: 15, lead: 'cloth',
     blurb: 'Things that bend, from Ten Minute Physics by Matthias Müller: soft bodies you can grab and skin, and cloth that drapes and collides with itself.' },
-  papers: { at: [592, 229], tilt: 20, lead: 'gravitational-imaging',
+  papers: { at: [592, 229], tilt: 10, lead: 'gravitational-imaging',
     blurb: 'Recent papers, explained with live figures: a million-solar-mass clump found by gravitational lensing, how AlphaFold predicts a protein structure, and a benchmark of coding agents that rebuild moving scenes.' },
   shaders: { at: [433, 499], tilt: -30, lead: 'sdf-solids',
     blurb: 'Live WebGPU shader tables in WGSL: noises, fields, colour, lighting, sampling and signed-distance solids, each with its source one click away.' },
@@ -326,6 +326,7 @@ const BLURBS = {
   'chandrasekhar-limit': 'Why no white dwarf weighs more than 1.4 Suns.',
   molecules: 'Over a thousand molecules, skeletal formula beside 3D.',
   reactions: 'Watch molecules change in 3D through famous syntheses.',
+  'octane-number': 'Why some fuels knock: the octane scale, a live cylinder, and fuels in 3D.',
   'periodic-table': 'Eleven shapes of the table, and the live atom of every element.',
   qave: 'Quantum algorithms step by step in 3D.',
   'qft-flow': 'Four qubit phase knobs and the spectrum a QFT reads out.',

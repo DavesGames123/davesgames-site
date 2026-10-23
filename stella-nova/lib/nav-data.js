@@ -126,7 +126,8 @@ w.SN_NAV = [
     { h: "Molecules & Reactions", p: [
       ["molecular-bond", "Molecular Bond", "SIM"],
       ["molecules", "Molecule Explorer", "2D/3D"],
-      ["reactions", "Reaction Explorer", "NEW"]
+      ["reactions", "Reaction Explorer", "NEW"],
+      ["octane-number", "Octane Number", "NEW"]
     ] }
   ] },
   { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [

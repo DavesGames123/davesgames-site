@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-233 registered pages in 6 regions and 26 constellations.
+234 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -170,7 +170,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `blackhole` | Black Hole | Space & Gravity > Deep Space | GPU | Gravitational lensing around a Schwarzschild hole. |  | shown | hook, tier 1, default | yes |
 | `wormhole` (pages/ellis-wormhole) | Wormhole | Space & Gravity > Deep Space | GPU | Fly through an Ellis wormhole. |  | shown | hook, tier 2, default | yes |
 | `chandrasekhar-limit` | Chandrasekhar Limit | Space & Gravity > Deep Space | NEW | Why no white dwarf weighs more than 1.4 Suns. |  | shown | hook, tier 4, default | yes |
-| `dark-matter-halo` | Dark Matter Halo | Space & Gravity > Deep Space | NEW | Where the Milky Way keeps its dark matter, and how sure we are. |  | shown | hook, tier 3, default | no |
+| `dark-matter-halo` | Dark Matter Halo | Space & Gravity > Deep Space | NEW | Where the Milky Way keeps its dark matter, and how sure we are. |  | shown | hook, tier 3, default | yes |
 | `orbital` (pages/atomic-orbital-vr) | Atomic Orbital | Quantum > Atoms | VR | Hydrogen orbitals in 3D, VR ready. |  | shown | hook, tier 2, default | yes |
 | `hydrogen-table` | Hydrogen Wave Function | Quantum > Atoms | NEW | Every hydrogen wave function, side by side. |  | shown | hook, tier 3, default | yes |
 | `exotic-atoms` | Exotic Atoms | Quantum > Atoms | NEW | Rydberg giants to n = 300, positronium, trilobite molecules and the field of the electron cloud. |  | shown | hook, tier 4, default | yes |
@@ -183,6 +183,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `molecular-bond` | Molecular Bond | Chemistry > Molecules & Reactions | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
 | `molecules` | Molecule Explorer | Chemistry > Molecules & Reactions | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
 | `reactions` | Reaction Explorer | Chemistry > Molecules & Reactions | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |
+| `octane-number` | Octane Number | Chemistry > Molecules & Reactions | NEW | Why some fuels knock: the octane scale, a live cylinder, and fuels in 3D. |  | shown | hook, tier 3, default | no |
 | `protein-viewer` | Protein Structure | Life Sciences > Molecules of Life | 3D | Real protein structures in 3D, 37 presets. |  | shown | hook, tier 3, default | yes |
 | `protein-folding` | Protein Folding | Life Sciences > Molecules of Life | SIM | Watch a chain fold into its native shape. |  | shown | hook, tier 2, default | yes |
 | `virus-atlas` | Virus Atlas | Life Sciences > Molecules of Life | 3D | Real virus capsids from the PDB: assemble, peel, explode. |  | shown | hook, tier 4, default | yes |
@@ -254,7 +255,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `resonance-3d` | Resonance 3D | Sound & Vibration > Resonance | 3D | Resonance figures in 3D. |  | shown | hook, tier 2, default | yes |
 | `wave-membrane` | Standing Wave Membrane | Sound & Vibration > Resonance | SIM | Chladni modes of a vibrating drum. |  | shown | hook, tier 2, default | yes |
 | `chladni-plate` | Chladni Plate | Sound & Vibration > Resonance | NEW | Sand finds the nodal lines of guitar and violin tops. |  | shown | hook, tier 3, default | yes |
-| `black-october` | Black October | Research > Security | NEW | The October 2026 security incidents, event by event, with every source. |  | shown | hook, tier 3, default | no |
+| `black-october` | Black October | Research > Security | NEW | The October 2026 security incidents, event by event, with every source. |  | shown | hook, tier 3, default | yes |
 | `gravitational-imaging` | Gravitational Imaging | Research > Physics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
 | `circular-rydberg` | Circular Rydberg Atoms | Research > Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
 | `alphafold` (pages/alphafold-explained) | How AlphaFold Works | Research > Biology & Medicine | ML | How AlphaFold turns a sequence into a structure. |  | shown | hook, tier 3, default | yes |
