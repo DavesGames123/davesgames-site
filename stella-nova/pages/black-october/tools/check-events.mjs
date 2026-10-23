@@ -7,6 +7,7 @@
 //  fetch the source URLs (no network in the check).
 //    - a confirmed event has at least one primary source
 //    - no event text has exploit content (request lines, payload code)
+//    - a related link goes to another thread, and is given from one end only
 //    - the layout runs on the data
 // ============================================================================
 import { validate, layout } from '../grow.js';
@@ -17,6 +18,12 @@ for (const e of EVENTS) {
   if (e.confidence === 'confirmed' && !e.sources.some(s => s.primary)) out.push(`${e.id}: confirmed with no primary source`);
   const text = [e.title, e.summary, e.note].join(' ');
   if (/(GET|POST) \/\S|<\?php|\$_(GET|POST|FILES)|Content-Disposition:|curl\s+-/i.test(text)) out.push(`${e.id}: text looks like exploit content`);
+  for (const r of e.related || []) {
+    const o = EVENTS.find(x => x.id === r);
+    if (!o) out.push(`${e.id}: related ${r} is not in the ledger`);
+    else if (o.thread === e.thread) out.push(`${e.id}: related ${r} is in the same thread (use parent)`);
+    else if ((o.related || []).includes(e.id) && e.id > r) out.push(`${e.id}: related ${r} is also given from the other end`);
+  }
 }
 let L = null;
 if (!out.length) { try { L = layout(EVENTS, { seed: 7 }); } catch (err) { out.push('layout: ' + err.message); } }
