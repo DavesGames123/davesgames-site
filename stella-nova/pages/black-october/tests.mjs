@@ -260,7 +260,7 @@ section('page logic (model.js, render.js)');
   const M = await import('./model.js');
   const R = await import('./render.js');
   const L = layout(EVENTS, M.LAYOUT_OPTS), N = L.nodes.length;
-  ok(L.band && L.band.label === 'before October' && L.band.count === 36, `ledger band: ${L.band && L.band.label}, ${L.band && L.band.count} events`);
+  ok(L.band && L.band.label === 'before October' && L.band.count === 44, `ledger band: ${L.band && L.band.label}, ${L.band && L.band.count} events`);
   ok(L.rings.length === 22 && L.rings[0].label === '2026-10-02', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
   ok(L.threads.every(t => M.THREAD_NAMES[t.id]), 'every thread has a display name');
   const C = M.threadColors(L.threads);
@@ -304,7 +304,7 @@ section('page logic (model.js, render.js)');
   const dl = M.linksOf(L, deep.id);
   ok(dl.chain.length === deep.depth && L.byId.get(dl.chain.at(-1)).parent === null, `linksOf chain goes to the root (depth ${deep.depth})`);
   ok(L.nodes.every(n => M.linksOf(L, n.id).children.every(ch => L.byId.get(ch).parent === n.id)), 'linksOf children');
-  ok(M.revealCount(L.nodes, -Infinity) === 0 && M.revealCount(L.nodes, Infinity) === N && M.revealCount(L.nodes, L.tw) === 38, 'revealCount (36 before the window, then the two events at its start, 1 Oct 12:00)');
+  ok(M.revealCount(L.nodes, -Infinity) === 0 && M.revealCount(L.nodes, Infinity) === N && M.revealCount(L.nodes, L.tw) === 46, 'revealCount (44 before the window, then the two events at its start, 1 Oct 12:00)');
 
   const items = L.nodes.map((n, i) => ({ x: (i * 37) % 390, y: (i * 53) % 700, w: 60 + (i % 5) * 20, h: 13, pri: i }));
   const placed = M.placeLabels(items, [{ x0: 0, y0: 0, x1: 100, y1: 40 }], 500);

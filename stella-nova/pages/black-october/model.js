@@ -61,6 +61,12 @@ export const THREAD_NAMES = Object.freeze({
   'palo-alto-gp': "Palo Alto GlobalProtect bypass",
   'meta-muse': "Meta Muse shared chats",
   'signal-ringrtc': "Signal RingRTC hangup bug",
+  loxone: "Loxone 'Samurai' breach",
+  'fortinet-hardening': "Fortinet hardening release",
+  'arista-vco': "Arista VeloCloud zero-day",
+  capcom: "Capcom ID breach",
+  'crime-stoppers': "Crime Stoppers P3 tips breach",
+  beyondtrust: "BeyondTrust Remote Support zero-day",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
