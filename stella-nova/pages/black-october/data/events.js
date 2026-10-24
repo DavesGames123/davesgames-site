@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended four times by 2026-10-24. Still going on then.
+//  Gathered 2026-10-22, extended five times by 2026-10-24. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -10880,6 +10880,2521 @@ export const EVENTS = [
    {
     "url": "https://securelist.com/uefi-bootkit-blackx/121539/",
     "publisher": "Kaspersky Securelist",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "php-f5labs-first-scans",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T08:36:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "F5 Labs sees its first PHP2Shell scans five hours before the CVEs are published",
+  "summary": "F5 Labs says its sensors first recorded PHP2Shell scanning at 08:36 UTC on 21 October, and thousands of exploit attempts within hours of disclosure. About 98% of attempts target CVE-2026-109619; it reports no successful compromise.",
+  "sources": [
+   {
+    "url": "https://www.f5.com/labs/articles/php2shell-exploitation-attempts-observed",
+    "publisher": "F5 Labs",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "F5 Labs published this on 22 October; the event time is the first scan it reports."
+ },
+ {
+  "id": "php-openai-checker",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "OpenAI publishes an open-source PHP2Shell version checker",
+  "summary": "OpenAI releases PHP Version Checker under Apache 2.0, a Node.js tool and Codex skill that flags PHP builds older than the fixed releases from response headers or a local install. It compares version numbers only and cannot see backported fixes.",
+  "sources": [
+   {
+    "url": "https://github.com/openai/php2shell-checker",
+    "publisher": "OpenAI (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://pc.watch.impress.co.jp/docs/news/2150338.html",
+    "publisher": "PC Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-distros-day0",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T13:45:09Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Debian and Ubuntu ship PHP fixes alongside the upstream release",
+  "summary": "Debian publishes DSA-6574-1 (php8.4, trixie) at 13:45 UTC and LTS advisory DLA-4848-1 (php8.2, bookworm); Ubuntu publishes USN-8948-1 at 13:56 UTC and USN-8948-2 for older releases at 15:33 UTC.",
+  "sources": [
+   {
+    "url": "https://lists.debian.org/debian-security-announce/2026/msg00489.html",
+    "publisher": "Debian",
+    "primary": true
+   },
+   {
+    "url": "https://lists.debian.org/debian-lts-announce/2026/10/msg00042.html",
+    "publisher": "Debian LTS",
+    "primary": true
+   },
+   {
+    "url": "https://security-tracker.debian.org/tracker/CVE-2026-109618",
+    "publisher": "Debian Security Tracker",
+    "primary": true
+   },
+   {
+    "url": "https://ubuntu.com/security/notices/USN-8948-1",
+    "publisher": "Canonical",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-fortinet-fg-ir-26-186",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Fortinet FG-IR-26-186: FortiOS and FortiWeb not impacted; four products under review",
+  "summary": "Fortinet's PSIRT lists about 48 products, including FortiOS, FortiWeb and FortiMail, as not impacted by the PHP flaws and keeps FortiDDoS, FortiClient Cloud Services, FortiSOAR and FortiSOAR PaaS under investigation. It says the flaws are not known to be exploited.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-186",
+    "publisher": "Fortinet",
+    "primary": true
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/10/22/php2shell-vulnerability-fortinet-cisco-palo-alto-networks/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Revised on 22 and 23 October to update the products under investigation and add IPS references."
+ },
+ {
+  "id": "php-cert-fr-ale-014",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR alert CERTFR-2026-ALE-014: isolate unsupported PHP 5.x to 8.1 systems",
+  "summary": "France's CERT-FR opens an alert on the PHP flaws, lists all 5.x, 7.x, 8.0 and 8.1 branches as affected, and tells operators of unsupported branches to isolate systems and migrate. Its 22 October update says it knows of proofs of concept for specific PHP deployments.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-014/",
+    "publisher": "CERT-FR (ANSSI)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-aws-bulletin",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T21:30:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "AWS bulletin 2026-143: Beanstalk, Lightsail and Amazon Linux get fixed PHP",
+  "summary": "AWS publishes a bulletin with updated Elastic Beanstalk PHP 8.2 to 8.5 platforms, Lightsail blueprints and Amazon Linux packages. Lambda users of custom PHP runtimes must patch and redeploy, and running Lightsail instances must be rebuilt from new blueprints.",
+  "sources": [
+   {
+    "url": "https://aws.amazon.com/security/security-bulletins/2026-143-aws/",
+    "publisher": "Amazon Web Services",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Published 14:30 PDT on 21 October; last updated 13:30 PDT on 23 October."
+ },
+ {
+  "id": "php-qnap-qsa-26-18",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T09:17:55Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "QNAP: QTS, QuTS hero and several apps affected; keep NAS devices off the internet",
+  "summary": "QNAP's advisory QSA-26-18 says multiple QNAP products are affected and fixes are in progress. Until then it tells users to take devices off the public internet, turn off port forwarding and UPnP, and use a VPN.",
+  "sources": [
+   {
+    "url": "https://community.qnap.com/t/security-notice-qnap-statement-on-critical-php-vulnerabilities-php2shell-security-advisory-qsa-26-18/7293",
+    "publisher": "QNAP",
+    "primary": true
+   },
+   {
+    "url": "https://www.qnap.com/en/security-advisory/qsa-26-18",
+    "publisher": "QNAP",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-synology-sa-26-14",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T11:45:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Synology-SA-26:14 ships fixed PHP packages; PHP 7.3 package gets no fix",
+  "summary": "Synology publishes a critical advisory with fixed Package Center builds for its PHP 7.4 to 8.4 packages, Mail Station and Synology Calendar, and marks it resolved. The end-of-life PHP 7.3 package gets no fix.",
+  "sources": [
+   {
+    "url": "https://www.synology.com/en-global/security/advisory/Synology_SA_26_14",
+    "publisher": "Synology",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-sansec-less-likely",
+  "thread": "php2shell",
+  "parent": "php-exploitation-disputed",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Sansec: mass exploitation less likely; shops need not go offline",
+  "summary": "E-commerce security firm Sansec updates its research to say public PHP2Shell exploits do not work against a default PHP install and usually need a separate file-inclusion bug, so stores need not take themselves offline.",
+  "sources": [
+   {
+    "url": "https://sansec.io/research/php2shell",
+    "publisher": "Sansec",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-redhat-eus",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Red Hat extends PHP fixes to EUS, AUS and SAP streams; rates the flaws Important",
+  "summary": "After shipping RHEL 8, 9 and 10 updates on 21 October, Red Hat adds backported fixes on 23 October for RHEL 8.4, 8.6, 8.8, 9.2, 9.4, 9.6 and 10.0 long-life streams. Red Hat rates the CVEs Important, not Critical.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/security/cve/CVE-2026-109618",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-109618.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-f5-critical-release",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "F5 ships BIG-IP 17.1.3.7, 17.5.1.11 and 21.1.0.4 with PHP fixes",
+  "summary": "F5 advisory K000163821 lists the BIG-IP Configuration utility as affected, and an October 23 critical release adds the PHP fixes. The 17.5.1.11 release notes say the PHP fixes are its only new changes.",
+  "sources": [
+   {
+    "url": "https://my.f5.com/manage/s/article/K000163848",
+    "publisher": "F5",
+    "primary": true
+   },
+   {
+    "url": "https://my.f5.com/manage/s/article/K000163821",
+    "publisher": "F5",
+    "primary": true
+   },
+   {
+    "url": "https://techdocs.f5.com/kb/en-us/products/big-ip_ltm/releasenotes/related/relnote-supplement-bigip-17-5-1-11.html",
+    "publisher": "F5",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "BIG-IP Next for Kubernetes 2.4.2 is also listed. BIG-IP Next, BIG-IQ and F5 Insight are listed as not vulnerable."
+ },
+ {
+  "id": "php-cisa-sigma",
+  "thread": "php2shell",
+  "parent": "php-cisa-alert",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA revises its PHP alert with a SIGMA detection rule",
+  "summary": "CISA updates its 21 October alert to add a SIGMA detection rule for suspicious activity, add partner resources and repeat its patching guidance. It still says it has not seen exploitation.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-unit42-agentic-intrusion",
+  "thread": "php2shell",
+  "parent": "php-exploitation-disputed",
+  "t": "2026-10-23T19:30:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Unit 42 describes an agentic-AI intrusion at a European government entity",
+  "summary": "Unit 42 updates its PHP threat brief: attackers it links to agentic AI platforms reached password hashes and MFA secrets within two hours of initial exploitation, tunnelled into Active Directory and tried Domain Admin escalation.",
+  "sources": [
+   {
+    "url": "https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/",
+    "publisher": "Palo Alto Networks Unit 42",
+    "primary": true
+   }
+  ],
+  "confidence": "disputed",
+  "note": "The section sits in Unit 42's PHP2Shell brief but does not name the CVE used for initial access or the date. The AI attribution is Unit 42's inference from command patterns. CISA and the Dutch NCSC report no confirmed successful exploitation."
+ },
+ {
+  "id": "php-qnap-fixes",
+  "thread": "php2shell",
+  "parent": "php-qnap-qsa-26-18",
+  "t": "2026-10-24T13:41:05Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "QNAP releases PHP2Shell fixes for QTS, QuTS hero and QuTScloud",
+  "summary": "QNAP posts firmware builds dated 23 October, some as public beta, and marks QTS, QuTS hero and QuTScloud resolved in QSA-26-18 version 1.1. Note Station 3, QNE, QVR Surveillance on ARM32 and TVR OS are still being fixed.",
+  "sources": [
+   {
+    "url": "https://community.qnap.com/t/security-notice-qnap-statement-on-critical-php-vulnerabilities-php2shell-security-advisory-qsa-26-18/7293",
+    "publisher": "QNAP",
+    "primary": true
+   },
+   {
+    "url": "https://www.qnap.com/en/security-advisory/qsa-26-18",
+    "publisher": "QNAP",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-google-oss-vrp-pause",
+  "thread": "ai-discovery",
+  "parent": "ai-patch-the-planet-launch",
+  "t": "2026-10-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Google stops accepting product reports to its open-source bug bounty",
+  "summary": "Google's OSS VRP stops taking new product vulnerability reports from 1 October, citing a large rise in automated submissions that are mostly invalid. It promises an update in the first quarter of 2027.",
+  "sources": [
+   {
+    "url": "https://bughunters.google.com/about/rules/open-source/google-open-source-software-vulnerability-reward-program-rules#product-vulnerabilities",
+    "publisher": "Google",
+    "primary": true
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/10/05/google-ai-generated-vulnerability-reports-pause/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Google's statement says 'automated', not 'AI'; press coverage attributes the flood to AI-generated reports."
+ },
+ {
+  "id": "ai-curl-minor-open",
+  "thread": "ai-discovery",
+  "parent": "ai-patch-the-planet-launch",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "curl will handle low and medium severity flaws in public from 26 October",
+  "summary": "curl's lead developer says the project will move LOW and MEDIUM vulnerability reports to public GitHub issues and keep only HIGH and CRITICAL private. He says the change is triggered by an avalanche of reports, linked to AI-using researchers.",
+  "sources": [
+   {
+    "url": "https://daniel.haxx.se/blog/2026/10/20/do-minor-curl-vulnerabilities-in-the-open/",
+    "publisher": "curl project",
+    "primary": true
+   },
+   {
+    "url": "https://heise.de/en/news/curl-focuses-on-high-risk-and-critical-vulnerabilities-11497102.html",
+    "publisher": "heise online",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-fortune-daybreak",
+  "thread": "ai-discovery",
+  "parent": "ai-openai-disclosure-post",
+  "t": "2026-10-22T18:37:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Fortune: PHP2Shell shows OpenAI's commercial bet on its Daybreak program",
+  "summary": "Fortune reports that OpenAI's application-only Daybreak program says participants' results grew from 858 to 1,885 flaws found and from 263 to 661 patches. Fortune frames the crisis as a revenue opportunity for OpenAI.",
+  "sources": [
+   {
+    "url": "https://fortune.com/2026/10/22/php-security-flaw-ai-powered-attacks-hackers-openai-daybreak/",
+    "publisher": "Fortune",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "ai-eff-funding",
+  "thread": "ai-discovery",
+  "parent": "ai-phpf-report-flood",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "EFF: AI made vulnerabilities cheap; companies must fund open source",
+  "summary": "The EFF says frontier models let moderately skilled people find bugs in minutes, cites about 13,000 new CVEs in October, and calls on companies that profit from open source to fund its maintenance.",
+  "sources": [
+   {
+    "url": "https://eff.org/deeplinks/2026/10/vulnerability-apocalypse-and-why-we-should-fund-open-source",
+    "publisher": "Electronic Frontier Foundation",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-iff-representations",
+  "thread": "emudhra",
+  "parent": "emu-certin-advisory",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "IFF asks eMudhra, CERT-In, MeitY and the CCA for an inquiry and a full report",
+  "summary": "The Internet Freedom Foundation asks eMudhra for a dated incident report and an independent audit, and asks MeitY and the CCA to open an IT Act inquiry. It says it found no statement from the CCA and asks for replies within 15 days.",
+  "sources": [
+   {
+    "url": "https://internetfreedom.in/a-private-key-with-the-value-4-iff-writes-to-emudhra-cert-in-and-meity-on-the-compromise-of-emudhras-certificate-authority-keys/",
+    "publisher": "Internet Freedom Foundation",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "IFF sent the letters on 21 October and published them on 22 October."
+ },
+ {
+  "id": "emu-theprint-history",
+  "thread": "emudhra",
+  "parent": "emu-exit-tls",
+  "t": "2026-10-24T11:53:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "ThePrint: 2018 inclusion concerns, and seven Indian banks on eMudhra certificates",
+  "summary": "ThePrint reports that Mozilla reviewers raised problems before eMudhra's 2018 inclusion, and that at least seven Indian banks serve eMudhra certificates that would break if Chrome distrusts its remaining root. eMudhra did not answer ThePrint.",
+  "sources": [
+   {
+    "url": "https://theprint.in/tech/emudhras-rise-from-indian-digital-signatures-to-global-cybersecurity-red-flags-ignored-along-the-way/3080266/",
+    "publisher": "ThePrint",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-android-crlite-lag",
+  "thread": "emudhra",
+  "parent": "emu-android-fix",
+  "t": "2026-10-24T13:15:35Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Mozilla: CRLite updates reach some Android devices late",
+  "summary": "A user reports Firefox for Android accepting an eMudhra certificate that desktop Firefox rejects. Mozilla says it chains to the G1 root, was revoked for unrelated reasons, and that CRLite updates propagate slowly on some Android devices.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085538",
+    "publisher": "Mozilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Mozilla says the fix is tracked in a restricted bug, 2084730."
+ },
+ {
+  "id": "gitlab-ruby-onigmo-fixes",
+  "thread": "gitlab",
+  "parent": "gitlab-cve-published",
+  "t": "2026-10-23T03:11:22Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Ruby 4.0.9, 3.4.12 and 3.3.13 fix the Onigmo bugs behind four GitLab CVEs",
+  "summary": "The Ruby core team ships regexp-engine (Onigmo) fixes for the bugs behind GitLab's CVE-2026-89078, CVE-2026-93577, CVE-2026-97229 and CVE-2026-110264. Any Ruby application that compiles attacker-controlled patterns is exposed; Regexp.timeout does not protect against the bugs.",
+  "sources": [
+   {
+    "url": "https://www.ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/",
+    "publisher": "Ruby",
+    "primary": true
+   },
+   {
+    "url": "https://www.ruby-lang.org/en/feeds/news.rss",
+    "publisher": "Ruby",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "GitLab had patched the Ruby it bundles; this post extends the fix to plain Ruby. CVE-2026-110264 maps to an overflow of internal IDs in a pattern with many repeats."
+ },
+ {
+  "id": "llm-second-exfil",
+  "thread": "litellm",
+  "parent": "llm-ci-secrets",
+  "t": "2026-10-12T12:08:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Attacker runs a second round of secret-exfiltration workflows on private LiteLLM repos",
+  "summary": "Using the stolen org-owner token, the attacker runs workflows on several private repositories between 12:08 and 12:30 UTC that post all repository secrets to the same endpoint. LiteLLM says these were minimally sensitive secrets and minimally funded provider keys, not part of the path to the poisoned release.",
+  "sources": [
+   {
+    "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026-attack-chain",
+    "publisher": "LiteLLM",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "llm-socket-flag",
+  "thread": "litellm",
+  "parent": "llm-pypi-upload",
+  "t": "2026-10-21T11:46:30Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Socket's scanner flags the malicious litellm 1.107.0 wheels seven minutes after upload",
+  "summary": "Socket says its AI scanner raised malware alerts at 11:46:30 UTC on the wheels published at 11:39:51. Its write-up, out at 13:41 UTC, notes the container provenance named the lookalike Berri-AI/litellm repository as source.",
+  "sources": [
+   {
+    "url": "https://socket.dev/blog/litellm-compromise",
+    "publisher": "Socket",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Socket also sent LiteLLM an independent investigation of the malicious workflows on 22 Oct at 17:38 UTC, per LiteLLM's attack-chain timeline."
+ },
+ {
+  "id": "llm-claude-code-tokens",
+  "thread": "litellm",
+  "parent": "llm-entry-suspect",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Press: LiteLLM says Claude Code responses can leak GitHub CLI tokens into its logs",
+  "summary": "The Hacker News and The Next Web report LiteLLM saying Claude Code sometimes embeds a user's GitHub CLI OAuth token in a response body, so tokens can land in LiteLLM logs that store response bodies. Neither outlet carries a reply from Anthropic.",
+  "sources": [
+   {
+    "url": "https://thehackernews.com/2026/10/litellm-suspects-github-token-leak-in.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   },
+   {
+    "url": "https://thenextweb.com/news/litellm-hack-github-tokens-logs-claude-code",
+    "publisher": "The Next Web",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "LiteLLM's 23 Oct attack-chain post does not mention Claude Code and traces the token theft to a master key committed in May; LiteLLM has since flagged its first incident post as partly inaccurate."
+ },
+ {
+  "id": "llm-cosign-rotation",
+  "thread": "litellm",
+  "parent": "llm-attack-chain-post",
+  "t": "2026-10-24T08:11:40Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "LiteLLM rotates its image-signing key in its first releases since the compromise",
+  "summary": "LiteLLM publishes 1.103.8, 1.104.6, 1.105.4 and 1.106.3 between 08:11 and 09:34 UTC. Docker images and Helm charts are now signed with a new cosign key, verification with the old key fails, and the eMudhra root CA is removed from the bundled trust stores.",
+  "sources": [
+   {
+    "url": "https://github.com/BerriAI/litellm/releases/tag/v1.106.3",
+    "publisher": "LiteLLM (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/BerriAI/litellm/releases/tag/v1.103.8",
+    "publisher": "LiteLLM (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "emu-exit-tls"
+  ]
+ },
+ {
+  "id": "pwnescape-amazon-linux",
+  "thread": "pwnescape",
+  "parent": "pwnescape-cve",
+  "t": "2026-10-15T12:19:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Amazon Linux lists PwnEscape fixes for Amazon Linux 2 and 2023 kernels",
+  "summary": "Amazon's ALAS tracker marks CVE-2026-99999 fixed in Amazon Linux 2 (core and 5.4, 5.10, 5.15 extras) and Amazon Linux 2023 (kernel, kernel6.12, kernel6.18). Amazon rates it Important, CVSS 8.8.",
+  "sources": [
+   {
+    "url": "https://explore.alas.aws.amazon.com/CVE-2026-99999.html",
+    "publisher": "Amazon Web Services",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The tracker gives release dates of 1 and 12 October, before public disclosure on 15 October; those dates are as listed and are not explained. t is the CVE publication day."
+ },
+ {
+  "id": "pwnescape-sakura-signups",
+  "thread": "pwnescape",
+  "parent": "pwnescape-oss-security",
+  "t": "2026-10-16T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Sakura Internet halts new sign-ups for VPS, rental and managed servers over PwnEscape",
+  "summary": "Sakura Internet suspends new applications for Sakura VPS in all regions, several rental and managed server plans, and new Sakura Cloud projects while it investigates CVE-2026-99999. Existing servers keep running.",
+  "sources": [
+   {
+    "url": "https://vps.sakura.ad.jp/contents/info/202610-pendingapply/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   },
+   {
+    "url": "https://help.sakura.ad.jp/notification/n-2696/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   },
+   {
+    "url": "https://atmarkit.itmedia.co.jp/ait/articles/2610/20/news024.html",
+    "publisher": "@IT (ITmedia)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Notices dated 16 Oct JST with no time; t is a placeholder within that JST day."
+ },
+ {
+  "id": "pwnescape-kagoya-signups",
+  "thread": "pwnescape",
+  "parent": "pwnescape-oss-security",
+  "t": "2026-10-19T09:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "KAGOYA suspends new applications for five services over PwnEscape",
+  "summary": "From 18:00 JST on 19 Oct, KAGOYA stops new applications for KAGOYA CLOUD VPS, KAGOYA MAIL, rental servers, desknet's NEO dedicated servers and KAGOYA Chat while it assesses CVE-2026-99999. No resumption date is set.",
+  "sources": [
+   {
+    "url": "https://www.kagoya.jp/news/2026101937082/",
+    "publisher": "KAGOYA JAPAN",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/kagoya-cve-2026-99999-vps-new-applications-suspended-20261019/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pwnescape-rhel10-fix",
+  "thread": "pwnescape",
+  "parent": "pwnescape-cve",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Red Hat's RHEL 10 kernel update RHSA-2026:85321 lists the PwnEscape CVE",
+  "summary": "Red Hat's Important kernel update for RHEL 10 (kernel-6.12.0-211.67.1.el10_2), issued 19 Oct, lists CVE-2026-99999, a day before the RHEL 9 fix. Red Hat's security data maps this advisory as the RHEL 10 fix.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/errata/RHSA-2026:85321",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-99999.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pwnescape-sakura-maintenance",
+  "thread": "pwnescape",
+  "parent": "pwnescape-sakura-signups",
+  "t": "2026-10-21T04:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Sakura Internet reboots rental-server and VPS hosts in emergency maintenance",
+  "summary": "Sakura patches hosts from 13:00 JST on 21 Oct (rental and managed servers) and 15:00 JST (VPS), with about an hour of downtime per VPS. Rental work ends 22:30 JST that day; VPS work ends 17:40 JST on 22 Oct.",
+  "sources": [
+   {
+    "url": "https://help.sakura.ad.jp/notification/n-2697/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   },
+   {
+    "url": "https://vps.sakura.ad.jp/contents/info/202610-pendingapply/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/sakura_emergency_maintenance_linux_cve_pwnescape_php_network/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The maintenance notice itself does not name the CVE; Sakura's VPS PwnEscape status page links to it as the vulnerability work."
+ },
+ {
+  "id": "pwnescape-sakura-rental-resumes",
+  "thread": "pwnescape",
+  "parent": "pwnescape-sakura-maintenance",
+  "t": "2026-10-22T01:30:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Sakura reopens rental and managed server sign-ups after host maintenance",
+  "summary": "Sakura Internet says the maintenance is complete and new applications for its rental and managed server plans resume at 10:30 JST on 22 Oct.",
+  "sources": [
+   {
+    "url": "https://help.sakura.ad.jp/notification/n-2696/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pwnescape-rhel-eus-els",
+  "thread": "pwnescape",
+  "parent": "pwnescape-rhel9-fix",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Red Hat fixes RHEL 7 ELS and RHEL 8 and 9 extended streams; main RHEL 8 still affected",
+  "summary": "Red Hat's data lists PwnEscape fixes for RHEL 8.4, 8.6 and 8.8 extended streams (21 Oct), RHEL 7 ELS, RHEL 9.2 and 9.6 streams (22 Oct). RHEL 8 itself, RHEL 9 kernel-rt and OpenShift CoreOS are still listed as affected.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-99999.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/errata/RHSA-2026:88206",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Dates span 21 to 22 Oct; t is the last of them."
+ },
+ {
+  "id": "pwnescape-debian-bookworm-612",
+  "thread": "pwnescape",
+  "parent": "pwnescape-debian",
+  "t": "2026-10-22T15:09:29Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Debian LTS ships the PwnEscape fix for bookworm's linux-6.12 kernel (DLA-4850-1)",
+  "summary": "Debian LTS releases linux-6.12 6.12.113-1~deb12u1 for bookworm users on the newer kernel, listing CVE-2026-99999. Bookworm's default kernel was fixed earlier in DLA-4841-1.",
+  "sources": [
+   {
+    "url": "https://lists.debian.org/debian-lts-announce/2026/10/msg00044.html",
+    "publisher": "Debian",
+    "primary": true
+   },
+   {
+    "url": "https://security-tracker.debian.org/tracker/CVE-2026-99999",
+    "publisher": "Debian",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pwnescape-ubuntu-pending",
+  "thread": "pwnescape",
+  "parent": "pwnescape-cve",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Ubuntu lists pending PwnEscape kernels for 22.04 to 26.10; 20.04 and older still exposed",
+  "summary": "Canonical's CVE page, updated 23 Oct, marks the main linux package 'work in progress' with target versions for 22.04, 24.04, 26.04 and 26.10. 20.04, 18.04 and 16.04 and many cloud kernels stay vulnerable, and no USN is out yet.",
+  "sources": [
+   {
+    "url": "https://ubuntu.com/security/CVE-2026-99999",
+    "publisher": "Canonical",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Ubuntu rates the priority Medium despite the 9.3 CVSS score. The AlmaLinux event reads the same tracker on 23 Oct as all releases vulnerable; the work-in-progress status was likely added later that day."
+ },
+ {
+  "id": "pwnescape-sakura-vps-ishikari",
+  "thread": "pwnescape",
+  "parent": "pwnescape-sakura-maintenance",
+  "t": "2026-10-23T06:30:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Sakura VPS reopens sign-ups in Ishikari only; Tokyo and Osaka stay closed",
+  "summary": "Sakura Internet says VPS maintenance is complete and new VPS applications resume in the Ishikari region at 15:30 JST on 23 Oct. Tokyo and Osaka remain suspended with no date.",
+  "sources": [
+   {
+    "url": "https://vps.sakura.ad.jp/contents/info/202610-pendingapply/",
+    "publisher": "Sakura Internet",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-herodevs-eol",
+  "thread": "nodejs",
+  "parent": "node-oct21-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "End-of-life Node.js 20 and 18 bundle vulnerable Brotli and get no upstream fix",
+  "summary": "HeroDevs notes that the final Node.js 20.x and 18.x releases bundle Brotli 1.1.0, inside the affected range, and that the Node.js project will not patch them. HeroDevs says its paid builds for 20.x are in progress, with no date.",
+  "sources": [
+   {
+    "url": "https://www.herodevs.com/blog-posts/cve-2026-111497-node2shell-node-js-brotli-rce",
+    "publisher": "HeroDevs",
+    "primary": true
+   },
+   {
+    "url": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases",
+    "publisher": "Node.js",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "HeroDevs sells extended support for end-of-life Node.js, so it has a commercial interest in this point."
+ },
+ {
+  "id": "nginx-debian-dsa",
+  "thread": "nginx",
+  "parent": "nginx-release",
+  "t": "2026-10-21T15:28:43Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Debian DSA-6575-1 backports all five nginx fixes to trixie",
+  "summary": "Debian ships nginx 1.26.3-3+deb13u10 for trixie with the five October CVEs. Debian notes CVE-2026-93479 reached trixie through one of its own earlier security backports.",
+  "sources": [
+   {
+    "url": "https://lists.debian.org/debian-security-announce/2026/msg00490.html",
+    "publisher": "Debian",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "rw-ai-key-batch-revocation",
+  "thread": "railway",
+  "parent": "rw-vendors-notified",
+  "t": "2026-10-24T13:57:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Railway: new AI-key revocations are precautionary and may hit replacement keys",
+  "summary": "Railway says it is not under a new attack. On 23 October AI providers asked for another batch of possibly affected keys, which Railway gave to OpenAI and Anthropic; because it could not filter by creation date, providers may have revoked replacement keys made after the incident.",
+  "sources": [
+   {
+    "url": "https://status.railway.com/incident/8E4V5WLD",
+    "publisher": "Railway",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Railway tells users whose keys were revoked to create a new key, update the environment variable and redeploy. A separate notice (23 Oct 22:03 UTC) says station.railway.com is still down and signups stay paused."
+ },
+ {
+  "id": "onamae-fsa-notice",
+  "thread": "onamae",
+  "parent": "onamae-trade-fraud-reports",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Japan's FSA tells FX dealers to warn customers and watch for unauthorised trades",
+  "summary": "After several firms reported unauthorised trades, the Financial Services Agency sends an emergency notice through the Financial Futures Association of Japan. It asks FX dealers to urge password changes and checks of trade history, and to strengthen monitoring.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/54c8398aa3366fd6c508aa3a24ba9df303477468",
+    "publisher": "Asahi Shimbun (via Yahoo! News Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Asahi dates the notice to 22 October and published on 23 October 18:06 JST. The FSA notice itself was not found online."
+ },
+ {
+  "id": "onamae-gov-cautious",
+  "thread": "onamae",
+  "parent": "onamae-acd-request",
+  "t": "2026-10-24T10:30:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Government cool on GMO's request: active cyber defence 'not yet' warranted",
+  "summary": "Officials say there is no way for a single company to request the powers, which target serious cases such as critical infrastructure; one says it is not yet a case for activation, another that defensive support will be given. The National Cyber Office says it would not disclose any neutralisation.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUA241IB0U6A021C2000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/a6c13869355c08b783055cccf11990435cf34c98",
+    "publisher": "Asahi Shimbun (via Yahoo! News Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "All officials are unnamed. Nikkei published at 19:30 JST, Asahi at 20:41 JST. Nikkei notes that GMO is not a designated critical-infrastructure operator."
+ },
+ {
+  "id": "artex-fss-attacker-ips",
+  "thread": "artex",
+  "parent": "artex-fsc-meeting",
+  "t": "2026-10-06T02:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Korea's FSS names 19 attacker IPs in 12 countries; police open a formal probe",
+  "summary": "The Financial Supervisory Service sends 19 attacker IP addresses to all financial firms with an 8 October deadline to check blocking. Police form a 28-officer cyber-terror team, and President Lee orders a fast, resourced response at a cabinet meeting.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610061126488393",
+    "publisher": "Financial News (Korea)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Article published 6 Oct 11:33 KST. Leaks it cites: Shinhan about 25,000 customers, KB Kookmin 119, Hana 89."
+ },
+ {
+  "id": "artex-fsc-16-firms",
+  "thread": "artex",
+  "parent": "artex-fss-attacker-ips",
+  "t": "2026-10-14T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Korean regulators: 16 financial firms breached, about 100,000 records leaked",
+  "summary": "At a second emergency meeting the FSC and FSS say 16 firms across banking, savings banks, card, fintech and crypto were breached, adding DB Savings Bank, KDB Capital, Brightfix, Streami (Gopax) and another. A check of 555 firms found 130 with security gaps.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610141604470154",
+    "publisher": "Financial News (Korea), Yonhap copy",
+    "primary": false
+   },
+   {
+    "url": "https://www.shinailbo.co.kr/news/articleView.html?idxno=5071929",
+    "publisher": "Shinailbo",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Leaked data include names, contacts, resident registration numbers and emails; no card or account numbers. Regulators said the count may rise. The FSC press release was not found on fsc.go.kr, and regulators have not officially tied the breaches to ARTEX."
+ },
+ {
+  "id": "ahold-police-invite",
+  "thread": "ahold",
+  "parent": "ahold-relaunch",
+  "t": "2026-10-14T17:01:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Dutch police and prosecutors publicly invite Ahold to file a criminal report",
+  "summary": "Police and the Public Prosecution Service say they invited Ahold Delhaize to report the attack and that no criminal investigation is under way without one. Ahold had reported to the Dutch NCSC only.",
+  "sources": [
+   {
+    "url": "https://nos.nl/artikel/2634984-politie-en-om-nodigen-ahold-uit-aangifte-te-doen-van-cybersecurity-incident",
+    "publisher": "NOS",
+    "primary": false
+   },
+   {
+    "url": "https://nltimes.nl/2026/10/16/albert-heijn-hasnt-reported-hack-police-grocery-deliveries-least-sunday",
+    "publisher": "NL Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "NOS story 19:01 Amsterdam time. On 15 Oct the police cybercrime lead repeated on Pauw & De Wit that no report had been filed."
+ },
+ {
+  "id": "ahold-revenue-estimate",
+  "thread": "ahold",
+  "parent": "ahold-update",
+  "t": "2026-10-20T15:50:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Retail experts put Albert Heijn's lost revenue at EUR 120 to 150 million",
+  "summary": "Two retail experts asked by RTL Z estimate that Albert Heijn missed EUR 120 to 150 million in revenue during the outage. Albert Heijn does not comment on the figure.",
+  "sources": [
+   {
+    "url": "https://nltimes.nl/2026/10/20/cyberattack-attempt-cost-albert-heijn-eu150-million-experts-say",
+    "publisher": "NL Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Expert estimate of missed revenue, not a loss reported by the company."
+ },
+ {
+  "id": "ahold-no-php-link",
+  "thread": "ahold",
+  "parent": "ahold-revenue-estimate",
+  "t": "2026-10-21T15:24:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Some AH customers can order again; Ahold sees no link to the PHP flaws for now",
+  "summary": "Albert Heijn lets delivery-bundle and business customers order again at about a third of normal capacity. An Ahold Delhaize spokesperson says there is no link for now to the PHP vulnerability that took Dutch sites offline.",
+  "sources": [
+   {
+    "url": "https://nos.nl/artikel/2636102-beperkte-groep-vaste-klanten-kan-na-cyberaanval-weer-bestelling-plaatsen-bij-ah",
+    "publisher": "NOS",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "NOS gives Wednesday 17:24 without a full date; Wednesday 21 Oct is inferred from the article sequence.",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "ahold-deliveries-all",
+  "thread": "ahold",
+  "parent": "ahold-no-php-link",
+  "t": "2026-10-23T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Albert Heijn reopens grocery ordering to all customers at a third of capacity",
+  "summary": "First home deliveries go out from 07:00 after almost two weeks, and all customers can order again. Capacity is about a third of normal; cancelled orders get store credit.",
+  "sources": [
+   {
+    "url": "https://nos.nl/artikel/2636302-klanten-albert-heijn-kunnen-weer-boodschappen-laten-bezorgen",
+    "publisher": "NOS",
+    "primary": false
+   },
+   {
+    "url": "https://nltimes.nl/2026/10/23/police-investigate-cyberattack-albert-heijn-works-restore-full-deliveries",
+    "publisher": "NL Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "ahold-police-probe",
+  "thread": "ahold",
+  "parent": "ahold-police-invite",
+  "t": "2026-10-23T15:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "Dutch police confirm a criminal investigation into the Ahold Delhaize attack",
+  "summary": "A police spokesperson confirms to ANP that a criminal investigation is under way, after Ahold Delhaize filed its report about a week after the attack. Police give no further detail.",
+  "sources": [
+   {
+    "url": "https://nltimes.nl/2026/10/23/police-investigate-cyberattack-albert-heijn-works-restore-full-deliveries",
+    "publisher": "NL Times",
+    "primary": false
+   },
+   {
+    "url": "https://www.computable.nl/2026/10/23/politie-start-strafrechtelijk-onderzoek-naar-cyberaanval-op-albert-heijn/",
+    "publisher": "Computable",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "NL Times story 17:00 Amsterdam time. Sources differ on whether the report was filed on Sunday 18 or Monday 19 Oct."
+ },
+ {
+  "id": "loxone-hq-logistics",
+  "thread": "loxone",
+  "parent": "loxone-crm-data",
+  "t": "2026-10-20T02:13:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Loxone restarts order processing and shipping from its headquarters",
+  "summary": "Loxone says logistics at its headquarters are running again and orders ship, with orders still taken by email. Support, Intercom video and Loxone Radio had returned the evening before.",
+  "sources": [
+   {
+    "url": "https://security.loxone.com/",
+    "publisher": "Loxone",
+    "primary": true
+   },
+   {
+    "url": "https://dysruptionhub.com/loxone-pennsylvania-cyberattack-orders/",
+    "publisher": "DysruptionHub",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 3, stamped 20.10.2026 04:13; the page gives no time zone, CEST is assumed."
+ },
+ {
+  "id": "loxone-php-wait",
+  "thread": "loxone",
+  "parent": "loxone-hq-logistics",
+  "t": "2026-10-21T10:02:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Loxone holds its site relaunch for the PHP patch; says it decrypted hit databases",
+  "summary": "Loxone says its website, shop and partner portal are restored and pen-tested but stay closed until the announced PHP security update is in. It says its codebase was not compromised and it decrypted the databases the attackers encrypted.",
+  "sources": [
+   {
+    "url": "https://security.loxone.com/",
+    "publisher": "Loxone",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 5, stamped 21.10.2026 12:02 (CEST assumed). Loxone also says it warned partners who had sent installation credentials in plain text; logistics in the US, UK and Switzerland run again.",
+  "related": [
+   "php-preannounce"
+  ]
+ },
+ {
+  "id": "loxone-php-patched",
+  "thread": "loxone",
+  "parent": "loxone-php-wait",
+  "t": "2026-10-22T07:35:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Loxone installs the PHP patches and adds 2FA to its Config software",
+  "summary": "Loxone says it installed the PHP patches, brings its website back during the day, and releases Config 17.2.10.21 with two-factor login for Loxone accounts. It reports no incidents at customer installations worldwide.",
+  "sources": [
+   {
+    "url": "https://security.loxone.com/",
+    "publisher": "Loxone",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 6, stamped 22.10.2026 09:35 (CEST assumed).",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "loxone-webshop-back",
+  "thread": "loxone",
+  "parent": "loxone-php-patched",
+  "t": "2026-10-23T14:42:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Loxone webshop and production fully back; Remote Connect to need current firmware",
+  "summary": "Loxone says its webshop is fully available after security reviews and the latest PHP updates, and all suppliers and production lines run again. Remote Connect will require a current Miniserver version; portal, library, configurator and jobs sites are still down.",
+  "sources": [
+   {
+    "url": "https://security.loxone.com/",
+    "publisher": "Loxone",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 7, stamped 23.10.2026 16:42 (CEST assumed). No word on whether 'Samurai' published data."
+ },
+ {
+  "id": "crime-stoppers-us-class-action",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-vendor-confirms",
+  "t": "2026-03-31T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Proposed US class action against Navigate360 filed in Ohio federal court",
+  "summary": "A tipster sues Navigate360 in the US District Court for the Northern District of Ohio, case 5:26-cv-00765, alleging that P3 promised anonymity it did not protect. The claims are unproven and no class is certified.",
+  "sources": [
+   {
+    "url": "https://www.cpmlegal.com/media/matter/60032_CrimeStoppers%20-%20CPM%20Complaint.pdf",
+    "publisher": "Cotchett, Pitre & McCarthy (complaint)",
+    "primary": true
+   },
+   {
+    "url": "https://www.cp24.com/news/canada/2026/06/18/crime-stoppers-cyber-breach-may-identify-anonymous-tipsters-on-dark-web/",
+    "publisher": "CP24",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Filing date from the court header on the complaint. Outside the October window; added as background to the thread."
+ },
+ {
+  "id": "crime-stoppers-ontario-wider",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-police-suspend",
+  "t": "2026-10-23T14:05:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Peel, York, London, Hamilton, Kingston and St. Thomas police also pause Crime Stoppers",
+  "summary": "More Ontario police services suspend their use of Crime Stoppers after the P3 leak. Global News reports that 12,392 of Toronto's 176,859 affected tips may hold personal information.",
+  "sources": [
+   {
+    "url": "https://globalnews.ca/news/12118307/ontario-crime-stoppers-cyber-breach/",
+    "publisher": "Global News",
+    "primary": false
+   },
+   {
+    "url": "https://www.ctvnews.ca/london/article/st-thomas-police-suspend-crime-stoppers-participation-after-cybersecurity-breach/",
+    "publisher": "CTV News London",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Global News story 10:05 ET; individual suspension times are not given."
+ },
+ {
+  "id": "crime-stoppers-winnipeg-ottawa",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-ontario-wider",
+  "t": "2026-10-23T21:33:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Ottawa and Winnipeg police suspend use of Crime Stoppers",
+  "summary": "Ottawa police suspend their use of the Crime Stoppers platform, and Winnipeg police follow after learning that Winnipeg-related data was in the breach. The suspensions now reach beyond Ontario.",
+  "sources": [
+   {
+    "url": "https://www.ctvnews.ca/ottawa/article/ottawa-police-suspending-use-of-crime-stoppers-after-report-of-cybersecurity-breach/",
+    "publisher": "CTV News Ottawa",
+    "primary": false
+   },
+   {
+    "url": "https://globalnews.ca/news/12119163/winnipeg-police-suspend-crime-stoppers-use/",
+    "publisher": "Global News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is CTV's Ottawa story (17:33 ET); Global's Winnipeg story is 17:17 CT (22:17 UTC)."
+ },
+ {
+  "id": "fridge-anssi-senate",
+  "thread": "fridge-attack",
+  "parent": "fridge-anssi-tasked",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "ANSSI chief tells the Senate the attack used basic flaws, not published vulnerabilities",
+  "summary": "ANSSI director general Vincent Strubel tells the Senate foreign affairs and defence committee that internet-exposed units, weak passwords and unprotected administration were exploited. He says ANSSI checked similar refrigeration used in health care for vaccines.",
+  "sources": [
+   {
+    "url": "https://www.publicsenat.fr/actualites/politique/des-defauts-de-securisation-elementaire-et-des-mots-de-passe-faibles-ont-permis-la-cyberattaque-contre-les-frigos-de-supermarches",
+    "publisher": "Public Sénat",
+    "primary": false
+   },
+   {
+    "url": "https://www.generation-nt.com/actualites/cyberattaque-frigos-supermarches-anssi-defauts-2083209",
+    "publisher": "Génération NT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "He rejects third-party analyses that blamed vulnerabilities published by researchers, and says ANSSI cannot compel retailers. Still no claim of responsibility."
+ },
+ {
+  "id": "sbi-customer-notice",
+  "thread": "sbi",
+  "parent": "sbi-filing",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "SBI posts 'Important Information for Customers': very few hit, balances safe",
+  "summary": "SBI's official X account posts a notice saying the incident affected 'a very very small number of customers' and that account balances are completely safe. It gives no count and does not list the exposed data.",
+  "sources": [
+   {
+    "url": "https://www.freepressjournal.in/business/sbi-breaks-silence-on-data-leak-says-very-few-customers-affected-and-bank-balances-are-safe",
+    "publisher": "Free Press Journal",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "FPJ article updated 21 Oct 18:38 IST; the SBI post itself was not opened."
+ },
+ {
+  "id": "sbi-congress-criticism",
+  "thread": "sbi",
+  "parent": "sbi-filing",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Congress MP says SBI did not detect the breach itself and owes customers answers",
+  "summary": "A Congress Rajya Sabha MP says on X that an outside agency, not SBI, found the leak, and criticises the bank for not informing affected customers.",
+  "sources": [
+   {
+    "url": "https://m.thewire.in/article/banking/sbi-admits-data-leak-on-the-dark-web-iff-pawan-khera-question-why-customers-not-informed-yet",
+    "publisher": "The Wire",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "ets-ca-ag-listing",
+  "thread": "ca-students",
+  "parent": "ets-notices",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Breach notice filed on the California Attorney General's list under 'CDE'",
+  "summary": "The California AG's data breach list carries an entry for CDE with a breach date of 22 May 2026, reported 16 Oct 2026. No AG enforcement action has been found.",
+  "sources": [
+   {
+    "url": "https://oag.ca.gov/ecrime/databreach/reports/sb24-631485",
+    "publisher": "California Attorney General",
+    "primary": true
+   },
+   {
+    "url": "https://oag.ca.gov/privacy/databreach/list",
+    "publisher": "California Attorney General",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The entry is named CDE, not ETS; the attached sample is the ETS Notice of Data Breach as reported. The entry page itself was not opened."
+ },
+ {
+  "id": "ets-scope-2006",
+  "thread": "ca-students",
+  "parent": "ets-scope",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "CDE: notices also cover students who left since 2006 without a confirmed transfer",
+  "summary": "The CDE incident page says affected people include students enrolled from 2023 to now and students who left a California school since 2006 without a confirmed transfer. No total count is given.",
+  "sources": [
+   {
+    "url": "https://www.cde.ca.gov/nr/in/ets-incident.asp",
+    "publisher": "California Department of Education",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "t is the page's 'Last Reviewed' date of 22 Oct; the text may be older."
+ },
+ {
+  "id": "mrmax-services-back",
+  "thread": "mrmax",
+  "parent": "mrmax-detect",
+  "t": "2026-10-04T00:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Mr. Max restores normal app and online store service",
+  "summary": "Nikkei reports that the MrMax app and e-commerce site have run normally since the morning of 4 Oct (JST), the day after the company shut them.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOJC0625M0W6A001C2000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Morning JST; the hour is approximate. Mr. Max's own notice does not state when service resumed."
+ },
+ {
+  "id": "ivanti-ics-first-exploit",
+  "thread": "ivanti-ics",
+  "parent": null,
+  "t": "2026-10-03T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "UTA0576 compromises a fully patched Ivanti Connect Secure VPN with a zero-day chain",
+  "summary": "Volexity says a previously unknown actor it tracks as UTA0576 chained an authentication bypass, an RCE and a privilege escalation to get unauthenticated root on an appliance running 22.8R2.4. Volexity started its investigation on 5 October.",
+  "sources": [
+   {
+    "url": "https://www.volexity.com/blog/2026/10/13/a-series-of-unauthenticated-events-chained-exploitation-of-ivanti-connect-secure-zero-days/",
+    "publisher": "Volexity",
+    "primary": true
+   },
+   {
+    "url": "https://bleepingcomputer.com/news/security/ivanti-warns-of-connect-secure-zero-day-exploited-in-attacks",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Volexity dates the first exploitation to 3 October; Defused, quoted by BleepingComputer, says it saw the first signs on 1 October."
+ },
+ {
+  "id": "ivanti-ics-advisory",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-first-exploit",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Ivanti discloses CVE-2026-104935 in Connect Secure with 'limited exploitation'",
+  "summary": "Ivanti says it is aware of limited in-the-wild exploitation of the authentication bypass (CVSS 8.6) and ships fixes in 22.8R2.5, 25.1.3.0 and later. Ivanti says 22.7R2.14 and earlier are not affected.",
+  "sources": [
+   {
+    "url": "https://www.ivanti.com/blog/october-2026-security-update",
+    "publisher": "Ivanti",
+    "primary": true
+   },
+   {
+    "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-104935",
+    "publisher": "NIST NVD",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ivanti-ics-volexity-report",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-advisory",
+  "t": "2026-10-13T18:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Volexity: no malware, log tampering, and the root escalation is still unpatched",
+  "summary": "Volexity reports that UTA0576 re-ran the exploit for each command, altered logs and evaded Ivanti's Integrity Checker Tool, then took LDAP credentials. Ivanti will fix the privilege escalation in a future release; Volexity assesses a criminal motive with low confidence.",
+  "sources": [
+   {
+    "url": "https://www.volexity.com/blog/2026/10/13/a-series-of-unauthenticated-events-chained-exploitation-of-ivanti-connect-secure-zero-days/",
+    "publisher": "Volexity",
+    "primary": true
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/attacker-chains-three-ivanti-connect.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ivanti-ics-kev",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-advisory",
+  "t": "2026-10-13T16:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-104935 to KEV with a 16 October deadline",
+  "summary": "CISA lists the Ivanti Connect Secure flaw as known exploited on the day of disclosure and gives federal agencies three days to act.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-104935",
+    "publisher": "NIST NVD",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pan-os-mgmt-advisory",
+  "thread": "pan-os-mgmt",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Palo Alto discloses CVE-2026-0322, an exploited PAN-OS management-interface RCE",
+  "summary": "Palo Alto Networks says 'very limited exploitation' of the authenticated root RCE (CVSS 4.0 8.6) has been seen and urges restricting the management interface to trusted IPs. Cloud NGFW and Prisma Access are not affected.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-0322",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   },
+   {
+    "url": "https://bleepingcomputer.com/news/security/palo-alto-networks-warns-of-pan-os-rce-flaw-exploited-in-attacks",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "A different flaw from the GlobalProtect bypass CVE-2026-0257. Palo Alto has not said when exploitation began or who is behind it."
+ },
+ {
+  "id": "pan-os-mgmt-kev",
+  "thread": "pan-os-mgmt",
+  "parent": "pan-os-mgmt-advisory",
+  "t": "2026-10-14T18:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-0322 to KEV with a 17 October deadline",
+  "summary": "CISA lists the PAN-OS code injection flaw as known exploited and gives federal agencies three days to mitigate.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.csoonline.com/article/4235787/attackers-exploit-palo-alto-pan-os-flaw-for-root-access-as-cisa-orders-three-day-fix.html",
+    "publisher": "CSO Online",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "pan-os-mgmt-11-2-16",
+  "thread": "pan-os-mgmt",
+  "parent": "pan-os-mgmt-advisory",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "PAN-OS 11.2.16 ships, the last pending CVE-2026-0322 fix",
+  "summary": "Palo Alto updates the advisory to say PAN-OS 11.2.16 is published, completing the fixed releases for every supported branch.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-0322",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cisco-seg-fix",
+  "thread": "cisco-seg",
+  "parent": null,
+  "t": "2026-09-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Cisco ships Secure Email Gateway 15.5.5-014 and 16.5.0-780 with the AMP file-write fix",
+  "summary": "SecurityWeek reports that the fix for the flaw later tracked as CVE-2026-76519 shipped on 14 September, grouped with other bugs in a September advisory.",
+  "sources": [
+   {
+    "url": "https://www.securityweek.com/cisco-warns-of-exploited-secure-email-gateway-vulnerability/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "cisco-seg-advisory",
+  "thread": "cisco-seg",
+  "parent": "cisco-seg-fix",
+  "t": "2026-10-14T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Cisco: CVE-2026-76519 in Secure Email Gateway is under active exploitation",
+  "summary": "Cisco publishes an advisory for an unauthenticated arbitrary file write (CVSS 9.8) in the AMP File Reputation feature, saying PSIRT learned of active exploitation in October. Content Scanner Tools 25.3.0.5525 fixes it, and Cisco contacted cloud customers with signs of compromise.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://bleepingcomputer.com/news/security/cisco-patches-actively-exploited-secure-email-gateway-zero-day",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "SecurityWeek says Cisco updated a September advisory; the advisory page itself shows a first publication on 14 October, version 1.0."
+ },
+ {
+  "id": "cisco-seg-kev",
+  "thread": "cisco-seg",
+  "parent": "cisco-seg-advisory",
+  "t": "2026-10-14T18:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-76519 to KEV with a 17 October deadline",
+  "summary": "CISA lists the Secure Email Gateway path traversal as known exploited. It is the second exploited Secure Email Gateway flaw since mid-September, after CVE-2026-76461.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/cisco-warns-of-exploited-secure-email-gateway-vulnerability/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "atlassian-dc-advisory",
+  "thread": "atlassian-dc",
+  "parent": null,
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Atlassian discloses CVE-2026-21589: unauthenticated file reads in 8 Data Center products",
+  "summary": "Atlassian rates the flaw critical (CVSS 9.3) for Jira, Confluence, Bitbucket, Bamboo, Crowd, Crucible and Fisheye Data Center. Cloud is patched with no sign of exploitation; Atlassian cannot say whether Data Center instances were hit.",
+  "sources": [
+   {
+    "url": "https://confluence.atlassian.com/security/cve-2026-21589-arbitrary-file-access-vulnerability-impacts-multiple-products-1870495748.html",
+    "publisher": "Atlassian",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "atlassian-dc-exploited",
+  "thread": "atlassian-dc",
+  "parent": "atlassian-dc-advisory",
+  "t": "2026-10-07T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Exploitation attempts start within two hours of watchTowr's technical write-up",
+  "summary": "Previdian's honeypots see attempts soon after watchTowr publishes its analysis, which shows that Crowd-linked setups can leak stored application credentials. watchTowr says most traffic is reconnaissance; CrowdSec counts 89 source IPs from 7 October.",
+  "sources": [
+   {
+    "url": "https://bleepingcomputer.com/news/security/hackers-exploit-critical-atlassian-flaw-after-public-poc-release",
+    "publisher": "BleepingComputer",
+    "primary": false
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/10/07/exploitation-critical-atlassian-flaw-cve-2026-21589/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "atlassian-dc-kev",
+  "thread": "atlassian-dc",
+  "parent": "atlassian-dc-exploited",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-21589 to KEV with an 18 October deadline",
+  "summary": "CISA lists the Atlassian Data Center file-access flaw as known exploited, eight days after the first attempts were reported.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "windows-motw-patch",
+  "thread": "windows-motw",
+  "parent": null,
+  "t": "2026-10-13T14:00:00Z",
+  "tPrecision": "hour",
+  "kind": "patch",
+  "title": "Microsoft fixes CVE-2026-96951, an exploited Windows Shell Mark of the Web bypass",
+  "summary": "Microsoft's October Patch Tuesday marks the Windows Shell command injection (CVSS 8.8) as 'Exploitation Detected'; a crafted file can evade MOTW warnings. The release is Microsoft's largest, at more than 1,400 CVEs.",
+  "sources": [
+   {
+    "url": "https://msrc.microsoft.com/update-guide/en-US/vulnerability/CVE-2026-96951",
+    "publisher": "Microsoft MSRC",
+    "primary": true
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/10/14/microsoft-patch-tuesday-cve-2026-96951-motw-bypass/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Microsoft has not said who exploited it. Tenable notes an earlier exploited Windows Shell flaw this year was linked to APT28, but no link is shown for this one."
+ },
+ {
+  "id": "windows-motw-kev",
+  "thread": "windows-motw",
+  "parent": "windows-motw-patch",
+  "t": "2026-10-13T18:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-96951 to KEV with a 16 October deadline",
+  "summary": "CISA lists the Windows Shell flaw as known exploited on Patch Tuesday.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "siteguard-advisory",
+  "thread": "siteguard",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "EG Secure Solutions: SiteGuard Server Edition command injection is being exploited",
+  "summary": "The Japanese WAF vendor discloses CVE-2026-106931 in the statistics feature (on by default), which can run commands as root or SYSTEM, and confirms exploitation. It tells customers to save diagnostic data first because updating can erase attack traces.",
+  "sources": [
+   {
+    "url": "https://www.eg-secure.co.jp/siteguard/news/alert-202610-1",
+    "publisher": "EG Secure Solutions",
+    "primary": true
+   },
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/16/56472.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "siteguard-jpcert",
+  "thread": "siteguard",
+  "parent": "siteguard-advisory",
+  "t": "2026-10-14T15:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC issues an urgent alert (JPCERT-AT-2026-0032) on SiteGuard",
+  "summary": "JPCERT/CC publishes an alert on CVE-2026-106931 and relays the vendor's statement that exploitation is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260032.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "siteguard-kev",
+  "thread": "siteguard",
+  "parent": "siteguard-jpcert",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds the SiteGuard flaw to KEV with a 23 October deadline",
+  "summary": "CISA lists CVE-2026-106931 in the same batch as the four Plex CVEs and the Siemens Software Center flaw.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/20/cisa-adds-six-known-exploited-vulnerabilities-catalog",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "plex-kev",
+   "siemens-ssc-kev"
+  ]
+ },
+ {
+  "id": "fortinet-kev-fortimail-advisory",
+  "thread": "fortinet-kev",
+  "parent": null,
+  "t": "2026-10-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Fortinet: FortiMail path traversal CVE-2026-104286 is exploited, no patch yet",
+  "summary": "Fortinet says the unauthenticated file-write flaw (CVSS 9.8), found by its own product security team, is reported exploited in the wild. It publishes indicators and tells customers to disable IBE or restrict the management interface until fixes ship.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-175",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/10/02/fortinet-fortimail-vulnerability-cve-2026-104286/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fortinet-kev-fortimail-kev",
+  "thread": "fortinet-kev",
+  "parent": "fortinet-kev-fortimail-advisory",
+  "t": "2026-10-01T18:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-104286 to KEV with a 4 October deadline",
+  "summary": "CISA lists the FortiMail flaw as known exploited on the day Fortinet discloses it.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fortinet-kev-fortimail-fix",
+  "thread": "fortinet-kev",
+  "parent": "fortinet-kev-fortimail-advisory",
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "FortiMail fixes and the FortiMail Cloud remediation arrive",
+  "summary": "Fortinet updates FG-IR-26-175 with the solution (8.0.2, 7.6.7, 7.4.9) and says FortiMail Cloud was remediated on 5 October.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-175",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The 21 October hardening release lists the same FortiMail fixed versions (8.0.2, 7.6.7, 7.4.9) as 'available now'.",
+  "related": [
+   "fortinet-hardening-announce"
+  ]
+ },
+ {
+  "id": "fortinet-kev-fortios-cli",
+  "thread": "fortinet-kev",
+  "parent": "fortinet-kev-fortimail-advisory",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds FortiOS CLI path traversal CVE-2025-61624 to KEV",
+  "summary": "CISA lists the April 2026 FortiOS, FortiProxy, FortiPAM and FortiSwitchManager flaw as exploited; it needs an admin with read-write rights. Fortinet's advisory now marks it 'Known Exploited'.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/16/cisa-adds-two-known-exploited-vulnerabilities-catalog",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-122",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "beyondtrust-kev"
+  ]
+ },
+ {
+  "id": "beyondtrust-cisa-alert",
+  "thread": "beyondtrust",
+  "parent": "beyondtrust-kev",
+  "t": "2026-10-16T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA alert: patch BeyondTrust now, rebuild and rotate credentials if compromised",
+  "summary": "CISA urges self-hosted operators to apply BT26-05-RS and, where compromise is suspected, to image the appliance, rebuild it, rotate every stored credential and revoke support sessions.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/16/cisa-urges-patching-critical-vulnerability-beyondtrust-remote-support",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "amadeus-kal-notified",
+  "thread": "amadeus-airlines",
+  "parent": null,
+  "t": "2026-10-20T13:44:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Amadeus tells Korean Air that customer data may have leaked from its systems",
+  "summary": "Amadeus, which runs the airline's reservation and ticketing platform, notifies Korean Air at 22:44 KST on 20 October. The cause is unauthorized use of login credentials of an account in the Amadeus system.",
+  "sources": [
+   {
+    "url": "https://view.asiae.co.kr/en/article/2026102321412357867",
+    "publisher": "The Asia Business Daily",
+    "primary": false
+   },
+   {
+    "url": "https://zdnet.co.kr/view/?no=20261024111553",
+    "publisher": "ZDNet Korea",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "A separate Amadeus case is not linked by any source: heise reported on 13 October an exposed heap dump in an Amadeus booking display environment that Amadeus says it learned of on 21 September."
+ },
+ {
+  "id": "amadeus-airlines-disclose",
+  "thread": "amadeus-airlines",
+  "parent": "amadeus-kal-notified",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Korean Air and Asiana disclose booking data leaked through Amadeus",
+  "summary": "Both airlines confirm that reservation data, including booking numbers, leaked from the Amadeus system; they say no payment data was included and their own systems were not breached. Korean Air emails customers a warning.",
+  "sources": [
+   {
+    "url": "https://en.fnnews.com/news/202610232139004239",
+    "publisher": "Financial News",
+    "primary": false
+   },
+   {
+    "url": "https://view.asiae.co.kr/en/article/2026102321412357867",
+    "publisher": "The Asia Business Daily",
+    "primary": false
+   },
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146720",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "amadeus-scope-open",
+  "thread": "amadeus-airlines",
+  "parent": "amadeus-airlines-disclose",
+  "t": "2026-10-24T04:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Breach window put at Aug 2023 to Sep 2026; scale still unknown",
+  "summary": "ZDNet Korea reports that the intrusion probably ran between August 2023 and September 2026, that the scale is not known, and that the PIPC may investigate. Only Korean Air and Asiana are named among about 200 Amadeus airline customers.",
+  "sources": [
+   {
+    "url": "https://zdnet.co.kr/view/?no=20261024111553",
+    "publisher": "ZDNet Korea",
+    "primary": false
+   },
+   {
+    "url": "https://en.fnnews.com/news/202610232139004239",
+    "publisher": "Financial News",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Financial News gives the end of the window as September 2025; ZDNet Korea and the Asia Business Daily give September 2026."
+ },
+ {
+  "id": "studio-access",
+  "thread": "studio-design",
+  "parent": null,
+  "t": "2026-09-30T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party accesses the cloud environment of Japanese no-code web builder Studio",
+  "summary": "Studio says a third party accessed its cloud environment from 30 September to 1 October (JST) through a vulnerability, and that customer data could be read from outside until 14 October.",
+  "sources": [
+   {
+    "url": "https://studio.design/ja/whats-new/unauthorized-access-2026-10",
+    "publisher": "Studio",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-detected",
+  "thread": "studio-design",
+  "parent": "studio-access",
+  "t": "2026-10-13T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Studio confirms the intrusion and closes the access route by 14 October",
+  "summary": "An internal investigation confirms the unauthorized access on 13 October; Studio fixes the vulnerability and closes the route on 13 and 14 October.",
+  "sources": [
+   {
+    "url": "https://studio.design/ja/whats-new/unauthorized-access-2026-10",
+    "publisher": "Studio",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-first-notice",
+  "thread": "studio-design",
+  "parent": "studio-detected",
+  "t": "2026-10-16T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Studio says data of all registered users may have leaked, including API keys",
+  "summary": "The first notice covers account data, form submissions, CMS content, API keys, page passwords and webhook URLs; the decryption keys were also read. Studio asks all users to change passwords and rotate keys.",
+  "sources": [
+   {
+    "url": "https://studio.design/ja/whats-new/unauthorized-access-2026-10",
+    "publisher": "Studio",
+    "primary": true
+   },
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/16/2000002332/",
+    "publisher": "ITmedia NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-key-rotation",
+  "thread": "studio-design",
+  "parent": "studio-first-notice",
+  "t": "2026-10-17T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Studio switches its encryption key and offers joint breach reports to the PPC",
+  "summary": "Studio replaces its encryption key on 17 October and re-encrypts stored data. Site owners with forms are told they may have to report to the Personal Information Protection Commission and notify their own users.",
+  "sources": [
+   {
+    "url": "https://studio.design/ja/whats-new/unauthorized-access-2026-10",
+    "publisher": "Studio",
+    "primary": true
+   },
+   {
+    "url": "https://studio.design/ja/whats-new/unauthorized-access-2026-10-form",
+    "publisher": "Studio",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-php-maintenance",
+  "thread": "studio-design",
+  "parent": "studio-key-rotation",
+  "t": "2026-10-21T13:26:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Studio pauses its APIs, including public-site forms, to patch PHP2Shell",
+  "summary": "Emergency maintenance from 22:26 to 04:05 JST updates PHP to the fixed version and pauses APIs used by public sites. Studio says no damage from the PHP issue is confirmed.",
+  "sources": [
+   {
+    "url": "https://studio.design/ja/whats-new/maintenance-20261021",
+    "publisher": "Studio",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "studio-digital-agency",
+  "thread": "studio-design",
+  "parent": "studio-first-notice",
+  "t": "2026-10-22T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Japan's Digital Agency says up to 13,323 inquiry records may have leaked via Studio",
+  "summary": "The Digital Agency used Studio for part of its website. Form data from May 2021 to March 2023 and 35 staff and contractor accounts may be exposed; no misuse is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.digital.go.jp/press/a0a8f66c-b32d-4695-9372-bcd5d4280f22",
+    "publisher": "Digital Agency",
+    "primary": true
+   },
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/23/2000002543/",
+    "publisher": "ITmedia NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "daj-first-traces",
+  "thread": "digital-arts",
+  "parent": null,
+  "t": "2025-07-15T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Earliest traces of intrusion into Digital Arts cloud and internal systems",
+  "summary": "Digital Arts, a Japanese filtering and security vendor, later finds intrusion traces that go back to around July 2025, made with stolen credentials used to run its cloud services.",
+  "sources": [
+   {
+    "url": "https://www.daj.jp/ir/data/daj2326_202703_3q_1.pdf",
+    "publisher": "Digital Arts",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The company gives only \"around July 2025\"; the day is a placeholder."
+ },
+ {
+  "id": "daj-ai-inspection",
+  "thread": "digital-arts",
+  "parent": "daj-first-traces",
+  "t": "2026-10-09T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "An AI-assisted audit finds traces that earlier checks missed",
+  "summary": "Digital Arts runs a full AI-assisted inspection of its systems, products and internal environment on 9 October and finds intrusion traces in its cloud operations environment.",
+  "sources": [
+   {
+    "url": "https://www.daj.jp/ir/data/daj2326_202703_3q_1.pdf",
+    "publisher": "Digital Arts",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "daj-disclosure",
+  "thread": "digital-arts",
+  "parent": "daj-ai-inspection",
+  "t": "2026-10-21T07:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Digital Arts discloses that customer data in six cloud services may have been viewed",
+  "summary": "The exchange filing names i-FILTER@Cloud, m-FILTER@Cloud, m-FILTER MailAdviser, FINAL CODE@Cloud, z-FILTER and Desk, and asks all their customers to change passwords. No exfiltration is confirmed as of noon JST.",
+  "sources": [
+   {
+    "url": "https://www.daj.jp/ir/data/daj2326_202703_3q_1.pdf",
+    "publisher": "Digital Arts",
+    "primary": true
+   },
+   {
+    "url": "https://www.nikkei.com/nkd/disclosure/tdnr/20261021554017/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://www.security-next.com/191844",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "arcadia-access",
+  "thread": "arcadia-raiden",
+  "parent": null,
+  "t": "2026-10-10T21:26:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Intrusion into SpeeCAN RAIDEN, a disaster-alert mail service for Japanese authorities",
+  "summary": "Arcadia's report puts the start at 06:26 JST on 11 October, through a path-traversal flaw in a media server that hosts attachments.",
+  "sources": [
+   {
+    "url": "https://raiden.site.ktaiwork.jp/wp-content/uploads/sites/2/2026/10/2026_10_19AccessIncident.pdf",
+    "publisher": "Arcadia",
+    "primary": true
+   },
+   {
+    "url": "https://piyolog.hatenadiary.jp/entry/2026/10/14/014350",
+    "publisher": "piyolog",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "arcadia-phishing-sent",
+  "thread": "arcadia-raiden",
+  "parent": "arcadia-access",
+  "t": "2026-10-12T16:17:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Attackers send 1.42 million phishing emails from the alert system",
+  "summary": "A planted program sends 1,423,428 emails between 01:17 and 07:16 JST on 13 October, many posing as card companies; at least 869,575 go to addresses Arcadia does not hold.",
+  "sources": [
+   {
+    "url": "https://raiden.site.ktaiwork.jp/archives/4597",
+    "publisher": "Arcadia (SpeeCAN RAIDEN)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "arcadia-first-report",
+  "thread": "arcadia-raiden",
+  "parent": "arcadia-phishing-sent",
+  "t": "2026-10-13T09:47:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Arcadia estimates up to 3.1 million email addresses exposed",
+  "summary": "The first detailed report estimates about 3,136,000 email addresses, 105,000 phone numbers and 15,000 fax numbers. Two services were shut down from 11:00 JST, and some municipalities could not send alerts.",
+  "sources": [
+   {
+    "url": "https://raiden.site.ktaiwork.jp/archives/4597",
+    "publisher": "Arcadia (SpeeCAN RAIDEN)",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148069.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "arcadia-police",
+  "thread": "arcadia-raiden",
+  "parent": "arcadia-first-report",
+  "t": "2026-10-21T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "National Police Agency: data of about 125,000 police staff in 20 prefectures may be out",
+  "summary": "Reports citing the NPA say 20 prefectural police forces used the safety-check service, and four forces exposed about 16,000 residents and 2,600 firms on crime-alert lists. No investigation data is said to be affected.",
+  "sources": [
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102100348&g=soc",
+    "publisher": "Jiji Press",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUD213JV0R21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "arcadia-press-conference",
+  "thread": "arcadia-raiden",
+  "parent": "arcadia-police",
+  "t": "2026-10-23T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Arcadia apologises at a press conference and says attacks are still going on",
+  "summary": "The company says the service is still under attack and alerts could be suspended again. Reports cite 393 bodies, including 366 municipalities, and at least 560,000 addresses.",
+  "sources": [
+   {
+    "url": "https://www.tokyo-np.co.jp/article/523490",
+    "publisher": "Tokyo Shimbun (Kyodo)",
+    "primary": false
+   },
+   {
+    "url": "https://www.arcadia.co.jp/info/4076",
+    "publisher": "Arcadia",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "softech-attack",
+  "thread": "pk-softech",
+  "parent": null,
+  "t": "2026-09-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Swiss pension software supplier PK Softech is hit by a cyberattack",
+  "summary": "Publica, the federal pension fund, says its external software supplier was attacked at the end of September 2026 and informed it then.",
+  "sources": [
+   {
+    "url": "https://www.publica.ch/de/cyberangriff-auf-softwarelieferanten",
+    "publisher": "Publica",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Sources give only \"end of September\"; the day is a placeholder."
+ },
+ {
+  "id": "softech-publica-confirms",
+  "thread": "pk-softech",
+  "parent": "softech-attack",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Publica confirms a data outflow; federal prosecutors open a case",
+  "summary": "Possibly affected data include names, AHV numbers, addresses, salaries, savings balances, partner details and IBANs. Pensions continue to be paid.",
+  "sources": [
+   {
+    "url": "https://www.publica.ch/de/ueber-uns/aktuell/cyberangriff-auf-softwarelieferant-von-publica-datenabfluss-bestaetigt",
+    "publisher": "Publica",
+    "primary": true
+   },
+   {
+    "url": "https://www.publica.ch/de/cyberangriff-auf-softwarelieferanten",
+    "publisher": "Publica",
+    "primary": true
+   },
+   {
+    "url": "https://www.it-markt.ch/news/2026-10-08/bundespensionskasse-publica-meldet-datenabfluss",
+    "publisher": "IT-Markt",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "softech-bern-funds",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Canton of Bern says two of its pension funds use the attacked supplier",
+  "summary": "The Bernische Pensionskasse and the teachers fund BLVK are affected; the canton says theft is not proven but cannot be ruled out.",
+  "sources": [
+   {
+    "url": "https://www.it-markt.ch/news/2026-10-08/bundespensionskasse-publica-meldet-datenabfluss",
+    "publisher": "IT-Markt",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "softech-edoeb-prelim",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Swiss data protection commissioner opens a preliminary inquiry into Publica",
+  "summary": "The EDÖB says PK Softech reported the attack to it on 8 October and that it opened an informal inquiry into Publica on 14 October.",
+  "sources": [
+   {
+    "url": "https://www.edoeb.admin.ch/de/edoeb-leitete-nach-cyberangriff-auf-softwarelieferant-abklaerungen-ein",
+    "publisher": "EDÖB",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "softech-akira",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Reports: Akira holds data on over 100,000 federal staff and demands a ransom",
+  "summary": "Swiss media say the Akira group is behind the attack and threatens to publish the data, which include staff of Fedpol and the intelligence service. Publica does not name a group.",
+  "sources": [
+   {
+    "url": "https://www.it-markt.ch/news/2026-10-08/bundespensionskasse-publica-meldet-datenabfluss",
+    "publisher": "IT-Markt",
+    "primary": false
+   },
+   {
+    "url": "https://www.inside-it.ch/datenleck-bei-publica-gefaehrdet-auch-sicherheitsbehoerden-20261020",
+    "publisher": "Inside IT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "softech-edoeb-formal",
+  "thread": "pk-softech",
+  "parent": "softech-edoeb-prelim",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "EDÖB opens a formal investigation against PK Softech",
+  "summary": "Announced on 23 October, the probe looks at what data the pension funds passed to the supplier, the legal basis, and how much leaked. Several other large pension funds are also affected.",
+  "sources": [
+   {
+    "url": "https://www.edoeb.admin.ch/de/edoeb-leitete-nach-cyberangriff-auf-softwarelieferant-abklaerungen-ein",
+    "publisher": "EDÖB",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ghost-wave-begins",
+  "thread": "ghostaction",
+  "parent": null,
+  "t": "2026-08-31T14:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "New GhostAction wave plants secret-stealing GitHub Actions workflows",
+  "summary": "GitGuardian sees a burst of 143 repositories receive a malicious workflow that sends CI secrets to the attacker, a year after the first GhostAction wave.",
+  "sources": [
+   {
+    "url": "https://blog.gitguardian.com/ghostaction-github-actions-supply-chain-attack-returns/",
+    "publisher": "GitGuardian",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ghost-gitguardian-report",
+  "thread": "ghostaction",
+  "parent": "ghost-wave-begins",
+  "t": "2026-10-07T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "GitGuardian reports GhostAction is back: 772 repositories hit",
+  "summary": "The report counts 772 public repositories across 373 users and organisations, with 2,577 targeted secret names, and says only 16% were cleaned by 5 October.",
+  "sources": [
+   {
+    "url": "https://blog.gitguardian.com/ghostaction-github-actions-supply-chain-attack-returns/",
+    "publisher": "GitGuardian",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ghost-mass-spike",
+  "thread": "ghostaction",
+  "parent": "ghost-gitguardian-report",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Spike pushes the workflow to about 28,000 new repositories in minutes",
+  "summary": "Over 8 and 9 October the payload first goes to 160 earlier victims, then about 20 minutes later to roughly 28,000 new repositories.",
+  "sources": [
+   {
+    "url": "https://blog.gitguardian.com/ghostaction-github-actions-supply-chain-attack-returns/",
+    "publisher": "GitGuardian",
+    "primary": true
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/ghostaction-compromises-about-1900.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ghost-github-blocks",
+  "thread": "ghostaction",
+  "parent": "ghost-mass-spike",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "GitHub starts blocking the malicious workflow from running",
+  "summary": "According to GitGuardian, GitHub prevents the workflow from running from 9 October, so later waves on 10 and 12 October extract no secrets.",
+  "sources": [
+   {
+    "url": "https://blog.gitguardian.com/ghostaction-github-actions-supply-chain-attack-returns/",
+    "publisher": "GitGuardian",
+    "primary": true
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/ghostaction-compromises-about-1900.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "ghost-count-update",
+  "thread": "ghostaction",
+  "parent": "ghost-github-blocks",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Updated count: over 30,000 repositories and about 1,900 compromised accounts",
+  "summary": "GitGuardian updates its totals to more than 30,000 repositories, about 3,000 users and organisations, and 3,174 targeted secrets, including npm, PyPI and cloud keys.",
+  "sources": [
+   {
+    "url": "https://blog.gitguardian.com/ghostaction-github-actions-supply-chain-attack-returns/",
+    "publisher": "GitGuardian",
+    "primary": true
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/ghostaction-compromises-about-1900.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ledger-funds-drained",
+  "thread": "ledger-implant",
+  "parent": null,
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Attackers drain funds using recovery phrases stolen by implants in Ledger signers",
+  "summary": "Hidden implants in devices sold through the reseller CryptoBilis read the recovery phrase during setup and send it out over an embedded eSIM; the thefts happen on 9 October.",
+  "sources": [
+   {
+    "url": "https://x.com/Ledger/status/2109896739985453358",
+    "publisher": "Ledger",
+    "primary": true
+   },
+   {
+    "url": "https://therecord.media/ledger-cryptocurrency-wallet-implant-theft",
+    "publisher": "The Record",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ledger-statement",
+  "thread": "ledger-implant",
+  "parent": "ledger-funds-drained",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Ledger warns CryptoBilis buyers not to set up their devices",
+  "summary": "Ledger says tampered devices can pass its authenticity checks because the Secure Element is intact, and tells users to move funds to a new signer. CryptoBilis pauses Ledger sales.",
+  "sources": [
+   {
+    "url": "https://x.com/Ledger/status/2109896739985453358",
+    "publisher": "Ledger",
+    "primary": true
+   },
+   {
+    "url": "https://therecord.media/ledger-cryptocurrency-wallet-implant-theft",
+    "publisher": "The Record",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "firstvds-breach",
+  "thread": "firstvds",
+  "parent": null,
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Russian host FirstVDS finds malware copying data from customer servers",
+  "summary": "FirstVDS says attackers used a flaw in ISPsystem VMmanager 6 to mount customer disks read-only and copy passwords, cloud credentials, configs and wallets to their own server.",
+  "sources": [
+   {
+    "url": "https://t.me/TakeFirstNews/1463",
+    "publisher": "FirstVDS",
+    "primary": true
+   },
+   {
+    "url": "https://therecord.media/russia-cyberattack-firstvds-cloud",
+    "publisher": "The Record",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "firstvds-restricted",
+  "thread": "firstvds",
+  "parent": "firstvds-breach",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "FirstVDS runs with limits as the VMmanager flaw stays partly unfixed",
+  "summary": "ISPsystem ships several patches, but FirstVDS says the flaw is not fully fixed and keeps management-interface access off.",
+  "sources": [
+   {
+    "url": "https://therecord.media/russia-cyberattack-firstvds-cloud",
+    "publisher": "The Record",
+    "primary": false
+   },
+   {
+    "url": "https://firstvds.live",
+    "publisher": "FirstVDS",
     "primary": true
    }
   ],
