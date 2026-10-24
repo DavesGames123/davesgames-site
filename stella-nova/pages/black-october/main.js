@@ -12,6 +12,9 @@
 //    state .................. "const S ="
 //    intro, counts, filters . "function buildPanel"
 //    record card ............ "function showCard"
+//    crowded-tap choice ..... "function showChoice"
+//    event search ........... "function buildFinder"
+//    card swipe (phone) ..... "function bindCardSwipe"
 //    select + keep in view .. "function select"
 //    playhead ............... "function setK"
 //    play loop .............. "function tick"
@@ -119,16 +122,17 @@ function syncFilters() {
 const visible = n => !!n && INDEX.get(n.id) < S.k && !S.hidden.has(n.thread) && !S.confOff.has(n.ev.confidence);
 
 // ---------------------------------------------------------------- card
+// A button that selects one event: its title, then its time.
+function refBtn(rid) {
+  const m = L.byId.get(rid);
+  return el('button', { style: `--c:${COLORS.get(m.thread)}`, onclick: () => select(rid, true) },
+    m.ev.title, ' ', el('small', {}, M.fmtUTC(m.t, m.ev.tPrecision)));
+}
 function showCard(id) {
   const n = L.byId.get(id), card = $('card'), body = $('cardBody');
   if (!n) { card.hidden = true; return; }
-  const e = n.ev, lk = M.linksOf(L, id), i = INDEX.get(id);
+  const e = n.ev, lk = M.linksOf(L, id), i = INDEX.get(id), ref = refBtn;
   card.style.setProperty('--c', COLORS.get(n.thread));
-  const ref = rid => {
-    const m = L.byId.get(rid);
-    return el('button', { style: `--c:${COLORS.get(m.thread)}`, onclick: () => select(rid, true) },
-      m.ev.title, ' ', el('small', {}, M.fmtUTC(m.t, m.ev.tPrecision)));
-  };
   const host = u => { try { const x = new URL(u); return x.host + (x.pathname.length > 1 ? x.pathname : ''); } catch (err) { return u; } };
   body.replaceChildren(
     el('div', { class: 'th' }, M.threadName(n.thread)),
@@ -159,6 +163,77 @@ function stepVisible(i, d) {
   return null;
 }
 function closeCard() { S.sel = null; $('card').hidden = true; request(); }
+
+// A touch tap on a spot with several dots close together: the card lists
+// them, nearest first, and offers a zoom on that spot.
+const CHOICE_MAX = 8;
+function showChoice(list, x, y) {
+  const card = $('card'), more = list.length - CHOICE_MAX;
+  S.sel = null;
+  if (phone()) setPanel(false);
+  card.style.removeProperty('--c');
+  $('cardBody').replaceChildren(
+    el('h3', {}, `${list.length} events at this spot`),
+    el('p', { class: 'sum' }, 'Choose one, or zoom in to pull them apart.'),
+    el('div', { class: 'rel' }, list.slice(0, CHOICE_MAX).map(n => refBtn(n.id))),
+    more > 0 ? el('p', { class: 'sum' }, `and ${more} more`) : null,
+    el('button', { class: 'zoomhere', onclick: () => { closeCard(); zoomBy(3, x, y); } }, 'Zoom in here'));
+  $('cardPrev').disabled = true; $('cardNext').disabled = true;
+  card.hidden = false; card.scrollTop = 0;
+  request();
+}
+
+// Phone card gestures. Sideways on the card: earlier or later. Down on the
+// grip or the button row: close. The card body keeps its vertical scroll
+// (touch-action pan-y in style.css), so a downward swipe there scrolls.
+function bindCardSwipe() {
+  const card = $('card');
+  let s = null, swiped = false;
+  card.addEventListener('pointerdown', e => {
+    s = phone() && e.pointerType !== 'mouse' ? { x: e.clientX, y: e.clientY, top: !!e.target.closest('#cardGrip, .card-nav') } : null;
+  });
+  card.addEventListener('pointerup', e => {
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y, top = s.top;
+    s = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) {
+      const b = $(dx < 0 ? 'cardNext' : 'cardPrev');
+      if (!b.disabled) b.click();
+      swiped = true;
+    } else if (top && dy > 50 && dy > 1.5 * Math.abs(dx)) { closeCard(); swiped = true; }
+    if (swiped) setTimeout(() => { swiped = false; }, 400);
+  });
+  card.addEventListener('pointercancel', () => { s = null; });
+  // The swipe does not also press the button it started on. The
+  // b.click() above is not trusted, so it goes through.
+  card.addEventListener('click', e => { if (swiped && e.isTrusted) { e.preventDefault(); e.stopPropagation(); swiped = false; } }, true);
+}
+
+// ---------------------------------------------------------------- finder
+// Event search in the panel. No query lists the newest events. A tap
+// selects the event; on a phone the sheet closes and the card opens.
+const FIND_PAGE = 12;
+function buildFinder() {
+  const q = $('findQ');
+  let shown = FIND_PAGE, timer = 0;
+  const run = () => {
+    const all = M.findEvents(L.nodes, q.value), word = q.value.trim();
+    $('findNote').textContent = !word ? 'Newest first.' : all.length ? `${all.length} ${all.length === 1 ? 'event matches' : 'events match'}, newest first.` : 'No event matches.';
+    $('findList').replaceChildren(...all.slice(0, shown).map(n => el('li', {},
+      el('button', { class: 'frow', style: `--c:${COLORS.get(n.thread)}`, onclick: () => { q.blur(); select(n.id, true); } },
+        el('span', { class: 'sw' }),
+        el('span', { class: 'ft' }, n.ev.title, el('small', {}, `${M.fmtUTC(n.t, n.ev.tPrecision)} · ${M.threadName(n.thread)}`))))));
+    $('findMore').hidden = all.length <= shown;
+    $('findMore').textContent = `Show more (${all.length - shown} more)`;
+  };
+  q.addEventListener('input', () => { shown = FIND_PAGE; clearTimeout(timer); timer = setTimeout(run, 120); });
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') q.blur(); });
+  // On a phone the keyboard covers the base of the screen: open the sheet
+  // to full height so the box and the first results stay above it.
+  q.addEventListener('focus', () => { if (phone()) { $('panel').classList.add('full'); setTimeout(() => q.scrollIntoView({ block: 'start', behavior: 'smooth' }), 320); } });
+  $('findMore').onclick = () => { shown += FIND_PAGE; run(); };
+  run();
+}
 
 // Select a node. From a link (fromUI): show it even when the playhead or a
 // filter hides it, and move the view when an overlay covers it.
@@ -282,6 +357,13 @@ function bindPointer() {
   const pts = new Map();
   let drag = null, pinch = null, lastTap = { t: 0, x: 0, y: 0 };
   const reach = () => coarse() ? 22 : 12;
+  // Crowded: the second dot is not clearly farther from the finger than the
+  // first, so the nearest one may not be the one the user meant.
+  const crowded = (near, x, y) => {
+    if (near.length < 2) return false;
+    const d = n => { const [a, b] = M.toScreen(S.view, n.x, n.y); return Math.hypot(a - x, b - y); };
+    return d(near[1]) - d(near[0]) < 10;
+  };
   const at = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   cv.addEventListener('pointerdown', e => {
     cv.setPointerCapture(e.pointerId);
@@ -327,9 +409,10 @@ function bindPointer() {
     if (pts.size === 1) { const [p] = [...pts.values()]; drag = { x0: p.x, y0: p.y, view: { ...S.view }, moved: true }; return; }
     cv.classList.remove('drag');
     if (drag && !drag.moved && e.type === 'pointerup') {
-      const n = M.pick(L.nodes, S.view, x, y, reach(), m => visible(m));
+      const near = M.pickAll(L.nodes, S.view, x, y, reach(), m => visible(m)), n = near[0];
       const now = performance.now();
-      if (n) select(n.id);
+      if (n && drag.type !== 'mouse' && crowded(near, x, y)) showChoice(near, x, y);
+      else if (n) select(n.id);
       else if (drag.type !== 'mouse' && now - lastTap.t < 320 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30) zoomBy(2, x, y);
       else if (S.sel) closeCard();
       lastTap = { t: now, x, y };
@@ -382,6 +465,8 @@ function start() {
   setPanel(!phone());
   bindPointer();
   bindSheet();
+  bindCardSwipe();
+  buildFinder();
   $('panelBtn').onclick = () => setPanel(!document.body.classList.contains('panel-open'));
   $('panelClose').onclick = () => setPanel(false);
   $('play').onclick = () => (S.playing ? stop() : play());

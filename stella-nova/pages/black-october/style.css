@@ -14,11 +14,14 @@
    TOUCH (pointer:coarse): every target is 44px or more, text is 11px or
    more. PHONE (max-width 768px, or a short touch screen) matches PHONE_Q
    in main.js: the panel and the card are bottom sheets above the time
-   bar, and the panel is closed at load. LANDSCAPE phone: the panel and the
+   bar, and the panel is closed at load. The card has a grip (#cardGrip);
+   main.js bindCardSwipe reads the swipes. The search box is 16px so iOS
+   does not zoom the page on focus. LANDSCAPE phone: the panel and the
    card are drawers on the right edge.
      grep -n 'PANEL'      the left column
      grep -n 'TIMEBAR'    play, scrubber, time label
      grep -n 'CARD'       the record of one event
+     grep -n 'finder'     the event search in the panel
      grep -n 'TOUCH'      target and text sizes for any touch screen
      grep -n 'PHONE'      the phone block
      grep -n 'LANDSCAPE'  the landscape phone block
@@ -94,6 +97,16 @@ body.panel-closed #panel{transform:translateX(-100%)}
 .clist button svg{width:14px;height:14px}
 .clist button.off{color:var(--faint);border-color:var(--line)}
 .clist button.off svg{opacity:0.35}
+.finder input{width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--bg3);color:var(--ink);font:inherit;font-size:16px;padding:7px 10px;-webkit-appearance:none;appearance:none}
+.finder input:focus{outline:none;border-color:var(--acc)}
+.finder input::placeholder{color:var(--faint)}
+.fnote{font-size:0.75rem;color:var(--dim);margin:5px 0 3px}
+.flist{list-style:none;display:grid;gap:1px;max-height:340px;overflow-y:auto;overscroll-behavior:contain}
+.frow{width:100%;display:grid;grid-template-columns:12px 1fr;gap:9px;align-items:start;text-align:left;border:0;background:none;border-radius:7px;padding:5px 8px;font-size:0.84rem;color:var(--ink2);line-height:1.35}
+.frow:hover{background:var(--bg3);color:var(--ink)}
+.frow .sw{width:10px;height:10px;margin-top:4px;border-radius:50%;background:var(--c)}
+.frow small{display:block;font-size:0.72rem;color:var(--dim);margin-top:1px}
+#findMore{margin-top:6px;border:1px solid var(--line2);background:var(--bg3);border-radius:7px;padding:3px 10px;font-size:0.78rem;color:var(--ink2)}
 .foot{margin-top:20px;font-size:0.75rem;color:var(--dim);line-height:1.55}
 
 .icon{width:34px;height:34px;border:1px solid var(--line2);border-radius:8px;background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:0.95rem;flex:0 0 auto}
@@ -141,6 +154,8 @@ html.in-frame #card{top:10px}
 #cardBody .rel button{display:block;width:100%;text-align:left;border:0;background:none;padding:3px 0 3px 10px;border-left:2px solid var(--c,var(--line2));font-size:0.82rem;color:var(--ink2)}
 #cardBody .rel button:hover{color:var(--ink)}
 #cardBody .rel small{color:var(--dim)}
+#cardBody .zoomhere{margin-top:12px;border:1px solid var(--line2);background:var(--bg3);border-radius:7px;padding:3px 12px;font-size:0.8rem;color:var(--ink2)}
+#cardGrip{display:none}
 
 #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tb-h) + 14px);z-index:21;font-size:0.78rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s;white-space:nowrap}
 
@@ -153,6 +168,9 @@ html.in-frame #card{top:10px}
   .trow{min-height:44px}
   .only{min-width:44px}
   #cardBody .rel button{min-height:44px}
+  .frow{min-height:44px;padding:6px 8px}
+  #findMore,#cardBody .zoomhere{min-height:44px;padding:0 14px}
+  .fnote,.frow small{font-size:0.78rem}
   #cardBody .src a{display:inline-block;min-height:28px;padding:4px 0}
   #scrub{height:34px}
   .tread,.counts span,.key li,.foot,#cardBody .src small,#cardBody .prim{font-size:0.78rem}
@@ -178,7 +196,11 @@ html.in-frame #card{top:10px}
   .intro h1{font-size:1.9rem}
   #card{top:auto;left:0;right:0;bottom:calc(var(--tb-h) + env(safe-area-inset-bottom));width:auto;max-height:min(56vh,520px);max-height:min(56dvh,520px);
     border-radius:16px 16px 0 0;border-left:1px solid var(--line2);border-top:3px solid var(--c,var(--dim));
-    padding:8px calc(16px + env(safe-area-inset-right)) 18px calc(16px + env(safe-area-inset-left))}
+    padding:0 calc(16px + env(safe-area-inset-right)) 18px calc(16px + env(safe-area-inset-left));touch-action:pan-y}
+  #cardGrip{display:flex;justify-content:center;align-items:center;height:22px;touch-action:none}
+  #cardGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .card-nav{touch-action:none}
+  .flist{max-height:none;overflow:visible}
   #zoomCtl{top:calc(52px + env(safe-area-inset-top));bottom:auto}
   html.in-frame #zoomCtl{top:10px}
   #hint{white-space:normal;width:calc(100% - 32px);text-align:center}
@@ -194,7 +216,8 @@ html.in-frame #card{top:10px}
   #timebar,body.panel-closed #timebar{right:auto;width:min(560px,60vw);border-right:1px solid var(--line);border-radius:0 14px 0 0}
   #sheetGrip{display:none}
   #panelClose{display:inline-flex;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2}
-  #card{top:0;bottom:0;left:auto;right:0;width:min(46vw,400px);max-height:none;border-radius:0;border-top:0;border-left:3px solid var(--c,var(--dim))}
+  #card{top:0;bottom:0;left:auto;right:0;width:min(46vw,400px);max-height:none;border-radius:0;border-top:0;border-left:3px solid var(--c,var(--dim));padding-top:8px}
+  #cardGrip{display:none}
   #zoomCtl{top:10px;left:calc(10px + env(safe-area-inset-left));right:auto}
 }
 

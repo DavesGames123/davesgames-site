@@ -294,6 +294,30 @@ section('page logic (model.js, render.js)');
   ok(miss === 0, `pick at 4x zoom: ${miss} nodes not picked by a tap on them`);
   ok(M.pick(L.nodes, v, -500, -500, 22) === null, 'pick far away gives null');
   ok(M.pick(L.nodes, v4, ...M.toScreen(v4, L.nodes[0].x, L.nodes[0].y), 22, n => n !== L.nodes[0]) !== L.nodes[0], 'pick skips hidden nodes');
+  // pickAll: nearest first, the same first node as pick, and no node out of reach
+  {
+    let bad = 0, crowd = 0;
+    for (const n of L.nodes) {
+      const [x, y] = M.toScreen(v, n.x, n.y), all = M.pickAll(L.nodes, v, x, y, 22), one = M.pick(L.nodes, v, x, y, 22);
+      const d = m => { const [a, b] = M.toScreen(v, m.x, m.y); return Math.hypot(a - x, b - y); };
+      if (!one || Math.abs(d(all[0]) - d(one)) > 1e-9 || all.some((m, i) => d(m) > 22 || (i && d(m) < d(all[i - 1]) - 1e-9))) bad++;
+      if (all.length > 1) crowd++;
+    }
+    ok(bad === 0, `pickAll starts at pick's distance (ties may differ) and sorts by distance (${bad} bad)`);
+    ok(crowd > 0, `at fit zoom on a 390px phone, ${crowd} of ${N} dots share a tap with another dot`);
+    ok(M.pickAll(L.nodes, v, -500, -500, 22).length === 0, 'pickAll far away is empty');
+  }
+  // findEvents: no query gives all, newest first; each word must match
+  {
+    const all = M.findEvents(L.nodes, '');
+    ok(all.length === N && all.every((n, i) => !i || all[i - 1].t >= n.t), 'findEvents with no query: every event, newest first');
+    const e0 = L.nodes[Math.floor(N / 2)], word = e0.ev.title.split(/\s+/).find(w => w.length > 5) || e0.ev.title;
+    const hits = M.findEvents(L.nodes, word.toUpperCase());
+    ok(hits.includes(e0) && hits.every(n => [n.ev.title, n.ev.summary, n.ev.id, n.thread, M.threadName(n.thread), ...n.ev.sources.map(x => x.publisher)].join(' ').toLowerCase().includes(word.toLowerCase())), `findEvents "${word}": ${hits.length} hits, case-blind`);
+    ok(M.findEvents(L.nodes, 'php2shell cisco').every(n => n.thread === 'php2shell' || /cisco/i.test(n.ev.title + n.ev.summary)) && M.findEvents(L.nodes, 'php2shell cisco').length > 0, 'findEvents: two words both match');
+    ok(M.findEvents(L.nodes, 'zzzz-no-such-event').length === 0, 'findEvents: no match gives none');
+    ok(M.findEvents(L.nodes, 'Railway').some(n => n.thread === 'railway'), 'findEvents matches thread names');
+  }
 
   const pairs = M.relatedPairs(L);
   const relIn = EVENTS.reduce((a, e) => a + (e.related || []).length, 0);

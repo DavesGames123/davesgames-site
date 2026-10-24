@@ -39,7 +39,8 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      #cv        the growth, full window; drag pans, wheel and pinch zoom
-     #panel     intro (#lede), #counts, the key, #threadList (#thAll
+     #panel     intro (#lede), #counts, the finder (#findQ #findNote
+                #findList #findMore), the key, #threadList (#thAll
                 #thNone), #confList. Desktop: a column on the left.
                 Phone portrait: a bottom sheet (#sheetGrip). Phone
                 landscape: a drawer on the right.
@@ -47,11 +48,16 @@
      #zoomCtl   #zIn #zOut #zFit
      #hint      the first-use hint; it fades after the first move
      #card      the record of one event: #cardBody #cardPrev #cardNext
-                #cardClose
+                #cardClose. A phone tap on a crowded spot shows a
+                choice list in #cardBody first. Phone: #cardGrip; swipe
+                the card down to close it, sideways for earlier/later.
 
    GREP MAP  (main.js)
      grep -n 'function buildPanel'    intro, counts, key, filters
      grep -n 'function showCard'      the record card
+     grep -n 'function showChoice'    the list for a crowded tap
+     grep -n 'function buildFinder'   event search
+     grep -n 'function bindCardSwipe' card gestures on a phone
      grep -n 'function setK'          the playhead and the time label
      grep -n 'function tick'          play loop
      grep -n 'function bindPointer'   pan, zoom, pinch, hover, tap
@@ -81,6 +87,14 @@
     <p class="lede" id="lede"></p>
   </header>
   <div id="counts" class="counts" aria-label="Counts"></div>
+
+  <section class="finder">
+    <h2>Find an event</h2>
+    <input type="search" id="findQ" placeholder="Search titles, threads, publishers" aria-label="Search the events" autocomplete="off" enterkeyhint="search">
+    <p class="fnote" id="findNote"></p>
+    <ul id="findList" class="flist"></ul>
+    <button id="findMore" hidden>Show more</button>
+  </section>
 
   <section class="key">
     <h2>How to read this</h2>
@@ -113,6 +127,7 @@
 <div id="hint">Drag to move · scroll or pinch to zoom · point at or tap a dot for its record</div>
 
 <article id="card" hidden aria-live="polite">
+  <div id="cardGrip" aria-hidden="true"><span></span></div>
   <div class="card-nav">
     <button id="cardPrev" aria-label="Earlier event">‹ earlier</button>
     <button id="cardNext" aria-label="Later event">later ›</button>

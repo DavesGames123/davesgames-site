@@ -13,7 +13,8 @@
 //    counts strip .......... "export function counts"
 //    view (world <-> px) ... "export function fitView"  "export function toScreen"
 //    zoom about a point .... "export function zoomAt"
-//    tap / hover pick ...... "export function pick"
+//    tap / hover pick ...... "export function pick"  "export function pickAll"
+//    event search .......... "export function findEvents"
 //    links of a node ....... "export function linksOf"
 //    playhead .............. "export function revealCount"
 //    label placement ....... "export function placeLabels"
@@ -155,6 +156,30 @@ export function pick(nodes, v, px, py, reach = 14, shown = () => true) {
     if (d <= bd) { bd = d; best = n; }
   });
   return best;
+}
+// All shown nodes within reach of (px, py), nearest first. A phone tap on a
+// crowded spot gets a short list to choose from, not a random neighbour.
+export function pickAll(nodes, v, px, py, reach = 14, shown = () => true) {
+  const out = [];
+  nodes.forEach((n, i) => {
+    if (!shown(n, i)) return;
+    const [x, y] = toScreen(v, n.x, n.y), d = (x - px) ** 2 + (y - py) ** 2;
+    if (d <= reach * reach) out.push([d, n]);
+  });
+  return out.sort((a, b) => a[0] - b[0]).map(p => p[1]);
+}
+
+// Event search for the panel list. Each word of the query must be in the
+// title, the summary, the thread name, the id or a source publisher. No
+// query gives every node. The result is newest first.
+export function findEvents(nodes, query, name = threadName) {
+  const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = n => {
+    if (!words.length) return true;
+    const e = n.ev, hay = [e.title, e.summary, e.id, n.thread, name(n.thread), ...e.sources.map(s => s.publisher)].join(' ').toLowerCase();
+    return words.every(w => hay.includes(w));
+  };
+  return nodes.filter(hit).sort((a, b) => b.t - a.t);
 }
 
 // Parent, children, ancestors to the root, and related links (both ways).
