@@ -68,6 +68,8 @@ export const THREAD_NAMES = Object.freeze({
   capcom: "Capcom ID breach",
   'crime-stoppers': "Crime Stoppers P3 tips breach",
   beyondtrust: "BeyondTrust Remote Support zero-day",
+  'collabora-code': "Collabora CODE / Nextcloud RCE",
+  blackx: "BlackX UEFI bootkit",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;

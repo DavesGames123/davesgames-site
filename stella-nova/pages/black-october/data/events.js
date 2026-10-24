@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended three times by 2026-10-24. Still going on then.
+//  Gathered 2026-10-22, extended four times by 2026-10-24. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -10360,5 +10360,529 @@ export const EVENTS = [
   ],
   "confidence": "reported",
   "note": "Date from Rapid7's reading of the KEV feed; the CISA feed itself was not fetched."
+ },
+ {
+  "id": "php-citrix-netscaler",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Citrix: all supported NetScaler versions affected through the management GUI",
+  "summary": "Citrix advisory CTX697263 says NetScaler ADC and Gateway are affected through the NSIP, management SNIP and cluster IP interfaces, with PHP package fixes planned but no fixed builds yet. Citrix-managed cloud services are already fixed; customers are told to restrict management access meanwhile.",
+  "sources": [
+   {
+    "url": "https://support.citrix.com/external/article/CTX697263/",
+    "publisher": "Citrix",
+    "primary": true
+   },
+   {
+    "url": "https://www.kraftkennedy.com/citrix-security-advisory-for-cve-2026-109618-and-cve-2026-109619/",
+    "publisher": "Kraft Kennedy",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-certin-msme",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-In advisory CIAD-2026-0052 tells Indian MSMEs to patch PHP2Shell",
+  "summary": "India's CERT-In issues a high-severity advisory aimed at small businesses, telling them to check with hosts and vendors whether they run PHP and to upgrade internet-facing systems first. The advisory itself speaks of large-scale exploitation in the wild, a stronger claim than most other agencies made.",
+  "sources": [
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&VLCODE=CIAD-2026-0052",
+    "publisher": "CERT-In",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-wmf-train-resumes",
+  "thread": "php2shell",
+  "parent": "php-wmf-tools-post",
+  "t": "2026-10-23T20:25:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "Wikimedia: MediaWiki train and backport deployments resume next week",
+  "summary": "Wikimedia says it will skip the 1.48.0-wmf.2 branch, finish rolling out 1.48.0-wmf.1 to all wikis on 28-29 October, and resume the normal train with a 3 November branch cut.",
+  "sources": [
+   {
+    "url": "https://lists.wikimedia.org/hyperkitty/list/wikitech-l@lists.wikimedia.org/thread/DAAZEQRLOPBVBX2U72MMYFIXOLRH4P5E/",
+    "publisher": "Wikimedia (wikitech-l)",
+    "primary": true
+   },
+   {
+    "url": "https://wikitech.wikimedia.org/wiki/Incidents/2026-10-21_PHP_security_update/Community",
+    "publisher": "Wikimedia Wikitech",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-debian-brotli",
+  "thread": "nodejs",
+  "parent": "node-brotli-upstream",
+  "t": "2026-10-23T21:09:31Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Debian ships Brotli fixes for trixie (DSA-6582-1) and bookworm (DLA-4855-1)",
+  "summary": "Debian fixes CVE-2026-111497 in its system brotli package: version 1.1.0-2+deb13u1 for trixie, and an LTS update for bookworm about an hour later. Debian describes the impact as denial of service or possibly arbitrary code execution.",
+  "sources": [
+   {
+    "url": "https://lists.debian.org/debian-security-announce/2026/msg00498.html",
+    "publisher": "Debian",
+    "primary": true
+   },
+   {
+    "url": "https://lists.debian.org/debian-lts-announce/2026/10/msg00049.html",
+    "publisher": "Debian LTS",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-wmcs-notice",
+  "thread": "nodejs",
+  "parent": "node-oct21-release",
+  "t": "2026-10-24T00:39:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Wikimedia Cloud Services: disable Node tools older than 22.23.4, 24.22.1 or 26.12.1",
+  "summary": "Wikimedia Cloud Services tells Toolforge and Cloud VPS maintainers to disable Node.js projects on unpatched versions until it provides fixed Node images. It plans no platform-wide shutdown for now.",
+  "sources": [
+   {
+    "url": "https://lists.wikimedia.org/hyperkitty/list/cloud-announce@lists.wikimedia.org/thread/TCUZGJX6H4OYZKOIPNVNKB63LIPGQFG6/",
+    "publisher": "Wikimedia (cloud-announce)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "php-wmcs-vps-partial"
+  ]
+ },
+ {
+  "id": "pwnescape-suse-sles12",
+  "thread": "pwnescape",
+  "parent": "pwnescape-suse-tid",
+  "t": "2026-10-23T10:48:19Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "SUSE ships its first PwnEscape kernel fix, for SLES 12 SP5 LTSS",
+  "summary": "SUSE-SU-2026:4892-1 fixes CVE-2026-99999 in kernel 4.12.14-122.336.1 for SLES 12 SP5 LTSS and Extended Security. SUSE 15 SP7 and other current kernels are still listed as in progress, and SLES 16 and openSUSE Leap as affected.",
+  "sources": [
+   {
+    "url": "https://www.suse.com/support/update/announcement/2026/suse-su-20264892-1/",
+    "publisher": "SUSE",
+    "primary": true
+   },
+   {
+    "url": "https://www.suse.com/security/cve/CVE-2026-99999.html",
+    "publisher": "SUSE",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "rw-incident-resolved",
+  "thread": "railway",
+  "parent": "rw-high-risk-notified",
+  "t": "2026-10-23T22:06:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Railway marks the incident resolved; builds, API and dashboard normal",
+  "summary": "Railway moves the October 21 incident to resolved on its status page, saying builds, deployments, the API and the dashboard operate normally. Builds may still start or finish more slowly than usual.",
+  "sources": [
+   {
+    "url": "https://status.railway.com/incident/QH8L8B3E",
+    "publisher": "Railway",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "llm-original-post-flagged",
+  "thread": "litellm",
+  "parent": "llm-attack-chain-post",
+  "t": "2026-10-23T21:50:00Z",
+  "tPrecision": "minute",
+  "kind": "correction",
+  "title": "LiteLLM flags its first incident post as partly inaccurate or incomplete",
+  "summary": "LiteLLM adds a note to its original incident post saying some assumptions in its status updates were later found inaccurate or incomplete. It keeps the text as a record and points readers to the attack-chain post as the canonical account.",
+  "sources": [
+   {
+    "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026",
+    "publisher": "LiteLLM",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The note does not name which earlier claims were wrong; the 'exposed internal deployment' theory (llm-entry-suspect) differs from the later attack-chain account."
+ },
+ {
+  "id": "onamae-fourth-report",
+  "thread": "onamae",
+  "parent": "onamae-third-report",
+  "t": "2026-10-24T02:50:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "GMO fourth report: customer data taken; 5,000 yen to every user; old system stays down",
+  "summary": "GMO confirms that customer information was taken from the service. It will pay every current customer 5,000 yen, cover confirmed realised losses from unauthorised trades, and offer a replacement desktop service free for six months instead of restoring the old system.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/20261024/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.onamae.com/news/article/11598",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2150944.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Status as of 11:50 JST, 24 Oct. Compensation application details due by 6 November; payment and migration details by email by 30 October."
+ },
+ {
+  "id": "onamae-extortion",
+  "thread": "onamae",
+  "parent": "onamae-fourth-report",
+  "t": "2026-10-24T02:50:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "GMO: attacker demands money and threatens trading on accounts at 70+ brokers",
+  "summary": "GMO says the attacker demanded money and threatened leaks, further unauthorised trading on customer accounts at more than 70 brokers and FX firms, and ransomware on connected customer PCs. GMO says it will not pay and has given evidence to the police.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/20261024/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2150944.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-acd-request",
+  "thread": "onamae",
+  "parent": "onamae-fourth-report",
+  "t": "2026-10-24T02:50:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "GMO asks the government to use active cyber defence for the first time",
+  "summary": "GMO formally asks government agencies to apply Japan's new active cyber defence powers, in force since 1 October, to trace and neutralise the attacker's infrastructure. It calls the case the first for the framework, although GMO is not a designated critical-infrastructure operator.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/20261024/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/a8ce2e220374f85e5b51af7b5353dcbb8151a364",
+    "publisher": "Yomiuri Shimbun (via Yahoo! News Japan)",
+    "primary": false
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2150944.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "A related Yomiuri headline quotes a government official saying the system is not activated on request; only the headline was seen, so no government decision is recorded."
+ },
+ {
+  "id": "onamae-fifth-report",
+  "thread": "onamae",
+  "parent": "onamae-fourth-report",
+  "t": "2026-10-24T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "GMO fifth report: scan your PCs, end trading sessions, ignore attacker messages",
+  "summary": "GMO's fifth report tells users to scan their own devices, change trading passwords from a clean device and end all live sessions, since a password change alone may leave a session open. It warns users not to answer messages from people claiming to be the intruder.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/250/",
+    "publisher": "GMO Internet",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Status as of 15:00 JST, 24 Oct."
+ },
+ {
+  "id": "cw-onboarding-target",
+  "thread": "connectwise",
+  "parent": "cw-restore-outlook",
+  "t": "2026-10-24T14:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "ConnectWise targets 26 October to start phased Cloud Backup partner onboarding",
+  "summary": "ConnectWise says restoration, testing and security checks continue through the weekend, with phased partner onboarding targeted to begin Monday 26 October and restore access before full re-enrolment. Partners must keep affected connections disabled until then.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "crime-stoppers-navigate360-notice",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-police-suspend",
+  "t": "2026-10-22T15:32:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Navigate360 posts a breach notice: data copied from 21 Nov 2025 to 5 Mar 2026",
+  "summary": "Navigate360 publicly confirms for the first time that an unauthorized party copied data from one of its systems. It says names, addresses, birth dates, Social Security numbers and other sensitive data may be involved.",
+  "sources": [
+   {
+    "url": "https://navigate360.com/blog/navigate360-notice-of-data-breach/",
+    "publisher": "Navigate360",
+    "primary": true
+   },
+   {
+    "url": "https://www.centraloregondaily.com/news/consumer/safety-company-acknowledges-hack-seven-months-after-breach-exposed-millions-of-crime-tips/article_5dfd336c-840c-50f1-b004-220fdfaa6128.html",
+    "publisher": "Reuters (via Central Oregon Daily)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "crime-stoppers-watchdogs-no-power",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-cbc-1-5m",
+  "t": "2026-10-24T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Federal and Ontario privacy commissioners say they cannot investigate Crime Stoppers",
+  "summary": "The federal privacy office and Ontario's IPC tell CBC that the law does not cover non-profits such as Crime Stoppers. CBC also reports a June association memo that told chapters not to contact privacy commissioners.",
+  "sources": [
+   {
+    "url": "https://www.cbc.ca/news/investigates/canadian-crime-stoppers-privacy-commissioners-data-breach-9.7394372",
+    "publisher": "CBC News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "capcom-second-report",
+  "thread": "capcom",
+  "parent": "capcom-notice",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Capcom second report: names, addresses, purchase history leaked for 19 E-Capcom users",
+  "summary": "Capcom says 19 of the 196 hijacked CAPCOM ID accounts had their E-Capcom store pages accessed, which exposed name, address, phone, birth date and purchase history. All 19 are in Japan, and Capcom says its impact investigation is complete.",
+  "sources": [
+   {
+    "url": "https://www.capcom.co.jp/ir/news/html/261023.html",
+    "publisher": "Capcom",
+    "primary": true
+   },
+   {
+    "url": "https://news.denfaminicogamer.jp/news/2610232v",
+    "publisher": "Denfaminicogamer",
+    "primary": false
+   },
+   {
+    "url": "https://www.gamespark.jp/article/2026/10/23/173999.html",
+    "publisher": "Game*Spark",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "bullhorn-sso-root-cause",
+  "thread": "bullhorn",
+  "parent": "bullhorn-bbo-restored",
+  "t": "2026-10-24T16:01:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Bullhorn finds the root cause of the ATS SSO fault; Canvas still unavailable",
+  "summary": "Bullhorn's status page says all products are available but some features are still impaired. It has found the root cause of the ATS single sign-on fault with Back Office, some users still cannot log in, and restoring Canvas is its top priority.",
+  "sources": [
+   {
+    "url": "https://status.bullhorn.com/",
+    "publisher": "Bullhorn status page",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "collabora-code-first-attacks",
+  "thread": "collabora-code",
+  "parent": null,
+  "t": "2026-09-10T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Attacks on Nextcloud servers through the built-in Collabora CODE server begin",
+  "summary": "Nextcloud administrators later report webshells planted through the richdocumentscode app from about 10 September, with searches for password stores and crypto wallets. The start date is from admin reports, not from the vendor.",
+  "sources": [
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/hackers-exploit-collabora-rce-flaw-to-backdoor-nextcloud-servers/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "collabora-code-patch",
+  "thread": "collabora-code",
+  "parent": "collabora-code-first-attacks",
+  "t": "2026-09-11T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "richdocumentscode 26.4.303 ships the fix without an advisory",
+  "summary": "Collabora releases the Built-in CODE Server app 26.4.303 through the Nextcloud app store, but publishes no advisory or CVE for five weeks.",
+  "sources": [
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/hackers-exploit-collabora-rce-flaw-to-backdoor-nextcloud-servers/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   },
+   {
+    "url": "https://censys.com/advisory/cve-2026-110447",
+    "publisher": "Censys",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "collabora-code-forum-warning",
+  "thread": "collabora-code",
+  "parent": "collabora-code-patch",
+  "t": "2026-10-03T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Nextcloud forum warning: built-in Collabora users must update as soon as possible",
+  "summary": "A community post on the Nextcloud forum urges Built-in CODE users to update because of ongoing attacks. CISA later cites the post in its KEV entry.",
+  "sources": [
+   {
+    "url": "https://help.nextcloud.com/t/to-collabora-built-in-user-update-asap/250516",
+    "publisher": "Nextcloud community forum",
+    "primary": false
+   },
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/hackers-exploit-collabora-rce-flaw-to-backdoor-nextcloud-servers/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "collabora-code-advisory",
+  "thread": "collabora-code",
+  "parent": "collabora-code-forum-warning",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Collabora discloses CVE-2026-110447, unauthenticated command injection (CVSS 9.2)",
+  "summary": "Collabora's advisory GHSA-g3vx-3m76-fghh covers richdocumentscode before 26.4.303. Standalone Collabora Online servers are not affected; Censys counts about 19,000 exposed hosts.",
+  "sources": [
+   {
+    "url": "https://github.com/CollaboraOnline/online/security/advisories/GHSA-g3vx-3m76-fghh",
+    "publisher": "Collabora Online (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://censys.com/advisory/cve-2026-110447",
+    "publisher": "Censys",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "collabora-code-kev",
+  "thread": "collabora-code",
+  "parent": "collabora-code-advisory",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds CVE-2026-110447 to KEV with a 26 October deadline",
+  "summary": "CISA lists the Collabora Built-in CODE Server command injection as exploited, with forensic triage required and a federal due date of 26 October.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/23/cisa-adds-one-known-exploited-vulnerability-catalog-0",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "blackx-securelist",
+  "thread": "blackx",
+  "parent": null,
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Kaspersky reveals BlackX, a UEFI bootkit used against Central Asian diplomats",
+  "summary": "Kaspersky says BlackX abused the old Baton Drop flaw (CVE-2022-21894) to bypass Secure Boot on patched Windows at diplomatic bodies in Tajikistan, Uzbekistan and Turkmenistan in early 2026. It links the activity to APT41 with medium confidence.",
+  "sources": [
+   {
+    "url": "https://securelist.com/uefi-bootkit-blackx/121539/",
+    "publisher": "Kaspersky Securelist",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "blackx-revocation-gap",
+  "thread": "blackx",
+  "parent": "blackx-securelist",
+  "t": "2026-10-24T14:17:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "Press: the Baton Drop patch alone did not stop BlackX; revocation is manual",
+  "summary": "BleepingComputer reports that the victims ran fully patched Windows because the certificate revocation behind the Baton Drop fix is not applied automatically and needs an admin step.",
+  "sources": [
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/blackx-uefi-bootkit-exploits-baton-drop-flaw-to-bypass-secure-boot/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   },
+   {
+    "url": "https://securelist.com/uefi-bootkit-blackx/121539/",
+    "publisher": "Kaspersky Securelist",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
  }
 ];
