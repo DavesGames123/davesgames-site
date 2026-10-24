@@ -382,6 +382,21 @@ section('main.js link check');
   const css = fs.readFileSync(path.join(here, 'style.css'), 'utf8');
   ok(/\[hidden\]\{display:none!important\}/.test(css), 'style.css has [hidden]{display:none!important}');
   ok(/rel: 'noopener noreferrer'/.test(main) && !/\.innerHTML\s*=/.test(main), 'source links get rel noopener; main.js sets no innerHTML');
+  // The card body once got "[object HTMLHeadingElement]" text: showCard
+  // passed arrays and null straight to replaceChildren. Now every child
+  // list goes through fill(), which flattens and skips null.
+  const calls = [...main.matchAll(/\.replaceChildren\(/g)].length;
+  ok(calls === 1 && /function fill\(node, \.\.\.kids\) \{\n  node\.replaceChildren\(\);/.test(main), `replaceChildren is called only inside fill (${calls} calls)`);
+  {
+    const src = main.slice(main.indexOf('function el('), main.indexOf('const svgGlyph'));
+    class FakeNode { constructor(tag) { this.tag = tag; this.kids = []; } replaceChildren(...k) { this.kids = k; } append(c) { this.kids.push(c); } setAttribute() {} addEventListener() {} }
+    const doc = { createElement: t => new FakeNode(t) };
+    const { el, fill } = new Function('Node', 'document', src + '\nreturn { el, fill };')(FakeNode, doc);
+    const h = el('h4', {}, 'Follows from'), d = el('div', {}, null, ['x', [false, 'y']]);
+    const body = fill(new FakeNode('div'), el('h3', {}, 'title'), null, [h, d], false, 'tail');
+    ok(body.kids.length === 4 && body.kids[1] === h && body.kids[2] === d && body.kids[3] === 'tail', 'fill flattens arrays and skips null and false');
+    ok(d.kids.join('|') === 'x|y' && body.kids.every(k => k instanceof FakeNode || !/object|null/.test(k)), 'no "[object ...]" or "null" text');
+  }
   ok(!/text-transform:\s*uppercase|letter-spacing:\s*\.?[1-9]/.test(css), 'no uppercase letter-spaced labels');
 }
 

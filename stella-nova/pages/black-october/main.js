@@ -53,8 +53,15 @@ function el(tag, attrs = {}, ...kids) {
     if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v;
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
   }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c instanceof Node ? c : String(c));
-  return e;
+  return fill(e, ...kids);
+}
+// Replace the children of node. Arrays at any depth are flattened, and
+// null or false is skipped. A bare replaceChildren() would turn an array
+// into "[object HTMLHeadingElement]" text and a null into "null".
+function fill(node, ...kids) {
+  node.replaceChildren();
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) node.append(c instanceof Node ? c : String(c));
+  return node;
 }
 const svgGlyph = conf => {
   const ns = 'http://www.w3.org/2000/svg', s = document.createElementNS(ns, 'svg');
@@ -134,7 +141,7 @@ function showCard(id) {
   const e = n.ev, lk = M.linksOf(L, id), i = INDEX.get(id), ref = refBtn;
   card.style.setProperty('--c', COLORS.get(n.thread));
   const host = u => { try { const x = new URL(u); return x.host + (x.pathname.length > 1 ? x.pathname : ''); } catch (err) { return u; } };
-  body.replaceChildren(
+  fill(body,
     el('div', { class: 'th' }, M.threadName(n.thread)),
     el('h3', {}, e.title),
     el('dl', { class: 'meta' },
@@ -172,7 +179,7 @@ function showChoice(list, x, y) {
   S.sel = null;
   if (phone()) setPanel(false);
   card.style.removeProperty('--c');
-  $('cardBody').replaceChildren(
+  fill($('cardBody'),
     el('h3', {}, `${list.length} events at this spot`),
     el('p', { class: 'sum' }, 'Choose one, or zoom in to pull them apart.'),
     el('div', { class: 'rel' }, list.slice(0, CHOICE_MAX).map(n => refBtn(n.id))),
@@ -219,7 +226,7 @@ function buildFinder() {
   const run = () => {
     const all = M.findEvents(L.nodes, q.value), word = q.value.trim();
     $('findNote').textContent = !word ? 'Newest first.' : all.length ? `${all.length} ${all.length === 1 ? 'event matches' : 'events match'}, newest first.` : 'No event matches.';
-    $('findList').replaceChildren(...all.slice(0, shown).map(n => el('li', {},
+    fill($('findList'), ...all.slice(0, shown).map(n => el('li', {},
       el('button', { class: 'frow', style: `--c:${COLORS.get(n.thread)}`, onclick: () => { q.blur(); select(n.id, true); } },
         el('span', { class: 'sw' }),
         el('span', { class: 'ft' }, n.ev.title, el('small', {}, `${M.fmtUTC(n.t, n.ev.tPrecision)} · ${M.threadName(n.thread)}`))))));
