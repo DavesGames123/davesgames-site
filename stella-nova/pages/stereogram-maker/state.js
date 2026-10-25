@@ -6,6 +6,8 @@
 //          | 'photo', and the fields of each kind, plus relief and lift
 //    pat   what fills the picture: kind 'tile' | 'dots' | 'colour' |
 //          'image', the tile id, the seed, the dot density, the palette
+//          of the coloured dots, the tile colours (tpal, a pattern-designer
+//          palette id, '' as drawn) and the motifs per repeat (tdens)
 //    view  how to look at it: wall or cross, eye separation (cm), mu,
 //          guide dots, smooth edges (oversample 2), size, turntable
 //  encodeState writes the state as a short query string for the page hash
@@ -21,7 +23,7 @@
 export const DEFAULT_STATE = {
   src: { kind: 'model', id: '', yaw: 0, pitch: 0, roll: 0, fit: 0.82, text: 'Look closer', face: 'serif', shape: 'torus',
          invert: false, soft: 4, relief: 0.85, lift: 0.1, ref: '' },
-  pat: { kind: 'tile', id: '', seed: 1, density: 0.5, palette: 0, ref: '' },
+  pat: { kind: 'tile', id: '', seed: 1, density: 0.5, palette: 0, tpal: '', tdens: 1, ref: '' },
   view: { mode: 'wall', eyeSep: 6.35, mu: 0.3333, guides: true, smooth: true, size: 'fit', frames: 36, speed: 12, dot: 1 },
 };
 
@@ -35,7 +37,7 @@ export function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
 
 const LIMITS = {
   yaw: [-180, 180], pitch: [-80, 80], roll: [-180, 180], fit: [0.4, 1], relief: [0.2, 1], lift: [0, 0.5], soft: [0, 12],
-  seed: [1, 99999], density: [0.2, 0.8], palette: [0, DOT_PALETTE_IDS.length - 1],
+  seed: [1, 99999], density: [0.2, 0.8], tdens: [1, 3], palette: [0, DOT_PALETTE_IDS.length - 1],
   eyeSep: [4.5, 7.5], mu: [0.12, 0.45], frames: [12, 72], speed: [4, 24], dot: [1, 4],
 };
 const num = (v, k, d) => { const x = parseFloat(v); if (!Number.isFinite(x)) return d; const [a, b] = LIMITS[k]; return x < a ? a : x > b ? b : x; };
@@ -52,7 +54,7 @@ export function encodeState(s) {
   q.set('r', r3(s.src.relief)); q.set('l', r3(s.src.lift));
   const pk = s.pat.kind === 'image' ? 'tile' : s.pat.kind;
   q.set('pk', pk);
-  if (pk === 'tile') q.set('t', s.pat.id);
+  if (pk === 'tile') { q.set('t', s.pat.id); if (s.pat.tpal) q.set('tp', s.pat.tpal); if (s.pat.tdens > 1) q.set('td', s.pat.tdens); }
   if (pk === 'dots') q.set('dn', r3(s.pat.density));
   if (pk === 'colour') q.set('pl', s.pat.palette);
   q.set('s', s.pat.seed);
@@ -82,6 +84,8 @@ export function decodeState(str, known) {
   const pk = g('pk');
   s.pat.kind = pk === 'dots' || pk === 'colour' ? pk : 'tile';
   if (known.tiles.has(g('t'))) s.pat.id = g('t');
+  if (known.palettes ? known.palettes.has(g('tp')) : /^[a-z0-9-]{1,40}$/.test(g('tp') || '')) s.pat.tpal = g('tp');
+  s.pat.tdens = Math.round(num(g('td'), 'tdens', 1));
   s.pat.density = num(g('dn'), 'density', s.pat.density);
   s.pat.palette = Math.round(num(g('pl'), 'palette', 0));
   s.pat.seed = Math.round(num(g('s'), 'seed', 1));

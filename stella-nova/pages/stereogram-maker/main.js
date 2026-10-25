@@ -97,7 +97,7 @@ const renderLane = lane(stageW, 'render'), previewLane = lane(stageW, 'preview')
 
 // ── state ──────────────────────────────────────────────────────────────────
 const KNOWN = {
-  models: new Set(MODELS.map(m => m.id)), tiles: new Set(TILES.map(t => t.id)),
+  models: new Set(MODELS.map(m => m.id)), tiles: new Set(TILES.map(t => t.id)), palettes: new Set(PALETTES.map(p => p.id)),
   shapes: new Set(SDF_SHAPES), sizes: new Set(SIZES.map(s => s.id)),
 };
 let S = cloneState(DEFAULT_STATE);
@@ -276,6 +276,8 @@ function syncControls() {
   document.querySelectorAll('#shapeGrid button').forEach(b => b.classList.toggle('on', b.dataset.s === S.src.shape));
   document.querySelectorAll('#sizes button').forEach(b => b.classList.toggle('on', b.dataset.z === S.view.size));
   document.querySelectorAll('#dotPals .pal').forEach((b, i) => b.classList.toggle('on', i === S.pat.palette));
+  document.querySelectorAll('#tilePals .pal').forEach(b => b.classList.toggle('on', b.dataset.p === (S.pat.tpal || '')));
+  segOn('tileDens', 'd', String(S.pat.tdens || 1));
   document.querySelectorAll('#exGrid .excard').forEach((b, i) => b.classList.toggle('on', i === exampleOn));
   markModel(); markTile(); eyeHint(); sizeInfo(); modelCredit(); tileNote();
   const canTurn = S.src.kind === 'model';
@@ -339,6 +341,7 @@ function bindControls() {
     S.pat.kind = b.dataset.k; exampleOff(); syncControls(); render();
     if (S.pat.kind === 'tile') queueTileThumbs();
   }));
+  document.querySelectorAll('#tileDens button').forEach(b => b.addEventListener('click', () => { S.pat.kind = 'tile'; S.pat.tdens = +b.dataset.d; exampleOff(); syncControls(); render(); }));
   $('tileSeed').addEventListener('click', () => { S.pat.seed = 1 + Math.floor(Math.random() * 9999); exampleOff(); tileNote(); refreshTileThumb(S.pat.id); render(); });
   $('tileRandom').addEventListener('click', () => {
     const pool = TILES.filter(t => t.family !== 'dots');
@@ -509,7 +512,7 @@ function pickModel(id, go) {
 // ── pattern gallery ────────────────────────────────────────────────────────
 let tileFam = 'all';
 const tileThumbs = new Map();       // id -> ImageData
-let tileQueued = false;
+let tileQueued = false, tileGen = 0;
 function buildTileFams() {
   const fams = [...new Set(TILES.map(t => t.family))];
   const host = $('tileFams');
@@ -549,11 +552,13 @@ function markTile() { document.querySelectorAll('.tcard').forEach(b => b.classLi
 async function queueTileThumbs() {
   if (tileQueued) return;
   tileQueued = true;
+  const gen = tileGen, tpal = S.pat.tpal;
   const ids = TILES.map(t => t.id).filter(id => !tileThumbs.has(id));
   for (let i = 0; i < ids.length; i += 6) {
     const batch = ids.slice(i, i + 6);
     try {
-      const imgs = await thumbW.call('tiles', { ids: batch, size: 64, seed: 1 });
+      const imgs = await thumbW.call('tiles', { ids: batch, size: 64, seed: 1, tpal });
+      if (gen !== tileGen) return;
       imgs.forEach((im, k) => {
         const id = im.id || batch[k], data = new ImageData(im.data, im.w, im.h);
         tileThumbs.set(id, data);
@@ -564,7 +569,7 @@ async function queueTileThumbs() {
 }
 async function refreshTileThumb(id) {
   try {
-    const [im] = await thumbW.call('tiles', { ids: [id], size: 64, seed: S.pat.seed });
+    const [im] = await thumbW.call('tiles', { ids: [id], size: 64, seed: S.pat.seed, tpal: S.pat.tpal });
     const data = new ImageData(im.data, im.w, im.h);
     tileThumbs.set(id, data);
     document.querySelectorAll(`.tcard[data-id="${CSS.escape(id)}"] canvas`).forEach(c => paintTile(c, data));
@@ -572,6 +577,26 @@ async function refreshTileThumb(id) {
 }
 function scrollToOn(sel) { const on = document.querySelector(sel + ' .on'); if (on) on.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 
+// The tile colours: As drawn, then the first two palettes of each
+// pattern-designer palette group.
+const TILE_PALETTES = [...new Set(PALETTES.map(p => p.group))].flatMap(g => PALETTES.filter(p => p.group === g).slice(0, 2));
+function buildTilePalettes() {
+  const host = $('tilePals');
+  host.innerHTML = '';
+  const add = (id, name, cols) => {
+    const b = document.createElement('button');
+    b.className = 'pal' + (id ? '' : ' asdrawn'); b.dataset.p = id; b.title = name; b.setAttribute('aria-label', name);
+    if (cols) for (const c of cols) { const s = document.createElement('i'); s.style.background = c; b.append(s); }
+    else b.textContent = name;
+    b.addEventListener('click', () => {
+      S.pat.kind = 'tile'; S.pat.tpal = id; exampleOff(); syncControls(); render();
+      tileThumbs.clear(); tileGen++; tileQueued = false; queueTileThumbs();
+    });
+    host.append(b);
+  };
+  add('', 'As drawn', null);
+  for (const p of TILE_PALETTES) add(p.id, p.name, [p.bg, ...p.ink]);
+}
 function buildDotPalettes() {
   const host = $('dotPals');
   host.innerHTML = '';
@@ -873,7 +898,7 @@ function boot() {
   if (fromHash) { S = fromHash; if (S.src.kind === 'model' && !S.src.id && MODELS[0]) pickModel(MODELS[0].id, false); }
   else if (EXAMPLES.length) { S = stateFromExample(EXAMPLES[0]); exampleOn = 0; }
   if (!S.pat.id && TILES[0]) S.pat.id = (TILES.find(t => t.family !== 'dots') || TILES[0]).id;
-  buildShapes(); buildSizes(); buildDotPalettes(); buildTileFams(); buildPatterns(); buildModels(); buildExamples();
+  buildShapes(); buildSizes(); buildDotPalettes(); buildTilePalettes(); buildTileFams(); buildPatterns(); buildModels(); buildExamples();
   bindSliders(); bindControls(); bindDrag(); bindHelp(); bindSheet();
   $('modelSearch').addEventListener('input', e => { modelQuery = e.target.value; buildModels(); });
   syncControls();

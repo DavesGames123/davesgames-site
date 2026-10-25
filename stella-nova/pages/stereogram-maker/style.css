@@ -162,6 +162,11 @@ html.in-frame #tools{top:12px}
 .pal i{flex:1}
 .pal::after{content:'';position:absolute;inset:0;border-radius:8px;box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset}
 .pal.on::after{box-shadow:0 0 0 2px var(--acc) inset}
+.tpals{grid-template-columns:repeat(4,1fr);gap:5px}
+.tpals .pal{height:26px;border-radius:6px}
+.tpals .pal::after{border-radius:6px}
+.pal.asdrawn{align-items:center;justify-content:center;background:var(--bg2);font-size:0.7rem;color:var(--dim)}
+.pal.asdrawn.on{color:var(--acc)}
 
 /* Examples */
 .exgrid{display:grid;grid-template-columns:1fr;gap:10px}

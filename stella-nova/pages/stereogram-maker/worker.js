@@ -16,7 +16,7 @@
 //                 -> { stereo: StereoImage, relief: Image|null, ms }
 //    preview    { src, w, h }                -> { relief }   (drag to turn)
 //    modelThumb { id, size }                 -> { relief }
-//    tiles      { ids, size, seed }          -> [Image + { id }]
+//    tiles      { ids, size, seed, tpal }    -> [Image + { id }]
 //    practice   { w, h, dpi, mode }          -> { stereo, relief }
 //    turntable  { state, w, h, dpi, n, colors } -> { n, sepFar }
 //  state is the page state (state.js). dpi is the output px per inch.
@@ -32,7 +32,8 @@
 //                   "function tileOf", "function stereoOpts", "const TEXT_FACES"
 // ============================================================================
 import * as E from './engine-api.js';
-import { reliefImage, shapeDepth, practiceDepth, mirrorTile, cropSquare } from './depthkit.js';
+import { reliefImage, shapeDepth, practiceDepth, mirrorTile, cropSquare, recolour, repeatTile } from './depthkit.js';
+import { PALETTES } from '../pattern-designer/palettes.js';
 
 const meshes = new Map(), uploads = new Map();
 let readBytes = null;
@@ -93,12 +94,21 @@ export async function depthOf(src, w, h) {
 export function tileOf(pat, sepFar) {
   if (pat.kind === 'image') return uploads.get(pat.ref) || null;
   if (pat.kind !== 'tile' || !pat.id) return null;
-  const size = Math.max(24, Math.round(sepFar));
-  const key = pat.id + '|' + pat.seed + '|' + size;
+  const k = Math.max(1, Math.min(3, pat.tdens | 0 || 1));
+  const size = Math.max(16, Math.round(sepFar / k));
+  const key = [pat.id, pat.seed, size, k, pat.tpal || ''].join('|');
   const hit = tileCache.get(key);
   if (hit) return hit;
   const [t] = E.tilesFromPatterns([pat.id], size, pat.seed);
-  return tileCache.set(key, t);
+  return tileCache.set(key, repeatTile(tintTile(t, pat.id, pat.tpal), k));
+}
+
+// A tile in the colours of another pattern-designer palette, or as drawn.
+const palCols = id => { const p = PALETTES.find(q => q.id === id); return p ? [p.bg, ...p.ink] : null; };
+export function tintTile(t, id, tpal) {
+  if (!tpal) return t;
+  const m = E.tileMeta(id), from = m && palCols(m.palette), to = palCols(tpal);
+  return from && to ? recolour(t, from, to) : t;
 }
 
 // The engine options of a page state at an output density dpi.
@@ -152,7 +162,7 @@ export async function handle(msg, post) {
       const relief = reliefImage(raw, { bg: [26, 28, 33], bg2: [13, 14, 17] });
       result = { relief }; transfer = bufs(relief);
     } else if (op === 'tiles') {
-      result = E.tilesFromPatterns(args.ids, args.size, args.seed);
+      result = E.tilesFromPatterns(args.ids, args.size, args.seed).map((t, i) => tintTile(t, args.ids[i], args.tpal));
       transfer = bufs(...result);
     } else if (op === 'practice') {
       const dm = practiceDepth(args.w, args.h);

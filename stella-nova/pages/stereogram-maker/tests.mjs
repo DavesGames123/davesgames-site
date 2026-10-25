@@ -111,6 +111,10 @@ const known = { models: new Set(['a', 'b']), tiles: new Set(['pd-x', 'pd-y']), s
   const t = ST.cloneState(ST.DEFAULT_STATE);
   Object.assign(t.src, { kind: 'text', text: 'Hello & bye', face: 'sans' }); Object.assign(t.pat, { kind: 'colour', palette: 3 });
   const dt = ST.decodeState(ST.encodeState(t), known);
+  const tp = ST.cloneState(ST.DEFAULT_STATE); Object.assign(tp.pat, { kind: 'tile', id: 'pd-x', tpal: 'clay', tdens: 3 });
+  const dtp = ST.decodeState(ST.encodeState(tp), Object.assign({ palettes: new Set(['clay']) }, known));
+  ok(dtp.pat.tpal === 'clay' && dtp.pat.tdens === 3, 'tile colours and density round trip');
+  ok(ST.decodeState('k=model&tp=nope&td=7', Object.assign({ palettes: new Set(['clay']) }, known)).pat.tpal === '' , 'unknown tile palette drops');
   ok(dt.src.kind === 'text' && dt.src.text === 'Hello & bye' && dt.src.face === 'sans' && dt.pat.kind === 'colour' && dt.pat.palette === 3, 'text and colour round trip');
   const u = ST.cloneState(ST.DEFAULT_STATE);
   Object.assign(u.src, { kind: 'photo', ref: 'photo-1' }); Object.assign(u.pat, { kind: 'image', ref: 'image-1' });
@@ -147,6 +151,10 @@ const DK = await import('./depthkit.js');
   ok(tt.w * tt.h * 36 <= 7e6 * 1.02 && Math.abs(tt.w / tt.h - 16 / 9) < 0.02, 'turntableSize budget and aspect ' + tt.w + 'x' + tt.h);
   const fb = DK.fitBox(1000, 500, 1);
   ok(fb.w === 500 && fb.h === 500, 'fitBox');
+  const rc = DK.recolour({ w: 3, h: 1, data: Uint8ClampedArray.from([255, 255, 255, 255, 0, 0, 0, 255, 128, 128, 128, 255]) }, ['#ffffff', '#000000'], ['#ff0000', '#0000ff']);
+  ok(rc.data[0] === 255 && rc.data[2] === 0 && rc.data[4] === 0 && rc.data[6] === 255 && Math.abs(rc.data[8] - 127) <= 2 && Math.abs(rc.data[10] - 128) <= 2, 'recolour maps paper and ink, blends the edge: ' + Array.from(rc.data).join(','));
+  const rp = DK.repeatTile({ w: 2, h: 1, data: Uint8ClampedArray.from([1, 2, 3, 255, 4, 5, 6, 255]) }, 3);
+  ok(rp.w === 6 && rp.h === 3 && rp.data[4 * 2] === 1 && rp.data[4 * 9] === 4, 'repeatTile 3 x 3');
   ok(DK.SIZES[0].id === 'fit' && DK.SIZES.every(s => s.id === 'fit' || (s.w > 0 && s.h > 0 && s.dpi > 0)), 'SIZES');
 }
 
@@ -183,6 +191,13 @@ const last = msgs => msgs[msgs.length - 1];
   Object.assign(base.pat, { kind: 'tile', id: tileId && tileId.id, seed: 2 });
   r = last(await call('render', { state: base, w: 240, h: 160, dpi: 96 }));
   ok(r.m.ok && r.m.result.stereo.w === 240, 'render with a pattern tile: ' + r.m.error);
+  const plain = r.m.ok ? r.m.result.stereo.data : null;
+  Object.assign(base.pat, { tpal: 'clay', tdens: 2 });
+  r = last(await call('render', { state: base, w: 240, h: 160, dpi: 96 }));
+  ok(r.m.ok && plain && r.m.result.stereo.data.some((v, i) => v !== plain[i]), 'tile colours and density change the picture: ' + r.m.error);
+  const tt2 = W.tileOf(base.pat, 120);
+  ok(tt2 && Math.abs(tt2.w - 120) <= 2, 'a density 2 tile is about one repeat wide (' + (tt2 && tt2.w) + ')');
+  Object.assign(base.pat, { tpal: '', tdens: 1 });
   // Coloured dots with a palette.
   Object.assign(base.pat, { kind: 'colour', palette: 0 });
   r = last(await call('render', { state: base, w: 200, h: 120, dpi: 72, colors: ['#112233', '#ff0000', '#00ff00'] }));
@@ -348,6 +363,10 @@ async function bootInJsdom(JSDOM) {
     if (!await waitFor(() => puts.filter(p => p[0] === '').length >= E.TILES.length * 4)) errors.push('tile thumbnails did not draw');
     n0 = outs(); doc.querySelectorAll('.tcard')[5].click();
     if (!await waitFor(() => outs() > n0)) errors.push('a tile click did not render');
+    // A tile palette renders again and marks its swatch.
+    n0 = outs(); doc.querySelectorAll('#tilePals .pal')[3].click();
+    if (!await waitFor(() => outs() > n0)) errors.push('a tile palette click did not render');
+    if (!doc.querySelectorAll('#tilePals .pal')[3].classList.contains('on')) errors.push('the tile palette is not marked');
     // The help dialog renders the practice image.
     doc.getElementById('seeBtn').click();
     if (!await waitFor(() => puts.some(p => p[0] === 'practice'))) errors.push('no practice image');

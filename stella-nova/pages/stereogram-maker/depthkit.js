@@ -24,6 +24,7 @@
 //    depth shaping ........ "export function shapeDepth"
 //    practice depth ....... "export function practiceDepth"
 //    tiles from images .... "export function mirrorTile", "export function cropSquare"
+//    tile colours ......... "export function recolour", "export function repeatTile"
 //    resample ............. "export function resizeImage"
 //    sizes and DPI ........ "export function fitBox", "export function screenDpi", "SIZES"
 //    turntable budget ..... "export function turntableSize"
@@ -219,4 +220,38 @@ export function screenDpi(scale, phone) { return (phone ? 120 : 96) * scale; }
 export function turntableSize(w, h, n, budget) {
   const per = budget / Math.max(1, n), k = Math.min(1, Math.sqrt(per / Math.max(1, w * h)));
   return { w: Math.max(64, Math.round(w * k)), h: Math.max(48, Math.round(h * k)) };
+}
+
+// ── tile colours and density ───────────────────────────────────────────────
+const hexRGB = h => { const n = parseInt(String(h).replace('#', ''), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+// Recolour a tile drawn in the colours from (hex list: paper first, then
+// the inks) to the colours to, slot by slot: the paper to the paper, ink
+// k to ink k mod the number of inks. Each pixel is a blend of its two
+// nearest source colours, so the anti-aliased edges stay soft.
+export function recolour(img, from, to) {
+  const F = from.map(hexRGB), T = from.map((_, k) => hexRGB(k === 0 ? to[0] : to[1 + (k - 1) % Math.max(1, to.length - 1)] || to[0]));
+  const out = new Uint8ClampedArray(img.data.length), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let a = 0, b = -1, da = Infinity, db = Infinity;
+    for (let k = 0; k < F.length; k++) {
+      const e = (d[i] - F[k][0]) ** 2 + (d[i + 1] - F[k][1]) ** 2 + (d[i + 2] - F[k][2]) ** 2;
+      if (e < da) { db = da; b = a; da = e; a = k; } else if (e < db) { db = e; b = k; }
+    }
+    let wa = 1;
+    if (b >= 0 && da > 0) { const sa = Math.sqrt(da), sb = Math.sqrt(db); wa = sb / (sa + sb); }
+    const B = b >= 0 ? T[b] : T[a];
+    out[i] = T[a][0] * wa + B[0] * (1 - wa); out[i + 1] = T[a][1] * wa + B[1] * (1 - wa); out[i + 2] = T[a][2] * wa + B[2] * (1 - wa); out[i + 3] = 255;
+  }
+  return Object.assign({}, img, { data: out });
+}
+// k x k copies of a tile in one tile: the motif gets k times smaller in a
+// repeat of the same width.
+export function repeatTile(img, k) {
+  if (k <= 1) return img;
+  const W = img.w * k, H = img.h * k, out = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const s = ((y % img.h) * img.w + (x % img.w)) * 4, o = (y * W + x) * 4;
+    out[o] = img.data[s]; out[o + 1] = img.data[s + 1]; out[o + 2] = img.data[s + 2]; out[o + 3] = 255;
+  }
+  return Object.assign({}, img, { w: W, h: H, data: out });
 }
