@@ -127,6 +127,14 @@ export const THREAD_NAMES = Object.freeze({
   zammad: "Zammad helpdesk exploits",
   ahsay: "AhsayCBS backup server exploits",
   'sonicwall-sma': "SonicWall SMA1000 SSRF",
+  shopserve: "Estore ShopServe",
+  sourcenext: "Sourcenext",
+  'ride-on-express': "Ride On Express (Gin no Sara)",
+  'yellow-hat': "Yellow Hat",
+  fancl: "Fancl and Attenir",
+  aena: "Aena",
+  'beauty-garage': "Beauty Garage",
+  hollys: "Hollys Coffee membership (Korea)",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;

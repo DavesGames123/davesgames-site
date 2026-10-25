@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended seven times by 2026-10-25. Still going on then.
+//  Gathered 2026-10-22, extended eight times by 2026-10-25. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -17724,5 +17724,697 @@ export const EVENTS = [
   ],
   "confidence": "disputed",
   "note": "The warnings came on 9 October. SonicWall's notice still says no in-the-wild exploitation is known; some outlets call it actively exploited."
+ },
+ {
+  "id": "shopserve-detect",
+  "thread": "shopserve",
+  "parent": null,
+  "t": "2026-08-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Estore finds a leak from its ShopServe e-commerce platform and blocks the attacker",
+  "summary": "Estore, which runs the ShopServe shop-building service, says an outside party used a flaw in an application on its server from 21 May to 1 Aug and sent database data out. It blocks the attack traffic on 1 Aug.",
+  "sources": [
+   {
+    "url": "https://estore.jp/press/20260801/",
+    "publisher": "Estore",
+    "primary": true
+   },
+   {
+    "url": "https://estore.jp/press/20261016/",
+    "publisher": "Estore",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: the final report of 16 Oct put ShopServe among the largest Japanese breach notices of the mid-October 2026 wave. Estore names only 'a vulnerability in an application on its server', not PHP or a CVE. The access ran from May, before the October PHP disclosures."
+ },
+ {
+  "id": "shopserve-second-report",
+  "thread": "shopserve",
+  "parent": "shopserve-detect",
+  "t": "2026-08-02T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "ShopServe second report: up to 8,853,839 records, store mail and FTP logins too",
+  "summary": "Estore's second report gives up to 8,853,839 records (not unique people), with buyer and member data, partial card numbers, and store admin, mail and FTP logins and payout bank details.",
+  "sources": [
+   {
+    "url": "https://estore.jp/press/20260802/",
+    "publisher": "Estore",
+    "primary": true
+   },
+   {
+    "url": "https://netshop.impress.co.jp/n/2026/08/05/16526",
+    "publisher": "Netshop Impress",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The count is as of 14:00 JST on 2 Aug."
+ },
+ {
+  "id": "shopserve-final-report",
+  "thread": "shopserve",
+  "parent": "shopserve-second-report",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "ShopServe final report: about 23.36 million people at 7,858 stores",
+  "summary": "After forensics, Estore says data of about 23,356,000 people at 7,858 current and past stores leaked, with partial card data for about 2,096,900. Mail, FTP and bank data are removed from the scope.",
+  "sources": [
+   {
+    "url": "https://estore.jp/press/20261016/",
+    "publisher": "Estore",
+    "primary": true
+   },
+   {
+    "url": "https://netshop.impress.co.jp/n/2026/10/19/16881",
+    "publisher": "Netshop Impress",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The higher number comes from a new count with duplicates merged, so it does not compare directly with the August record count. Estore reports no secondary damage and no dark-web listing."
+ },
+ {
+  "id": "sourcenext-access-start",
+  "thread": "sourcenext",
+  "parent": null,
+  "t": "2026-10-09T01:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Intruder starts pulling Sourcenext member data through its member-information API",
+  "summary": "Sourcenext later finds that a third party began, at about 10:00 JST on 9 Oct, to misuse the API that returns member information from its member-management system.",
+  "sources": [
+   {
+    "url": "https://www.sourcenext.com/support/i/2026/1015_info/",
+    "publisher": "Sourcenext",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the largest Japanese breach notices of the mid-October 2026 wave. Sourcenext does not name PHP or an exploited flaw; it says an outside specialist is still looking for the cause."
+ },
+ {
+  "id": "sourcenext-contain",
+  "thread": "sourcenext",
+  "parent": "sourcenext-access-start",
+  "t": "2026-10-13T04:36:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Sourcenext detects the access and contains it the same day",
+  "summary": "Sourcenext confirms unauthorized access at about 09:00 JST on 13 Oct and finishes blocking the outside traffic at 13:36 JST.",
+  "sources": [
+   {
+    "url": "https://www.sourcenext.com/support/i/2026/1015_info/",
+    "publisher": "Sourcenext",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "sourcenext-notice",
+  "thread": "sourcenext",
+  "parent": "sourcenext-contain",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Sourcenext: 22,519,960 customer records, passwords included, may have leaked",
+  "summary": "Sourcenext says up to 22,519,960 records may have leaked: emails, passwords, names, addresses, phones, birth dates and employer data. Card data was not in the system. It forces password resets and reports to the PPC.",
+  "sources": [
+   {
+    "url": "https://www.sourcenext.com/support/i/2026/1015_info/",
+    "publisher": "Sourcenext",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148588.html",
+    "publisher": "Internet Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Records, not verified unique people. Former members are included."
+ },
+ {
+  "id": "sourcenext-plain-passwords",
+  "thread": "sourcenext",
+  "parent": "sourcenext-notice",
+  "t": "2026-10-16T08:56:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Reports say Sourcenext passwords leaked without encryption",
+  "summary": "NHK reports that the leaked passwords were not encrypted. Internet Watch later adds that they leaked in a readable form, and that the forced reset stops their use on Sourcenext ID.",
+  "sources": [
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261016de60556",
+    "publisher": "NHK",
+    "primary": false
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148588.html",
+    "publisher": "Internet Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Sourcenext's own notice does not say how passwords were stored. One report says system-link passwords were encrypted. Internet Watch added the readable-password line in an update of 20 Oct."
+ },
+ {
+  "id": "rideon-detect",
+  "thread": "ride-on-express",
+  "parent": null,
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Ride On Express detects third-party access to its delivery-order servers",
+  "summary": "Ride On Express, which runs the Gin no Sara, Kamatora and Sushi Joto delivery brands, detects unauthorized third-party access to its servers from 5 Oct and starts to investigate.",
+  "sources": [
+   {
+    "url": "https://www.rideonexpresshd.co.jp/news/2026/10/3-33.html",
+    "publisher": "Ride On Express Holdings",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the large Japanese breach notices of the mid-October 2026 wave. The company blames ransomware at its server operator, which it does not name, and names no PHP flaw. Internet Watch notes the IDCF Cloud ransomware attack of 7 Oct but does not link the two."
+ },
+ {
+  "id": "rideon-shutdown",
+  "thread": "ride-on-express",
+  "parent": "rideon-detect",
+  "t": "2026-10-07T00:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Servers fail; Gin no Sara, Kamatora and Sushi Joto web and app orders stop",
+  "summary": "Early on 7 Oct some servers fail and the server operator reports a ransomware attack. Ride On Express stops its official sites and apps; phone, counter and Demaecan or Uber Eats orders go on.",
+  "sources": [
+   {
+    "url": "https://www.rideonexpresshd.co.jp/news/2026/10/post-482.html",
+    "publisher": "Ride On Express Holdings",
+    "primary": true
+   },
+   {
+    "url": "https://www.rideonexpresshd.co.jp/news/2026/10/3-33.html",
+    "publisher": "Ride On Express Holdings",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "'Early morning' JST; the hour is approximate. The operator later said the stored data could not be recovered."
+ },
+ {
+  "id": "rideon-count",
+  "thread": "ride-on-express",
+  "parent": "rideon-shutdown",
+  "t": "2026-10-13T09:06:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Ride On Express: data of up to about 6.5 million customers may have leaked",
+  "summary": "The third report says up to about 6.5 million records may have leaked: names, addresses, phones, emails, birth dates, password hashes and order history. No leak is confirmed yet; web and app orders stay stopped.",
+  "sources": [
+   {
+    "url": "https://www.rideonexpresshd.co.jp/news/2026/10/3-33.html",
+    "publisher": "Ride On Express Holdings",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2147767.html",
+    "publisher": "Internet Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The count is a maximum, not a confirmed leak. Time is from the Internet Watch report (18:06 JST); the notice itself is dated 13 Oct only."
+ },
+ {
+  "id": "yellowhat-detect",
+  "thread": "yellow-hat",
+  "parent": null,
+  "t": "2026-08-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Yellow Hat detects access to its web work-booking system and shuts it",
+  "summary": "Yellow Hat detects unauthorized access to its car-service web booking system on 19 Aug, cuts it off and stops it, then brings it back after security work.",
+  "sources": [
+   {
+    "url": "https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20261015/20261015551164.pdf",
+    "publisher": "Yellow Hat (TSE disclosure)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: the confirmed count of 15 Oct put Yellow Hat among the large Japanese breach notices of the mid-October 2026 wave. Yellow Hat names no PHP or other flaw. Some reports give 18 Aug for detection; the 15 Oct notice says 19 Aug."
+ },
+ {
+  "id": "yellowhat-first-report",
+  "thread": "yellow-hat",
+  "parent": "yellowhat-detect",
+  "t": "2026-08-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Yellow Hat: data of up to 1,801,499 members may have leaked",
+  "summary": "Yellow Hat's first report says names, phones, emails and member numbers of up to 1,801,499 members may have leaked from the booking system.",
+  "sources": [
+   {
+    "url": "https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20261015/20261015551164.pdf",
+    "publisher": "Yellow Hat (TSE disclosure)",
+    "primary": true
+   },
+   {
+    "url": "https://kumanichi.com/articles/2030054",
+    "publisher": "Kumamoto Nichinichi Shimbun",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "yellowhat-second-report",
+  "thread": "yellow-hat",
+  "parent": "yellowhat-first-report",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Yellow Hat confirms 1,797,124 members' data left, with addresses and password hashes",
+  "summary": "Forensics confirm that data of 1,797,124 members left the system. Addresses, birth dates, gender, login IDs and non-recoverable passwords are added to the items. Yellow Hat files its final report to the PPC.",
+  "sources": [
+   {
+    "url": "https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20261015/20261015551164.pdf",
+    "publisher": "Yellow Hat (TSE disclosure)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fancl-access",
+  "thread": "fancl",
+  "parent": null,
+  "t": "2026-10-03T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Fancl and Attenir online stores accessed without authorization from 3 to 10 Oct",
+  "summary": "An outside party accesses the e-commerce sites of Fancl and its sister brand Attenir from 3 to 10 Oct, the two companies later find.",
+  "sources": [
+   {
+    "url": "https://www.fancl.jp/news/pdf/husei.pdf",
+    "publisher": "Fancl and Attenir",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the Japanese breach notices of the mid-October 2026 wave. The companies hold back the attack details and name no PHP or other flaw."
+ },
+ {
+  "id": "fancl-detect",
+  "thread": "fancl",
+  "parent": "fancl-access",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Internal check finds the Fancl and Attenir intrusion; the faulty function is stopped",
+  "summary": "An internal investigation on 15 Oct finds the access. The companies set up an emergency team the same day, find the function that caused the leak and stop it.",
+  "sources": [
+   {
+    "url": "https://www.fancl.jp/news/pdf/husei.pdf",
+    "publisher": "Fancl and Attenir",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fancl-notice",
+  "thread": "fancl",
+  "parent": "fancl-detect",
+  "t": "2026-10-16T06:16:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Fancl and Attenir: 834,947 member records leaked",
+  "summary": "Fancl gives 393,785 records (368,184 people) and Attenir 441,162 records (417,312 people): emails, names, addresses, phones, birth dates and some hashed sub-passwords. No card data or main passwords.",
+  "sources": [
+   {
+    "url": "https://www.fancl.jp/news/pdf/husei.pdf",
+    "publisher": "Fancl and Attenir",
+    "primary": true
+   },
+   {
+    "url": "https://www.tsuhannews.jp/news/detail/76012",
+    "publisher": "Tsuhan Shimbun",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "834,947 is the sum of the two record counts, not a figure in the notice; overlap between the two member bases is not given. Hour from the PDF creation time (15:16 JST). The PPC and police were told on 16 Oct."
+ },
+ {
+  "id": "aena-detect",
+  "thread": "aena",
+  "parent": null,
+  "t": "2026-10-12T20:58:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Aena log review finds mass automated access to member pages of its store app",
+  "summary": "At 05:58 JST on 13 Oct, a log analysis shows that member my-page data in the app of off-price retailer Aena was viewed through mechanical consecutive access.",
+  "sources": [
+   {
+    "url": "https://www.aena.co.jp/news/detail/7826/",
+    "publisher": "Aena",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the Japanese breach notices of the mid-October 2026 wave. Aena names no PHP or software flaw; it blames automated consecutive access and says the method is still under investigation."
+ },
+ {
+  "id": "aena-notice",
+  "thread": "aena",
+  "parent": "aena-detect",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Aena: data of up to 817,215 app members may have been viewed; app access blocked",
+  "summary": "Aena says names, addresses, phones, emails, birth dates, delivery addresses and card last-four digits of up to 817,215 app members may have been viewed. It blocks access to the EC app.",
+  "sources": [
+   {
+    "url": "https://www.aena.co.jp/news/detail/7826/",
+    "publisher": "Aena",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Full card numbers, security codes and login passwords were not exposed, Aena says. LINE members and Amazon or Rakuten buyers are not in scope."
+ },
+ {
+  "id": "aena-resume",
+  "thread": "aena",
+  "parent": "aena-notice",
+  "t": "2026-10-19T03:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Aena restarts its store app with forced password changes",
+  "summary": "Aena restarts the EC app at noon JST on 19 Oct. On first launch each member must set a new password.",
+  "sources": [
+   {
+    "url": "https://www.aena.co.jp/news/detail/7904/",
+    "publisher": "Aena",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The notice is dated 20 Oct but gives noon on 19 Oct as the restart time."
+ },
+ {
+  "id": "beautygarage-intrusion",
+  "thread": "beauty-garage",
+  "parent": null,
+  "t": "2026-10-10T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Intruder takes customer data from Beauty Garage's EC server, 10-12 Oct",
+  "summary": "From 10 to 12 Oct an outside party breaks into the server of the Beauty Garage and Eyelash Garage salon-supply stores and takes part of the customer data.",
+  "sources": [
+   {
+    "url": "https://www.beautygarage.jp/topics/news_unauthorizedaccess2026",
+    "publisher": "Beauty Garage",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the Japanese breach notices of the mid-October 2026 wave. Beauty Garage names no PHP or other flaw. It found the leak while still investigating a card-data incident announced in February 2026."
+ },
+ {
+  "id": "beautygarage-block",
+  "thread": "beauty-garage",
+  "parent": "beautygarage-intrusion",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Beauty Garage detects the leak and blocks the access route",
+  "summary": "Beauty Garage detects the leak on 13 Oct, finds the intrusion route and blocks it the same day. The stores stay open.",
+  "sources": [
+   {
+    "url": "https://www.beautygarage.jp/topics/news_unauthorizedaccess2026",
+    "publisher": "Beauty Garage",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "beautygarage-notice",
+  "thread": "beauty-garage",
+  "parent": "beautygarage-block",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Beauty Garage: 775,725 customer records leaked, with password hashes",
+  "summary": "Beauty Garage says 775,725 records leaked: company and salon names, customer names, phones, emails, password hashes and reset question hashes. Addresses, order history and card data are not shown to have leaked.",
+  "sources": [
+   {
+    "url": "https://www.beautygarage.jp/topics/news_unauthorizedaccess2026",
+    "publisher": "Beauty Garage",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The count is of records held at 23:55 JST on 10 Oct, not of unique people."
+ },
+ {
+  "id": "hollys-access",
+  "thread": "hollys",
+  "parent": null,
+  "t": "2026-09-03T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Hollys membership data taken from a cloud service, 3 Sep to 7 Oct",
+  "summary": "An outside party gets into a cloud service that holds Hollys Coffee membership data between 3 Sep and 7 Oct, the Korean chain later says, and takes customer data from it.",
+  "sources": [
+   {
+    "url": "https://www.hollys.co.kr/news/notice/view.do?idx=240",
+    "publisher": "Hollys (KG F&B)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a large Korean breach notice in the mid-October 2026 wave. Hollys blames access to the cloud service for cryptocurrency mining and names no PHP or other exploited flaw. The notices are images on the Hollys notice board."
+ },
+ {
+  "id": "hollys-notice",
+  "thread": "hollys",
+  "parent": "hollys-access",
+  "t": "2026-10-16T12:36:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Hollys apologises for a membership data leak; passwords and addresses included",
+  "summary": "Hollys says it confirmed on 16 Oct that data of members who joined before 11 Feb 2020 leaked: IDs, passwords, names, birth dates, phones, addresses, emails and DI codes. It blocks the access path.",
+  "sources": [
+   {
+    "url": "https://www.hollys.co.kr/news/notice/view.do?idx=239",
+    "publisher": "Hollys (KG F&B)",
+    "primary": true
+   },
+   {
+    "url": "https://khan.co.kr/article/202610182006001",
+    "publisher": "Kyunghyang Shinmun",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Posted 21:36 KST. Kyunghyang reports that customers got text messages only on 18 Oct."
+ },
+ {
+  "id": "hollys-count",
+  "thread": "hollys",
+  "parent": "hollys-notice",
+  "t": "2026-10-19T07:51:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Hollys: about 2.76 million records reported to KISA; cloud membership service to close",
+  "summary": "A follow-up says the leaked file was a temporary data file made for a past membership revamp, with about 2.76 million records from 2009 to Feb 2020, duplicates included. Hollys will close the cloud-based membership service.",
+  "sources": [
+   {
+    "url": "https://www.hollys.co.kr/news/notice/view.do?idx=240",
+    "publisher": "Hollys (KG F&B)",
+    "primary": true
+   },
+   {
+    "url": "https://biz.sbs.co.kr/amp/article/20000340838",
+    "publisher": "SBS Biz",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Posted 16:51 KST. The exact scale is still under review, Hollys says."
+ },
+ {
+  "id": "emu-python-denylist",
+  "thread": "emudhra",
+  "parent": "emu-go-block",
+  "t": "2026-10-24T14:20:01Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Python adds an eMudhra key denylist to its ssl module (CVE-2026-115557)",
+  "summary": "The Python Security Response Team announces CVE-2026-115557: the ssl module now rejects chains with the compromised eMudhra intermediate keys, whatever the SSLContext settings. The PSF rates it CVSS 4.0 9.4 and lists versions before 3.16.0 as affected.",
+  "sources": [
+   {
+    "url": "https://www.openwall.com/lists/oss-security/2026/10/24/5",
+    "publisher": "oss-security (Python security-announce forward)",
+    "primary": true
+   },
+   {
+    "url": "https://cveawg.mitre.org/api/cve/CVE-2026-115557",
+    "publisher": "CVE Program (PSF CNA record)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/python/cpython/pull/160042",
+    "publisher": "CPython (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The main-branch PR merged at 05:40 UTC on 24 Oct; backports to 3.15, 3.14, 3.13, 3.12 and 3.11 merged between 07:17 and 23:10 UTC. The denylist matches the key (SPKI), so cross-signed copies are blocked too, and the PR says it mirrors Go's crypto/x509 change."
+ },
+ {
+  "id": "emu-ms-ama-windows-image",
+  "thread": "emudhra",
+  "parent": "emu-microsoft-block",
+  "t": "2026-10-24T03:54:13Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Microsoft rebuilds its AKS Windows log-agent image to distrust the eMudhra CAs",
+  "summary": "Microsoft merges a Sev1 fix to its Azure Monitor ama-logs Windows image: it imports the 16 pinned intermediates into the Disallowed store, drops two anchor roots from the bundled Ruby CA file and moves to Go 1.27.3. The PR says Windows blocks the intermediates through Microsoft's disallowed list, but this image keeps its own trust stores.",
+  "sources": [
+   {
+    "url": "https://github.com/microsoft/Docker-Provider/pull/1808",
+    "publisher": "Microsoft Docker-Provider (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "PR opened 22 Oct 22:58 UTC, merged 24 Oct 03:54 UTC. It also adds the Disallowed import for nodes with restricted egress that may never fetch Microsoft's list."
+ },
+ {
+  "id": "emu-veeam-kb",
+  "thread": "emudhra",
+  "parent": "emu-microsoft-block",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Veeam: appliance blocklist update shipped; Windows blocked the intermediates from 20 Oct",
+  "summary": "Veeam KB4952 says it shipped a Veeam Updater fix that adds the compromised certificates to its appliances' trust store blocklist; other servers get the fix from the OS vendor. It says Microsoft has blocked the intermediates since 20 October and gives a LastSyncTime check.",
+  "sources": [
+   {
+    "url": "https://www.veeam.com/kb4952",
+    "publisher": "Veeam",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Veeam is a vendor, not Microsoft; its 20 October date agrees with the press date in emu-microsoft-block but is not a Microsoft notice."
+ },
+ {
+  "id": "php-meti-whitehat-team",
+  "thread": "php2shell",
+  "parent": "php-ipa-alert",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "METI to set up a white-hat hacker team at IPA in November",
+  "summary": "Japan's trade minister says a team of white-hat hackers will be set up at IPA during November to check systems that companies use for flaws, warning that attackers may be using AI to search widely. He says METI passed the PHP warning to about 1,000 industry groups on 21 October.",
+  "sources": [
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/23/2000002556/",
+    "publisher": "ITmedia NEWS (Sankei)",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/65b66320e0c9ff5589547af93a7dede5b3fe0489",
+    "publisher": "Nippon TV NEWS NNN via Yahoo! News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "From the minister's post-cabinet press conference of 23 Oct; the METI transcript page returned HTTP 403, so it was not read."
+ },
+ {
+  "id": "ai-ldp-saturation-proposal",
+  "thread": "ai-discovery",
+  "parent": "ai-patch-the-planet-launch",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Japan's LDP hands the Prime Minister 'Prepare for AI cyber saturation attacks!'",
+  "summary": "The LDP's national cybersecurity strategy headquarters gives Prime Minister Takaichi a proposal that calls the present 'the eve of a cyber emergency'. It asks for a PM-led cyber response headquarters and strategic ties with US frontier AI companies.",
+  "sources": [
+   {
+    "url": "https://www.jimin.jp/news/policy/214454.html",
+    "publisher": "Liberal Democratic Party of Japan",
+    "primary": true
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261020de62455",
+    "publisher": "NHK",
+    "primary": false
+   },
+   {
+    "url": "https://www.sbbit.jp/article/cont1/187641",
+    "publisher": "Business+IT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The draft was agreed at a 20 Oct meeting after a run of corporate data leaks. Placed in ai-discovery because the proposal is framed around AI-driven mass attacks; it names no single incident.",
+  "related": [
+   "php-takaichi",
+   "onamae-acd-request"
+  ]
+ },
+ {
+  "id": "bullhorn-soap-offline",
+  "thread": "bullhorn",
+  "parent": "bullhorn-faq-scope",
+  "t": "2026-10-23T22:30:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Bullhorn: legacy SOAP APIs stay offline; Canvas only for payroll reports on request",
+  "summary": "Bullhorn's known-issues page says its legacy ATS SOAP APIs are offline, with only the REST API available, and that customers can request Canvas only for payroll or critical reports. Its 25 Oct 12:05 UTC status update says Canvas is still down and some users still cannot log in.",
+  "sources": [
+   {
+    "url": "https://kb.bullhorn.com/ats/Content/BHATS/Topics/SecurityChange/functionalityAndKnownLimitations.htm",
+    "publisher": "Bullhorn",
+    "primary": true
+   },
+   {
+    "url": "https://status.bullhorn.com/",
+    "publisher": "Bullhorn status page",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The KB page is stamped 'Last Updated: October 23, 2026 at 6:30 PM ET'."
+ },
+ {
+  "id": "ivanti-ics-csa-sg",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-kev",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Singapore's CSA warns of active exploitation of the Ivanti Connect Secure flaw",
+  "summary": "Singapore's Cyber Security Agency issues alert AL-2026-147 on CVE-2026-104935, saying attackers are using it to run arbitrary commands and telling users to patch at once.",
+  "sources": [
+   {
+    "url": "https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2026-147/",
+    "publisher": "Cyber Security Agency of Singapore",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Page footer says last updated 23 October 2026. No Ivanti fix for the separate root-escalation step was found as of 25 Oct."
  }
 ];
