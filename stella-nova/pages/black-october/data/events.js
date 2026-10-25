@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended eight times by 2026-10-25. Still going on then.
+//  Gathered 2026-10-22, extended nine times by 2026-10-25. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -18416,5 +18416,1362 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "Page footer says last updated 23 October 2026. No Ivanti fix for the separate root-escalation step was found as of 25 Oct."
+ },
+ {
+  "id": "idcf-ransomware",
+  "thread": "idcf-cloud",
+  "parent": null,
+  "t": "2026-10-06T18:40:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Ransomware attack stops part of IDC Frontier's IDCF Cloud East Japan Region 1",
+  "summary": "At about 03:40 JST on 7 Oct a third party's ransomware attack causes a failure in four zones of IDCF Cloud East Japan Region 1. The SoftBank-owned provider sets up an emergency headquarters at 09:00 JST.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261007002",
+    "publisher": "IDC Frontier",
+    "primary": true
+   },
+   {
+    "url": "https://www.idcf.jp/news/topics/20261009001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2146693.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese cloud ransomware attack in the October 2026 wave that hit hundreds of companies and local governments. The intrusion route is not disclosed."
+ },
+ {
+  "id": "idcf-495-affected",
+  "thread": "idcf-cloud",
+  "parent": "idcf-ransomware",
+  "t": "2026-10-07T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "IDC Frontier names ransomware as the cause; 495 companies and local governments hit",
+  "summary": "IDC Frontier's second report says ransomware caused the outage, that 495 companies and local governments are affected, and that Region 1 is cut off from the network. Customer consoles in other regions are stopped as a precaution.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261007002",
+    "publisher": "IDC Frontier",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2146693.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   },
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118700/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Reports name Ibaraki Prefecture, Kodaira City, Jiji Press and Tobu Zoo among the sites that could not be viewed or updated."
+ },
+ {
+  "id": "idcf-restore-difficult",
+  "thread": "idcf-cloud",
+  "parent": "idcf-495-affected",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "IDC Frontier: data in the four hit zones is very hard to recover; use your own backups",
+  "summary": "The third report says data in the tesla, henry, pascal and joule zones is expected to be very difficult to retrieve or restore. Customers are told to rebuild elsewhere from their own backups.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261008001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "idcf-softbank-response",
+  "thread": "idcf-cloud",
+  "parent": "idcf-restore-difficult",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "IDC Frontier sets up its response with parent SoftBank; reports to regulators and police",
+  "summary": "IDC Frontier's fourth report says SoftBank's corporate and technical units handle customer contact, investigation and recovery support, with an outside security firm. Supervisory agencies and the police are informed.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261009001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "idcf-jr-east-view",
+  "thread": "idcf-cloud",
+  "parent": "idcf-495-affected",
+  "t": "2026-10-09T05:58:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "JR East and View Card: up to about 6.09 million member emails may have leaked via IDCF",
+  "summary": "JR East says emails of up to 1.67 million Eki-net members and data of 390,000 Otona no Kyujitsu Club members may have been taken from a mail-delivery service hit at IDC Frontier. View Card adds about 4.03 million VIEW's NET email addresses.",
+  "sources": [
+   {
+    "url": "https://www.jreast.co.jp/press/2026/20261009_ho02.pdf",
+    "publisher": "JR East",
+    "primary": true
+   },
+   {
+    "url": "https://www.jreast.co.jp/card/news/pdf/20261009.pdf",
+    "publisher": "View Card (JR East)",
+    "primary": true
+   },
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118766/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The JR East PDFs return HTTP 403 to automated fetches; their content is taken from search-index text and news reports. The 6.09 million total is ITmedia's sum as cited by innovaTopia. Time is from a 14:58 JST news report."
+ },
+ {
+  "id": "idcf-fifth-report",
+  "thread": "idcf-cloud",
+  "parent": "idcf-softbank-response",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "IDC Frontier: no data left the hit zones; 194 of 495 customers can recover snapshots",
+  "summary": "The fifth report says no customer data in the hit zones was taken out and backups are confirmed safe. 194 of the 495 customers used snapshots that can be retrieved; portal registration data of 48 companies was looked up without authorisation.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261014001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "idcf-jr-no-leak",
+  "thread": "idcf-cloud",
+  "parent": "idcf-jr-east-view",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "correction",
+  "title": "JR East and View Card: mail contractor now judges that no member data leaked",
+  "summary": "JR East and View Card update their notices to say the external mail-delivery company reported that Eki-net, Otona no Kyujitsu Club and VIEW's NET member data did not leak.",
+  "sources": [
+   {
+    "url": "https://www.jreast.co.jp/card/news/pdf/20261015.pdf",
+    "publisher": "View Card (JR East)",
+    "primary": true
+   },
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/19/56496.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The View Card PDF returns HTTP 403 to automated fetches; content is from search-index text and ScanNetSecurity."
+ },
+ {
+  "id": "idcf-backup-resume",
+  "thread": "idcf-cloud",
+  "parent": "idcf-fifth-report",
+  "t": "2026-10-18T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "IDCF Cloud Backup service restarts; snapshot feature stays off",
+  "summary": "IDC Frontier's sixth report says the IDCF Cloud Backup service is back after safety checks, so customers can take backups and restore to other clouds or on-premises. The snapshot feature is still stopped.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261018001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "As of 25 Oct the IDC Frontier news page lists no report after the sixth."
+ },
+ {
+  "id": "commune-intrusion",
+  "thread": "commune",
+  "parent": null,
+  "t": "2026-10-05T09:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Attacker breaks into Commune community sites by posing as an administrator",
+  "summary": "From about 18:00 JST on 5 Oct an attacker obtains invitation links to private communities on Commune Inc.'s platform, registers as a member and poses as an administrator to view, take and overwrite member data.",
+  "sources": [
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2147291.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   },
+   {
+    "url": "https://www.lycorp.co.jp/ja/privacy-security/announcement/020892/",
+    "publisher": "LY Corporation",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese SaaS supply-chain breach of October 2026 that reached many client companies and a prefecture. LY Corporation says a flaw in Commune's system was exploited."
+ },
+ {
+  "id": "commune-second-wave",
+  "thread": "commune",
+  "parent": "commune-intrusion",
+  "t": "2026-10-07T04:17:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Second wave: fake sign-ups and lookups on Commune during maintenance",
+  "summary": "After Commune stops all communities on the night of 6 Oct, new unauthorised sign-ups and lookups start at 13:17 JST on 7 Oct during maintenance. They are blocked at 14:58 JST.",
+  "sources": [
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2147291.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "commune-disclosure",
+  "thread": "commune",
+  "parent": "commune-second-wave",
+  "t": "2026-10-09T11:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Commune: data of about 307,000 members leaked, 126,000 with email addresses",
+  "summary": "Commune Inc. says member data of about 307,000 people on Commune and Commune for Work leaked, about 126,000 with email addresses. Clients report counts: Yamaha about 1,600, Suzuki about 3,000, Koikeya up to 1,800, Morinaga Milk 291.",
+  "sources": [
+   {
+    "url": "https://communeinc.com/ja/news/2026oct09",
+    "publisher": "Commune Inc.",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2147291.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Only the headline of Commune's own notice could be read; the counts come from INTERNET Watch (20:53 JST, 9 Oct). Commune CRM and Commune Engage saw attempts but no leak."
+ },
+ {
+  "id": "commune-lycorp",
+  "thread": "commune",
+  "parent": "commune-disclosure",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "LY Corporation: 1,750 DS.LAB community users' data may have been taken via Commune",
+  "summary": "LY Corporation says names, emails and profile data of 1,750 users of its DS.LAB community, run on Commune, may have been viewed or taken. It stops DS.LAB and sees no access to its own systems.",
+  "sources": [
+   {
+    "url": "https://www.lycorp.co.jp/ja/privacy-security/announcement/020892/",
+    "publisher": "LY Corporation",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "infoq-access",
+  "thread": "infoq",
+  "parent": null,
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Attacker exploits a software flaw on GMO Research's infoQ survey site",
+  "summary": "From 2 Oct an attacker uses a flaw in software on the infoQ survey-panel site to reach member data and exchange members' points for gift codes.",
+  "sources": [
+   {
+    "url": "https://gmo-research.ai/pressroom/notice/notice-20261005",
+    "publisher": "GMO Research & AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a large Japanese panel-site breach in early October 2026. The flaw is not named."
+ },
+ {
+  "id": "infoq-stop",
+  "thread": "infoq",
+  "parent": "infoq-access",
+  "t": "2026-10-03T05:15:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "GMO Research blocks the attack and suspends infoQ after a member's question",
+  "summary": "A member inquiry leads to the discovery on the morning of 3 Oct. Point exchanges stop at 11:24 JST, the attack route is blocked at 14:15 JST and outside access to infoQ at 15:00 JST.",
+  "sources": [
+   {
+    "url": "https://gmo-research.ai/pressroom/notice/notice-20261005",
+    "publisher": "GMO Research & AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "infoq-notice",
+  "thread": "infoq",
+  "parent": "infoq-stop",
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "infoQ: all 948,498 member records may have leaked; 611 members lose points to gift codes",
+  "summary": "GMO Research says up to 948,498 records, every one it holds, may have leaked, with addresses, birth dates and encrypted passwords. Points of 611 members were turned into Amazon gift codes worth 2,869,500 yen.",
+  "sources": [
+   {
+    "url": "https://gmo-research.ai/pressroom/notice/notice-20261005",
+    "publisher": "GMO Research & AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "m3-detect",
+  "thread": "m3-mrkun",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "M3 confirms unauthorised access to its MR-kun service for drug makers",
+  "summary": "M3 finds a third party's unauthorised access to the system of MR-kun, its service for pharmaceutical companies, on 14 Oct and confirms a leak the same day.",
+  "sources": [
+   {
+    "url": "https://corporate.m3.com/assets.ctfassets.net/1pwj74siywcy/4YBQ3JACTocGVgQmIVkSHe/bed9ff0b11db690e1217e0329c484104/20261015_Public_J.pdf",
+    "publisher": "M3",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: Japan's largest physician portal reports a breach in the mid-October 2026 wave. The cause is not stated."
+ },
+ {
+  "id": "m3-notice",
+  "thread": "m3-mrkun",
+  "parent": "m3-detect",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "M3: names and workplaces of under 10% of doctors and hundreds of pharma staff leaked",
+  "summary": "M3 says names, workplaces and some emails of fewer than one in ten doctor members and a few hundred pharmaceutical staff leaked. Passwords and points are not included; the route is blocked.",
+  "sources": [
+   {
+    "url": "https://corporate.m3.com/assets.ctfassets.net/1pwj74siywcy/4YBQ3JACTocGVgQmIVkSHe/bed9ff0b11db690e1217e0329c484104/20261015_Public_J.pdf",
+    "publisher": "M3",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "daiki-notice",
+  "thread": "daiki-suisan",
+  "parent": null,
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Daiki Suisan: data of 174,933 official-app members may have leaked",
+  "summary": "Seafood chain Daiki Suisan says unauthorised access to its official app system may have exposed names, phones, emails and addresses of 174,933 users registered since Nov 2024. It found the access on 15 Sep and reported to the PPC.",
+  "sources": [
+   {
+    "url": "https://www.daiki-suisan.co.jp/files/optionallink/00000164_file.pdf",
+    "publisher": "Daiki Suisan",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the Japanese app breach notices of the October 2026 wave. Passwords are on a separate server and not included."
+ },
+ {
+  "id": "kepco-exposed",
+  "thread": "kepco-staff",
+  "parent": null,
+  "t": "2026-10-01T06:59:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Data on all ~24,000 KEPCO employees appears on an outside webpage",
+  "summary": "At about 15:59 KST on 1 Oct Korea Electric Power Corp. learns, through the National Intelligence Service, that data on about 24,000 employees is on an external webpage. The page is taken down about 32 hours later.",
+  "sources": [
+   {
+    "url": "https://www.ytn.co.kr/_ln/0102_202610042213417353",
+    "publisher": "YTN",
+    "primary": false
+   },
+   {
+    "url": "https://biz.sbs.co.kr/amp/article/20000338255",
+    "publisher": "SBS Biz",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a large Korean public-sector exposure in the October 2026 wave. The cause, an insider route or a hack, is still under investigation."
+ },
+ {
+  "id": "kepco-statement",
+  "thread": "kepco-staff",
+  "parent": "kepco-exposed",
+  "t": "2026-10-04T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "KEPCO confirms names, numbers and emails of 24,000 staff exposed; sees no AI-hack link",
+  "summary": "KEPCO says seven items, including names, units, staff numbers, phones and emails, were exposed but no ID numbers or customer data. It reports to the PIPC and investigates with the NIS and the energy ministry.",
+  "sources": [
+   {
+    "url": "https://www.ytn.co.kr/_ln/0102_202610042213417353",
+    "publisher": "YTN",
+    "primary": false
+   },
+   {
+    "url": "https://biz.sbs.co.kr/amp/article/20000338255",
+    "publisher": "SBS Biz",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "KEPCO says the case looks unrelated to the AI-assisted attacks on Korean finance."
+ },
+ {
+  "id": "kepco-security-files",
+  "thread": "kepco-staff",
+  "parent": "kepco-statement",
+  "t": "2026-10-06T06:13:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Threat-intel data hints that KEPCO access-control and CCTV files also leaked",
+  "summary": "Daily Secu reports that a US threat-intelligence firm holds files that look like KEPCO access-control lists with face data, an HR database dump and camera credentials.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=208748",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "kepco-face-cctv",
+  "thread": "kepco-staff",
+  "parent": "kepco-security-files",
+  "t": "2026-10-19T02:10:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "KEPCO: face data of 408 staff and logins for 14,957 CCTV cameras also leaked",
+  "summary": "Data KEPCO gave a lawmaker shows face-authentication data of 408 employees and IP addresses, IDs and passwords of 14,957 CCTV units also leaked. KEPCO changes all camera credentials and files an extra PIPC report.",
+  "sources": [
+   {
+    "url": "https://biz.sbs.co.kr/amp/article/20000340759",
+    "publisher": "SBS Biz",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Investigators look at both a subcontractor route and an outside hack; the overseas cloud page kept no download logs."
+ },
+ {
+  "id": "pknu-access",
+  "thread": "pukyong-univ",
+  "parent": null,
+  "t": "2026-10-17T03:57:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Attacker abuses a flaw in Suhyup Bank's tuition system used by Pukyong National University",
+  "summary": "From 12:57 KST on 17 Oct to 09:27 KST on 18 Oct an attacker uses a flaw in Suhyup Bank's Campus e-Moa tuition system, creates an unauthorised admin account and views personal data.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209051",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Korean university breach of the October 2026 wave. The flaw is not described."
+ },
+ {
+  "id": "pknu-extortion",
+  "thread": "pukyong-univ",
+  "parent": "pknu-access",
+  "t": "2026-10-20T12:40:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Pukyong learns of the breach from a money demand using the stolen data",
+  "summary": "The university becomes aware of the leak at about 21:40 KST on 20 Oct, after a demand for money that uses the stolen data.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209051",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "pknu-notice",
+  "thread": "pukyong-univ",
+  "parent": "pknu-extortion",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Pukyong National University: data of 5,106 students and 2 staff leaked",
+  "summary": "The university's notice says names, student numbers, tuition amounts and virtual account numbers of 5,106 students and contact data of two staff leaked. It reports to the education ministry and the PIPC and asks police to investigate.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209051",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The university's own notice was not opened; Daily Secu reports it in detail (25 Oct 16:28 KST)."
+ },
+ {
+  "id": "giftl-access",
+  "thread": "giftl",
+  "parent": null,
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Unauthorised access hits Gift-L, mobile voucher issuer for Lotte brands",
+  "summary": "Spoon, a unit of Lotte affiliate Daehong Planning that runs the Gift-L voucher service for Lotteria and Angel-in-us, says unauthorised outside access on 22 Oct leaked customer data.",
+  "sources": [
+   {
+    "url": "https://www.sisajournal.com/news/articleView.html?idxno=391599",
+    "publisher": "Sisa Journal",
+    "primary": false
+   },
+   {
+    "url": "https://www.fnnews.com/news/202610251751066550",
+    "publisher": "Financial News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Korean retail breach disclosed on 25 Oct 2026 during the wave."
+ },
+ {
+  "id": "giftl-notice",
+  "thread": "giftl",
+  "parent": "giftl-access",
+  "t": "2026-10-25T09:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Gift-L: names, phones, emails and refund account numbers of some customers leaked",
+  "summary": "Spoon says names, mobile numbers, emails and refund bank account numbers of some customers leaked, without a count. It blocks the attacker's IP, reports to the authorities and will text each affected customer.",
+  "sources": [
+   {
+    "url": "https://www.sisajournal.com/news/articleView.html?idxno=391599",
+    "publisher": "Sisa Journal",
+    "primary": false
+   },
+   {
+    "url": "https://www.fnnews.com/news/202610251751066550",
+    "publisher": "Financial News",
+    "primary": false
+   },
+   {
+    "url": "https://m.sedaily.com/article/20105863",
+    "publisher": "Seoul Economic Daily",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Gift-L's own notice was not found. Sisa Journal published at 18:06 KST on 25 Oct."
+ },
+ {
+  "id": "ahsay-douzone-apo",
+  "thread": "ahsay",
+  "parent": "ahsay-kev",
+  "t": "2026-10-25T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Douzone Bizon: Ahsay flaw used to take encrypted data from its APO backup servers",
+  "summary": "Korean ERP vendor Douzone Bizon tells customers its APO backup servers were breached through a flaw in Ahsay's backup software and some encrypted data was taken out. It sees no key leak, shuts the servers and reports to KISA.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209050",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Daily Secu (25 Oct 15:44 KST) quotes Douzone's customer notice, which was not opened. The time of the intrusion is under investigation; Douzone is checking a link to its 18 Oct notice. Affected customers are not yet identified."
+ },
+ {
+  "id": "onamae-ceo-blog",
+  "thread": "onamae",
+  "parent": "onamae-gov-cautious",
+  "t": "2026-10-25T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "GMO chief: in-house white hats had flagged Desktop Cloud issues; court log request started",
+  "summary": "GMO's group chief executive writes that internal white-hat hackers had raised security issues with the service beforehand. GMO starts court disclosure requests for attacker logs and repeats its active cyber defence request.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/251/",
+    "publisher": "GMO Internet",
+    "primary": true
+   },
+   {
+    "url": "https://www.kumagai.com/?eid=19600",
+    "publisher": "GMO Internet Group (chief executive blog)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The post also says GMO's IERAE unit found ARTEX at the origin of attacks on about 20 Japanese firms, but does not say ARTEX was used against Desktop Cloud. It promises full compensation of eligible losses if brokers refuse refunds.",
+  "related": [
+   "artex-japan-gmo"
+  ]
+ },
+ {
+  "id": "onamae-single-maintenance",
+  "thread": "onamae",
+  "parent": "onamae-rental-maintenance",
+  "t": "2026-10-25T11:30:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Onamae.com starts open-ended emergency maintenance of its single-service account manager",
+  "summary": "From 20:30 JST on 25 Oct Onamae.com takes the COMNavi account manager of its single-service rental servers offline in urgent maintenance with no end time.",
+  "sources": [
+   {
+    "url": "https://www.onamae.com/news/article/11605",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The notice gives no reason. Scheduled RS-plan and mail maintenance set for 26-27 Oct is marked postponed on the Onamae.com news list."
+ },
+ {
+  "id": "yamato-detect",
+  "thread": "yamato-atobarai",
+  "parent": null,
+  "t": "2026-09-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Yamato Transport confirms unauthorised access to its Kuroneko deferred-payment service",
+  "summary": "Yamato Transport confirms unauthorised access to the Kuroneko Daikin Atobarai (pay-after-delivery) service on 28 Sep, restricts outside access and starts an investigation with outside experts.",
+  "sources": [
+   {
+    "url": "https://www.yamato-hd.co.jp/important/info_260929_1.html",
+    "publisher": "Yamato Holdings",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148860.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a large Japanese logistics breach whose final count came out in mid-October 2026. The attack method is not described. The Yamato notice was not opened; its content is from INTERNET Watch and Security NEXT."
+ },
+ {
+  "id": "yamato-first-report",
+  "thread": "yamato-atobarai",
+  "parent": "yamato-detect",
+  "t": "2026-09-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Yamato's first report: deferred-payment service stopped after the intrusion",
+  "summary": "Yamato announces the intrusion on 29 Sep and stops the deferred-payment service. A second report on 2 Oct warns that billing amounts and employee names may also be out.",
+  "sources": [
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/01/56361.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148860.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "yamato-resume",
+  "thread": "yamato-atobarai",
+  "parent": "yamato-first-report",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Kuroneko deferred-payment service resumes",
+  "summary": "Yamato restarts the Kuroneko deferred-payment service on 9 Oct while the investigation continues.",
+  "sources": [
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148860.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "yamato-fourth-report",
+  "thread": "yamato-atobarai",
+  "parent": "yamato-resume",
+  "t": "2026-10-16T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Yamato: about 5.26 million customer records taken from the deferred-payment service",
+  "summary": "Yamato's fourth report says data on about 5.26 million users since Oct 2018 was taken, 490,000 with emails, plus about 50,000 recipient records and 4,100 merchant records. Billing amounts and employee names were not taken.",
+  "sources": [
+   {
+    "url": "https://www.yamato-hd.co.jp/important/info_260929_1.html",
+    "publisher": "Yamato Holdings",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2148860.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   },
+   {
+    "url": "https://www.security-next.com/191595",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "INTERNET Watch published at 17:06 JST on 16 Oct. Some outlets give 5.31 million, which seems to add user and recipient records."
+ },
+ {
+  "id": "tw-intrusion",
+  "thread": "tradeworks-iwai",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Admin-function flaw at contractor Tradeworks exposes Iwai Cosmo's online trading system",
+  "summary": "On 14 Oct Iwai Cosmo Securities detects unauthorised access to its online trading system, which Tradeworks runs. A separate attack the same day on the trade management system places orders in seven customer accounts, five executed.",
+  "sources": [
+   {
+    "url": "https://www.iwaicosmo.co.jp/info/2026/10201710.html",
+    "publisher": "Iwai Cosmo Securities",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2149845.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Japanese broker breach with unauthorised trades in the same weeks as the GMO Desktop Cloud trading fraud; no link between the two is reported. Iwai Cosmo's notices were not opened; content is from INTERNET Watch."
+ },
+ {
+  "id": "tw-first-report",
+  "thread": "tradeworks-iwai",
+  "parent": "tw-intrusion",
+  "t": "2026-10-16T05:10:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Iwai Cosmo: names and emails of 4,611 customers leaked; Tradeworks blames an admin setting",
+  "summary": "Iwai Cosmo's first report says names and emails of 4,611 customers leaked. Tradeworks says logins were protected by MFA and passkeys, but a configuration flaw in some admin functions was abused.",
+  "sources": [
+   {
+    "url": "https://www.iwaicosmo.co.jp/news/2026/10161410.html",
+    "publisher": "Iwai Cosmo Securities",
+    "primary": true
+   },
+   {
+    "url": "https://pdf.irpocket.com/C3997/xoA3/IjHJ/LeLI/QUZU.pdf",
+    "publisher": "Tradeworks",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2149845.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time inferred from the notice URL (14:10 JST)."
+ },
+ {
+  "id": "tw-second-report",
+  "thread": "tradeworks-iwai",
+  "parent": "tw-first-report",
+  "t": "2026-10-20T08:10:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Iwai Cosmo second report: 4,975 customers hit; 7 accounts saw unintended orders",
+  "summary": "Iwai Cosmo raises the count to 4,975 and discloses that orders were placed in seven accounts without the owners' intent, five executed and then reversed. It says the leaked data was not used for the trades.",
+  "sources": [
+   {
+    "url": "https://www.iwaicosmo.co.jp/info/2026/10201710.html",
+    "publisher": "Iwai Cosmo Securities",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2149845.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   },
+   {
+    "url": "https://www.security-next.com/191717",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time inferred from the notice URL (17:10 JST)."
+ },
+ {
+  "id": "futureshop-ceo-explainer",
+  "thread": "futureshop",
+  "parent": "futureshop-pii-report",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "futureshop CEO: PHP maintenance, 21 Oct intrusion and one-store leak are separate events",
+  "summary": "futureshop's chief executive says the 21-22 Oct outage was PHP2Shell work on its CMS option servers, the 21 Oct intrusion used a flaw in a related service with no leak found so far, and the one-store leak came from a different software flaw.",
+  "sources": [
+   {
+    "url": "https://www.future-shop.jp/news/2026/10/25.html",
+    "publisher": "futureshop",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "futureshop itself does not use PHP; its CMS server option does. All servers were back at 23:35 JST on 22 Oct. An outside investigator is being engaged for the 21 Oct intrusion."
+ },
+ {
+  "id": "wasabi-encrypt",
+  "thread": "wasabi-switch",
+  "parent": "wasabi-php-template",
+  "t": "2026-10-20T05:02:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "WASABI SWITCH encrypts stored shop credentials; some mall links paused for new keys",
+  "summary": "Wasabi's sixth report says per-shop credentials, mall settings and mail account passwords are now encrypted in the database. eBay, Amazon and Walmart links stop until shops reissue API tokens; other malls and carriers must rotate keys.",
+  "sources": [
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261020-01/",
+    "publisher": "Wasabi",
+    "primary": true
+   },
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261022-02/",
+    "publisher": "Wasabi",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Encryption was completed at about 05:00 JST on 20 Oct. A 22 Oct notice asks shops that changed keys before then to change them again."
+ },
+ {
+  "id": "php-korea-alert-caution",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T03:00:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Korea raises its private-sector cyber crisis alert to 'caution' over PHP2Shell",
+  "summary": "At noon KST on 22 Oct the Ministry of Science and ICT raises the private-sector cyber crisis alert from 'interest' to 'caution' and asks major firms for urgent security measures; KISA publishes fixed versions.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209033",
+    "publisher": "Daily Secu",
+    "primary": false
+   },
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209029",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The ministry's own notice was not found."
+ },
+ {
+  "id": "php-korea-kisa-audit",
+  "thread": "php2shell",
+  "parent": "php-korea-alert-caution",
+  "t": "2026-10-23T08:37:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Korean lawmaker: KISA cannot check whether public bodies patched PHP2Shell",
+  "summary": "At a National Assembly audit on 23 Oct a lawmaker says KISA has not established how many public-sector systems run vulnerable PHP or are patched. KISA's head cites legal limits on checking other agencies' systems.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209033",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "php-cyfirma-korean-actors",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "CYFIRMA: Korean-speaking actors pick PHP2Shell targets in Korea, Japan and others",
+  "summary": "Threat-intel firm CYFIRMA reports Korean-speaking users on a private I2P forum choosing government and finance targets in Korea, the US, Japan and other countries for PHP2Shell. It gives only medium confidence to a Lazarus link.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209035",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "No successful attack or North Korean attribution is confirmed. CYFIRMA's report itself was not opened."
+ },
+ {
+  "id": "emu-reply-chrome",
+  "thread": "emudhra",
+  "parent": "emu-chrome-rebuke",
+  "t": "2026-10-25T03:53:46Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra rejects Chrome's rebuke and says other checks missed the weak keys for 18 months",
+  "summary": "eMudhra answers Chrome's Root Program that it has accepted the consequences by leaving public TLS, that audits and cross-signers also missed the flaw, and that revoked CAs protect any client that checks revocation. It promises the full report within 14 days.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c43",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2083449/comment",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-ct-107k-certs",
+  "thread": "emudhra",
+  "parent": "emu-reply-chrome",
+  "t": "2026-10-25T04:23:17Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Bug comment: 107,107 certificates signed with six compromised keys were logged in CT",
+  "summary": "A participant reports 107,107 certificates signed by others with six of the eight compromised keys in two e-Szigno CT logs on 20-21 Oct, nearly all without revocation pointers. Clients that check only leaf revocation would not catch them.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c44",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Community analysis, not a root-program finding. The comment also says eMudhra's CRL and OCSP servers refused some common client user agents on 24-25 Oct and asks eMudhra to answer Chrome's and Mozilla's questions by 28 Oct."
+ },
+ {
+  "id": "emu-android-reason-codes",
+  "thread": "emudhra",
+  "parent": "emu-android-crlite-lag",
+  "t": "2026-10-25T16:17:48Z",
+  "tPrecision": "minute",
+  "kind": "correction",
+  "title": "Mozilla: Android CRLite omits low-priority revocations, so the reported site loads",
+  "summary": "Mozilla adds that the reported certificate was revoked as 'Superseded'. Firefox for Android gets a smaller CRLite dataset without such low-priority revocations, unlike Desktop.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085538",
+    "publisher": "Mozilla Bugzilla, bug 2085538",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The certificate chains to the G1 root, which the key compromise did not hit."
+ },
+ {
+  "id": "aeon-notice",
+  "thread": "aeon-web",
+  "parent": null,
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Aeon detects unauthorised access to some group company websites and starts maintenance",
+  "summary": "Aeon Co. says it detected third-party unauthorised access to some websites of Aeon Group companies, is checking their safety and investigating whether personal data leaked. It names no sites, cause or count.",
+  "sources": [
+   {
+    "url": "https://www.aeon.info/wp-content/uploads/news/important/pdf/2026/10/261021R_2.pdf",
+    "publisher": "Aeon Co.",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: Japan's largest retail group reports intrusions on the day of the PHP2Shell release; it does not name PHP or any cause. As of 25 Oct no follow-up notice is listed on aeon.info. A Kyodo report cited by others says sites of 13 group companies could not be viewed; that report was not opened."
+ },
+ {
+  "id": "fortisiem-advisory",
+  "thread": "fortisiem",
+  "parent": null,
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Fortinet FG-IR-26-180: unauthenticated file write in FortiSIEM 7.5.0 (CVE-2026-106173)",
+  "summary": "Fortinet discloses an arbitrary file write in the FortiSIEM gRPC phQueryMaster service, CVSS 9.4, fixed in 7.5.1. Restricting TCP port 27918 is the workaround; the advisory lists it as not known to be exploited.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-180",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the same out-of-cycle Fortinet PSIRT week as the FortiMail and FortiOS flaws; a separate thread because it has its own exploitation track."
+ },
+ {
+  "id": "fortisiem-horizon3-poc",
+  "thread": "fortisiem",
+  "parent": "fortisiem-advisory",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Horizon3.ai publishes a technical write-up and PoC for the FortiSIEM flaw",
+  "summary": "Horizon3.ai releases a deep dive and proof of concept that chains the path traversal into remote code execution on unpatched FortiSIEM 7.5.0.",
+  "sources": [
+   {
+    "url": "https://thehackernews.com/2026/10/critical-fortisiem-flaw-gets-public.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "fortisiem-cccs-exploited",
+  "thread": "fortisiem",
+  "parent": "fortisiem-horizon3-poc",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Canadian Cyber Centre: open-source reporting says CVE-2026-106173 is exploited",
+  "summary": "The Canadian Centre for Cyber Security updates advisory AV26-1037 to say open-source reporting indicates in-the-wild exploitation of the FortiSIEM flaw. Fortinet's advisory still lists it as not known to be exploited, and it is not in CISA KEV.",
+  "sources": [
+   {
+    "url": "https://www.cyber.gc.ca/en/alerts-advisories/fortinet-security-advisory-av26-1037",
+    "publisher": "Canadian Centre for Cyber Security",
+    "primary": true
+   },
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-180",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "disputed",
+  "note": "The Cyber Centre names no source; Fortinet's advisory has no revision after 13 October."
+ },
+ {
+  "id": "citrix-ns-107406",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-saml-zero-day",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Citrix CTX697191: fourth NetScaler SAML flaw, CVE-2026-107406, CVSS 9.5",
+  "summary": "Citrix discloses a memory overflow that can give remote code execution on NetScaler ADC and Gateway configured as a SAML SP or IdP. In IdP mode the affected range includes builds 14.1-73.37 to 73.41 and 13.1-64.23 to 64.28, so owners must move to 14.1-73.46 or 13.1-64.29.",
+  "sources": [
+   {
+    "url": "https://support.citrix.com/external/article/CTX697191",
+    "publisher": "Citrix",
+    "primary": true
+   },
+   {
+    "url": "https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2026-140/",
+    "publisher": "Cyber Security Agency of Singapore",
+    "primary": true
+   },
+   {
+    "url": "https://bleepingcomputer.com/news/security/citrix-warns-admins-to-patch-new-netscaler-rce-flaw-immediately",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Citrix states no exploitation, and the CVE is not in the CISA KEV feed of 23 October; a Cyber Daily report that CISA added it does not match the feed."
+ },
+ {
+  "id": "php-paloalto-first-hotfixes",
+  "thread": "php2shell",
+  "parent": "php-paloalto-hotfix-eta",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Palo Alto releases the first PAN-OS PHP hotfixes: 10.2.18-h13, 11.1.16-h4, 11.2.10-h16",
+  "summary": "Palo Alto's 25 October advisory revision marks three PAN-OS hotfixes as released and updates the FAQ. The other PAN-OS 10.2 to 12.2 hotfixes stay due 27 to 30 October, and the company still knows of no malicious exploitation against its products.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-109618",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The 24 October revision added only updated threat signature and content version details."
+ },
+ {
+  "id": "llm-image-scan-fixes",
+  "thread": "litellm",
+  "parent": "llm-cosign-rotation",
+  "t": "2026-10-25T09:39:15Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "LiteLLM v1.106.4 removes brotli 1.2.0 and the emSign ECC G3 root from its images",
+  "summary": "LiteLLM's 25 October release says it fixes image scans that flag brotli 1.2.0 and the emSign ECC Root CA - G3, and keeps the new cosign key for verification. It ships with patch releases on the 1.103 to 1.105 lines on the same morning.",
+  "sources": [
+   {
+    "url": "https://github.com/BerriAI/litellm/releases/tag/v1.106.4",
+    "publisher": "BerriAI/litellm on GitHub",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "node-distro-ratings",
+   "emu-python-denylist"
+  ]
+ },
+ {
+  "id": "citrix-ns-jpcert",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-zero-days",
+  "t": "2026-09-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC alert AT-2026-0029: NetScaler attack attempts in Japan since 24 September",
+  "summary": "JPCERT/CC issues an alert on the eight NetScaler flaws and says overseas sensors have seen attack attempts against NetScaler in Japan since 24 September. It tells owners to patch and check for compromise at once.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260029.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "JPCERT/CC says it is not clear that the 24 September attempts target these flaws."
+ },
+ {
+  "id": "citrix-ns-mandiant",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-zero-days",
+  "t": "2026-09-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Mandiant: NetScaler zero-day use since early September, WHIPSHOT web shells",
+  "summary": "Mandiant and Google Threat Intelligence say an unattributed actor has used the NetScaler zero-days since at least early September against government, finance, technology, education and legal targets in North America and Europe. They describe PHP web shells, a setuid shell for root persistence and the SLAPSHOT tunneler, and publish hunting guidance.",
+  "sources": [
+   {
+    "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances",
+    "publisher": "Google Cloud (Mandiant / GTIG)",
+    "primary": true
+   },
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260029.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "JPCERT/CC added the Mandiant indicators to its alert on 2 October."
+ },
+ {
+  "id": "windows-motw-record-batch",
+  "thread": "windows-motw",
+  "parent": "windows-motw-patch",
+  "t": "2026-10-14T07:16:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "SecurityWeek: October Patch Tuesday fixes a record 1,413 CVEs, 'largely driven by AI'",
+  "summary": "SecurityWeek counts 1,413 CVEs in Microsoft's October release, 1,102 of them in Windows, with the MOTW bypass the only exploited one and two others publicly disclosed. It says the surge is largely driven by AI-assisted bug finding.",
+  "sources": [
+   {
+    "url": "https://www.securityweek.com/microsoft-patches-record-1413-vulnerabilities-including-exploited-windows-zero-day/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "cw-25oct-holds-target",
+  "thread": "connectwise",
+  "parent": "cw-onboarding-target",
+  "t": "2026-10-25T14:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "ConnectWise keeps 26 October for Cloud Backup onboarding, restore access first",
+  "summary": "ConnectWise's 25 October update says restoration, testing and security checks go on, with restore access first and phased re-enrollment second. It warns that restored infrastructure does not mean every partner capability is back, and says the backup archives show no sign of compromise.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "snort-hardening-release",
+  "thread": "cisco-snort-hardening",
+  "parent": null,
+  "t": "2026-10-21T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco ships a critical Snort 3 hardening release found with frontier AI models",
+  "summary": "Cisco publishes a Snort 3 security hardening release that groups its findings into four CVEs by weakness class, two rated CVSS 9.0, across Secure Firewall Threat Defense, Meraki MX, Cyber Vision and IOS XE UTD. Cisco credits internal testing with frontier AI models and knows of no exploitation; cloud-delivered products were updated automatically.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-snort3-ybgmhTQe",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: the same AI-found, CWE-grouped 'hardening release' model that Fortinet used the same day. Fixed in open-source Snort 3.12.4.0.",
+  "related": [
+   "fortinet-hardening-announce"
+  ]
+ },
+ {
+  "id": "crime-stoppers-sask-pause",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-cbc-1-5m",
+  "t": "2026-10-24T17:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Saskatchewan Crime Stoppers programs pause all tip lines",
+  "summary": "Crime Stoppers programs in Regina, Saskatoon, Moose Jaw, Prince Albert and provincial Saskatchewan stop taking tips, saying the stolen P3 data could identify tipsters. They say they are still seeking answers from Navigate360 about local impact.",
+  "sources": [
+   {
+    "url": "https://panow.com/2026/10/24/sask-crime-stoppers-pauses-tip-lines-after-data-breach/",
+    "publisher": "paNOW",
+    "primary": false
+   },
+   {
+    "url": "https://www.ctvnews.ca/saskatoon/article/saskatchewan-crime-stoppers-programs-pause-tip-lines-after-data-breach/",
+    "publisher": "CTV News",
+    "primary": false
+   },
+   {
+    "url": "https://www.cbc.ca/news/canada/saskatchewan/sask-crime-stoppers-pauses-tip-intake-national-data-breach-9.7394723",
+    "publisher": "CBC News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "paNOW published the joint release at 11:21 local time (17:21 UTC)."
+ },
+ {
+  "id": "crime-stoppers-anishinabek",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-cbc-1-5m",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Anishinabek Police Service suspends its use of Crime Stoppers",
+  "summary": "The Anishinabek Police Service, a First Nations police service in Ontario, suspends its use of Crime Stoppers while it reviews the Navigate360 breach. It says its own internal systems are not involved.",
+  "sources": [
+   {
+    "url": "https://www.anishinabekpolice.ca/anishinabek-police-service-statement-on-crime-stoppers-data-breach",
+    "publisher": "Anishinabek Police Service",
+    "primary": true
+   },
+   {
+    "url": "https://www.netnewsledger.com/2026/10/25/anishinabek-police-suspend-crime-stoppers-use-following-reported-data-breach/",
+    "publisher": "NetNewsLedger",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "keystone-detect",
+  "thread": "keystone-wallet",
+  "parent": null,
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Keystone hardware-wallet maker detects unauthorized access to its web shop",
+  "summary": "Keystone detects unauthorized access to its official website on 20 October and starts to review API activity with its e-commerce provider Shopify.",
+  "sources": [
+   {
+    "url": "https://x.com/KeystoneWallet/status/2114054080754770137",
+    "publisher": "Keystone Hardware Wallet",
+    "primary": true
+   },
+   {
+    "url": "https://news.bitcoin.com/security/keystone-wallet-data-breach-exposes-buyers-addresses-to-scammers/",
+    "publisher": "Bitcoin.com News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a crypto hardware-wallet customer-data breach disclosed in the October 2026 wave, after the Ledger implant cases. The Shopify detail comes from Bitcoin.com News, not from Keystone's post.",
+  "related": [
+   "ledger-funds-drained"
+  ]
+ },
+ {
+  "id": "keystone-disclosure",
+  "thread": "keystone-wallet",
+  "parent": "keystone-detect",
+  "t": "2026-10-24T17:59:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Keystone: buyers' names, addresses and order details taken; keys safe",
+  "summary": "Keystone says it confirmed on 23 October that a third party obtained customer names, contact details, shipping addresses and order details. It says payment data, recovery phrases and private keys were not exposed, and warns of impersonation scams.",
+  "sources": [
+   {
+    "url": "https://x.com/KeystoneWallet/status/2114054080754770137",
+    "publisher": "Keystone Hardware Wallet",
+    "primary": true
+   },
+   {
+    "url": "https://news.bitcoin.com/security/keystone-wallet-data-breach-exposes-buyers-addresses-to-scammers/",
+    "publisher": "Bitcoin.com News",
+    "primary": false
+   },
+   {
+    "url": "https://cryptobriefing.com/keystone-data-breach-exposed-2026/",
+    "publisher": "Crypto Briefing",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Keystone has not given the number of affected customers."
+ },
+ {
+  "id": "ahold-ah-compensation",
+  "thread": "ahold",
+  "parent": "ahold-update",
+  "t": "2026-10-20T11:30:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Albert Heijn offers EUR 10 store credit per cancelled order after the attack",
+  "summary": "Albert Heijn says customers get EUR 10 store credit for each order cancelled during the outage, plus refunds where they had paid, Premium discounts and extra Air Miles. Its AH Voordeelshop is back online.",
+  "sources": [
+   {
+    "url": "https://nieuws.ah.nl/mediastatement-inzake-it-incident/",
+    "publisher": "Albert Heijn",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 12 of Albert Heijn's media statement, 13:30 CEST. On 21 October it added EUR 10 for Bezorgbundel subscribers; on 23 October it said normal delivery capacity is expected by Wednesday 28 October."
  }
 ];
