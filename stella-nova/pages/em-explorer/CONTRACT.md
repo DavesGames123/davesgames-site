@@ -130,3 +130,49 @@ Branch main. Stage and commit by pathspec in one Bash command; check
 stash or push. Subject `em-explorer: ...` under 72 characters,
 ASD-STE100 body with real validation output and "No browser ran.",
 ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+
+## Round 2 (2026-10-25)
+
+What the user said, verbatim, after the page went live:
+
+> on the electron microscope looks good but takes a long time to load
+
+> also i want to look at 3d SEM data with the electron microscope page as well
+
+Asked which 3D SEM data, the user chose "SEM surface scans": open 3D
+surface scans made with scanning EM (insects, pollen, crystals and so
+on, for example from tilt-pair or multi-detector SEM, or SEM
+photogrammetry), shown as objects that the reader turns and zooms.
+
+| Package | Owns |
+|---|---|
+| PERF | `data/**`, `view/**`, the boot order in `main.js` and `ui/mount.js`, `index.html` head |
+| SEM | `sem/**` (new), `sem/CREDITS.md`, one entry point in `main.js`/`index.html` (a "Surface scans" mode switch) and its `ui/` panel file `ui/sem-panel.js` |
+
+PERF: measure first, then fix. Find what the reader waits for between
+opening the page and the first sharp image (module waterfall, worker
+start, info/shard-index round trips, first tile scale and size, the
+default dataset and home view, retries, the catalog live checks if any
+run at load). Write the measured timeline before and after in NOTES.md
+(node with real fetches; no browser). Targets: a first coarse image in
+well under 2 s on a good link, then refine; prefetch the shard indexes
+of the home view; open the coarsest useful scale first; start the
+worker and the first fetches in parallel with the UI build.
+
+SEM: find SEM surface scans with an open licence (CC0, CC BY, CC BY-SA;
+never NC or ND) and a real source: for example Zenodo, Figshare,
+MorphoSource open-download items, Dryad, Smithsonian Open Access,
+Wikimedia Commons, published papers' data. Check each licence on its
+own page and quote it in `sem/CREDITS.md`. At least 8 objects across
+kinds if the sources allow; say how many were found and why others were
+left out. Build them into compact meshes or height maps (GLB position +
+normal + optional SEM-grey texture, under 3 MB each, under 25 MB all) in
+the repo, with a build script in `sem/build/` recording URLs and steps.
+Show them with a WebGL2 turntable viewer (orbit, zoom, SEM-like
+lighting from a side detector, a scale bar in um), a picker with
+captions, and the credit on screen. Keep the slice explorer the default
+mode. No ported code from viewers with non-open licences.
+
+Same rules as above: node tests, jsdom from the scratchpad, no
+headless Chrome, scratch under 500 MB and deleted, never the user's
+email in a request, pathspec commits `em-explorer: ...`, no push.
