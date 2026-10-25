@@ -12,6 +12,10 @@
 //  FLOW
 //    boot()            WebGL2 test, packages, catalog, viewer, controls,
 //                      then the dataset from the hash (or the default)
+//    earlyOpen()       round 2 (PERF): as soon as data/ and catalog/ are in,
+//                      start the worker and openVolume of the first dataset,
+//                      while view/ and the UI still load; selectDataset
+//                      takes that Promise (S.early) for the same dataset
 //    selectDataset()   openVolume, viewer.setVolume, title, slice range,
 //                      places; a later call cancels an earlier one (token)
 //    goBookmark()      switch dataset if needed, goTo, the caption card
@@ -23,6 +27,7 @@
 //
 //  grep -n targets
 //    boot ............. "async function boot"
+//    early open ....... "function earlyOpen"
 //    WebGL2 test ...... "function hasWebGL2"
 //    dataset switch ... "async function selectDataset"
 //    place ............ "async function goBookmark"
@@ -53,6 +58,7 @@ const S = {
   plane: 'xy', contrast: { ...DEFAULT_CONTRAST }, auto: true, invert: false,
   bookmark: null, scope: 'here', query: '', last: null, lastHash: null,
   sliceDrag: false, hashTimer: 0, toastTimer: 0, panel: null, failed: null,
+  early: null,
 };
 
 // ── messages ───────────────────────────────────────────────────────────────
@@ -343,7 +349,9 @@ async function selectDataset(id, { view = null } = {}) {
   document.body.classList.add('busy');
   let vol;
   try {
-    vol = await S.pk.data.openVolume(d);
+    const early = S.early && S.early.id === id ? S.early.p : null;
+    S.early = null;
+    vol = await (early || S.pk.data.openVolume(d));
   } catch (e) {
     if (token !== S.token) return false;
     $('loading').hidden = true; document.body.classList.remove('busy');
@@ -581,6 +589,31 @@ function bindShell() {
   });
 }
 
+// The dataset that applyHash(location.hash, true) opens first.
+function bootDatasetId(cat, hash) {
+  const p = parseHash(hash);
+  const ids = new Set(cat.datasets.map((d) => d.id));
+  if (p.dataset && ids.has(p.dataset)) return p.dataset;
+  const b = p.bookmark && cat.bookmarks.find((x) => x.id === p.bookmark);
+  if (b) return b.dataset;
+  return cat.defaultId;
+}
+
+// data/ and catalog/ are in: start the worker and the first openVolume now.
+function earlyOpen(got) {
+  if (!got.data || !got.catalog || S.early || window.__emTestPackages) return;
+  const data = got.data;
+  try { data.setPhone && data.setPhone(isPhone()); } catch (e) { /* DATA */ }
+  try { data.warm && data.warm(); } catch (e) { /* DATA */ }
+  const cat = normalizeCatalog(got.catalog);
+  const id = bootDatasetId(cat, location.hash);
+  const d = id && cat.datasets.find((x) => x.id === id);
+  if (!d) return;
+  const p = Promise.resolve().then(() => data.openVolume(d));
+  p.catch(() => {});   // selectDataset shows the error
+  S.early = { id, p };
+}
+
 async function boot() {
   bindShell();
   bindImage();
@@ -590,7 +623,8 @@ async function boot() {
   const gl2 = hasWebGL2();
   // tests can hand in their own packages (window.__emTestPackages)
   const given = window.__emTestPackages;
-  S.pk = given ? { errors: [], ...given } : await loadPackages((p) => import(p), '.');
+  const got = {};
+  S.pk = given ? { errors: [], ...given } : await loadPackages((p) => import(p), '.', (pkg, mod) => { got[pkg] = mod; earlyOpen(got); });
   for (const { pkg, error } of S.pk.errors) console.warn(`em-explorer: ${pkg} package not loaded, using a stub:`, error && error.message);
   S.cat = normalizeCatalog(S.pk.catalog);
   renderAbout($('aboutBody'), S.cat.about);
@@ -658,3 +692,4 @@ window.__em.ready = boot().catch((e) => {
   return false;
 });
 import('./saver/index.js').catch((e) => console.warn('em-explorer: saver not loaded', e));
+import('./ui/sem-panel.js').then((m) => m.mountSemMode()).catch((e) => console.warn('em-explorer: surface scans not loaded', e));

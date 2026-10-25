@@ -1,0 +1,83 @@
+/* ============================================================================
+   EM EXPLORER  ·  sem/sem.css — the "Surface scans" mode (SEM package)
+   ----------------------------------------------------------------------------
+   ui/sem-panel.js adds this file when the page starts. The mode is one
+   full-screen layer, #sem, over the slice explorer. html.em-sem is set while
+   it is open. It uses the page tokens from style.css (--glass, --ink,
+   --accent, --gap, --safe-*) and the fonts from lib/sci.css.
+
+     grep -n 'SWITCH'   the mode buttons in #topRight and #dock
+     grep -n 'LAYER'    #sem, the canvas, the cards
+     grep -n 'PICKER'   the list of scans
+     grep -n 'PHONE'    the phone layout
+   ========================================================================== */
+
+/* SWITCH */
+#semBtn{min-height:38px}
+#semBtn[aria-pressed="true"],#dockSem[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
+
+/* LAYER */
+#sem{position:fixed;inset:0;z-index:40;background:var(--bg);color:var(--ink)}
+#semView{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none;cursor:grab}
+#semView:active{cursor:grabbing}
+#sem .sem-card{position:absolute;background:var(--glass);border:1px solid var(--line-b);border-radius:var(--r);
+  box-shadow:var(--shadow);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+#semSide{left:calc(var(--gap) + var(--safe-l));top:calc(var(--gap) + var(--safe-t));width:var(--col);
+  max-height:calc(100% - 2 * var(--gap) - var(--safe-t) - var(--safe-b) - 64px);display:flex;flex-direction:column;overflow:hidden}
+#semSide .sem-head{padding:14px 16px 8px}
+#semSide .brand{font-size:12px;color:var(--dim)}
+#semSide h1{font-family:'STIX Two Text',Georgia,serif;font-weight:500;font-size:22px;margin:2px 0 4px}
+#semSide .lead{font-size:13px;line-height:1.45;color:var(--ink-2);margin:0}
+#semTop{position:absolute;z-index:2;top:calc(var(--gap) + var(--safe-t));right:calc(var(--gap) + var(--safe-r));display:flex;gap:8px}
+#sem .pill{min-height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--line-b);background:var(--glass);color:var(--ink);
+  font:500 13px/1 Inter,system-ui,sans-serif;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+#sem .pill:hover{border-color:var(--accent)}
+#sem .pill svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6}
+
+/* PICKER */
+#semList{list-style:none;margin:0;padding:6px 8px 10px;overflow:auto;flex:1}
+#semList li{margin:0}
+#semList button{all:unset;box-sizing:border-box;display:block;width:100%;min-height:44px;padding:8px 10px;border-radius:10px;cursor:pointer}
+#semList button:hover{background:rgba(255,255,255,0.05)}
+#semList button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+#semList button[aria-current="true"]{background:var(--accent-soft)}
+#semList .s-t{display:block;font-size:14px;color:var(--ink)}
+#semList button[aria-current="true"] .s-t{color:var(--accent)}
+#semList .s-k{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+#semList .s-g{font-size:11px;color:var(--dim);padding:10px 10px 2px}
+
+#semCap{left:calc(var(--col) + 2 * var(--gap) + var(--safe-l));bottom:calc(var(--gap) + var(--safe-b));max-width:min(520px,calc(100% - var(--col) - 280px));padding:12px 16px}
+#semCap h2{font-family:'STIX Two Text',Georgia,serif;font-weight:500;font-size:19px;margin:0 0 2px}
+#semCap .s-m{font-size:12px;color:var(--dim);margin:0 0 6px}
+#semCap p{font-family:'STIX Two Text',Georgia,serif;font-size:15px;line-height:1.45;margin:0 0 8px}
+#semCap .s-c{font-size:11.5px;line-height:1.4;color:var(--dim);margin:0}
+#semCap a{color:var(--ink-2)}
+#semCap a:hover{color:var(--accent)}
+
+#semScale{position:absolute;right:calc(var(--gap) + var(--safe-r) + 6px);bottom:calc(var(--gap) + var(--safe-b) + 6px);
+  font:500 12px/1 Inter,system-ui,sans-serif;color:var(--ink);text-align:center;pointer-events:none;text-shadow:0 1px 2px #000}
+#semScale .bar{height:5px;border:1.5px solid var(--ink);border-top:none;margin-top:5px;box-shadow:0 1px 2px #000}
+#semHint{position:absolute;right:calc(var(--gap) + var(--safe-r) + 6px);bottom:calc(var(--gap) + var(--safe-b) + 36px);
+  font-size:11.5px;color:var(--dim);pointer-events:none}
+#semMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:14px;color:var(--ink-2)}
+#semMsg.bad{color:var(--bad)}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #sem{bottom:var(--dock-h,64px)}
+  #semSide{left:0;right:0;top:auto;bottom:0;width:auto;max-height:none;border-radius:16px 16px 0 0;border-bottom:none}
+  #semSide .sem-head{display:none}
+  #semList{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;padding:8px 10px;scroll-snap-type:x proximity}
+  #semList li{flex:0 0 auto;scroll-snap-align:start}
+  #semList .s-g{display:none}
+  #semList button{width:auto;max-width:190px;padding:8px 12px;border:1px solid var(--line)}
+  #semList .s-k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #semCap{left:var(--gap);right:var(--gap);top:calc(var(--gap) + var(--safe-t));bottom:auto;max-width:none;padding:10px 12px}
+  #semCap p{font-size:14px}
+  #semCap.min p,#semCap.min .s-c{display:none}
+  #semTop{top:auto;bottom:calc(84px + var(--gap));right:var(--gap)}
+  #semTop .pill span{display:none}
+  #semScale{bottom:calc(84px + var(--gap) + 6px);left:var(--gap);right:auto}
+  #semHint{display:none}
+}
+html.sn-saver #sem{display:none!important}
