@@ -159,7 +159,7 @@ input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:v
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);border:0}
 
 /* CAPTION. The card of the chosen place. */
-#caption{position:fixed;z-index:31;left:calc(var(--gap) + var(--safe-l) + var(--col) + 16px);bottom:calc(var(--gap) + var(--safe-b));width:min(440px,calc(100vw - var(--col) - 260px));
+#caption{position:fixed;z-index:31;left:calc(var(--gap) + var(--safe-l) + var(--col) + 16px);bottom:calc(var(--gap) + var(--safe-b));width:min(440px,max(280px,calc(100vw - var(--col) - 260px)));
   padding:12px 12px 10px 18px;border-radius:var(--r);animation:rise .35s var(--ease)}
 body.panel-closed #caption{left:calc(var(--gap) + var(--safe-l))}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
