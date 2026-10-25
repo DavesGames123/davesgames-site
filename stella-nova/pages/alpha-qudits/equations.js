@@ -48,7 +48,7 @@ export const EQ = {
   matching: `(U \\otimes \\bar{U})\\,|\\omega_{m}\\rangle = |\\omega_{m}\\rangle`,
   letters: `(d+1)(d-1) = d^{2}-1: \\qquad ${qb('3')}\\ \\text{at a qubit (Pauli)}, \\quad ${qt('8')}\\ \\text{at a qutrit (Gell-Mann)}`,
   weyl: `${qb('\\sigma_{x}\\sigma_{z} = -\\,\\sigma_{z}\\sigma_{x}')}, \\qquad ${qt('Z X = \\omega\\, X Z')}, \\quad \\omega = e^{2\\pi i/3}`,
-  signOnly: `AB = \\lambda BA \\;\\Rightarrow\\; \\lambda^{d} = 1, \\qquad \\lambda = \\lambda^{-1} \\;\\Rightarrow\\; \\lambda = \\pm 1 \\text{ only at even } d`,
+  signOnly: `AB = \\lambda BA \\;\\Rightarrow\\; \\lambda^{d} = 1, \\qquad \\lambda = \\lambda^{-1} \\;\\Rightarrow\\; \\lambda^{\\gcd(d,2)} = 1: \\ \\lambda = -1 \\text{ only at even } d`,
 
   // ---------------------------------------------------------------- c4
   decomposable: `\\Lambda = \\Phi_{1} + \\Phi_{2}\\circ T, \\qquad \\Phi_{1}, \\Phi_{2}\\ \\text{completely positive}`,

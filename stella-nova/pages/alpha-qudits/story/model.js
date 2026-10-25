@@ -59,7 +59,7 @@ export const MODEL = [
       ] } },
       { p: `To <b>fix</b> something is to determine it with certainty on the single copy, not to estimate an average over many runs. What is <b>known</b> of a qudit is what its reads fix together, unchanged under every matching and every exchange of its reads or of its pairs. Two reads fix their product. Exchanging them returns the product times the phase by which they fail to commute. An exchange done twice is no exchange, so that phase has to be its own inverse: a sign.` },
       { eq: 'weyl', note: 'At a qubit, reads in different bases anticommute, so the phase is −1. At a qutrit the clock and shift operators commute only up to a cube root of unity.' },
-      { eq: 'signOnly', note: 'Why the qutrit gets no sign: taking determinants of <i>AB</i> = <i>λBA</i> in dimension <i>d</i> gives <i>λ</i><sup><i>d</i></sup> = 1, and a sign needs <i>λ</i> = <i>λ</i><sup>−1</sup>. Both hold only for <i>λ</i> = ±1 at even <i>d</i>.' },
+      { eq: 'signOnly', note: 'Why the qutrit gets no sign: taking determinants of <i>AB</i> = <i>λBA</i> in dimension <i>d</i> gives <i>λ</i><sup><i>d</i></sup> = 1, and a sign needs <i>λ</i> = <i>λ</i><sup>−1</sup>. Together they give <i>λ</i><sup>gcd(<i>d</i>, 2)</sup> = 1: the sign <i>λ</i> = −1 is possible only at even <i>d</i>, and at a qutrit only <i>λ</i> = 1, no sign, is left (Corollary S4).' },
       { p: `So two anticommuting reads at a qubit fix one thing more than either alone: their product, with their order as its sign. This small rule later adds three extra records to the count, and with them the √6 term.` },
     ],
     figures: {
