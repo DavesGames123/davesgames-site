@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0c0e">
+<meta name="description" content="Pan and zoom through real electron microscopy volumes of brain and cells, from a whole specimen down to single synapses, membranes and organelles.">
+<title>Electron Microscopy Explorer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   EM EXPLORER  ·  page shell (CORE package)
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the three packages and binds the ids:
+     view/index.js     createViewer: the WebGL2 tiled slice view in #view
+     data/index.js     openVolume: streams chunks from the public buckets
+     catalog/index.js  DATASETS, BOOKMARKS, ABOUT
+   CONTRACT.md is the spec, NOTES.md has the package requests.
+
+   HEAD LOAD ORDER  (order matters)
+     gpu-guard.js, wishlist.js, stats-beacon.js  (the site scripts, first)
+     style.css    the page stylesheet
+     lib/sci.css  STIX Two Text and Inter (it @imports the fonts)
+   main.js is a module at the end of body.
+
+   LAYOUT  (# marks an id main.js binds to)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ #title  dataset name · meta · (i)        #topRight  plane · share  │
+     │ #panel  tabs: places · datasets · image                            │
+     │                       #view (full screen)                          │
+     │                       #caption  the card of the chosen place       │
+     │ #credit  data credit line                 (VIEW: scale bar, map)    │
+     └───────────────────────────────────────────────────────────────────┘
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock     base bar: Places, Datasets, Image, Share (44 px and more)
+     #panel    portrait: a bottom sheet above the dock (#sheetGrip);
+               landscape: a drawer on the right edge
+   MESSAGES  #nogl (no WebGL2), #nonet (the data did not load),
+             #offline (a strip while the browser is offline), #toast
+   SHEET     #about: about the data, credits, keys
+
+   GREP MAP  grep -n 'id="' index.html  lists every bound element
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body class="booting">
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<canvas id="view" tabindex="0" aria-label="Electron microscopy image. Drag to pan. Scroll or pinch to zoom. Shift and scroll to go through the slices."></canvas>
+<div id="progress" aria-hidden="true"><span></span></div>
+
+<header id="title">
+  <div class="brand">Stella Nova</div>
+  <div class="t-row">
+    <h1 id="dsName">Electron microscopy explorer</h1>
+    <button id="aboutBtn" class="round" type="button" aria-label="About the data and credits">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.2"/><path d="M10 9v5"/><circle cx="10" cy="6.2" r=".6" class="dot"/></svg>
+    </button>
+  </div>
+  <div id="dsMeta" class="t-meta"></div>
+</header>
+
+<div id="topRight">
+  <div id="planeSeg" class="seg" role="radiogroup" aria-label="Section plane">
+    <button type="button" role="radio" data-plane="xy" aria-checked="true" title="XY plane (1)">XY</button>
+    <button type="button" role="radio" data-plane="xz" aria-checked="false" title="XZ plane (2)">XZ</button>
+    <button type="button" role="radio" data-plane="yz" aria-checked="false" title="YZ plane (3)">YZ</button>
+  </div>
+  <button id="shareBtn" class="pill" type="button">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.5V3M6.5 6.2 10 2.8l3.5 3.4M5 9.5H4v8h12v-8h-1"/></svg>
+    <span>Share</span>
+  </button>
+</div>
+
+<button id="panelOpen" class="round big" type="button" aria-label="Show the controls" hidden>
+  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5h14M3 10h14M3 14.5h14"/></svg>
+</button>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" tabindex="0" aria-label="Resize the controls"><span></span></div>
+  <div class="p-head">
+    <div class="tabs" role="tablist" aria-label="Controls">
+      <button type="button" role="tab" id="tabBtn-places" data-tab="places" aria-controls="tab-places" aria-selected="true">Places</button>
+      <button type="button" role="tab" id="tabBtn-data" data-tab="data" aria-controls="tab-data" aria-selected="false">Datasets</button>
+      <button type="button" role="tab" id="tabBtn-image" data-tab="image" aria-controls="tab-image" aria-selected="false">Image</button>
+    </div>
+    <button id="panelClose" class="round" type="button" aria-label="Hide the controls">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+  </div>
+
+  <section id="tab-places" role="tabpanel" aria-labelledby="tabBtn-places">
+    <div class="search">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.6 12.6 17 17"/></svg>
+      <input id="placeSearch" type="search" placeholder="Search places, for example synapse" autocomplete="off" spellcheck="false" aria-label="Search places">
+    </div>
+    <div id="placeScope" class="seg small" role="radiogroup" aria-label="Which places">
+      <button type="button" role="radio" data-scope="here" aria-checked="true">This dataset</button>
+      <button type="button" role="radio" data-scope="all" aria-checked="false">All datasets</button>
+    </div>
+    <ol id="placeList" class="places"></ol>
+    <p id="placeEmpty" class="empty" hidden>No places match. Try a different word.</p>
+  </section>
+
+  <section id="tab-data" role="tabpanel" aria-labelledby="tabBtn-data" hidden>
+    <p class="lead">Each volume is a stack of electron microscope images, millions of pixels wide. Pick one, then zoom in.</p>
+    <ul id="dsList" class="datasets"></ul>
+  </section>
+
+  <section id="tab-image" role="tabpanel" aria-labelledby="tabBtn-image" hidden>
+    <div class="group">
+      <div class="g-label">Section plane</div>
+      <div id="planeSeg2" class="seg" role="radiogroup" aria-label="Section plane">
+        <button type="button" role="radio" data-plane="xy" aria-checked="true">XY</button>
+        <button type="button" role="radio" data-plane="xz" aria-checked="false">XZ</button>
+        <button type="button" role="radio" data-plane="yz" aria-checked="false">YZ</button>
+      </div>
+      <label class="check"><input id="threeView" type="checkbox"> <span>Show the three planes</span></label>
+    </div>
+    <div class="group">
+      <div class="g-label"><label for="slice">Depth</label><output id="sliceV" for="slice"></output></div>
+      <input id="slice" type="range" min="0" max="1000" step="1" value="500">
+      <p class="hint" id="sliceHint">Shift and scroll, or drag with two fingers, to go through the slices.</p>
+    </div>
+    <div class="group">
+      <div class="g-label"><label for="lo">Black point</label><output id="loV" for="lo">0</output></div>
+      <input id="lo" type="range" min="0" max="254" step="1" value="0">
+      <div class="g-label"><label for="hi">White point</label><output id="hiV" for="hi">255</output></div>
+      <input id="hi" type="range" min="1" max="255" step="1" value="255">
+      <div class="g-label"><label for="gamma">Gamma</label><output id="gammaV" for="gamma">1.00</output></div>
+      <input id="gamma" type="range" min="0.3" max="3" step="0.01" value="1">
+      <div class="row2">
+        <label class="check"><input id="invert" type="checkbox"> <span>Invert</span></label>
+        <button id="resetImage" class="pill small" type="button">Reset</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="p-foot">
+    <button id="aboutLink" class="link" type="button">About the data</button>
+    <span aria-hidden="true">·</span>
+    <button id="creditsLink" class="link" type="button">Credits</button>
+  </footer>
+</aside>
+
+<div id="caption" role="region" aria-label="Place" hidden>
+  <div class="cap-top">
+    <span id="capDs" class="cap-ds"></span>
+    <button id="capClose" class="round" type="button" aria-label="Close the place card">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+  </div>
+  <h2 id="capTitle"></h2>
+  <p id="capText"></p>
+  <div class="cap-foot">
+    <a id="capSrc" target="_blank" rel="noopener noreferrer">Source</a>
+    <span class="cap-nav">
+      <button id="capPrev" class="round" type="button" aria-label="Previous place">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg>
+      </button>
+      <button id="capNext" class="round" type="button" aria-label="Next place">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5"/></svg>
+      </button>
+    </span>
+  </div>
+</div>
+
+<button id="credit" type="button" aria-label="Data credit and licence"></button>
+
+<div id="loading" role="status" hidden><span class="spin" aria-hidden="true"></span><span id="loadingText">Opening the volume</span></div>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<div id="offline" role="status" hidden>You are offline. The parts you saw stay; new tiles load when the connection is back.</div>
+
+<div id="nogl" class="msg" role="alert" hidden>
+  <div class="msg-card">
+    <h2>This view needs WebGL2</h2>
+    <p>Your browser did not give the page a WebGL2 context, so it cannot draw the microscope images. WebGL2 is in current Safari, Chrome, Edge and Firefox. Turn on hardware acceleration, or open the page in a different browser.</p>
+  </div>
+</div>
+
+<div id="nonet" class="msg" role="alert" hidden>
+  <div class="msg-card">
+    <h2 id="nonetTitle">The data did not load</h2>
+    <p id="nonetWhy">The microscope images stream from public research archives, and the page could not reach one.</p>
+    <div class="msg-acts">
+      <button id="retryBtn" class="pill accent" type="button">Try again</button>
+      <button id="otherDsBtn" class="pill" type="button">Pick another dataset</button>
+    </div>
+  </div>
+</div>
+
+<div id="about" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+  <div class="about-card" tabindex="-1">
+    <button id="aboutClose" class="round" type="button" aria-label="Close">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+    </button>
+    <h2 id="aboutTitle">About the data</h2>
+    <div id="aboutBody" class="prose"></div>
+    <h3 id="creditsTitle">Credits</h3>
+    <div id="creditsBody" class="prose"></div>
+    <h3>Controls</h3>
+    <dl class="keys">
+      <dt>Drag</dt><dd>pan</dd>
+      <dt>Scroll, pinch, double tap</dt><dd>zoom</dd>
+      <dt>Shift and scroll, two-finger drag</dt><dd>go through the slices</dd>
+      <dt>1 2 3</dt><dd>XY, XZ, YZ plane</dd>
+      <dt>N, P</dt><dd>next and previous place</dd>
+      <dt>I</dt><dd>invert the image</dd>
+      <dt>?</dt><dd>this sheet</dd>
+    </dl>
+  </div>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button type="button" data-tab="places" aria-expanded="false">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 18s5.5-5.2 5.5-9.5a5.5 5.5 0 0 0-11 0C4.5 12.8 10 18 10 18z"/><circle cx="10" cy="8.5" r="2"/></svg>
+    <span>Places</span>
+  </button>
+  <button type="button" data-tab="data" aria-expanded="false">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 18 6.5 10 10.5 2 6.5zM2 10l8 4 8-4M2 13.5l8 4 8-4"/></svg>
+    <span>Datasets</span>
+  </button>
+  <button type="button" data-tab="image" aria-expanded="false">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h8M15 5h2M3 10h3M10 10h7M3 15h9M16 15h1"/><circle cx="13" cy="5" r="2"/><circle cx="8" cy="10" r="2"/><circle cx="14" cy="15" r="2"/></svg>
+    <span>Image</span>
+  </button>
+  <button type="button" id="dockShare">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 12.5V3M6.5 6.2 10 2.8l3.5 3.4M5 9.5H4v8h12v-8h-1"/></svg>
+    <span>Share</span>
+  </button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
