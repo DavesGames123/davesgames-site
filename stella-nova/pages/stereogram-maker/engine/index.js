@@ -9,6 +9,7 @@
 //
 //  DATA SHAPES (all structured-clone safe; send .data.buffer as a transfer)
 //    DepthMap = { w, h, data: Float32Array(w*h), mask: Uint8Array(w*h) }
+//      (not a bare Float32Array: the size travels with the data)
 //      data is 0 at the far plane (the background) and 1 at the nearest
 //      point. mask is 1 where an object covers the pixel, else 0.
 //      Row-major, row 0 at the top.
@@ -106,10 +107,12 @@
 //    loadModel(id) -> Promise<Mesh + { id, record, triangleCount }>
 //
 //  WORKER (engine/worker.js, a module worker; engine/worker-core.js)
-//    in  { id, op, args }  out { id, ok: true, result } | { id, ok:
-//    false, error }. ops: the names of the functions above, plus
-//    'loadModel' and 'modelDepth' ({ model, ...depth opts }).
-//    createEngineClient(worker) -> { call(op, args) -> Promise }.
+//    in  { id, op, args: [...] }  out { id, ok: true, result } | { id,
+//    ok: false, error }. ops: the names of the functions above, plus
+//    'loadModel' ([id]), 'modelDepth' ([{ model, ...depth opts }]) and
+//    'modelTurntable' ([{ model, ...depth opts }, n]).
+//    createEngineClient(worker) -> { call(op, ...args) -> Promise, close() }
+//    (engine/client.js).
 //
 //  grep -n targets (file: name)
 //    depth.js ........ "export function depthFromMesh", "function raster"
@@ -121,25 +124,25 @@
 //    pairs.js ........ "export function wheatstonePair", "export function anaglyph"
 //    animate.js ...... "export function animate"
 //    png.js .......... "export function encodePNG" (node tests, downloads)
-//    worker-core.js .. "export function handle"
+//    worker-core.js .. "export async function handle", "const OPS"
+//    client.js ....... "export function createEngineClient"
 //    tests.mjs ....... node engine/tests.mjs
 // ============================================================================
-// Stub bodies until the modules land. The names and shapes above are fixed.
-const todo = name => () => { throw new Error('stereogram engine: ' + name + ' is not built yet'); };
-export const depthFromMesh = todo('depthFromMesh');
-export const depthFromMeshGL = () => null;
-export const depthFromText = todo('depthFromText');
-export const depthFromImage = todo('depthFromImage');
-export const depthFromSDF = todo('depthFromSDF');
-export const SDF_SHAPES = ['sphere', 'torus', 'steps', 'cone', 'ripple', 'pyramid'];
-export const turntable = todo('turntable');
-export const sirds = todo('sirds');
-export const autostereogram = todo('autostereogram');
-export const farSeparation = (o = {}) => Math.round((o.eyeSep ?? 2.5) * (o.dpi ?? 72) / 2);
-export const TILES = [];
-export const tilesFromPatterns = todo('tilesFromPatterns');
-export const seamError = todo('seamError');
-export const wheatstonePair = todo('wheatstonePair');
-export const randomDotStereogram = todo('randomDotStereogram');
-export const anaglyph = todo('anaglyph');
-export const animate = todo('animate');
+import { depthFromMesh as cpuDepth } from './depth.js';
+import { depthFromMeshGL } from './depth-gl.js';
+
+// depthFromMesh with the optional WebGL2 path (opts.gl true).
+export function depthFromMesh(mesh, opts = {}) {
+  if (opts.gl) { const d = depthFromMeshGL(mesh, opts); if (d) return d; }
+  return cpuDepth(mesh, opts);
+}
+export { depthFromMeshGL };
+export { depthFromImage, depthFromSDF, SDF_SHAPES, turntable, boxBlur, meshBounds, turnMatrix, emptyDepth } from './depth.js';
+export { depthFromText, FONT5x7 } from './text.js';
+export { sirds, autostereogram, farSeparation, nearSeparation, separation, rowLinks, hash3, DEFAULTS, DOT_PALETTE } from './sirds.js';
+export { TILES, DOT_TILES, tilesFromPatterns, seamError } from './tiles.js';
+export { wheatstonePair, randomDotStereogram, anaglyph } from './pairs.js';
+export { animate } from './animate.js';
+export { encodePNG, depthToImage } from './png.js';
+export { Raster2D } from './raster2d.js';
+export { createEngineClient } from './client.js';
