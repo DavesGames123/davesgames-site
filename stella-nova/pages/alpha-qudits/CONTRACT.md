@@ -252,3 +252,27 @@ Commit an early version of your public API with its header in your
 first commit. Requests to another package go in `NOTES.md` as a dated
 line (from, to, what); work against a local stub until the other side
 lands.
+
+## Addendum 2026-10-24: the wider program (coordinator)
+
+The user then pasted the author's talk deck "Chain Theory: an
+introduction" (23 Oct 2026) and asked, verbatim: "do we include the
+ideas of standard model webs re: alpha qudits?". A follow-up agent
+adds one chapter after chapter 10, "Beyond the Letter: Chain Theory's
+wider program", in a new package WEBS (webs/**) with its own story
+file. Nobody else builds it; do not stub it in other packages.
+
+- Grades on every claim, in the author's own terms: theorem,
+  conditional theorem, open result, conjectured. The compendium is
+  "release 0.1, a working draft" (100 / 109 / 198). The author's own
+  caution: many "theorems" are exhaustive checks over a finite catalog
+  of webs. That a web is a named particle is a conjecture.
+- Figures: the chain analogy (rigid links, free joints: a basis at one
+  end fixes the far end; nothing matches bases across a joint); the
+  six genres (2,2) (3,2) (4,2) (3,3) (4,3) (4,4) with readable / dark
+  and the conjectured sector as a separate amber band; the electron
+  web (core qutrit triangle (3,3), in-leg (4,3), hub legs (4,2), hub
+  qubit pair (2,2), docks (3,2)) and the W/Z as one web read along
+  one or two lines. Our own drawings; the deck's are not copied.
+- The deck's numbers come from the deck only; the page says so. The
+  compendium and its Lean were not read by us.
