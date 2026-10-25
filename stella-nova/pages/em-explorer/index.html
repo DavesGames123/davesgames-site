@@ -22,6 +22,14 @@
 
    HEAD LOAD ORDER  (order matters)
      gpu-guard.js, wishlist.js, stats-beacon.js  (the site scripts, first)
+     preconnect   storage.googleapis.com (hemibrain, the default, and h01);
+                  dns-prefetch for the two S3 buckets
+     modulepreload  main.js and every module of data/, catalog/, ui/ and
+                  view/ (and data/worker.js, so the worker graph is in the
+                  HTTP cache): one wave of requests in place of five levels
+                  of imports (round 2, PERF; NOTES.md has the timeline).
+                  A new module in those folders gets a line here too;
+                  data/tests.mjs checks the list against the import graph.
      style.css    the page stylesheet
      lib/sci.css  STIX Two Text and Inter (it @imports the fonts)
    main.js is a module at the end of body.
@@ -45,6 +53,40 @@
    GREP MAP  grep -n 'id="' index.html  lists every bound element
   ═══════════════════════════════════════════════════════════════════════════
 -->
+<link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
+<link rel="dns-prefetch" href="https://bossdb-open-data.s3.amazonaws.com">
+<link rel="dns-prefetch" href="https://janelia-cosem-datasets.s3.amazonaws.com">
+<link rel="modulepreload" href="main.js">
+<link rel="modulepreload" href="data/index.js">
+<link rel="modulepreload" href="data/engine.js">
+<link rel="modulepreload" href="data/cache.js">
+<link rel="modulepreload" href="data/scheduler.js">
+<link rel="modulepreload" href="data/urls.js">
+<link rel="modulepreload" href="data/precomputed.js">
+<link rel="modulepreload" href="data/hash.js">
+<link rel="modulepreload" href="data/codecs.js">
+<link rel="modulepreload" href="../../vendor/fzstd@0.1.1/esm/index.mjs">
+<link rel="modulepreload" href="data/zarr.js">
+<link rel="modulepreload" href="data/slice.js">
+<link rel="modulepreload" href="data/worker.js">
+<link rel="modulepreload" href="catalog/index.js">
+<link rel="modulepreload" href="catalog/datasets.js">
+<link rel="modulepreload" href="catalog/bookmarks.js">
+<link rel="modulepreload" href="catalog/about.js">
+<link rel="modulepreload" href="ui/mount.js">
+<link rel="modulepreload" href="ui/sheet.js">
+<link rel="modulepreload" href="ui/panels.js">
+<link rel="modulepreload" href="ui/format.js">
+<link rel="modulepreload" href="ui/hash.js">
+<link rel="modulepreload" href="view/index.js">
+<link rel="modulepreload" href="view/camera.js">
+<link rel="modulepreload" href="view/tiles.js">
+<link rel="modulepreload" href="view/plan.js">
+<link rel="modulepreload" href="view/slice.js">
+<link rel="modulepreload" href="view/gl.js">
+<link rel="modulepreload" href="view/input.js">
+<link rel="modulepreload" href="view/overlay.js">
+<link rel="modulepreload" href="view/stub.js">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="../../lib/sci.css">
 </head>

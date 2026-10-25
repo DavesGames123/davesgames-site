@@ -67,14 +67,18 @@ const STUB_VIEW = {
 
 export const STUBS = { catalog: STUB_CATALOG, data: STUB_DATA, view: STUB_VIEW };
 
-// loadPackages(importer) -> { catalog, data, view, errors: [{ pkg, error }] }
+// loadPackages(importer, base, onEach) -> { catalog, data, view, errors: [{ pkg, error }] }
 // importer(path) defaults to import(); tests pass their own.
-export async function loadPackages(importer = (p) => import(p), base = '..') {
+// onEach(pkg, mod) runs as soon as one package is in (round 2: main.js
+// starts the worker and the first openVolume when data and catalog are
+// in, while view/ still loads). A throw in onEach does not stop the load.
+export async function loadPackages(importer = (p) => import(p), base = '..', onEach = null) {
   const errors = [];
   const one = async (pkg, stub, check) => {
     try {
       const mod = await importer(`${base}/${pkg}/index.js`);
       if (!check(mod)) throw new Error(`${pkg}/index.js has not the documented exports`);
+      if (onEach) { try { onEach(pkg, mod); } catch (e) { /* page handler */ } }
       return mod;
     } catch (e) {
       errors.push({ pkg, error: e });

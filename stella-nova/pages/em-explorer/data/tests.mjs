@@ -641,6 +641,25 @@ await section('perf: at most 6 fetches per HTTP/1.1 host, S3 host names', async 
 });
 
 
+await section('perf: index.html modulepreload covers the import graph', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const PAGE = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const html = fs.readFileSync(path.join(PAGE, 'index.html'), 'utf8');
+  const listed = new Set([...html.matchAll(/<link rel="modulepreload" href="([^"]+)">/g)].map((m) => path.resolve(PAGE, m[1])));
+  for (const f of listed) ok(fs.existsSync(f), 'preloaded file exists: ' + path.relative(PAGE, f));
+  const deps = (f) => [...fs.readFileSync(f, 'utf8').matchAll(/^\s*(?:import|export)\s[^;'"]*?from\s*['"]([^'"]+)['"]/gm)].map((m) => path.resolve(path.dirname(f), m[1]));
+  const seen = new Set();
+  const walk = (f) => { if (seen.has(f)) return; seen.add(f); deps(f).forEach(walk); };
+  ['main.js', 'catalog/index.js', 'data/index.js', 'view/index.js', 'data/worker.js'].forEach((r) => walk(path.join(PAGE, r)));
+  // the SEM mode (sem/**, ui/sem-panel.js) is not the first view: no preload needed
+  const inScope = [...seen].filter((f) => { const r = path.relative(PAGE, f); return !r.startsWith('sem' + path.sep) && !/^ui[\/]sem-/.test(r); });
+  const missing = inScope.filter((f) => !listed.has(f)).map((f) => path.relative(PAGE, f));
+  ok(missing.length === 0, 'every module of main.js, data, catalog, view and the worker is preloaded', missing);
+  const h = html.indexOf('<head>'), firstLink = html.indexOf('<link', h);
+  ok(html.indexOf('stats-beacon.js') < firstLink, 'the three site scripts stay first in the head');
+});
+
 // ---------------------------------------------------------------- live
 
 function decodeJpegPIL(bytes) {
