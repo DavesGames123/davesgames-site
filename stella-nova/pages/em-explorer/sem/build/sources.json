@@ -1,0 +1,169 @@
+{
+  "_comment": "Inputs of sem/build/build.py. One record per surface scan. kind=mesh: a 3D mesh from SEM photogrammetry. kind=stereo: a red-cyan anaglyph of two SEM images at two tilts; the build makes a height map. Every file is pinned by its checksum (md5 on Figshare, sha1 on Commons). Licences were read on each record's own page on 2026-10-25.",
+  "tiltDegDefault": 4,
+  "objects": [
+    {
+      "id": "prorocentrum",
+      "kind": "mesh",
+      "format": "stl",
+      "files": [
+        {
+          "url": "https://ndownloader.figshare.com/files/46152633",
+          "name": "prorocentrum.stl",
+          "md5": "1c7b55e996becf064879cb2162db9b4b"
+        }
+      ],
+      "unitUm": 1,
+      "targetFaces": 110000,
+      "record": "https://doi.org/10.6084/m9.figshare.25764384",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "halamphora",
+      "kind": "mesh",
+      "format": "stl",
+      "files": [
+        {
+          "url": "https://ndownloader.figshare.com/files/46153122",
+          "name": "halamphora.stl",
+          "md5": "6373946c6a777e923e1e038bafb54ae0"
+        }
+      ],
+      "unitUm": 1,
+      "targetFaces": 90000,
+      "record": "https://doi.org/10.6084/m9.figshare.25764540",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "pistoprion",
+      "kind": "mesh",
+      "format": "obj",
+      "files": [
+        {
+          "url": "https://ndownloader.figshare.com/files/66293471",
+          "name": "pistoprion.obj",
+          "md5": "c1af0445cba19885d4d1c6da8f76652b"
+        },
+        {
+          "url": "https://ndownloader.figshare.com/files/66293462",
+          "name": "pistoprion.jpg",
+          "md5": "7d5b637618ae6d8a17463577a0e0aea2"
+        }
+      ],
+      "unitUm": 1,
+      "targetFaces": 120000,
+      "record": "https://doi.org/10.6084/m9.figshare.32896022",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "chitinozoan",
+      "kind": "mesh",
+      "format": "obj",
+      "files": [
+        {
+          "url": "https://ndownloader.figshare.com/files/66293474",
+          "name": "saku.obj",
+          "md5": "f010ea32ea3ede6b74d3b1f3dec71554"
+        },
+        {
+          "url": "https://ndownloader.figshare.com/files/66293468",
+          "name": "saku.jpg",
+          "md5": "a06e8efca4ef6340a2cc10aa3359a03e"
+        }
+      ],
+      "unitUm": 1,
+      "targetFaces": 120000,
+      "record": "https://doi.org/10.6084/m9.figshare.32896022",
+      "licence": "CC BY 4.0"
+    },
+    {
+      "id": "bee-eye",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/4/46/Bee%C2%B4s_eye_SEM_anaglyph.JPG",
+          "name": "bee-eye.jpg",
+          "sha1": "c9bd2c109b9830f65be09521dc06136284bf6850"
+        }
+      ],
+      "barUm": 50,
+      "record": "https://commons.wikimedia.org/wiki/File:Bee%C2%B4s_eye_SEM_anaglyph.JPG",
+      "licence": "CC BY-SA 3.0"
+    },
+    {
+      "id": "aphid",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Aphis_fabae_STEREO%2C_0100x.JPG",
+          "name": "aphid.jpg",
+          "sha1": "6cc9c1b7fbe5e97ee2cbb4ce16ee53334d03e136"
+        }
+      ],
+      "barUm": 200,
+      "record": "https://commons.wikimedia.org/wiki/File:Aphis_fabae_STEREO,_0100x.JPG",
+      "licence": "CC BY-SA 3.0",
+      "marginPx": 60
+    },
+    {
+      "id": "alchemilla",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Alchemilla_SEM_Stereo_500x.JPG",
+          "name": "alchemilla.jpg",
+          "sha1": "2f12a601607f43eacf3e68b852681a162b8a5f46"
+        }
+      ],
+      "barUm": 50,
+      "record": "https://commons.wikimedia.org/wiki/File:Alchemilla_SEM_Stereo_500x.JPG",
+      "licence": "CC BY-SA 3.0",
+      "marginPx": 140
+    },
+    {
+      "id": "puffball",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Puffball_spores_in_SEM_stereoscopic%2C_magnification_2000x.JPG",
+          "name": "puffball.jpg",
+          "sha1": "cf6442dbddd27a47b203bae483af7e9369d59d72"
+        }
+      ],
+      "barUm": 20,
+      "record": "https://commons.wikimedia.org/wiki/File:Puffball_spores_in_SEM_stereoscopic,_magnification_2000x.JPG",
+      "licence": "CC BY-SA 3.0"
+    },
+    {
+      "id": "dragonfly",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/f/f7/Dragonfly_larva_skin_SEM_stereo_100x.png",
+          "name": "dragonfly.png",
+          "sha1": "1e232bef4b7def503f6dbf8d3e484703bd89c220"
+        }
+      ],
+      "barUm": 200,
+      "record": "https://commons.wikimedia.org/wiki/File:Dragonfly_larva_skin_SEM_stereo_100x.png",
+      "licence": "CC BY-SA 3.0",
+      "maxSlopeDeg": 85
+    },
+    {
+      "id": "glass-fibre",
+      "kind": "stereo",
+      "files": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Glass_reinforced_plastic_SEM_Stereo_200x.JPG",
+          "name": "glass-fibre.jpg",
+          "sha1": "8fdafe7d9aaf59a2c949177241757d172412c193"
+        }
+      ],
+      "barUm": 200,
+      "record": "https://commons.wikimedia.org/wiki/File:Glass_reinforced_plastic_SEM_Stereo_200x.JPG",
+      "licence": "CC BY-SA 3.0",
+      "marginPx": 60,
+      "maxSlopeDeg": 85
+    }
+  ]
+}

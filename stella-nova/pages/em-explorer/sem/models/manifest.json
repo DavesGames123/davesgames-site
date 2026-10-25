@@ -1,0 +1,272 @@
+{
+ "prorocentrum": {
+  "file": "prorocentrum.glb",
+  "bytes": 1323180,
+  "vertices": 55155,
+  "faces": 109998,
+  "sizeUm": [
+   45.085,
+   27.366,
+   15.851
+  ],
+  "kind": "mesh",
+  "texture": false,
+  "grey": false,
+  "sourceFaces": 823106
+ },
+ "halamphora": {
+  "file": "halamphora.glb",
+  "bytes": 1081352,
+  "vertices": 45002,
+  "faces": 90000,
+  "sizeUm": [
+   16.269,
+   3.398,
+   3.86
+  ],
+  "kind": "mesh",
+  "texture": false,
+  "grey": false,
+  "sourceFaces": 170894
+ },
+ "pistoprion": {
+  "file": "pistoprion.glb",
+  "bytes": 1681484,
+  "vertices": 60000,
+  "faces": 119998,
+  "sizeUm": [
+   551.431,
+   211.541,
+   161.951
+  ],
+  "kind": "mesh",
+  "texture": false,
+  "grey": true,
+  "sourceFaces": 1006326
+ },
+ "chitinozoan": {
+  "file": "chitinozoan.glb",
+  "bytes": 1681956,
+  "vertices": 60029,
+  "faces": 119999,
+  "sizeUm": [
+   250.059,
+   90.433,
+   86.014
+  ],
+  "kind": "mesh",
+  "texture": false,
+  "grey": true,
+  "sourceFaces": 996865
+ },
+ "bee-eye": {
+  "file": "bee-eye.glb",
+  "bytes": 1492484,
+  "vertices": 49473,
+  "faces": 90000,
+  "sizeUm": [
+   217.194,
+   164.116,
+   344.815
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 586,
+  "barUm": 50,
+  "umPerPx": 0.08532,
+  "tiltDeg": 4,
+  "dataBarRow": 1925,
+  "matches": 560,
+  "inliers": 368,
+  "rowResidualPx": 0.571,
+  "epipolarDeg": -6.98,
+  "parallaxPctPx": [
+   -170.1,
+   -55.2,
+   29.0
+  ],
+  "validFraction": 0.644,
+  "parallaxRangePx": [
+   -215.4,
+   52.1
+  ],
+  "workScale": 0.40188,
+  "marginPx": 22.3
+ },
+ "aphid": {
+  "file": "aphid.glb",
+  "bytes": 1745532,
+  "vertices": 54102,
+  "faces": 99999,
+  "sizeUm": [
+   1144.05,
+   871.178,
+   2175.843
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 445,
+  "barUm": 200,
+  "umPerPx": 0.44944,
+  "tiltDeg": 4,
+  "dataBarRow": 1940,
+  "matches": 1685,
+  "inliers": 1628,
+  "rowResidualPx": 0.366,
+  "epipolarDeg": -6.88,
+  "parallaxPctPx": [
+   -42.5,
+   34.7,
+   77.3
+  ],
+  "validFraction": 0.763,
+  "parallaxRangePx": [
+   -160.7,
+   121.0
+  ],
+  "workScale": 0.40188,
+  "marginPx": 60.0
+ },
+ "alchemilla": {
+  "file": "alchemilla.glb",
+  "bytes": 1836616,
+  "vertices": 52785,
+  "faces": 99999,
+  "sizeUm": [
+   225.275,
+   173.966,
+   472.647
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 555,
+  "barUm": 50,
+  "umPerPx": 0.09009,
+  "tiltDeg": 4,
+  "dataBarRow": 1933,
+  "matches": 2407,
+  "inliers": 2399,
+  "rowResidualPx": 0.256,
+  "epipolarDeg": -8.52,
+  "parallaxPctPx": [
+   -108.7,
+   -103.7,
+   -98.5
+  ],
+  "validFraction": 0.806,
+  "parallaxRangePx": [
+   -148.0,
+   142.5
+  ],
+  "workScale": 0.40911,
+  "marginPx": 140.0
+ },
+ "puffball": {
+  "file": "puffball.glb",
+  "bytes": 1431452,
+  "vertices": 47400,
+  "faces": 92586,
+  "sizeUm": [
+   57.097,
+   30.139,
+   7.64
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 885,
+  "barUm": 20,
+  "umPerPx": 0.0226,
+  "tiltDeg": 4,
+  "dataBarRow": 1337,
+  "matches": 1995,
+  "inliers": 1452,
+  "rowResidualPx": 0.718,
+  "epipolarDeg": -13.77,
+  "parallaxPctPx": [
+   -13.2,
+   -3.2,
+   7.2
+  ],
+  "validFraction": 0.988,
+  "parallaxRangePx": [
+   -15.2,
+   5.3
+  ],
+  "workScale": 0.4049,
+  "marginPx": 9.5
+ },
+ "dragonfly": {
+  "file": "dragonfly.glb",
+  "bytes": 1552484,
+  "vertices": 51977,
+  "faces": 100000,
+  "sizeUm": [
+   1099.81,
+   858.991,
+   1147.411
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 226,
+  "barUm": 200,
+  "umPerPx": 0.88496,
+  "tiltDeg": 4,
+  "dataBarRow": 972,
+  "matches": 221,
+  "inliers": 163,
+  "rowResidualPx": 0.51,
+  "epipolarDeg": -7.95,
+  "parallaxPctPx": [
+   -55.7,
+   -11.6,
+   26.0
+  ],
+  "validFraction": 0.613,
+  "parallaxRangePx": [
+   -59.7,
+   27.0
+  ],
+  "workScale": 0.82315,
+  "marginPx": 18.4
+ },
+ "glass-fibre": {
+  "file": "glass-fibre.glb",
+  "bytes": 1753660,
+  "vertices": 51176,
+  "faces": 99999,
+  "sizeUm": [
+   563.972,
+   430.559,
+   274.375
+  ],
+  "kind": "stereo",
+  "texture": true,
+  "grey": false,
+  "barPx": 451,
+  "barUm": 200,
+  "umPerPx": 0.44346,
+  "tiltDeg": 4,
+  "dataBarRow": 972,
+  "matches": 834,
+  "inliers": 760,
+  "rowResidualPx": 0.483,
+  "epipolarDeg": -9.06,
+  "parallaxPctPx": [
+   -9.6,
+   -4.2,
+   4.4
+  ],
+  "validFraction": 0.956,
+  "parallaxRangePx": [
+   -15.0,
+   11.8
+  ],
+  "workScale": 0.8044,
+  "marginPx": 60.0
+ }
+}
