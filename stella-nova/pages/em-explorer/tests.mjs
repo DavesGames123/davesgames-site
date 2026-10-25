@@ -5,6 +5,7 @@
 //  Run from the repo root:
 //    NODE_PATH=<dir with jsdom@24.1.3>/node_modules node stella-nova/pages/em-explorer/tests.mjs
 //  Flags: --core  skip the package tests (data/, view/, catalog/)
+//         --live  also section 8: the real page streams minnie65 (1 to 3 MB)
 //
 //  Sections
 //    1. syntax      node --check on every .js and .mjs file of the page
@@ -16,6 +17,7 @@
 //    6. page        jsdom boots with test packages: desktop, phone, hash,
 //                   share, places, failure messages, no WebGL2
 //    7. real boot   jsdom boots with the real packages and no network
+//    8. live        (--live) the real page loads real minnie65 tiles
 //  No browser runs. jsdom comes from NODE_PATH or JSDOM_DIR; with no jsdom,
 //  sections 6 and 7 are skipped and say so.
 //
@@ -29,6 +31,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ARGS = new Set(process.argv.slice(2));
+const LIVE = ARGS.has('--live');
+const NODE_FETCH = globalThis.fetch;   // kept before the jsdom boots replace it
 let pass = 0, fail = 0;
 const fails = [];
 function ok(c, msg) { if (c) { pass++; console.log('  ok   ' + msg); } else { fail++; fails.push(msg); console.log('  FAIL ' + msg); } }
@@ -584,6 +588,41 @@ else {
   ok(P.doc.querySelectorAll('#placeList .pl-item').length >= Math.min(1, cat.bookmarks.length), `places listed: ${P.doc.querySelectorAll('#placeList .pl-item').length} (catalog ${cat.bookmarks.length})`);
   ok(!P.$('nonet').hidden || em.volume(), `with no network the page says so (${P.$('nonetTitle').textContent}: ${P.$('nonetWhy').textContent.slice(0, 80)})`);
   P.close();
+}
+
+// ── 8 ──
+// --live: the real page streams a real dataset end to end. MICrONS
+// minnie65: only its scale 0 is raw+gzip, which node can decode; its other
+// scales are JPEG, which needs a browser, so those tiles fail here and back
+// off. The run opens the dataset at its home view, then flies to the myelin
+// place at zoom 1 (scale 0) and waits for those tiles.
+if (LIVE) {
+  sect('8. live: the real page in jsdom streams minnie65');
+  if (!loadJsdom() || !fakeCanvas) console.log('  skip: no jsdom or no fake WebGL2');
+  else {
+    const P = await boot({ w: 640, h: 480, hash: 'd=minnie65', fetchImpl: NODE_FETCH });
+    const em = P.win.__em, vw = em && em.viewer;
+    const vol = em && em.volume();
+    ok(P.ready === true && vol && em.state().dataset === 'minnie65' && vol.scales.length > 1, `minnie65 opens with its real info (ready ${P.ready}, ${vol && vol.scales.length} scales, s0 ${vol && vol.scales[0].size.join(' x ')})`);
+    const ds = em.catalog.datasets.find((d) => d.id === 'minnie65');
+    let st = vw.state();
+    ok(Math.abs(st.x - ds.home.x) < 2 && Math.abs(st.zoom / ds.home.zoom - 1) < 0.02 && st.plane === ds.home.plane, `home view from the catalog: x ${st.x.toFixed(0)} y ${st.y.toFixed(0)} zoom ${st.zoom}`);
+    await em.goBookmark('mm-myelin');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 60000) { P.frames(1); await sleep(25); st = vw.state(); if (st.ready && st.scaleIndex === 0 && st.tiles.total > 0) break; }
+    ok(st.ready && st.scaleIndex === 0 && st.tiles.loaded === st.tiles.total && st.tiles.total > 0, `myelin place at scale ${st.scaleKey}: ${st.tiles.loaded}/${st.tiles.total} tiles in ${((Date.now() - t0) / 1000).toFixed(1)} s (${st.errors} JPEG tiles failed in node)`);
+    ok(Math.abs(st.x - 60000) < 2 && Math.abs(st.y - 121000) < 2 && Math.abs(st.z - 6000) < 1, `the view is on the place: ${st.x.toFixed(0)}, ${st.y.toFixed(0)}, ${st.z.toFixed(0)}`);
+    const sl = await vol.getSlice(0, 'xy', 6000, [59936, 120936, 60064, 121064]);
+    let mn = 255, mx = 0, sum = 0;
+    for (const v of sl.data) { if (v < mn) mn = v; if (v > mx) mx = v; sum += v; }
+    ok(sl.width === 128 && sl.height === 128 && mx - mn > 20, `real EM pixels at the place: 128 x 128, grey ${mn}..${mx}, mean ${(sum / sl.data.length).toFixed(0)}`);
+    const stats = await vol.stats();
+    console.log(`  note ${stats.fetched} fetches, ${(stats.fetchedBytes / 1e6).toFixed(2)} MB, cache ${(stats.cacheBytes / 1e6).toFixed(2)} MB`);
+    ok(stats.fetchedBytes < 20e6, `the run costs under 20 MB (${(stats.fetchedBytes / 1e6).toFixed(2)} MB)`);
+    ok(!P.errors.length, `no page errors${P.errors.length ? ': ' + P.errors[0].slice(0, 400) : ''}`);
+    P.win.__snRelease();
+    P.close();
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
