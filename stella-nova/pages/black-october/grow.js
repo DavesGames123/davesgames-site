@@ -69,7 +69,9 @@ export const DEFAULTS = Object.freeze({
   scale: 'sqrt',     // 'linear' or 'sqrt' (sqrt opens the dense first hours)
   inner: 0.06,       // radius of T0; the centre stays clear for the title
   minGap: 0.012,     // the shortest distance between two nodes (unit disc)
-  sectorGap: 0.05,   // radians between two thread sectors
+  sectorGap: 0.05,   // radians between two thread sectors (at most)
+  gapShare: 0.1,     // the largest part of the circle that the gaps take
+  sectorPow: 0.9,    // sector weight count^sectorPow + 1 (0.5 gave php2shell 9 degrees)
   walkSteps: 600,    // the longest angle walk of one event
   bridgeStep: 0.008, // radial length of one bridge segment
   wiggle: 0.55,      // bridge amplitude, as a part of the parent-child angle room
@@ -141,10 +143,13 @@ export function timeScale(t0, t1, o) {
 // sector is sqrt(count) + 1, so a large thread gets room and a small thread
 // does not go to a hair.
 export function sectors(threads, o) {
-  const w = threads.map(th => Math.sqrt(th.count) + 1), sum = w.reduce((a, b) => a + b, 0);
-  const room = Math.PI * 2 - o.sectorGap * threads.length;
-  let a = -Math.PI / 2 + o.sectorGap / 2;
-  threads.forEach((th, i) => { th.a0 = a; th.a1 = a + room * w[i] / sum; a = th.a1 + o.sectorGap; });
+  const w = threads.map(th => Math.pow(th.count, o.sectorPow) + 1), sum = w.reduce((a, b) => a + b, 0);
+  // The gaps take at most gapShare of the circle. A fixed gap per thread
+  // gave 128 threads a negative room, and every sector fell to one line.
+  const gap = Math.min(o.sectorGap, Math.PI * 2 * o.gapShare / Math.max(threads.length, 1));
+  const room = Math.PI * 2 - gap * threads.length;
+  let a = -Math.PI / 2 + gap / 2;
+  threads.forEach((th, i) => { th.a0 = a; th.a1 = a + room * w[i] / sum; a = th.a1 + gap; });
   return threads;
 }
 
@@ -155,19 +160,50 @@ function gauss(rand) {
 
 // The angle walk of one event on its time ring. It returns the first free
 // angle, or the angle with the most room when no angle is free.
-function placeAngle(r, a, th, placed, rand, o) {
+function placeAngle(r, a, th, placed, rand, o, steps = o.walkSteps) {
   const margin = Math.min(o.minGap / Math.max(r, 1e-3), (th.a1 - th.a0) / 2);
   const lo = th.a0 + margin, hi = th.a1 - margin;
   const step = o.minGap / Math.max(r, 1e-3);
   let best = a, bestRoom = -1;
   a = Math.min(Math.max(a, lo), hi);
-  for (let k = 0; k < o.walkSteps; k++) {
+  for (let k = 0; k < steps; k++) {
     const room = roomAt(r, a, placed, o.minGap);
-    if (room >= o.minGap) return a;
+    if (room >= o.minGap) { placeAngle.room = room; return a; }
     if (room > bestRoom) { bestRoom = room; best = a; }
     a += gauss(rand) * step * (1 + k / 40);
     if (a < lo) a = lo + (lo - a) % Math.max(hi - lo, 1e-9);
     if (a > hi) a = hi - (a - hi) % Math.max(hi - lo, 1e-9);
+  }
+  placeAngle.room = bestRoom;
+  return best;
+}
+
+// The time span that an event's stamp stands for: a 'day' event is some
+// time in its UTC day, an 'hour' event some time in its hour.
+export function spanOf(t, prec) {
+  if (prec === 'day') { const d = Math.floor(t / DAY) * DAY; return [d, d + DAY - 60000]; }
+  if (prec === 'hour') { const h = Math.floor(t / 3600000) * 3600000; return [h, h + 3600000 - 60000]; }
+  return [t, t];
+}
+
+// The place of one event. First the ring of its stamp. When that ring has
+// no free angle, an event with a day or hour stamp tries other rings inside
+// its span (never nearer the centre than its parent), nearest ring first.
+function placeNode(t, e, p, th, nodes, radiusOf, tw, rand, o) {
+  const r0 = radiusOf(t), a0 = p ? p.a : (th.a0 + th.a1) / 2;
+  let a = placeAngle(r0, a0, th, nodes, rand, o);
+  if (placeAngle.room >= o.minGap || t < tw) return [r0, a];
+  const [s0, s1] = spanOf(t, e.tPrecision);
+  const lo = Math.max(radiusOf(Math.max(s0, tw)), p ? p.r : 0), hi = radiusOf(s1);
+  let best = [r0, a], bestRoom = placeAngle.room;
+  const n = Math.min(24, Math.floor((hi - lo) / (o.minGap * 0.5)));
+  const cand = [];
+  for (let k = 0; k <= n; k++) cand.push(lo + (hi - lo) * k / Math.max(n, 1));
+  cand.sort((x, y) => Math.abs(x - r0) - Math.abs(y - r0));
+  for (const r of cand) {
+    a = placeAngle(r, a0, th, nodes, rand, o, 160);
+    if (placeAngle.room >= o.minGap) return [r, a];
+    if (placeAngle.room > bestRoom) { bestRoom = placeAngle.room; best = [r, a]; }
   }
   return best;
 }
@@ -288,9 +324,8 @@ export function layout(events, opts = {}) {
 
   const nodes = [], edges = [], byId = new Map();
   for (const { e, t } of order) {
-    const th = thOf.get(e.thread), r = radiusOf(t);
-    const p = e.parent == null ? null : byId.get(e.parent);
-    const a = placeAngle(r, p ? p.a : (th.a0 + th.a1) / 2, th, nodes, rand, o);
+    const th = thOf.get(e.thread), p = e.parent == null ? null : byId.get(e.parent);
+    const [r, a] = placeNode(t, e, p, th, nodes, radiusOf, tw, rand, o);
     const n = { id: e.id, ev: e, thread: e.thread, parent: p ? p.id : null, depth: p ? p.depth + 1 : 0,
       t, r, a, x: r * Math.cos(a), y: r * Math.sin(a) };
     nodes.push(n); byId.set(n.id, n);

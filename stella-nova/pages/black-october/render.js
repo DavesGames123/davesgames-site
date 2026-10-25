@@ -39,9 +39,10 @@ export const PAL = Object.freeze({
 });
 const SANS = 'Inter, system-ui, -apple-system, sans-serif', SERIF = "'STIX Two Text', Georgia, serif";
 
-export function nodeRadius(n, zoom = 1) {
+// k: the dot scale of a small screen (st.dotScale, 1 on a large screen).
+export function nodeRadius(n, zoom = 1, k = 1) {
   const z = Math.min(2.4, Math.max(1, Math.pow(zoom, 0.38)));
-  return (1.5 + 0.62 * Math.sqrt(n.ev.sources.length) + (n.parent ? 0 : 0.9)) * z;
+  return (1.5 + 0.62 * Math.sqrt(n.ev.sources.length) + (n.parent ? 0 : 0.9)) * z * k;
 }
 
 // Halo text: a stroke in the background colour under the fill.
@@ -145,8 +146,8 @@ function drawRelated(g, L, st, focus) {
 }
 
 // One dot. confirmed: filled. reported: hollow. disputed: hollow + slash.
-export function drawNode(g, x, y, r, col, conf, bg = PAL.bg) {
-  g.beginPath(); g.arc(x, y, r + 1, 0, Math.PI * 2); g.fillStyle = bg; g.fill();
+export function drawNode(g, x, y, r, col, conf, bg = PAL.bg, halo = 1) {
+  g.beginPath(); g.arc(x, y, r + halo, 0, Math.PI * 2); g.fillStyle = bg; g.fill();
   g.beginPath(); g.arc(x, y, conf === 'confirmed' ? r : Math.max(0.5, r - 0.6), 0, Math.PI * 2);
   if (conf === 'confirmed') { g.fillStyle = col; g.fill(); return; }
   g.lineWidth = 1.2; g.strokeStyle = col; g.stroke();
@@ -183,7 +184,7 @@ function drawLabels(g, L, st, shown, boxes) {
     items.push({ n, t, x, y, w: g.measureText(t).width, h: f + 2,
       pri: (force ? 1e6 : 0) + (n.parent ? 0 : 60) + (n.ev.confidence === 'disputed' ? 30 : 0) + n.ev.sources.length * 6 + n.t / 1e12 });
   }
-  const dots = shown.map(n => { const [x, y] = toScreen(v, n.x, n.y), r = nodeRadius(n, st.zoom); return { x0: x - r, y0: y - r, x1: x + r, y1: y + r }; });
+  const dots = shown.map(n => { const [x, y] = toScreen(v, n.x, n.y), r = nodeRadius(n, st.zoom, st.dotScale); return { x0: x - r, y0: y - r, x1: x + r, y1: y + r }; });
   g.textAlign = 'left'; g.textBaseline = 'top';
   for (const it of placeLabels(items, boxes.concat(dots), 160)) text(g, it.t, it.lx, it.ly, it.n.id === st.sel ? PAL.sel : PAL.text);
 }
@@ -193,6 +194,7 @@ export function drawScene(g, L, st) {
   st.index = st.index || new Map(L.nodes.map((n, i) => [n.id, i]));
   st.pairs = st.pairs || relatedPairs(L);
   st.names = st.names || (id => id);
+  st.dotScale = st.dotScale || 1;
   g.fillStyle = PAL.bg; g.fillRect(0, 0, st.w, st.h);
   const boxes = [];
   drawRings(g, L, st, boxes);
@@ -216,14 +218,14 @@ export function drawScene(g, L, st) {
     if (x < -10 || x > st.w + 10 || y < -10 || y > st.h + 10) continue;
     if (n === L.nodes[st.k - 1] && st.frac < 1) continue;
     g.globalAlpha = focus && !focus.near.has(n.id) ? 0.45 : 1;
-    drawNode(g, x, y, nodeRadius(n, st.zoom), st.colors.get(n.thread), n.ev.confidence);
+    drawNode(g, x, y, nodeRadius(n, st.zoom, st.dotScale), st.colors.get(n.thread), n.ev.confidence, PAL.bg, st.dotScale < 1 ? 0.5 : 1);
   }
   g.globalAlpha = 1;
   for (const id of [st.hover, st.sel]) {
     const n = id && L.byId.get(id);
     if (!n || st.index.get(id) >= st.k) continue;
     const [x, y] = toScreen(v, n.x, n.y);
-    g.beginPath(); g.arc(x, y, nodeRadius(n, st.zoom) + 3.5, 0, Math.PI * 2);
+    g.beginPath(); g.arc(x, y, nodeRadius(n, st.zoom, st.dotScale) + 3.5, 0, Math.PI * 2);
     g.lineWidth = id === st.sel ? 1.6 : 1; g.strokeStyle = PAL.sel; g.stroke();
   }
   if (st.front != null) {

@@ -179,6 +179,31 @@ section('before-window band');
   ok(layout(ev, { seed: 7 }).band === null, 'no band when no event is before the window');
 }
 
+section('the full ledger has room');
+{
+  // 128 threads at a fixed 0.05 rad gap took 6.4 rad, more than one turn:
+  // every sector had a negative width and its dots fell on one line.
+  const { EVENTS } = await import('./data/events.js');
+  const { LAYOUT_OPTS } = await import('./model.js');
+  const { spanOf } = await import('./grow.js');
+  const L = layout(EVENTS, LAYOUT_OPTS), th = L.threads;
+  ok(th.every(t => t.a1 - t.a0 > 0.005), `every sector is wider than 0.005 rad (${th.length} threads, min ${Math.min(...th.map(t => t.a1 - t.a0)).toFixed(4)})`);
+  const used = th.reduce((a, t) => a + t.a1 - t.a0, 0);
+  ok(used >= Math.PI * 2 * 0.85 && used <= Math.PI * 2, `sectors use ${(used / Math.PI / 2 * 100).toFixed(0)}% of the turn`);
+  const php = th.find(t => t.id === 'php2shell');
+  ok(php && (php.a1 - php.a0) * 180 / Math.PI >= 20, `php2shell sector ${php && ((php.a1 - php.a0) * 180 / Math.PI).toFixed(1)} degrees`);
+  // A node may leave the ring of its stamp only inside the span of its precision.
+  ok(L.nodes.every(n => {
+    const [s0, s1] = spanOf(n.t, n.ev.tPrecision);
+    return n.t < L.tw ? near(n.r, L.radiusOf(n.t)) : n.r >= L.radiusOf(Math.max(s0, L.tw)) - 1e-9 && n.r <= L.radiusOf(s1) + 1e-9;
+  }), 'each node is on a ring inside the span of its stamp');
+  ok(L.nodes.every(n => !n.parent || n.r >= L.byId.get(n.parent).r - 1e-12), 'a child is never nearer the centre than its parent');
+  const win = L.nodes.filter(n => n.t >= L.tw);
+  let stacked = 0;
+  for (let i = 0; i < win.length; i++) for (let j = i + 1; j < win.length; j++) if (Math.hypot(win[i].x - win[j].x, win[i].y - win[j].y) < DEFAULTS.minGap / 2) stacked++;
+  ok(stacked <= 20, `${stacked} window node pairs nearer than half of minGap`);
+}
+
 section('saver shots');
 {
   const { EVENTS } = await import('./data/events.js');

@@ -438,6 +438,12 @@ function bindPointer() {
   cv.addEventListener('dblclick', e => { const [x, y] = at(e); zoomBy(2, x, y); });
 }
 
+// On a small screen the fit view holds 900+ dots in a disc of about 170 px:
+// smaller dots there, so fewer dots cover others. Full size at 2x zoom.
+function dotScale(zoom) {
+  return Math.min(S.w, S.h) >= 560 ? 1 : Math.min(1, 0.7 * Math.sqrt(Math.max(1, zoom)));
+}
+
 // ---------------------------------------------------------------- frame
 function request() { if (!S.raf) S.raf = requestAnimationFrame(frame); }
 function frame(now) {
@@ -461,6 +467,7 @@ function draw() {
     k: growing ? S.k + 1 : S.k, frac: growing ? S.frac : 1,
     colors: COLORS, hidden: S.hidden, confOff: S.confOff, hover: S.hover, sel: S.sel,
     front, labels: 'auto', font: coarse() ? 12 : 11, names: M.threadName, index: INDEX,
+    dotScale: dotScale(S.view.s / S.fit.s),
   });
 }
 
