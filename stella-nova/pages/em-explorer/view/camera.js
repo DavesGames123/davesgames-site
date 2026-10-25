@@ -13,6 +13,7 @@
 //  GREP MAP
 //    grep -n 'export const PLANES'     the plane axis table
 //    grep -n 'export function chooseScale'   scale level for a zoom
+//    grep -n 'export function fine0For'      costly scale 0 (OpenOrganelle)
 //    grep -n 'export function tileSize'      tile size in voxels
 //    grep -n 'export function visibleTiles'  tiles that cover a view
 //    grep -n 'export function sliceIndex'    slice index at a scale
@@ -49,13 +50,26 @@ export function nmPerPxToZoom(vol, plane, npp) { return inPlaneRes(vol.scales[0]
 // Scale level for a zoom. Scales run from fine (0) to coarse. The level is
 // the coarsest one whose voxel is no larger than bias device px, so one
 // device px shows about one voxel. bias > 1 trades detail for fewer tiles.
-export function chooseScale(scales, plane, nmPerDevPx, bias = 1) {
+// fine0 > 1: scale 0 is costly (thick chunks); keep scale 1 until one
+// scale-0 voxel spans fine0 device px.
+export function chooseScale(scales, plane, nmPerDevPx, bias = 1, fine0 = 1) {
   let best = 0;
   const lim = nmPerDevPx * bias * 1.0001;
   for (let s = 0; s < scales.length; s++) {
     if (inPlaneRes(scales[s], plane) <= lim) best = s;
   }
+  if (best === 0 && fine0 > 1 && scales.length > 1 && nmPerDevPx * bias * fine0 > inPlaneRes(scales[0], plane) * 1.0001) best = 1;
   return best;
+}
+
+// fine0 for a volume: 2 when a scale-0 tile reads thick chunks that do not
+// compress well (raw, zstd, blosc with 64 or more slices per chunk), else 1.
+// A volume can set vol.fine0 itself.
+export function fine0For(vol, plane) {
+  if (vol.fine0) return vol.fine0;
+  const s = vol.scales[0], n = PLANES[plane].n;
+  const enc = String(s.encoding || '').toLowerCase();
+  return enc !== 'jpeg' && enc !== 'png' && (s.chunk[n] || 1) >= 64 ? 2 : 1;
 }
 
 // The coarsest scale: the base level that is always loaded (and the minimap).

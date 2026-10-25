@@ -50,7 +50,7 @@
 // ============================================================================
 import {
   PLANES, AXIS, extentNm, inPlaneRes, zoomToNmPerPx, nmPerPxToZoom, chooseScale, baseScale,
-  visibleTiles, sliceIndex, scaleBar, zoomLimits, fitNmPerPx, clampCamera, snapSlice,
+  visibleTiles, sliceIndex, scaleBar, fine0For, zoomLimits, fitNmPerPx, clampCamera, snapSlice,
   layoutViews, viewAt, screenToWorld, viewRectNm, zoomPath, easeInOut,
 } from './camera.js';
 import { TileStore, tileKey, posKey } from './tiles.js';
@@ -174,7 +174,7 @@ export function createViewer(canvas, opts = {}) {
 
   function limits() { const v = views[0].vp; return zoomLimits(vol, plane, v.w, v.h); }
 
-  function targetScale(p) { return chooseScale(vol.scales, p, cam.nmPerPx / dpr, lodBias); }
+  function targetScale(p) { return chooseScale(vol.scales, p, cam.nmPerPx / dpr, lodBias, fine0For(vol, p)); }
 
   function computeWants(vw, vi, out) {
     const p = vw.plane, sc = vol.scales, base = baseScale(sc), tgt = targetScale(p);
@@ -666,7 +666,7 @@ export function createViewer(canvas, opts = {}) {
     const tc = targetCam(tg);
     const vw = layoutViews(cssW, cssH, 'single', tc.plane, effInsets())[0];
     const c = { center: tc.center, nmPerPx: tc.nmPerPx };
-    const L = chooseScale(vol.scales, tc.plane, tc.nmPerPx / dpr, lodBias);
+    const L = chooseScale(vol.scales, tc.plane, tc.nmPerPx / dpr, lodBias, fine0For(vol, tc.plane));
     const idx = sliceIndex(vol.scales[L], tc.plane, tc.center[PLANES[tc.plane].n]);
     const tiles = visibleTiles(vw, c, vol.scales[L]);
     if (!tiles.length) return 1;

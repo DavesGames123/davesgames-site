@@ -26,6 +26,9 @@ const vol = stubVolume({ size: [20000, 12000, 3000], resolution: [8, 8, 40], chu
   ok(C.chooseScale(sc, 'xy', 4) === 0, 'zoomed past one to one stays on scale 0');
   ok(C.chooseScale(sc, 'xy', 1e9) === sc.length - 1, 'far out -> coarsest');
   ok(C.chooseScale(sc, 'xy', 20, 1.6) === 2, 'lod bias 1.6 picks a coarser level');
+  ok(C.chooseScale(sc, 'xy', 8, 1, 2) === 1 && C.chooseScale(sc, 'xy', 4, 1, 2) === 0 && C.chooseScale(sc, 'xy', 3, 1, 2) === 0, 'costly scale 0 waits for 2 device px per voxel');
+  ok(C.fine0For({ scales: [{ encoding: 'zstd', chunk: [128, 128, 128] }] }, 'xy') === 2 && C.fine0For({ scales: [{ encoding: 'jpeg', chunk: [64, 64, 64] }] }, 'xy') === 1
+    && C.fine0For({ scales: [{ encoding: 'raw', chunk: [128, 128, 16] }] }, 'xy') === 1, 'fine0: OpenOrganelle zstd 128^3 yes, hemibrain JPEG and minnie65 raw 16-deep no');
   // xz: in-plane finest axis is x (8 nm) on scale 0
   ok(C.inPlaneRes(sc[0], 'xz') === 8 && C.inPlaneRes(sc[3], 'xz') === 64, 'in-plane resolution uses the finest axis');
   const ts = C.tileSize(sc[0], 'xz');
@@ -214,6 +217,7 @@ function mockGL() {
   const states = [];
   const v = createViewer(canvas, { overlay: false, phone: false, onState: s => states.push(s) });
   const sv = stubVolume({ size: [40000, 30000, 2000], resolution: [8, 8, 8], chunk: [64, 64, 64], levels: 9 });
+  sv.fine0 = 1;   // as cheap as JPEG; the costly case is tested below
   v.setVolume(sv);
   const tick = async (n = 1) => { for (let i = 0; i < n; i++) { v._debug.frame(1000 + i * 16 + (tick.t = (tick.t || 0) + 16)); await new Promise(r => setTimeout(r, 0)); } };
   await tick(1);
@@ -233,6 +237,7 @@ function mockGL() {
   s = v.state();
   ok(near(s.x, 1234, 1e-9) && near(s.y, 5678, 1e-9) && near(s.z, 900, 1e-9) && near(s.zoom, 1), 'goTo and state() round trip in scale-0 voxels');
   ok(s.scaleIndex === 0 && s.slice.index === 900 && s.slice.axis === 'z', 'zoom 1 at dpr 1 picks scale 0');
+  sv.fine0 = 2; ok(v.state().scaleIndex === 1, 'a costly scale 0 keeps scale 1 at zoom 1'); sv.fine0 = 1;
   ok(s.scaleBar.px > 40 && s.scaleBar.px <= 120, 'scale bar in state');
   // coarse under fine: before any scale-0 tile lands, coarse tiles draw
   const d0 = gl.calls.draw; await tick(1);
