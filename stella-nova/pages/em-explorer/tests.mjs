@@ -13,9 +13,11 @@
 //                   ReferenceError on a browser global is correct
 //    3. markup      head order, bound ids, the [hidden] guard, fonts, meta
 //    4. ui units    ui/hash.js, ui/format.js, ui/mount.js
-//    5. packages    data/tests.mjs, view/tests.mjs, catalog/tests.mjs
+//    5. packages    data/, view/, catalog/, saver/ and sem/tests.mjs
 //    6. page        jsdom boots with test packages: desktop, phone, hash,
 //                   share, places, failure messages, no WebGL2
+//    6c. sem mode   main.js mounts ui/sem-panel.js: the hash and the keys
+//                   stay with the open mode, then go back to the slice view
 //    7. real boot   jsdom boots with the real packages and no network
 //    8. live        (--live) the real page loads real minnie65 tiles
 //  No browser runs. jsdom comes from NODE_PATH or JSDOM_DIR; with no jsdom,
@@ -165,7 +167,7 @@ const { normalizeCatalog, loadPackages, STUBS } = await import('./ui/mount.js');
 sect('5. package tests');
 if (ARGS.has('--core')) console.log('  skip (--core)');
 else {
-  for (const pkg of ['data', 'view', 'catalog']) {
+  for (const pkg of ['data', 'view', 'catalog', 'saver', 'sem']) {
     const t = path.join(HERE, pkg, 'tests.mjs');
     if (!fs.existsSync(t)) { console.log(`  skip ${pkg}/tests.mjs is not there yet`); continue; }
     const t0 = Date.now();
@@ -567,6 +569,51 @@ else {
   P.frames(2);
   P.win.__snRelease();
   ok(!P.errors.length, `no errors with the real viewer${P.errors.length ? ': ' + P.errors[0].slice(0, 400) : ''}`);
+  P.close();
+}
+
+// ── 6c ──
+// The two modes together: main.js mounts ui/sem-panel.js, so the slice
+// explorer and the "Surface scans" layer share the hash and the keys.
+sect('6c. page in jsdom with the Surface scans mode');
+if (!loadJsdom() || !fakeCanvas || !fs.existsSync(path.join(HERE, 'ui', 'sem-panel.js'))) console.log('  skip: no jsdom, no fake WebGL2 or no ui/sem-panel.js');
+else {
+  const T = testPackages();
+  const fromDisk = async (url) => {
+    const u = new URL(String(url));
+    const p = u.protocol === 'file:' ? fileURLToPath(u) : path.join(HERE, u.pathname.replace('/stella-nova/pages/em-explorer/', ''));
+    if (!/[\\/]sem[\\/]models[\\/]/.test(p) || !fs.existsSync(p)) throw new TypeError('Failed to fetch (tests have no network)');
+    const b = fs.readFileSync(p);
+    return { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
+  };
+  const P = await boot({ packages: T, fetchImpl: fromDisk });
+  for (let i = 0; i < 200 && !P.win.__emSem; i++) await sleep(5);
+  const sem = P.win.__emSem, vw = T.view.viewers[0];
+  ok(P.ready === true && sem && vw, `main.js mounts the mode (ready ${P.ready}, __emSem ${!!sem})`);
+  ok(!P.doc.documentElement.classList.contains('em-sem') && !P.$('sem') && P.$('semBtn'), 'the slice explorer is the default mode');
+  const opened = sem && await sem.open('puffball');
+  ok(opened === true && P.doc.documentElement.classList.contains('em-sem') && /#sem=puffball$/.test(P.win.location.href), `the mode opens over the slice explorer (${P.win.location.hash})`);
+  // a late view report from the slice explorer must not take the hash
+  vw.goTo({ x: 10, y: 20, z: 30, zoom: 0.5 });
+  await sleep(600);
+  ok(/#sem=puffball$/.test(P.win.location.href), `the slice view keeps off the hash while the mode is open (${P.win.location.hash})`);
+  // the slice explorer keys do not act on the hidden view
+  const goTos = vw.calls.filter((c) => c[0] === 'goTo').length, planes = vw.calls.filter((c) => c[0] === 'setPlane').length;
+  let reached = 0;
+  const spy = () => { reached++; };
+  P.win.addEventListener('keydown', spy);
+  P.key('n'); P.key('2'); P.key('ArrowLeft');
+  P.win.removeEventListener('keydown', spy);
+  ok(vw.calls.filter((c) => c[0] === 'goTo').length === goTos && vw.calls.filter((c) => c[0] === 'setPlane').length === planes, 'the keys n and 2 do not move the hidden slice view');
+  ok(reached === 0, `the keys do not reach the slice view's window listener (${reached})`);
+  P.key('Escape');
+  ok(!sem.isOpen() && !P.doc.documentElement.classList.contains('em-sem'), 'Escape goes back to the slice explorer');
+  vw.goTo({ x: 11, y: 21, z: 31, zoom: 0.5 });
+  await sleep(600);
+  ok(/d=alpha&/.test(P.win.location.hash), `after close the slice view writes the hash again (${P.win.location.hash})`);
+  P.key('3');
+  ok(vw.calls.filter((c) => c[0] === 'setPlane').length === planes + 1, 'after close the slice explorer keys work again');
+  ok(!P.errors.length, `no errors with both modes${P.errors.length ? ': ' + P.errors[0].slice(0, 400) : ''}`);
   P.close();
 }
 

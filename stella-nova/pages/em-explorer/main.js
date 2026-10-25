@@ -141,8 +141,12 @@ function currentHash() {
   });
 }
 
+// html.em-sem: the Surface scans layer (the SEM entry line below) is over the
+// slice view and owns the hash and the keys until it closes
+const semOpen = () => document.documentElement.classList.contains('em-sem');
+
 function writeHash() {
-  if (!S.dsId || document.documentElement.classList.contains('sn-saver')) return;
+  if (!S.dsId || semOpen() || document.documentElement.classList.contains('sn-saver')) return;
   const h = currentHash();
   if (h === S.lastHash) return;
   S.lastHash = h;
@@ -512,6 +516,7 @@ function closeAbout() {
 
 // ── keys ───────────────────────────────────────────────────────────────────
 function onKey(e) {
+  if (semOpen()) return;
   if (e.key === 'Escape') {
     if (!$('about').hidden) { closeAbout(); e.preventDefault(); return; }
     if (!$('toast').hidden) { $('toast').hidden = true; return; }

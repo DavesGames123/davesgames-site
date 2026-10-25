@@ -270,8 +270,11 @@ export function mountSemMode({ doc = document, win = window } = {}) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target, tag = t && t.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    const was = S.open;
     if (S.open && e.key === 'Escape') { e.preventDefault(); close(); }
     else if ((e.key === 's' || e.key === 'S') && !(t && t.isContentEditable)) { e.preventDefault(); S.open ? close() : open(); }
+    // the slice view (view/index.js) listens on window: keep its keys off the hidden view
+    if (was) e.stopPropagation();
   });
 
   // the screensaver takes the screen: close the mode
