@@ -167,7 +167,11 @@ export default {
     x += text(g, `) / ${a.den}`, x, fy, { size: fs, fam: 'serif', color: a.den !== (ref && ref.den) ? C.qt : C.ink2 });
     if (removed.length && x + 80 < x1) text(g, `  (no ${removed.map(s => s.replace(/^\d+/, '')).join(', ')} term)`, x, fy, { size: 11.5, color: C.dim });
     if (a.fromPaper) text(g, 'printed value (Table S5); not recomputed', x0, fy + 20, { size: 11.5, color: C.qt, it: true });
-    else if (a.agrees === false && a.paper) text(g, `Table S5 prints ${a.paper.invText}; our reading of its rule: ${a.inv.toFixed(3)}`, x0, fy + 20, { size: fitSize(g, 'Table S5 prints 000.000; our reading of its rule: 000.000', W, 11.5, { it: true }), color: C.qt, it: true });
+    else if (a.agrees === false && a.paper) {
+      let s = `Table S5 prints ${a.paper.invText}; our reading of its rule: ${a.inv.toFixed(3)}`;
+      if (measure(g, s, { size: 11, it: true }) > W) s = `printed ${a.paper.invText}; our reading ${a.inv.toFixed(3)}`;
+      text(g, s, x0, fy + 20, { size: fitSize(g, s, W, 11.5, { it: true }), color: C.qt, it: true });
+    }
     else if (!isComp) text(g, `${a.records} records over N = ${a.den}`, x0, fy + 20, { size: 11.5, color: C.dim });
     else {
       let s = 'the measured window around 137.036 is 4 × 10⁻⁸ wide: far thinner than the dashed line';
