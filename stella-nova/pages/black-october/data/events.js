@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended six times by 2026-10-25. Still going on then.
+//  Gathered 2026-10-22, extended seven times by 2026-10-25. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -10720,7 +10720,7 @@ export const EVENTS = [
   "id": "bullhorn-sso-root-cause",
   "thread": "bullhorn",
   "parent": "bullhorn-bbo-restored",
-  "t": "2026-10-24T16:01:00Z",
+  "t": "2026-10-25T00:00:00Z",
   "tPrecision": "minute",
   "kind": "statement",
   "title": "Bullhorn finds the root cause of the ATS SSO fault; Canvas still unavailable",
@@ -10732,7 +10732,8 @@ export const EVENTS = [
     "primary": true
    }
   ],
-  "confidence": "confirmed"
+  "confidence": "confirmed",
+  "note": "Bullhorn's status page shows only 08:00 and 20:00 EDT updates for 24 October. The 08:00 EDT updates carry only the headline; the root-cause sentence first appears in the 20:00 EDT (00:00 UTC 25 Oct) All Products and BBO updates. The Atom feed was last updated 19:59:05 EDT. No 16:01 UTC update exists."
  },
  {
   "id": "collabora-code-first-attacks",
@@ -15357,5 +15358,2371 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "The notice is undated; the 24 Oct date is from a Ruliweb post of the notice at 15:24 KST."
+ },
+ {
+  "id": "fc-access",
+  "thread": "furusato-choice",
+  "parent": null,
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party accesses member data of the Furusato Choice tax-donation site",
+  "summary": "Trustbank later finds that a third party accessed the member information of Furusato Choice, Japan's large hometown-tax donation portal, on 17 Oct.",
+  "sources": [
+   {
+    "url": "https://www.trustbank.co.jp/newsroom/newsrelease/news261020/",
+    "publisher": "Trustbank",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Trustbank names an exploited vulnerability but not the software."
+ },
+ {
+  "id": "fc-stop",
+  "thread": "furusato-choice",
+  "parent": "fc-access",
+  "t": "2026-10-19T06:50:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Trustbank sees unusual access and stops all Furusato Choice services",
+  "summary": "After it sees an unusual access pattern on 19 Oct, Trustbank stops the Furusato Choice services at 15:50 JST. No restart date is set.",
+  "sources": [
+   {
+    "url": "https://www.trustbank.co.jp/newsroom/newsrelease/news261020/",
+    "publisher": "Trustbank",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fc-notice",
+  "thread": "furusato-choice",
+  "parent": "fc-stop",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Furusato Choice: 4,454,097 member records leaked, with hashed passwords",
+  "summary": "Trustbank says names, emails, addresses, phone numbers, hashed passwords and donation-deduction estimates of 4,454,097 members leaked. It reported to the PPC and planned a police report for 21 Oct.",
+  "sources": [
+   {
+    "url": "https://www.trustbank.co.jp/newsroom/newsrelease/news261020/",
+    "publisher": "Trustbank",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2149772.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The count may change as the investigation goes on."
+ },
+ {
+  "id": "carsensor-detect",
+  "thread": "carsensor",
+  "parent": null,
+  "t": "2026-10-17T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Recruit detects suspicious access and halts Carsensor and C-MATCH",
+  "summary": "Recruit detects suspicious outside access to Carsensor-related systems on 17 Oct and stops all Carsensor services, the app and the dealer tool C-MATCH from about 17:00 JST.",
+  "sources": [
+   {
+    "url": "https://www.recruit.co.jp/newsroom/pressrelease/2026/1021_149447.html",
+    "publisher": "Recruit",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Recruit gives the cause only as unauthorized access from outside."
+ },
+ {
+  "id": "carsensor-notice",
+  "thread": "carsensor",
+  "parent": "carsensor-detect",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Recruit: up to 3,709,551 records from Carsensor and C-MATCH may have leaked",
+  "summary": "Names and addresses of 3.21 million users who contacted dealers, and staff and bank-debit data of 483,168 C-MATCH dealers, may have leaked. No payment data or passwords were involved.",
+  "sources": [
+   {
+    "url": "https://www.recruit.co.jp/newsroom/pressrelease/2026/1021_149447.html",
+    "publisher": "Recruit",
+    "primary": true
+   },
+   {
+    "url": "https://www.security-next.com/191773",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Recruit says addresses are mostly to city level; up to 447,670 may include full street addresses."
+ },
+ {
+  "id": "carsensor-makers",
+  "thread": "carsensor",
+  "parent": "carsensor-detect",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Nissan and Mitsubishi Motors used-car search sites are also down since 17 Oct",
+  "summary": "Kyodo reports that Nissan and Mitsubishi Motors, whose official used-car search sites run on Recruit's system, stopped those sites from 17 Oct.",
+  "sources": [
+   {
+    "url": "https://kumanichi.com/articles/2048927",
+    "publisher": "Kumamoto Nichinichi Shimbun (Kyodo)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Dated by the report of 21 Oct; the stops began on 17 Oct."
+ },
+ {
+  "id": "wasabi-access",
+  "thread": "wasabi-switch",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Intruder enters the WASABI SWITCH e-commerce back-office and plants malware",
+  "summary": "Wasabi later finds that a third party entered the WASABI SWITCH multi-mall order system on 14 Oct, took shops' order data and left malware.",
+  "sources": [
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261016-01/",
+    "publisher": "Wasabi",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach in the October 2026 wave, included because the operator names an abused PHP feature. It is not linked to the PHP interpreter flaws."
+ },
+ {
+  "id": "wasabi-first",
+  "thread": "wasabi-switch",
+  "parent": "wasabi-access",
+  "t": "2026-10-16T02:11:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "WASABI SWITCH: shop order data leaked and used in fake refund emails; second intrusion",
+  "summary": "After shops report buyers getting fake refund emails with real order details, Wasabi discloses the leak. It also reports a second intrusion by a different route at about 04:00 JST on 16 Oct.",
+  "sources": [
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261016-01/",
+    "publisher": "Wasabi",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The number of affected buyers was not given."
+ },
+ {
+  "id": "wasabi-delete",
+  "thread": "wasabi-switch",
+  "parent": "wasabi-first",
+  "t": "2026-10-18T03:05:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Wasabi removes all order, buy-back and customer data from the live system",
+  "summary": "Because intrusions repeat, Wasabi saves and then deletes the order, buy-back and customer records held in WASABI SWITCH, and encrypts the stored mall, FTP, mail and API credentials.",
+  "sources": [
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261018-01/",
+    "publisher": "Wasabi",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "wasabi-php-template",
+  "thread": "wasabi-switch",
+  "parent": "wasabi-delete",
+  "t": "2026-10-18T10:15:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Wasabi finds its template engine's PHP feature was abused and turns it off",
+  "summary": "The fifth report says the PHP function of the WASABI SWITCH content-template engine was abused in the intrusion. Wasabi disables PHP in templates and forces password resets with two-step login.",
+  "sources": [
+   {
+    "url": "https://wasabi-inc.biz/help/news/20261018-02/",
+    "publisher": "Wasabi",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cmoa-stop",
+  "thread": "cmoa",
+  "parent": null,
+  "t": "2026-10-15T02:35:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "NTT Solmare stops the Comic Seymour e-book store after likely unauthorized access",
+  "summary": "NTT Solmare judges that its Comic Seymour servers were very likely accessed from outside and stops the service at 11:35 JST on 15 Oct.",
+  "sources": [
+   {
+    "url": "https://www.nttsolmare.com/press/2026/1016.html",
+    "publisher": "NTT Solmare",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. The store is one of Japan's largest e-book and manga stores."
+ },
+ {
+  "id": "cmoa-leak",
+  "thread": "cmoa",
+  "parent": "cmoa-stop",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Comic Seymour confirms member data, including hashed passwords, left the system",
+  "summary": "NTT Solmare confirms that emails, hashed passwords, birth dates, gender and nicknames leaked from its member system; the count is still under review.",
+  "sources": [
+   {
+    "url": "https://www.nttsolmare.com/press/2026/1016.html",
+    "publisher": "NTT Solmare",
+    "primary": true
+   },
+   {
+    "url": "https://www.security-next.com/191552",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cmoa-logs",
+  "thread": "cmoa",
+  "parent": "cmoa-leak",
+  "t": "2026-10-18T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Third report: attacker also viewed and took system log files",
+  "summary": "NTT Solmare's third report says some system log files were also viewed and taken, and it checks whether they hold member data.",
+  "sources": [
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/comic-cmoa-third-report-attack-route-system-logs-20261018/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "NTT Solmare's own third-report page was not found at the expected URL; the fourth report confirms the log finding."
+ },
+ {
+  "id": "cmoa-fourth",
+  "thread": "cmoa",
+  "parent": "cmoa-logs",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Comic Seymour: 319 database records and up to 4.2 million log records leaked",
+  "summary": "The fourth report counts 319 member-database records with hashed passwords and up to about 4.2 million log records with emails, which may repeat. The entry route is found and blocked.",
+  "sources": [
+   {
+    "url": "https://www.nttsolmare.com/press/2026/1021.html",
+    "publisher": "NTT Solmare",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The store was still down on 21 Oct; all users must reset passwords at restart."
+ },
+ {
+  "id": "sagawa-access",
+  "thread": "sagawa",
+  "parent": null,
+  "t": "2026-09-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Sagawa Express confirms unauthorized access to its parcel-tracking service",
+  "summary": "Sagawa says it confirmed third-party access to the parcel inquiry service of its website on 30 Sep and limits access to the service.",
+  "sources": [
+   {
+    "url": "https://www2.sagawa-exp.co.jp/information/detail/419/",
+    "publisher": "Sagawa Express",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. The breach began in September; the record count came on 23 Oct. Sagawa has not named the cause."
+ },
+ {
+  "id": "sagawa-waybills",
+  "thread": "sagawa",
+  "parent": "sagawa-access",
+  "t": "2026-10-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Sagawa: about 100 days of waybill data may have leaked; nine web services stop",
+  "summary": "Sagawa's second and third reports say sender and recipient names, addresses and phone numbers from waybills of 21 Jun to 30 Sep may have leaked. It stops several web services and files a PPC report.",
+  "sources": [
+   {
+    "url": "https://www2.sagawa-exp.co.jp/information/detail/430/",
+    "publisher": "Sagawa Express",
+    "primary": true
+   },
+   {
+    "url": "https://ecnomikata.com/ecnews/51852/",
+    "publisher": "ECのミカタ",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "sagawa-53m",
+  "thread": "sagawa",
+  "parent": "sagawa-waybills",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Sagawa fifth report: up to about 53.23 million records; parcel tracking reopens",
+  "summary": "Sagawa counts up to about 53.23 million personal records, with duplicates left in, and reopens parcel tracking. The tracking API and eight other services stay down.",
+  "sources": [
+   {
+    "url": "https://www2.sagawa-exp.co.jp/information/detail/430/",
+    "publisher": "Sagawa Express",
+    "primary": true
+   },
+   {
+    "url": "https://japansecuritysummit.org/2026/10/15114/",
+    "publisher": "Japan Security Summit",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Sagawa stresses that the count is not of people and not of confirmed outflow. It found no secondary misuse."
+ },
+ {
+  "id": "gettiis-access",
+  "thread": "gettiis",
+  "parent": null,
+  "t": "2026-10-17T15:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Attacker exploits a flaw in the Gettii-Lite ticketing program and takes member data",
+  "summary": "From about 00:00 to 07:00 JST on 18 Oct, a third party exploits a vulnerability in the Gettii-Lite program and takes member data of the GETTIIS ticket store.",
+  "sources": [
+   {
+    "url": "https://www.gettiis.jp/notice/detail/42",
+    "publisher": "Link Station",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Included because the notice names an exploited flaw; Link Station does not name the software beneath it. Clients such as Kumamoto Nichinichi Shimbun and Chuo City posted their own notices on 20 Oct."
+ },
+ {
+  "id": "gettiis-notice",
+  "thread": "gettiis",
+  "parent": "gettiis-access",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "GETTIIS: 317,971 member records leaked, 29,515 with encrypted partial card data",
+  "summary": "Link Station's second report counts 317,971 member IDs, 311,451 hashed passwords and 29,515 encrypted card fragments (first and last four digits, name, expiry). It patched the flaw and moved servers.",
+  "sources": [
+   {
+    "url": "https://www.gettiis.jp/notice/detail/42",
+    "publisher": "Link Station",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The first report was posted on 19 Oct."
+ },
+ {
+  "id": "valtec-stop",
+  "thread": "valtec",
+  "parent": null,
+  "t": "2026-10-22T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Valtec stops about 24 cloud and POS services and blames a PHP flaw",
+  "summary": "Business-software maker Valtec says customer data is deemed leaked after unauthorized access, stops services such as MOT/Cloud, web booking and its POS systems, and first gives the cause as an attack on a PHP flaw.",
+  "sources": [
+   {
+    "url": "https://www.webjapan.co.jp/maintenance/serviceteishi261022/",
+    "publisher": "Valtec",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Restart was planned for 26 Oct at the earliest."
+ },
+ {
+  "id": "valtec-correction",
+  "thread": "valtec",
+  "parent": "valtec-stop",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "correction",
+  "title": "Valtec retracts the PHP cause: the attack used a flaw in its own service",
+  "summary": "Valtec's second report calls the PHP attribution a mistake, made because staff confused it with separate PHP patch work. The attacker used a vulnerability in Valtec's own service.",
+  "sources": [
+   {
+    "url": "https://www.webjapan.co.jp/maintenance/serviceteishi261022/",
+    "publisher": "Valtec",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "An example of a breach first blamed on the PHP flaws and then withdrawn."
+ },
+ {
+  "id": "andst-intrusion",
+  "thread": "andst",
+  "parent": null,
+  "t": "2026-10-21T22:30:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Intruder logs in to several AND ST HD business servers and extracts data",
+  "summary": "From about 07:30 JST on 22 Oct, an outside attacker tries logins on several business servers of the fashion group (formerly Adastria), gets in and extracts data.",
+  "sources": [
+   {
+    "url": "https://www.andst-hd.co.jp/news/notice/entry-17234/",
+    "publisher": "AND ST HD",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. AND ST HD has not named the entry route."
+ },
+ {
+  "id": "andst-isolate",
+  "thread": "andst",
+  "parent": "andst-intrusion",
+  "t": "2026-10-22T01:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "AND ST HD detects the intrusion, isolates servers and stops internal systems",
+  "summary": "The company detects the illegal operations at about 10:00 JST and isolates the servers. By 17:00 JST it cuts the access route and stops internal business systems.",
+  "sources": [
+   {
+    "url": "https://www.andst-hd.co.jp/news/notice/entry-17234/",
+    "publisher": "AND ST HD",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "andst-notice",
+  "thread": "andst",
+  "parent": "andst-isolate",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "AND ST HD: about 2.5 million customer records may have leaked; points frozen",
+  "summary": "About 2.5 million customer records (name, birth date, address, phone, email, member ID) and about 10,000 supplier records may have leaked; employee data is under review. Member points cannot be used.",
+  "sources": [
+   {
+    "url": "https://www.andst-hd.co.jp/news/notice/entry-17234/",
+    "publisher": "AND ST HD",
+    "primary": true
+   },
+   {
+    "url": "https://www.fashionsnap.com/article/2026-10-23/andst-unauthorized-access/",
+    "publisher": "Fashionsnap",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The and ST web store itself was not hit. Police and the PPC were told on 23 Oct."
+ },
+ {
+  "id": "tf-exploit",
+  "thread": "treasure-factory",
+  "parent": null,
+  "t": "2026-10-19T18:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Attacker exploits a database-access flaw in Treasure Factory's case system",
+  "summary": "Between before dawn and the morning of 20 Oct (JST), a third party exploits a flaw in the case-management system for home buy-back and moving services and takes customer data.",
+  "sources": [
+   {
+    "url": "https://www.treasure-f.com/info/detail/st825/",
+    "publisher": "Treasure Factory",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Treasure Factory says the flaw is not the recently disclosed PHP vulnerability. A separate phishing breach hit its subsidiary Kindal in August."
+ },
+ {
+  "id": "tf-stop",
+  "thread": "treasure-factory",
+  "parent": "tf-exploit",
+  "t": "2026-10-20T01:30:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Treasure Factory cuts outside access to the system and stops its request forms",
+  "summary": "After it reads the access logs, the reuse retailer stops outside access to the system at 10:30 JST and the buy-back and moving request forms at 11:05 JST.",
+  "sources": [
+   {
+    "url": "https://www.treasure-f.com/info/detail/st825/",
+    "publisher": "Treasure Factory",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Restart was planned for about 28 Oct."
+ },
+ {
+  "id": "tf-notice",
+  "thread": "treasure-factory",
+  "parent": "tf-stop",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Treasure Factory: 746,277 customer records taken; flaw not the PHP bug",
+  "summary": "Treasure Factory confirms 746,277 customer records were taken, plus 750 partner and staff records and 1,000 device records, and states that the PHP vulnerability was not involved.",
+  "sources": [
+   {
+    "url": "https://www.treasure-f.com/info/detail/st825/",
+    "publisher": "Treasure Factory",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/treasure_factory_746277_db_vulnerability_leak_20261023/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC236QG0T21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The customer count is in an image table on the notice; the number is as the news reports give it."
+ },
+ {
+  "id": "fxnavi-scrape",
+  "thread": "fx-navi",
+  "parent": null,
+  "t": "2026-04-27T11:26:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Third party pulls FX-navi user data through an app API for three days",
+  "summary": "From about 20:26 JST on 27 Apr to 14:26 JST on 30 Apr, a third party may have taken user data from the FX demo-trading app FX-navi continuously, through a function of the app's API.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261023555394.pdf",
+    "publisher": "Green Monster (TDnet filing)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. The April pull was found only while investigating the October access; the two came from different IP addresses."
+ },
+ {
+  "id": "fxnavi-access",
+  "thread": "fx-navi",
+  "parent": "fxnavi-scrape",
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Green Monster detects unauthorized access to FX-navi and starts an investigation",
+  "summary": "Green Monster confirms third-party access to FX-navi on 17 Oct. It finds no leak from that access, but the investigation reveals the April pull.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261023555394.pdf",
+    "publisher": "Green Monster (TDnet filing)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fxnavi-notice",
+  "thread": "fx-navi",
+  "parent": "fxnavi-access",
+  "t": "2026-10-23T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Green Monster: about 6.19 million FX-navi user records may have been taken",
+  "summary": "The listed company says about 6.19 million records may have been taken, including 66,003 email addresses and 4.81 million survey answers. It fixed the API and voided all login credentials.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261023555394.pdf",
+    "publisher": "Green Monster (TDnet filing)",
+    "primary": true
+   },
+   {
+    "url": "https://www.inatei.com/entry/greenmonster-fxnavi-data-leak",
+    "publisher": "inatei",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Many of the records are not personal data; the app does not collect names, addresses or payment data. The hour is from secondary reports of a 16:00 JST filing."
+ },
+ {
+  "id": "nifty-intrusion",
+  "thread": "nifty-lines",
+  "parent": null,
+  "t": "2026-10-19T01:20:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Nifty finds unauthorized access to its internal line-application system",
+  "summary": "At about 10:20 JST on 19 Oct, Nifty confirms outside access to the internal tool it uses to register broadband line applications, and blocks the source.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/191648",
+    "publisher": "Security NEXT",
+    "primary": false
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2149561.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Nifty's own release returned HTTP 403 to this check."
+ },
+ {
+  "id": "nifty-first",
+  "thread": "nifty-lines",
+  "parent": "nifty-intrusion",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Nifty first report: data of up to 542,513 line applicants may have leaked",
+  "summary": "Nifty says member IDs, names, birth dates, addresses, phone numbers and emails of up to 542,513 people who applied for three fibre services since 2019 may have leaked.",
+  "sources": [
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2149561.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "nifty-revised",
+  "thread": "nifty-lines",
+  "parent": "nifty-first",
+  "t": "2026-10-21T09:05:00Z",
+  "tPrecision": "hour",
+  "kind": "correction",
+  "title": "Nifty cuts the count to 18,000: only @nifty Hikari applicants, no emails",
+  "summary": "The second report narrows the exposure to up to 18,000 @nifty Hikari applicants who applied outside Nifty's website, and says email addresses were not affected.",
+  "sources": [
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2150101.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   },
+   {
+    "url": "https://www.nifty.co.jp/newsrelease/nifty202610215453.htm",
+    "publisher": "Nifty",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "The time is that of the INTERNET Watch article (18:05 JST); Nifty's release could not be opened. A separate Nifty emergency maintenance of member services began at 22:00 JST on 21 Oct."
+ },
+ {
+  "id": "h2o-access",
+  "thread": "h2o-id",
+  "parent": null,
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Intruder reaches the H2O customer system through the department-store booking site",
+  "summary": "H2O Retailing confirms third-party access to its customer-management system via the Hankyu and Hanshin department store booking site on 16 Oct, and shuts the whole site.",
+  "sources": [
+   {
+    "url": "https://data.swcms.net/file/h2o-retailing/ja/news/auto_20261019552921/pdfFile.pdf",
+    "publisher": "H2O Retailing",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese breach notice in the October 2026 wave of mass breach disclosures (20-24 Oct), which the ledger missed. Included although the notice is dated 19 Oct, because of its size. H2O has not named the flaw."
+ },
+ {
+  "id": "h2o-estores",
+  "thread": "h2o-id",
+  "parent": "h2o-access",
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Access also found on HANKYU HANSHIN E-STORES and Remo Order; both shut",
+  "summary": "On 17 Oct the group finds unauthorized access on its online store and the Remo Order service too, and stops both systems.",
+  "sources": [
+   {
+    "url": "https://data.swcms.net/file/h2o-retailing/ja/news/auto_20261019552921/pdfFile.pdf",
+    "publisher": "H2O Retailing",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "h2o-notice",
+  "thread": "h2o-id",
+  "parent": "h2o-estores",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "H2O: personal data of about 1.26 million H2O ID members leaked",
+  "summary": "H2O says part of the data of about 1.26 million H2O ID members, nearly all of them, leaked: names, addresses, phones, emails and birth dates. The online-store leak is still under review.",
+  "sources": [
+   {
+    "url": "https://data.swcms.net/file/h2o-retailing/ja/news/auto_20261019552921/pdfFile.pdf",
+    "publisher": "H2O Retailing",
+    "primary": true
+   },
+   {
+    "url": "https://www.fashionsnap.com/article/2026-10-19/h2o-unauthorized-access/",
+    "publisher": "Fashionsnap",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-japan-mhlw",
+  "thread": "php2shell",
+  "parent": "php-japan-mof",
+  "t": "2026-10-23T01:30:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Japan's health ministry has 31 sites of its own and its agencies offline over PHP",
+  "summary": "The health minister says that, as of 15:00 JST on 22 Oct, 31 sites of the ministry and its agencies, such as the care-service information system, were stopped as a precaution. No leak was reported.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUA230TO0T21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/757f3c73e8b1ff031c1869b093189ddcda188827",
+    "publisher": "NTV News (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Said at the post-cabinet press conference on 23 Oct; the hour is approximate. No MHLW press release was found."
+ },
+ {
+  "id": "bm-okazaki",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-22T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Okazaki City: about 26,000 crime-alert mail addresses leaked via Blastmail",
+  "summary": "Okazaki City says its vendor's mail system was breached and about 26,000 email addresses registered for its crime-prevention mail were leaked; the count for its municipal-housing mail is still being checked.",
+  "sources": [
+   {
+    "url": "https://www.city.okazaki.lg.jp/shisei/koho/1006195/1006358/1016621/1017457.html",
+    "publisher": "Okazaki City",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The city names the vendor Rakus Light Cloud and links its Blastmail notice; figures are as of 15:00 JST on 22 Oct."
+ },
+ {
+  "id": "bm-shunan",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Shunan City: names, addresses and phones of 302 fan-club mail members leaked",
+  "summary": "Shunan City says the Blastmail breach exposed the name, address, phone number and email address of 302 registrants of its fan-club newsletter, and that it is still checking for other data.",
+  "sources": [
+   {
+    "url": "https://www.city.shunan.lg.jp/soshiki/101/153883.html",
+    "publisher": "Shunan City",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "bm-nanjo",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Nanjo City: 11,117 half-marathon runners' emails at risk; second report softens it",
+  "summary": "Nanjo City, Okinawa, says its contractor sent a runner survey through Blastmail and that 11,117 email addresses may have leaked. A second report says the operator has not so far found the runners' addresses among the confirmed leaked data.",
+  "sources": [
+   {
+    "url": "https://www.city.nanjo.okinawa.jp/topics/1792646187/",
+    "publisher": "Nanjo City",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "satimo lists the first report on 22 Oct; the page was last updated on 23 Oct with the second report."
+ },
+ {
+  "id": "bm-tokyo-foundation",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Tokyo: up to 16,000 farm-volunteer records leaked via Blastmail",
+  "summary": "The Tokyo Metropolitan Government says the Blastmail breach exposed names, email addresses and attributes of up to about 16,000 farmers and volunteers in a foundation's farm-support programme; the foundation stopped using the service.",
+  "sources": [
+   {
+    "url": "https://www.metro.tokyo.lg.jp/information/press/2026/10/2026102317",
+    "publisher": "Tokyo Metropolitan Government",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "bm-nulab",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-22T07:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Nulab: Backlog users' emails and space IDs may be in the Blastmail haul",
+  "summary": "Nulab says user email addresses and, for some customers, space IDs, space keys and organisation names may have leaked through Blastmail. It stops using Blastmail and reports to the privacy commission; no access to Backlog itself is confirmed.",
+  "sources": [
+   {
+    "url": "https://nulab.com/ja/info/20261022-1-nulab/",
+    "publisher": "Nulab",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Status as of 16:00 JST on 22 Oct; Nulab said whether its customers were in the leaked list was still being checked."
+ },
+ {
+  "id": "bm-update-1025",
+  "thread": "blastmail",
+  "parent": "bm-344-contracts",
+  "t": "2026-10-25T01:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Blastmail 25 Oct update: no new findings, restart date still not set",
+  "summary": "At 10:00 JST on 25 Oct Rakus Light Cloud says the outside investigation goes on with no new facts and unchanged leak counts. Blastmail stays down with no restart date; the next update is due at 10:00 JST on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://info.blastmail.jp/information_20261021.html",
+    "publisher": "Rakus Light Cloud (Blastmail)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "commerble-creds",
+  "thread": "commerble",
+  "parent": null,
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "System-admin credentials of Japanese EC platform Commerble are stolen",
+  "summary": "According to the platform operator's report to Xebio Holdings, Commerble's system-management credentials were obtained by a third party on 16 Oct; misconfigured access restrictions were abused.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261022554661.pdf",
+    "publisher": "Xebio Holdings (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese web-shop platform breach in the October 2026 wave of Japanese breach notices (compare futureshop). The exact entry route is still under investigation by Commerble and its parent Sigma Consulting."
+ },
+ {
+  "id": "commerble-db-access",
+  "thread": "commerble",
+  "parent": "commerble-creds",
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Intruder reaches GALLERY・2 customer database through Commerble's admin cloud",
+  "summary": "The attacker goes through the platform's management cloud into the customer database of Xebio subsidiary GALLERY・2 and runs operations that display customer data.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261022554661.pdf",
+    "publisher": "Xebio Holdings (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "commerble-skimmer",
+  "thread": "commerble",
+  "parent": "commerble-db-access",
+  "t": "2026-10-18T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Payment-entry page found tampered; GALLERY・2 shuts its web shop",
+  "summary": "GALLERY・2 finds its checkout payment-entry screen altered and stops the EC site the same day. Commerble later closes external access to admin functions and changes credentials.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261022554661.pdf",
+    "publisher": "Xebio Holdings (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "commerble-xebio-notice",
+  "thread": "commerble",
+  "parent": "commerble-skimmer",
+  "t": "2026-10-23T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Xebio: up to about 128,000 GALLERY・2 buyers' data may have leaked via Commerble",
+  "summary": "Xebio Holdings discloses that names and emails of up to about 128,000 buyers, about 122,000 address records and about 158,000 order-confirmation emails may have leaked. Card numbers and passwords were not held; no exfiltration is confirmed yet.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261022554661.pdf",
+    "publisher": "Xebio Holdings (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://satimo.org/2026/10/data-breach-list-2026/",
+    "publisher": "satimo",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The PDF is dated 23 Oct although its TDnet number begins 1401202610225; the subsidiary reported to the privacy commission on 21 Oct."
+ },
+ {
+  "id": "nec-osaka-download",
+  "thread": "nec-contractor",
+  "parent": null,
+  "t": "2026-09-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party downloads an Osaka University data file from NEC's shared cloud storage",
+  "summary": "After an NEC development and maintenance contractor is hit in late September, a third party downloads a file of Osaka University personal data that NEC had shared with a subcontractor and failed to delete.",
+  "sources": [
+   {
+    "url": "https://www.osaka-u.ac.jp/ja/news/topics/2026/10/21004",
+    "publisher": "Osaka University",
+    "primary": true
+   },
+   {
+    "url": "https://jpn.nec.com/news/info/20261020.html",
+    "publisher": "NEC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a supply-chain breach disclosed in the October 2026 wave of Japanese breach notices. NEC dates the contractor attack only to late September."
+ },
+ {
+  "id": "nec-tells-osaka",
+  "thread": "nec-contractor",
+  "parent": "nec-osaka-download",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "NEC tells Osaka University that its data was downloaded",
+  "summary": "NEC reports the 26 September download to Osaka University, which runs its campus education system through NEC.",
+  "sources": [
+   {
+    "url": "https://www.osaka-u.ac.jp/ja/news/topics/2026/10/21004",
+    "publisher": "Osaka University",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "nec-disclosure",
+  "thread": "nec-contractor",
+  "parent": "nec-osaka-download",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "NEC: stolen contractor account used to encrypt customer servers and leak shared files",
+  "summary": "NEC says a contractor's stolen legitimate account was used to get into customer systems from the contractor's terminal, files on servers were encrypted and systems went down, and files in a shared cloud storage leaked.",
+  "sources": [
+   {
+    "url": "https://jpn.nec.com/news/info/20261020.html",
+    "publisher": "NEC",
+    "primary": true
+   },
+   {
+    "url": "https://www.security-next.com/191694",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "NEC does not name the customers; satimo and Nikkei report three affected companies."
+ },
+ {
+  "id": "nec-osaka-notice",
+  "thread": "nec-contractor",
+  "parent": "nec-tells-osaka",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Osaka University: data of 77,851 students, graduates and staff leaked via NEC",
+  "summary": "Osaka University says names, university IDs, university email addresses, student or staff numbers and affiliations of 15,035 students, 59,014 graduates and 3,802 staff leaked. It calls NEC's undisclosed subcontracting a serious problem.",
+  "sources": [
+   {
+    "url": "https://www.osaka-u.ac.jp/ja/news/topics/2026/10/21004",
+    "publisher": "Osaka University",
+    "primary": true
+   },
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/22/2000002491/",
+    "publisher": "ITmedia NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "abceed-detect",
+  "thread": "abceed",
+  "parent": null,
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Globee detects unauthorised access to systems of English-learning app abceed",
+  "summary": "Globee finds an intrusion into systems linked to its abceed service that abused settings in those systems; it blocks the route, stops the function and resets credentials and sessions.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261020553707.pdf",
+    "publisher": "Globee (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese app breach disclosed in the October 2026 wave of Japanese breach notices. Globee does not name the abused setting or say whether a software flaw was involved."
+ },
+ {
+  "id": "abceed-notice",
+  "thread": "abceed",
+  "parent": "abceed-detect",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Globee: emails and hashed passwords of 10,834 abceed accounts may have leaked",
+  "summary": "Globee discloses that email addresses and hashed passwords of 10,834 accounts, 90 of them with user names, may have leaked; it has reported to the privacy commission and is emailing users.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261020553707.pdf",
+    "publisher": "Globee (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "bm-machouse",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "G-Yet: Mac House newsletter members' names, birth dates and emails may have leaked",
+  "summary": "Listed apparel retailer G-Yet says Mac House newsletter data sent through Blastmail, including name, email, birth date, sex and region, may have leaked; the count is still being checked.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261023555550.pdf",
+    "publisher": "G-Yet (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-aomori",
+  "thread": "studio-design",
+  "parent": "studio-first-notice",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Aomori Prefecture: 206 event applicants' data may have leaked via Studio",
+  "summary": "Aomori Prefecture says its contractor, the Daily Tohoku newspaper, collected event applications through Studio, so data of 206 applicants may have leaked; no actual theft is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.pref.aomori.lg.jp/release/2026/81624.html",
+    "publisher": "Aomori Prefecture",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-smarthr",
+  "thread": "studio-design",
+  "parent": "studio-first-notice",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "SmartHR: inquiry-form data of 2,012 people on five group sites may have leaked via Studio",
+  "summary": "SmartHR says inquiry-form entries on Studio-built sites of SmartHR, Smart Soudanshitsu, AIRVISA, BYARD and Looper may have leaked, 2,012 people as of 22 Oct; data in its cloud services is not affected.",
+  "sources": [
+   {
+    "url": "https://smarthr.co.jp/news/info/20261022/",
+    "publisher": "SmartHR",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "valtec-second-report",
+  "thread": "valtec",
+  "parent": "valtec-correction",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Valtec second report: malware put on a server on 20 Oct; no leak confirmed yet",
+  "summary": "Valtec says a third party got in and installed malware on a server on 20 Oct. No leak is confirmed, but customer names, phone numbers and emails may have leaked; servers are disconnected and services stay down, with 26 Oct the earliest restart.",
+  "sources": [
+   {
+    "url": "https://www.webjapan.co.jp/maintenance/serviceteishi261023/",
+    "publisher": "Valtec",
+    "primary": true
+   },
+   {
+    "url": "https://www.webjapan.co.jp/maintenance/serviceteishi261022/",
+    "publisher": "Valtec",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Placed after bo-w.json events valtec-stop and valtec-correction, which this event depends on."
+ },
+ {
+  "id": "mlit-hakuhodo-notice",
+  "thread": "mlit-hakuhodo",
+  "parent": null,
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "MLIT: data of 23,918 people at 16,950 builders may have leaked from a Hakuhodo system",
+  "summary": "Japan's land ministry says outside parties made unauthorised operations on the subsidy-application system that Hakuhodo runs as secretariat of the Housing Energy-Saving 2024 Campaign. Builders' contact data may have leaked; no consumer data is confirmed leaked.",
+  "sources": [
+   {
+    "url": "https://www.mlit.go.jp/report/press/house04_hh_001366.html",
+    "publisher": "Ministry of Land, Infrastructure, Transport and Tourism",
+    "primary": true
+   },
+   {
+    "url": "https://www.env.go.jp/press/press_05754.html",
+    "publisher": "Ministry of the Environment",
+    "primary": true
+   },
+   {
+    "url": "https://www.security-next.com/191780",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a central-government contractor breach in the October 2026 wave of Japanese breach notices. Joint release with METI and the Environment Ministry; cause not given."
+ },
+ {
+  "id": "mlit-hakuhodo-suspend",
+  "thread": "mlit-hakuhodo",
+  "parent": "mlit-hakuhodo-notice",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Subsidy system fully suspended; only final-report functions to come back",
+  "summary": "All functions of the campaign system are stopped; MLIT says only the functions needed for final reports of the Child-Rearing Eco Home subsidy will return after checks and fixes.",
+  "sources": [
+   {
+    "url": "https://www.mlit.go.jp/report/press/house04_hh_001366.html",
+    "publisher": "Ministry of Land, Infrastructure, Transport and Tourism",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cuenote-nomura",
+  "thread": "cuenote",
+  "parent": "cuenote-disclosure",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Nomura Securities: i-Port subscriber emails may have leaked through Ymirlink",
+  "summary": "Nomura says Ymirlink told it on 22 Oct that data was confirmed taken from a mail-delivery database, so email addresses of i-Port portfolio-tool subscribers at financial institutions may have leaked; no portfolio or account data is involved.",
+  "sources": [
+   {
+    "url": "https://www.nomuraholdings.com/jp/news/topics/20261023.html",
+    "publisher": "Nomura Securities",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Nomura relays Ymirlink's timeline: intrusion found 16 Oct, database exfiltration confirmed 22 Oct."
+ },
+ {
+  "id": "futureshop-freeplus-end",
+  "thread": "futureshop",
+  "parent": "futureshop-second-report",
+  "t": "2026-10-23T09:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Form Mailer FreePlus used by futureshop stores is shut down at a day's notice",
+  "summary": "Developer Future Spirits ends its Form Mailer FreePlus at 18:00 JST on 23 Oct, saying it can no longer keep the needed security level against more sophisticated attacks; futureshop tells stores their forms will stop working.",
+  "sources": [
+   {
+    "url": "https://www.future-s.com/news/detail/732",
+    "publisher": "Future Spirits",
+    "primary": true
+   },
+   {
+    "url": "https://www.future-shop.jp/news/2026/10/23-2.html",
+    "publisher": "futureshop",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Future Spirits says no unauthorised access or leak was confirmed and does not mention PHP. futureshop's notice also ends its old 'new form mailer' for stores without Commerce Creator."
+ },
+ {
+  "id": "onamae-rental-maintenance",
+  "thread": "onamae",
+  "parent": "onamae-ddns-maintenance",
+  "t": "2026-10-24T14:10:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Onamae.com adds open-ended emergency maintenance on two rental-server plans",
+  "summary": "Onamae.com starts urgent maintenance with no end time on part of its single-service rental servers at 23:10 JST on 24 Oct, taking homepages down, and on RS-plan servers from 00:30 JST on 25 Oct, stopping File Manager and FTP.",
+  "sources": [
+   {
+    "url": "https://www.onamae.com/news/article/11604",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   },
+   {
+    "url": "https://www.onamae.com/news/article/11603",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Both notices are marked urgent but give no reason; the RS-plan notice calls the work preventive. Neither mentions the Desktop Cloud breach or PHP."
+ },
+ {
+  "id": "bm-tokyo-metro",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Tokyo Metro: 80,000 newsletter emails leaked via Blastmail, its second leak in a month",
+  "summary": "Tokyo Metro says email addresses of about 80,000 event-newsletter subscribers were taken through its delivery vendor Rakus Light Cloud; it stops newsletter sign-ups and sending. In late September it had disclosed a separate leak of about 59,000 Metro Point Club addresses.",
+  "sources": [
+   {
+    "url": "https://www.tokyo-np.co.jp/article/523562",
+    "publisher": "Tokyo Shimbun (Kyodo)",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC23A0P0T21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Tokyo Metro's own news page refused automated fetches. The September leak came from a different contractor server."
+ },
+ {
+  "id": "goodsmile-access",
+  "thread": "goodsmile-shop",
+  "parent": null,
+  "t": "2026-10-19T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Attackers repeatedly break into Good Smile Company's official web shop",
+  "summary": "From about 15:00 JST on 19 Oct to about 22:00 JST on 22 Oct, attackers repeatedly access the figure maker's official shop, which the company believes was through a system vulnerability.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/5598647fdb465d6b8f5451d035230e89624e9193",
+    "publisher": "KAI-YOU (via Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://support.goodsmile.com/hc/ja/articles/63547468806297",
+    "publisher": "Good Smile Company",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Japanese web-shop breach in the October 2026 wave of Japanese breach notices. The company notice refused automated fetches; details are from KAI-YOU. The flaw is not named."
+ },
+ {
+  "id": "goodsmile-notice",
+  "thread": "goodsmile-shop",
+  "parent": "goodsmile-access",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Good Smile: shop members' addresses, orders and card last-four digits may have leaked",
+  "summary": "Good Smile Company closes its shop, patches the suspected flaw and reports to the privacy commission. Names, addresses, phones, emails, order details and card brand, last four digits and expiry may have leaked; the count is not yet known.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/5598647fdb465d6b8f5451d035230e89624e9193",
+    "publisher": "KAI-YOU (via Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://satimo.org/2026/10/data-breach-list-2026/",
+    "publisher": "satimo",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "yonsei-telegram-offer",
+  "thread": "yonsei-portal",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Telegram post offers access to Yonsei University websites for $300",
+  "summary": "A Telegram seller claims web shells on Yonsei-domain sites; the university circulates the post on 16 Oct but its check finds no breach and judges the offer likely false.",
+  "sources": [
+   {
+    "url": "https://www.seoul.co.kr/news/society/accident/2026/10/23/20261023010010",
+    "publisher": "Seoul Shinmun",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Korean university breach in the October 2026 wave of Korean breach notices (compare ticketbay and the Amadeus airline leak). The link between the Telegram offer and the intrusion is not established."
+ },
+ {
+  "id": "yonsei-intrusion",
+  "thread": "yonsei-portal",
+  "parent": "yonsei-telegram-offer",
+  "t": "2026-10-20T10:41:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Two unauthorised accesses hit the Yonsei portal on 20 and 21 October",
+  "summary": "Intruders access the Yonsei University portal from 19:41 to 19:43 KST on 20 Oct and from 10:04 to 10:11 KST on 21 Oct; the university reports to the PIPC on 21 Oct.",
+  "sources": [
+   {
+    "url": "https://www.seoul.co.kr/news/society/accident/2026/10/23/20261023010010",
+    "publisher": "Seoul Shinmun",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "yonsei-notice",
+  "thread": "yonsei-portal",
+  "parent": "yonsei-intrusion",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Yonsei University: IDs, names, phones and emails of about 10,000 members leaked",
+  "summary": "Yonsei's IT office tells students, graduates and staff that student or staff numbers, names, mobile numbers, emails and some system data of about 10,000 people leaked; no resident registration numbers were included.",
+  "sources": [
+   {
+    "url": "https://www.seoul.co.kr/news/society/accident/2026/10/23/20261023010010",
+    "publisher": "Seoul Shinmun",
+    "primary": false
+   },
+   {
+    "url": "https://www.koreadaily.com/article/20261021174912280",
+    "publisher": "Korea Daily",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "yonsei-police",
+  "thread": "yonsei-portal",
+  "parent": "yonsei-notice",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Seoul police cyber unit opens a preliminary inquiry into the Yonsei leak",
+  "summary": "After the university asks investigators to look into the leak, the Seoul Metropolitan Police Agency's cyber crime unit starts a preliminary inquiry on 23 Oct.",
+  "sources": [
+   {
+    "url": "https://www.seoul.co.kr/news/society/accident/2026/10/23/20261023010010",
+    "publisher": "Seoul Shinmun",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "bm-env-ministry",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Environment Ministry: subscriber data of six newsletters may have leaked via Blastmail",
+  "summary": "Japan's Environment Ministry says emails, names and attributes of subscribers to six newsletters, such as GEOC and Kinki Environment Hall, may have leaked. NHK puts the total at up to 22,000 records.",
+  "sources": [
+   {
+    "url": "https://www.env.go.jp/press/press_05784.html",
+    "publisher": "Ministry of the Environment",
+    "primary": true
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261024de64630",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The ministry release gives no count and says no leak is confirmed yet; the 22,000 figure is from NHK."
+ },
+ {
+  "id": "crypton-detect",
+  "thread": "crypton-sonicwire",
+  "parent": null,
+  "t": "2026-10-17T11:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Crypton finds intrusion into SONICWIRE and D2R and stops both servers",
+  "summary": "Hatsune Miku publisher Crypton Future Media finds possible unauthorised access to its SONICWIRE sound store and D2R store system at about 20:00 JST on 17 Oct, disables accounts and stops the servers at 23:39 JST.",
+  "sources": [
+   {
+    "url": "https://www.crypton.co.jp/cfm/news/2026/10/20info",
+    "publisher": "Crypton Future Media",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese web-shop breach in the October 2026 wave of Japanese breach notices. Crypton does not say how the attacker got in."
+ },
+ {
+  "id": "crypton-notice",
+  "thread": "crypton-sonicwire",
+  "parent": "crypton-detect",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Crypton: data of up to about 420,000 SONICWIRE members may have leaked",
+  "summary": "Crypton reports to police on 18 Oct and to the privacy commission on 19 Oct, invalidates all passwords and says names, emails, hashed passwords and some addresses may have leaked.",
+  "sources": [
+   {
+    "url": "https://www.crypton.co.jp/cfm/news/2026/10/20info",
+    "publisher": "Crypton Future Media",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "crypton-count",
+  "thread": "crypton-sonicwire",
+  "parent": "crypton-notice",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Crypton confirms 362,137 SONICWIRE member records leaked; rebuild aimed at 1 Nov",
+  "summary": "Crypton confirms 362,137 member records with names, emails and salted password hashes, plus 671 invoice address records, were taken; no card data or serial numbers. It rebuilds the services on new servers for a target restart of 1 Nov.",
+  "sources": [
+   {
+    "url": "https://www.crypton.co.jp/cfm/news/2026/10/20info",
+    "publisher": "Crypton Future Media",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "valuedesign-php-pause",
+  "thread": "valuedesign",
+  "parent": "valuedesign-leak",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Value Design pauses Arara Cashless and online charging for the PHP flaws",
+  "summary": "Value Design stops its Arara Cashless and Online Charge services as a precaution over CVE-2026-109618 and CVE-2026-109619 while the Value Card ASP keeps running; restart is to come in stages.",
+  "sources": [
+   {
+    "url": "https://www.valuedesign.jp/news/info/20261022",
+    "publisher": "Value Design",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Value Design does not link the pause to the Value Card server breach disclosed the next day.",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "fujicco-notice",
+  "thread": "fujicco-campaign",
+  "parent": null,
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Fujicco: about 15,500 campaign entries leaked from a contractor's server",
+  "summary": "Food maker Fujicco says the server of the firm running entry forms for two 2026 campaigns was accessed by a third party, found on 21 Oct. Names, addresses, phones, emails and survey data of about 15,500 entries are treated as taken.",
+  "sources": [
+   {
+    "url": "https://www.fujicco.co.jp/upload/pr_261022.pdf",
+    "publisher": "Fujicco",
+    "primary": true
+   },
+   {
+    "url": "https://satimo.org/2026/10/data-breach-list-2026/",
+    "publisher": "satimo",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a contractor-server breach in the October 2026 wave of Japanese breach notices. Fujicco does not name the contractor or the flaw; it reports to the privacy commission and plans a police report."
+ },
+ {
+  "id": "hanjin-itsm-access",
+  "thread": "hanjin-itsm",
+  "parent": null,
+  "t": "2026-10-21T18:00:00Z",
+  "tPrecision": "hour",
+  "kind": "exploitation",
+  "title": "Abnormal queries hit Hanjin Information & Communications' ITSM site",
+  "summary": "Hanjin Information & Communications, the Hanjin group's IT company, detects abnormal queries on its IT service management site in the early morning of 22 Oct KST.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146722",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Korean breach notice in the October 2026 wave of Korean breach notices. Boan News reports that a dark-web group called n0n posted an extortion threat claiming stolen credentials just before; the link is not confirmed."
+ },
+ {
+  "id": "hanjin-itsm-notice",
+  "thread": "hanjin-itsm",
+  "parent": "hanjin-itsm-access",
+  "t": "2026-10-24T01:17:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Hanjin I&C: names and emails of 980 ITSM users leaked; reported to KISA",
+  "summary": "Hanjin Information & Communications says names and email addresses of 980 ITSM users leaked but not passwords. It blocks the route, isolates servers, resets passwords and reports to KISA.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146722",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The time is the Boan News article time (10:17 KST, 24 Oct), not the company's notice."
+ },
+ {
+  "id": "php-korea-patch-rate",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T02:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "Korea: only about 3.8% of PHP 8.2-8.5 servers patched 36 hours after release",
+  "summary": "A Shodan query for Boan News finds about 210 of some 5,500 Korean servers on PHP 8.2 to 8.5 running a fixed build at 11:00 KST on 23 Oct; no Korean victim is named.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146702",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Servers that hide their PHP version are excluded; banner versions do not show backported distro fixes."
+ },
+ {
+  "id": "gitlab-certeu-advisory",
+  "thread": "gitlab",
+  "parent": "gitlab-cve-published",
+  "t": "2026-10-22T09:14:22Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "CERT-EU advisory 2026-019: update GitLab fast and check for compromise",
+  "summary": "CERT-EU tells EU bodies to update self-managed GitLab as soon as possible, internet-facing servers first, and to run a compromise assessment with GitLab's two detection rules. It does not report exploitation.",
+  "sources": [
+   {
+    "url": "https://cert.europa.eu/publications/security-advisories/2026-019/",
+    "publisher": "CERT-EU",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "gitlab-certfr-avis",
+  "thread": "gitlab",
+  "parent": "gitlab-cve-published",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR avis CERTFR-2026-AVI-1363 covers 12 GitLab CVEs, remote code execution included",
+  "summary": "France's CERT-FR publishes an avis on the 21 October GitLab release, listing 12 CVEs with remote code execution, data disclosure, policy bypass and denial of service among the risks.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1363/",
+    "publisher": "CERT-FR (ANSSI)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "An avis, not an alerte: CERT-FR's open alerts on 25 Oct cover PHP, Ivanti ICS and refrigeration controllers, not GitLab."
+ },
+ {
+  "id": "node-certfr-avis",
+  "thread": "nodejs",
+  "parent": "node-oct21-release",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR avis CERTFR-2026-AVI-1367 on the Node.js releases",
+  "summary": "CERT-FR lists Node.js 22.x, 24.x and 26.x before 22.23.4, 24.22.1 and 26.12.1 as affected, with remote code execution and security bypass among the risks. The avis names no CVE.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1367/",
+    "publisher": "CERT-FR (ANSSI)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The avis dates the Node.js bulletin to 14 October; Node.js published the security releases on 21 October."
+ },
+ {
+  "id": "node-envoy-advisory",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-23T16:03:27Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Envoy rates the Brotli flaw critical; its fix shipped in early-October releases",
+  "summary": "Envoy publishes a critical advisory for deployments with the Brotli decompressor, fixed in 1.40.0, 1.39.3, 1.38.6, 1.37.8 and 1.36.12, credited to OpenAI Security Research. Patch the Planet's tracker also lists Istio 1.29.9, 1.30.6 and 1.31.2 as fixed.",
+  "sources": [
+   {
+    "url": "https://github.com/envoyproxy/envoy/security/advisories/GHSA-3wvj-j6qm-62mr",
+    "publisher": "Envoy Proxy",
+    "primary": true
+   },
+   {
+    "url": "https://patchtheplanet.org/brotli",
+    "publisher": "Patch the Planet",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/envoyproxy/envoy/releases/tag/v1.39.3",
+    "publisher": "Envoy Proxy",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Envoy 1.39.3 was released on 6 Oct and 1.40.0 on 13 Oct; Istio 1.30.6 and 1.31.2 on 15-16 Oct. Their release notes do not name Brotli, so the fix shipped before the CVE was public."
+ },
+ {
+  "id": "node-ncscnl-exploited-tag",
+  "thread": "nodejs",
+  "parent": "node-cisa-ssvc",
+  "t": "2026-10-24T00:29:28Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Dutch NCSC vulnerability feed tags the Brotli CVE as exploited; no source named",
+  "summary": "The NCSC-NL CSAF record for CVE-2026-111497 gains an 'exploited' status in an update at 00:29 UTC on 24 Oct. CISA's rating says exploitation 'none', and no public report of in-the-wild attacks was found.",
+  "sources": [
+   {
+    "url": "https://vulnerabilities.ncsc.nl/csaf/v2/2026/cve-2026-111497.json",
+    "publisher": "NCSC-NL",
+    "primary": true
+   },
+   {
+    "url": "https://cveawg.mitre.org/api/cve/CVE-2026-111497",
+    "publisher": "CVE Program (CISA ADP)",
+    "primary": true
+   }
+  ],
+  "confidence": "disputed",
+  "note": "NCSC-NL says the portal aggregates open sources and does not vouch for them; the record does not say which source set the flag. It may reflect public proof-of-concept work rather than attacks."
+ },
+ {
+  "id": "node-distro-ratings",
+  "thread": "nodejs",
+  "parent": "node-wmcs-notice",
+  "t": "2026-10-25T02:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "Ubuntu and SUSE rate the Brotli CVE medium; most distro fixes still pending",
+  "summary": "Ubuntu rates CVE-2026-111497 medium with brotli and nodejs still 'needs-triage'; SUSE rates it moderate with only Tumbleweed fixed; Red Hat rates it Important with fixes only in Hardened Images. The CNA score is 9.2.",
+  "sources": [
+   {
+    "url": "https://ubuntu.com/security/CVE-2026-111497",
+    "publisher": "Canonical",
+    "primary": true
+   },
+   {
+    "url": "https://www.suse.com/security/cve/CVE-2026-111497.html",
+    "publisher": "SUSE",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-111497.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://www.openwall.com/lists/oss-security/2026/10/23/25",
+    "publisher": "oss-security mailing list",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "State as read from the three trackers about 02:00 UTC on 25 Oct. Debian fixed it on 23 Oct (node-debian-brotli). An oss-security post on 23 Oct questioned whether OS vendors treat the bug with enough urgency."
+ },
+ {
+  "id": "nginx-certfr-avis",
+  "thread": "nginx",
+  "parent": "nginx-f5-critical",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR avis CERTFR-2026-AVI-1341 covers the F5 NGINX fixes",
+  "summary": "CERT-FR publishes an avis on F5's 14 October bulletins, listing NGINX Open Source before 1.30.6 and 1.31.7, NGINX Plus, Ingress Controller, Gateway Fabric, njs and the NGINX WAF and DoS products with 11 CVEs.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1341/",
+    "publisher": "CERT-FR (ANSSI)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "nginx-distros-unpatched",
+  "thread": "nginx",
+  "parent": "nginx-post-correction",
+  "t": "2026-10-24T14:27:42Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Ubuntu and Red Hat still list the October nginx flaws as unfixed",
+  "summary": "Ubuntu's tracker, updated 14:27 UTC on 24 Oct, rates CVE-2026-15176 and CVE-2026-93479 medium with every release 'needs-triage'. Red Hat lists RHEL 8, 9 and 10 nginx as affected by CVE-2026-15176 and defers the CVE-2026-93479 fix on RHEL 9 and 10.",
+  "sources": [
+   {
+    "url": "https://ubuntu.com/security/CVE-2026-15176",
+    "publisher": "Canonical",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-15176.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-93479.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Debian backported all five fixes on 21 Oct (nginx-debian-dsa). Red Hat has fixed only its Hardened Images build (RHSA-2026:83427)."
+ },
+ {
+  "id": "ghost-stepsecurity-history",
+  "thread": "ghostaction",
+  "parent": "ghost-github-blocks",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "StepSecurity: new GhostAction workflows mine whole git histories and AI keys",
+  "summary": "StepSecurity says the 8 Oct sweeps hit 345 repositories through two accounts and that the new workflows harvest secrets from full git history, including deleted ones, and target AI-provider keys. It counts 378 repositories with a live malicious workflow on 9 Oct.",
+  "sources": [
+   {
+    "url": "https://www.stepsecurity.io/blog/ghostaction-returns",
+    "publisher": "StepSecurity",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "StepSecurity's counts are approximate and exclude forks; they are far below GitGuardian's 28,000-repository spike because the two firms count different things."
+ },
+ {
+  "id": "subql-npm-removed",
+  "thread": "subquery",
+  "parent": "subql-issue",
+  "t": "2026-10-05T12:46:02Z",
+  "tPrecision": "minute",
+  "kind": "takedown",
+  "title": "Malicious @subql/common 5.8.3 is gone from npm; latest tag back on 5.8.2",
+  "summary": "The npm registry no longer lists version 5.8.3, and 'latest' points to 5.8.2. The package metadata was last changed at 12:46 UTC on 5 Oct, about 50 minutes after the malicious publish.",
+  "sources": [
+   {
+    "url": "https://registry.npmjs.org/@subql%2fcommon",
+    "publisher": "npm registry",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The removal time is inferred from the registry's last-modified stamp. A 5.8.3-onf-rt1 version under a 'redteam' tag, published at 11:24 UTC the same day, is still listed; its purpose is unknown."
+ },
+ {
+  "id": "subql-maintainer-reply",
+  "thread": "subquery",
+  "parent": "subql-npm-removed",
+  "t": "2026-10-10T09:12:29Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "SubQuery: compromised token deleted, security review started",
+  "summary": "A SubQuery collaborator replies on the GitHub issue five days after the report, saying the team has deleted the compromised token and started reviewing the leak.",
+  "sources": [
+   {
+    "url": "https://github.com/subquery/subql/issues/3047",
+    "publisher": "SubQuery (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "This is the first reply on the issue; subql-issue records none as of the report. The issue was still open on 25 Oct."
+ },
+ {
+  "id": "tl-clean-release",
+  "thread": "tensorlake",
+  "parent": "tl-advisory",
+  "t": "2026-10-08T20:24:05Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Tensorlake publishes 0.5.145, its next regular npm release",
+  "summary": "Tensorlake publishes tensorlake 0.5.145 about 19 hours after the malicious 0.5.144, and releases continue through 0.5.158 on 21 Oct.",
+  "sources": [
+   {
+    "url": "https://registry.npmjs.org/tensorlake",
+    "publisher": "npm registry",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/tensorlakeai/tensorlake/issues/1014",
+    "publisher": "Tensorlake (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The registry also shows 0.0.0-stage and 0.0.1-security versions published at 04:14-04:15 UTC on 8 Oct; their purpose is not stated. Tensorlake closed issue 1014 on 9 Oct, pointing to its advisory."
+ },
+ {
+  "id": "aieval-aisi-metr-review",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-aisi-report",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "AISI gives METR transcripts and access for an independent review",
+  "summary": "The UK AI Security Institute says it is sharing transcripts and relevant access with METR, a third-party evaluation and incident-analysis organisation, for an independent review of the incident.",
+  "sources": [
+   {
+    "url": "https://www.aisi.gov.uk/blog/investigating-alignment-failures-in-aisis-incident",
+    "publisher": "UK AI Security Institute",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "AISI gives no date for when the review will finish."
+ },
+ {
+  "id": "citrix-ns-zero-days",
+  "thread": "citrix-netscaler",
+  "parent": null,
+  "t": "2026-09-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Citrix patches eight NetScaler flaws; two zero-days already exploited",
+  "summary": "Citrix fixes CVE-2026-88771 through CVE-2026-88778 in NetScaler ADC and Gateway and says CVE-2026-88771 (unauthenticated command execution) and CVE-2026-88772 are exploited against unmitigated appliances. CISA adds both to KEV with a 30 September deadline.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/09/27/critical-zero-day-vulnerabilities-exploited-citrix-netscaler-adc-gateway",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV",
+    "primary": true
+   },
+   {
+    "url": "https://www.helpnetsecurity.com/2026/09/28/citrix-netscaler-rce-zero-days-exploited-for-weeks-cve-2026-88771-cve-2026-88772/",
+    "publisher": "Help Net Security",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a pre-October root, but the follow-on SAML zero-day (4 Oct) and CISA's 9 October revision fall in the October wave. Researchers say attacks ran for weeks in September before the patch."
+ },
+ {
+  "id": "citrix-ns-mass-scan",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-zero-days",
+  "t": "2026-09-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "NetScaler exploitation widens to mass scanning after a public write-up",
+  "summary": "After a public technical write-up of CVE-2026-88771, Help Net Security reports broad opportunistic scanning, log poisoning and web shells on NetScaler appliances. Sophos warns that patching alone may not remove an attacker already on a device.",
+  "sources": [
+   {
+    "url": "https://helpnetsecurity.com/2026/09/29/netscaler-zero-day-exploitation-escalates-into-mass-attacks-cve-2026-88771",
+    "publisher": "Help Net Security",
+    "primary": false
+   },
+   {
+    "url": "https://www.sophos.com/en-us/blog/citrix-netscaler-cve-2026-88771-cve-2026-88772-in-active-exploitation",
+    "publisher": "Sophos",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "citrix-ns-saml-zero-day",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-zero-days",
+  "t": "2026-10-04T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third NetScaler zero-day: SAML memory overflow CVE-2026-88779 exploited",
+  "summary": "Citrix bulletin CTX697174 reports targeted attacks on CVE-2026-88779, a memory overflow in NetScaler appliances set up as a SAML service or identity provider, fixed in 14.1-73.41 and 13.1-64.28. CISA adds it to KEV the same day with a 7 October deadline.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV",
+    "primary": true
+   },
+   {
+    "url": "https://bleepingcomputer.com/news/security/citrix-patches-netscaler-saml-zero-day-exploited-in-attacks",
+    "publisher": "BleepingComputer",
+    "primary": false
+   },
+   {
+    "url": "https://www.csoonline.com/article/4230642/citrix-warns-of-actively-exploited-netscaler-flaw-days-after-zero-day-patch-rush.html",
+    "publisher": "CSO Online",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Customers who already installed the September fixes must upgrade again if they use SAML. The Citrix bulletin page did not render for us; the KEV entry cites it."
+ },
+ {
+  "id": "citrix-ns-cisa-revision",
+  "thread": "citrix-netscaler",
+  "parent": "citrix-ns-saml-zero-day",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA revises its NetScaler alert to cover ten CVEs and forensic triage",
+  "summary": "CISA's NetScaler alert, last revised 9 October, lists CVE-2026-88771 to 88779 and CVE-2026-107406 and tells owners to check for compromise and keep forensic evidence before they update. Compromised appliances should be restored from a clean backup and their secrets replaced.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/09/27/critical-zero-day-vulnerabilities-exploited-citrix-netscaler-adc-gateway",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "zammad-exploit-report",
+  "thread": "zammad",
+  "parent": null,
+  "t": "2026-10-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Zammad warns a root escalation, CVE-2026-102490, is reported as exploited",
+  "summary": "Zammad posts on its community forum that DIVD reports CVE-2026-102490, a local escalation to root, as actively exploited, chained with session-fixation flaw CVE-2026-102489. It recommends Zammad 7.2.0 and says it has not yet verified the details.",
+  "sources": [
+   {
+    "url": "https://community.zammad.org/t/take-care-local-privilege-escalation-cve-2026-102490-is-reported-as-being-actively-exploited/21297/2",
+    "publisher": "Zammad",
+    "primary": true
+   },
+   {
+    "url": "https://zammad.com/en/product/releases/",
+    "publisher": "Zammad",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: open-source helpdesk exploitation added to KEV in the first days of October. DIVD also lists a separate undisclosed RCE for versions above 6.3."
+ },
+ {
+  "id": "zammad-kev",
+  "thread": "zammad",
+  "parent": "zammad-exploit-report",
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "cve",
+  "title": "CISA adds both Zammad flaws to KEV with a 5 October deadline",
+  "summary": "CISA lists CVE-2026-102489 (session fixation leading to code execution as the zammad user) and CVE-2026-102490 (escalation to root) as known exploited and chainable.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ahsay-hotfix",
+  "thread": "ahsay",
+  "parent": null,
+  "t": "2026-10-12T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Ahsay ships AhsayCBS hotfixes after earlier patches missed two critical flaws",
+  "summary": "Ahsay tells partners to install AhsayCBS 10.3.4.45 or 9.15.2.70 at once for CVE-2026-105133 and CVE-2026-105134, saying versions 9.15.2.59 and 10.3.4.0 did not fully fix them.",
+  "sources": [
+   {
+    "url": "https://www.ahsay.com/en/company/announcements/patch-cve-105133-105134-update",
+    "publisher": "Ahsay",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: backup-server exploitation of the October wave, in the same week as the ConnectWise Cloud Backup compromise. No link between them is reported."
+ },
+ {
+  "id": "ahsay-kev",
+  "thread": "ahsay",
+  "parent": "ahsay-hotfix",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "cve",
+  "title": "CISA adds the chained AhsayCBS auth bypass and command injection to KEV",
+  "summary": "CISA lists CVE-2026-105133, an authentication bypass in the AhsayCBS API, and CVE-2026-105134, a command injection that it can be chained with, as exploited, with a 17 October deadline.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "softech-pkzh-migros",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-16T09:10:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Zurich city pension fund PKZH: member data stolen at PK Softech; it files a complaint",
+  "summary": "The Pensionskasse Stadt Zürich says personal data of its insured, sent to PK Softech to prepare a system change, was taken, and it files a criminal complaint. The Migros pension fund also reports a leak, and the Swiss Post fund is checking.",
+  "sources": [
+   {
+    "url": "https://www.finews.ch/news/finanzplatz/74026-hacker-daten-pensionskasse-stadt-zuerich",
+    "publisher": "finews.ch",
+    "primary": false
+   },
+   {
+    "url": "https://www.cash.ch/news/cyberangriff-betrifft-auch-pensionskassen-der-post-und-der-stadt-zurich-977090",
+    "publisher": "cash.ch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "In the worst case: name, date of birth, AHV number, contact data, civil status, partner data, IBAN and pension data. PKZH says pension assets and the administration system are not affected. PKZH's own notice was not opened."
+ },
+ {
+  "id": "crime-stoppers-niagara-barrie",
+  "thread": "crime-stoppers",
+  "parent": "crime-stoppers-ontario-wider",
+  "t": "2026-10-24T16:33:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Niagara, Guelph and Barrie police also step back from Crime Stoppers",
+  "summary": "Niagara Regional Police suspend their use of Crime Stoppers, saying some Niagara data was in the breach, and Barrie police stop promoting the tip line. Guelph police are also reported to have suspended the program.",
+  "sources": [
+   {
+    "url": "https://www.cp24.com/news/canada/2026/10/24/police-services-in-our-region-suspending-crime-stoppers-amid-cybersecurity-incident/",
+    "publisher": "CP24",
+    "primary": false
+   },
+   {
+    "url": "https://www.chch.com/chch-news/niagara-police-suspend-partnership-with-crime-stoppers-after-data-breach/",
+    "publisher": "CHCH News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Niagara police announced on Friday 23 October; CHCH published on 24 October at 17:39 UTC. The time is CP24's 24 October story (12:33 EDT)."
+ },
+ {
+  "id": "emu-incommon-scope",
+  "thread": "emudhra",
+  "parent": "emu-ceremony",
+  "t": "2026-10-16T08:10:16Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Before the key breach: eMudhra widens a separate InCommon IGTF CA misissuance",
+  "summary": "In Mozilla bug 2073581, eMudhra says certificates from InCommon RSA IGTF Server CA 4, which it operates, also break the CPS profile in three extensions, including ones issued after issuance resumed on 22 September. The bug, opened 18 September for disallowed key sizes, is still open.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2073581",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2073581/comment",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "A separate compliance incident, not the weak-key compromise. eMudhra's last comment (23 Oct 16:56 UTC) says an updated full report is still in work."
+ },
+ {
+  "id": "emu-mozilla-intent-approve",
+  "thread": "emudhra",
+  "parent": "emu-ceremony",
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Two weeks before the breach, Mozilla posts intent to approve four new eMudhra roots",
+  "summary": "Mozilla's root program announces its intent to approve eMudhra's root inclusion request for four roots, with a last call ending 9 October. A participant replies that eMudhra's recent incident record does not impress them and asks for an incident overview.",
+  "sources": [
+   {
+    "url": "https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/h2ucXHS5HZ4",
+    "publisher": "Mozilla dev-security-policy",
+    "primary": true
+   },
+   {
+    "url": "https://groups.google.com/a/ccadb.org/g/public",
+    "publisher": "CCADB public list",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The CCADB public discussion of the inclusion requests ran from about 21 September. The thread shows no withdrawal or pause after the 17 October key compromise as of 25 October."
+ },
+ {
+  "id": "cw-axcient-legacy-offline",
+  "thread": "connectwise",
+  "parent": "cw-advisory",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "ConnectWise's Axcient takes its Legacy Portal offline over the PHP flaws",
+  "summary": "ConnectWise's trust page says Axcient has finished PHP remediation for x360Recover, but keeps the Backup for Files Legacy Portal offline while mitigation continues. Backups keep running.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "ConnectWise says the portal issue is separate from the Cloud Backup compromise. The advisory does not say that exploitation was seen.",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "cw-axcient-legacy-restored",
+  "thread": "connectwise",
+  "parent": "cw-axcient-legacy-offline",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Axcient Legacy Portal restored after PHP remediation",
+  "summary": "Axcient restores the Backup for Files Legacy Portal and tells partners to check their own and their customers' applications for affected PHP components.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "emu-talos-guidance",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-public",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Cisco Talos: Snort rules for the eMudhra keys; no misuse seen yet",
+  "summary": "Cisco Talos publishes guidance on the eight weak eMudhra intermediates with Snort SIDs 67363 to 67374. It says it had seen no malicious use as of 21 October 14:00 UTC and warns that VPNs, proxies, CI/CD and embedded devices may not check revocation.",
+  "sources": [
+   {
+    "url": "https://blog.talosintelligence.com/compromised-intermediate-certificates/",
+    "publisher": "Cisco Talos",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-cisco-informational",
+  "thread": "emudhra",
+  "parent": "emu-talos-guidance",
+  "t": "2026-10-23T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Cisco lists products hit by the eMudhra distrust; fixes run to late November",
+  "summary": "Cisco informational cisco-sa-emudhra-info-ScS22A1r names affected products, including Secure Firewall Management Center, ThousandEyes agents, Duo gateways, IOS XR (26.4.1, 30 Nov) and Meraki MV cameras (18 Nov). ISE, ASA and Firepower Threat Defense and many more are still under investigation.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-emudhra-info-ScS22A1r",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml",
+    "publisher": "Cisco PSIRT RSS",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Version 1.0 was published 23 Oct 16:00 GMT; version 1.1 followed on 24 Oct 20:55 GMT. Duo and Secure Access cloud services are already remediated, and Meraki Dashboard remediation is in progress."
+ },
+ {
+  "id": "emu-electron-fix",
+  "thread": "emudhra",
+  "parent": "emu-trust-store-disclosure",
+  "t": "2026-10-20T02:35:15Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Electron 44.9.1, 43.8.1 and 42.11.16 block the eMudhra intermediates",
+  "summary": "Electron ships releases that block the compromised intermediates; its advisory GHSA-jr5w-w6x2-84p9 (CVE-2026-115570, high) follows on 22 October. Apps such as Slack and Discord are only protected once they rebuild on a fixed Electron.",
+  "sources": [
+   {
+    "url": "https://github.com/electron/electron/releases/tag/v44.9.1",
+    "publisher": "Electron (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://api.github.com/repos/electron/electron/security-advisories/GHSA-jr5w-w6x2-84p9",
+    "publisher": "Electron (GitHub advisory)",
+    "primary": true
+   },
+   {
+    "url": "https://emudhra.we-have-a-problem.com/",
+    "publisher": "eMudhra Intermediate CA Compromise (reporter's site)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The advisory was published 22 Oct 04:37 UTC."
+ },
+ {
+  "id": "emu-reporter-site",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-public",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Reporter's site publishes signed proof, a client checker and a patch list",
+  "summary": "The reporter's site publishes a message signed with all eight compromised keys, test hosts that show whether a client still trusts the intermediates, and a list of patched trust stores, runtimes and tools. On 22 October it adds two hosts whose leaf certificates were never logged to CT.",
+  "sources": [
+   {
+    "url": "https://emudhra.we-have-a-problem.com/",
+    "publisher": "eMudhra Intermediate CA Compromise (reporter's site)",
+    "primary": true
+   },
+   {
+    "url": "https://statistics-emudhra.we-have-a-problem.com/",
+    "publisher": "eMudhra Intermediate CA Compromise (statistics)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The site says no CT entries exist for the intermediates since April 2025, so CT-enforcing browsers could not have been attacked; whether non-browser clients were attacked is unknown. It says Apple blocked the certificates from 22 October, while Apple's own page says 19 October."
+ },
+ {
+  "id": "emu-apple-support-doc",
+  "thread": "emudhra",
+  "parent": "emu-apple-block",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "ca-action",
+  "title": "Apple blocks the emSign ECC G3 root too; macOS command-line tools still exposed",
+  "summary": "Apple's support page says it began blocking the 12 intermediate certificates on 19 October and the emSign ECC Root CA - G3 on 23 October, by automatic configuration update. curl, git, python3 and other tools that read /etc/ssl/cert.pem do not check the block, and Apple will fix that file in a later software update.",
+  "sources": [
+   {
+    "url": "https://support.apple.com/en-us/149555",
+    "publisher": "Apple",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "First Apple statement found; the 19 October event rests on press reports. Apps that bundle their own roots are not covered."
+ },
+ {
+  "id": "sonicwall-sma-advisory",
+  "thread": "sonicwall-sma",
+  "parent": null,
+  "t": "2026-10-06T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "SonicWall fixes a CVSS 10.0 pre-auth SSRF in SMA1000 appliances",
+  "summary": "SonicWall notice SNWLID-2026-0017 fixes CVE-2026-102255 in the SMA1000 WorkPlace interface and three other flaws on 6210, 7210 and 8200v appliances, in builds 12.4.3-03670 and 12.5.0-03082. It lists no workaround and says it has no evidence of exploitation.",
+  "sources": [
+   {
+    "url": "https://www.sonicwall.com/support/notices/kA1VN000002QP3G0AW",
+    "publisher": "SonicWall",
+    "primary": true
+   },
+   {
+    "url": "https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2026-137/",
+    "publisher": "Cyber Security Agency of Singapore",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: one of the October edge-device flaws attacked within days of disclosure. Not in the CISA KEV catalog as of 25 October."
+ },
+ {
+  "id": "sonicwall-sma-attempts",
+  "thread": "sonicwall-sma",
+  "parent": "sonicwall-sma-advisory",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Exploit attempts on SMA1000 decoys two days after disclosure",
+  "summary": "Defused says attempts against CVE-2026-102255 reach its SMA decoys on 8 October, and Previdian reports attempts on its sensors. No breach of a customer network is reported.",
+  "sources": [
+   {
+    "url": "https://www.securityweek.com/critical-sonicwall-vulnerability-exploited-days-after-disclosure/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   },
+   {
+    "url": "https://socradar.io/blog/cve-2026-102255-sonicwall-sma1000-ssrf/",
+    "publisher": "SOCRadar",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "The warnings came on 9 October. SonicWall's notice still says no in-the-wild exploitation is known; some outlets call it actively exploited."
  }
 ];
