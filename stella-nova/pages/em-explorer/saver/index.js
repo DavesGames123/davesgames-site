@@ -109,14 +109,19 @@ window.snSaver = {
     try {
       const v = saved && saved.view;
       const view = v && [v.x, v.y, v.z].every(Number.isFinite) ? { x: v.x, y: v.y, z: v.z, zoom: v.zoom, plane: v.plane } : null;
-      if (saved && saved.dataset && em.state().dataset !== saved.dataset) {
-        em.selectDataset(saved.dataset, { view });
-      } else if (saved) {
-        if (view) viewer.goTo(view);
-        // CORE's window now (what its sliders show), not the saver's window
+      // the reader's image: their own window, or CORE's auto mode
+      const image = saved ? { contrast: saved.auto ? null : saved.contrast, invert: !!saved.invert } : null;
+      const putImage = () => {
+        if (image && typeof em.setImage === 'function') { em.setImage(image); return; }
         const core = em.state(), c = core.contrast;
         if (c) viewer.setContrast(c.lo / 255, c.hi / 255, c.gamma);
         viewer.setInvert(!!core.invert);
+      };
+      if (saved && saved.dataset && em.state().dataset !== saved.dataset) {
+        Promise.resolve(em.selectDataset(saved.dataset, { view })).then((ok) => { if (ok && !run) putImage(); }, () => {});
+      } else if (saved) {
+        if (view) viewer.goTo(view);
+        putImage();
       }
     } catch (e) { /* CORE or VIEW */ }
     // CORE puts its insets back on a resize

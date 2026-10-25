@@ -392,6 +392,8 @@ for (const frameName of ['16:9', '9:16']) {
         hook = win.snSaver || hook;
         ok(ready === true && !!em.viewer, `${name} page: boots on the real catalog (ready ${ready})`);
         ok(hook && typeof hook.enter === 'function', `${name} page: main.js loads the saver hook`);
+        // the reader's own image, which exit must put back
+        if (em.setImage) em.setImage({ contrast: { lo: 20, hi: 200, gamma: 1.3 }, invert: true });
         const before = em.state();
         if (process.env.SAVER_LOG) { const f0 = em.viewer.saverShots.flyTo; em.viewer.saverShots.flyTo = (tg, o) => { const t = performance.now(); return f0(tg, o).then((v) => { console.log('    flyTo', o.ms, '->', v, Math.round(performance.now() - t), 'ms'); return v; }); }; }
         const labels = [];
@@ -428,6 +430,8 @@ for (const frameName of ['16:9', '9:16']) {
         ok(after.dataset === before.dataset, `${name} page: exit puts back ${before.dataset} (${after.dataset})`);
         const vs = em.viewer.state();
         ok(Math.abs(vs.x - before.view.x) < 2 && Math.abs(vs.zoom / before.view.zoom - 1) < 0.02, `${name} page: exit puts back the view`);
+        const vc = vs.contrast || {};
+        ok(after.auto === false && after.contrast.lo === 20 && after.contrast.hi === 200 && after.invert === true && Math.abs(vc.lo - 20 / 255) < 1e-3 && Math.abs(vc.hi - 200 / 255) < 1e-3 && Math.abs(vc.gamma - 1.3) < 1e-3 && vs.invert === true, `${name} page: exit puts back the reader's contrast and invert (${JSON.stringify(after.contrast)}, view ${vc.lo && vc.lo.toFixed(3)}..${vc.hi && vc.hi.toFixed(3)})`);
         ok(!errors.length, `${name} page: no errors${errors.length ? ': ' + errors[0].slice(0, 300) : ''}`);
         try { win.__snRelease && win.__snRelease(); } catch (e) { /* gpu-guard */ }
       } catch (e) {
