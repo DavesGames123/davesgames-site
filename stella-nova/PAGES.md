@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-237 registered pages in 6 regions and 26 constellations.
+238 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -192,6 +192,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `ct-explained` | How CT Works | Life Sciences > Anatomy & Imaging | NEW | How CT works, from X-ray shadows to slices. |  | shown | hook, tier 3, default | yes |
 | `ct-lab` | CT Lab | Life Sciences > Anatomy & Imaging | LAB | Scan phantoms, fill the sinogram, break the image. |  | shown | hook, tier 4, default | yes |
 | `ct-lab-3d` | CT Lab 3D | Life Sciences > Anatomy & Imaging | NEW | CT scan a real walnut, a rabbit, a skull or a mosquito in amber, then slice it. |  | shown | hook, tier 4, default | yes |
+| `em-explorer` | Electron Microscopy Explorer | Life Sciences > Anatomy & Imaging | NEW | Zoom from a whole fly brain or mouse cortex down to single synapses in open EM data. |  | shown | hook, tier 3, default | no |
 | `neuron-lab` | Neuron Lab | Life Sciences > Neuroscience | SIM | A 3D neuron: watch a spike run along its branches. |  | shown | hook, tier 3, default | yes |
 | `neuron-network` | Neural Network | Life Sciences > Neuroscience | SIM | A cortical column of spiking cells in a gamma rhythm. |  | shown | hook, tier 3, default | yes |
 | `plant-growth` | Plant Growth | Life Sciences > Growth & Spread | 3D | Oaks, conifers, willows and ferns grow live by space colonisation. | roots grown with a port of dlaf by Michael Fogleman (MIT) | shown | hook, tier 4, default | yes |

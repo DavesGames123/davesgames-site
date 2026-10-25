@@ -141,7 +141,8 @@ w.SN_NAV = [
       ["human-skeleton", "Human Skeleton", "3D"],
       ["ct-explained", "How CT Works", "NEW"],
       ["ct-lab", "CT Lab", "LAB"],
-      ["ct-lab-3d", "CT Lab 3D", "NEW"]
+      ["ct-lab-3d", "CT Lab 3D", "NEW"],
+      ["em-explorer", "Electron Microscopy Explorer", "NEW"]
     ] },
     { h: "Neuroscience", p: [
       ["neuron-lab", "Neuron Lab", "SIM"],
