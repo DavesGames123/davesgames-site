@@ -69,7 +69,7 @@ async function depthOf(spec) {
       const v = (recordOf(M, spec.model) || {}).view || {};
       const d = E.depthFromMesh(mesh, {
         w, h, yaw: spec.yaw ?? v.yaw ?? 0, pitch: spec.pitch ?? v.pitch ?? 0, roll: spec.roll ?? v.roll ?? 0,
-        fov: spec.fov ?? 22, fit: spec.fit ?? 0.9, norm: spec.norm ?? 'view', near: spec.near ?? 1, far: spec.far ?? 0.2,
+        fov: spec.fov ?? (spec.match ? undefined : 22), match: spec.match, fit: spec.fit ?? 0.9, norm: spec.norm ?? 'view', near: spec.near ?? 1, far: spec.far ?? 0.2,
       });
       return d;
     }
@@ -90,6 +90,12 @@ function tileFor(id, size, seed = 1) {
   const key = id + '@' + size + '#' + seed;
   if (!tiles.has(key)) tiles.set(key, E.tilesFromPatterns([id], size, seed)[0] || null);
   return tiles.get(key);
+}
+
+// A single-image stereogram of a model takes the perspective that the
+// fused image implies (engine matchedFov), unless the spec sets fov.
+function matched(spec, opts = {}) {
+  return spec && spec.model && spec.fov == null ? Object.assign({}, spec, { match: { mu: opts.mu ?? 1 / 3 } }) : spec;
 }
 
 function sirdsOpts(tile, opts = {}) {
@@ -113,7 +119,7 @@ export async function handle(op, a = {}) {
     }
     case 'depth': return depthOf(a.spec);
     case 'stereo': {
-      const d = await depthOf(a.spec);
+      const d = await depthOf(matched(a.spec, a.opts));
       const img = E.sirds(d, sirdsOpts(a.tile, a.opts));
       return { img, depth: a.withDepth ? d : null, fallback: !!d.fallback };
     }
@@ -135,7 +141,7 @@ export async function handle(op, a = {}) {
       const n = a.n | 0 || 24, s = a.spec, frames = [];
       let fallback = false;
       for (let k = 0; k < n; k++) {
-        const d = await depthOf(Object.assign({}, s, { yaw: (s.yaw ?? 0) + 360 * k / n, norm: 'sphere' }));
+        const d = await depthOf(matched(Object.assign({}, s, { yaw: (s.yaw ?? 0) + 360 * k / n, norm: 'sphere' }), a.opts));
         fallback = fallback || !!d.fallback;
         frames.push(d);
       }
