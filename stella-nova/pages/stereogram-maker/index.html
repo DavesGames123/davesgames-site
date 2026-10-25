@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Stereogram Maker — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STEREOGRAM MAKER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The page makes single-image stereograms. A source
+   gives a depth map: a scanned 3D object (turn it with a drag), a line of
+   text, a shape, an uploaded depth map, or a photo. A pattern gives the
+   tile that repeats across the image: a pattern-designer tile, random
+   dots, coloured dots, or an uploaded image. The engine (engine/, ENGINE
+   owns it) runs the constraint algorithm in a module worker.
+
+   FILES  (MAKER owns all but engine/, models/ and CREDITS.md)
+     engine-api.js   the one door to engine/ and models/; it makes the
+                     return shapes the same for the page and the worker
+     depthkit.js     DOM-free depth tools: relief shading, depth shaping,
+                     the practice depth, image tiles, sizes
+     state.js        the page state and its link form
+     examples.js     the example gallery
+     worker.js       the module worker: depth, tiles, stereograms, frames
+     main.js         the stage, the controls, the drag, the dialogs
+     saver.js        window.snSaver: turntable stereograms of the models
+     tests.mjs       node tests (engine tests, then the page tests)
+
+   HEAD LOAD ORDER  (order matters)
+     gpu-guard.js, wishlist.js, stats-beacon.js, then style.css, then
+     lib/sci.css (STIX Two Text and Inter). main.js is a module at the end
+     of body.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left with four tabs (#tabs): Examples,
+                 Source, Pattern, View. #stage fills the rest. #print holds
+                 #out (the stereogram) and #rev (the depth view) on top of
+                 each other. #tools at the top right: How to see it,
+                 Reveal, Turntable, PNG, Link. #caption under the print.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: panel, Stereogram or Depth, turntable,
+                 PNG. #panel is a bottom sheet (portrait) or a drawer at
+                 the right (landscape). #helpBtn sits in the topbar.
+     #help ..... the How to see it dialog with the practice image (#practice)
+
+   GREP MAP  (main.js)
+     grep -n 'function render'        send the current spec to the worker
+     grep -n 'function layout'        fit the print in the clear area
+     grep -n 'function bindDrag'      drag to turn a model
+     grep -n 'function buildModels'   the object library
+     grep -n 'function buildPatterns' the pattern gallery
+     grep -n 'function buildExamples' the example cards
+     grep -n 'function startTurntable' the animated stereogram
+     grep -n 'function downloadPNG'   the PNG file
+     grep -n 'function shareLink'     the link with the state in the hash
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Make your own single-image stereograms from scanned 3D objects, text, shapes, depth maps or photos, on more than forty seamless pattern tiles or random dots. Turn the object, reveal the depth, animate a turntable and save a PNG.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-turn" viewBox="0 0 24 24"><ellipse cx="12" cy="13" rx="8.5" ry="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.5v6.2M17.6 14.9l2.4 1.6-2.9.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="16.9" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M4 7h3.5c4.5 0 4.5 10 9 10H20m0 0-2.5-2.5M20 17l-2.5 2.5M4 17h3.5c1.6 0 2.6-1.3 3.4-3M20 7h-3.5c-1.6 0-2.6 1.3-3.4 3M20 7l-2.5-2.5M20 7l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Stereogram maker</div>
+  <button id="tbLink" class="tb-help" aria-label="Copy a link"><svg><use href="#i-link"/></svg></button>
+  <button id="helpBtn" class="tb-help" aria-label="How to see it"><svg><use href="#i-help"/></svg></button>
+</div>
+<button id="gear" aria-label="Controls"><svg><use href="#i-menu"/></svg></button>
+
+<main id="stage">
+  <div id="tools" role="toolbar" aria-label="Stereogram tools">
+    <button id="seeBtn"><svg><use href="#i-help"/></svg><span>How to see it</span></button>
+    <button id="revealBtn" aria-pressed="false" title="Show the hidden depth map (hold R)"><svg><use href="#i-eye"/></svg><span>Reveal</span></button>
+    <button id="turnBtn" aria-pressed="false" title="An animated stereogram of the object as it turns"><svg><use href="#i-turn"/></svg><span>Turntable</span></button>
+    <button id="pngBtn" title="Save the stereogram as a PNG file"><svg><use href="#i-down"/></svg><span>PNG</span></button>
+    <button id="linkBtn" title="Copy a link to this stereogram"><svg><use href="#i-link"/></svg><span id="linkLab">Link</span></button>
+  </div>
+  <figure id="print">
+    <canvas id="out" aria-label="Stereogram"></canvas>
+    <canvas id="rev" aria-hidden="true"></canvas>
+    <div id="busy" aria-hidden="true"><i></i></div>
+    <div id="dragHint" aria-hidden="true">Drag to turn the object</div>
+  </figure>
+  <figcaption id="caption"><span id="capMain"></span><span id="capSub"></span></figcaption>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div id="tabs" class="tabs" role="tablist">
+    <button role="tab" data-tab="examples" class="on" aria-selected="true">Examples</button>
+    <button role="tab" data-tab="source" aria-selected="false">Source</button>
+    <button role="tab" data-tab="pattern" aria-selected="false">Pattern</button>
+    <button role="tab" data-tab="view" aria-selected="false">View</button>
+  </div>
+
+  <!-- EXAMPLES: ready pairs of an object and a pattern (examples.js) -->
+  <section class="tabpane" data-pane="examples">
+    <p class="lede">Pick an example, then relax your eyes and look through the picture. Each one is a real scanned object hidden in a repeating pattern.</p>
+    <div id="exGrid" class="exgrid"></div>
+  </section>
+
+  <!-- SOURCE: what gives the depth -->
+  <section class="tabpane" data-pane="source" hidden>
+    <div class="seg five" id="srcKind" role="radiogroup" aria-label="Source">
+      <button data-k="model" class="on">Object</button>
+      <button data-k="text">Text</button>
+      <button data-k="shape">Shape</button>
+      <button data-k="depth">Depth map</button>
+      <button data-k="photo">Photo</button>
+    </div>
+
+    <div class="srcbox" data-src="model">
+      <div class="searchrow"><input id="modelSearch" type="search" placeholder="Search objects" aria-label="Search objects" autocomplete="off"><span id="modelCount" class="count"></span></div>
+      <div id="modelKinds" class="chips"></div>
+      <div id="modelGrid" class="mgrid"></div>
+      <div class="credit" id="modelCredit"></div>
+      <div class="sub">Pose</div>
+      <div class="prm"><label for="yaw">Turn</label><span class="val" id="yawV"></span><input type="range" id="yaw" min="-180" max="180" step="1" value="0"></div>
+      <div class="prm"><label for="pitch">Tilt</label><span class="val" id="pitchV"></span><input type="range" id="pitch" min="-80" max="80" step="1" value="0"></div>
+      <div class="prm"><label for="fit">Size in frame</label><span class="val" id="fitV"></span><input type="range" id="fit" min="0.4" max="1" step="0.01" value="0.82"></div>
+      <div class="btns"><button id="poseReset">Reset the pose</button></div>
+      <p class="hint">Drag the picture to turn the object. While you drag, the picture shows the depth. The stereogram comes back when you let go.</p>
+    </div>
+
+    <div class="srcbox" data-src="text" hidden>
+      <label class="fld"><span>Words</span><input id="textIn" type="text" maxlength="24" value="Look closer" autocomplete="off" spellcheck="false"></label>
+      <div class="seg three" id="textFace" aria-label="Letter style">
+        <button data-f="serif" class="on">Serif</button>
+        <button data-f="sans">Sans</button>
+        <button data-f="bevel">Bevelled</button>
+      </div>
+      <p class="hint">Short words in heavy letters show best. A line of more than about twelve letters gets thin.</p>
+    </div>
+
+    <div class="srcbox" data-src="shape" hidden>
+      <div id="shapeGrid" class="chips big"></div>
+    </div>
+
+    <div class="srcbox" data-src="depth" hidden>
+      <label class="drop" id="depthDrop"><input id="depthFile" type="file" accept="image/*"><b>Choose a depth map</b><small>A grey image: white is near, black is far.</small></label>
+      <div class="btns"><button id="depthInvert" aria-pressed="false">Black is near</button></div>
+    </div>
+
+    <div class="srcbox" data-src="photo" hidden>
+      <label class="drop" id="photoDrop"><input id="photoFile" type="file" accept="image/*"><b>Choose a photo</b><small>Bright parts come forward. A face lit from the front or a bright object on a dark ground works best.</small></label>
+      <div class="prm"><label for="photoSoft">Smoothing</label><span class="val" id="photoSoftV"></span><input type="range" id="photoSoft" min="0" max="12" step="1" value="4"></div>
+      <div class="btns"><button id="photoInvert" aria-pressed="false">Dark comes forward</button></div>
+      <p class="hint">A photo has no true depth. The page uses brightness as height, so a real depth map or an object gives a cleaner result.</p>
+    </div>
+
+    <div class="sub">Depth</div>
+    <div class="prm"><label for="relief">Relief</label><span class="val" id="reliefV"></span><input type="range" id="relief" min="0.2" max="1" step="0.01" value="0.85"></div>
+    <div class="prm"><label for="lift">Lift off the wall</label><span class="val" id="liftV"></span><input type="range" id="lift" min="0" max="0.5" step="0.01" value="0.1"></div>
+  </section>
+
+  <!-- PATTERN: the tile that repeats -->
+  <section class="tabpane" data-pane="pattern" hidden>
+    <div class="seg four" id="patKind" role="radiogroup" aria-label="Pattern">
+      <button data-k="tile" class="on">Patterns</button>
+      <button data-k="dots">Random dots</button>
+      <button data-k="colour">Coloured dots</button>
+      <button data-k="image">Your image</button>
+    </div>
+    <div class="patbox" data-pat="tile">
+      <div id="tileFams" class="chips"></div>
+      <div id="tileGrid" class="tgrid"></div>
+      <div class="btns"><button id="tileSeed"><svg><use href="#i-shuffle"/></svg> New seed</button><button id="tileRandom">Surprise me</button></div>
+      <div class="credit" id="tileNote"></div>
+    </div>
+    <div class="patbox" data-pat="dots" hidden>
+      <p class="hint">Black and white dots, as in the first random-dot stereograms of the 1960s and 1970s. No pattern gives the eye a false hold, so these are often the easiest to fuse.</p>
+      <div class="prm"><label for="dotDensity">Black dots</label><span class="val" id="dotDensityV"></span><input type="range" id="dotDensity" min="0.2" max="0.8" step="0.01" value="0.5"></div>
+    </div>
+    <div class="patbox" data-pat="colour" hidden>
+      <div id="dotPals" class="pals"></div>
+    </div>
+    <div class="patbox" data-pat="image" hidden>
+      <label class="drop" id="tileDrop"><input id="tileFile" type="file" accept="image/*"><b>Choose an image</b><small>The page crops a square from the middle and mirrors it, so the tile wraps with no seam.</small></label>
+    </div>
+    <div class="prm" id="dotSizeRow" hidden><label for="dotSize">Dot size</label><span class="val" id="dotSizeV"></span><input type="range" id="dotSize" min="1" max="4" step="1" value="1"></div>
+  </section>
+
+  <!-- VIEW: how the eyes meet the picture -->
+  <section class="tabpane" data-pane="view" hidden>
+    <div class="sub first">Viewing</div>
+    <div class="seg two" id="eyeMode" role="radiogroup" aria-label="Viewing method">
+      <button data-m="wall" class="on">Wall-eyed</button>
+      <button data-m="cross">Cross-eyed</button>
+    </div>
+    <p class="hint" id="eyeHint"></p>
+    <div class="prm"><label for="eyeSep">Eye separation</label><span class="val" id="eyeSepV"></span><input type="range" id="eyeSep" min="4.5" max="7.5" step="0.05" value="6.35"></div>
+    <div class="prm"><label for="mu">Depth of field</label><span class="val" id="muV"></span><input type="range" id="mu" min="0.12" max="0.45" step="0.01" value="0.3333"></div>
+    <div class="btns"><button id="guideBtn" aria-pressed="true" class="on">Guide dots</button><button id="smoothBtn" aria-pressed="true" class="on">Smooth edges</button></div>
+
+    <div class="sub">Size</div>
+    <div id="sizes" class="chips"></div>
+    <p class="hint" id="sizeInfo"></p>
+
+    <div class="sub">Turntable</div>
+    <div class="prm"><label for="turnFrames">Frames</label><span class="val" id="turnFramesV"></span><input type="range" id="turnFrames" min="12" max="72" step="6" value="36"></div>
+    <div class="prm"><label for="turnSpeed">Speed</label><span class="val" id="turnSpeedV"></span><input type="range" id="turnSpeed" min="4" max="24" step="1" value="12"></div>
+
+    <div class="sub">About</div>
+    <div class="about">
+      <p>Each column of the picture links to a column one repeat to the side. Where the hidden surface is near, the two linked columns sit closer, so the eyes must meet in front of the wall. The page gives both columns the same colour, and the pair of eyes reads that as depth.</p>
+      <p>The constraint method with hidden-surface removal is after Thimbleby, Inglis and Witten (1994). The single-image random-dot stereogram came from the work of Christopher Tyler and Maureen Clarke. The <a href="../stereogram-history/index.html" target="_top" id="histLink">history page</a> tells how it came to be.</p>
+    </div>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false"><svg><use href="#i-menu"/></svg></button>
+  <div id="dockView" class="seg">
+    <button data-v="stereo" class="on">Stereogram</button>
+    <button data-v="depth">Depth</button>
+  </div>
+  <button id="dockTurn" aria-label="Turntable" aria-pressed="false"><svg><use href="#i-turn"/></svg></button>
+  <button id="dockPng" aria-label="Save a PNG"><svg><use href="#i-down"/></svg></button>
+</nav>
+
+<dialog id="help" aria-labelledby="helpTitle">
+  <form method="dialog" class="hclose"><button aria-label="Close">✕</button></form>
+  <h2 id="helpTitle">How to see it</h2>
+  <div class="hgrid">
+    <div class="hpractice">
+      <canvas id="practice" aria-label="Practice stereogram"></canvas>
+      <div class="hpractice-cap"><span id="practiceCap">A practice image: a raised square with a ring.</span>
+        <button id="practiceReveal" aria-pressed="false">Show the answer</button></div>
+    </div>
+    <div class="hsteps">
+      <div class="seg two" id="helpMode">
+        <button data-m="wall" class="on">Wall-eyed</button>
+        <button data-m="cross">Cross-eyed</button>
+      </div>
+      <ol id="stepsWall">
+        <li>Bring your face close to the picture, so that it is a blur.</li>
+        <li>Look through the screen, as if at something far behind it. Do not try to focus.</li>
+        <li>Move back slowly. Keep the blur. The two dots above the picture become three or four.</li>
+        <li>When the middle two dots join into one, hold your gaze there. The shape comes up out of the pattern.</li>
+      </ol>
+      <ol id="stepsCross" hidden>
+        <li>Hold a finger between your eyes and the picture.</li>
+        <li>Look at the tip of the finger. The two dots above the picture double.</li>
+        <li>Move the finger until the two middle dots join into one.</li>
+        <li>Keep your eyes there and take the finger away. A cross-eyed picture shows the depth the right way only when you set Cross-eyed in View.</li>
+      </ol>
+      <p class="hnote">Most people see it in less than a minute. Some take a few days of practice, and a few people do not see depth with two eyes at all. If the shape goes in, not out, you are using the other method: change it in View.</p>
+    </div>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
