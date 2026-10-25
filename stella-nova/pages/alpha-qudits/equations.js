@@ -36,7 +36,7 @@ export const EQ = {
   // ---------------------------------------------------------------- c1
   alphaDef: `${a('\\alpha')} = \\frac{e^{2}}{4\\pi\\varepsilon_{0}\\hbar c} \\approx \\frac{1}{137.036}`,
   onShell: `${a('\\alpha(0)')} = Z_{3}\\,${a('\\alpha_{\\text{bare}}')}, \\qquad Z_{1} = Z_{2}`,
-  running: `\\frac{1}{${a('\\alpha(Q)')}} \\approx \\frac{1}{${a('\\alpha(0)')}} - \\frac{2}{3\\pi}\\ln\\frac{Q}{m_{e}c^{2}} \\quad (Q \\gg m_{e}c^{2},\\ \\text{electron loop only})`,
+  running: `\\frac{1}{${a('\\alpha(Q)')}} \\approx \\frac{1}{${a('\\alpha(0)')}} - \\frac{2}{3\\pi}\\ln\\frac{Q}{m_{e}c^{2}} \\qquad (Q \\gg m_{e}c^{2},\\ \\text{electron loop only})`,
 
   // ---------------------------------------------------------------- c2
   pairKet: `|\\omega_{m}\\rangle = \\frac{1}{\\sqrt{m}}\\sum_{i=1}^{m} |i\\rangle|i\\rangle, \\qquad m = \\min(d_{1}, d_{2})`,
@@ -44,7 +44,7 @@ export const EQ = {
   swap: `\\langle\\omega_{d}|_{23}\\,|\\omega_{d}\\rangle_{12}|\\omega_{d}\\rangle_{34} = \\frac{1}{d}\\,|\\omega_{d}\\rangle_{14}`,
 
   // ---------------------------------------------------------------- c3
-  transpose: `(A \\otimes \\mathbb{1})\\,|\\omega_{m}\\rangle = (\\mathbb{1} \\otimes A^{\\mathsf{T}})\\,|\\omega_{m}\\rangle`,
+  transpose: `(A \\otimes \\mathbf{1})\\,|\\omega_{m}\\rangle = (\\mathbf{1} \\otimes A^{\\mathsf{T}})\\,|\\omega_{m}\\rangle`,
   matching: `(U \\otimes \\bar{U})\\,|\\omega_{m}\\rangle = |\\omega_{m}\\rangle`,
   letters: `(d+1)(d-1) = d^{2}-1: \\qquad ${qb('3')}\\ \\text{at a qubit (Pauli)}, \\quad ${qt('8')}\\ \\text{at a qutrit (Gell-Mann)}`,
   weyl: `${qb('\\sigma_{x}\\sigma_{z} = -\\,\\sigma_{z}\\sigma_{x}')}, \\qquad ${qt('Z X = \\omega\\, X Z')}, \\quad \\omega = e^{2\\pi i/3}`,
@@ -55,8 +55,8 @@ export const EQ = {
   readCap: `\\text{readable} \\iff d_{1} d_{2} \\le 6: \\qquad (${qb('2')},${qb('2')}),\\ (${qb('2')},${qt('3')})`,
 
   // ---------------------------------------------------------------- c5
-  algebra: `\\mathfrak{su}(${qt('3')}) \\oplus \\mathfrak{su}(${qb('2')}) \\oplus \\mathfrak{u}(1) = \\operatorname{Lie} S\\big(U(${qt('3')}) \\times U(${qb('2')})\\big), \\qquad S\\big(U(3)\\times U(2)\\big) \\cong \\frac{SU(3)\\times SU(2)\\times U(1)}{\\mathbb{Z}_{6}}`,
-  charge: `${q('Q')} = i\\,\\operatorname{diag}\\big(d_{2}\\mathbb{1}_{d_{1}};\\, -d_{1}\\mathbb{1}_{d_{2}}\\big), \\qquad ${q('Q')}\\,|\\omega_{m}\\rangle = i\\,(d_{2}-d_{1})\\,|\\omega_{m}\\rangle`,
+  algebra: `\\begin{gathered} \\mathfrak{su}(${qt('3')}) \\oplus \\mathfrak{su}(${qb('2')}) \\oplus \\mathfrak{u}(1) = \\operatorname{Lie} S\\big(U(${qt('3')}) \\times U(${qb('2')})\\big) \\\\ S\\big(U(3)\\times U(2)\\big) \\cong \\frac{SU(3)\\times SU(2)\\times U(1)}{\\mathbb{Z}_{6}} \\end{gathered}`,
+  charge: `${q('Q')} = i\\,\\operatorname{diag}\\big(d_{2}\\mathbf{1}_{d_{1}};\\, -d_{1}\\mathbf{1}_{d_{2}}\\big), \\qquad ${q('Q')}\\,|\\omega_{m}\\rangle = i\\,(d_{2}-d_{1})\\,|\\omega_{m}\\rangle`,
   hyper: `${q('Q')} = i\\,\\operatorname{diag}(3,3;-2,-2,-2) = 6i\\,${q('Y')}, \\qquad ${q('Y')} = \\operatorname{diag}\\!\\left(\\tfrac12,\\tfrac12;-\\tfrac13,-\\tfrac13,-\\tfrac13\\right)`,
   doublet: `${q('Y')}\\big|_{\\mathbb{C}^{2}\\otimes\\mathbb{C}^{3}} = \\tfrac12 - \\tfrac13 = \\tfrac16 \\quad (\\mathbf{3}, \\mathbf{2})_{1/6}`,
   unbroken: `${q('U')} = i\\,\\operatorname{diag}(1,1;-1,-1,0)`,
@@ -67,8 +67,8 @@ export const EQ = {
   path: `\\frac{1}{\\sqrt{2}}\\cdot\\frac{1}{\\sqrt{3}}\\cdot\\frac{1}{\\sqrt{2}} = \\frac{1}{2\\sqrt{3}}, \\qquad 12 \\times \\frac{1}{12} = 1`,
 
   // ---------------------------------------------------------------- c7
-  readoutDim: `${n('N')} = \\dim ${n('R')} = \\underbrace{(${qt('3')}^{2}-1)(${qb('2')}^{2}-1)}_{\\text{unread: }24}\\cdot\\underbrace{(${qt('3')}\\cdot${qb('2')})^{2}}_{\\text{read: }36}\\cdot 36 = ${n('31104')} = 2^{7}3^{5}`,
-  products: `\\underbrace{${qt('8')}\\cdot${qt('8')}}_{${qt('Q_1')}${qt('Q_2')}} + \\underbrace{${qb('3')}\\cdot${qb('3')}}_{${qb('q_1')}${qb('q_2')}} + 4\\cdot\\underbrace{${qt('8')}\\cdot${qb('3')}}_{\\text{mixed}} = 64 + 9 + 96 = ${rec('169')}`,
+  readoutDim: `${n('N')} = \\dim ${n('R')} = \\underbrace{(${qt('3')}^{2}-1)(${qb('2')}^{2}-1)}_{\\text{unread: }24}\\cdot\\underbrace{(${qt('3')}\\cdot${qb('2')})^{2}}_{\\text{read: }36}\\cdot 36 \\qquad = ${n('31104')} = 2^{7}3^{5}`,
+  products: `\\underbrace{${qt('8')}\\cdot${qt('8')}}_{${qt('Q_1')}${qt('Q_2')}} + \\underbrace{${qb('3')}\\cdot${qb('3')}}_{${qb('q_1')}${qb('q_2')}} + 4\\cdot\\underbrace{${qt('8')}\\cdot${qb('3')}}_{\\text{mixed}} \\qquad = 64 + 9 + 96 = ${rec('169')}`,
   records: `${rec('169')}\\ \\text{products} + ${rec('3')}\\ \\text{commutators} = ${rec('172')}\\ \\text{records}`,
   readout: `\\langle M\\rangle = \\frac{\\operatorname{tr}_{${n('R')}} M}{\\dim ${n('R')}}`,
 
@@ -76,9 +76,9 @@ export const EQ = {
   exchanges: `X_{r} = \\begin{cases} -p_{r} & \\text{both slots at one end} \\\\ +1 & \\text{one slot at each end}\\end{cases} \\qquad Y_{r} = \\begin{cases} +1 & \\text{both slots at one end} \\\\ -p_{r} & \\text{one slot at each end}\\end{cases}`,
   weight: `${rec('k_{r}')} = 3^{[X_{r}=-1]}\\,2^{[Y_{r}=-1]} = \\tfrac12\\,(2-X_{r})(3-Y_{r}) \\in \\{1, 2, 3, 6\\}`,
   strandSum: `d \\cdot \\frac{1}{\\sqrt{d}} = \\sqrt{d}: \\qquad ${qt('\\sqrt{3}')}\\ \\text{for } X, \\quad ${qb('\\sqrt{2}')}\\ \\text{for } Y`,
-  sectors: `(+,+) = \\tfrac12(a^{2}-a+b^{2}-b)+2ab = 79, \\quad (+,-) = 2ab = 48, \\quad (-,+) = \\tfrac12(a^{2}+a+b^{2}+b) = 42, \\quad (-,-) = \\tfrac12 b(b-1) = 3`,
-  value: `\\frac{G_{\\text{dressed}}}{G_{\\text{bare}}} = \\frac{1}{${n('N')}}\\sum_{r=1}^{${rec('172')}} \\sqrt{${rec('k_{r}')}} = ${ALPHA_CAND}`,
-  coords: `${a('\\alpha_{\\text{cand}}')} = \\tfrac{79}{31104} + \\tfrac{1}{648}\\sqrt{2} + \\tfrac{7}{5184}\\sqrt{3} + \\tfrac{1}{10368}\\sqrt{6} \\in \\mathbb{Q}(\\sqrt{2}, \\sqrt{3})`,
+  sectors: `\\begin{aligned} (+,+)&: \\tfrac12(a^{2}-a+b^{2}-b)+2ab = ${rec('79')} \\\\ (+,-)&: 2ab = ${rec('48')} \\\\ (-,+)&: \\tfrac12(a^{2}+a+b^{2}+b) = ${rec('42')} \\\\ (-,-)&: \\tfrac12 b(b-1) = ${rec('3')} \\end{aligned}`,
+  value: `\\frac{G_{\\text{dressed}}}{G_{\\text{bare}}} = \\frac{1}{${n('N')}}\\sum_{r=1}^{${rec('172')}} \\sqrt{${rec('k_{r}')}} \\qquad = ${ALPHA_CAND}`,
+  coords: `${a('\\alpha_{\\text{cand}}')} = \\tfrac{79}{31104} + \\tfrac{1}{648}\\sqrt{2} \\qquad + \\tfrac{7}{5184}\\sqrt{3} + \\tfrac{1}{10368}\\sqrt{6} \\qquad \\in \\mathbb{Q}(\\sqrt{2}, \\sqrt{3})`,
 
   // ---------------------------------------------------------------- c9
   factorize: `\\frac{G_{\\text{dressed}}}{G_{\\text{bare}}} = Z_{3}\\left(\\frac{Z_{2}}{Z_{1}}\\right)^{2} ${a('\\alpha_{\\text{bare}}')}, \\qquad ${a('\\alpha_{\\text{bare}}')} = \\tfrac12 + \\tfrac12 = 1, \\quad \\frac{Z_{2}}{Z_{1}} = 1`,
@@ -89,6 +89,14 @@ export const EQ = {
   wyler: `${a('\\alpha_{\\text{W}}')} = \\frac{9}{8\\pi^{4}}\\left(\\frac{\\pi^{5}}{2^{4}\\cdot 5!}\\right)^{1/4} = \\frac{1}{137.036\\,08\\ldots}`,
   family: `x = \\frac{a + b\\sqrt{2} + c\\sqrt{3} + d\\sqrt{6}}{D}, \\qquad a, b, c, d \\in \\{0, \\ldots, c_{\\max}\\}`,
 };
+
+// Long equations stack their parts on lines, so that they fit a phone:
+// each '\\qquad' (with a comma before it) starts a new line of a gathered
+// block (lines centred). A part that starts with '=', '+' or '\\in'
+// continues the line before it.
+const G = rows => `\\begin{gathered} ${rows.join(' \\\\ ')} \\end{gathered}`;
+const STACK = ['hero', 'running', 'pairKet', 'letters', 'weyl', 'signOnly', 'decomposable', 'readCap', 'charge', 'hyper', 'conserved', 'path', 'readoutDim', 'products', 'exchanges', 'strandSum', 'value', 'coords', 'factorize', 'family'];
+for (const k of STACK) EQ[k] = G(EQ[k].split(/,?\s*\\qquad\s*/));
 
 // Short TeX for inline use in the story text (data-inline boxes).
 export const INLINE = {

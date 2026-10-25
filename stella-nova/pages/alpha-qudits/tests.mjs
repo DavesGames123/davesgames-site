@@ -187,6 +187,12 @@ section('numbers');
       const star = rd.filter(c => c.filters && c.filters.endRule && c.filters.twoPoint && c.filters.charge);
       ok(star.length === 1 && star[0].center === 3, `exactly one readable configuration passes the three filters (${star.length})`);
     } catch (e) { ok(false, 'model enumerateConfigs: ' + e.message); }
+    if (M.lookElsewhere) {
+      // The c10 text quotes these two counts.
+      const sm = M.lookElsewhere({ coeffMax: 100, denominators: { kind: 'smooth', max: 40000 }, window: 1 });
+      const al = M.lookElsewhere({ coeffMax: 100, denominators: { kind: 'all', max: 40000 }, window: 1 });
+      ok(sm.hits === 1 && Math.abs(sm.expected - 0.18) < 0.005 && al.hits === 299 && Math.round(al.expected) === 353, `look-elsewhere counts quoted in c10: smooth ${sm.hits} (${sm.expected.toFixed(3)}), all ${al.hits} (${al.expected.toFixed(1)})`);
+    }
     if (M.MEASUREMENTS) {
       const list = Array.isArray(M.MEASUREMENTS) ? M.MEASUREMENTS : Object.values(M.MEASUREMENTS);
       const flat = JSON.stringify(list);

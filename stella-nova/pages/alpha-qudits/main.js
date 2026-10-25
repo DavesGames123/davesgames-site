@@ -409,7 +409,7 @@ function tableConfigs(el, M) {
     <p class="sub">Our model enumerates every shared centre with its arms under the paper's bounds: ${list.length} configurations, ${nCap} under the read cap, ${readable.length} readable (the paper's Table S2). Switch the three filters on, one at a time. <b>R</b> marks a read arm, <b>U</b> an unread one, and each number is the dimension of the far end.</p>
     <div class="funnel">${F.map(([k, l]) => `<button type="button" data-f="${k}" aria-pressed="false">${l}</button>`).join('')}<span class="count"></span></div>
     <div class="tablewrap"><table class="t"><thead><tr><th>centre</th><th>arms</th><th>links</th><th>reads</th><th>unread</th><th>readout dim.</th><th>records</th><th></th></tr></thead><tbody></tbody></table></div>
-    <p class="model-note">Computed by our model in JavaScript, not taken from the paper's table.</p>`;
+    <p class="model-note">Computed by our model in JavaScript, not taken from the paper's table.${readable.some(c => c.center === 2 && Array.isArray(c.records) && c.records.some(r => Array.isArray(r.far) && r.far[0] === 3 && r.far[1] === 3)) ? ' One difference: at a qubit centre with two qutrit far ends the paper prints 174 records, where our slot count gives 169 products and 3 commutators, 172. The paper does not evaluate those rows.' : ''}</p>`;
   const tb = el.querySelector('tbody'), count = el.querySelector('.count');
   const rows = readable.map(c => {
     const tr = document.createElement('tr');
