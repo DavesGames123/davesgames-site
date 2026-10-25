@@ -132,7 +132,8 @@ function clearArea(withSheet) {
   if (phone()) {
     const land = innerHeight <= 500;
     top = land ? 12 : inFrame ? 52 : document.querySelector('.topbar').getBoundingClientRect().bottom + 4;
-    bottom = land ? 12 : 50; side = 12;
+    // In landscape the dock is a strip at the lower left of the stage.
+    bottom = land ? $('dock').getBoundingClientRect().height + 8 : 50; side = 12;
     if (land && withSheet && $('panel').classList.contains('open')) {
       return { x: side, y: top, w: Math.max(80, r.width - $('panel').getBoundingClientRect().width - 2 * side), h: Math.max(80, r.height - top - bottom) };
     }
@@ -757,7 +758,12 @@ async function shareLink() {
   let url = location.href;
   try {
     const P = window.parent;
-    if (P && P !== window && P.snShare && P.location) url = P.snShare.url(P.location.hash);
+    // The shell copies the page hash into its own URL on the next
+    // hashchange, so build the shell hash here: '#<key>/<state>'.
+    if (P && P !== window && P.snShare && P.location) {
+      const key = decodeURIComponent(P.location.hash.slice(1).split('/')[0] || '') || 'stereogram-maker';
+      url = P.snShare.url('#' + key + '/' + code);
+    }
   } catch (e) { /* another origin */ }
   let ok = false;
   try { await navigator.clipboard.writeText(url); ok = true; } catch (e) { ok = false; }
