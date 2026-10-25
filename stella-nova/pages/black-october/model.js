@@ -149,6 +149,13 @@ export const THREAD_NAMES = Object.freeze({
   fortisiem: "FortiSIEM gRPC file-write flaw",
   'cisco-snort-hardening': "Cisco Snort 3 AI-found hardening release",
   'keystone-wallet': "Keystone wallet shop breach",
+  'nol-universe': "NOL Universe staff data",
+  renta: "Renta! e-book store",
+  'jp-wave-alerts': "Japanese government alerts on the breach wave",
+  'yakiniku-king': "Yakiniku King app",
+  bookoff: "Bookoff members",
+  skyticket: "skyticket travel site",
+  'certin-bfsi': "CERT-In: AI-assisted payment API fraud in Indian finance",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;

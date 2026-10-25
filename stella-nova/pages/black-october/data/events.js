@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended nine times by 2026-10-25. Still going on then.
+//  Gathered 2026-10-22, extended ten times by 2026-10-26. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -19773,5 +19773,1098 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "Update 12 of Albert Heijn's media statement, 13:30 CEST. On 21 October it added EUR 10 for Bezorgbundel subscribers; on 23 October it said normal delivery capacity is expected by Wednesday 28 October."
+ },
+ {
+  "id": "cairn-jpcert-case-e",
+  "thread": "cairn",
+  "parent": "cairn-report",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC adds 'Case E': Cairn, CyberStrikeAI and ARTEX used against Japanese sites",
+  "summary": "JPCERT/CC updates alert AT-2026-0030 with a fifth case: attackers use AI pentest platforms such as Cairn, CyberStrikeAI and ARTEX to scan and exploit public web applications and take configuration and backup files. The update lists nine source IP addresses seen from late September to 20 October, and some attacks hit internet-facing WSUS servers.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260030.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "AT-2026-0030 was first published on 8 October 2026 (see jpalert-jpcert-at0030); the 23 October revision added Case E.",
+  "related": [
+   "artex-japan-gmo",
+   "jpalert-jpcert-at0030"
+  ]
+ },
+ {
+  "id": "bm-piccoma",
+  "thread": "blastmail",
+  "parent": "bm-344-contracts",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Kakao Piccoma: 1,002,404 recipient emails of one newsletter send leaked via Blastmail",
+  "summary": "Kakao Piccoma says Rakus Light Cloud told it on 24 October that the recipient list of one Piccoma newsletter send, 1,002,404 email addresses, left Blastmail. Piccoma says only email addresses leaked and its own apps and systems were not accessed.",
+  "sources": [
+   {
+    "url": "https://www.kakaopiccoma.com/info/%E6%A0%AA%E5%BC%8F%E4%BC%9A%E7%A4%BE%E3%83%A9%E3%82%AF%E3%82%B9%E3%83%A9%E3%82%A4%E3%83%88%E3%82%AF%E3%83%A9%E3%82%A6%E3%83%89%E3%81%AE%E3%83%A1%E3%83%BC%E3%83%AB%E9%85%8D%E4%BF%A1%E3%82%B7%E3%82%B9.html",
+    "publisher": "Kakao Piccoma",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/piccoma_blastmail_email_address_leak_20261024_revised/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The count is the recipients of one send, not unique people. Piccoma calls this its first report."
+ },
+ {
+  "id": "php-kisa-115560",
+  "thread": "php2shell",
+  "parent": "php-cve-2026-115560",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "KISA posts a temporary-measure advisory for the third PHP flaw, CVE-2026-115560",
+  "summary": "KrCERT/CC at KISA posts security notice 2581 recommending a temporary measure for CVE-2026-115560, which the 21 October PHP releases do not fix. Korean press on 25 October report KISA's advice to turn off the related upload-progress feature and restart PHP workers.",
+  "sources": [
+   {
+    "url": "https://www.boho.or.kr/kr/bbs/list.do?menuNo=205020&bbsId=B0000133",
+    "publisher": "KISA KrCERT/CC",
+    "primary": true
+   },
+   {
+    "url": "https://m.news.nate.com/view/20261025n09502",
+    "publisher": "Hankook Ilbo (via Nate)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "wasabi-syuppin",
+  "thread": "wasabi-switch",
+  "parent": "wasabi-encrypt",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Syuppin: 2,216 mall orders and 31 admin account records leaked via contractor Wasabi",
+  "summary": "Camera retailer Syuppin, operator of Map Camera, says the WASABI SWITCH intrusion leaked 2,216 order records from its outside-mall shops and 31 management account records. It says no access to its own systems has been found; the notice was last updated at 18:00 JST on 25 October.",
+  "sources": [
+   {
+    "url": "https://www.syuppin.co.jp/news/%E3%80%90%E9%87%8D%E8%A6%81%E3%81%AA%E3%81%8A%E7%9F%A5%E3%82%89%E3%81%9B%E3%80%91%E5%A7%94%E8%A8%97%E5%85%88%E3%81%A7%E3%81%82%E3%82%8B%E6%A0%AA%E5%BC%8F%E4%BC%9A%E7%A4%BE%E3%83%AF%E3%82%B5%E3%83%93/",
+    "publisher": "Syuppin",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Facts taken from the search-result text of Syuppin's notice; the page itself returned HTTP 403 to direct fetches, so it is marked reported."
+ },
+ {
+  "id": "nol-access",
+  "thread": "nol-universe",
+  "parent": null,
+  "t": "2026-10-18T17:40:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Attacker abuses a flaw in NOL Universe's employee-lookup function",
+  "summary": "An outside attacker exploits a security flaw in the employee information lookup function of NOL Universe, the Yanolja group travel and ticketing company that runs Interpark, at 02:40 KST on 19 October.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209056",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Part of the Korean breach-notice wave the ledger tracks (Ticketbay, Yonsei, Hanjin I&C, Gift-L): another Korean firm disclosing an API or web-function abuse in the same week. No PHP or AI-tool link is stated."
+ },
+ {
+  "id": "nol-notice",
+  "thread": "nol-universe",
+  "parent": "nol-access",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "NOL Universe: names, phones, work emails and staff IDs of employees leaked",
+  "summary": "NOL Universe tells staff that the attacker took four items of employee data: name, phone number, company email and employee number. It does not give a count or name the flaw.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209056",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Daily Secu published the report at 02:47 KST on 26 October with an image of the company notice; the notice's own date is not given."
+ },
+ {
+  "id": "renta-stop",
+  "thread": "renta",
+  "parent": null,
+  "t": "2026-10-18T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Papyless finds possible intrusion into Renta! servers and stops the e-book store",
+  "summary": "Papyless becomes aware of possible outside unauthorized access to the servers of its Renta! e-book and manga rental store and suspends the service for emergency maintenance.",
+  "sources": [
+   {
+    "url": "https://papy.co.jp/news/sc/index/article/2026/20261021.html",
+    "publisher": "Papyless",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/renta-emergency-maintenance-comic-cmoa-incident-20261018/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave; Renta! went down three days after the Comic Seymour e-book store, and press cover the two stoppages together.",
+  "related": [
+   "cmoa-stop"
+  ]
+ },
+ {
+  "id": "renta-tdnet",
+  "thread": "renta",
+  "parent": "renta-stop",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Papyless tells the Tokyo Stock Exchange that the Renta! stop is due to possible intrusion",
+  "summary": "Papyless files a timely disclosure naming possible unauthorized access as the reason for the Renta! suspension, with no restart date.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261019552777.pdf",
+    "publisher": "Papyless (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/renta-emergency-maintenance-comic-cmoa-incident-20261018/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The TDnet PDF returned HTTP 403 to direct fetches; the filing is known from the Rocket Boys write-up."
+ },
+ {
+  "id": "renta-notice",
+  "thread": "renta",
+  "parent": "renta-tdnet",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Papyless: some Renta! members' emails and other data may have leaked",
+  "summary": "Papyless says member data such as email addresses of some customers may have leaked; it holds no card data and has seen no leak of purchase history or bookshelves. Renta! stays down, and passwords will be reset at restart.",
+  "sources": [
+   {
+    "url": "https://papy.co.jp/news/sc/index/article/2026/20261023.html",
+    "publisher": "Papyless",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/748a4ae57b940ed8505e684cdeeffb464e8f4e73",
+    "publisher": "Sponichi Annex (via Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "renta-week-down",
+  "thread": "renta",
+  "parent": "renta-notice",
+  "t": "2026-10-25T06:24:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Renta! and Comic Seymour still down after a week; publishers move early releases",
+  "summary": "Sponichi reports that Renta! and Comic Seymour have both been suspended for more than a week and that publishers are moving titles planned for early release on those stores to other platforms.",
+  "sources": [
+   {
+    "url": "https://news.livedoor.com/topics/detail/32652351/",
+    "publisher": "Sponichi Annex (via livedoor News)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "related": [
+   "cmoa-fourth"
+  ]
+ },
+ {
+  "id": "jpalert-ppc-caution",
+  "thread": "jp-wave-alerts",
+  "parent": null,
+  "t": "2026-10-07T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Japan's privacy commission issues a caution notice on large-scale leak cases",
+  "summary": "The Personal Information Protection Commission publishes a caution notice on how businesses should respond in the light of the large-scale data-leak cases. It adds an explainer video on 9 October.",
+  "sources": [
+   {
+    "url": "https://www.ppc.go.jp/news/press/2026/261007_houdou",
+    "publisher": "Personal Information Protection Commission",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Root of the Japanese state response to the September-October breach-notice wave that the ledger tracks thread by thread (Times Car, Sagawa, Yamato, Lawson and so on). The press-release PDF is encrypted and its text was not read."
+ },
+ {
+  "id": "jpalert-jpcert-at0030",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-ppc-caution",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC alert AT-2026-0030 on unauthorised access at Japanese organisations",
+  "summary": "JPCERT/CC publishes an alert on leaks from unauthorised access at Japanese organisations since about September, with attack cases such as scanning for known flaws, abuse of hidden app APIs, a Metabase SQL injection and a web shell. It updates the alert on 9 and 23 October.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260030.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   },
+   {
+    "url": "https://www.jpcert.or.jp/at/2026.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "jpalert-ipa-measures",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-jpcert-at0030",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "IPA lists urgent measures after the run of leaks at banks, telecoms and others",
+  "summary": "IPA tells organisations to review logs of exposed applications for one to three months, inventory outside services and accounts, and cut stored data. It says no single exploited product is confirmed and suspects exposed apps or stolen accounts.",
+  "sources": [
+   {
+    "url": "https://www.ipa.go.jp/security/security-alert/2026/alert20261009.html",
+    "publisher": "IPA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-attacker-statement",
+  "thread": "onamae",
+  "parent": "onamae-extortion",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Attacker's statement asks GMO for US$1 million by noon JST on 27 October",
+  "summary": "A statement attributed to the Desktop Cloud attacker demands US$1 million by noon JST on 27 October and claims long-standing RDP access and file collection from customer PCs. Security Measures Lab saw logs timestamped 14 October but could not verify the claims.",
+  "sources": [
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/gmo_onamae_hacker_statement_lab_sources_20261025/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Attacker claims only; GMO has said it will not pay. The outlet says the logs show copy operations, not proof that files left customer PCs."
+ },
+ {
+  "id": "ykking-detect",
+  "thread": "yakiniku-king",
+  "parent": null,
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Unauthorised access hits the member system of the Yakiniku King app",
+  "summary": "Monogatari Corporation confirms unauthorised access to the member management system of its Yakiniku King restaurant app and blocks the traffic; it confirms data left the system on 3 October.",
+  "sources": [
+   {
+    "url": "https://www.sbbit.jp/article/cont1/187306",
+    "publisher": "SB Biz+",
+    "primary": false
+   },
+   {
+    "url": "https://rocket-boys.co.jp/?p=42522",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Part of the Japanese consumer breach-notice wave of early October 2026 that the ledger tracks (Burger King Japan, Mr. Max, Lawson, Sourcenext and others)."
+ },
+ {
+  "id": "ykking-notice",
+  "thread": "yakiniku-king",
+  "parent": "ykking-detect",
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Monogatari: 10,788,963 Yakiniku King app member records leaked",
+  "summary": "Monogatari says almost all of the 10,808,784 registered app users had member number, app name, email and phone number taken. Passwords, birth dates, points and visit history were not taken, and it holds no card data.",
+  "sources": [
+   {
+    "url": "https://www.sbbit.jp/article/cont1/187306",
+    "publisher": "SB Biz+",
+    "primary": false
+   },
+   {
+    "url": "https://www.moneypost.jp/1453883/0/",
+    "publisher": "Money Post",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Monogatari's own notice was not opened; figures are from press reports."
+ },
+ {
+  "id": "bookoff-access",
+  "thread": "bookoff",
+  "parent": null,
+  "t": "2026-10-04T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party pulls Bookoff member data from its membership system, 4-6 October",
+  "summary": "A third party takes member data from the Bookoff Group membership management system between 4 and 6 October; Bookoff confirms the unauthorised access on 6 October.",
+  "sources": [
+   {
+    "url": "https://game.watch.impress.co.jp/docs/news/2148433.html",
+    "publisher": "GAME Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://atsoho.com/blog/bookoff-data-breach",
+    "publisher": "atsoho",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Part of the Japanese consumer breach-notice wave of early October 2026 that the ledger tracks (Burger King Japan, Mr. Max, Lawson, Sourcenext and others)."
+ },
+ {
+  "id": "bookoff-first",
+  "thread": "bookoff",
+  "parent": "bookoff-access",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Bookoff first report: up to about 6.43 million member records may have leaked",
+  "summary": "Bookoff says data of up to about 6.43 million member records may have leaked and starts reporting to the Personal Information Protection Commission.",
+  "sources": [
+   {
+    "url": "https://kumanichi.com/articles/2044802",
+    "publisher": "Kumamoto Nichinichi Shimbun",
+    "primary": false
+   },
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118813/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "bookoff-second",
+  "thread": "bookoff",
+  "parent": "bookoff-first",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Bookoff second report: 6,383,279 people, with addresses and password hashes",
+  "summary": "Bookoff fixes the scope at 6,427,735 member numbers held by 6,383,279 people; names, birth dates, addresses, phones, emails, password hashes and point-card numbers were taken. Member notices start on 15 October.",
+  "sources": [
+   {
+    "url": "https://www.bookoff.co.jp/info/news/2026/post_114.html",
+    "publisher": "Bookoff",
+    "primary": true
+   },
+   {
+    "url": "https://game.watch.impress.co.jp/docs/news/2148433.html",
+    "publisher": "GAME Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://news.denfaminicogamer.jp/news/261014r",
+    "publisher": "Denfaminicogamer",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Bookoff page was opened, but its body is an image; the counts come from the press reports."
+ },
+ {
+  "id": "skyticket-intrusion",
+  "thread": "skyticket",
+  "parent": null,
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Intruder misuses skyticket admin functions and reaches data on other servers, 2-4 Oct",
+  "summary": "An intruder operates parts of the skyticket management function without authorisation between 2 and 4 October and reaches data on other servers and cloud storage; Adventure finds it on 5 October.",
+  "sources": [
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118810/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Part of the Japanese consumer breach-notice wave of early October 2026 that the ledger tracks (Burger King Japan, Mr. Max, Lawson, Sourcenext and others)."
+ },
+ {
+  "id": "skyticket-notice",
+  "thread": "skyticket",
+  "parent": "skyticket-intrusion",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Adventure: about 14.64 million skyticket records taken, 4.13 million with password hashes",
+  "summary": "Adventure discloses three incidents: the admin intrusion with about 14.64 million records, a 20 September flaw exposing 17,780 refund bank records, and about 12,000 bus bookings viewable without login.",
+  "sources": [
+   {
+    "url": "https://skyticket.jp/news/maintenance/67603/",
+    "publisher": "Adventure (skyticket)",
+    "primary": true
+   },
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118810/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The skyticket notice returned HTTP 403 to direct fetches; facts are from innovaTopia's reading of it."
+ },
+ {
+  "id": "skyticket-cards",
+  "thread": "skyticket",
+  "parent": "skyticket-notice",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "correction",
+  "title": "skyticket corrects itself: old logs exposed up to 6,140 members' card numbers",
+  "summary": "In its second report Adventure withdraws its claim that no card numbers leaked: old payment logs held card number, name and expiry for up to 6,140 skyticket Premium members who paid between February 2017 and June 2018.",
+  "sources": [
+   {
+    "url": "https://rocket-boys.co.jp/?p=44020",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   },
+   {
+    "url": "https://innovatopia.jp/cyber-security/cyber-security-news/118810/",
+    "publisher": "innovaTopia",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "php-sophos-myutm-offline",
+  "thread": "php2shell",
+  "parent": "php-services-paused",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "takedown",
+  "title": "Sophos takes its MyUTM licensing portal offline; says no Sophos product is affected",
+  "summary": "Sophos advisory sophos-sa-20261021-php2shell says no Sophos product is affected, but its hosted MyUTM portal for end-of-life SG UTM ran an affected PHP and was taken offline on 21 October to update it. Sophos says it has found no evidence of exploitation of the portal and adds IPS signatures on 22 October.",
+  "sources": [
+   {
+    "url": "https://www.sophos.com/en-us/security-advisories/sophos-sa-20261021-php2shell",
+    "publisher": "Sophos",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Advisory version 4, last updated 22 October; the page gives no time of day."
+ },
+ {
+  "id": "emu-crl-ua-blocked",
+  "thread": "emudhra",
+  "parent": "emu-ct-107k-certs",
+  "t": "2026-10-25T09:57:32Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "New Mozilla bug: eMudhra CRL and OCSP hosts refuse common command-line clients",
+  "summary": "Mozilla bug 2085612 reports that crl.emsign.com, ocsp.emsign.com, ocsp-b.emsign.com and repository.emsign.com return 403 to the default curl, wget and Python urllib clients but serve the CRL to other clients. The reporter confirmed the block independently at 09:34 UTC on 25 October.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085612",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c44",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Filed by a community member; eMudhra had not answered on the bug at the time of collection."
+ },
+ {
+  "id": "emu-crl-next-update",
+  "thread": "emudhra",
+  "parent": "emu-reply-chrome",
+  "t": "2026-10-25T09:59:17Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Bug comment: eMudhra's CRLs say next update April 2027, so clients may cache old ones",
+  "summary": "A comment on Mozilla bug 2083449 answers eMudhra's relying-party argument: the current emSign Root TLS CA - G3 CRL names 16 April 2027 as its next update, so a standards-compliant client may legally keep a pre-incident CRL that does not list the revoked CAs.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c46",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-chrome-paranoid-question",
+  "thread": "emudhra",
+  "parent": "emu-reply-chrome",
+  "t": "2026-10-25T18:01:59Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Bug comment asks Chrome whether its own weak-key tool was run at root inclusion",
+  "summary": "A comment on Mozilla bug 2083449 asks the Chrome Root Program whether checks like Google's 2022 paranoid_crypto tool, which can flag the weak eMudhra intermediate keys from public certificates, were run during root inclusion or cross-sign reviews.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c47",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "A question only; Chrome had not answered at the time of collection."
+ },
+ {
+  "id": "php-ncscnl-github-tracker",
+  "thread": "php2shell",
+  "parent": "php-nl-offline",
+  "t": "2026-10-21T10:37:16Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC opens a public PHP2Shell vendor-status repository on GitHub",
+  "summary": "NCSC-NL creates the NCSC-NL/php2shell repository before the PHP release, adds a list of potentially affected PHP products at 11:20 UTC, and then takes vendor status updates by pull request. By 23 October it tracks fixes and open exposures for Broadcom, HPE, Trend Micro, F5, Cisco, Plesk and others.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell",
+    "publisher": "NCSC-NL",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/blob/main/software/changelog_software_list.md",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The same model the Dutch NCSC used for Log4Shell in 2021. Repository created 10:21 UTC; first content commit 10:37 UTC."
+ },
+ {
+  "id": "php-hpe-clearpass-affected",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "HPE: ClearPass Policy Manager 6.14.1 and 6.11.16 and below affected by PHP2Shell",
+  "summary": "HPE bulletin HPESBNW05171 lists ClearPass Policy Manager as affected and tells customers to take guest portals and management interfaces off public access. It points HPE Mist customers to a separate Juniper advisory.",
+  "sources": [
+   {
+    "url": "https://support.hpe.com/hpesc/public/docDisplay?docId=hpesbnw05171en_us&docLocale=en_US",
+    "publisher": "Hewlett Packard Enterprise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-hpe-clearpass-hotfix",
+  "thread": "php2shell",
+  "parent": "php-hpe-clearpass-affected",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "HPE ships ClearPass 6.14.1 and 6.11.16 hotfixes for the PHP flaws",
+  "summary": "Revision 2 of HPESBNW05171 adds hotfix patches for ClearPass 6.14.1 and 6.11.16 that HPE says address both CVEs completely. HPE does not assess end-of-support versions.",
+  "sources": [
+   {
+    "url": "https://support.hpe.com/hpesc/public/docDisplay?docId=hpesbnw05171en_us&docLocale=en_US",
+    "publisher": "Hewlett Packard Enterprise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Bulletin page shows 'Last Updated: 2026-10-24'; the history lists rev.2 on 23 October."
+ },
+ {
+  "id": "php-trendmicro-impacted",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Trend Micro: Apex One, Apex Central and Deep Discovery appliances affected by PHP2Shell",
+  "summary": "Trend Micro advisory KA-0024802 lists on-premises Apex One, Apex Central, Web Security and Deep Discovery Inspector, Analyzer and Email Inspector as affected, with Deep Discovery critical patches due 30 October. Apex One as a Service was fixed in emergency maintenance on 23 October; Trend sees no successful exploitation.",
+  "sources": [
+   {
+    "url": "https://success.trendmicro.com/en-US/solution/KA-0024802",
+    "publisher": "Trend Micro",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/blob/main/software/changelog_software_list.md",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Statuses are 'as of Oct. 23'; the page was last updated 24 October. No fixed build numbers were published for the on-premises products."
+ },
+ {
+  "id": "php-zscaler-48h-telemetry",
+  "thread": "php2shell",
+  "parent": "php-watchtowr-itw",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Zscaler: 1,156 PHP2Shell attempts from 156 IPs against 70 organisations in 48 hours",
+  "summary": "Zscaler ThreatLabz updates its PHP2Shell advisory with deception telemetry: 1,156 possible exploitation attempts from 156 attacker IPs against 70 organisations in the first 48 hours, from tools including one that names itself 'ShellFlow'. It reports no confirmed compromise and names no actor.",
+  "sources": [
+   {
+    "url": "https://www.zscaler.com/blogs/security-research/cve-2026-109618-and-cve-2026-109619-php-vulnerable-unauthenticated-rce",
+    "publisher": "Zscaler ThreatLabz",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Post first published 21 October, updated 23 October with the telemetry; no time of day is given."
+ },
+ {
+  "id": "php-kisa-115560-advisory",
+  "thread": "php2shell",
+  "parent": "php-cve-2026-115560",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "KISA: the 21 October PHP releases do not fix CVE-2026-115560; disable upload progress",
+  "summary": "Korea's KISA tells operators that the third PHP session RCE vector, CVE-2026-115560, has no fix yet and is not closed by 8.5.12, 8.4.27, 8.3.36 or 8.2.35. It recommends setting session.upload_progress.enabled to 0 and restarting all PHP workers.",
+  "sources": [
+   {
+    "url": "https://www.boho.or.kr/kr/bbs/view.do?bbsId=B0000133&nttId=72237&menuNo=205020",
+    "publisher": "KISA (KrCERT/CC)",
+    "primary": true
+   },
+   {
+    "url": "https://www.topstarnews.net/news/articleView.html?idxno=16257370",
+    "publisher": "Top Star News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "KISA says only servers that meet all three session configuration conditions are affected; servers that already applied the PHP2Shell interim measure need no more action."
+ },
+ {
+  "id": "php-korea-chaebol-no-breach",
+  "thread": "php2shell",
+  "parent": "php-korea-alert-caution",
+  "t": "2026-10-25T02:06:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Samsung, SK, Hyundai, LG and HD Hyundai report no PHP2Shell breaches; POSCO patches",
+  "summary": "Newsis reports that Korea's largest groups found no exploitation after checks and patches, POSCO formed an emergency team and GS patched some sites. Experts warn that smaller suppliers on old PHP versions are the weak point.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610251106157265",
+    "publisher": "Financial News (Newsis)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The same report says the science minister told a 23 October National Assembly audit that a cross-government plan for the PHP incident will be prepared."
+ },
+ {
+  "id": "php-jpcert-form-offline",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T09:00:00Z",
+  "tPrecision": "minute",
+  "kind": "takedown",
+  "title": "JPCERT/CC takes its incident-report web form offline for emergency maintenance",
+  "summary": "Japan's national CSIRT starts emergency maintenance of its incident-report web form at 18:00 JST on 21 October, five hours before the PHP release, and asks reporters to use e-mail instead.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/maintenance20261022.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "JPCERT/CC gives no reason for the maintenance; the link to PHP2Shell is the timing only, the same hours in which Japanese and Dutch government sites went offline."
+ },
+ {
+  "id": "php-jpcert-form-back",
+  "thread": "php2shell",
+  "parent": "php-jpcert-form-offline",
+  "t": "2026-10-23T02:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "JPCERT/CC's incident-report form returns after 41 hours",
+  "summary": "JPCERT/CC says the emergency maintenance of its incident-report web form ended at 11:00 JST on 23 October and the form is back in normal use.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/maintenance20261023.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "snort-hardening-uc",
+  "thread": "cisco-snort-hardening",
+  "parent": "snort-hardening-release",
+  "t": "2026-10-21T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco Unified Communications hardening release: eight CVEs, two rated CVSS 9.8",
+  "summary": "Cisco publishes a critical hardening release for Unified CM, IM&P, Session Management Edition, Unity Connection, Emergency Responder and Prime Collaboration Deployment, found with existing testing and frontier AI models. Release 15 is fixed in 15SU5, release 14 must migrate, and there are no workarounds.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-voice-hardening-twgbH9e3",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Each CVE groups several findings by weakness class; Cisco says none is known to be exploited. Cisco used the same AI-found hardening format for Meraki on 7 October (cisco-sa-hardening-meraki-os-drbEX9GH, CVSS up to 9.6)."
+ },
+ {
+  "id": "snort-hardening-expressway",
+  "thread": "cisco-snort-hardening",
+  "parent": "snort-hardening-release",
+  "t": "2026-10-21T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco Expressway X15.5.20 ships an AI-found hardening release and a 9.8 root RCE fix",
+  "summary": "Cisco's Expressway hardening release groups AI-assisted findings into eight CVEs scored up to 8.6. The same X15.5.20 build fixes CVE-2026-76466, an unauthenticated root command execution (CVSS 9.8) in clustered Expressway that an outside researcher reported.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-exwy-hardening-FhcqBVcs",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-vcs-static-cred-hr7EWZ8t",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Expressway is also on Cisco's PHP2Shell vulnerable list, with its PHP fix (15.5.21) still TBD on 23 October.",
+  "related": [
+   "php-cisco-vulnerable"
+  ]
+ },
+ {
+  "id": "emu-update5-script-error",
+  "thread": "emudhra",
+  "parent": "emu-cause-statement",
+  "t": "2026-10-25T18:30:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "eMudhra apologises: 'The flaw was ours. A script error' made the weak CA keys",
+  "summary": "Status update 5 says a script error produced the eight weak emSign G3 intermediate keys, apologises to customers, partners and the WebPKI community, and promises a full root-cause report through the CCADB process and an independent expert review of its procedures and controls.",
+  "sources": [
+   {
+    "url": "https://emudhra.com/en/post/certificate-security-incident",
+    "publisher": "eMudhra",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Dated 26 October (India time); the page was live by 23:13 UTC on 25 October, so t is the start of 26 October IST. Update 3 had blamed a key wrap/unwrap step in the HSM ceremony; update 5 names a script error instead and does not reconcile the two."
+ },
+ {
+  "id": "emu-philippines-statement",
+  "thread": "emudhra",
+  "parent": "emu-exit-tls",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "eMudhra tells Philippine customers its services there, TLS included, are unaffected",
+  "summary": "A Manila-datelined press release says eMudhra's Philippine operations, including TLS services, are not affected, that its other products run normally, and that it offers certificates from another public CA even to unaffected TLS customers.",
+  "sources": [
+   {
+    "url": "https://emudhra.com/en/press-release/emudhra-assures-continued-service-customers-philippines",
+    "publisher": "eMudhra",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The release speaks of continuing TLS service and does not mention the exit from global SSL/TLS announced on 22 October."
+ },
+ {
+  "id": "emu-mea-statement",
+  "thread": "emudhra",
+  "parent": "emu-philippines-statement",
+  "t": "2026-10-25T20:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "eMudhra: no impact in the Middle East and Africa; distrust hit one US customer ecosystem",
+  "summary": "A Dubai-datelined release says no customer, service or application in the Middle East and Africa is affected, that the root distrust affected only a single customer ecosystem in the United States, and that Sectigo certificates are offered at no cost as CA redundancy.",
+  "sources": [
+   {
+    "url": "https://emudhra.com/en/press-release/emudhra-confirms-no-impact-middle-east-africa-global-tls-incident",
+    "publisher": "eMudhra",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Dated 26 October in Dubai (UTC+4), which began at 20:00 UTC on 25 October. A Bugzilla comment of 25 October counted 107,107 certificates logged in CT under six of the compromised keys, issued by others, not eMudhra."
+ },
+ {
+  "id": "php-unit42-retraction",
+  "thread": "php2shell",
+  "parent": "php-unit42-agentic-intrusion",
+  "t": "2026-10-25T21:15:00Z",
+  "tPrecision": "minute",
+  "kind": "correction",
+  "title": "Unit 42 retracts its report of a PHP2Shell intrusion at a European government agency",
+  "summary": "Unit 42 says it cannot confirm that initial access in the European government attack it described on 23 October came through the PHP2Shell CVEs, only that it ran in the context of a vulnerable PHP application, and retracts its 23 October update on agentic-AI post-exploitation.",
+  "sources": [
+   {
+    "url": "https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/",
+    "publisher": "Palo Alto Networks Unit 42",
+    "primary": true
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/php2shell-exploitation-hits-government.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The page says 'Updated October 25, 2026, at 2:15 p.m. PT to retract our October 23 update.' Press reports of the first confirmed PHP2Shell breach, for example The Hacker News on a government entity, relied on the retracted update."
+ },
+ {
+  "id": "php-hikvision-storage",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Hikvision: Hybrid SAN and Cluster Storage arrays run affected PHP; patch disables it",
+  "summary": "Hikvision advisory HSRC-202610-01 lists Hybrid SAN arrays up to V2.3.9-8 and Cluster Storage up to V1.1.4 as affected. The Hybrid SAN patch turns the PHP service off by default while a PHP upgrade is still in testing; Cluster Storage customers must contact support.",
+  "sources": [
+   {
+    "url": "https://www.hikvisionjapan.com/php-security-advisory/",
+    "publisher": "Hikvision Japan",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Hikvision says the information comes from public reports and its investigation continues; it does not report exploitation."
+ },
+ {
+  "id": "php-crime-forums-offline",
+  "thread": "php2shell",
+  "parent": "php-services-paused",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "takedown",
+  "title": "Criminal forums BreachForums, DarkForums, PwnForums and Dread go offline over PHP2Shell",
+  "summary": "Tenable reports that several cybercrime forums took themselves offline or restricted sign-ups within 48 hours of the disclosure, fearing a breach of member data and logs; Dread's maintenance notice named both CVEs. Boan News, citing SOCRadar monitoring, reports the same shutdowns.",
+  "sources": [
+   {
+    "url": "https://www.tenable.com/blog/php2shell-vulnerability-threat-actor-response",
+    "publisher": "Tenable",
+    "primary": false
+   },
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146718",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Sources disagree on which forum said it would stay offline 'until PHP has been patched globally': Tenable quotes DarkForums, Boan News attributes it to BreachForums. No forum notice was opened directly."
+ },
+ {
+  "id": "php-cyfirma-logs-doubted",
+  "thread": "php2shell",
+  "parent": "php-cyfirma-korean-actors",
+  "t": "2026-10-24T06:10:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Korean expert doubts CYFIRMA's chat logs: the Korean 'is not natural' for Koreans",
+  "summary": "Boan News reports CYFIRMA's claim that the group planned a 25 October target-list deadline and used a local AI model to rank exploits, but quotes an anonymous Korean security expert who says the Korean in the published chat captures does not read like real Korean or North Korean hackers.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146724",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "CYFIRMA itself rates the Lazarus link only 'Moderate' and allows for an ordinary Korean-speaking criminal group."
+ },
+ {
+  "id": "rw-ai-key-notice-closed",
+  "thread": "railway",
+  "parent": "rw-ai-key-batch-revocation",
+  "t": "2026-10-25T06:26:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Railway closes its AI-key revocation notice: 'No impact'",
+  "summary": "Railway marks the 24 October notice about precautionary AI-provider key revocations as resolved, dismissing it as a notice with no impact.",
+  "sources": [
+   {
+    "url": "https://status.railway.com/incident/8E4V5WLD",
+    "publisher": "Railway",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "label-rawstory-lockdown",
+  "thread": "label",
+  "parent": "label-viral-post",
+  "t": "2026-10-22T17:04:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Raw Story: 'Black October' panic and talk of internet lockdowns spread on X",
+  "summary": "Raw Story reports X posts by tech figures comparing the week to March 2020 and asking whether internet lockdowns are coming. It notes no lockdown has been announced and that Axios reported no money taken.",
+  "sources": [
+   {
+    "url": "https://www.rawstory.com/agentic-ai/",
+    "publisher": "Raw Story",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Speculation on social media, not a policy proposal. No government announced any internet restriction. Raw Story cites the Axios bank report, which the ledger times at 18:01 UTC from a syndicated copy; Raw Story's 1:04 PM ET stamp is earlier."
+ },
+ {
+  "id": "label-reuters-banks",
+  "thread": "label",
+  "parent": "label-axios",
+  "t": "2026-10-22T19:41:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Reuters: banks block outside AI agents; Morgan Stanley source sees no rogue agents",
+  "summary": "Reuters, citing people familiar with the matter, says Morgan Stanley blocks third-party agents but has seen no unauthorized or rogue ones. JPMorgan's CEO says it will not let 'just any outside agent' in; Schwab's CEO says it blocks unauthorized agents.",
+  "sources": [
+   {
+    "url": "https://www.aol.com/articles/us-banks-detect-unauthorized-ai-091700000.html",
+    "publisher": "Reuters (via AOL)",
+    "primary": false
+   },
+   {
+    "url": "https://www.rawstory.com/agentic-ai/",
+    "publisher": "Raw Story",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Reuters relays the Axios scoop without confirming it; the Morgan Stanley account contradicts the 'rogue agents inside accounts' framing. Time is the article's last update."
+ },
+ {
+  "id": "keystone-count-unpublished",
+  "thread": "keystone-wallet",
+  "parent": "keystone-disclosure",
+  "t": "2026-10-25T10:18:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Keystone emails affected buyers but gives no customer count yet",
+  "summary": "crypto.news reports Keystone is emailing affected buyers and preparing a detailed incident report, with no customer count, country breakdown or forensic findings published. A circulating claim of 120,000 buyer addresses across four wallet makers is unverified.",
+  "sources": [
+   {
+    "url": "https://crypto.news/keystone-wallet-hack-customer-addresses-exposed/",
+    "publisher": "crypto.news",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "certin-bfsi-ciad0046",
+  "thread": "certin-bfsi",
+  "parent": null,
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-In CIAD-2026-0046: payment API thefts in Indian finance, possibly AI-assisted",
+  "summary": "CERT-In and CSIRT-Fin warn of campaigns against NBFCs, lenders, fintechs and wallets that steal gateway and bank API credentials and call fund-transfer APIs directly to mule accounts. The critical advisory says the attackers possibly use AI-assisted offensive tooling, which shortens the time from break-in to theft.",
+  "sources": [
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&VLCODE=CIAD-2026-0046",
+    "publisher": "CERT-In",
+    "primary": true
+   },
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&year=2026",
+    "publisher": "CERT-In",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: CERT-In's AI-agent advisory CIAD-2026-0049 (cert-in-ai thread) tells BFSI and fintech entities to apply the CIAD-2026-0046 measures as well, and both describe AI-assisted attacks. No victim is named.",
+  "related": [
+   "certin-advisory"
+  ]
+ },
+ {
+  "id": "label-guardian",
+  "thread": "label",
+  "parent": "label-yahoo-finance-video",
+  "t": "2026-10-23T18:48:48Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Guardian: 'Black October' experts warn of a 'vulnerability tsunami' from AI-found bugs",
+  "summary": "The Guardian quotes Sam Altman saying 'I no longer think we're going to be able to patch all bugs' and Anthropic's deputy CISO predicting a 'vulnerability tsunami'. It also quotes Cloudflare's CEO and Salesforce's CEO, who calls it a 'code red'.",
+  "sources": [
+   {
+    "url": "https://www.theguardian.com/technology/2026/oct/23/cybersecurity-ai-hacking-php-vulnerability",
+    "publisher": "The Guardian",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The quotes come from X posts on the evening of 22 Oct (US time), as the Guardian relays them. The '70% of sites at risk' figure in the article is an estimate of exposure, not of breaches."
+ },
+ {
+  "id": "ledger-ceo-chain-review",
+  "thread": "ledger-implant",
+  "parent": "ledger-implant-confirmed",
+  "t": "2026-10-13T06:46:10Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Ledger CEO leads the CryptoBilis probe and reviews reseller supply-chain controls",
+  "summary": "Ledger's CEO says he leads the investigation into who tampered with the signers and where in the distribution chain it happened. Ledger reviews the controls on its direct sales and resellers and asks other vendors to work on chain-of-custody and tamper detection.",
+  "sources": [
+   {
+    "url": "https://x.com/_pgauthier/status/2109898470383329321",
+    "publisher": "Ledger (CEO on X)",
+    "primary": true
+   },
+   {
+    "url": "https://api.fxtwitter.com/_pgauthier/status/2109898470383329321",
+    "publisher": "FxTwitter mirror of the X post",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Ledger says it has no indication that its own infrastructure was compromised and that figures circulating online are unverified."
  }
 ];
