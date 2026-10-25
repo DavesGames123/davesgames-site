@@ -8,7 +8,7 @@
 //
 //  Groups (grep -n "section(" to jump):
 //    files       node --check on every CORE file
-//    packages    runs model/, strands/, ends/, records/, compare/, saver/
+//    packages    runs model/, strands/, ends/, records/, compare/, webs/, saver/
 //                tests.mjs when the file exists (each in its own process)
 //    story       chapter order, sentence-case headings, 2-5 paragraphs,
 //                equation and figure keys, scenes against CONTRACT.md,
@@ -55,7 +55,7 @@ console.log(`  ${CORE_FILES.length} files`);
 
 // ============================================================================
 section('packages');
-const PKGS = ['model', 'strands', 'ends', 'records', 'compare', 'saver'];
+const PKGS = ['model', 'strands', 'ends', 'records', 'compare', 'webs', 'saver'];
 const pkgResults = {};
 for (const p of PKGS) {
   const f = join(HERE, p, 'tests.mjs');
@@ -89,6 +89,12 @@ for (const c of CH) {
   ok(paras >= 2 && paras <= 5, `${c.id} has 2-5 top-level paragraphs (${paras})`);
 }
 const allBlocks = c => c.blocks.flatMap(b => b.more ? [b, ...b.more.blocks] : [b]);
+// The closing WEBS section (webs/story.js): built after c11, not a chapter.
+const WB = (await import(pathToFileURL(join(HERE, 'webs/story.js')).href)).WEBS;
+ok(WB && WB.id === 'webs' && WB.divider && !CH.some(c => c.id === 'webs'), 'WEBS is a closing section, not one of the 12 chapters');
+ok(Object.values(WB.figures).every(f => f.pkg === 'webs' && ['paper', 'model', 'analogy', 'deck'].includes(f.tag)) && Object.values(WB.figures).filter(f => f.tag === 'paper').length === 0, 'WEBS figures are tagged as the talk deck, never as the paper');
+const c10 = CH.find(c => c.id === 'c10');
+ok(c10.blocks.filter(b => JSON.stringify(b).includes('separate section')).length === 1 && CH.filter(c => c.id !== 'c10').every(c => !/Chain Theory/.test(JSON.stringify(c.blocks))), 'one pointer to the WEBS section, at the end of c10 only');
 const eqKeys = CH.flatMap(c => allBlocks(c).filter(b => b.eq).map(b => b.eq));
 const missingEq = eqKeys.filter(k => !(k in E.EQ));
 ok(!missingEq.length, `every equation key exists in equations.js (${eqKeys.length} used)` + (missingEq.length ? ` missing ${missingEq}` : ''));
@@ -242,6 +248,7 @@ section('page');
   const ids = [...new Set([...js.matchAll(/\$\('([A-Za-z0-9_-]+)'\)/g)].map(x => x[1]))];
   const missing = ids.filter(id => !html.includes(`id="${id}"`));
   ok(ids.length >= 8 && !missing.length, `index.html has all ${ids.length} ids main.js binds` + (missing.length ? ` (missing ${missing.join(', ')})` : ''));
+  ok(html.indexOf('id="websDivider"') > html.indexOf('id="c11"') && html.indexOf('id="webs"') > html.indexOf('id="websDivider"'), 'index.html has the WEBS divider and shell after c11');
   const chIds = S.CHAPTERS.map(c => c.id);
   ok(chIds.every(id => html.includes(`id="${id}"`)), 'index.html has a shell for every chapter');
   const head = ['gpu-guard.js', 'wishlist.js', 'stats-beacon.js'].map(f => html.indexOf(f));
@@ -314,7 +321,7 @@ section('jsdom');
     const d = w.document;
     ok(S.CHAPTERS.slice(1).every(c => d.querySelector(`#${c.id} .ch-head h2`)), 'every chapter c1..c11 has its heading');
     ok(d.querySelectorAll('#heroBody .prose').length >= 3 && d.querySelector('#heroBody .fig'), 'the hero has its text and its figure');
-    const nFig = S.CHAPTERS.reduce((n, c) => n + Object.keys(c.figures || {}).length, 0);
+    const nFig = S.CHAPTERS.reduce((n, c) => n + Object.keys(c.figures || {}).length, 0) + Object.keys(WB.figures).length;
     const figs = [...d.querySelectorAll('figure.fig')];
     ok(figs.length === nFig, `${figs.length} figure cards (story: ${nFig})`);
     const mounted = figs.filter(f => f.querySelector('.host'));
@@ -326,7 +333,10 @@ section('jsdom');
     const boxes = d.querySelectorAll('[data-tex]').length;
     ok(typeset >= boxes, `MathJax stub typeset all ${boxes} TeX boxes (${typeset} calls)`);
     ok(d.querySelectorAll('#rail a').length === 12 && d.querySelectorAll('#menuList a').length === 12, 'rail and phone menu list 12 chapters');
-    ok(d.querySelectorAll('[data-analogy]').length === analogies.length, `${analogies.length} analogy boxes`);
+    ok(d.querySelector('#webs .ch-head h2') && !d.querySelector('#webs .ch-num') && d.querySelectorAll('#webs figure.fig .host[data-pkg="webs"]').length === Object.keys(WB.figures).length, 'the WEBS section has its heading, no chapter number, and its webs figures');
+    ok(!d.querySelector('.aq-st-analogy') && !d.querySelector('.webs-notes'), 'no package repeats the analogy note under notes: false');
+    const nAn = analogies.length + WB.blocks.filter(x => x.analogy).length;
+    ok(d.querySelectorAll('[data-analogy]').length === nAn, `${nAn} analogy boxes (chapters and WEBS)`);
     ok(d.querySelectorAll('.gloss dt').length === S.GLOSSARY.length, 'glossary built');
     ok(d.querySelectorAll('.refs li').length === Object.keys(S.SOURCES).length, `${Object.keys(S.SOURCES).length} sources listed`);
     const meas = [...d.querySelectorAll('[data-table="measurements"] tbody tr')].map(r => r.lastElementChild.textContent);

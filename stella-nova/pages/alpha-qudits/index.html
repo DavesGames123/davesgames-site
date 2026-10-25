@@ -22,7 +22,7 @@
      <section> shells below, typesets the TeX of equations.js with
      ../../lib/sci-math.js (MathJax SVG), and mounts one figure card per
      story figure. A card loads its package (strands/, ends/, records/,
-     compare/) by a dynamic import when it comes near the screen, and
+     compare/, webs/) by a dynamic import when it comes near the screen, and
      shows a placeholder when the package is not there. The c1 figure
      (screening) is CORE's own canvas, in main.js.
 
@@ -40,6 +40,8 @@
      #menuSheet  chapter list sheet, with #menuList and #menuClose
      #c0         hero: #heroBody (chapter 0 text and figure), #heroStats
      #c1 .. #c11 chapter shells; main.js fills each from story/*.js
+     #webs       closing section after the sources (webs/story.js), behind
+                 #websDivider; not listed in the rail or the phone menu
      #noscript   message when the module does not run
 
    GREP MAP  (main.js)
@@ -95,6 +97,11 @@
     <section class="ch" id="c9" data-ch="9"></section>
     <section class="ch" id="c10" data-ch="10"></section>
     <section class="ch" id="c11" data-ch="11"></section>
+
+    <!-- Closing section, apart from chapters 0-11 (CONTRACT.md addendum):
+         webs/story.js, written by main.js. Not in the rail. -->
+    <hr class="webs-divider" id="websDivider">
+    <section class="ch webs" id="webs" data-ch="12"></section>
 
     <p class="noscript" id="noscript">The chapters of this page are written by a JavaScript module. If you can read this line for more than a moment, the module did not run in this browser.</p>
   </main>

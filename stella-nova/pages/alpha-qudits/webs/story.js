@@ -49,14 +49,14 @@ export const WEBS = {
     fw1: { pkg: 'webs', title: 'Rigid links, free joints', tag: 'analogy', scenes: [
       { id: 'chain', label: 'Chain', cap: 'The talk\'s analogy for the joins, in our drawing: rigid links, free joints, and what no turn of a joint changes.' },
     ] },
-    fw2: { pkg: 'webs', title: 'Six genres of link', tag: 'paper', scenes: [
+    fw2: { pkg: 'webs', title: 'Six genres of link', tag: 'deck', scenes: [
       { id: 'genres', label: 'Genres', cap: 'Derived on top (the read cap), conjectured in the amber band. Counts per Part from the talk deck.' },
     ] },
-    fw3: { pkg: 'webs', title: 'Conjectured webs', tag: 'paper', scenes: [
+    fw3: { pkg: 'webs', title: 'Conjectured webs', tag: 'deck', scenes: [
       { id: 'electron', label: 'Electron', cap: 'The electron\'s web, built in the order the talk lists its genres. Dashed: counts and far ends the talk text does not give.' },
       { id: 'wz', label: 'W and Z', cap: 'One web, two reads. The web\'s structure is not given in the talk text; only the reads are drawn firmly.' },
     ] },
-    fw4: { pkg: 'webs', title: 'The compendium, graded', tag: 'paper', scenes: [
+    fw4: { pkg: 'webs', title: 'The compendium, graded', tag: 'deck', scenes: [
       { id: 'grades', label: 'Grades', cap: 'Boxed statements by Part (theorems, conditional theorems, open results), and the 17 particles by what they rest on. Counts from the talk deck.' },
     ] },
   },

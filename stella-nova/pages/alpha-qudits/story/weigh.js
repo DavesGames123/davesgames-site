@@ -8,6 +8,8 @@
 //  Sigma offsets are (candidate - measured) / u, in 1/alpha, as in Fig. 3.
 // ============================================================================
 
+import { WEBS_POINTER } from '../webs/story.js';
+
 // The four determinations of 1/alpha(0) that the paper compares with
 // (its Fig. 3), as decimal strings so that no digit is lost. u is the
 // one-sigma uncertainty in the last digits shown in brackets. main.js
@@ -70,6 +72,7 @@ export const WEIGH = [
       { eq: 'family' },
       { p: `Read these counts with care. They differ by a factor of hundreds because restricting the denominators is itself a choice. A large count says that a formula of this shape could hit the window by luck, if its integers were free. They are not free in the paper: the derivation fixes 79, 48, 42, 3 and 31104 by its rules, and the dials above show what happens when a rule moves. The fair question is how many rules there were to choose, and how many of the choices the paper's definitions really force. Both the look-elsewhere count and the list of clauses belong in that judgement.` },
       { fig: 'f10b' },
+      { aside: WEBS_POINTER },
     ],
     figures: {
       f10a: { pkg: 'compare', title: 'Flip a clause', tag: 'paper', scenes: [

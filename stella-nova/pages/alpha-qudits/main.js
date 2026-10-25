@@ -20,6 +20,9 @@
 //    5. model/index.js (dynamic import) fills the tables of c6, c8, c9.
 //    6. window.alphaPage = { goto(chapter), figure(name) } for SAVER, and
 //       ./saver/index.js is imported last (a failed import is ignored).
+//    7. The closing section WEBS (webs/story.js) is built after c11 into
+//       #webs, behind #websDivider. It is not in CHAPTERS, so the rail
+//       and the phone menu list only chapters 0-11 (CONTRACT.md addendum).
 //
 //  GREP MAP
 //      grep -n 'function buildChapter'   one chapter from its story object
@@ -36,6 +39,7 @@
 // ============================================================================
 import { CHAPTERS, GLOSSARY, SOURCES, CREDITS, CHAPTER_REFS, MEASURED } from './story/index.js';
 import { EQ } from './equations.js';
+import { WEBS } from './webs/story.js';
 import { typesetAll } from '../../lib/sci-math.js';
 
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -50,8 +54,9 @@ const PKG = {
   ends: ['./ends/index.js', 'createEnds'],
   records: ['./records/index.js', 'createRecords'],
   compare: ['./compare/index.js', 'createCompare'],
+  webs: ['./webs/index.js', 'createWebs'],
 };
-const TAGS = { paper: "the paper's result, our drawing", model: 'our model', analogy: 'analogy' };
+const TAGS = { paper: "the paper's result, our drawing", model: 'our model', analogy: 'analogy', deck: "the talk deck's claim, our drawing" };
 // The candidate, for the tables when model/ is not loaded (CONTRACT.md).
 const CAND_INV = '137.035999189566155029183744020866';
 const PAPER_SECTORS = { '++': 79, '+-': 48, '-+': 42, '--': 3 };
@@ -92,7 +97,8 @@ function refsLine(id) {
 function buildChapter(ch) {
   const el = ch.hero ? $('heroBody') : $(ch.id);
   if (!el) return null;
-  const head = ch.hero ? '' : `<div class="ch-head"><span class="ch-num">${pad(ch.num)}</span><h2>${ch.title}</h2></div>`;
+  // The closing WEBS section (divider: true) has a heading with no number.
+  const head = ch.hero ? '' : ch.divider ? `<div class="ch-head"><h2>${ch.title}</h2></div>` : `<div class="ch-head"><span class="ch-num">${pad(ch.num)}</span><h2>${ch.title}</h2></div>`;
   el.innerHTML = head + ch.blocks.map(block).join('') + refsLine(ch.id);
   el.querySelectorAll('[data-fig]').forEach(slot => {
     const id = slot.dataset.fig, spec = ch.figures && ch.figures[id];
@@ -540,7 +546,7 @@ function loop(now) {
 }
 
 // ---------------------------------------------------------------- boot
-for (const ch of CHAPTERS) {
+for (const ch of [...CHAPTERS, WEBS]) {
   const rec = buildChapter(ch);
   if (rec) nearIO.observe(rec.el);
 }
