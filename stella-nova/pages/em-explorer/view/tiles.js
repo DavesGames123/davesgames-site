@@ -49,11 +49,13 @@ export class TileStore {
   has(key) { return this.tiles.has(key); }
 
   // A loaded tile at the same place within maxD slice steps, nearest first.
-  nearest(pk, index, maxD = 3) {
+  // skip: an index to leave out (the exact tile, to draw the old one under it).
+  nearest(pk, index, maxD = 3, skip = null) {
     const m = this.byPos.get(pk);
     if (!m) return null;
     let best = null, bd = maxD + 1;
     for (const [i, t] of m) {
+      if (i === skip) continue;
       const d = Math.abs(i - index);
       if (d < bd) { bd = d; best = t; }
     }
