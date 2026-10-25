@@ -96,6 +96,13 @@ html.in-frame .brand,html.in-frame .pagetitle{display:none}
 /* STAGE */
 #stage{position:fixed;top:var(--top-h);left:var(--learn-w);right:0;bottom:0;display:flex;flex-direction:column;transition:left .32s var(--ease)}
 body.panel-closed #stage{left:0}
+/* narrow desktop stage: the blocks layout is taller than the stage, so the
+   stage scrolls (main.js relayout sets body.net-v) */
+body.net-v #stage{overflow-y:auto;overscroll-behavior:contain;display:block}
+body.net-v .stage-head{position:sticky;top:0;z-index:8;background:rgba(11,13,19,0.96)}
+body.net-v .net-wrap{flex:none}
+body.net-v #netCv{position:relative;inset:auto}
+body.net-v .net-hint{display:none}
 .strip{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);flex:0 0 auto;min-width:0}
 .strip-ex{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;min-width:0;flex:1;padding:3px}
 .strip-ex::-webkit-scrollbar{display:none}

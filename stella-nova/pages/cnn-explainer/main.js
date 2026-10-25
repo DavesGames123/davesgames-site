@@ -342,6 +342,9 @@ export async function boot() {
     const w = Math.max(240, wrap.clientWidth || (phone ? 360 : 1100));
     const h = phone ? 0 : Math.max(300, wrap.clientHeight || 640);
     S.base = { w, h, orient: phone || w < 720 ? 'v' : 'h' };
+    // a narrow desktop stage also gets the tall blocks layout: then the
+    // stage must scroll as it does on a phone (style.css body.net-v)
+    doc.body.classList.toggle('net-v', S.base.orient === 'v' && !phone);
     S.dpr = Math.min(2, win.devicePixelRatio || 1);
     S.cw = w; S.ch = -1; S.fullKey = '';
     layoutNow();
