@@ -258,7 +258,7 @@ lands.
 The user then pasted the author's talk deck "Chain Theory: an
 introduction" (23 Oct 2026) and asked, verbatim: "do we include the
 ideas of standard model webs re: alpha qudits?". A follow-up agent
-adds one chapter after chapter 10, "Beyond the Letter: Chain Theory's
+adds one closing section (see Placement below), "Beyond the Letter: Chain Theory's
 wider program", in a new package WEBS (webs/**) with its own story
 file. Nobody else builds it; do not stub it in other packages.
 
