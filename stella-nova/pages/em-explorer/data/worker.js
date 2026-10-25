@@ -1,14 +1,14 @@
 // Module worker for the em-explorer DATA package.
-// Messages in:  { op, id, ... }  open, chunk, slice, cancel, cancelAll,
-//               focus, cap, stats, close.
+// Messages in:  { op, id, ... }  open, chunk, slice, prefetch, cancel,
+//               cancelAll, focus, cap, stats, close.
 // Messages out: { op: 'ready', jpeg } once, then { id, ok, result | error, abort }.
 // Slice buffers are transferred. Chunk data is copied first, because the
 // cache keeps the original.
 
-import { createEngine } from './engine.js';
+import { createEngine, BROWSER_IN_FLIGHT, PREFIX_BYTES } from './engine.js';
 import { decodeJpegBrowser } from './codecs.js';
 
-const engine = createEngine({ decodeJpeg: decodeJpegBrowser });
+const engine = createEngine({ decodeJpeg: decodeJpegBrowser, maxInFlight: BROWSER_IN_FLIGHT, prefixBytes: PREFIX_BYTES });
 const ctrls = new Map();
 
 function reply(id, p, transfer) {
@@ -47,6 +47,9 @@ if (scope) scope.onmessage = (e) => {
         (r) => [r.data.buffer]);
       break;
     }
+    case 'prefetch':
+      reply(m.id, engine.prefetchIndexes(m.vid, m.groups));
+      break;
     case 'cancel': {
       const ac = ctrls.get(m.ref);
       if (ac) ac.abort();

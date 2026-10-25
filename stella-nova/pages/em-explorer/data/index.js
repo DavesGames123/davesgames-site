@@ -15,9 +15,12 @@
 //       JSON API, which sends CORS headers for every public bucket).
 //       format is optional: the reader tries `info`, then `.zattrs`.
 //       Optional: maxScales (keep the first N scales), name.
-//     opts: { worker: true|false, cacheBytes, maxInFlight }
+//     opts: { worker: true|false, cacheBytes, maxInFlight, prefixBytes, hostCap }
 //   setPhone(bool)        cache cap 96 MB (phone) or 256 MB (desktop).
 //   setCacheBytes(n)      set the cache cap in bytes.
+//   warm()                start the module worker now (round 2: main.js
+//                         calls it as soon as this module is in, so the
+//                         worker starts while VIEW and the UI still load).
 //
 // Volume
 //   id, format, dtype ('uint8'), yzOrder ('zy': yz plane is u=z, v=y)
@@ -34,6 +37,10 @@
 //     -> Promise<{ data: Uint8Array, shape [x,y,z] }>  (x is fastest)
 //     Chunk grid positions count from voxel 0 of the scale. Do not
 //     write into data: without a worker it is the cached copy.
+//   prefetchIndexes([{ si, chunks: [[cx, cy, cz], ...] }]) -> Promise<n>
+//     load the shard and minishard indexes of these chunks (sharded
+//     precomputed; a no-op for zarr). VIEW calls it once per volume with
+//     the tiles of the first view.
 //   setFocus({ x, y, z })  view centre in nm. Queued requests nearest
 //     to the focus go first, when the caller gives no priority.
 //   cancelAll()           drop all queued and in-flight requests.
@@ -45,7 +52,9 @@
 // worker cannot start, or has no OffscreenCanvas for JPEG (Safari before
 // 16.4), the engine runs on the main thread instead.
 //
-// Rules: at most 8 fetches in flight; an aborted signal removes its
+// Rules: at most 24 fetches in flight in the browser (8 for a private
+// engine with opts.fetch, the tests), at most 6 per HTTP/1.1 host (S3,
+// where data/urls.js spreads chunks over three host names); an aborted signal removes its
 // requests when no other caller waits for the same chunk. A missing shard,
 // minishard entry or zarr chunk gives a chunk of zeros (fill value).
 //
@@ -63,10 +72,14 @@
 //   'class Scheduler'                    data/scheduler.js
 //   'function assembleSlice'             data/slice.js
 //   'function resolveUrl'                data/urls.js
+//   'function s3ShardHosts'              data/urls.js  (S3 host names)
+//   'function hostSlot'                  data/engine.js (6 per HTTP/1.1 host)
+//   'async function prefetchIndexes'     data/engine.js
+//   'async shardHead'                    data/precomputed.js (small shards)
 //   'self.onmessage' / 'scope.onmessage' data/worker.js  (message ops)
 //   node data/tests.mjs [--live] [--png dir]   offline and live tests
 
-import { createEngine, DESKTOP_CACHE, PHONE_CACHE } from './engine.js';
+import { createEngine, DESKTOP_CACHE, PHONE_CACHE, BROWSER_IN_FLIGHT, PREFIX_BYTES } from './engine.js';
 import { decodeJpegBrowser } from './codecs.js';
 import { abortError } from './scheduler.js';
 
@@ -108,7 +121,9 @@ function localBackend(opts = {}) {
     fetch: opts.fetch,
     decodeJpeg: opts.decodeJpeg || (canJpeg ? decodeJpegBrowser : null),
     cacheBytes: opts.cacheBytes || currentCap(),
-    maxInFlight: opts.maxInFlight,
+    maxInFlight: opts.maxInFlight || (opts.fetch || opts.private ? undefined : BROWSER_IN_FLIGHT),
+    prefixBytes: opts.prefixBytes ?? (opts.fetch || opts.private ? 0 : PREFIX_BYTES),
+    hostCap: opts.hostCap,
   });
   return {
     kind: 'local',
@@ -116,6 +131,7 @@ function localBackend(opts = {}) {
     open: (record) => engine.open(record),
     chunk: (vid, si, c, o) => engine.getChunk(vid, si, c, o),
     slice: (vid, si, plane, index, rect, o) => engine.getSlice(vid, si, plane, index, rect, o),
+    prefetch: (vid, groups) => engine.prefetchIndexes(vid, groups),
     focus: (vid, nm) => engine.setFocus(vid, nm),
     cancelAll: (vid) => engine.cancelAll(vid),
     close: (vid) => engine.close(vid),
@@ -176,6 +192,7 @@ function workerBackend(allowNoJpeg = false) {
       chunk: (vid, si, c, o = {}) => call({ op: 'chunk', vid, si, c: [...c], priority: o.priority }, o.signal),
       slice: (vid, si, plane, index, rect, o = {}) =>
         call({ op: 'slice', vid, si, plane, index, rect: [...rect], priority: o.priority }, o.signal),
+      prefetch: (vid, groups) => call({ op: 'prefetch', vid, groups: JSON.parse(JSON.stringify(groups || [])) }),
       focus: (vid, nm) => worker.postMessage({ op: 'focus', vid, nm: { x: nm.x, y: nm.y, z: nm.z } }),
       cancelAll: (vid) => worker.postMessage({ op: 'cancelAll', vid }),
       close: (vid) => worker.postMessage({ op: 'close', vid }),
@@ -184,6 +201,8 @@ function workerBackend(allowNoJpeg = false) {
     };
   }).then((api) => { api.setCacheBytes(currentCap()); return api; });
 }
+
+export function warm() { sharedBackend().catch(() => {}); }
 
 function sharedBackend() {
   if (!shared) {
@@ -218,6 +237,7 @@ class Volume {
   getChunk(scaleIndex, c, opts = {}) {
     return this.backend.chunk(this.vid, scaleIndex, c, opts);
   }
+  prefetchIndexes(groups) { return this.disposed ? Promise.resolve(0) : this.backend.prefetch(this.vid, groups); }
   setFocus(nm) { if (nm) this.backend.focus(this.vid, nm); }
   cancelAll() { this.backend.cancelAll(this.vid); }
   stats() { return this.backend.stats(); }

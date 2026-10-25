@@ -5,16 +5,26 @@
 // shared by all volumes), the small index cache (shard and minishard
 // indexes) and the Scheduler (max 8 fetches in flight, priority, cancel).
 //
-// createEngine({ fetch, decodeJpeg, cacheBytes, maxInFlight }) -> {
+// createEngine({ fetch, decodeJpeg, cacheBytes, maxInFlight, hostCap,
+//                prefixBytes }) -> {
 //   open(record) -> Promise<{ vid, meta }>,
 //   getChunk(vid, si, c, opts), getSlice(vid, si, plane, index, rect, opts),
+//   prefetchIndexes(vid, [{ si, chunks: [[cx,cy,cz], ...] }]) -> Promise<n>,
 //   setFocus(vid, nm), cancelAll(vid?), close(vid), stats(),
 //   setCacheBytes(n) }
+//
+// maxInFlight: 8 by default (tests); the browser backends pass
+// BROWSER_IN_FLIGHT (24), because GCS speaks HTTP/2 and a cap of 8 held
+// the hemibrain home view at 40 s (NOTES.md, round 2 timeline).
+// hostCap: fetches in flight per HTTP/1.1 host name (S3), default 6, the
+// browser limit, so the queue order stays ours and not the browser's.
+// prefixBytes: read a whole small shard in one request (precomputed.js
+// PREFIX_BYTES in the browser backends; 0, off, by default).
 
 import { ByteLRU } from './cache.js';
 import { Scheduler, abortError } from './scheduler.js';
-import { resolveUrl } from './urls.js';
-import { PrecomputedSource, parseInfo } from './precomputed.js';
+import { resolveUrl, hostOf, isHttp1Host } from './urls.js';
+import { PrecomputedSource, parseInfo, PREFIX_BYTES } from './precomputed.js';
 import { openZarr } from './zarr.js';
 import { assembleSlice } from './slice.js';
 
@@ -22,6 +32,10 @@ export const DESKTOP_CACHE = 256 * 1024 * 1024;
 export const PHONE_CACHE = 96 * 1024 * 1024;
 const INDEX_CACHE = 24 * 1024 * 1024;
 const MAX_RANGE_SLACK = 1 << 20;
+export const BROWSER_IN_FLIGHT = 24;
+export { PREFIX_BYTES };
+const HOST_CAP = 6;
+const PREFETCH_LANES = 4;
 
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -40,8 +54,31 @@ export function createEngine(opts = {}) {
   const byUrl = new Map();
   const counters = { fetched: 0, fetchedBytes: 0, errors: 0 };
   let nextVid = 1;
+  const hostCap = opts.hostCap === undefined ? HOST_CAP : opts.hostCap;
+  const lanes = new Map();
 
-  async function fetchBytes(url, { range, signal } = {}) {
+  // A slot on an HTTP/1.1 host; waits in arrival order, leaves on abort.
+  function hostSlot(url, signal) {
+    const host = hostOf(url);
+    if (!hostCap || !isHttp1Host(host)) return Promise.resolve(() => {});
+    let L = lanes.get(host);
+    if (!L) lanes.set(host, L = { n: 0, wait: [] });
+    const release = () => { L.n--; while (L.wait.length) { const w = L.wait.shift(); if (w.go()) break; } };
+    if (L.n < hostCap) { L.n++; return Promise.resolve(release); }
+    return new Promise((resolve, reject) => {
+      const w = { done: false, go: () => { if (w.done) return false; w.done = true; L.n++; resolve(release); return true; } };
+      if (signal) signal.addEventListener('abort', () => { if (!w.done) { w.done = true; reject(abortError()); } }, { once: true });
+      L.wait.push(w);
+    });
+  }
+
+  async function fetchBytes(url, o = {}) {
+    if (o.signal && o.signal.aborted) throw abortError();
+    const release = await hostSlot(url, o.signal);
+    try { return await fetchBytesNow(url, o); } finally { release(); }
+  }
+
+  async function fetchBytesNow(url, { range, signal } = {}) {
     const headers = {};
     if (range) headers.Range = 'bytes=' + range[0] + '-' + (range[1] - 1);
     for (let attempt = 0; ; attempt++) {
@@ -91,7 +128,7 @@ export function createEngine(opts = {}) {
     }
   }
 
-  const io = { fetchBytes, fetchJson, decodeJpeg, indexCache };
+  const io = { fetchBytes, fetchJson, decodeJpeg, indexCache, prefixBytes: opts.prefixBytes || 0 };
 
   async function openSource(record) {
     const store = resolveUrl(record.url || record.source);
@@ -164,6 +201,29 @@ export function createEngine(opts = {}) {
     }, { signal: o.signal, priority: o.priority, group: vid, centre: chunkCentre(v.meta, si, c) });
   }
 
+  // Warm the shard and minishard indexes of these chunks (sharded
+  // precomputed only), so the first chunk of each shard waits one round
+  // trip and not three. Index fetches do not take a scheduler slot.
+  async function prefetchIndexes(vid, groups) {
+    const v = vols.get(vid);
+    if (!v || typeof v.src.warmIndex !== 'function') return 0;
+    const list = [];
+    for (const g of groups || []) {
+      if (!(g.si >= 0 && g.si < v.meta.scales.length)) continue;
+      for (const c of g.chunks || []) list.push([g.si, c]);
+    }
+    // in the given order (coarse first), at most PREFETCH_LANES at a time
+    let next = 0, n = 0;
+    const lane = async () => {
+      while (next < list.length) {
+        const [si, c] = list[next++];
+        try { if (await v.src.warmIndex(si, c)) n++; } catch (e) { /* the chunk read reports it */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PREFETCH_LANES, list.length) }, lane));
+    return n;
+  }
+
   function getSlice(vid, si, plane, index, rect, o = {}) {
     const v = vol(vid);
     const s = v.meta.scales[si];
@@ -176,6 +236,7 @@ export function createEngine(opts = {}) {
     open,
     getChunk,
     getSlice,
+    prefetchIndexes,
     meta(vid) { return vol(vid).meta; },
     setFocus(vid, nm) { if (nm) sched.setFocus(vid, { x: +nm.x || 0, y: +nm.y || 0, z: +nm.z || 0 }); },
     cancelAll(vid) { sched.cancelAll(vid); },

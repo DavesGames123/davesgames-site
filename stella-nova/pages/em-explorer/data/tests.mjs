@@ -558,6 +558,89 @@ await section('worker protocol: index.js -> worker.js through a fake Worker', as
   }
 });
 
+// ---------------------------------------------------------------- round 2 (PERF)
+
+await section('perf: small shard in one prefix read', async () => {
+  const files = new Map();
+  const scale = { key: 's0', size: [100, 70, 40], chunk: [32, 32, 16] };
+  const sharding = { '@type': 'neuroglancer_uint64_sharded_v1', hash: 'identity', preshift_bits: 1,
+    minishard_bits: 2, shard_bits: 1, minishard_index_encoding: 'gzip', data_encoding: 'gzip' };
+  buildSharded(files, BASE + '/p', scale, sharding, (c) => chunkRaw(scale, c));
+  files.set(BASE + '/p/info', new TextEncoder().encode(JSON.stringify({ data_type: 'uint8', scales: [{
+    key: 's0', size: scale.size, resolution: [4, 4, 30], chunk_sizes: [scale.chunk], encoding: 'raw', sharding }] })));
+  const missing = (p) => Math.floor(p[0] / 32) === 1 && Math.floor(p[1] / 32) === 1 && Math.floor(p[2] / 16) === 0;
+  const runs = {};
+  for (const prefixBytes of [0, 1 << 20]) {
+    const log = [], ranges = [];
+    const f = fakeFetch(files, log);
+    const vol = await openVolume({ id: 'p', url: BASE + '/p' }, { prefixBytes,
+      fetch: (u, init) => { ranges.push(init && init.headers && init.headers.Range); return f(u, init); } });
+    for (const [plane, index, rect] of [['xy', 5, [0, 0, 100, 70]], ['xz', 33, [10, 0, 90, 40]], ['yz', 64, [0, 0, 40, 70]]]) {
+      const r = await vol.getSlice(0, plane, index, rect);
+      checkSlice(r, scale, plane, index, rect, missing, `prefix ${prefixBytes}: ${plane} ${index}`);
+    }
+    runs[prefixBytes] = { n: log.length, ranges };
+  }
+  const on = runs[1 << 20], off = runs[0];
+  const shards = [...files.keys()].filter((k) => k.endsWith('.shard')).length;
+  eq(on.n, 1 + shards, 'prefix on: info + one read per shard');
+  ok(on.ranges.filter(Boolean).every((r) => r === 'bytes=0-1048575'), 'prefix on: every read is the prefix', on.ranges);
+  ok(off.n > on.n * 3, 'prefix off: index, minishard and chunk reads', `${off.n} vs ${on.n}`);
+});
+
+await section('perf: prefetchIndexes leaves only chunk reads', async () => {
+  const files = new Map();
+  const scale = { key: 's0', size: [128, 128, 32], chunk: [32, 32, 16] };
+  const sharding = { hash: 'identity', preshift_bits: 0, minishard_bits: 2, shard_bits: 2,
+    minishard_index_encoding: 'raw', data_encoding: 'raw' };
+  buildSharded(files, BASE + '/q', scale, sharding, (c) => chunkRaw(scale, c));
+  files.set(BASE + '/q/info', new TextEncoder().encode(JSON.stringify({ data_type: 'uint8', scales: [{
+    key: 's0', size: scale.size, resolution: [1, 1, 1], chunk_sizes: [scale.chunk], encoding: 'raw', sharding }] })));
+  const ranges = [];
+  const f = fakeFetch(files);
+  const vol = await openVolume({ id: 'q', url: BASE + '/q' }, {
+    fetch: (u, init) => { ranges.push(init && init.headers && init.headers.Range); return f(u, init); } });
+  const chunks = [];
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) chunks.push([x, y, 0]);
+  const n = await vol.prefetchIndexes([{ si: 0, chunks }, { si: 9, chunks }]);
+  ok(n >= 15, 'minishard indexes warmed (one chunk is missing)', n);
+  const before = ranges.length;
+  const r = await vol.getSlice(0, 'xy', 3, [0, 0, 128, 128]);
+  checkSlice(r, scale, 'xy', 3, [0, 0, 128, 128], (p) => Math.floor(p[0] / 32) === 1 && Math.floor(p[1] / 32) === 1 && Math.floor(p[2] / 16) === 0, 'slice after prefetch');
+  eq(ranges.length - before, 15, 'after the prefetch: 15 chunk reads, no index reads');
+});
+
+await section('perf: at most 6 fetches per HTTP/1.1 host, S3 host names', async () => {
+  const s3 = resolveUrl('https://janelia-cosem-datasets.s3.amazonaws.com/c/c.zarr/em');
+  eq(s3.url('.zattrs'), 'https://janelia-cosem-datasets.s3.amazonaws.com/c/c.zarr/em/.zattrs', 'metadata on the first host');
+  eq(s3.url('s1/.zarray'), 'https://janelia-cosem-datasets.s3.amazonaws.com/c/c.zarr/em/s1/.zarray', 'zarray on the first host');
+  const hosts = new Set();
+  for (let i = 0; i < 60; i++) hosts.add(new URL(s3.url('s0/0/0/' + i)).host);
+  eq(hosts.size, 3, 'chunks spread over three host names');
+  eq(s3.url('s0/1/2/3'), s3.url('s0/1/2/3'), 'one path, one host');
+  eq(resolveUrl('https://other-bucket.s3.amazonaws.com/a').url('b/c'), 'https://other-bucket.s3.amazonaws.com/a/b/c', 'unlisted bucket stays on its host');
+
+  const files = new Map();
+  const H = 'https://x.s3.amazonaws.com/v';
+  const scale = { key: 's0', size: [256, 256, 16], chunk: [32, 32, 16] };
+  files.set(H + '/info', new TextEncoder().encode(JSON.stringify({ data_type: 'uint8', scales: [{
+    key: 's0', size: scale.size, resolution: [1, 1, 1], chunk_sizes: [scale.chunk], encoding: 'raw' }] })));
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    files.set(`${H}/s0/${x * 32}-${x * 32 + 32}_${y * 32}-${y * 32 + 32}_0-16`, chunkRaw(scale, [x, y, 0]));
+  }
+  const base = fakeFetch(files);
+  let inflight = 0, maxSeen = 0;
+  const slow = async (u, init) => {
+    inflight++; maxSeen = Math.max(maxSeen, inflight);
+    try { await new Promise((r) => setTimeout(r, 5)); return await base(u, init); } finally { inflight--; }
+  };
+  const vol = await openVolume({ id: 'h', url: H }, { fetch: slow, maxInFlight: 24 });
+  const r = await vol.getSlice(0, 'xy', 3, [0, 0, 256, 256]);
+  checkSlice(r, scale, 'xy', 3, [0, 0, 256, 256], null, 'slice through the host cap');
+  ok(maxSeen <= 6 && maxSeen >= 5, 'never more than 6 on one S3 host', maxSeen);
+});
+
+
 // ---------------------------------------------------------------- live
 
 function decodeJpegPIL(bytes) {

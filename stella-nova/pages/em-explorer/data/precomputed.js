@@ -13,6 +13,16 @@
 //      delta offsets (from the end of the previous chunk), sizes.
 //   7. Chunk bytes (raw or gzip data_encoding), then the scale encoding.
 // Edge chunks have the clipped shape. Missing shards or chunks give zeros.
+//
+// Small shards (round 2, PERF): when a whole shard file is likely to be
+// under io.prefixBytes (PREFIX_BYTES = 1 MB in the browser backends, 0 =
+// off for a private test engine; coarse scales: hemibrain s8 is 419 KB,
+// h01 s12 is 33 KB), the first read takes bytes [0, prefixBytes) in one
+// request.
+// The shard index, the minishard indexes and the chunks then come from
+// that prefix: one round trip in place of three for the first image.
+// warmIndex(si, c) loads the shard and minishard index of one chunk
+// (engine prefetchIndexes).
 
 import { murmurHash64 } from './hash.js';
 import { gunzip } from './codecs.js';
@@ -111,6 +121,17 @@ function findChunk(mini, id) {
   return -1;
 }
 
+export const PREFIX_BYTES = 1 << 20;
+
+// Estimated bytes of one shard of a scale: voxels per shard times bytes per
+// voxel (JPEG about 0.2, gzip raw about 0.8, raw 1).
+export function shardBytesEstimate(s) {
+  if (!s.sharding) return Infinity;
+  const vox = s.size[0] * s.size[1] * s.size[2] / 2 ** (s.sharding.shard_bits || 0);
+  const bpv = s.encoding === 'jpeg' ? 0.2 : s.sharding.data_encoding === 'gzip' ? 0.8 : 1;
+  return vox * bpv;
+}
+
 export function clippedShape(scale, c) {
   return [0, 1, 2].map((d) => Math.min(scale.chunk[d], scale.size[d] - c[d] * scale.chunk[d]));
 }
@@ -163,33 +184,66 @@ export class PrecomputedSource {
     return p;
   }
 
-  async readShardedChunk(si, c, signal) {
+  // { url, id, minishard, indexEnd } of one chunk.
+  locate(si, c) {
     const s = this.scales[si];
     const sh = s.sharding;
     const id = chunkId(gridShape(s), c);
     const { shard, minishard } = shardOf(sh, id);
-    const url = this.store.url(s.key + '/' + shardName(sh, shard));
-    const indexEnd = this.shardIndexBytes(sh);
-    const shardIndex = await this.cachedIndex('s|' + url, () =>
-      this.io.fetchBytes(url, { range: [0, indexEnd] }));
-    if (!shardIndex) return null;
-    const dv = new DataView(shardIndex.buffer, shardIndex.byteOffset, shardIndex.byteLength);
-    const start = Number(readU64(dv, minishard * 16));
-    const end = Number(readU64(dv, minishard * 16 + 8));
+    return { s, sh, id, minishard, url: this.store.url(s.key + '/' + shardName(sh, shard)), indexEnd: this.shardIndexBytes(sh) };
+  }
+
+  // The shard index (and the prefix, for a small shard) of one shard.
+  async shardHead(L) {
+    const P = this.io.prefixBytes || 0;
+    if (P > 0 && shardBytesEstimate(L.s) <= P) {
+      const pre = await this.cachedIndex('p|' + L.url, () => this.io.fetchBytes(L.url, { range: [0, P] }));
+      if (!pre) return { index: null, pre: null };
+      if (pre.length >= L.indexEnd) return { index: pre.subarray(0, L.indexEnd), pre };
+    }
+    const index = await this.cachedIndex('s|' + L.url, () => this.io.fetchBytes(L.url, { range: [0, L.indexEnd] }));
+    return { index, pre: null };
+  }
+
+  async readRange(L, pre, a, b, signal) {
+    if (pre && b <= pre.length) return pre.slice(a, b);
+    return this.io.fetchBytes(L.url, { range: [a, b], signal });
+  }
+
+  async minishardIndex(L, head) {
+    const { index, pre } = head;
+    if (!index) return null;
+    const dv = new DataView(index.buffer, index.byteOffset, index.byteLength);
+    const start = Number(readU64(dv, L.minishard * 16));
+    const end = Number(readU64(dv, L.minishard * 16 + 8));
     if (end <= start) return null;
-    const mini = await this.cachedIndex('m|' + url + '|' + minishard, async () => {
-      let b = await this.io.fetchBytes(url, { range: [indexEnd + start, indexEnd + end] });
+    return this.cachedIndex('m|' + L.url + '|' + L.minishard, async () => {
+      let b = await this.readRange(L, pre, L.indexEnd + start, L.indexEnd + end);
       if (!b) return null;
-      if (sh.minishard_index_encoding === 'gzip') b = await gunzip(b);
+      if (L.sh.minishard_index_encoding === 'gzip') b = await gunzip(b);
       return parseMinishardIndex(b);
     });
+  }
+
+  async warmIndex(si, c) {
+    const s = this.scales[si];
+    if (!s || !s.sharding) return false;
+    const L = this.locate(si, c);
+    const mini = await this.minishardIndex(L, await this.shardHead(L));
+    return !!mini;
+  }
+
+  async readShardedChunk(si, c, signal) {
+    const L = this.locate(si, c);
+    const head = await this.shardHead(L);
+    const mini = await this.minishardIndex(L, head);
     if (!mini) return null;
-    const i = findChunk(mini, id);
+    const i = findChunk(mini, L.id);
     if (i < 0) return null;
-    const off = indexEnd + mini.offsets[i];
-    let b = await this.io.fetchBytes(url, { range: [off, off + mini.sizes[i]], signal });
+    const off = L.indexEnd + mini.offsets[i];
+    let b = await this.readRange(L, head.pre, off, off + mini.sizes[i], signal);
     if (!b) return null;
-    if (sh.data_encoding === 'gzip') b = await gunzip(b);
+    if (L.sh.data_encoding === 'gzip') b = await gunzip(b);
     return b;
   }
 
