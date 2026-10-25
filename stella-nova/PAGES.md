@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-234 registered pages in 6 regions and 26 constellations.
+235 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -258,6 +258,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `black-october` | Black October | Research > Security | NEW | The October 2026 security incidents, event by event, with every source. |  | shown | hook, tier 3, default | yes |
 | `gravitational-imaging` | Gravitational Imaging | Research > Physics | NEW | A million Suns of dark mass, found by the dent it makes in a lensed arc. |  | shown | no | no |
 | `circular-rydberg` | Circular Rydberg Atoms | Research > Physics | NEW | Giant circular electron orbits that lived 11 ms at room temperature. |  | shown | hook, tier 3, default | yes |
+| `alpha-qudits` | Alpha from Entangled Qudits | Research > Physics | NEW | A proposed closed form for the fine-structure constant from entangled qudits, explained. |  | shown | hook, tier 3, default | no |
 | `alphafold` (pages/alphafold-explained) | How AlphaFold Works | Research > Biology & Medicine | ML | How AlphaFold turns a sequence into a structure. |  | shown | hook, tier 3, default | yes |
 | `enzyme-design` | De Novo Enzyme Design | Research > Biology & Medicine | NEW | Design an enzyme from scratch: hold the chemistry still and grow a protein around it. |  | shown | no | yes |
 | `mrna-vaccine` | The mRNA Vaccine | Research > Biology & Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |

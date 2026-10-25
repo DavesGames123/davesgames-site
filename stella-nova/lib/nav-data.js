@@ -267,7 +267,8 @@ w.SN_NAV = [
     ] },
     { h: "Physics", p: [
       ["gravitational-imaging", "Gravitational Imaging", "NEW"],
-      ["circular-rydberg", "Circular Rydberg Atoms", "NEW"]
+      ["circular-rydberg", "Circular Rydberg Atoms", "NEW"],
+      ["alpha-qudits", "Alpha from Entangled Qudits", "NEW"]
     ] },
     { h: "Biology & Medicine", p: [
       ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"],

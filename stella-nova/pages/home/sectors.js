@@ -132,7 +132,7 @@ const THUMBS = new Set(THUMB_KEYS);
 // lead is the page the inspector opens first. The game sector's lead is an
 // in-page anchor (#features).
 const SECTOR_TEXT = {
-  game: { at: [104, 118], tilt: 20, lead: 'features',
+  game: { at: [104, 128], tilt: 20, lead: 'features',
     blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.' },
   wiki: { at: [150, 300], tilt: -45, lead: 'wiki',
     blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
@@ -142,7 +142,7 @@ const SECTOR_TEXT = {
     blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
   quantum: { at: [542, 75], tilt: 63, lead: 'orbital',
     blurb: 'Atoms and qubits: hydrogen orbitals in 3D, quantum circuits that encode and decode data and images, and a particle collider.' },
-  chemistry: { at: [567, 296], tilt: 0, lead: 'periodic-table',
+  chemistry: { at: [572, 296], tilt: 5, lead: 'periodic-table',
     blurb: 'The elements and what they make: a periodic table in eleven shapes with the live atom of every element, two atoms that share an electron, over a thousand molecules in 3D, and famous syntheses step by step.' },
   life: { at: [720, 150], tilt: -40, lead: 'protein-viewer',
     blurb: 'Real protein structures, a chain that folds and viruses in 3D, a human skull and skeleton you can pull apart, CT scans from the X-ray up, neurons that fire, and plants, coral and an epidemic that grow.' },
@@ -385,6 +385,7 @@ const BLURBS = {
   'dark-matter-halo': 'Where the Milky Way keeps its dark matter, and how sure we are.',
   'fly-duel': 'Two model fruit fly brains, wired from the connectome, learn a card duel.',
   'circular-rydberg': 'Giant circular electron orbits that lived 11 ms at room temperature.',
+  'alpha-qudits': 'A proposed closed form for the fine-structure constant from entangled qudits, explained.',
   'volume-noise': 'Tileable 3D Perlin-Worley noise for clouds, in WGSL.',
   halftone: 'Photos as halftone dots and rosettes, in WGSL.',
   'thread-art': 'A portrait drawn by one thread from peg to peg.',
