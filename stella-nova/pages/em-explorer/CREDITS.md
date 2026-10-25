@@ -1,10 +1,16 @@
 # Electron Microscopy Explorer: data credits
 
-The page streams image tiles live from the public archives below. No image
-data is copied into this repository. The repository holds only metadata:
-dataset records, bookmark positions and captions (`catalog/`).
+The slice explorer streams image tiles live from the public archives
+below. No volume data is copied into this repository. For the slice
+explorer, the repository holds only metadata: dataset records, bookmark
+positions and captions (`catalog/`).
 
-Every dataset here is open data under the Creative Commons Attribution 4.0
+The "Surface scans" mode is different: the ten SEM surface scans are in
+the repository as GLB files (`sem/models/`). Their credits and licences
+(CC BY 4.0 and CC BY-SA 3.0) are in `sem/CREDITS.md`, and the layer
+shows the credit, the licence and the source link of each scan on screen.
+
+Every dataset of the slice explorer is open data under the Creative Commons Attribution 4.0
 International licence (CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/). The licence statements and
 credit requests below were read from each dataset's own pages on
