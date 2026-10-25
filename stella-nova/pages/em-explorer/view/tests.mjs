@@ -192,6 +192,13 @@ section('tiles');
   ok(started.length === n0 && st.errorCount === 1, 'a failed tile waits before a retry');
   clock += 5000; st.want([D('bad', 0)]);
   ok(started.length === n0 + 1, 'retry after retryMs');
+  pend.get('bad').rej(new Error('net'));
+  await new Promise(r => setTimeout(r, 0));
+  clock += 3000; st.want([D('bad', 0)]);
+  ok(started.length === n0 + 1, 'a second failure waits longer (5 s, not 2.5 s)');
+  clock += 2500; st.want([D('bad', 0)]);
+  ok(started.length === n0 + 2, 'retry after 2 x retryMs');
+  ok(st.retryWait(1) === 2500 && st.retryWait(3) === 10000 && st.retryWait(40) === 60000, 'the wait doubles up to maxRetryMs');
   st.clear(); ok(st.tiles.size === 0 && st.flight.size === 0, 'clear');
 }
 

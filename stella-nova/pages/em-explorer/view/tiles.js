@@ -7,7 +7,10 @@
 //  calls want(list) with every tile it wants, lowest prio first. The store
 //  starts the best requests up to maxInFlight, aborts requests that nobody
 //  wanted for abortMs, and frees the least recently used textures above
-//  maxTiles. A failed request waits retryMs before the next attempt.
+//  maxTiles. A failed request waits before the next attempt: retryMs, then
+//  twice as long after each new failure, up to maxRetryMs. So a tile that
+//  always fails (an archive outage, a chunk the browser cannot decode) does
+//  not fetch its chunks again and again.
 //
 //  Keys: key = vol|scale|plane|index|tu|tv (one tile of one slice),
 //  posKey = vol|scale|plane|tu|tv (the same place on any slice). nearest()
@@ -31,12 +34,13 @@ export class TileStore {
     this.maxTiles = o.maxTiles ?? 600;
     this.abortMs = o.abortMs ?? 350;
     this.retryMs = o.retryMs ?? 2500;
+    this.maxRetryMs = o.maxRetryMs ?? 60000;
     this.now = o.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
     this.onLoad = o.onLoad || (() => {});
     this.tiles = new Map();     // key -> tile
     this.byPos = new Map();     // posKey -> Map(index -> tile)
     this.flight = new Map();    // key -> { ctl, desc, lastWanted }
-    this.failed = new Map();    // key -> time of failure
+    this.failed = new Map();    // key -> { t: time of the last failure, n: failures }
     this.frame = 0;
     this.loadedCount = 0; this.errorCount = 0;
   }
@@ -82,7 +86,7 @@ export class TileStore {
       if (room <= 0) break;
       if (this.tiles.has(d.key) || this.flight.has(d.key)) continue;
       const ft = this.failed.get(d.key);
-      if (ft !== undefined && now - ft < this.retryMs) continue;
+      if (ft && now - ft.t < this.retryWait(ft.n)) continue;
       this._start(d, now); room--;
     }
   }
@@ -111,12 +115,15 @@ export class TileStore {
       if (this.flight.get(desc.key) !== f) return;
       this.flight.delete(desc.key);
       if (err && err.name === 'AbortError') return;
-      this.failed.set(desc.key, this.now());
+      const prev = this.failed.get(desc.key);
+      this.failed.set(desc.key, { t: this.now(), n: prev ? prev.n + 1 : 1 });
       this.errorCount++;
       this.lastError = err;
       this.onLoad(null);
     });
   }
+
+  retryWait(n) { return Math.min(this.maxRetryMs, this.retryMs * 2 ** Math.max(0, n - 1)); }
 
   evict() {
     if (this.tiles.size <= this.maxTiles) return 0;
