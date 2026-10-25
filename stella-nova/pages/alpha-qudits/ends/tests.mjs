@@ -267,6 +267,45 @@ await check('locks witness: PT >= 0 up to 4, Choi < 0 past 3, positivity and CP 
   D.xs.forEach((a, i) => { if (a <= 4 + 1e-9) assert(D.pt[i] > -1e-9, 'pt ' + a); if (a > 3 + 1e-9) assert(D.ch[i] < 0, 'ch ' + a); if (a < 3 - 1e-9) assert(D.ch[i] > 0, 'sep ' + a); });
   assert(D.posMin >= -1e-10); near(D.cpMin, -1, 1e-9);
 });
+// Text stays inside the canvas: a text-measuring mock (about 0.55 em per
+// character for Inter; serif and narrow glyphs make it an overestimate).
+function textCtx(W, H, out) {
+  const st = { font: '12px x', textAlign: 'start' };
+  const measure = s => { const m = /([\d.]+)px/.exec(st.font); return String(s).length * (m ? +m[1] : 12) * 0.55; };
+  const base = mockCtx([]);
+  return new Proxy({}, {
+    get(t, k) {
+      if (k === 'measureText') return s => ({ width: measure(s) });
+      if (k === 'fillText') return (s, x, y, maxW) => {
+        const w = Math.min(measure(s), maxW ?? Infinity), a = st.textAlign, x0 = a === 'center' ? x - w / 2 : a === 'right' || a === 'end' ? x - w : x;
+        if (x0 < -2 || x0 + w > W + 2 || y < -2 || y > H + 2) out.push(`"${String(s).slice(0, 40)}" x ${Math.round(x0)}..${Math.round(x0 + w)} y ${Math.round(y)}`);
+      };
+      if (k in st) return st[k];
+      return base[k];
+    },
+    set(t, k, v) { st[k] = v; return true; },
+  });
+}
+await check('at 320 to 1280 px every text label stays inside the figure', () => {
+  const out = [];
+  for (const k of IDX.SCENES) {
+    const M = IDX.SCENE_MODULES[k];
+    for (const W of [320, 360, 414, 768, 1280]) {
+      const H = M.height(W);
+      for (const s of M.steps) for (const variant of [{}, { d: 3 }, { sel: [2, 3] }, { pair: 1, order: 1 }]) {
+        const st = M.init(Object.assign({ step: s.id }, variant)); st.auto = false; st.since = 0;
+        for (const tt of [0.5, 2.6, 4.1, 7.3, 12]) {
+          const before = out.length;
+          M.draw(textCtx(W, H, out), { W, H, view: { x: 0, y: 0, w: W, h: H } }, st, tt);
+          for (let i = before; i < out.length; i++) out[i] = `${k}/${s.id} W ${W}: ` + out[i];
+        }
+      }
+    }
+  }
+  const uniq = [...new Set(out)];
+  for (const u of uniq.slice(0, 40)) console.log('       outside: ' + u);
+  assert(uniq.length === 0, uniq.length + ' labels outside:\n       ' + uniq.slice(0, 12).join('\n       '));
+});
 const BLmod = await import(join(HERE, 'scenes', 'bloch.js'));
 await check('bloch product(): sx sy = i sz, sy sx = -i sz, cyclic', () => {
   const p = BLmod.product('x', 'y'), q = BLmod.product('y', 'x'), r = BLmod.product('z', 'x');
@@ -294,6 +333,10 @@ else {
     assert(w.document.getElementById('ends-css'), 'css injected');
     const btns = host.querySelectorAll('button'); assert(btns.length >= 4, 'buttons ' + btns.length);
     assert(host.querySelectorAll('.ends-note').length === 2, 'two notes');
+    const h2 = w.document.createElement('div'); w.document.body.appendChild(h2);
+    const quiet = IDX.createEnds(h2, { scene: 'bloch', notes: false, reduced: true });
+    assert(!h2.querySelector('.ends-note') && h2.querySelector('.ends-cap'), 'notes: false hides the analogy text, keeps the caption');
+    quiet.play(1.5); quiet.pause(); quiet.resume(); quiet.play(2); quiet.dispose();
     for (const sc of IDX.SCENES) for (const step of IDX.STEPS[sc]) { api.show(sc, { step }); api.play(2.5); assert(host.querySelector('.ends-cap').textContent.length > 20, sc + ' caption'); }
     btns[0] && host.querySelector('button').click();
     api.setBand({ t: 80, b: 120 }); api.play(1);

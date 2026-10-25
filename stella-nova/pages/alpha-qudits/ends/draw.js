@@ -57,15 +57,35 @@ export function mix(h1, h2, t) {
   return `rgb(${c(16)},${c(8)},${c(0)})`;
 }
 
+// The horizontal room a label may use: each scene sets it from its view at
+// the start of draw. label() shrinks a long text (not below 11 px, then it
+// squeezes) and slides it so that it stays inside, at 320 px too.
+let BX0 = -Infinity, BX1 = Infinity;
+export function setBounds(v) { BX0 = v.x; BX1 = v.x + v.w; }
 export function label(g, s, x, y, o = {}) {
   g.save();
-  g.font = o.font || font(13);
-  g.textAlign = o.align || 'center';
+  let f = o.font || font(13);
+  g.font = f;
+  const align = o.align || 'center';
+  g.textAlign = align;
   g.textBaseline = o.base || 'middle';
-  if (o.halo !== false) { g.lineJoin = 'round'; g.lineWidth = o.haloW || 4; g.strokeStyle = o.haloC || 'rgba(7,11,14,0.85)'; g.strokeText(s, x, y); }
+  let w = g.measureText(s).width, maxW;
+  const room = BX1 - BX0 - 8;
+  if (w > room) {
+    const m = /([\d.]+)px/.exec(f), px = m ? +m[1] : 13, px2 = Math.max(11, px * room / w);
+    if (px2 < px) { f = f.replace(/[\d.]+px/, px2.toFixed(1) + 'px'); g.font = f; w = g.measureText(s).width; }
+    if (w > room) { maxW = room; w = room; }
+  }
+  if (Number.isFinite(BX0)) {
+    const lo = BX0 + 4, hi = BX1 - 4;
+    if (align === 'center') x = clamp(x, lo + w / 2, hi - w / 2);
+    else if (align === 'right' || align === 'end') x = clamp(x, lo + w, hi);
+    else x = clamp(x, lo, hi - w);
+  }
+  if (o.halo !== false) { g.lineJoin = 'round'; g.lineWidth = o.haloW || 4; g.strokeStyle = o.haloC || 'rgba(7,11,14,0.85)'; maxW ? g.strokeText(s, x, y, maxW) : g.strokeText(s, x, y); }
   g.fillStyle = o.color || C.text;
   g.globalAlpha *= o.alpha ?? 1;
-  g.fillText(s, x, y);
+  maxW ? g.fillText(s, x, y, maxW) : g.fillText(s, x, y);
   g.restore();
 }
 // Wrap text to a width; returns the lines.
@@ -108,7 +128,7 @@ const gearCache = new Map();
 export function gearPoints(N, R) {
   const key = N + ':' + R.toFixed(2);
   if (gearCache.has(key)) return gearCache.get(key);
-  const m = 2 * R / N, pts = outline(N, N, m, { ha: 1, hf: 1.25, t: 0.48 }).map(([r, p]) => [r * Math.cos(p), r * Math.sin(p)]);
+  const m = 2 * R / N, pts = outline(N, N, m, { ha: 1, hf: 1.25, t: 0.5, under: 0.15 }).map(([r, p]) => [r * Math.cos(p), r * Math.sin(p)]);
   gearCache.set(key, pts);
   if (gearCache.size > 40) gearCache.delete(gearCache.keys().next().value);
   return pts;
@@ -232,5 +252,5 @@ export function rrect(g, x, y, w, h, r) {
 export function short(v, dp = 2) {
   if (Math.abs(v) < 5e-4) return '0';
   let s = v.toFixed(dp).replace(/0+$/, '').replace(/\.$/, '');
-  return s.replace(/^(-?)0\./, '$1.');
+  return s.replace(/^(-?)0\./, '$1.').replace(/^-/, '−');
 }

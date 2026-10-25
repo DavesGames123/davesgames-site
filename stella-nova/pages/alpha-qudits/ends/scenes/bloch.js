@@ -23,7 +23,7 @@
 //    function product ... sigma_a sigma_b = i s sigma_c from the matrices
 //    draw( .............. the frame
 // ============================================================================
-import { C, font, label, arrow, clamp, rgba, ease, tile, short, rrect } from '../draw.js';
+import { C, font, label, setBounds, arrow, clamp, rgba, ease, tile, short, rrect } from '../draw.js';
 import { mubs, blochOf, inner, pauli, mul, hs, readLetters, spanRank } from '../linalg.js';
 
 const STEPS = [{ id: 'bases', label: 'Three bases' }, { id: 'letters', label: 'Three letters' }, { id: 'commutator', label: 'Order sign' }];
@@ -35,6 +35,7 @@ const BLOCH = B.map(b => b.vecs.map(blochOf));
 const KETS = { z: ['|0⟩', '|1⟩'], x: ['|+⟩', '|−⟩'], y: ['|+i⟩', '|−i⟩'] };
 const P = pauli(); // x, y, z
 const PAIRS = [['x', 'y'], ['y', 'z'], ['z', 'x']];
+const RK2 = spanRank(readLetters(2).map(l => l.A));
 
 // sigma_a sigma_b = (re + i im) sigma_c: read the coefficients by the trace pairing.
 export function product(a, b) {
@@ -101,9 +102,9 @@ export default {
   autoKey: 'step',
   analogy: {
     right: 'Each read of a qubit is an axis through the sphere, and its two outcomes are the two poles. The three axes are at right angles, which is what mutually unbiased means here: a pole of one axis sits on the equator of the other two, so it reads one half either way. Two reads on different axes anticommute, and their product is the third axis with a sign set by the order.',
-    breaks: 'The sphere is a picture of one qubit alone. In the model no qubit stands alone: each is an end of a pair, and a read acts on the pair. The sphere also hides the phase of the far end, which the transpose identity hands over conjugated.',
+    breaks: 'The sphere is a picture of one qubit alone. In the model no qubit stands alone: each is an end of a maximally entangled pair, and on its own such an end sits at the centre of the sphere, not on its surface. A read acts on the pair, and the arrow here is a state the read can leave at the far end.',
   },
-  height: W => Math.round(W < 560 ? clamp(W * 1.35, 440, 560) : clamp(W * 0.6, 380, 480)),
+  height: W => Math.round(W < 560 ? clamp(W * 1.5, 480, 620) : clamp(W * 0.6, 400, 500)),
   init(p) { return { step: p.step || 'bases', pair: p.pair ?? 0, order: p.order ?? 0, yaw0: 0.6, drag: 0 }; },
   controls(st) {
     const out = [{ key: 'step', label: 'Step', options: STEPS.map(s => ({ v: s.id, label: s.label })) }];
@@ -121,11 +122,12 @@ export default {
   },
   pointer(st, kind, p) { if (kind === 'move') { st.drag += p.dx * 0.01; return true; } return false; },
   draw(g, env, st, t) {
+    setBounds(env.view);
     const v = env.view, tt = t - st.since;
     if (st.auto) st.step = STEPS[Math.floor(Math.max(0, tt) / PERIOD) % STEPS.length].id;
     const wide = v.w >= 560;
-    const r = wide ? Math.min(v.h * 0.36, v.w * 0.22) : Math.min(v.w * 0.33, v.h * 0.25);
-    const view = { cx: wide ? v.x + v.w * 0.3 : v.x + v.w / 2, cy: wide ? v.y + v.h * 0.5 : v.y + r + 34, r, yaw: st.yaw0 + st.drag + (env.reduced ? 0.05 : 0.18) * t, tilt: 0.38 };
+    const r = wide ? Math.min(v.h * 0.36, v.w * 0.22) : Math.min(v.w * 0.3, v.h * 0.22);
+    const view = { cx: wide ? v.x + v.w * 0.3 : v.x + v.w / 2, cy: wide ? v.y + v.h * 0.5 : v.y + r + 34, r, yaw: st.yaw0 + st.drag + (st.step === 'commutator' ? 0.22 * Math.sin(0.5 * t) : (env.reduced ? 0.05 : 0.18) * t), tilt: 0.38 };
     const panel = wide ? { x: v.x + v.w * 0.56, y: v.y + 24, w: v.w * 0.42, h: v.h - 48 } : { x: v.x + 12, y: view.cy + r + 40, w: v.w - 24, h: v.y + v.h - (view.cy + r + 40) - 8 };
 
     sphere(g, view, false);
@@ -202,7 +204,7 @@ export default {
       const y0 = panel.y + 34 + 2 * s + 40, gs = clamp(s * 0.8, 16, 26);
       label(g, 'tr(σₐ σᵦ), computed:', panel.x, y0, { font: font(12), color: C.dim, align: 'left' });
       for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { const [re] = hs(P[i], P[j]); tile(g, panel.x + j * gs, y0 + 14 + i * gs, gs, re, 0, 2, { text: short(re) }); }
-      const rk = spanRank(readLetters(2).map(l => l.A));
+      const rk = RK2;
       label(g, `3 bases × (d − 1) = ${rk} independent letters`, panel.x + 3 * gs + 12, y0 + 14 + 1.5 * gs, { font: font(12, 500), align: 'left', color: C.text });
     }
     if (st.step === 'commutator') {
@@ -210,11 +212,13 @@ export default {
       const va = [0, 0, 0], vb = [0, 0, 0], vc = [0, 0, 0]; va[pa] = 1; vb[pb] = 1; vc[AX.indexOf(res.c)] = res.im > 0 ? 1 : -1;
       const ph = ((tt % 3) / 3);
       // arc from A to B
-      g.save(); g.strokeStyle = C.accent; g.lineWidth = 3;
-      g.beginPath();
-      const n = 30, up = ease(ph / 0.5);
-      for (let k = 0; k <= n * up; k++) { const q = proj(slerp(va, vb, k / n).map(x => x * 1.04), view); k ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y); }
-      g.stroke(); g.restore();
+      const n = 40, up = ease(ph / 0.5);
+      let prev = null;
+      for (let k = 0; k <= n * up; k++) {
+        const q = proj(slerp(va, vb, k / n).map(x => x * 1.03), view);
+        if (prev) { g.save(); g.strokeStyle = rgba(C.accent, q.depth < 0 ? 1 : 0.4); g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(prev.x, prev.y); g.lineTo(q.x, q.y); g.stroke(); g.restore(); }
+        prev = q;
+      }
       const o = proj([0, 0, 0], view);
       for (const [vv, col, nm] of [[va, AXC[a], 'A = σ' + a], [vb, AXC[b], 'B = σ' + b]]) {
         const q = proj(vv, view); arrow(g, o.x, o.y, q.x, q.y, { color: col, w: 2.5 });
@@ -238,10 +242,10 @@ export default {
       const yb = panel.y + 12 + 4 * 26 + 6;
       if (yb + 40 < v.y + v.h) {
         rrect(g, panel.x - 6, yb - 4, Math.min(panel.w, 330), 44, 8); g.fillStyle = 'rgba(255,214,102,0.07)'; g.fill();
-        label(g, 'three pairs of letters at each read qubit:', panel.x, yb + 8, { font: font(12), color: C.dim, align: 'left' });
-        label(g, 'the 3 commutator records', panel.x, yb + 27, { font: font(13, 600), color: C.accent, align: 'left' });
+        label(g, '3 pairs of letters: 3 commutators at each read qubit;', panel.x, yb + 8, { font: font(12), color: C.dim, align: 'left' });
+        label(g, 'q1 minus q2: the 3 commutator records', panel.x, yb + 27, { font: font(13, 600), color: C.accent, align: 'left' });
       }
     }
-    label(g, 'qubit, d = 2', view.cx, view.cy + r + 18, { font: font(12), color: C.qubit });
+    label(g, 'qubit end, d = 2', v.x + 8, v.y + 12, { font: font(12, 500), color: C.qubit, align: 'left' });
   },
 };
