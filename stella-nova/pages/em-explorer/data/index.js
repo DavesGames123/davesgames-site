@@ -32,12 +32,18 @@
 //     data is row-major, rows along v. Voxels outside the volume are 0.
 //   getChunk(scaleIndex, [cx, cy, cz], { signal, priority })
 //     -> Promise<{ data: Uint8Array, shape [x,y,z] }>  (x is fastest)
+//     Chunk grid positions count from voxel 0 of the scale. Do not
+//     write into data: without a worker it is the cached copy.
 //   setFocus({ x, y, z })  view centre in nm. Queued requests nearest
 //     to the focus go first, when the caller gives no priority.
 //   cancelAll()           drop all queued and in-flight requests.
-//   stats() -> Promise<{ cacheBytes, cacheCap, chunks, inFlight, queued,
-//                        fetched, fetchedBytes, errors }>
+//   stats() -> Promise<{ cacheBytes, cacheCap, chunks, indexBytes, inFlight,
+//                        queued, fetched, fetchedBytes, errors }>
 //   dispose()             cancel all and release the reader.
+//
+// Worker: index.js starts data/worker.js as a module worker. When the
+// worker cannot start, or has no OffscreenCanvas for JPEG (Safari before
+// 16.4), the engine runs on the main thread instead.
 //
 // Rules: at most 8 fetches in flight; an aborted signal removes its
 // requests when no other caller waits for the same chunk. A missing shard,
@@ -57,12 +63,179 @@
 //   'class Scheduler'                    data/scheduler.js
 //   'function assembleSlice'             data/slice.js
 //   'function resolveUrl'                data/urls.js
+//   'self.onmessage' / 'scope.onmessage' data/worker.js  (message ops)
+//   node data/tests.mjs [--live] [--png dir]   offline and live tests
+
+import { createEngine, DESKTOP_CACHE, PHONE_CACHE } from './engine.js';
+import { decodeJpegBrowser } from './codecs.js';
+import { abortError } from './scheduler.js';
 
 export const DATA_API_VERSION = 1;
+export { DESKTOP_CACHE, PHONE_CACHE };
 
-export async function openVolume(record) {
-  throw new Error('em-explorer DATA: openVolume is not ready yet (' + (record && record.id) + ')');
+let shared = null;
+let capBytes = null;
+
+function detectPhone() {
+  try {
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    if (nav.deviceMemory && nav.deviceMemory <= 2) return true;
+    if (typeof matchMedia === 'function' && typeof screen !== 'undefined') {
+      return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+    }
+  } catch (e) { /* not a browser */ }
+  return false;
 }
 
-export function setPhone() {}
-export function setCacheBytes() {}
+function currentCap() {
+  return capBytes || (detectPhone() ? PHONE_CACHE : DESKTOP_CACHE);
+}
+
+export function setCacheBytes(n) {
+  if (!(n > 0)) return;
+  capBytes = n;
+  if (shared) shared.then((b) => b.setCacheBytes(n), () => {});
+}
+
+export function setPhone(phone) {
+  setCacheBytes(phone ? PHONE_CACHE : DESKTOP_CACHE);
+}
+
+function localBackend(opts = {}) {
+  const canJpeg = typeof createImageBitmap === 'function' &&
+    (typeof OffscreenCanvas !== 'undefined' || typeof document !== 'undefined');
+  const engine = createEngine({
+    fetch: opts.fetch,
+    decodeJpeg: opts.decodeJpeg || (canJpeg ? decodeJpegBrowser : null),
+    cacheBytes: opts.cacheBytes || currentCap(),
+    maxInFlight: opts.maxInFlight,
+  });
+  return {
+    kind: 'local',
+    engine,
+    open: (record) => engine.open(record),
+    chunk: (vid, si, c, o) => engine.getChunk(vid, si, c, o),
+    slice: (vid, si, plane, index, rect, o) => engine.getSlice(vid, si, plane, index, rect, o),
+    focus: (vid, nm) => engine.setFocus(vid, nm),
+    cancelAll: (vid) => engine.cancelAll(vid),
+    close: (vid) => engine.close(vid),
+    stats: () => Promise.resolve(engine.stats()),
+    setCacheBytes: (n) => engine.setCacheBytes(n),
+  };
+}
+
+function workerBackend(allowNoJpeg = false) {
+  return new Promise((resolve, reject) => {
+    let worker;
+    try {
+      worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    } catch (e) { reject(e); return; }
+    const pending = new Map();
+    let nextId = 1, ready = false;
+    const timer = setTimeout(() => { if (!ready) { worker.terminate(); reject(new Error('worker timeout')); } }, 20000);
+    worker.onerror = (e) => {
+      if (!ready) { clearTimeout(timer); worker.terminate(); reject(new Error('worker failed: ' + (e && e.message))); }
+    };
+    worker.onmessage = (e) => {
+      const m = e.data || {};
+      if (m.op === 'ready') {
+        ready = true; clearTimeout(timer);
+        if (m.jpeg === false && !allowNoJpeg) { worker.terminate(); reject(new Error('no JPEG decoder in the worker')); return; }
+        resolve(api);
+        return;
+      }
+      const p = pending.get(m.id);
+      if (!p) return;
+      pending.delete(m.id);
+      if (p.signal && p.onAbort) p.signal.removeEventListener('abort', p.onAbort);
+      if (m.ok) p.resolve(m.result);
+      else p.reject(m.abort ? abortError() : new Error(m.error));
+    };
+    function call(msg, signal) {
+      if (signal && signal.aborted) return Promise.reject(abortError());
+      const id = nextId++;
+      return new Promise((res, rej) => {
+        const p = { resolve: res, reject: rej, signal, onAbort: null };
+        if (signal) {
+          p.onAbort = () => {
+            if (!pending.has(id)) return;
+            pending.delete(id);
+            worker.postMessage({ op: 'cancel', ref: id });
+            rej(abortError());
+          };
+          signal.addEventListener('abort', p.onAbort, { once: true });
+        }
+        pending.set(id, p);
+        worker.postMessage({ ...msg, id });
+      });
+    }
+    const api = {
+      kind: 'worker',
+      worker,
+      open: (record) => call({ op: 'open', record: JSON.parse(JSON.stringify(record)) }),
+      chunk: (vid, si, c, o = {}) => call({ op: 'chunk', vid, si, c: [...c], priority: o.priority }, o.signal),
+      slice: (vid, si, plane, index, rect, o = {}) =>
+        call({ op: 'slice', vid, si, plane, index, rect: [...rect], priority: o.priority }, o.signal),
+      focus: (vid, nm) => worker.postMessage({ op: 'focus', vid, nm: { x: nm.x, y: nm.y, z: nm.z } }),
+      cancelAll: (vid) => worker.postMessage({ op: 'cancelAll', vid }),
+      close: (vid) => worker.postMessage({ op: 'close', vid }),
+      stats: () => call({ op: 'stats' }),
+      setCacheBytes: (n) => worker.postMessage({ op: 'cap', bytes: n }),
+    };
+  }).then((api) => { api.setCacheBytes(currentCap()); return api; });
+}
+
+function sharedBackend() {
+  if (!shared) {
+    shared = (async () => {
+      const canWorker = typeof Worker !== 'undefined' && typeof window !== 'undefined';
+      if (canWorker) {
+        try { return await workerBackend(); } catch (e) {
+          if (typeof console !== 'undefined') console.warn('em-explorer DATA: no module worker, decoding on the main thread.', e);
+        }
+      }
+      return localBackend();
+    })();
+  }
+  return shared;
+}
+
+class Volume {
+  constructor(backend, meta) {
+    this.backend = backend;
+    this.vid = meta.vid;
+    this.id = meta.id;
+    this.format = meta.format;
+    this.dtype = meta.dtype;
+    this.yzOrder = meta.yzOrder;
+    this.scales = meta.scales;
+    this.bounds = meta.bounds;
+    this.disposed = false;
+  }
+  getSlice(scaleIndex, plane, index, rect, opts = {}) {
+    return this.backend.slice(this.vid, scaleIndex, plane, index, rect, opts);
+  }
+  getChunk(scaleIndex, c, opts = {}) {
+    return this.backend.chunk(this.vid, scaleIndex, c, opts);
+  }
+  setFocus(nm) { if (nm) this.backend.focus(this.vid, nm); }
+  cancelAll() { this.backend.cancelAll(this.vid); }
+  stats() { return this.backend.stats(); }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.backend.close(this.vid);
+  }
+}
+
+// opts.worker false: run on this thread. opts.fetch / opts.decodeJpeg
+// (tests): a private engine with these functions.
+export async function openVolume(record, opts = {}) {
+  if (!record || !(record.url || record.source)) throw new Error('em-explorer DATA: the record has no url');
+  let backend;
+  if (opts.fetch || opts.decodeJpeg || opts.private) backend = localBackend(opts);
+  else if (opts.worker === false) backend = await (shared = shared || Promise.resolve(localBackend(opts)));
+  else backend = await sharedBackend();
+  const meta = await backend.open(record);
+  return new Volume(backend, meta);
+}
