@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-235 registered pages in 6 regions and 26 constellations.
+237 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -233,6 +233,8 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `polarization` (pages/circular-polarization) | Circular Polarization | Light & Fields > Optics | NEW | Watch a wave twist as it travels. |  | shown | hook, tier 2, default | yes |
 | `photon-caustics` | Photon Caustics 2D | Light & Fields > Optics | GPU | Trace photons through mirrors, lenses and water and watch caustics form, in 2D and in a 3D pool. |  | shown | hook, tier 3, default | yes |
 | `photon-caustics-3d` | Photon Caustics 3D | Light & Fields > Optics | GPU | Sunlight through waves draws caustics on a pool floor. |  | shown | hook, tier 3, default | yes |
+| `stereogram-maker` | Stereogram Maker | Light & Fields > Optics | NEW | Hide real scanned objects in single-image stereograms over 54 patterns. |  | shown | hook, tier 3, default | no |
+| `stereogram-history` | How the Stereogram Came to Be | Light & Fields > Optics | NEW | From Wheatstone to Julesz to Tyler: how one image came to hold two views. |  | shown | hook, tier 3, default | no |
 | `attractorlab` | Strange Attractors | Patterns & Chaos > Chaos | 3D | Lorenz, Rossler, Thomas and friends. |  | shown | hook, tier 2, default | yes |
 | `flowlab` | Vector Fields | Patterns & Chaos > Chaos | SIM | Flow lines through vector fields. |  | shown | hook, tier 2, default | yes |
 | `reaction-diffusion` | Reaction–Diffusion | Patterns & Chaos > Emergence | GPU | Gray-Scott patterns that grow and split. |  | shown | hook, tier 3, default | yes |
