@@ -36,7 +36,12 @@ export const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 //         tint: 0..1 how much the depth colours the cast }
 const NEAR_ALB = [238, 228, 210], FAR_ALB = [150, 158, 170];
 export function reliefImage(dm, opts = {}) {
-  const { w, h, data: z, mask } = dm;
+  const { w, h, mask } = dm;
+  // A mesh depth map is flat on each triangle, so the normals of a scan
+  // show its facets. A masked blur of a few px smooths the normals; the
+  // wall never bleeds into the object.
+  const sr = opts.smooth ?? Math.max(1, Math.round(Math.min(w, h) / 260));
+  const z = sr > 0 ? maskedBlur(dm.data, mask, w, h, sr) : dm.data;
   const out = new Uint8ClampedArray(w * h * 4);
   const bg = opts.bg || [24, 26, 31], bg2 = opts.bg2 || [11, 12, 15];
   const tint = opts.tint ?? 1;
@@ -87,6 +92,37 @@ export function reliefImage(dm, opts = {}) {
   }
   return { w, h, data: out };
 }
+// A box blur (two passes) of a over the pixels where mask is 1. Pixels
+// off the mask keep their value.
+export function maskedBlur(a, mask, w, h, r) {
+  let num = new Float32Array(w * h), den = new Float32Array(w * h);
+  for (let i = 0; i < a.length; i++) if (mask[i]) { num[i] = a[i]; den[i] = 1; }
+  for (let pass = 0; pass < 2; pass++) {
+    num = boxH(boxV(num, w, h, r), w, h, r); den = boxH(boxV(den, w, h, r), w, h, r);
+  }
+  const out = Float32Array.from(a);
+  for (let i = 0; i < a.length; i++) if (mask[i] && den[i] > 1e-6) out[i] = num[i] / den[i];
+  return out;
+}
+function boxH(a, w, h, r) {
+  const o = new Float32Array(w * h), k = 1 / (2 * r + 1);
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let s = 0;
+    for (let x = -r; x <= r; x++) s += a[row + clampI(x, w)];
+    for (let x = 0; x < w; x++) { o[row + x] = s * k; s += a[row + clampI(x + r + 1, w)] - a[row + clampI(x - r, w)]; }
+  }
+  return o;
+}
+function boxV(a, w, h, r) {
+  const o = new Float32Array(w * h), k = 1 / (2 * r + 1);
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let y = -r; y <= r; y++) s += a[clampI(y, h) * w + x];
+    for (let y = 0; y < h; y++) { o[y * w + x] = s * k; s += a[clampI(y + r + 1, h) * w + x] - a[clampI(y - r, h) * w + x]; }
+  }
+  return o;
+}
+const clampI = (i, n) => i < 0 ? 0 : i >= n ? n - 1 : i;
 function norm3(v) { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; }
 
 // ── depth shaping ──────────────────────────────────────────────────────────
@@ -171,10 +207,12 @@ export function fitBox(W, H, a) {
   if (!(a > 0)) return { w: W, h: H };
   return W / H > a ? { w: H * a, h: H } : { w: W, h: W / a };
 }
-// CSS px per inch of a screen. A desktop CSS px is near 1/96 inch; a phone
-// CSS px is smaller (about 1/150 inch on the common phones). scale is the
-// device px per CSS px of the render.
-export function screenDpi(scale, phone) { return (phone ? 150 : 96) * scale; }
+// The DPI that the engine gets for a screen render. A desktop CSS px is
+// near 1/96 inch. A phone CSS px is near 1/150 inch, but people hold a
+// phone closer, and a repeat of half the eye separation leaves only two
+// repeats across the screen. 120 gives about three, which fuses more
+// easily. scale is the device px per CSS px of the render.
+export function screenDpi(scale, phone) { return (phone ? 120 : 96) * scale; }
 
 // The frame size for a turntable of n frames inside budget pixels in all,
 // with the aspect of w x h and no larger than w x h.
