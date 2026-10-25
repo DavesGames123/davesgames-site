@@ -35,6 +35,7 @@
 //    opts   { scene = 'pair', params, theme = 'dark' | 'light',
 //             controls = true (44 px buttons under the canvas),
 //             caption = true (step caption and the analogy note),
+//             notes = true (false: no analogy note; the step caption stays),
 //             autoplay = true (own rAF clock until CORE calls play(t);
 //             paused when off screen), reduced (default: the
 //             prefers-reduced-motion query; true shows a still frame),
@@ -131,7 +132,9 @@ export function createStrands(host, opts = {}) {
   stepEl.setAttribute('aria-live', 'polite');
   const note = doc.createElement('details');
   note.className = 'aq-st-analogy';
-  if (opts.caption !== false) { root.appendChild(stepEl); root.appendChild(note); }
+  // notes: false (CORE) keeps the step caption and leaves out the analogy
+  // note, because the story prints the same right / breaks text.
+  if (opts.caption !== false) { root.appendChild(stepEl); if (opts.notes !== false) root.appendChild(note); }
   host.appendChild(root);
 
   const reduce = opts.reduced != null ? !!opts.reduced
