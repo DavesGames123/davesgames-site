@@ -307,7 +307,7 @@ async function bootInJsdom(JSDOM) {
   const puts = [];
   w.HTMLCanvasElement.prototype.getContext = function () {
     const c = this;
-    return { putImageData: (img) => puts.push([c.id, img.width]), drawImage() {}, fillRect() {}, getImageData: (x, y, ww, hh) => ({ data: new Uint8ClampedArray(ww * hh * 4) }) };
+    return { putImageData: (img) => puts.push([c.id, img.width]), drawImage: () => puts.push([c.id, 'draw']), fillRect() {}, getImageData: (x, y, ww, hh) => ({ data: new Uint8ClampedArray(ww * hh * 4) }) };
   };
   w.HTMLCanvasElement.prototype.toBlob = function (cb) { cb(null); };
   class ImageDataN { constructor(d, ww, hh) { this.data = d; this.width = ww; this.height = hh; } }
@@ -361,8 +361,19 @@ async function bootInJsdom(JSDOM) {
     doc.querySelector('#srcKind [data-k="text"]').click();
     n0 = outs(); await waitFor(() => outs() > n0);
     if (!/Look closer/.test(doc.getElementById('capMain').textContent)) errors.push('text caption: ' + doc.getElementById('capMain').textContent);
+    // The saver: enter gives the #saver canvas, a shot draws and names
+    // itself on the plate, exit puts the page back.
+    globalThis.createImageBitmap = async img => ({ width: img.width, height: img.height, close() {} });
+    const labels = [];
+    const ret = w.snSaver.enter({ seed: 3, seconds: 30, calm: 0.5, label: info => labels.push(info) });
+    if (!ret || !ret.canvas || ret.canvas.id !== 'saver' || !doc.documentElement.classList.contains('sn-saver')) errors.push('saver enter');
+    if (!await waitFor(() => labels.length && labels[0] && puts.some(p => p[0] === 'saver' && p[1] === 'draw'), 60000)) errors.push('the saver drew no shot');
+    else if (!E.MODELS.some(m => m.name === labels[0].title)) errors.push('saver label: ' + JSON.stringify(labels[0]));
+    w.snSaver.exit();
+    if (doc.documentElement.classList.contains('sn-saver') || labels[labels.length - 1] !== null) errors.push('saver exit');
+    delete globalThis.createImageBitmap;
     const n = sel => doc.querySelectorAll(sel).length;
-    const msg = `out canvas ${outOk ? 'painted' : 'not painted'}, then example, tile, help, turntable and text steps in ${Date.now() - t0} ms; ${n('.excard')} examples, ${n('.mcard')} model cards, ${n('.tcard')} tile cards, ${n('#dotPals .pal')} palettes, ${n('#shapeGrid button')} shapes, ${n('#sizes button')} sizes; snSaver ${typeof w.snSaver === 'object' || typeof globalThis.window.snSaver === 'object' ? 'set' : 'missing'}; caption "${doc.getElementById('capMain').textContent} ${doc.getElementById('capSub').textContent}"` + (errors.length ? '; errors: ' + errors.join('; ') : '');
+    const msg = `out canvas ${outOk ? 'painted' : 'not painted'}, then example, tile, help, turntable, text and saver steps in ${Date.now() - t0} ms; ${n('.excard')} examples, ${n('.mcard')} model cards, ${n('.tcard')} tile cards, ${n('#dotPals .pal')} palettes, ${n('#shapeGrid button')} shapes, ${n('#sizes button')} sizes; snSaver ${typeof w.snSaver === 'object' || typeof globalThis.window.snSaver === 'object' ? 'set' : 'missing'}; caption "${doc.getElementById('capMain').textContent} ${doc.getElementById('capSub').textContent}"` + (errors.length ? '; errors: ' + errors.join('; ') : '');
     return { ok: outOk && !errors.length && n('.excard') === EX.EXAMPLES.length && n('.mcard') === E.MODELS.length && n('.tcard') === E.TILES.length && !!w.snSaver, msg };
   } catch (e) {
     return { ok: false, msg: 'threw ' + e.name + ': ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n') };

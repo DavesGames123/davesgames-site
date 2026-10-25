@@ -37,9 +37,9 @@ button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color
 svg{width:18px;height:18px;flex:0 0 auto}
 a{color:var(--acc)}
 
-.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;pointer-events:none}
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:12px;padding:0 20px;pointer-events:none}
 .brand{font-family:var(--sci-serif);font-size:1.15rem;color:#efe9de}
-.pagetitle{font-size:0.8rem;color:var(--dim);margin-left:auto}
+.pagetitle{font-size:0.8rem;color:var(--dim)}
 .tb-help{display:none;pointer-events:auto}
 html.in-frame .topbar{display:none}
 
@@ -88,18 +88,18 @@ html.in-frame #tools{top:12px}
 
 /* PANEL */
 #panel{position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;background:rgba(13,14,17,0.98);
-  border-right:1px solid var(--line);padding:62px 18px 28px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--faint) transparent;
+  border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;
   transform:translateX(-100%);transition:transform .28s cubic-bezier(.4,0,.2,1)}
+.phead{flex:none;display:flex;align-items:center;gap:8px;padding:16px 18px 14px;border-bottom:1px solid var(--line)}
+#panes{flex:1;min-height:0;overflow-y:auto;padding:16px 18px 28px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
 #panel.open{transform:translateX(0)}
-html.in-frame #panel{padding-top:18px}
-#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#panelClose{flex:none;width:34px;height:34px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:9px;cursor:pointer}
 #panelClose:hover{color:var(--acc);border-color:var(--acc)}
-html.in-frame #panelClose{top:12px}
 #dock,#sheetGrip{display:none}
 
-.tabs{position:sticky;top:-62px;z-index:3;display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:3px;margin:0 0 16px;
+.tabs{flex:1;min-width:0;display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:3px;margin:0;
   background:var(--bg2);border:1px solid var(--line);border-radius:11px}
-html.in-frame .tabs{top:-18px;margin-right:40px}
 .tabs button{height:32px;border:0;border-radius:8px;background:transparent;color:var(--dim);font-size:0.8rem;cursor:pointer}
 .tabs button:hover{color:var(--ink)}
 .tabs button.on{background:var(--bg3);color:var(--ink);box-shadow:0 0 0 1px var(--line-b) inset}
@@ -220,6 +220,8 @@ html.in-frame .tabs{top:-18px;margin-right:40px}
 /* wide desktop: no change; panel closed shows the gear */
 @media(min-width:769px){
   body.panel-closed #gear{display:flex}
+  .topbar{align-items:baseline;padding:18px 20px 0 calc(var(--panel-w) + 28px)}
+  body.panel-closed .topbar{padding-left:68px}
 }
 
 /* TOUCH. Any touch screen or narrow window: every target 44px or more. */
@@ -272,17 +274,15 @@ html.in-frame .tabs{top:-18px;margin-right:40px}
 
   #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(56vh,560px);height:min(56dvh,560px);
     border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
-    padding:0 calc(16px + env(safe-area-inset-right)) 28px calc(16px + env(safe-area-inset-left));
     transform:translateY(calc(100% + var(--dock-h)));transition:transform .3s cubic-bezier(.4,0,.2,1),height .3s cubic-bezier(.4,0,.2,1);
-    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;box-shadow:0 -20px 60px rgba(0,0,0,0.5)}
+    box-shadow:0 -20px 60px rgba(0,0,0,0.5)}
+  .phead{padding:0 calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left))}
+  #panes{padding:14px calc(16px + env(safe-area-inset-right)) 28px calc(16px + env(safe-area-inset-left))}
   #panel.open{transform:translateY(0)}
   #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
-  html.in-frame #panel{padding-top:0}
   #panelClose{display:none}
-  #sheetGrip{display:flex;position:sticky;top:0;z-index:4;justify-content:center;align-items:center;height:30px;margin:0 -16px;
-    background:rgba(13,14,17,1);touch-action:none;cursor:grab}
+  #sheetGrip{display:flex;flex:none;justify-content:center;align-items:center;height:30px;touch-action:none;cursor:grab}
   #sheetGrip span{width:44px;height:5px;border-radius:3px;background:var(--dim);opacity:0.55}
-  .tabs,html.in-frame .tabs{top:30px;margin:0 0 14px;background:rgba(18,20,25,1)}
   .mgrid{grid-template-columns:repeat(3,1fr)}
   .tgrid{grid-template-columns:repeat(5,1fr)}
   .exgrid{grid-template-columns:1fr 1fr}
@@ -310,11 +310,12 @@ html.in-frame .tabs{top:-18px;margin-right:40px}
   #stage,body.panel-closed #stage{bottom:0}
   #caption{display:none}
   #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(48vw,400px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
-    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
+    transform:translateX(100%)}
+  .phead{padding:10px calc(12px + env(safe-area-inset-right)) 10px 12px}
+  #panes{padding:12px calc(14px + env(safe-area-inset-right)) 20px 14px}
   #panel.open{transform:translateX(0)}
   #sheetGrip{display:none}
-  .tabs,html.in-frame .tabs{top:0;margin-top:10px}
-  #panelClose{display:none}
+  #panelClose{display:block;width:44px;height:44px}
   .tgrid{grid-template-columns:repeat(4,1fr)}
   .exgrid{grid-template-columns:1fr 1fr}
 }

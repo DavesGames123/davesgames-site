@@ -37,8 +37,8 @@
      of body.
 
    LAYOUT  (# marks an element id main.js binds to)
-     desktop ... #panel at the left with four tabs (#tabs): Examples,
-                 Source, Pattern, View. #stage fills the rest. #print holds
+     desktop ... #panel at the left: four tabs (#tabs: Examples, Source,
+                 Pattern, View) over #panes, the part that scrolls. #stage fills the rest. #print holds
                  #out (the stereogram) and #rev (the depth view) on top of
                  each other. #tools at the top right: How to see it,
                  Reveal, Turntable, PNG, Link. #caption under the print.
@@ -104,14 +104,16 @@
 
 <aside id="panel" class="open" aria-label="Controls">
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" aria-label="Close controls">✕</button>
-
-  <div id="tabs" class="tabs" role="tablist">
-    <button role="tab" data-tab="examples" class="on" aria-selected="true">Examples</button>
-    <button role="tab" data-tab="source" aria-selected="false">Source</button>
-    <button role="tab" data-tab="pattern" aria-selected="false">Pattern</button>
-    <button role="tab" data-tab="view" aria-selected="false">View</button>
+  <div class="phead">
+    <div id="tabs" class="tabs" role="tablist">
+      <button role="tab" data-tab="examples" class="on" aria-selected="true">Examples</button>
+      <button role="tab" data-tab="source" aria-selected="false">Source</button>
+      <button role="tab" data-tab="pattern" aria-selected="false">Pattern</button>
+      <button role="tab" data-tab="view" aria-selected="false">View</button>
+    </div>
+    <button id="panelClose" aria-label="Close controls">✕</button>
   </div>
+  <div id="panes">
 
   <!-- EXAMPLES: ready pairs of an object and a pattern (examples.js) -->
   <section class="tabpane" data-pane="examples">
@@ -226,6 +228,7 @@
       <p>The constraint method with hidden-surface removal is after Thimbleby, Inglis and Witten (1994). The single-image random-dot stereogram came from the work of Christopher Tyler and Maureen Clarke. The <a href="../stereogram-history/index.html" target="_top" id="histLink">history page</a> tells how it came to be.</p>
     </div>
   </section>
+  </div>
 </aside>
 
 <nav id="dock" aria-label="Quick controls">

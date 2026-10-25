@@ -476,7 +476,7 @@ function buildModels() {
 }
 const thumbCache = new Map();
 const thumbObserver = typeof IntersectionObserver !== 'undefined'
-  ? new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { thumbObserver.unobserve(e.target); queueThumb(e.target.dataset.id); } }, { root: $('panel'), rootMargin: '200px' })
+  ? new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { thumbObserver.unobserve(e.target); queueThumb(e.target.dataset.id); } }, { root: $('panes'), rootMargin: '200px' })
   : { observe: el => queueThumb(el.dataset.id), unobserve() {} };
 function queueThumb(id) { if (!thumbDone.has(id) && !thumbQueue.includes(id)) { thumbQueue.push(id); pumpThumbs(); } }
 async function pumpThumbs() {
