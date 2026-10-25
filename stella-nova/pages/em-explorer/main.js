@@ -614,3 +614,4 @@ window.__em.ready = boot().catch((e) => {
   showNoNet('The page did not start', String((e && e.message) || e).slice(0, 200));
   return false;
 });
+import('./saver/index.js').catch((e) => console.warn('em-explorer: saver not loaded', e));
