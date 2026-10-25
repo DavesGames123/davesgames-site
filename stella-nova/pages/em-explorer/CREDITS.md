@@ -32,10 +32,12 @@ credit requests below were read from each dataset's own pages on
 - Data: MICrONS cortical mm^3, 8 x 8 x 40 nm serial-section TEM,
   precomputed volume on BossDB
   `https://bossdb-open-data.s3.amazonaws.com/iarpa_microns/minnie/minnie65/em`
-- Licence: CC BY 4.0. The MICrONS Explorer terms say: "We are making all
+- Licence: CC BY 4.0. The MICrONS Explorer terms
+  (https://www.microns-explorer.org/terms-and-conditions) say: "We are making all
   the material on this website available under the Creative Commons
   Attribution 4.0 International".
-- Credit: the citation policy asks to cite the source clearly and link to
+- Credit: the citation policy asks to cite the source "in a manner that is
+  clear, accurate and easily discoverable" and to link to
   www.microns-explorer.org. MICrONS Consortium et al. (2025). Functional
   connectomics spanning multiple areas of mouse visual cortex. Nature 640,
   435-447.
@@ -57,6 +59,9 @@ credit requests below were read from each dataset's own pages on
   nanoscale resolution. Science 384, eadk4858.
 - Links: https://h01-release.storage.googleapis.com/landing.html ·
   https://doi.org/10.1126/science.adk4858
+- Tissue: the paper abstract says "a cubic millimeter of human temporal
+  cortex that was surgically removed to gain access to an underlying
+  epileptic focus" (read on Crossref, 2026-10-25).
 - Bookmark sources: the blood-vessel view is the published H01 view
   `data/20210601/neuroglancer_states/bv_2d.json`. Two synapse positions
   come from the published synapse annotation layer
