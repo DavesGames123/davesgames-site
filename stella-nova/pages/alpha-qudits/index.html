@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Alpha from entangled qudits: a closed form for 1/137, explained — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ALPHA FROM ENTANGLED QUDITS  ·  page shell  (CORE)
+  ───────────────────────────────────────────────────────────────────────────
+   A research explainer on A. D. Wissner-Gross, "A Parameter-Free Candidate
+   for the Fine-Structure Constant from Entangled Qudits" (preprint, 23
+   October 2026). The binding spec is CONTRACT.md in this folder. The page
+   explains the paper and does not endorse it.
+
+   HOW THE PAGE IS BUILT
+     main.js writes the eleven chapters from story/*.js into the empty
+     <section> shells below, typesets the TeX of equations.js with
+     ../../lib/sci-math.js (MathJax SVG), and mounts one figure card per
+     story figure. A card loads its package (strands/, ends/, records/,
+     compare/) by a dynamic import when it comes near the screen, and
+     shows a placeholder when the package is not there. The c1 figure
+     (screening) is CORE's own canvas, in main.js.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module).
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #progress   reading progress bar under the top bar
+     #rail       chapter rail, desktop (min-width 1080px)
+     #menuBtn    chapter button, phone and tablet; opens #menuSheet
+     #menuSheet  chapter list sheet, with #menuList and #menuClose
+     #c0         hero: #heroBody (chapter 0 text and figure), #heroStats
+     #c1 .. #c11 chapter shells; main.js fills each from story/*.js
+     #noscript   message when the module does not run
+
+   GREP MAP  (main.js)
+     grep -n 'function buildChapter'   one chapter from its story object
+     grep -n 'function figureCard'     one figure card and its hosts
+     grep -n 'function mountHost'      dynamic import of a package
+     grep -n 'function placeholder'    the stand-in figure
+     grep -n 'function createScreen'   the c1 screening figure
+     grep -n 'function buildTables'    configs, sectors, measurements
+     grep -n 'function initNav'        rail, phone menu, progress
+     grep -n 'function loop'           the one rAF loop
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="An interactive explainer of a preprint that proposes a parameter-free closed form for the fine-structure constant, (79 + 48√2 + 42√3 + 3√6)/31104, from a network of maximally entangled qudits: the axiom, reads, the read cap, the Standard Model charge, the 172 records and their weights, the comparison with experiment, and how to weigh such a claim.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Alpha from entangled qudits</div>
+</div>
+<div class="progress" aria-hidden="true"><i id="progress"></i></div>
+
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+  <main id="doc">
+    <header class="hero ch" id="c0" data-ch="0">
+      <p class="kicker">Research · quantum information · preprint, 23 October 2026</p>
+      <h1>Alpha from entangled qudits</h1>
+      <p class="byline">An explainer of A. D. Wissner-Gross, “A Parameter-Free Candidate for the Fine-Structure Constant from Entangled Qudits”</p>
+      <div class="stats" id="heroStats">
+        <div><b>137.035 999 189 6…</b><span>1/α<sub>cand</sub>, the paper’s closed form</span></div>
+        <div><b>+0.60σ</b><span>from CODATA 2022, 137.035 999 177(21)</span></div>
+        <div><b>172</b><span>measurement records, weights 1, √2, √3, √6</span></div>
+        <div><b>31 104</b><span>readout dimension, 24 · 36 · 36</span></div>
+      </div>
+      <div class="hero-body" id="heroBody"></div>
+      <p class="note">This page is our own explanation. Every drawing is ours; the numbers are recomputed by our own code in this folder, not by the paper’s scripts. Tags say which parts are <b>the paper’s result</b>, which are <b>our model</b>, and which are <b>analogies</b> (each analogy says where it breaks). The identification of the number with α(0) is a conjecture of the paper.</p>
+    </header>
+
+    <section class="ch" id="c1" data-ch="1"></section>
+    <section class="ch" id="c2" data-ch="2"></section>
+    <section class="ch" id="c3" data-ch="3"></section>
+    <section class="ch" id="c4" data-ch="4"></section>
+    <section class="ch" id="c5" data-ch="5"></section>
+    <section class="ch" id="c6" data-ch="6"></section>
+    <section class="ch" id="c7" data-ch="7"></section>
+    <section class="ch" id="c8" data-ch="8"></section>
+    <section class="ch" id="c9" data-ch="9"></section>
+    <section class="ch" id="c10" data-ch="10"></section>
+    <section class="ch" id="c11" data-ch="11"></section>
+
+    <p class="noscript" id="noscript">The chapters of this page are written by a JavaScript module. If you can read this line for more than a moment, the module did not run in this browser.</p>
+  </main>
+</div>
+
+<button class="menu-btn" id="menuBtn" type="button" aria-controls="menuSheet" aria-expanded="false"><span class="menu-n" id="menuNum">00</span><span class="menu-t" id="menuTitle">Chapters</span></button>
+<div class="sheet" id="menuSheet" hidden role="dialog" aria-modal="true" aria-label="Chapters">
+  <div class="sheet-card">
+    <div class="sheet-top"><b>Chapters</b><button type="button" class="sheet-x" id="menuClose" aria-label="Close">×</button></div>
+    <ol class="sheet-list" id="menuList"></ol>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
