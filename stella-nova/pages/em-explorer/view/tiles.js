@@ -12,6 +12,14 @@
 //  always fails (an archive outage, a chunk the browser cannot decode) does
 //  not fetch its chunks again and again.
 //
+//  Bands (round 2, PERF). A descriptor can carry band (0 = coarsest level
+//  of view/plan.js). With o.lookahead = k, want() starts a tile of band b
+//  only while no wanted tile of a band below b - k is still missing, and
+//  nothing past band 0 while a band 0 tile is missing. So the
+//  coarse levels get the whole link first, and the fine levels do not
+//  share it with them. A descriptor with no band (saver prefetch) is never
+//  held. lookahead Infinity (the default) turns this off.
+//
 //  Keys: key = vol|scale|plane|index|tu|tv (one tile of one slice),
 //  posKey = vol|scale|plane|tu|tv (the same place on any slice). nearest()
 //  finds a loaded tile at the same place on a near slice, so a slice step
@@ -35,6 +43,7 @@ export class TileStore {
     this.abortMs = o.abortMs ?? 350;
     this.retryMs = o.retryMs ?? 2500;
     this.maxRetryMs = o.maxRetryMs ?? 60000;
+    this.lookahead = o.lookahead ?? Infinity;
     this.now = o.now || (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
     this.onLoad = o.onLoad || (() => {});
     this.tiles = new Map();     // key -> tile
@@ -82,9 +91,16 @@ export class TileStore {
     let room = this.maxInFlight - this.flight.size;
     if (room <= 0) return;
     const list = descs.slice().sort((a, b) => a.prio - b.prio);
+    // the lowest band with a wanted tile that is not loaded yet
+    let open = Infinity;
+    if (this.lookahead !== Infinity) {
+      for (const d of list) if (d.band != null && d.band < open && !this.tiles.has(d.key)) open = d.band;
+    }
     for (const d of list) {
       if (room <= 0) break;
       if (this.tiles.has(d.key) || this.flight.has(d.key)) continue;
+      // band 0 (the base, the first image) has the link to itself
+      if (d.band != null && d.band > (open === 0 ? 0 : open + this.lookahead)) continue;
       const ft = this.failed.get(d.key);
       if (ft && now - ft.t < this.retryWait(ft.n)) continue;
       this._start(d, now); room--;

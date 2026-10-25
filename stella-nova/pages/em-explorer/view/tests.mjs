@@ -8,6 +8,7 @@ import { assembleSlice, fetchSlice, transpose } from './slice.js';
 import { stubVolume } from './stub.js';
 import { classifyTwo, Fling, TapCounter, wheelZoomFactor, wheelPixels } from './input.js';
 import { createViewer } from './index.js';
+import * as P from './plan.js';
 
 let pass = 0, fail = 0;
 const ok = (c, msg) => { if (c) pass++; else { fail++; console.log('FAIL', msg); } };
@@ -393,6 +394,52 @@ if (process.argv.includes('--net')) {
     ok(r.width === t0.rect[2] - t0.rect[0] && vals.size > 30, `real minnie65 base tile ${r.width}x${r.height}, ${vals.size} grey levels`);
     v.dispose && v.dispose();
   } catch (e) { ok(false, 'net test: ' + (e && e.message)); }
+}
+
+// ------------------------------------------------------------ plan (round 2, PERF)
+section('plan');
+{
+  // hemibrain-like: 9 scales 8..2048 nm, chunk 64^3, home zoom 0.025 at dpr 2
+  const hb = stubVolume({ size: [34427, 39725, 41394], resolution: [8, 8, 8], chunk: [64, 64, 64], levels: 9 });
+  const vw = C.layoutViews(1440, 900, 'single', 'xy', { top: 60, left: 388, bottom: 42 })[0];
+  const cam = { center: C.extentNm(hb).map(e => e / 2), nmPerPx: C.zoomToNmPerPx(hb, 'xy', 0.025) };
+  const tgt = P.targetScale(hb, 'xy', cam.nmPerPx, 2, 1);
+  ok(tgt === 4, `hemibrain home at dpr 2 -> target s4 (${tgt})`);
+  const lv = P.wantLevels(hb, vw, cam, tgt);
+  ok(lv.map(l => l.L).join() === '8,7,6,5,4,4', `levels base, first, tgt+2, tgt+1, tgt, margin (${lv.map(l => l.L)})`);
+  ok(lv.every((l, i) => !i || l.prio > lv[i - 1].prio), 'priority rises from coarse to fine');
+  const out = P.computeWants(vw, 0, { vol: hb, cam, dpr: 2, lodBias: 1, volKey: 'k', ready: false }, []);
+  ok(out.every(d => Number.isInteger(d.band)) && out[0].band === 0, 'every tile has a band');
+  ok(out.filter(d => d.scale === 4 && d.band === 4).length > 50, 'the target tiles are band 4');
+  const g = P.chunkGroups(hb, out.filter(d => d.scale === 8));
+  ok(g.length === 1 && g[0].si === 8 && g[0].chunks.length >= 4, `chunk groups of the base (${g[0] && g[0].chunks.length} chunks)`);
+  // a pyramid with a far-off base gets a cheap first level
+  const ml = stubVolume({ size: [100000, 100000, 2000], resolution: [8, 8, 8], chunk: [128, 128, 128], levels: 14 });
+  const mc = { center: C.extentNm(ml).map(e => e / 2), nmPerPx: 32 };
+  const mt = P.targetScale(ml, 'xy', mc.nmPerPx, 2, 1);
+  const ml2 = P.wantLevels(ml, vw, mc, mt);
+  const first = ml2.find(l => l.prio === 50);
+  ok(first && first.L >= mt + 3 && C.visibleTiles(vw, mc, ml.scales[first.L]).length <= P.FIRST_TILES, `first level s${first && first.L} covers the view in at most ${P.FIRST_TILES} tiles`);
+
+  // TileStore lookahead: band 0 alone, then two bands at a time
+  const started = [], pend = new Map();
+  const st = new TileStore({ maxInFlight: 10, lookahead: 1, abortMs: 1e9,
+    load: (d) => new Promise((res) => { started.push(d.key); pend.set(d.key, res); }), upload: () => ({}) });
+  const D = (k, band, prio) => ({ key: k, posKey: k, index: 0, prio, band });
+  const W = [D('b0', 0, 0), D('f0', 1, 50), D('f1', 1, 51), D('m0', 2, 100), D('t0', 3, 300), D('x', undefined, 5000)];
+  st.want(W);
+  ok(started.join() === 'b0,x', `band 0 alone (and the saver tile with no band): ${started}`);
+  pend.get('b0')({ data: new Uint8Array(4), width: 2, height: 2 });
+  await new Promise(r => setTimeout(r, 0));
+  st.want(W);
+  ok(started.join() === 'b0,x,f0,f1,m0', `then bands 1 and 2: ${started}`);
+  for (const k of ['f0', 'f1']) pend.get(k)({ data: new Uint8Array(4), width: 2, height: 2 });
+  await new Promise(r => setTimeout(r, 0));
+  st.want(W);
+  ok(started.includes('t0'), 'band 3 starts when band 1 is in');
+  const off = new TileStore({ maxInFlight: 10, load: (d) => new Promise(() => { started.push('off-' + d.key); }), upload: () => ({}) });
+  off.want(W);
+  ok(started.filter(k => k.startsWith('off-')).length === 6, 'no lookahead: all start');
 }
 
 console.log(`view tests: ${pass} passed, ${fail} failed`);

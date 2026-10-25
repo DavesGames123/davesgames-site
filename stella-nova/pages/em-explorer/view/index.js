@@ -27,8 +27,9 @@
 //  How it works. The camera is one 3D centre (nm) and nmPerPx. Each view
 //  draws one plane through the centre. The zoom picks the target scale, so
 //  one device px shows about one voxel (camera.js chooseScale). A frame
-//  asks the tile store for the base scale (coarsest), the scale two levels
-//  above the target, and the target, nearest the focus first. It draws
+//  asks the tile store for the levels of view/plan.js wantLevels (base, a
+//  cheap first level, tgt+2, tgt+1, tgt), nearest the focus first, and on
+//  the first frame of a volume calls vol.prefetchIndexes. It draws
 //  every loaded level from coarse to fine, so a coarse tile shows under a
 //  fine tile that is not there yet. A slice step shows the nearest loaded
 //  slice of the same place until the new tile lands. New tiles fade in.
@@ -54,6 +55,7 @@ import {
   layoutViews, viewAt, screenToWorld, viewRectNm, zoomPath, easeInOut,
 } from './camera.js';
 import { TileStore, tileKey, posKey } from './tiles.js';
+import { computeWants as planWants, chunkGroups, LOOKAHEAD } from './plan.js';
 import { fetchSlice } from './slice.js';
 import { createRenderer } from './gl.js';
 import { wheelPixels, wheelZoomFactor, classifyTwo, Fling, TapCounter } from './input.js';
@@ -88,7 +90,7 @@ export function createViewer(canvas, opts = {}) {
   let disposed = false, raf = 0, lastT = 0;
   let pointer = null;            // last hover point { x, y }
   let extra = [];                // prefetch descriptors (saver)
-  let lastStateSig = '', lastFocus = null;
+  let lastStateSig = '', lastFocus = null, warmed = false;
   let flags = { loading: false, ready: false, targetLoaded: 0, targetTotal: 0 };
   // auto window: a histogram of the base tiles; 0 is the fill outside the
   // data, so it does not count
@@ -110,6 +112,7 @@ export function createViewer(canvas, opts = {}) {
   const store = new TileStore({
     maxInFlight: phone ? 8 : 12,
     maxTiles: phone ? 360 : 900,
+    lookahead: LOOKAHEAD,
     load: (d, signal) => fetchSlice(d.vol, d.scale, d.plane, d.index, d.rect, signal, d.prio),
     upload: (res, d) => {
       if (!res || !res.data) return null;
@@ -176,27 +179,9 @@ export function createViewer(canvas, opts = {}) {
 
   function targetScale(p) { return chooseScale(vol.scales, p, cam.nmPerPx / dpr, lodBias, fine0For(vol, p)); }
 
+  // view/plan.js: base, a cheap first level, tgt+2, tgt+1, tgt (round 2)
   function computeWants(vw, vi, out) {
-    const p = vw.plane, sc = vol.scales, base = baseScale(sc), tgt = targetScale(p);
-    const n = PLANES[p].n;
-    const vp = vi * 40, seen = new Set();
-    const add = (L, prio, margin = 0, maxD = Infinity, dIndex = 0) => {
-      const idx = sliceIndex(sc[L], p, cam.center[n]) + dIndex;
-      if (idx < 0 || idx >= sc[L].size[n]) return;
-      for (const t of visibleTiles(vw, cam, sc[L], margin)) {
-        if (t.d > maxD) continue;
-        const key = tileKey(volKey, L, p, idx, t.tu, t.tv);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({ key, posKey: posKey(volKey, L, p, t.tu, t.tv), index: idx,
-          vol, scale: L, plane: p, rect: t.rect, prio: prio + vp + t.d });
-      }
-    };
-    add(base, 0, 1);
-    if (tgt + 2 < base) add(tgt + 2, 100);
-    if (tgt < base) { add(tgt, 200); add(tgt, 600, 1); }
-    // adjacent slices of the central tiles, after the rest
-    if (tgt < base && vi === 0 && flags.ready) { add(tgt, 2000, 0, 1.6, 1); add(tgt, 2000, 0, 1.6, -1); }
+    planWants(vw, vi, { vol, cam, dpr, lodBias, volKey, ready: flags.ready }, out);
   }
 
   function drawView(vw, t) {
@@ -281,6 +266,11 @@ export function createViewer(canvas, opts = {}) {
     views.forEach((vw, i) => computeWants(vw, i, wants));
     for (const d of extra) wants.push(d);
     store.want(wants);
+    // once per volume: warm the shard indexes of every tile of the first view
+    if (!warmed && wants.length && typeof vol.prefetchIndexes === 'function') {
+      warmed = true;
+      try { Promise.resolve(vol.prefetchIndexes(chunkGroups(vol, wants))).catch(() => {}); } catch (e) {}
+    }
     if (vol.setFocus) {
       const c = cam.center, f = lastFocus, tol = 32 * cam.nmPerPx;
       if (!f || Math.abs(c[0] - f[0]) > tol || Math.abs(c[1] - f[1]) > tol || Math.abs(c[2] - f[2]) > tol) {
@@ -590,7 +580,7 @@ export function createViewer(canvas, opts = {}) {
     store.clear();
     extra = [];
     hist.fill(0); autoPending = opts.autoContrast !== false;
-    lastFocus = null;
+    lastFocus = null; warmed = false;
     vol = v; volKey = v ? String(v.id ?? 'vol') + '#' + (++volSerial) : '';
     flags = { loading: false, ready: false, targetLoaded: 0, targetTotal: 0 };
     if (!v) { invalidate(); return; }
