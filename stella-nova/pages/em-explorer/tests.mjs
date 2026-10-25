@@ -285,7 +285,7 @@ function testPackages() {
         setPlane(p) { calls.push(['setPlane', p]); st.plane = p; emit(); },
         setSlice(nm) { calls.push(['setSlice', nm]); },
         goTo(t) { calls.push(['goTo', { ...t }]); for (const k of ['x', 'y', 'z', 'zoom', 'plane']) if (t[k] != null) st[k] = t[k]; emit(); },
-        setContrast(lo, hi, g) { calls.push(['setContrast', lo, hi, g]); },
+        setContrast(lo, hi, g) { calls.push(['setContrast', Math.round(lo * 255), Math.round(hi * 255), g]); },
         setInvert(b) { calls.push(['setInvert', b]); },
         setInsets(i) { calls.push(['setInsets', { ...i }]); },
         setLayout(l) { calls.push(['setLayout', l]); },
@@ -342,7 +342,7 @@ else {
 
     P.click($('capNext'));
     await sleep(10);
-    ok(V.last('goTo')[1].x === 400 && $('capTitle').textContent === 'Mitochondrion', 'next place');
+    ok(V.last('goTo')[1].x === 400 && V.last('goTo')[1].animate === true && $('capTitle').textContent === 'Mitochondrion', 'next place: a smooth flight in the same dataset');
     P.key('p');
     await sleep(10);
     ok(V.last('goTo')[1].x === 100, 'key P: previous place');
@@ -508,6 +508,55 @@ else {
     ok(P.ready === false && !P.$('nogl').hidden, 'createViewer throws: the WebGL2 message shows');
     P.close();
   }
+}
+
+// ── 6b ──
+sect('6b. page in jsdom with the real VIEW, the test catalog and a synthetic volume');
+if (!loadJsdom() || !fakeCanvas || !fs.existsSync(path.join(HERE, 'view', 'index.js'))) console.log('  skip: no jsdom, no fake WebGL2 or no view/index.js');
+else {
+  const VIEW = await import('./view/index.js');
+  const T = testPackages();
+  T.view = VIEW;
+  T.data.openVolume = async (rec) => {
+    T.data.opened.push(rec.id);
+    if (rec.fail) throw new TypeError('Failed to fetch');
+    const v = VIEW.stubVolume({ size: rec.size.map((n) => n * 16), resolution: rec.voxel || [4, 4, 4], levels: 4 });
+    v.id = rec.id; v.dispose = () => T.data.disposed.push(rec.id);
+    return v;
+  };
+  const P = await boot({ packages: T });
+  const em = P.win.__em, vw = em.viewer;
+  for (let i = 0; i < 20; i++) { P.frames(1); await sleep(5); }
+  ok(P.ready === true && vw && typeof vw.state === 'function', `real viewer boots (ready ${P.ready})`);
+  P.click(P.doc.querySelector('#placeList .pl-item[data-id="syn"]'));
+  for (let i = 0; i < 400 && Math.abs(vw.state().z - 300) > 1; i++) { P.frames(1); await sleep(5); }
+  let st = vw.state();
+  ok(Math.abs(st.x - 100) < 1 && Math.abs(st.y - 200) < 1 && Math.abs(st.z - 300) < 1 && Math.abs(st.zoom - 1.5) < 0.01, `goTo a place: x ${st.x && st.x.toFixed(1)} y ${st.y && st.y.toFixed(1)} z ${st.z && st.z.toFixed(1)} zoom ${st.zoom && st.zoom.toFixed(3)}`);
+  P.click(P.$('capNext'));
+  for (let i = 0; i < 400 && Math.abs(vw.state().x - 400) > 1; i++) { P.frames(1); await sleep(5); }
+  st = vw.state();
+  ok(Math.abs(st.x - 400) < 1 && Math.abs(st.zoom - 2) < 0.01, `the flight to the next place lands: x ${st.x.toFixed(1)} zoom ${st.zoom.toFixed(3)}`);
+  P.input(P.$('lo'), 51); P.input(P.$('hi'), 204); P.input(P.$('gamma'), 1.4); P.key('i');
+  st = vw.state();
+  ok(st.contrast && Math.abs(st.contrast.lo - 0.2) < 0.01 && Math.abs(st.contrast.hi - 0.8) < 0.01 && Math.abs(st.contrast.gamma - 1.4) < 0.01 && st.invert === true, `contrast reaches the viewer: ${JSON.stringify(st.contrast)} invert ${st.invert}`);
+  P.input(P.$('lo'), 0); P.input(P.$('hi'), 1);
+  ok(Math.abs(vw.state().contrast.hi - 1 / 255) < 1e-3, 'a white point of 1 stays 1/255 (not the 0..1 range)');
+  P.key('2');
+  for (let i = 0; i < 5; i++) { P.frames(1); await sleep(5); }
+  ok(vw.state().plane === 'xz' && P.$('slice').max === String(2000 * 16 - 1), `plane XZ in the viewer, depth slider over y (max ${P.$('slice').max})`);
+  P.input(P.$('slice'), 1000);
+  for (let i = 0; i < 5; i++) { P.frames(1); await sleep(5); }
+  ok(Math.abs(vw.state().y - 1000) <= 1, `the depth slider moves the slice: y ${vw.state().y}`);
+  await sleep(500);
+  ok(/d=alpha&p=xz&/.test(P.win.location.hash) && /&y=100[01](\.\d)?&/.test(P.win.location.hash), `hash follows the real viewer: ${P.win.location.hash}`);
+  await em.selectDataset('beta');
+  for (let i = 0; i < 5; i++) { P.frames(1); await sleep(5); }
+  ok(T.data.disposed.includes('alpha') && P.$('dsName').textContent === 'Beta cell', 'dataset switch on the real viewer');
+  window.dispatchEvent(new P.win.Event('resize'));
+  P.frames(2);
+  P.win.__snRelease();
+  ok(!P.errors.length, `no errors with the real viewer${P.errors.length ? ': ' + P.errors[0].slice(0, 400) : ''}`);
+  P.close();
 }
 
 // ── 7 ──

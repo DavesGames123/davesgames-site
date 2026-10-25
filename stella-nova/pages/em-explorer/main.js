@@ -177,7 +177,8 @@ function applyContrast() {
   $('gammaV').textContent = Number(c.gamma).toFixed(2);
   $('invert').checked = S.invert;
   ['lo', 'hi', 'gamma'].forEach((id) => fill($(id)));
-  try { S.viewer && S.viewer.setContrast(c.lo, c.hi, c.gamma); } catch (e) { /* VIEW */ }
+  // VIEW takes the window in 0..1 (a 0..255 pair with hi <= 1 would read as 0..1)
+  try { S.viewer && S.viewer.setContrast(c.lo / 255, c.hi / 255, c.gamma); } catch (e) { /* VIEW */ }
   try { S.viewer && S.viewer.setInvert(S.invert); } catch (e) { /* VIEW */ }
 }
 
@@ -372,7 +373,8 @@ async function goBookmark(id) {
     return ok;
   }
   if (PLANES.includes(view.plane)) { S.plane = view.plane; syncPlane(); }
-  try { S.viewer.goTo(view); } catch (e) { /* VIEW */ }
+  // same dataset: a smooth flight (zoom out, across, in), like a map
+  try { S.viewer.goTo({ ...view, animate: !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) }); } catch (e) { /* VIEW */ }
   setSliceRange();
   renderPlacesNow();
   scheduleHash();
