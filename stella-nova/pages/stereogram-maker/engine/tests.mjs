@@ -71,6 +71,42 @@ export async function run({ quick = false } = {}) {
     ok(r.data[4 * (10 * 20 + 10)] === 0 && r.data[4 * (3 * 20 + 3)] === 255, 'the even-odd rule leaves the hole');
   });
 
+  await group('fusion', () => {
+    // A fused stereogram puts a point of final depth z at L = 2 - mu z
+    // viewing distances from the eyes, on the ray through its pixel. The
+    // perceived lateral radius is then r_px * L. For a sphere drawn with
+    // the matched perspective, r_px * L / sqrt(1 - Z^2) is the same at
+    // every pixel (the fused sphere keeps its shape, squeezed in depth).
+    // With the old fixed 22 degrees it is not: the fused sides bend.
+    const S = icosphere(6), w = 320, mu = 1 / 3, relief = 0.85, lift = 0.1, near = 1, far = 0.2;
+    const spread = fov => {
+      const o = { w, h: w, fit: 0.9, norm: 'sphere', near, far };
+      const d = E.depthFromMesh(S, fov == null ? Object.assign(o, { match: { mu, relief, lift } }) : Object.assign(o, { fov }));
+      const r = [];
+      for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+        const i = y * w + x; if (!d.mask[i]) continue;
+        const Z = 2 * (d.data[i] - far) / (near - far) - 1;
+        if (Z < 0.35) continue;                      // stay off the silhouette
+        const zf = lift + (1 - lift) * relief * d.data[i], L = 2 - mu * zf;
+        const rp = Math.hypot(x + 0.5 - w / 2, y + 0.5 - w / 2);
+        if (rp < 6) continue;
+        r.push([Z, rp * L / Math.sqrt(1 - Z * Z)]);
+      }
+      // The slope of the ratio against Z, per unit ratio: 0 when the fused
+      // shape is right; pixel and facet noise do not move it.
+      const n = r.length, mz = r.reduce((a, b) => a + b[0], 0) / n, mr = r.reduce((a, b) => a + b[1], 0) / n;
+      const sl = r.reduce((a, b) => a + (b[0] - mz) * (b[1] - mr), 0) / r.reduce((a, b) => a + (b[0] - mz) ** 2, 0);
+      return { fov: d.fov, cv: Math.abs(sl / mr) };
+    };
+    const want = E.matchedFov({ mu, relief, lift }, near, far);
+    ok(want > 4 && want < 9, 'matched fov for mu 1/3, relief 0.85, lift 0.1 is a few degrees (' + want.toFixed(2) + ')');
+    const m = spread(null), old = spread(22);
+    ok(Math.abs(m.fov - want) < 1e-9, 'depthFromMesh with match uses matchedFov (' + m.fov.toFixed(2) + ')');
+    ok(m.cv < 0.01, 'matched: the fused sphere keeps its shape (slope ' + m.cv.toFixed(4) + ')'); console.log('  fusion slope matched', m.cv.toFixed(4), 'fixed 22', old.cv.toFixed(4), 'ortho', spread(0).cv.toFixed(4));
+    ok(old.cv > 5 * m.cv && old.cv > 0.05, 'fixed 22 degrees: the fused sphere bends (slope ' + old.cv.toFixed(4) + ')');
+    ok(E.matchedFov({ mu: 0.45, relief: 1 }) > E.matchedFov({ mu: 0.12, relief: 1 }), 'a deeper slab needs a stronger perspective');
+  });
+
   await group('depth', () => {
     const S = icosphere(4), w = 160, fit = 0.9, s = fit * w / 2;
     const d = E.depthFromMesh(S, { w, h: w, fov: 0, fit, norm: 'sphere', near: 1, far: 0 });

@@ -134,16 +134,61 @@ export function finish(zb, w, h, o, sphere) {
   return out;
 }
 
-// A depth map of a mesh (see index.js for the options).
-export function depthFromMesh(mesh, opts = {}) {
-  const o = Object.assign({ w: 512, h: 512, yaw: 0, pitch: 0, roll: 0 }, opts);
-  const w = o.w | 0, h = o.h | 0;
+// The perspective that matches the stereogram. A viewer who fuses the
+// image sees a point of depth z at the distance L = V (2 - mu z) from the
+// eyes (V: the viewing distance, sirds.js GEOMETRY), along the ray through
+// its pixel. So the fused object is the depth map seen from the eyes,
+// with its depth squeezed into the slab mu V. A depth map drawn with any
+// other perspective gives a fused object whose sides bend in or out.
+// The object view z (-1..1 on the bounding sphere) maps to the final
+// depth z(Z) = z0 + g Z, so L is linear in Z: L = L0 (1 - a Z) with
+// a = mu g / (2 - mu z0). That is the perspective of a camera at 1 / a
+// sphere radii, fov = 2 asin(a). It does not depend on the viewing
+// distance, the dpi or the image size, only on how deep the slab is.
+// m: { mu, relief, lift } (relief and lift as the maker applies them
+// after this function: z = lift + (1 - lift) relief d); near and far as
+// in depthFromMesh; lo and span: the view z range that maps to [far,
+// near] (-1 and 2 for norm 'sphere').
+export function matchedFov(m = {}, near = 1, far = 0.2, lo = -1, span = 2) {
+  const mu = m.mu ?? 1 / 3, relief = m.relief ?? 1, lift = m.lift ?? 0;
+  const k = (1 - lift) * relief, g = k * (near - far) / span, z0 = lift + k * (far + (near - far) * (0 - lo) / span);
+  const a = Math.min(0.99, Math.max(0, mu * g / (2 - mu * z0)));
+  return 2 * Math.asin(a) / DEG;
+}
+
+function zRange(zb) {
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < zb.length; i++) if (zb[i] > -Infinity) { if (zb[i] < lo) lo = zb[i]; if (zb[i] > hi) hi = zb[i]; }
+  return lo <= hi ? [lo, hi] : [-1, 1];
+}
+
+function rasterMesh(mesh, o, w, h) {
   const V = viewOf(mesh, o);
   const { sx, sy, q } = project(mesh, V);
   const idx = mesh.indices || seqIndex(mesh.positions.length / 3);
   const zb = raster(idx, sx, sy, q, w, h);
   if (V.persp) for (let i = 0; i < zb.length; i++) if (zb[i] > -Infinity) zb[i] = V.D - 1 / zb[i];
-  return finish(zb, w, h, o, o.norm === 'sphere');
+  return zb;
+}
+
+// A depth map of a mesh (see index.js for the options). opts.match
+// ({ mu, relief, lift }) sets fov to matchedFov: one pass for norm
+// 'sphere', two for norm 'view' (the first pass finds the visible span).
+export function depthFromMesh(mesh, opts = {}) {
+  const o = Object.assign({ w: 512, h: 512, yaw: 0, pitch: 0, roll: 0 }, opts);
+  const w = o.w | 0, h = o.h | 0, sphere = o.norm === 'sphere';
+  const near = o.near ?? 1, far = o.far ?? 0.2;
+  if (o.match && opts.fov == null) {
+    o.fov = matchedFov(o.match, near, far);
+    if (!sphere) {
+      const [lo, hi] = zRange(rasterMesh(mesh, o, w, h));
+      o.fov = matchedFov(o.match, near, far, lo, Math.max(1e-6, hi - lo));
+    }
+  }
+  const zb = rasterMesh(mesh, o, w, h);
+  const out = finish(zb, w, h, o, sphere);
+  out.fov = o.fov ?? 22;
+  return out;
 }
 // The projection only (for the WebGL2 path in depth-gl.js).
 export function projectMesh(mesh, opts) {

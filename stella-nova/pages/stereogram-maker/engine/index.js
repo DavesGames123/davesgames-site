@@ -26,6 +26,11 @@
 //      yaw turns about the vertical axis, pitch about the horizontal
 //      axis, roll about the view axis. fov 0 is an orthographic view;
 //      fov > 0 is a perspective view (default 22).
+//      match { mu, relief, lift } (with no fov): the perspective that
+//      the fused stereogram implies (matchedFov). The default 22 degrees
+//      is about four times too strong for a slab of mu 1/3, so the fused
+//      object then bends. The DepthMap gets fov, the angle used.
+//    matchedFov(match, near, far, lo, span) -> degrees (see depth.js).
 //      near (default 1) and far (default 0.2): the depth values of the
 //      nearest and the farthest visible object point. The background is 0.
 //      fit (default 0.9): the part of min(w, h) that the bounding sphere
@@ -137,7 +142,7 @@ export function depthFromMesh(mesh, opts = {}) {
   return cpuDepth(mesh, opts);
 }
 export { depthFromMeshGL };
-export { depthFromImage, depthFromSDF, SDF_SHAPES, turntable, boxBlur, meshBounds, turnMatrix, emptyDepth } from './depth.js';
+export { matchedFov, depthFromImage, depthFromSDF, SDF_SHAPES, turntable, boxBlur, meshBounds, turnMatrix, emptyDepth } from './depth.js';
 export { depthFromText, FONT5x7 } from './text.js';
 export { sirds, autostereogram, farSeparation, nearSeparation, separation, rowLinks, hash3, DEFAULTS, DOT_PALETTE } from './sirds.js';
 export { TILES, DOT_TILES, tilesFromPatterns, seamError } from './tiles.js';
