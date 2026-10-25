@@ -254,6 +254,12 @@ await check('every scene and step draws at 360, 768 and 1280 px and in saver ban
   assert(bad.length === 0, bad.slice(0, 5).join('; '));
   console.log(`       ${frames} frames drew`);
 });
+await check('fitLayout scales every saver shot into 9:16 and 16:9 bands', () => {
+  for (const [bw, bh] of [[405, 340], [1280, 430], [720, 900]]) for (const s of IDX.saverShots) {
+    const L = IDX.fitLayout(IDX.SCENE_MODULES[s.scene], bw, bh);
+    assert(L.w * L.k <= bw + 1e-6 && L.h * L.k <= bh + 1e-6 && L.k > 0.45, `${s.id} at ${bw}x${bh}: k ${L.k.toFixed(2)}`);
+  }
+});
 await check('the tour visits every step of every scene', () => {
   for (const k of IDX.SCENES) {
     const M = IDX.SCENE_MODULES[k], st = M.init({}), seen = new Set(); st.auto = true; st.since = 0;

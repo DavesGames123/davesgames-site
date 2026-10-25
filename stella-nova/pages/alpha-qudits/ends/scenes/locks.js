@@ -113,7 +113,8 @@ function drawGrid(g, v, st, t) {
   label(g, '7: no product of two integers ≥ 2', capX + 2, ys + 32, { font: font(12), color: C.dim, align: 'left' });
   const yl = ys + 58;
   if (yl + 12 < v.y + v.h) {
-    const stack = v.w < 480, lx0 = stack ? v.x : Math.max(v.x, L.x0 - 30), x2 = stack ? v.x : lx0 + Math.max(300, L.gw / 2 + 30), y2 = stack ? yl + 24 : yl;
+    g.font = font(12); const t1 = g.measureText('steel: a map that reads compose (decomposable)').width;
+    const stack = v.w < 66 + t1 + 30 + 66 + 230, lx0 = stack ? v.x : Math.max(v.x, L.x0 - 30), x2 = stack ? v.x : lx0 + 66 + t1 + 24, y2 = stack ? yl + 24 : yl;
     keyShape(g, lx0 + 24, yl, 32, 6, [0.3, 0.8, 0.5, 0.2], { color: C.steel });
     label(g, 'steel: a map that reads compose (decomposable)', lx0 + 66, yl, { font: font(12), color: C.text, align: 'left' });
     keyShape(g, x2 + 24, y2, 32, 6, [0.9, 0.1, 0.7, 0.4], { color: C.dark });

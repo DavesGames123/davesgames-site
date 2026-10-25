@@ -45,7 +45,8 @@
 //  SAVER
 //    saverShots: [{ id, scene, params, seconds, title, caption, tex }].
 //    A shot is drawn with createEnds(host, { fill: true, scene, params })
-//    and play(t). setBand() keeps the subject in the clear band.
+//    and play(t). In fill mode the figure is laid out at the width that
+//    fits best (fitLayout) and scaled into the clear band of setBand().
 //
 //  FILES
 //    index.js ....... this API, the DOM shell, the loop, saverShots
@@ -89,6 +90,17 @@ export const saverShots = [
   { id: 'ends-charge-q', scene: 'charge', params: { step: 'charge' }, seconds: 10, title: 'The acting charge', caption: 'Q acts on the pair ket as i; the quark doublet has hypercharge 1/6.', tex: 'Q=6iY,\\quad Y=\\tfrac12-\\tfrac13=\\tfrac16' },
 ];
 
+// The layout width (360 to 1280 px) whose figure, scaled to fit a box of
+// bw x bh, comes out largest. Phone layouts are tall; desktop ones wide.
+export function fitLayout(mod, bw, bh) {
+  let best = null;
+  for (let w = 360; w <= 1280; w += 40) {
+    const h = mod.height(w), k = Math.min(bw / w, bh / h);
+    if (!best || k > best.k + 1e-9) best = { w, h, k };
+  }
+  return best;
+}
+
 let cssDone = false;
 function injectCss() {
   if (cssDone || typeof document === 'undefined') return;
@@ -128,8 +140,14 @@ export function createEnds(host, opts = {}) {
     if (!mod) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
-    if (fill) { g.fillStyle = C.bg; g.fillRect(0, 0, W, H); }
-    mod.draw(g, env(), st, reduced ? t * 0.6 : t);
+    if (fill) {
+      // the saver: lay the figure out at its best width, then scale it
+      // into the clear band (or the whole canvas) and centre it there
+      g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+      const v = env().view, L = fitLayout(mod, v.w, v.h);
+      g.translate(v.x + (v.w - L.w * L.k) / 2, v.y + (v.h - L.h * L.k) / 2); g.scale(L.k, L.k);
+      mod.draw(g, { W: L.w, H: L.h, dpr, fill, reduced, view: { x: 0, y: 0, w: L.w, h: L.h } }, st, reduced ? t * 0.6 : t);
+    } else mod.draw(g, env(), st, reduced ? t * 0.6 : t);
     if (mod.autoKey && st[mod.autoKey] !== lastStep) { lastStep = st[mod.autoKey]; buildControls(); }
     if (!fill) {
       const c = mod.caption ? mod.caption(st, t) : '';

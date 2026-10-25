@@ -114,8 +114,9 @@ export default {
       g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(px + bw * 8 / 12, yb + 8, 2, 18);
       label(g, '8 of 12: the stabilizer has dimension 4', px, yb + 38, { font: font(12), color: C.dim, align: 'left' });
       const yg = Math.min(v.y + v.h - 30, yb + 62);
-      label(g, 'su(3) ⊕ su(2) ⊕ u(1) exponentiates to', v.x + v.w / 2, yg, { font: font(13, 500, true), color: C.charge });
-      label(g, 'S(U(3) × U(2)) ≅ (SU(3) × SU(2) × U(1))/Z₆', v.x + v.w / 2, yg + 20, { font: font(13, 600, true), color: C.charge });
+      const gxl = wide ? px : v.x + v.w / 2, al = wide ? 'left' : 'center';
+      label(g, 'su(3) ⊕ su(2) ⊕ u(1) exponentiates to', gxl, yg, { font: font(13, 500, true), color: C.charge, align: al });
+      label(g, 'S(U(3) × U(2)) ≅ (SU(3) × SU(2) × U(1))/Z₆', gxl, yg + 20, { font: font(13, 600, true), color: C.charge, align: al });
     } else if (st.step === 'charge') {
       const Q = E[11], Y = diagM(hypercharge(), false), f = ease(((local % 6) - 2.2) / 1.2);
       const showY = f > 0.5;
