@@ -251,7 +251,7 @@ function testPackages() {
   const log = [];
   const catalog = {
     DATASETS: [
-      { id: 'alpha', name: 'Alpha brain', short: 'Alpha', organism: 'Fly', tissue: 'brain', method: 'FIB-SEM', voxel: [8, 8, 8], size: [1000, 2000, 3000], credit: 'Lab A', licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/', links: [{ label: 'Site', href: 'https://example.org/a' }, { label: 'Bad', href: 'javascript:alert(1)' }], contrast: { lo: 10, hi: 240, gamma: 1 } },
+      { id: 'alpha', name: 'Alpha brain', short: 'Alpha', organism: 'Fly', tissue: 'brain', method: 'FIB-SEM', voxel: [8, 8, 8], size: [1000, 2000, 3000], credit: 'Lab A', licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/', links: [{ label: 'Site', href: 'https://example.org/a' }, { label: 'Bad', href: 'javascript:alert(1)' }], contrast: { lo: 10, hi: 240, gamma: 1 }, home: { x: 111, y: 222, z: 333, zoom: 0.05, plane: 'xy' } },
       { id: 'beta', name: 'Beta cell', organism: 'Human', tissue: 'HeLa cell', method: 'FIB-SEM', size: [500, 600, 700], credit: 'Lab B', licence: 'CC BY 4.0', links: [] },
       { id: 'gone', name: 'Gone volume', credit: 'Lab C', licence: 'CC BY 4.0', voxel: [4, 4, 4], size: [10, 10, 10], fail: true },
     ],
@@ -276,7 +276,7 @@ function testPackages() {
   const view = {
     viewers: [],
     createViewer(canvas, opts) {
-      const st = { x: 0, y: 0, z: 0, zoom: 0.01, plane: 'xy' };
+      const st = { x: 0, y: 0, z: 0, zoom: 0.01, plane: 'xy', contrast: { lo: 0, hi: 1, gamma: 1 } };
       const calls = [];
       const emit = () => opts.onState({ ...st });
       const v = {
@@ -285,7 +285,9 @@ function testPackages() {
         setPlane(p) { calls.push(['setPlane', p]); st.plane = p; emit(); },
         setSlice(nm) { calls.push(['setSlice', nm]); },
         goTo(t) { calls.push(['goTo', { ...t }]); for (const k of ['x', 'y', 'z', 'zoom', 'plane']) if (t[k] != null) st[k] = t[k]; emit(); },
-        setContrast(lo, hi, g) { calls.push(['setContrast', Math.round(lo * 255), Math.round(hi * 255), g]); },
+        setContrast(lo, hi, g) { calls.push(['setContrast', Math.round(lo * 255), Math.round(hi * 255), g]); st.contrast = { lo, hi, gamma: g }; },
+        autoContrast() { calls.push(['autoContrast']); st.contrast = { lo: 0.1, hi: 0.9, gamma: 1 }; emit(); return { lo: 0.1, hi: 0.9 }; },
+        after(a, b) { let i = -1; for (let k = 0; k < calls.length; k++) if (calls[k][0] === a) i = k; return i >= 0 && calls.slice(i + 1).some((c) => c[0] === b); },
         setInvert(b) { calls.push(['setInvert', b]); },
         setInsets(i) { calls.push(['setInsets', { ...i }]); },
         setLayout(l) { calls.push(['setLayout', l]); },
@@ -315,6 +317,8 @@ else {
     ok($('dsName').textContent === 'Alpha brain' && $('dsMeta').textContent === 'Fly, brain · FIB-SEM · 8 nm voxels · 8 × 16 × 24 µm', `title: ${$('dsName').textContent} / ${$('dsMeta').textContent}`);
     ok($('credit').textContent === 'Data: Lab A · CC BY 4.0', `credit line: ${$('credit').textContent}`);
     ok(JSON.stringify(V.last('setContrast')) === '["setContrast",10,240,1]' && $('loV').textContent === '10', 'the dataset contrast goes to the viewer and the sliders');
+    const home = V.calls.find((c) => c[0] === 'goTo');
+    ok(home && home[1].x === 111 && home[1].y === 222 && home[1].z === 333 && home[1].zoom === 0.05 && home[1].plane === 'xy', `with no hash the dataset opens at its catalog home: ${JSON.stringify(home && home[1])}`);
     ok($('panel').classList.contains('open') && !P.doc.body.classList.contains('panel-closed') && $('panelOpen').hidden, 'desktop: the panel starts open');
     ok(V.calls.some((c) => c[0] === 'setInsets'), 'the viewer gets insets');
     const cards = P.doc.querySelectorAll('#dsList .ds-card');
@@ -353,15 +357,16 @@ else {
     ok(V.last('goTo')[1].plane === 'xz' && P.doc.querySelector('#planeSeg [data-plane="xz"]').getAttribute('aria-checked') === 'true', 'the place plane XZ is set and shown');
     ok($('capSrc').hidden && !P.doc.querySelector('img') && P.win.__xss === undefined && $('capText').textContent.startsWith('<img'), 'caption text stays text; a javascript: source is not a link');
     ok($('dsMeta').textContent.includes('4 nm voxels') && $('dsMeta').textContent.includes('2 × 2.4 × 2.8 µm'), `voxel size from the volume when the record has none: ${$('dsMeta').textContent}`);
-    ok(JSON.stringify(V.last('setContrast')) === '["setContrast",0,255,1]', 'a dataset with no contrast gets the default');
+    ok(!V.after('setVolume', 'setContrast'), 'a dataset with no catalog window keeps the VIEW auto window (no setContrast)');
     ok($('slice').max === '599' && /slice 60/.test($('sliceV').textContent), `XZ depth slider: max ${$('slice').max}, ${$('sliceV').textContent}`);
 
     P.input($('slice'), 100);
     ok(JSON.stringify(V.last('setSlice')) === '["setSlice",402]', `slice slider -> setSlice in nm: ${JSON.stringify(V.last('setSlice'))}`);
     P.input($('lo'), 30);
-    ok(JSON.stringify(V.last('setContrast')) === '["setContrast",30,255,1]' && $('loV').textContent === '30', 'black point');
+    // the sliders follow the window VIEW draws (here still 10..240), so a user change keeps its white point
+    ok(JSON.stringify(V.last("setContrast")) === `["setContrast",30,240,1]` && $("loV").textContent === "30", `black point keeps the window on screen: ${JSON.stringify(V.last("setContrast"))}`);
     P.input($('lo'), 255);
-    ok(V.last('setContrast')[1] === 254, 'the black point stays under the white point');
+    ok(V.last('setContrast')[1] === 239, 'the black point stays under the white point');
     P.input($('lo'), 30);
     P.input($('gamma'), 1.5);
     P.key('i');
@@ -375,7 +380,9 @@ else {
     P.key('1', { target: $('placeSearch') });
     ok(V.last('setPlane')[1] === 'yz', 'keys typed in the search box do not change the plane');
     P.click($('resetImage'));
-    ok(JSON.stringify(V.last('setContrast')) === '["setContrast",0,255,1]' && !$('invert').checked, 'reset image');
+    ok(V.last('autoContrast') && !V.after('autoContrast', 'setContrast') && $('loV').textContent === '26' && $('hiV').textContent === '230' && !$('invert').checked, `reset image: back to the auto window, sliders ${$('loV').textContent}..${$('hiV').textContent}`);
+    await sleep(520);
+    ok(!/[&#]c=/.test(P.win.location.hash), `the auto window stays out of the hash: ${P.win.location.hash}`);
 
     const r = await P.win.__em.share();
     ok(r === 'copied' && P.clip.length === 1 && /^http:\/\/localhost:8963\/stella-nova\/pages\/em-explorer\/index\.html#d=beta&p=yz&/.test(P.clip[0]) && !$('toast').hidden, `share copies the link: ${P.clip[0]}`);

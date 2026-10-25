@@ -50,7 +50,7 @@ const isPhone = () => !!(window.matchMedia && window.matchMedia(PHONE_Q).matches
 
 const S = {
   pk: null, cat: null, viewer: null, volume: null, dsId: null, token: 0,
-  plane: 'xy', contrast: { ...DEFAULT_CONTRAST }, invert: false,
+  plane: 'xy', contrast: { ...DEFAULT_CONTRAST }, auto: true, invert: false,
   bookmark: null, scope: 'here', query: '', last: null, lastHash: null,
   sliceDrag: false, hashTimer: 0, toastTimer: 0, panel: null, failed: null,
 };
@@ -131,7 +131,7 @@ function currentHash() {
   const st = viewState();
   return formatHash({
     dataset: S.dsId, plane: st.plane || S.plane, x: st.x, y: st.y, z: st.z, zoom: st.zoom,
-    contrast: S.contrast, invert: S.invert, bookmark: S.bookmark,
+    contrast: S.auto ? null : S.contrast, invert: S.invert, bookmark: S.bookmark,
   });
 }
 
@@ -157,6 +157,9 @@ function normalIndex(st) {
 function onState(st) {
   if (!st) return;
   S.last = st;
+  // auto window: VIEW sets it from the coarse tiles; the sliders follow it
+  // (not in the saver, which fades by its own window)
+  if (S.auto && st.contrast && !document.documentElement.classList.contains('sn-saver')) syncAuto(st.contrast);
   if (st.plane && st.plane !== S.plane && PLANES.includes(st.plane)) { S.plane = st.plane; syncPlane(); setSliceRange(); }
   if (!S.sliceDrag) syncSlice(normalIndex(st));
   document.body.classList.toggle('busy', !!(st.pending > 0 || st.loading));
@@ -169,7 +172,7 @@ function fill(input) {
   input.style.setProperty('--fill', (hi > lo ? ((v - lo) / (hi - lo)) * 100 : 0) + '%');
 }
 
-function applyContrast() {
+function showContrast() {
   const c = S.contrast;
   $('lo').value = c.lo; $('hi').value = c.hi; $('gamma').value = c.gamma;
   $('loV').textContent = String(Math.round(c.lo));
@@ -177,30 +180,58 @@ function applyContrast() {
   $('gammaV').textContent = Number(c.gamma).toFixed(2);
   $('invert').checked = S.invert;
   ['lo', 'hi', 'gamma'].forEach((id) => fill($(id)));
+}
+
+// S.auto: VIEW keeps its auto window (a setContrast would stop it), so only
+// the invert goes to VIEW. A user change, a catalog window or a hash window
+// sets S.auto = false.
+function applyContrast() {
+  const c = S.contrast;
+  showContrast();
   // VIEW takes the window in 0..1 (a 0..255 pair with hi <= 1 would read as 0..1)
-  try { S.viewer && S.viewer.setContrast(c.lo / 255, c.hi / 255, c.gamma); } catch (e) { /* VIEW */ }
+  if (!S.auto) { try { S.viewer && S.viewer.setContrast(c.lo / 255, c.hi / 255, c.gamma); } catch (e) { /* VIEW */ } }
   try { S.viewer && S.viewer.setInvert(S.invert); } catch (e) { /* VIEW */ }
 }
 
+// the auto window (0..1) into the sliders (0..255), with no call to VIEW
+function syncAuto(w) {
+  if (!w || !Number.isFinite(w.lo) || !Number.isFinite(w.hi)) return;
+  const lo = Math.round(w.lo * 255), hi = Math.max(lo + 1, Math.round(w.hi * 255));
+  if (lo === S.contrast.lo && hi === S.contrast.hi) return;
+  S.contrast = { lo, hi, gamma: S.contrast.gamma };
+  showContrast();
+}
+
+// the catalog window of a dataset, or null (then VIEW's auto window)
 function datasetContrast(d) {
   const c = d && d.contrast;
-  return c && Number.isFinite(c.lo) && Number.isFinite(c.hi) && c.hi > c.lo ? { lo: c.lo, hi: c.hi, gamma: Number.isFinite(c.gamma) ? c.gamma : 1 } : { ...DEFAULT_CONTRAST };
+  return c && Number.isFinite(c.lo) && Number.isFinite(c.hi) && c.hi > c.lo ? { lo: c.lo, hi: c.hi, gamma: Number.isFinite(c.gamma) ? c.gamma : 1 } : null;
+}
+
+function resetContrast(d) {
+  const c = datasetContrast(d);
+  S.auto = !c;
+  S.contrast = c || { ...DEFAULT_CONTRAST };
 }
 
 function bindImage() {
   const lo = $('lo'), hi = $('hi'), g = $('gamma');
   lo.addEventListener('input', () => {
+    S.auto = false;
     S.contrast.lo = Math.min(+lo.value, S.contrast.hi - 1);
     applyContrast(); scheduleHash();
   });
   hi.addEventListener('input', () => {
+    S.auto = false;
     S.contrast.hi = Math.max(+hi.value, S.contrast.lo + 1);
     applyContrast(); scheduleHash();
   });
-  g.addEventListener('input', () => { S.contrast.gamma = +g.value; applyContrast(); scheduleHash(); });
+  g.addEventListener('input', () => { S.auto = false; S.contrast.gamma = +g.value; applyContrast(); scheduleHash(); });
   $('invert').addEventListener('change', () => { S.invert = $('invert').checked; applyContrast(); scheduleHash(); });
   $('resetImage').addEventListener('click', () => {
-    S.contrast = datasetContrast(dataset()); S.invert = false; applyContrast(); scheduleHash();
+    resetContrast(dataset()); S.invert = false; applyContrast();
+    if (S.auto) { try { const w = S.viewer && S.viewer.autoContrast && S.viewer.autoContrast(); if (w) syncAuto(w); } catch (e) { /* VIEW */ } }
+    scheduleHash();
   });
   $('threeView').addEventListener('change', () => {
     try { S.viewer && S.viewer.setLayout && S.viewer.setLayout($('threeView').checked ? 'three' : 'single'); } catch (e) { /* VIEW */ }
@@ -302,7 +333,7 @@ async function selectDataset(id, { view = null } = {}) {
   S.dsId = id;
   if (prev !== id) {
     if (S.bookmark && (bookmark(S.bookmark) || {}).dataset !== id) closeCaption();
-    S.contrast = datasetContrast(d); S.invert = false;
+    resetContrast(d); S.invert = false;
   }
   setTitle(d);
   renderLists();
@@ -327,6 +358,10 @@ async function selectDataset(id, { view = null } = {}) {
   if (old && old !== vol) { try { old.dispose && old.dispose(); } catch (e) { /* DATA */ } }
   setTitle(d, vol);
   applyContrast();
+  // no view from a hash or a place: the catalog's first view of the dataset
+  if (!(view && [view.x, view.y, view.z].every(Number.isFinite)) && d.home && [d.home.x, d.home.y, d.home.z].every(Number.isFinite)) {
+    view = { ...d.home, plane: d.home.plane || S.plane };
+  }
   if (view && [view.x, view.y, view.z].every(Number.isFinite)) {
     const plane = PLANES.includes(view.plane) ? view.plane : S.plane;
     S.plane = plane; syncPlane();
@@ -394,7 +429,7 @@ function stepPlace(dir) {
 // ── hash in ────────────────────────────────────────────────────────────────
 function applyHash(hash, first) {
   const p = parseHash(hash);
-  if (p.contrast) S.contrast = p.contrast;
+  if (p.contrast) { S.contrast = p.contrast; S.auto = false; }
   if (p.invert != null) S.invert = p.invert;
   if (p.plane) S.plane = p.plane;
   const view = [p.x, p.y, p.z].every(Number.isFinite) ? { x: p.x, y: p.y, z: p.z, zoom: p.zoom, plane: p.plane } : null;
@@ -408,7 +443,7 @@ function applyHash(hash, first) {
   if (id !== S.dsId || first) {
     const keep = { ...S.contrast }, inv = S.invert;
     return selectDataset(id, { view }).then((ok) => {
-      if (p.contrast) { S.contrast = keep; S.invert = inv; applyContrast(); }
+      if (p.contrast) { S.contrast = keep; S.auto = false; S.invert = inv; applyContrast(); }
       else if (p.invert != null) { S.invert = inv; applyContrast(); }
       return ok;
     });
@@ -594,10 +629,18 @@ window.__em = {
   get catalog() { return S.cat; },
   get packages() { return S.pk; },
   volume: () => S.volume,
-  state: () => ({ dataset: S.dsId, plane: S.plane, contrast: { ...S.contrast }, invert: S.invert, bookmark: S.bookmark, view: viewState() }),
+  state: () => ({ dataset: S.dsId, plane: S.plane, contrast: { ...S.contrast }, auto: S.auto, invert: S.invert, bookmark: S.bookmark, view: viewState() }),
   selectDataset: (id, o) => selectDataset(id, o || {}),
   goBookmark: (id) => goBookmark(id),
   share, shareUrl, setPlane,
+  // the saver puts back the reader's image: contrast 0..255 (null = auto)
+  setImage({ contrast, invert } = {}) {
+    if (contrast && Number.isFinite(contrast.lo) && Number.isFinite(contrast.hi)) { S.contrast = { gamma: 1, ...contrast }; S.auto = false; }
+    else if (contrast === null) S.auto = true;
+    if (invert != null) S.invert = !!invert;
+    applyContrast();
+    if (S.auto) { try { const w = S.viewer && S.viewer.autoContrast && S.viewer.autoContrast(); if (w) syncAuto(w); } catch (e) { /* VIEW */ } }
+  },
   ready: null,
 };
 
