@@ -437,6 +437,15 @@ section('plan');
   await new Promise(r => setTimeout(r, 0));
   st.want(W);
   ok(started.includes('t0'), 'band 3 starts when band 1 is in');
+  // a failed coarse tile does not hold the fine bands (no JPEG decoder, an outage)
+  const s2 = [], rej = new Map();
+  const fs = new TileStore({ maxInFlight: 10, lookahead: 1, abortMs: 1e9,
+    load: (d) => new Promise((res, no) => { s2.push(d.key); rej.set(d.key, no); }), upload: () => ({}) });
+  fs.want(W);
+  rej.get('b0')(new Error('decode'));
+  await new Promise(r => setTimeout(r, 0));
+  fs.want(W);
+  ok(s2.includes('f0') && s2.includes('m0') && !s2.slice(1).includes('b0'), `a failed band 0 tile lets band 1 and 2 start: ${s2}`);
   const off = new TileStore({ maxInFlight: 10, load: (d) => new Promise(() => { started.push('off-' + d.key); }), upload: () => ({}) });
   off.want(W);
   ok(started.filter(k => k.startsWith('off-')).length === 6, 'no lookahead: all start');

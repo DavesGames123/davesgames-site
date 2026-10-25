@@ -15,7 +15,8 @@
 //  Bands (round 2, PERF). A descriptor can carry band (0 = coarsest level
 //  of view/plan.js). With o.lookahead = k, want() starts a tile of band b
 //  only while no wanted tile of a band below b - k is still missing, and
-//  nothing past band 0 while a band 0 tile is missing. So the
+//  nothing past band 0 while a band 0 tile is missing. A tile that failed
+//  and waits for its retry does not count as missing. So the
 //  coarse levels get the whole link first, and the fine levels do not
 //  share it with them. A descriptor with no band (saver prefetch) is never
 //  held. lookahead Infinity (the default) turns this off.
@@ -94,7 +95,8 @@ export class TileStore {
     // the lowest band with a wanted tile that is not loaded yet
     let open = Infinity;
     if (this.lookahead !== Infinity) {
-      for (const d of list) if (d.band != null && d.band < open && !this.tiles.has(d.key)) open = d.band;
+      // a tile that failed (and waits for its retry) does not hold the rest
+      for (const d of list) if (d.band != null && d.band < open && !this.tiles.has(d.key) && !this.failed.has(d.key)) open = d.band;
     }
     for (const d of list) {
       if (room <= 0) break;
