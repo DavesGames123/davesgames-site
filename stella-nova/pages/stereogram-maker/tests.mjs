@@ -102,11 +102,11 @@ const ST = await import('./state.js');
 const known = { models: new Set(['a', 'b']), tiles: new Set(['pd-x', 'pd-y']), shapes: new Set(['torus', 'sphere']), sizes: new Set(['fit', 'hd']) };
 {
   const s = ST.cloneState(ST.DEFAULT_STATE);
-  Object.assign(s.src, { kind: 'model', id: 'b', yaw: 33.3333, pitch: -12, fit: 0.7, relief: 0.6, lift: 0.2 });
+  Object.assign(s.src, { kind: 'model', id: 'b', yaw: 33.3333, pitch: -12, roll: 15, fit: 0.7, relief: 0.6, lift: 0.2 });
   Object.assign(s.pat, { kind: 'tile', id: 'pd-y', seed: 77 });
   Object.assign(s.view, { mode: 'cross', eyeSep: 6, mu: 0.25, guides: false, smooth: false, size: 'hd', dot: 2 });
   const d = ST.decodeState(ST.encodeState(s), known);
-  ok(d && d.src.id === 'b' && Math.abs(d.src.yaw - 33.333) < 1e-6 && d.src.pitch === -12 && d.pat.id === 'pd-y' && d.pat.seed === 77, 'model state round trip');
+  ok(d && d.src.id === 'b' && Math.abs(d.src.yaw - 33.333) < 1e-6 && d.src.pitch === -12 && d.src.roll === 15 && d.pat.id === 'pd-y' && d.pat.seed === 77, 'model state round trip');
   ok(d.view.mode === 'cross' && d.view.eyeSep === 6 && d.view.mu === 0.25 && !d.view.guides && !d.view.smooth && d.view.size === 'hd' && d.view.dot === 2, 'view round trip');
   const t = ST.cloneState(ST.DEFAULT_STATE);
   Object.assign(t.src, { kind: 'text', text: 'Hello & bye', face: 'sans' }); Object.assign(t.pat, { kind: 'colour', palette: 3 });

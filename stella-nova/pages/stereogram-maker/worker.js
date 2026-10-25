@@ -64,13 +64,15 @@ export const TEXT_FACES = {
 
 // The raw depth map of a source (before relief and lift), cached.
 export async function depthOf(src, w, h) {
-  const key = JSON.stringify([src.kind, src.id, src.yaw, src.pitch, src.fit, src.text, src.face, src.shape, src.invert, src.soft, src.ref, w, h]);
+  const key = JSON.stringify([src.kind, src.id, src.yaw, src.pitch, src.roll || 0, src.fit, src.text, src.face, src.shape, src.invert, src.soft, src.ref, w, h]);
   const hit = depthCache.get(key);
   if (hit) return hit;
   let dm;
   if (src.kind === 'model') {
     const mesh = await meshOf(src.id);
-    dm = E.depthFromMesh(mesh, { w, h, yaw: src.yaw, pitch: src.pitch, fit: src.fit, gl: true });
+    // The WebGL2 path (opts.gl) has not run in a browser yet (NOTES.md), so
+    // the CPU rasteriser draws every depth map.
+    dm = E.depthFromMesh(mesh, { w, h, yaw: src.yaw, pitch: src.pitch, roll: src.roll || 0, fit: src.fit });
   } else if (src.kind === 'text') {
     const f = TEXT_FACES[src.face] || TEXT_FACES.serif;
     dm = E.depthFromText(src.text || ' ', { w, h, size: 0.42, font: f.font, weight: f.weight, bevel: Math.max(1, Math.round(f.bevel * Math.min(w, h))) });
@@ -146,7 +148,7 @@ export async function handle(msg, post) {
       result = { relief }; transfer = bufs(relief);
     } else if (op === 'modelThumb') {
       const m = E.modelMeta(args.id), v = (m && m.view) || {};
-      const raw = await depthOf({ kind: 'model', id: args.id, yaw: v.yaw || 0, pitch: v.pitch || 0, fit: 0.86 }, args.size, args.size);
+      const raw = await depthOf({ kind: 'model', id: args.id, yaw: v.yaw || 0, pitch: v.pitch || 0, roll: v.roll || 0, fit: 0.86 }, args.size, args.size);
       const relief = reliefImage(raw, { bg: [26, 28, 33], bg2: [13, 14, 17] });
       result = { relief }; transfer = bufs(relief);
     } else if (op === 'tiles') {
@@ -160,7 +162,7 @@ export async function handle(msg, post) {
     } else if (op === 'turntable') {
       const st = args.state, mesh = await meshOf(st.src.id);
       const n = args.n | 0;
-      const depths = E.turntable(mesh, n, { w: args.w, h: args.h, yaw: st.src.yaw, pitch: st.src.pitch, fit: st.src.fit });
+      const depths = E.turntable(mesh, n, { w: args.w, h: args.h, yaw: st.src.yaw, pitch: st.src.pitch, roll: st.src.roll || 0, fit: st.src.fit });
       const opts = stereoOpts(st, args.dpi, args.colors);
       let sepFar = 0;
       E.animate(depths.map(d => shapeDepth(d, st.src.relief, st.src.lift)), opts, (k, frame) => {

@@ -49,7 +49,7 @@ export function shotList(seed, n = 24) {
 
 function shotState(shot) {
   const s = cloneState(DEFAULT_STATE), m = modelMeta(shot.model), v = (m && m.view) || {};
-  Object.assign(s.src, { kind: 'model', id: shot.model, yaw: v.yaw || 0, pitch: v.pitch || 0, fit: 0.84, relief: 0.85, lift: 0.08 });
+  Object.assign(s.src, { kind: 'model', id: shot.model, yaw: v.yaw || 0, pitch: v.pitch || 0, roll: v.roll || 0, fit: 0.84, relief: 0.85, lift: 0.08 });
   if (shot.tile) Object.assign(s.pat, { kind: 'tile', id: shot.tile, seed: shot.tileSeed });
   else Object.assign(s.pat, { kind: 'colour', palette: shot.palette, seed: shot.tileSeed });
   Object.assign(s.view, { mode: 'wall', guides: false, smooth: true });

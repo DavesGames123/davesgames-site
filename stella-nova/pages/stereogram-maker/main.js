@@ -111,6 +111,7 @@ function stateFromExample(ex) {
     const v = (modelMeta(s.src.id) || {}).view || {};
     if (ex.src.yaw == null) s.src.yaw = v.yaw || 0;
     if (ex.src.pitch == null) s.src.pitch = v.pitch || 0;
+    if (ex.src.roll == null) s.src.roll = v.roll || 0;
   }
   return s;
 }
@@ -329,7 +330,7 @@ function bindControls() {
   document.querySelectorAll('#textFace button').forEach(b => b.addEventListener('click', () => { S.src.face = b.dataset.f; exampleOff(); syncControls(); render(); }));
   $('poseReset').addEventListener('click', () => {
     const v = (modelMeta(S.src.id) || {}).view || {};
-    S.src.yaw = v.yaw || 0; S.src.pitch = v.pitch || 0; S.src.fit = DEFAULT_STATE.src.fit; syncControls(); render();
+    S.src.yaw = v.yaw || 0; S.src.pitch = v.pitch || 0; S.src.roll = v.roll || 0; S.src.fit = DEFAULT_STATE.src.fit; syncControls(); render();
   });
   $('depthInvert').addEventListener('click', () => { S.src.invert = !S.src.invert; syncControls(); render(); });
   $('photoInvert').addEventListener('click', () => { S.src.invert = !S.src.invert; syncControls(); render(); });
@@ -500,7 +501,7 @@ function pickModel(id, go) {
   const m = modelMeta(id);
   if (!m) return;
   S.src.kind = 'model'; S.src.id = id;
-  S.src.yaw = (m.view && m.view.yaw) || 0; S.src.pitch = (m.view && m.view.pitch) || 0;
+  S.src.yaw = (m.view && m.view.yaw) || 0; S.src.pitch = (m.view && m.view.pitch) || 0; S.src.roll = (m.view && m.view.roll) || 0;
   exampleOff();
   if (go) { syncControls(); render(); }
 }

@@ -19,7 +19,7 @@
 // ============================================================================
 
 export const DEFAULT_STATE = {
-  src: { kind: 'model', id: '', yaw: 0, pitch: 0, fit: 0.82, text: 'Look closer', face: 'serif', shape: 'torus',
+  src: { kind: 'model', id: '', yaw: 0, pitch: 0, roll: 0, fit: 0.82, text: 'Look closer', face: 'serif', shape: 'torus',
          invert: false, soft: 4, relief: 0.85, lift: 0.1, ref: '' },
   pat: { kind: 'tile', id: '', seed: 1, density: 0.5, palette: 0, ref: '' },
   view: { mode: 'wall', eyeSep: 6.35, mu: 0.3333, guides: true, smooth: true, size: 'fit', frames: 36, speed: 12, dot: 1 },
@@ -34,7 +34,7 @@ export const FACES = ['serif', 'sans', 'bevel'];
 export function cloneState(s) { return JSON.parse(JSON.stringify(s)); }
 
 const LIMITS = {
-  yaw: [-180, 180], pitch: [-80, 80], fit: [0.4, 1], relief: [0.2, 1], lift: [0, 0.5], soft: [0, 12],
+  yaw: [-180, 180], pitch: [-80, 80], roll: [-180, 180], fit: [0.4, 1], relief: [0.2, 1], lift: [0, 0.5], soft: [0, 12],
   seed: [1, 99999], density: [0.2, 0.8], palette: [0, DOT_PALETTE_IDS.length - 1],
   eyeSep: [4.5, 7.5], mu: [0.12, 0.45], frames: [12, 72], speed: [4, 24], dot: [1, 4],
 };
@@ -46,7 +46,7 @@ export function encodeState(s) {
   const q = new URLSearchParams();
   const k = s.src.kind === 'depth' || s.src.kind === 'photo' ? 'model' : s.src.kind;
   q.set('k', k);
-  if (k === 'model') { q.set('m', s.src.id); q.set('y', r3(s.src.yaw)); q.set('p', r3(s.src.pitch)); q.set('f', r3(s.src.fit)); }
+  if (k === 'model') { q.set('m', s.src.id); q.set('y', r3(s.src.yaw)); q.set('p', r3(s.src.pitch)); if (s.src.roll) q.set('rl', r3(s.src.roll)); q.set('f', r3(s.src.fit)); }
   if (k === 'text') { q.set('tx', s.src.text); q.set('tf', s.src.face); }
   if (k === 'shape') q.set('sh', s.src.shape);
   q.set('r', r3(s.src.relief)); q.set('l', r3(s.src.lift));
@@ -76,7 +76,7 @@ export function decodeState(str, known) {
   else {
     s.src.kind = 'model';
     if (known.models.has(g('m'))) s.src.id = g('m');
-    s.src.yaw = num(g('y'), 'yaw', 0); s.src.pitch = num(g('p'), 'pitch', 0); s.src.fit = num(g('f'), 'fit', s.src.fit);
+    s.src.yaw = num(g('y'), 'yaw', 0); s.src.pitch = num(g('p'), 'pitch', 0); s.src.roll = num(g('rl'), 'roll', 0); s.src.fit = num(g('f'), 'fit', s.src.fit);
   }
   s.src.relief = num(g('r'), 'relief', s.src.relief); s.src.lift = num(g('l'), 'lift', s.src.lift);
   const pk = g('pk');
