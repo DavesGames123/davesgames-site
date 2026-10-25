@@ -64,8 +64,12 @@ export const TEXT_FACES = {
 };
 
 // The raw depth map of a source (before relief and lift), cached.
-export async function depthOf(src, w, h) {
-  const key = JSON.stringify([src.kind, src.id, src.yaw, src.pitch, src.roll || 0, src.fit, src.text, src.face, src.shape, src.invert, src.soft, src.ref, w, h]);
+// match { mu, relief, lift }: the model depth map takes the perspective that
+// the fused stereogram implies (engine matchedFov), so the object keeps
+// its shape when it is fused.
+export async function depthOf(src, w, h, match = null) {
+  const mk = match && src.kind === 'model' ? [match.mu, src.relief, src.lift].map(v => Math.round((v ?? 0) * 1000)) : null;
+  const key = JSON.stringify([src.kind, src.id, src.yaw, src.pitch, src.roll || 0, src.fit, src.text, src.face, src.shape, src.invert, src.soft, src.ref, w, h, mk]);
   const hit = depthCache.get(key);
   if (hit) return hit;
   let dm;
@@ -73,7 +77,8 @@ export async function depthOf(src, w, h) {
     const mesh = await meshOf(src.id);
     // The WebGL2 path (opts.gl) has not run in a browser yet (NOTES.md), so
     // the CPU rasteriser draws every depth map.
-    dm = E.depthFromMesh(mesh, { w, h, yaw: src.yaw, pitch: src.pitch, roll: src.roll || 0, fit: src.fit });
+    dm = E.depthFromMesh(mesh, { w, h, yaw: src.yaw, pitch: src.pitch, roll: src.roll || 0, fit: src.fit,
+      match: match ? { mu: match.mu, relief: src.relief, lift: src.lift } : undefined });
   } else if (src.kind === 'text') {
     const f = TEXT_FACES[src.face] || TEXT_FACES.serif;
     dm = E.depthFromText(src.text || ' ', { w, h, size: 0.42, font: f.font, weight: f.weight, bevel: Math.max(1, Math.round(f.bevel * Math.min(w, h))) });
@@ -128,7 +133,7 @@ export function stereoOpts(state, dpi, colors) {
 }
 
 async function stereoOf(state, w, h, dpi, colors) {
-  const raw = await depthOf(state.src, w, h);
+  const raw = await depthOf(state.src, w, h, { mu: state.view.mu });
   const dm = shapeDepth(raw, state.src.relief, state.src.lift);
   const stereo = E.sirds(dm, stereoOpts(state, dpi, colors));
   return { dm, stereo };
@@ -172,7 +177,8 @@ export async function handle(msg, post) {
     } else if (op === 'turntable') {
       const st = args.state, mesh = await meshOf(st.src.id);
       const n = args.n | 0;
-      const depths = E.turntable(mesh, n, { w: args.w, h: args.h, yaw: st.src.yaw, pitch: st.src.pitch, roll: st.src.roll || 0, fit: st.src.fit });
+      const depths = E.turntable(mesh, n, { w: args.w, h: args.h, yaw: st.src.yaw, pitch: st.src.pitch, roll: st.src.roll || 0, fit: st.src.fit,
+        match: { mu: st.view.mu, relief: st.src.relief, lift: st.src.lift } });
       const opts = stereoOpts(st, args.dpi, args.colors);
       let sepFar = 0;
       E.animate(depths.map(d => shapeDepth(d, st.src.relief, st.src.lift)), opts, (k, frame) => {
