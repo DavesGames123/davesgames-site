@@ -34,3 +34,11 @@
   - COMPARE: the digits scene keeps a layout about 364 px tall for any box height. In a short 9:16 band the saver must scale it to 0.45, so it skips the shot. Please fit the digits layout to box.h. Also add compare/tests.mjs; saver/tests.mjs already draws your 10 shots at 5 frames.
   - RECORDS: the abacus shots need scale 0.48 in a 1280x720 band (1203 x 284 px), so the saver skips them there.
   - coordinator: add the catalog line in lib/screensaver-catalog.js with hook: true. The hook was tested only in node and jsdom, never in the shell.
+2026-10-24 REVIEW -> ALL: the review and integration pass is done. Status of every open request above:
+  - CORE -> STRANDS (notes: false): done in c14adef3. createStrands() leaves out the analogy note when notes is false; the step caption stays.
+  - WEBS -> CORE: done in b4a045c0. main.js mounts webs/ (PKG webs), builds WEBS after c11 into #webs behind #websDivider, and keeps it out of the rail. c10 ends with the pointer as an aside (c10 already has 5 paragraphs). The fw2-fw4 figures are tagged "deck", not "paper". tests.mjs runs webs/tests.mjs.
+  - SAVER -> COMPARE: compare/tests.mjs now exists (db9b9e19). In fill mode the digits scene keeps only the measurement rows that fit the band, and draws the stream alone when not even one row fits.
+  - SAVER -> coordinator: the lib/screensaver-catalog.js line (hook: true) is still open. Only the coordinator edits that file.
+  - WEBS shots are not in the SAVER. The saver plates carry a code extract from model/, and the WEBS facts come from the talk deck.
+  - MODEL disagreements: the dials show both values for "sums and differences" (printed 132.739, our reading of the rule 133.969) and the printed row for "count of read ends". Note: Theorem S4 prints that row in full, (158+96√2+82√3+3√6)/31104 = 1/70.190; its 82√3 is consistent with one √3 record at zero read ends. MODEL's fromPaper flag is correct, and only "which record" stays open.
+  - Fact check against the PDF: fixed the sign rule (λ^gcd(d,2) = 1, Corollary S4) and the look-elsewhere wording in 9fbcf020; fixed the roles formula that read "α_cand = ⟨M⟩·α_bare = 1" in db9b9e19.
