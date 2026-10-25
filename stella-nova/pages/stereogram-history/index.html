@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>How the stereogram came to be — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STEREOGRAM HISTORY  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and text. The page tells how the stereogram came to be,
+   from Wheatstone's mirror stereoscope (1838) and Brewster's wallpaper
+   (1844) to the random-dot stereogram of Julesz (1960) and the
+   single-image random-dot stereogram of Christopher Tyler and Maureen
+   Clarke (1979), and how the algorithm works today. Each chapter has a
+   live figure; most figures are stereograms of real 3D objects.
+
+   FACTS
+     Every date, name and quote: data.js, each with its source id.
+     Dates that sources do not agree on carry a "date unsure" tag.
+
+   ENGINE
+     Images come from the shared engine and models of the maker page
+     (../stereogram-maker/engine, ../stereogram-maker/models), run in
+     worker.js through jobs.js and client.js. No GPU: the figures are 2D
+     canvases. gpu-guard still loads first, because every page loads it.
+
+   HEAD LOAD ORDER
+     1. gpu-guard     ../../lib/gpu-guard.js
+     2. wishlist      ../../lib/wishlist.js
+     3. stats-beacon  ../../lib/stats-beacon.js
+     4. style.css, then ../../lib/sci.css (fonts, math colours)
+   Script at the end of body: main.js (module).
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #chips      sticky section bar
+     #viewbar    viewing controls: #modeSeg #revealBtn #helpBtn. Desktop:
+                 a sticky bar under #chips. Phone: #dock at the bottom.
+     #dock       phone only: #dockMode #dockReveal #dockHelp
+     #help       how to see a stereogram: #practiceCv #helpClose
+     #s0 hero    #heroCv #heroNext #heroCap #heroStats
+     #s1 eyes    #geoCv #geoRead #geoReset
+     #s2 scopes  #scopeCv #pairCv #pairModel #pairView #wallCv #wallIn #wallOut
+     #s3 julesz  #rdsCv #rdsModel #rdsView #rdsCap
+     #s4 tyler   #preList #rowCv #rowRule #rowIn #rowPlay #rowRead #furrowCv
+     #s5 work    #posList #workList #gratCv #gratCyc #gratCycOut #gratAmp #gratRead
+     #s6 culture #popList #popCv #popNext #popCap
+     #s7 today   #galGrid #bigCv #bigCap #bigTile #bigMu #bigMuOut #bigYaw #bigYawOut
+     #s8 time    #tlList
+     sources     #srcList
+
+   GREP MAP  (main.js)
+     grep -n 'function initView'     viewing mode, reveal, help sheet
+     grep -n 'function initHero'     hero turntable
+     grep -n 'function initEyes'     section 01
+     grep -n 'function initScopes'   section 02
+     grep -n 'function initJulesz'   section 03
+     grep -n 'function initTyler'    section 04
+     grep -n 'function initWork'     section 05
+     grep -n 'function initCulture'  section 06
+     grep -n 'function initToday'    section 07
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How the stereogram came to be: Wheatstone's mirror stereoscope, Brewster's wallpaper illusion, the random-dot stereogram of Bela Julesz and the single-image autostereogram of Christopher Tyler and Maureen Clarke, with live stereograms of real 3D objects in every chapter.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">How the stereogram came to be</div>
+</div>
+
+<nav id="chips" aria-label="Sections">
+  <ol>
+    <li><a href="#s1" data-target="s1"><b>01</b>Two eyes</a></li>
+    <li><a href="#s2" data-target="s2"><b>02</b>Stereoscopes</a></li>
+    <li><a href="#s3" data-target="s3"><b>03</b>Random dots</a></li>
+    <li><a href="#s4" data-target="s4"><b>04</b>One image</a></li>
+    <li><a href="#s5" data-target="s5"><b>05</b>Tyler's research</a></li>
+    <li><a href="#s6" data-target="s6"><b>06</b>The 1990s</a></li>
+    <li><a href="#s7" data-target="s7"><b>07</b>How it works today</a></li>
+    <li><a href="#s8" data-target="s8"><b>08</b>Timeline</a></li>
+    <li><a href="#refs" data-target="refs"><b>¶</b>Sources</a></li>
+  </ol>
+</nav>
+
+<aside id="viewbar" aria-label="Viewing controls">
+  <div class="vb-in">
+    <span class="vb-lbl">View every stereogram</span>
+    <div class="seg" id="modeSeg" role="group" aria-label="Viewing method">
+      <button data-v="wall" class="on">Wall-eyed</button><button data-v="cross">Cross-eyed</button>
+    </div>
+    <button class="tgl" id="revealBtn" aria-pressed="false">Show the depth maps</button>
+    <button class="tgl" id="helpBtn" aria-controls="help">How to see it</button>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockMode" aria-label="Switch the viewing method">Wall-eyed</button>
+  <button id="dockReveal" aria-pressed="false">Depth maps</button>
+  <button id="dockHelp" aria-controls="help">How to see it</button>
+</nav>
+
+<aside id="help" aria-label="How to see a stereogram" hidden>
+  <div class="help-in">
+    <div class="help-head"><b>How to see a stereogram</b><button id="helpClose" class="tgl">Close</button></div>
+    <canvas class="fig practice" id="practiceCv" aria-label="A practice stereogram of a sphere with two guide dots"></canvas>
+    <ol class="steps">
+      <li><b>Wall-eyed (parallel).</b> Bring the screen close to your nose, so it is a blur. Look through it, as at a far wall. Move back slowly and keep the eyes relaxed. The two guide dots at the top become four, then three: hold the middle one, and the shape comes out of the dots.</li>
+      <li><b>Cross-eyed.</b> Hold a finger half way between your eyes and the screen and look at the tip. The two guide dots behind it become three. Take the finger away and keep that crossing.</li>
+      <li>The two methods show opposite depth. Set the button to the method you use; every stereogram on the page follows it.</li>
+      <li>Some people cannot see stereo depth. The "Show the depth maps" button shows each hidden shape.</li>
+    </ol>
+  </div>
+</aside>
+
+<main id="doc">
+
+<header class="hero" id="s0">
+  <p class="kicker">Vision science · history</p>
+  <h1>How the stereogram came to be</h1>
+  <p class="lede">Each eye sees the world from a point about six centimetres from the other. The brain reads the small differences between the two views as depth. In 1838 Charles Wheatstone showed that two flat drawings, one for each eye, are enough to see a solid. In 1960 Bela Julesz showed that the drawings need no visible shape at all: two fields of random dots can hold one. In 1979 Christopher Tyler and Maureen Clarke put both views into one picture. This page follows that line, with a live stereogram of a real object in every chapter.</p>
+  <div class="grid hero-grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>A turning object, hidden in one image</h3><span class="tag real">real 3D scan, our render</span></div>
+      <canvas class="fig stereo" id="heroCv" aria-label="An animated single-image random-dot stereogram of a turning 3D object"></canvas>
+      <div class="ctrls"><button class="tgl" id="heroNext">Next object</button><span class="readout" id="heroCap"></span></div>
+    </article>
+    <div class="span-4 stats" id="heroStats"></div>
+  </div>
+  <p class="note">Every stereogram here is drawn on your device from a 3D model and the engine of the <a href="../stereogram-maker/">Stereogram Maker</a>. Items tagged <b>illustrative</b> show an idea, not a historical image. No historical picture or commercial stereogram is copied.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1">
+  <div class="sec-head"><span class="num">01</span><div><h2>Two eyes, two views</h2><p>Look at a point. Both lines of sight meet there. A nearer point needs the eyes to turn in more, a farther point less. The difference between those two angles is the binocular disparity, and the visual brain turns it into depth. Drag the fixation point and the second point in the top view.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Top view of the two eyes</h3><span class="tag real">exact geometry</span></div>
+      <canvas class="fig geo" id="geoCv" aria-label="Top view of two eyes, a fixation point, a second point and the Vieth-Müller circle. Drag the points."></canvas>
+      <div class="ctrls"><button class="tgl" id="geoReset">Reset</button><span class="readout wide" id="geoRead"></span></div>
+      <p class="cap">The dashed circle passes through both eyes and the fixation point (the Vieth-Müller circle). Every point on it has zero disparity, because all the angles on one chord of a circle are equal. Points inside it have crossed disparity (they look nearer), points outside it uncrossed (farther). The eye separation is the 6.35 cm (2.5 inches) that Thimbleby, Inglis and Witten use for their stereograms <span class="cites" data-cite="tiw1994"></span>.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The angles</h3></div>
+      <div class="eqs">
+        <div class="sci-eq" data-tex="\gamma = \arctan\frac{x + I/2}{z} - \arctan\frac{x - I/2}{z}"></div>
+        <p>The vergence angle <span class="mi">γ</span> of a point at (<span class="mi">x</span>, <span class="mi">z</span>), for eyes <span class="mi">I</span> apart. The disparity of a point P against the fixation point F:</p>
+        <div class="sci-eq" data-tex="\eta = \gamma_P - \gamma_F \approx \frac{I\,\Delta d}{d^2}"></div>
+        <p>For a small depth step <span class="mi">Δd</span> at distance <span class="mi">d</span>. Disparity falls as the square of the distance, so stereo depth works best near at hand.</p>
+      </div>
+      <p class="body dim">The word "cyclopean" for the joined view goes back to Ewald Hering (1868), as Tyler tells in his memoir of Julesz <span class="cites" data-cite="tylerNAS"></span>. Wells described single vision with two eyes in 1792 <span class="cites" data-cite="wells1792"></span>.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2">
+  <div class="sec-head"><span class="num">02</span><div><h2>Wheatstone's mirrors and Brewster's wallpaper</h2><p>In a paper read to the Royal Society on 21 June 1838, Charles Wheatstone drew each eye's view of a solid as a flat outline and put one drawing before each eye with two mirrors. The drawings joined into one solid figure. Six years later David Brewster found the same depth in a plain repeating wallpaper.</p></div></div>
+  <div class="grid">
+    <article class="card span-5">
+      <div class="card-top"><h3>The mirror stereoscope, from above</h3><span class="tag toy">schematic after the 1838 text</span></div>
+      <canvas class="fig scope" id="scopeCv" aria-label="Schematic top view of Wheatstone's mirror stereoscope: two mirrors at 90 degrees, a picture on each side, and the eyes"></canvas>
+      <blockquote class="q" id="qScope"></blockquote>
+      <p class="cap">Each eye looks into its own mirror and sees the picture on its side. The reflected images lie where the lines of sight cross, so the eyes converge and focus as on a real object. Wheatstone used only outlines on purpose <span class="cites" data-cite="wheatstone1838"></span>: <span id="qOutline"></span></p>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>A stereo pair of a real object</h3><span class="tag real">real 3D scan, two views</span></div>
+      <div class="ctrls top">
+        <label class="ctrl sel"><span class="lbl">Object</span><select id="pairModel"></select></label>
+        <div class="seg" id="pairView" role="group" aria-label="How to show the pair"><button data-v="pair" class="on">Side by side</button><button data-v="ana">Red-cyan</button></div>
+      </div>
+      <canvas class="fig pair" id="pairCv" aria-label="Two views of a 3D object side by side, for free fusion"></canvas>
+      <p class="cap">This is the Wheatstone form: one picture per eye, here covered with a pattern so that the eye has something to match. Free-fuse the two halves with the method set at the top, or set red-cyan for glasses. Brewster's lens stereoscope, which he showed to the British Association in Birmingham in 1849, became popular after Jules Duboscq of Paris built it for sale and showed it at the Great Exhibition of 1851 <span class="cites" data-cite="brewster1856"></span>.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Brewster's wallpaper, with the paper-hanger's mistake</h3><span class="tag real">live, free-fusable</span></div>
+      <canvas class="fig wall" id="wallCv" aria-label="A repeating wallpaper in which one vertical strip is hung a little out of line"></canvas>
+      <div class="ctrls">
+        <label class="ctrl"><span class="lbl">Shift of the middle strip</span><input type="range" id="wallIn" min="-12" max="12" step="1" value="6"><output id="wallOut"></output></label>
+      </div>
+      <div class="grid inner">
+        <blockquote class="q span-6" id="qWall"></blockquote>
+        <blockquote class="q span-6" id="qRelief"></blockquote>
+      </div>
+      <p class="cap">Fuse two neighbouring flowers and the whole wall joins, one flower further on. The middle strip of this paper is hung a few pixels out of line. Where a pair of flowers spans its edge, their spacing differs from the rest, and that band of the wall leaves the plane: one edge in front, the other behind. Brewster saw exactly this on real walls: <span id="qDefect"></span> <span class="cites" data-cite="brewster1856"></span>. His paper on it was read in Edinburgh in April 1844 <span class="cites" data-cite="brewster1844"></span>. A change of spacing as depth is the whole principle of the autostereogram.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3">
+  <div class="sec-head"><span class="num">03</span><div><h2>Julesz: depth with nothing to see</h2><p>Bela Julesz came to Bell Laboratories from Hungary in 1956 as a radar engineer. On the Bell Labs computers he made pairs of random-dot images: the same dots in both, except that a region is shifted sideways in one of them and the gap it leaves is filled with new dots. Each image alone is noise. Seen with both eyes, the region floats <span class="cites" data-cite="tyler2014"></span>. The 1960 paper showed that the brain can match the two views with no shape or edge visible to either eye <span class="cites" data-cite="julesz1960"></span>. He called this depth "cyclopean" <span class="cites" data-cite="tylerNAS"></span>.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>A random-dot stereogram of a real object</h3><span class="tag real">Julesz form, real 3D scan</span></div>
+      <div class="ctrls top">
+        <label class="ctrl sel"><span class="lbl">Object</span><select id="rdsModel"></select></label>
+        <div class="seg" id="rdsView" role="group" aria-label="View"><button data-v="pair" class="on">Two images</button><button data-v="one">One eye only</button><button data-v="ana">Red-cyan</button></div>
+      </div>
+      <canvas class="fig pair" id="rdsCv" aria-label="A two-image random-dot stereogram of a 3D object"></canvas>
+      <p class="cap" id="rdsCap"></p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Why it mattered</h3></div>
+      <p class="body">Before Julesz, one could think that each eye first finds the objects and the brain then pairs them. A random-dot stereogram has no objects for one eye to find. The match must happen between dots, before any shape exists: the shape is an output of stereo vision, not an input.</p>
+      <p class="body">Julesz's 1971 book <i>Foundations of Cyclopean Perception</i> made random-dot stereograms a standard tool <span class="cites" data-cite="julesz1971"></span>. In 1962, with Joan Miller, he coded two independent depth surfaces in one pair <span class="cites" data-cite="julesz1962"></span>. Tyler later noted that one image of such a pair is, in effect, a random-dot autostereogram, but that there is no record that Julesz noticed this <span class="cites" data-cite="tyler2014"></span>.</p>
+      <p class="body dim">Some accounts date the first random-dot images to 1959; the paper is from September 1960. <span class="tag unsure">date unsure</span></p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4">
+  <div class="sec-head"><span class="num">04</span><div><h2>Tyler and Clarke: both views in one image</h2><p>A random-dot stereogram needs two images and a way to give one to each eye. Brewster's wallpaper needs only one image, but it can show only a few flat planes. In 1979 at the Smith-Kettlewell Eye Research Institute in San Francisco, Christopher Tyler, a former colleague of Julesz at Bell Labs, and the programmer Maureen Clarke joined the two ideas: an algorithm that turns any depth map into one image of random dots that repeats with a spacing set by the depth. They made the first ones on an Apple II and a dot-matrix printer <span class="cites" data-cite="tyler2014"></span>.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>How the repeat spacing holds the depth, one row</h3><span class="tag real">the real row of a model</span></div>
+      <div class="ctrls top">
+        <div class="seg" id="rowRule" role="group" aria-label="Rule"><button data-v="look" class="on">Look-back, 1979</button><button data-v="sym">Symmetric, 1994</button></div>
+        <label class="ctrl"><span class="lbl">Row</span><input type="range" id="rowIn" min="0.1" max="0.9" step="0.01" value="0.5"></label>
+        <button class="tgl" id="rowPlay">Build the row</button>
+      </div>
+      <canvas class="fig rows" id="rowCv" aria-label="Top: the depth profile of one row of a 3D object. Bottom: the row of dots, with arcs that join each pair of dots that must have the same colour."></canvas>
+      <p class="cap" id="rowRead"></p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>The look-back rule</h3></div>
+      <p class="body">Start with a strip of random dots one repeat wide. Then, moving right, give each dot the colour of the dot one repeat to its left. Where the depth map says "near", the repeat is shorter; where it says "far", longer. When the eyes fuse neighbouring repeats, each change of spacing is a disparity, so the dots take the shape of the depth map <span class="cites" data-cite="tyler2014"></span>.</p>
+      <p class="body">Tyler and Clarke also found that when the repeat grows at an edge, the copied dots must be replaced by new ones, or the pattern "rings". Their 1990 SPIE paper gave the algorithm and four other forms: depth that cycles, a wallpaper that tiles a wall, a two-way image with depth at 90°, and the autolustergram <span class="cites" data-cite="tylerclarke1990"></span>.</p>
+      <ol class="tl mini" id="preList"></ol>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Horizontal furrows</h3><span class="tag toy">illustrative, after Tyler's "Furrows" (1979)</span></div>
+      <canvas class="fig stereo short" id="furrowCv" aria-label="A random-dot autostereogram of horizontal furrows"></canvas>
+      <p class="cap">Tyler shows one of the first random-dot autostereograms, "Furrows" (1979), as Figure 1 of his Scholarpedia article: a field of horizontal furrows <span class="cites" data-cite="tyler2014"></span>. This is our own render of the same idea, not that image: black and white dots, a sine-wave depth, two guide dots.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5">
+  <div class="sec-head"><span class="num">05</span><div><h2>Christopher Tyler's research</h2><p>The autostereogram is one item in a long research record. Tyler trained in Britain (Ph.D., Keele, 1970), was a research fellow in Julesz's department at Bell Laboratories in 1974-75 and joined the Smith-Kettlewell Eye Research Institute in 1975. His published work runs from stereo vision and flicker to the brain response of infants, symmetry, brain imaging, and the geometry of art <span class="cites" data-cite="tylerCV"></span>. This chapter keeps to that public record.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>A disparity grating</h3><span class="tag real">live, free-fusable</span></div>
+      <canvas class="fig stereo short" id="gratCv" aria-label="A random-dot autostereogram of a surface that waves in depth"></canvas>
+      <div class="ctrls">
+        <label class="ctrl"><span class="lbl">Waves</span><input type="range" id="gratCyc" min="1" max="24" step="1" value="4"><output id="gratCycOut"></output></label>
+        <label class="ctrl"><span class="lbl">Depth</span><input type="range" id="gratAmp" min="0.1" max="1" step="0.05" value="0.8"></label>
+      </div>
+      <p class="cap" id="gratRead"></p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Positions</h3><span class="tag real">from his CV</span></div>
+      <ol class="tl mini" id="posList"></ol>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>Selected papers</h3><span class="tag real">titles and journals checked</span></div>
+      <ol class="works" id="workList"></ol>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6">
+  <div class="sec-head"><span class="num">06</span><div><h2>From the lab to the poster shop</h2><p>In the 1980s random-dot autostereograms appeared in a vision-science text and as the frontispiece of a physics book, and in 1990 in a computer-game magazine <span class="cites" data-cite="tyler2014"></span>. In the early 1990s companies began to sell them in full colour, made from patterns and pictures instead of dots, and a long series of books of them began in 1993. Tyler notes that many of these images ask the eyes to diverge, which most people find harder than crossing them <span class="cites" data-cite="tyler2014"></span>.</p></div></div>
+  <div class="grid">
+    <article class="card span-5">
+      <div class="card-top"><h3>Names and dates</h3></div>
+      <ol class="tl mini" id="popList"></ol>
+      <p class="body dim">Magic Eye is a trademark of its owner. This page shows no image from those books; every picture here is our own.</p>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>Pattern instead of dots</h3><span class="tag real">real 3D scan, our patterns</span></div>
+      <canvas class="fig stereo" id="popCv" aria-label="A colour autostereogram made from a repeating pattern"></canvas>
+      <div class="ctrls"><button class="tgl" id="popNext">Next pattern and object</button><span class="readout" id="popCap"></span></div>
+      <p class="cap">The 1990s look: the free pixels take the colour of a repeating pattern tile instead of random dots. The patterns come from the site's pattern designer. Tyler describes two ways of making such pictures: depth that repeats with the pattern (after Trent) and a depth map that is free of it (his own) <span class="cites" data-cite="tyler2014"></span>. This one is the second kind.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7">
+  <div class="sec-head"><span class="num">07</span><div><h2>How it works today</h2><p>In 1994 Harold Thimbleby, Stuart Inglis and Ian Witten published a symmetric version of the algorithm <span class="cites" data-cite="tiw1994"></span>. Each point of the object links two pixels, one for each eye, placed evenly about it. A point that one eye cannot see makes no link (hidden-surface removal). Pick any example to see it large. To make your own, open the <a href="../stereogram-maker/">Stereogram Maker</a>.</p></div></div>
+  <div class="grid">
+    <article class="card span-4">
+      <div class="card-top"><h3>The geometry of the 1994 paper</h3></div>
+      <div class="eqs">
+        <div class="sci-eq" data-tex="s(z) = \frac{(1 - \mu z)\,E}{2 - \mu z}"></div>
+        <p>The screen is at distance <span class="mi">D</span>, the far plane (<span class="mi">z</span> = 0) at 2<span class="mi">D</span>, the near plane (<span class="mi">z</span> = 1) <span class="mi">μD</span> in front of it. <span class="mi">E</span> is the eye separation in pixels. A point at depth <span class="mi">z</span> links two pixels <span class="mi">s</span>(<span class="mi">z</span>) apart.</p>
+        <p>The paper uses <span class="mi">E</span> = 2.5 inches and <span class="mi">μ</span> = 1/3. At the far plane <span class="mi">s</span> = <span class="mi">E</span>/2: the background repeats every half eye separation.</p>
+        <p>Where two links share a pixel, they chain. A chain can tie pixels that no single point links, and then a ghost copy of a surface, an "echo", can appear. Hidden-surface removal leaves fewer links, and the paper shows that this reduces echoes.</p>
+      </div>
+    </article>
+    <article class="card span-8">
+      <div class="card-top"><h3 id="bigTitle">An example</h3><span class="tag real">real 3D scan</span></div>
+      <canvas class="fig stereo" id="bigCv" aria-label="A large autostereogram of the chosen example"></canvas>
+      <div class="ctrls">
+        <button class="tgl" id="bigTile">Next pattern</button>
+        <label class="ctrl"><span class="sym m1"><i>μ</i></span><span class="lbl">depth</span><input type="range" id="bigMu" min="0.1" max="0.5" step="0.01" value="0.33"><output id="bigMuOut"></output></label>
+        <label class="ctrl"><span class="lbl">Turn</span><input type="range" id="bigYaw" min="-180" max="180" step="5" value="0"><output id="bigYawOut"></output></label>
+      </div>
+      <p class="cap" id="bigCap"></p>
+    </article>
+    <div class="span-12 gallery" id="galGrid"></div>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8">
+  <div class="sec-head"><span class="num">08</span><div><h2>Timeline</h2><p>Every event, with its sources. Where sources do not agree, the item says so.</p></div></div>
+  <ol class="tl" id="tlList"></ol>
+</section>
+
+<section class="sec" id="refs">
+  <div class="sec-head"><span class="num">¶</span><div><h2>Sources</h2><p>Each source was fetched and read for this page, except where its entry says otherwise in data.js. The 3D models and their licences are listed in the credits of the Stereogram Maker.</p></div></div>
+  <ol class="refs" id="srcList"></ol>
+</section>
+
+</main>
+<script type="module" src="main.js"></script>
+</body>
+</html>
