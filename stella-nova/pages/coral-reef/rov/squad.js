@@ -124,7 +124,7 @@ export function createSquad(o = {}) {
   const visited = new Map(), chunksSeen = new Set(), inspected = new Set(), passed = new Set(), seenCols = new Set();
   const trail = [];                        // leader positions every 0.5 m (newest last)
   const visitedReset = () => { orbit = null; };
-  let regroupT = regroupEvery, exploreYaw = rand() * TAU, leg = null, s = 0, lastS = 0, stuckT = 0, markT = 0, orbit = null;
+  let regroupT = regroupEvery, exploreYaw = rand() * TAU, leg = null, s = 0, lastS = 0, stuckT = 0, markT = 0, orbit = null, planWait = 0;
 
   function makeState(p, yaw) {
     return { p: p.slice(), v: [0, 0, 0], a: [0, 0, 0], yaw, yawRate: 0, look: [p[0] + Math.cos(yaw) * 4, p[1] - 2, p[2] + Math.sin(yaw) * 4], lookR: 1.5,
@@ -312,7 +312,9 @@ export function createSquad(o = {}) {
     if (tryInspect() || tryArch() || (rand() < 0.7 && tryCanyon()) || frontier()) return;
     // nothing plans (a pocket): climb, then try again
     const p = S.vehicles[0].state.p;
-    planLeg([pushOut(sdf, [p[0], p[1] + 4, p[2]], clear)], 'regroup');
+    if (planLeg([pushOut(sdf, [p[0], p[1] + 4, p[2]], clear)], 'regroup')) return;
+    // the climb fails too: go back along the trail, the way the leader came
+    planLeg([pushOut(sdf, trailAt(12), clear)], 'regroup');
   }
 
   // ── goals ─────────────────────────────────────────────────────────────────
@@ -332,7 +334,14 @@ export function createSquad(o = {}) {
       if (len(sub(g, L.p)) > 5 && !freeLine(L.p, g)) { leg = null; planLeg([g], 'inspect', { target: c }); orbit.t = Math.max(0, orbit.t - 3); }
       return { g, look: c.center, lookR: c.radius, face: null };
     }
-    if (!leg || s >= leg.length - 0.05) { L.mode = 'survey'; L.phase = 'path'; if (!(S.task.kind === 'inspect' && orbit)) claim(0, null); nextTask(); }
+    if (!leg || s >= leg.length - 0.05) {
+      L.mode = 'survey'; L.phase = 'path';
+      if ((planWait -= dt) <= 0) { if (!(S.task.kind === 'inspect' && orbit)) claim(0, null); leg = null; nextTask(); planWait = leg ? 0 : 1 + rand(); }
+    }
+    // No plan worked (a rock pocket, the regroup climb too): hold here and
+    // try again after planWait. A null leg threw in pathAt, and main.js
+    // then stopped the squad for good (2026-10-26, about 115 min of seed 1).
+    if (!leg) { const g = pushOut(sdf, L.p.slice(), clear); return { g, look: L.look.slice(), lookR: L.lookR || 1.5, face: null }; }
     const lag = len(sub(pathAt(leg, s).p, L.p));
     s += cruise * dt * clamp(1.6 - lag / 1.5, 0.1, 1);
     s = Math.min(s, leg.length);

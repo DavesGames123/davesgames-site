@@ -28,6 +28,8 @@
 //                             only grown, no grow-in, fine focus
 //    tests/plant.test.mjs ... WORLD: plant mode: a tap plants one colony,
 //                             it grows in then locks, reload, origin, caps
+//    tests/pocket.test.mjs .. ROV: the squad in a rock pocket where no leg
+//                             plans: no throw, a back-off, an escape
 //    tests/squad.test.mjs ... WORLD, ROV: the squad never in rock or coral,
 //                             it keeps exploring, the follow camera
 //    tests/size.test.mjs .... CORAL, ROV: the larger colonies (heights,
