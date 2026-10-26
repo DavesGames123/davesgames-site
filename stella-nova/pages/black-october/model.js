@@ -156,6 +156,10 @@ export const THREAD_NAMES = Object.freeze({
   bookoff: "Bookoff members",
   skyticket: "skyticket travel site",
   'certin-bfsi': "CERT-In: AI-assisted payment API fraud in Indian finance",
+  'cisco-nxos-hardening': "Cisco NX-OS hardening release",
+  'medley-atlink': "Medley @link clinic system",
+  'dip-baitoru': "Dip Baitoru job sites",
+  'kiau-site': "International University of the Arts site breach",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;

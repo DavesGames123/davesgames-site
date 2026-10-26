@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended ten times by 2026-10-26. Still going on then.
+//  Gathered 2026-10-22, extended eleven times by 2026-10-26. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -20866,5 +20866,1085 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "Ledger says it has no indication that its own infrastructure was compromised and that figures circulating online are unverified."
+ },
+ {
+  "id": "php-softbank-alerts-stop",
+  "thread": "php2shell",
+  "parent": "php-japan-firms",
+  "t": "2026-10-22T21:47:00Z",
+  "tPrecision": "minute",
+  "kind": "takedown",
+  "title": "SoftBank stops emergency alert mail, earthquake warnings included, for PHP maintenance",
+  "summary": "SoftBank, Y!mobile and LINEMO stop delivering emergency alert mail from 06:47 JST on 23 Oct for maintenance tied to the PHP vulnerability. Phones do not sound for earthquake early warnings or tsunami warnings; SoftBank points users to apps such as Yahoo! Bosai.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/corp/news/info/2026/20261023_01/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   },
+   {
+    "url": "https://k-tai.watch.impress.co.jp/docs/news/2150959.html",
+    "publisher": "Keitai Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC233TU0T21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-docomo-areamail-stop",
+  "thread": "php2shell",
+  "parent": "php-japan-firms",
+  "t": "2026-10-23T10:30:00Z",
+  "tPrecision": "hour",
+  "kind": "takedown",
+  "title": "NTT Docomo stops part of Area Mail, J-Alert included, as a PHP precaution",
+  "summary": "NTT Docomo starts emergency maintenance at about 19:30 JST on 23 Oct as a precautionary response to the PHP vulnerability. J-Alert, river flood forecasts and government disaster and evacuation alerts stop; JMA earthquake and tsunami warnings keep going out.",
+  "sources": [
+   {
+    "url": "https://www.docomo.ne.jp/info/notice/page/261023_00_m.html",
+    "publisher": "NTT Docomo",
+    "primary": true
+   },
+   {
+    "url": "https://k-tai.watch.impress.co.jp/docs/news/2150985.html",
+    "publisher": "Keitai Watch (Impress)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The start time and the list of stopped alert types come from Keitai Watch; Docomo's notice confirms the PHP reason and the resumption."
+ },
+ {
+  "id": "php-softbank-quake-resume",
+  "thread": "php2shell",
+  "parent": "php-softbank-alerts-stop",
+  "t": "2026-10-25T00:25:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "SoftBank restores earthquake and tsunami warnings; evacuation alerts stay off until 26 Oct",
+  "summary": "SoftBank resumes JMA earthquake early warnings and tsunami warnings at 09:25 JST on 25 Oct after about 50 hours. Disaster and evacuation information from national and local governments stays suspended, with completion planned for Monday 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/corp/news/info/2026/20261023_01/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   },
+   {
+    "url": "https://k-tai.watch.impress.co.jp/docs/news/2150959.html",
+    "publisher": "Keitai Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102500234&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "SoftBank's notice was last updated 10:30 JST on 25 Oct; no completion notice was seen by about 12:00 JST on 26 Oct."
+ },
+ {
+  "id": "php-docomo-areamail-resume",
+  "thread": "php2shell",
+  "parent": "php-docomo-areamail-stop",
+  "t": "2026-10-25T11:01:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Docomo resumes all Area Mail alerts at 20:01 JST, ahead of its 26 Oct estimate",
+  "summary": "NTT Docomo says the maintenance is complete and Area Mail and its disaster and evacuation information service resume at 20:01 JST on 25 Oct. Docomo had expected to resume early on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.docomo.ne.jp/info/notice/page/261023_00_m.html",
+    "publisher": "NTT Docomo",
+    "primary": true
+   },
+   {
+    "url": "https://k-tai.watch.impress.co.jp/docs/news/2150985.html",
+    "publisher": "Keitai Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102500234&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-ncscnl-vendor-review",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-github-tracker",
+  "t": "2026-10-26T02:19:08Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker updates 18 product statuses from vendor advisories",
+  "summary": "The Dutch NCSC merges a review of 611 open tracker entries against official sources. Fedora, F5 BIG-IP, HPE ClearPass, NetApp ONTAP (CVE-2026-109618), QNAP and Quest KACE SMA move to fixed; Junos OS J-Web is listed vulnerable to CVE-2026-109618.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/48",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Juniper and NetApp advisories are JavaScript-only pages that could not be read here; their status comes from the NCSC-NL review."
+ },
+ {
+  "id": "php-getpagespeed-el7",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "GetPageSpeed ships PHP2Shell-fixed PHP 5.6 to 8.4 builds for CentOS 7",
+  "summary": "GetPageSpeed publishes fixed EL7 packages for every branch from PHP 5.6 to 8.4, using PHP's minimal 7.4, 8.0 and 8.1 fixes for older branches. It says no distribution or upstream fix exists for CentOS 7; the Dutch NCSC adds the builds to its tracker on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.getpagespeed.com/php2shell",
+    "publisher": "GetPageSpeed",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/46",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Upstream version numbers are unchanged on the backported branches, so version-only scanners flag fixed hosts; the package release number is what counts."
+ },
+ {
+  "id": "php-tuxcare-els",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "TuxCare starts PHP2Shell fixes for end-of-life PHP 5.x to 8.1",
+  "summary": "TuxCare says its Extended Lifecycle Support for Runtimes is rolling out fixed builds for both CVEs on PHP 8.1, 8.0, 7.0 to 7.4 and 5.x, including Windows builds, branch by branch.",
+  "sources": [
+   {
+    "url": "https://tuxcare.com/blog/php2shell-cve/",
+    "publisher": "TuxCare",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The post was last modified on 23 Oct; it does not cover CVE-2026-115560."
+ },
+ {
+  "id": "php-phpf-structural-failure",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "PHP Foundation calls the fix delay a 'structural failure' and moves to majority votes",
+  "summary": "The PHP Foundation says the delay came from the security team's consensus decision process and lack of resources: competing fixes stalled and restarted for months. The team is changing its process so decisions can be made by majority vote.",
+  "sources": [
+   {
+    "url": "https://thephp.foundation/blog/2026/10/21/todays-php-security-release-and-how-were-strengthening-php-security/",
+    "publisher": "The PHP Foundation",
+    "primary": true
+   },
+   {
+    "url": "https://xtrend.nikkei.com/atcl/contents/casestudy/00012/01978/",
+    "publisher": "Nikkei Cross Trend",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Nikkei Cross Trend picks up the admission on 26 Oct."
+ },
+ {
+  "id": "php-defused-globalprotect-probes",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Defused sees PHP2Shell probes against its GlobalProtect honeypots",
+  "summary": "Defused says a known mass-exploit IP sends PHP2Shell probes with a marker to its Palo Alto GlobalProtect decoys. Defused reads this as target-list building for Palo Alto devices; no compromise is reported.",
+  "sources": [
+   {
+    "url": "https://thehackernews.com/2026/10/php2shell-exploitation-hits-government.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Defused's post is on X and was not opened. Palo Alto's PAN-OS hotfixes for most trains are still due 27 to 30 Oct.",
+  "related": [
+   "palo-alto-gp-unit42"
+  ]
+ },
+ {
+  "id": "php-korea-small-malls",
+  "thread": "php2shell",
+  "parent": "php-korea-alert-caution",
+  "t": "2026-10-25T20:30:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Korean small online shops say they cannot judge PHP2Shell fixes without hosting help",
+  "summary": "News1 reports that small Korean shopping-mall operators without security staff rely on hosting firms and some had not heard of the flaws days later. They ask for emergency notices to registered sellers and technical support.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610260530430132",
+    "publisher": "Financial News (News1)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "node-dotnet-advisory",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-25T19:06:10Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Microsoft: .NET 8, 9 and 10 carry the Brotli flaw; fixed in 8.0.33, 9.0.22 and 10.0.14",
+  "summary": "Microsoft publishes a .NET advisory for CVE-2026-111497 rated High (CVSS 3.1 8.1). ASP.NET Core and HttpClient do not decompress Brotli by default, so only apps that turn it on or call Brotli APIs on untrusted data are exposed; .NET Framework is not affected.",
+  "sources": [
+   {
+    "url": "https://github.com/dotnet/runtime/issues/136446",
+    "publisher": "Microsoft .NET (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/dotnet/announcements/issues/494",
+    "publisher": "Microsoft .NET (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-mitmproxy-brotli",
+  "thread": "nodejs",
+  "parent": "node-pypi-brotli",
+  "t": "2026-10-25T23:25:13Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "mitmproxy 12.3.1 requires Brotli 1.2.1 for the decoder fix",
+  "summary": "mitmproxy 12.3.1 raises its Brotli requirement to 1.2.1 to pick up the CVE-2026-111497 fix. The same release blocks OCSP and CRL requests to eMudhra and Sectigo hosts in its eMudhra test modes.",
+  "sources": [
+   {
+    "url": "https://github.com/mitmproxy/mitmproxy/releases/tag/v12.3.1",
+    "publisher": "mitmproxy (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/mitmproxy/mitmproxy/blob/main/CHANGELOG.md",
+    "publisher": "mitmproxy (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-csa-sg",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Singapore's CSA alert AL-2026-154 rates the Node.js Brotli flaw CVSS 9.8",
+  "summary": "Singapore's Cyber Security Agency tells users to patch Node.js 22, 24 and 26 immediately. It notes exploitation needs an app that decompresses attacker-controlled Brotli data.",
+  "sources": [
+   {
+    "url": "https://www.csa.gov.sg/alerts-and-advisories/alerts/al-2026-154/",
+    "publisher": "Cyber Security Agency of Singapore",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Node.js rates the flaw High and Amazon Linux 8.1; CSA's 9.8 is the highest score seen."
+ },
+ {
+  "id": "node-kisa-advisory",
+  "thread": "nodejs",
+  "parent": "node-oct21-release",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "KISA's Node.js advisory lists three other CVEs and omits the Brotli flaw",
+  "summary": "KISA posts a Node.js security update advisory for 22.23.4, 24.22.1 and 26.12.1. It names CVE-2026-105482, CVE-2026-105483 and CVE-2026-106069 but not the Brotli RCE CVE-2026-111497.",
+  "sources": [
+   {
+    "url": "https://www.boho.or.kr/kr/bbs/view.do?bbsId=B0000133&nttId=72236&menuNo=205020",
+    "publisher": "KISA (KrCERT/CC)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "gitlab-kisa-advisory",
+  "thread": "gitlab",
+  "parent": "gitlab-patch",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "KISA advisory covers CVE-2026-110264 and four other GitLab flaws",
+  "summary": "KISA posts a GitLab security update advisory listing CVE-2026-110264 as affecting GitLab CE/EE from 7.0, with fixes from 18.11.13 to 19.5.1. It also lists a double free, an LDAP injection and a request smuggling flaw.",
+  "sources": [
+   {
+    "url": "https://www.boho.or.kr/kr/bbs/view.do?bbsId=B0000133&nttId=72232&menuNo=205020",
+    "publisher": "KISA (KrCERT/CC)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "fortisiem-kisa-advisory",
+  "thread": "fortisiem",
+  "parent": "fortisiem-advisory",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "KISA tells FortiSIEM 7.5.0 users to update to 7.5.1",
+  "summary": "KISA posts a Fortinet advisory for CVE-2026-106173 in FortiSIEM 7.5.0, two days after Horizon3.ai's public write-up. It recommends 7.5.1 or later.",
+  "sources": [
+   {
+    "url": "https://www.boho.or.kr/kr/bbs/view.do?bbsId=B0000133&nttId=72231&menuNo=205020",
+    "publisher": "KISA (KrCERT/CC)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-curl-policy-merged",
+  "thread": "ai-discovery",
+  "parent": "ai-curl-minor-open",
+  "t": "2026-10-25T10:36:44Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "curl commits the policy: vulnerabilities below HIGH go to public GitHub",
+  "summary": "curl merges a change to its disclosure policy that sends LOW and MEDIUM vulnerability reports to GitHub to cut the security team's load. HIGH and CRITICAL reports stay private; the change applies from 26 Oct.",
+  "sources": [
+   {
+    "url": "https://github.com/curl/curl/commit/c190227d9147b980b66b51a6d6a11769330a137c",
+    "publisher": "curl project (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://www.heise.de/en/news/curl-focuses-on-high-risk-and-critical-vulnerabilities-11497102.html",
+    "publisher": "heise online",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-talos-volume",
+  "thread": "ai-discovery",
+  "parent": "ai-patch-the-planet-launch",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Cisco Talos: published CVEs up 105% on last year, mainly from frontier AI models",
+  "summary": "Talos says CVE publications are up 105% and KEV entries 37% year on year, and Microsoft's monthly advisories rose more than tenfold since June. It says the models find more instances of known bug types, not new classes, and the 90-day disclosure model is in flux.",
+  "sources": [
+   {
+    "url": "https://blog.talosintelligence.com/theres-only-so-much-code-the-rise-in-vulnerability-numbers/",
+    "publisher": "Cisco Talos",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "windows-motw-record-batch"
+  ]
+ },
+ {
+  "id": "label-born-series",
+  "thread": "label",
+  "parent": "label-viral-post",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "German Born's IT blog runs a three-part 'Black October' series",
+  "summary": "Borns IT- und Windows-Blog publishes 'Black October' roundups on 22, 23 and 24 Oct. Part 3 mixes PHP2Shell, the Brotli flaw and k0t with unrelated items such as HPE Aruba fixes and Interpol's Serengeti arrests.",
+  "sources": [
+   {
+    "url": "https://borncity.com/blog/2026/10/22/black-october-2026-it-katastrophen-der-letzten-tage/",
+    "publisher": "Borns IT- und Windows-Blog",
+    "primary": false
+   },
+   {
+    "url": "https://borncity.com/blog/2026/10/23/black-october-2-schwachstellen-in-fortinet-fortios-oracle-java-node2shell-in-node-js/",
+    "publisher": "Borns IT- und Windows-Blog",
+    "primary": false
+   },
+   {
+    "url": "https://borncity.com/blog/2026/10/24/black-october-teil-3-neue-katastrophen-hpe-rufus-linux-phyton-usw/",
+    "publisher": "Borns IT- und Windows-Blog",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "label-wapo-brief",
+  "thread": "label",
+  "parent": "label-viral-post",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Washington Post's AI & Tech Brief titles an edition 'Black October'",
+  "summary": "The Washington Post's AI & Tech Brief newsletter runs an edition headed 'Black October' on 23 Oct. Wikipedia cites it with the Guardian as the source for the name.",
+  "sources": [
+   {
+    "url": "https://www.washingtonpost.com/wp-intelligence/ai-tech-brief/2026/10/23/ai-tech-brief-black-october/",
+    "publisher": "The Washington Post",
+    "primary": false
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/Black_October_(information_security)",
+    "publisher": "Wikipedia",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Post page returned 403 here; only its title and date, seen in the Wikipedia references, are used."
+ },
+ {
+  "id": "label-wikipedia-trim",
+  "thread": "label",
+  "parent": "label-wikipedia",
+  "t": "2026-10-24T20:40:15Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Wikipedia renames the article and cuts incidents no source ties to 'Black October'",
+  "summary": "Editors move the page to 'Black October (information security)' at 20:02 UTC and then remove sections, saying no reporting connects them to the label and the article is not a list of every October attack. GitLab and Fortinet sections are added on 25 and 26 Oct.",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&diff=1381788056",
+    "publisher": "Wikipedia",
+    "primary": true
+   },
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&action=history",
+    "publisher": "Wikipedia",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "At 01:11 UTC on 26 Oct the article covers PHP2Shell, the Brotli flaw, LiteLLM, eMudhra, GitLab and Fortinet."
+ },
+ {
+  "id": "cisco-nxos-hardening-release",
+  "thread": "cisco-nxos-hardening",
+  "parent": null,
+  "t": "2026-10-07T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco's NX-OS hardening release fixes six AI-found flaws, two rated CVSS 9.8",
+  "summary": "Cisco publishes an NX-OS hardening release covering Nexus, MDS and UCS fabric interconnects with six CVEs found by internal testing and frontier AI models. Cisco says none is known to be exploited.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-nxosw1-cWzSbtR",
+    "publisher": "Cisco PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://blogs.cisco.com/security/strengthening-the-foundation-a-predictable-customer-focused-response-to-ai-accelerated-vulnerability-discovery",
+    "publisher": "Cisco Blogs",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: AI-found bugs. It is the first-Wednesday release of the same cadence that shipped the Snort 3, Unified Communications and Expressway hardening releases on 21 Oct.",
+  "related": [
+   "snort-hardening-release"
+  ]
+ },
+ {
+  "id": "bm-nhk-publishing",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "NHK Publishing: about 127,000 gardening-newsletter records leaked via Blastmail",
+  "summary": "NHK Publishing says Rakus Light Cloud told it that the full send list of its 'Minna no Shumi no Engei' mail service leaked: emails, nicknames, gender and prefecture. It stops the mail service with no restart date.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC236GC0T21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/a4ff2ab3d5908c9a5afe9bbfc89a9a46d4aac10b",
+    "publisher": "Kyodo via Yahoo! News Japan",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261023de64585",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "NHK Publishing's own notice was not found; the figures come from Kyodo and Nikkei."
+ },
+ {
+  "id": "bm-update-1026",
+  "thread": "blastmail",
+  "parent": "bm-update-1025",
+  "t": "2026-10-26T01:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Blastmail 26 Oct update: still 344 contracts hit, no restart date; next report 17:00 JST",
+  "summary": "Rakus Light Cloud's 10:00 JST update on 26 October has no new findings: the count of contracts with more than contract data leaked stays at 344 and the outside forensic work goes on. The service stays down with no restart date.",
+  "sources": [
+   {
+    "url": "https://info.blastmail.jp/information_20261021.html",
+    "publisher": "Rakus Light Cloud",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The page says the 344 figure is unchanged since its 12th report and sets the next update for about 17:00 JST on 26 October."
+ },
+ {
+  "id": "cuenote-php-none",
+  "thread": "cuenote",
+  "parent": "cuenote-disclosure",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Ymirlink: the PHP flaws of 21 October do not affect Cuenote services",
+  "summary": "Ymirlink posts a separate notice saying CVE-2026-109618 and CVE-2026-109619 have no impact on Cuenote services. Its breach notice still names only 'a vulnerability in a program' as the cause.",
+  "sources": [
+   {
+    "url": "https://www.cuenote.jp/information/news/phpcuenote_20261022.html",
+    "publisher": "Ymirlink",
+    "primary": true
+   },
+   {
+    "url": "https://www.cuenote.jp/information/news/unauthorizedaccess.html",
+    "publisher": "Ymirlink",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Cuenote intrusion (16 Oct) came before PHP2Shell was public; Ymirlink draws no link between the two. Its breach page still shows only the first report (19 Oct, 19:05 version) as of 26 Oct."
+ },
+ {
+  "id": "cuenote-istyle",
+  "thread": "cuenote",
+  "parent": "cuenote-clients",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "istyle stops using Cuenote FC after Ymirlink finds access traces in its environment",
+  "summary": "istyle says Ymirlink told it on 21 October of suspicious outside access traces in istyle's own Cuenote FC environment. It has not confirmed a leak but stops using Cuenote FC in stages from 22 October.",
+  "sources": [
+   {
+    "url": "https://www.istyle.co.jp/news/info/2026/10/20261023.html",
+    "publisher": "istyle",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "jpalert-nco-response",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-ppc-caution",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "National Cybersecurity Office tells data-heavy firms to assume attack at any time",
+  "summary": "Japan's National Cybersecurity Office asks firms that hold large amounts of personal data to patch fast, use MFA, keep less data and share technical details after a breach. It also asks them to limit and delete data held by contractors.",
+  "sources": [
+   {
+    "url": "https://www.cyber.go.jp/news/20261014.html",
+    "publisher": "National Cybersecurity Office (Japan)",
+    "primary": true
+   },
+   {
+    "url": "https://k-tai.watch.impress.co.jp/docs/news/2147048.html",
+    "publisher": "Keitai Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The NCO PDF (cyber.go.jp/pdf/press/taiou.pdf) is encrypted and could not be read; the content is from Keitai Watch and the NCO list page."
+ },
+ {
+  "id": "jpalert-nco-roundup",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-nco-response",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "NCO lists nine agency alerts on the leak wave, from PPC, NPA, FSA, MIC, METI, NICT",
+  "summary": "The National Cybersecurity Office posts one page with the alerts that nine bodies issued from 7 to 13 October on the run of leaks. The list adds an NICT warning of 13 October on server attacks that start from Android app analysis.",
+  "sources": [
+   {
+    "url": "https://www.cyber.go.jp/news/20261014.html",
+    "publisher": "National Cybersecurity Office (Japan)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "jpalert-jpcert-eyes",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-jpcert-at0030",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC blog: the attackers behind the leak run used AI to scan and hit APIs",
+  "summary": "A JPCERT/CC Eyes post on the attack infrastructure says the attackers analysed Android apps to find APIs, used AI for known-flaw scans and API attacks, and also hit services outside Japan. It names no actor and lists three source IPs.",
+  "sources": [
+   {
+    "url": "https://blogs.jpcert.or.jp/ja/2026/10/web_api_attacks.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "cairn-jpcert-case-e"
+  ]
+ },
+ {
+  "id": "jpalert-mpd-warning",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-ipa-measures",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Tokyo police: about 600 leak-worry calls in a month; assume your data is already out",
+  "summary": "The Metropolitan Police Department posts advice for residents and firms on misuse of leaked data, such as scam calls, burglary and phishing. NHK and Asahi report about 600 related consultations in the month to 15 October.",
+  "sources": [
+   {
+    "url": "https://www.keishicho.metro.tokyo.lg.jp/kurashi/cyber/joho/information_leak.html",
+    "publisher": "Tokyo Metropolitan Police Department",
+    "primary": true
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261021de62656",
+    "publisher": "NHK",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/bd2621bc67bcff252653fc722e5255f99cd6f4a3",
+    "publisher": "Asahi Shimbun via Yahoo! News Japan",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The police page (updated 21 Oct) gives the advice; the 600 figure is from NHK and Asahi only."
+ },
+ {
+  "id": "onamae-gs-maintenance",
+  "thread": "onamae",
+  "parent": "onamae-rental-maintenance",
+  "t": "2026-10-24T18:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Onamae.com patches all GS shared servers for a vulnerability in an emergency window",
+  "summary": "Onamae.com runs emergency maintenance on all its GS shared servers from 03:00 to 11:00 JST on 25 October to fix a security vulnerability. The control panel was hard to reach and web servers ran degraded during the work.",
+  "sources": [
+   {
+    "url": "https://www.onamae.com/news/article/11606",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Posted after the fact on 26 October. The notice does not name the vulnerability, so a link to PHP2Shell is not stated."
+ },
+ {
+  "id": "onamae-gs-panel-pause",
+  "thread": "onamae",
+  "parent": "onamae-gs-maintenance",
+  "t": "2026-10-25T02:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Onamae.com pauses the GS shared-server control panel with no restart date",
+  "summary": "Citing a rise in attacks on internet services, Onamae.com stops the GS shared-server control panel from 11:00 JST on 25 October as a precaution. It says no intrusion is confirmed; sites, mail and databases stay up.",
+  "sources": [
+   {
+    "url": "https://www.onamae.com/news/article/11607",
+    "publisher": "GMO Internet (Onamae.com)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Posted 26 October."
+ },
+ {
+  "id": "carsensor-reopen",
+  "thread": "carsensor",
+  "parent": "carsensor-notice",
+  "t": "2026-10-22T04:30:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Recruit reopens Carsensor and C-MATCH; store booking stays off",
+  "summary": "Recruit brings Carsensor and the dealer service C-MATCH back on 22 October after it confirms the sites are safe. Store visit booking and some pages stay down with no date for full restoration.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/978021a991198091c56b4f48d2494655e2ba207b",
+    "publisher": "Nikkan Jidosha Shimbun via Yahoo! News Japan",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The time is when the paper saw both services working (13:30 JST). Recruit's 21 Oct release has no later update."
+ },
+ {
+  "id": "atlink-stop",
+  "thread": "medley-atlink",
+  "parent": null,
+  "t": "2026-10-14T15:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Medley stops @link, a booking system for up to 787 clinics, after unauthorised access",
+  "summary": "After an outside specialist body warns it on 11 October, Medley stops the @link patient app, web booking and related clinic services late on 14 October. It says up to 787 medical institutions may be affected.",
+  "sources": [
+   {
+    "url": "https://at-link.net/information/%E3%82%A2%E3%83%83%E3%83%88%E3%83%AA%E3%83%B3%E3%82%AF%E3%81%B8%E3%81%AE%E4%B8%8D%E6%AD%A3%E3%82%A2%E3%82%AF%E3%82%BB%E3%82%B9%E3%81%8A%E3%82%88%E3%81%B3%E3%82%B5%E3%83%BC%E3%83%93%E3%82%B9%E3%81%AE/",
+    "publisher": "Medley (@link)",
+    "primary": true
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4480/tdnet/2895027/00.pdf",
+    "publisher": "Medley (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://piyolog.hatenadiary.jp/entry/2026/10/15/065625",
+    "publisher": "piyolog",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: one of the run of Japanese breach notices of October 2026 that JPCERT/CC alert AT-2026-0030 and the NCO and PPC alerts answer; an outside specialist body found it, as in other cases of the run. The 787 figure is the count of client institutions, not of confirmed victims."
+ },
+ {
+  "id": "atlink-rebuild",
+  "thread": "medley-atlink",
+  "parent": "atlink-stop",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Medley will not restart the old @link system and moves clinics to a new cloud build",
+  "summary": "Medley says it will build @link again in a separate environment and move data there, with basic clinic functions from 22 October. The patient app and web booking stay off.",
+  "sources": [
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/20/2000002413/",
+    "publisher": "ITmedia NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "On 23 October Medley said the new build was late because of defects and gave no restart date."
+ },
+ {
+  "id": "atlink-data-confirmed",
+  "thread": "medley-atlink",
+  "parent": "atlink-rebuild",
+  "t": "2026-10-23T07:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Medley: patient names, logins, passwords and clinic visits were taken from @link",
+  "summary": "Medley says an unauthorised program on its database let a third party take patient names, birth day and month, login IDs and passwords, clinic names and last visit dates from late September to mid-October. App users' emails and payment dates and amounts were also taken.",
+  "sources": [
+   {
+    "url": "https://at-link.net/information/%E3%82%A2%E3%83%83%E3%83%88%E3%83%AA%E3%83%B3%E3%82%AF%E3%81%B8%E3%81%AE%E4%B8%8D%E6%AD%A3%E3%82%A2%E3%82%AF%E3%82%BB%E3%82%B9%E3%81%AB%E9%96%A2%E3%81%99%E3%82%8B%E8%AA%BF%E6%9F%BB%E7%8A%B6%E6%B3%81/",
+    "publisher": "Medley (@link)",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/medley_atlink_confirmed_patient_data_exfiltration_20261026/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update of 16:00 JST on 23 October. Counts of patients and clinics are still under investigation; Medley reported to the PPC and the health ministry. Card numbers are not held."
+ },
+ {
+  "id": "baitoru-notice",
+  "thread": "dip-baitoru",
+  "parent": null,
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Dip: up to 3,885,771 Baitoru member emails leaked through a flaw in a site function",
+  "summary": "Dip says access from overseas used a design flaw in part of its Baitoru and Baitoru NEXT job sites, found on 6 October, to take member email addresses. It blocks overseas access, fixes the program and reports to the PPC and MIC.",
+  "sources": [
+   {
+    "url": "https://www.dip-net.co.jp/news/2192",
+    "publisher": "Dip Corporation",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/dip_baitoru_baitoru_next_unauthorized_access_20261009/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: part of the early-October run of Japanese breach notices (6-9 Oct, the same days as Bookoff and skyticket) that led to the 7-9 Oct government alerts; overseas access abusing a site function matches the API-abuse cases in JPCERT/CC AT-2026-0030."
+ },
+ {
+  "id": "ahsay-douzone-msit-probe",
+  "thread": "ahsay",
+  "parent": "ahsay-douzone-apo",
+  "t": "2026-10-26T00:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Korea's MSIT calls the Douzone Bizon breaches major and opens a joint probe",
+  "summary": "The Ministry of Science and ICT says its incident review committee met on 25 October, judged Douzone Bizon's two reported breaches a major incident and formed a public-private team with KISA. The team will check spread to Douzone's client companies and publish the cause and scale.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146738",
+    "publisher": "Boan News",
+    "primary": false
+   },
+   {
+    "url": "https://www.mt.co.kr/tech/2026/10/26/2026102609073422711",
+    "publisher": "Money Today",
+    "primary": false
+   },
+   {
+    "url": "https://www.news1.kr/it-science/cc-newmedia/6331517",
+    "publisher": "News1",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Announced on the morning of 26 Oct KST (Boan News 09:48 KST). The MSIT press release itself was not opened. Under the Network Act amended on 1 Oct, repeat incidents can bring a surcharge of up to 3% of related revenue."
+ },
+ {
+  "id": "emu-incommon-update",
+  "thread": "emudhra",
+  "parent": "emu-exit-tls",
+  "t": "2026-10-22T14:45:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "InCommon: eMudhra will stop all public-root issuance in 30 days; next root not chosen",
+  "summary": "Internet2's InCommon Certificate Service tells subscribers that eMudhra will stop issuing from every intermediate under its public roots in about 30 days. InCommon has not chosen the replacement root and tells subscribers to reissue affected ECC certificates as RSA for now.",
+  "sources": [
+   {
+    "url": "https://incommon.org/about/news/incommon-certificate-service-update",
+    "publisher": "InCommon (Internet2)",
+    "primary": true
+   },
+   {
+    "url": "https://incommon.org/certificates/",
+    "publisher": "InCommon (Internet2)",
+    "primary": true
+   },
+   {
+    "url": "https://www.certkit.io/blog/emudhra-internet2-incommon-distrust",
+    "publisher": "CertKit",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "First update 10:45 ET, a second at 19:19 ET; the FAQ says it was last updated 22 Oct 18:30 ET and that ECC issuance was restored through the emSign G1 root. Chrome counts about 30,791 of the roughly 30,800 certificates under the distrusted root as InCommon's."
+ },
+ {
+  "id": "emu-crl-ua-questions",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-26T01:14:17Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: a firewall on eMudhra's revocation hosts blocks four HTTP clients",
+  "summary": "A commenter on the new Mozilla bug reports that eMudhra's CRL, OCSP and repository hosts return a web application firewall block page to four common HTTP clients by User-Agent. The comment says earlier eMudhra statements on revocation availability were wrong and asks six questions within 72 hours.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085612#c1",
+    "publisher": "Mozilla Bugzilla, bug 2085612",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2085612/comment",
+    "publisher": "Mozilla Bugzilla (REST API)",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "The author is a community participant, not a root program. The bug is still UNCONFIRMED with a needinfo on eMudhra; no eMudhra answer at the time of the pass."
+ },
+ {
+  "id": "kepco-audit-apology",
+  "thread": "kepco-staff",
+  "parent": "kepco-face-cctv",
+  "t": "2026-10-19T02:24:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "KEPCO's CEO apologises at the National Assembly audit and promises a security overhaul",
+  "summary": "At the parliamentary audit KEPCO's chief executive apologises for the staff data leak and promises a basic reform of KEPCO's information security and contractor management. The NIS, the PIPC and Jeonnam police investigate both a contractor route and an outside hack.",
+  "sources": [
+   {
+    "url": "https://ajunews.com/view/20261019111801292",
+    "publisher": "Aju News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Article time 11:24 KST. The article adds that the NIS Gwangju branch told KEPCO on 1 Oct at about 15:59 KST that staff data was on a private cloud web page."
+ },
+ {
+  "id": "artex-threatbook-relaunch",
+  "thread": "artex",
+  "parent": "artex-closed-source",
+  "t": "2026-10-16T07:20:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Korean press: ARTEX returns as a paid product, ARTEX PRO, on a Chinese cloud platform",
+  "summary": "Korean press report that the CEO of Chinese security firm ThreatBook posted that ARTEX 'is back with a commercial version', ARTEX PRO, on a new cloud platform for AI penetration-testing agents. The original ARTEX developer is reported to be a ThreatBook engineer.",
+  "sources": [
+   {
+    "url": "https://www.joongangenews.com/news/articleView.html?idxno=555748",
+    "publisher": "JoongAng Economy News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Article time 16:20 KST on 16 Oct; the social media post itself was not opened, and ThreatBook's role rests on this report. This follows the 8 Oct closed-source announcement."
+ },
+ {
+  "id": "firstvds-own-analysis",
+  "thread": "firstvds",
+  "parent": "firstvds-other-hosters",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "FirstVDS ends its own VMmanager analysis and finds hidden persistence on some nodes",
+  "summary": "FirstVDS says it completed its own technical analysis without waiting for ISPsystem and notified affected customers in three waves. It found hidden services posing as system processes on some nodes and cannot confirm the full volume of data taken.",
+  "sources": [
+   {
+    "url": "https://habr.com/ru/news/1097634/",
+    "publisher": "Habr",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Habr dates the FirstVDS update 21 Oct 15:00 MSK. FirstVDS tells notified customers to treat all data on the server as copied. Nodes go back only after a clean check; ordering of new servers resumed."
+ },
+ {
+  "id": "softech-security-staff",
+  "thread": "pk-softech",
+  "parent": "softech-akira",
+  "t": "2026-10-20T18:29:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Swiss press: stolen pension data cover ex-Federal Councillors, judges and elite soldiers",
+  "summary": "Citing the Tages-Anzeiger, Swiss media say the stolen data include former Federal Councillors, federal judges, intelligence officers and special-forces soldiers. A federal task force fears covert staff could be traced, and the intelligence service pauses some foreign operations.",
+  "sources": [
+   {
+    "url": "https://www.bluewin.ch/de/digital/hacker-erbeuten-daten-und-erpressen-die-schweiz-li.3642322",
+    "publisher": "blue News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Sitting Federal Councillors are reported not affected. The attack is dated to the night of 28 to 29 Sep. The Tages-Anzeiger article could not be opened (redirect loop)."
+ },
+ {
+  "id": "softech-publica-site-php",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Publica takes its website offline over the PHP flaws, separate from the supplier breach",
+  "summary": "Publica says publica.ch was unreachable on the afternoon of 21 October as a precaution after flaws in a widely used web technology were disclosed. It says this is not connected to the PK Softech attack; the site was patched and back from 18:30.",
+  "sources": [
+   {
+    "url": "https://www.publica.ch/de/cyberangriff-auf-softwarelieferanten",
+    "publisher": "Publica",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Publica does not name PHP; the date and wording match the 21 Oct PHP2Shell precaution wave. The same page records a second newsletter to insured persons on 22 Oct."
+ },
+ {
+  "id": "giftl-count",
+  "thread": "giftl",
+  "parent": "giftl-notice",
+  "t": "2026-10-25T23:40:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Gift-L leak put at 18,359 customers; Spoon asks investigators for a joint probe",
+  "summary": "Korean press put the Gift-L leak at 18,359 customers, with names, phones, emails and refund account numbers. Operator Spoon says it reported to security bodies and ministries, asked police to investigate and sees no coupon fraud so far.",
+  "sources": [
+   {
+    "url": "https://www.newspim.com/news/view/20261026000113",
+    "publisher": "Newspim",
+    "primary": false
+   },
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146737",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Newspim published at 08:40 KST on 26 Oct. Neither article names KISA or the PIPC. Gift-L's own notice was not opened."
+ },
+ {
+  "id": "kiau-cafe24-alert",
+  "thread": "kiau-site",
+  "parent": null,
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Cafe24 alerts International University of the Arts to a hack; a web shell is found",
+  "summary": "Hosting firm Cafe24 tells Korea's International University of the Arts of signs of a hack on its website, and a web shell file is found on the server. The school stops the site and removes the malicious files.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209045",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Wave link: one more of the Korean breach notices filed with KISA and the PIPC in late October that the ledger tracks (Yonsei, Pukyong, Gift-L), and a web shell on a hosted site. No PHP2Shell link is stated; the first intrusion time and route are not public. Low profile; the coordinator may drop it."
+ },
+ {
+  "id": "kiau-notice",
+  "thread": "kiau-site",
+  "parent": "kiau-cafe24-alert",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "The university: names, phones, IDs, encrypted passwords and addresses of members leaked",
+  "summary": "International University of the Arts tells site members their names, phone numbers, email IDs, encrypted passwords and addresses leaked, without a count. It reports to KISA and the PIPC.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209045",
+    "publisher": "Daily Secu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Daily Secu published on 25 Oct at 13:03 KST. The school's own notice was not opened."
  }
 ];
