@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended sixteen times by 2026-10-26. Still going on then.
+//  Gathered 2026-10-22, extended seventeen times by 2026-10-27. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -25694,7 +25694,7 @@ export const EVENTS = [
    }
   ],
   "confidence": "reported",
-  "note": "Time is the first confirmed shell (15:35 UTC) in the researcher's report; the press stories ran on 26 Oct (BleepingComputer 05:19 ET, SecurityWeek 09:30 ET). The researcher says the single-worker setup was deliberately favourable and is not a measure of exploit reliability. The researcher's evidence repository holds packet captures and is not linked here. The CISA KEV catalog (version 2026.10.23, checked 26 Oct 19:37 UTC) still does not list either PHP CVE."
+  "note": "Time is the first confirmed shell (15:35 UTC) in the researcher's report; the press stories ran on 26 Oct (BleepingComputer 05:19 ET, SecurityWeek 09:30 ET). The researcher says the single-worker setup was deliberately favourable and is not a measure of exploit reliability. The researcher's evidence repository holds packet captures and is not linked here. The CISA KEV JSON feed (version 2026.10.23, checked 26 Oct 19:37 UTC) did not list either PHP CVE; the KEV web catalog listed both later on 26 Oct (php-cisa-kev-added)."
  },
  {
   "id": "php-broadcom-casma-review",
@@ -26180,5 +26180,691 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "The police page is dated 14 Oct; Swiss Cybersecurity logs it as a 15 Oct update from the Zurich and Bern cantonal police. The warning is in the conditional: no case of actual misuse was reported at the time."
+ },
+ {
+  "id": "php-cisa-kev-added",
+  "thread": "php2shell",
+  "parent": "php-cisa-sigma",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds both PHP2Shell CVEs to KEV with a 29 October deadline",
+  "summary": "CISA adds CVE-2026-109618 and CVE-2026-109619 to its Known Exploited Vulnerabilities catalog on 26 Oct, with a 29 Oct due date and BOD 26-04 forensic triage required. It revises its 21 Oct PHP alert the same day to record the addition.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/26/cisa-adds-two-known-exploited-vulnerability-catalog",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog?search_api_fulltext=CVE-2026-109618",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/21/critical-vulnerabilities-php-require-immediate-patching",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Neither the alert nor the catalog gives a time of day. SecurityWeek wrote on the morning of 26 Oct (US time) that the CVEs were not yet listed. The KEV JSON and CSV feeds still showed version 2026.10.23 (1,756 entries) at about 23:10 UTC on 26 Oct, while the catalog web page listed 1,758 entries and both PHP CVEs, so the feeds lag the web catalog. Known ransomware use: Unknown. CVE-2026-115560 is not listed. CISA had said on 21 and 23 Oct that it had not observed exploitation."
+ },
+ {
+  "id": "php-cisco-v17-fix-dates",
+  "thread": "php2shell",
+  "parent": "php-cisco-vulnerable",
+  "t": "2026-10-26T20:00:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Cisco v1.7: Expressway fix in 15.5.21; URWB fix not due until February 2027",
+  "summary": "Version 1.7 of Cisco's PHP advisory gives fixed releases: Expressway and Expressway Select in 15.5.21, Ultra-Reliable Wireless Backhaul in 27.1.1, estimated for February 2027. Only four products stay under investigation: ISE Portal Builder, SD-AVC, SD-AVC Cloud Connector and Unified Industrial Wireless Software.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-php-october26-Jj384Daq",
+    "publisher": "Cisco",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Cisco scores the URWB case 6.6 because exploitation needs an authenticated administrator, and lists workarounds for URWB and Expressway. Cisco still says it knows of no malicious use. Version 1.6 (23 Oct) listed 11 products under investigation."
+ },
+ {
+  "id": "php-redhat-rhel7-els",
+  "thread": "php2shell",
+  "parent": "php-redhat-eus",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Red Hat backports one PHP2Shell fix to PHP 5.4 on RHEL 7 ELS",
+  "summary": "RHSA-2026:88693 ships php-5.4.16-48.el7_9.1 for RHEL 7 Extended Life Cycle Support and fixes CVE-2026-109619 only. Red Hat lists RHEL 7 as not affected by CVE-2026-109618.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/errata/RHSA-2026:88693",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-109619.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-109618.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Upstream PHP gave no fix for branches older than 8.2; this is a vendor backport to the PHP 5.4 line. Red Hat lists RHEL 6 PHP as out of support scope."
+ },
+ {
+  "id": "php-azure-appservice-windows",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Azure App Service: Linux PHP images patched; Windows built-in PHP gets no fix",
+  "summary": "Microsoft's App Service team says patched built-in PHP 8.2-8.5 images reached the Latest and Standard channels on App Service on Linux on 21 Oct, with Extended last. The built-in PHP runtimes on App Service for Windows are end-of-life and get no patch; customers must move to Linux or bring their own PHP.",
+  "sources": [
+   {
+    "url": "https://azure.github.io/AppService/2026/10/21/php-critical-security-release-app-service-linux.html",
+    "publisher": "Microsoft Azure App Service team",
+    "primary": true
+   },
+   {
+    "url": "https://learn.microsoft.com/en-us/answers/questions/6045369/when-will-php-8-4-27-fix-for-cve-2026-109618-cve-2",
+    "publisher": "Microsoft Q&A",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The same post says Marketplace WordPress apps on older Alpine-based images will not receive the patched PHP, and that the Windows guidance also applies to App Service on Azure Stack Hub. A Q&A poster reported apps still on 8.4.26 after the rollout."
+ },
+ {
+  "id": "php-cyber-centre-115560",
+  "thread": "php2shell",
+  "parent": "php-cyber-centre-al26-026",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Canadian Cyber Centre AL26-026 update adds the third PHP flaw, CVE-2026-115560",
+  "summary": "Update 1 of the Cyber Centre alert says CVE-2026-115560 is not fixed by the 21 Oct releases and tells users to disable session.upload_progress.enabled until a fix ships. The alert still says it sees no active exploitation.",
+  "sources": [
+   {
+    "url": "https://cyber.gc.ca/en/alerts-advisories/al26-026-critical-vulnerabilities-impacting-php-cve-2026-109618-cve-2026-109619",
+    "publisher": "Canadian Centre for Cyber Security",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-ox-24h-unpatched",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "OX Security: 99.28% of version-visible PHP hosts unpatched 24 hours after release",
+  "summary": "OX Security's repeated Shodan queries find 1,974,890 hosts in the affected range and 14,151 patched at 24 hours. It infers versions from headers such as X-Powered-By and leaves out hosts that hide the version.",
+  "sources": [
+   {
+    "url": "https://www.ox.security/blog/php2shell-24-hours-in-99-3-of-measurable-php-instances-are-still-unpatched/",
+    "publisher": "OX Security",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Banner counts cannot see distribution backports that keep the old version string (for example Red Hat and Debian builds), so they overstate the unpatched share. OX itself says the figures cover only publicly indexed hosts."
+ },
+ {
+  "id": "php-ox-day5-unpatched",
+  "thread": "php2shell",
+  "parent": "php-ox-24h-unpatched",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "OX Security day 5: 93.6% of version-visible PHP hosts still unpatched",
+  "summary": "On 26 Oct OX Security counts 1,863,342 of 1,990,772 measurable affected hosts still unpatched; patched hosts rise from 245 to 127,430. About 1.33 million affected hosts run end-of-life PHP branches with no upstream fix.",
+  "sources": [
+   {
+    "url": "https://www.ox.security/blog/php2shell-day-5-the-panic-hasnt-turned-into-patching/",
+    "publisher": "OX Security",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Same banner method as the 24-hour count, with the same backport blind spot. By segment OX reports cPanel and Magento hosts at 100% unpatched and Laravel lowest at 82.26%."
+ },
+ {
+  "id": "node-redhat-rhsb-015",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-26T05:33:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Red Hat bulletin RHSB-2026-015 on the Brotli flaw: Important, no errata yet",
+  "summary": "Red Hat's bulletin rates CVE-2026-111497 Important (CVSS 8.1, high attack complexity) and lists RHEL 7 to 10 as affected through brotli, its Python bindings, Firefox, Thunderbird, Node.js and JBoss Core Services. It says no reliable public RCE exploit is seen and gives no fixed packages yet.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/security/vulnerabilities/RHSB-2026-015",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-111497.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The bulletin gives 26 Oct 05:33 with no time zone stated; status is Ongoing. Red Hat's CVE data shows only the Hardened Images errata (RHSA-2026:87420, 21 Oct), with RHEL brotli, firefox and nodejs:24 still affected."
+ },
+ {
+  "id": "node-oracle-linux-brotli",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Oracle Linux ships its own Brotli and Node.js fixes for OL8, OL9 and OL10",
+  "summary": "Oracle releases eight errata (ELSA-2026-500512 to -500518) on 26 Oct that patch brotli on Oracle Linux 8, 9 and 10 and the bundled Brotli in nodejs, nodejs22 and nodejs24. The fixes are Oracle builds such as brotli 1.0.9-10.0.1.el9_8, ahead of any RHEL errata.",
+  "sources": [
+   {
+    "url": "https://linux.oracle.com/cve/CVE-2026-111497.html",
+    "publisher": "Oracle",
+    "primary": true
+   },
+   {
+    "url": "https://linux.oracle.com/errata/ELSA-2026-500513.html",
+    "publisher": "Oracle",
+    "primary": true
+   },
+   {
+    "url": "https://linux.oracle.com/errata/ELSA-2026-500515.html",
+    "publisher": "Oracle",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The 500000-series ELSA numbers and the .0.1 / .0.2 release tags mark Oracle-authored updates, not rebuilds of Red Hat errata. ELSA-2026-500515 also makes OL10 nodejs24 builds require the fixed system Brotli."
+ },
+ {
+  "id": "node-oss-ghostscript-silent",
+  "thread": "nodejs",
+  "parent": "node-brotli-upstream",
+  "t": "2026-10-26T02:03:22Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "oss-security: some projects took the Brotli fix silently, Ghostscript among them",
+  "summary": "An Oracle reply on the oss-security list points to lists of affected products, including .NET, Chromium, Firefox and the PHP brotli extension. It says some projects fixed the flaw unknowingly by pulling upstream Brotli before the announcement, for example Ghostscript 10.07.1rc1.",
+  "sources": [
+   {
+    "url": "https://www.openwall.com/lists/oss-security/2026/10/26/12",
+    "publisher": "oss-security (Openwall)",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Message dated 25 Oct 19:03 -0700. The Ghostscript claim is the poster's reading of its bundled Brotli copy, not an Artifex statement."
+ },
+ {
+  "id": "gitlab-azurelinux-ruby",
+  "thread": "gitlab",
+  "parent": "gitlab-ruby-onigmo-fixes",
+  "t": "2026-10-25T08:02:18Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Microsoft lists the GitLab regex CVEs for Azure Linux 3 Ruby; fixed in 3.3.13-11",
+  "summary": "Microsoft's Security Update Guide adds CVE-2026-110264 and CVE-2026-97229 for the Azure Linux 3 ruby package, fixed in ruby 3.3.13-11. The CVEs keep GitLab's CVSS 10.0 score.",
+  "sources": [
+   {
+    "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-110264",
+    "publisher": "Microsoft MSRC",
+    "primary": true
+   },
+   {
+    "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-97229",
+    "publisher": "Microsoft MSRC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Time is the first MSRC release stamp (25 Oct 01:02:18 -07:00); MSRC revised both entries at 14:44 -07:00 the same day. Data read from the MSRC Security Update Guide API. The affected package was ruby 3.3.5-10."
+ },
+ {
+  "id": "http3-qpack-h3-maintainer",
+  "thread": "http3-qpack",
+  "parent": "http3-qpack-h3-prs",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "h3 maintainer: a max field size setting stops the QPACK attack; defaults stay minimal",
+  "summary": "On the Rust h3 fix PR, the hyperium maintainer says a reasonable max_field_section_size \"completely prevents the problem\" and that the library is meant to have few defaults. The contributor offers to drop the default change and keep the HeaderMap panic fix.",
+  "sources": [
+   {
+    "url": "https://github.com/hyperium/h3/pull/377",
+    "publisher": "hyperium/h3 (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/hyperium/h3/issues/379",
+    "publisher": "hyperium/h3 (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "As of 26 Oct both PR #377 and PR #378 are still open and unmerged; FoxIO still lists h3 as unpatched."
+ },
+ {
+  "id": "cuenote-jr-ex",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-26T11:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "JR Central, West and Kyushu: Express Yoyaku and smart EX member data leaked via Cuenote",
+  "summary": "The three railways say Ymirlink told them on 26 Oct that emails, member IDs, katakana names and member types of some shinkansen booking members were viewed or taken from Cuenote FC, after an earlier all-clear. They stopped the mail service and reported to the privacy commission; press put the count at about 170,000.",
+  "sources": [
+   {
+    "url": "https://jr-central.co.jp/news/release/_pdf/000046119.pdf",
+    "publisher": "JR Central, JR West, JR Kyushu",
+    "primary": true
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC2698H0W6A021C2000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://www.sbbit.jp/article/cont1/187814",
+    "publisher": "Business+IT",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The release is dated 26 Oct with no time; Nikkei reported it at 20:33 JST, so the hour is approximate. The release says the count is still being checked by Ymirlink; the about 170,000 figure comes from JR Central via the press. Kanji names, birth dates, addresses, phones and card data are not affected."
+ },
+ {
+  "id": "onamae-shares-close-1026",
+  "thread": "onamae",
+  "parent": "onamae-gmo-shares-fall",
+  "t": "2026-10-26T06:30:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "GMO Internet Group shares close 16% down on 26 Oct, the worst fall on the TSE Prime",
+  "summary": "GMO Internet Group closes at 3,179 yen, down 590 yen or about 16%, the largest drop on the Tokyo Prime market, and subsidiary GMO Internet falls more than 14% to 418 yen. Reports tie the sell-off to the flat payment to all users and fears of larger losses.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUB267FQ0W6A021C2000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/914767d55906e87db0a6280b2edc3cfa04a86cbb",
+    "publisher": "Kyodo News via Yahoo! Japan",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time is the Tokyo close (15:30 JST). Nikkei says 16%; Kyodo says more than 15%."
+ },
+ {
+  "id": "artex-kb-first-leak",
+  "thread": "artex",
+  "parent": "artex-shinhan-leak",
+  "t": "2026-10-02T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "KB Kookmin Bank: outside intrusion into a staff mobile system leaks data of 119 customers",
+  "summary": "KB Kookmin Bank says it saw abnormal outside access to its employee mobile work-support system on the night of 30 Sep and cut it off; names, phones, addresses and encrypted resident numbers of 119 customers leaked. It promises full compensation and the FSS sends IT examiners.",
+  "sources": [
+   {
+    "url": "https://news.mtn.co.kr/news-detail/2026100214042172956",
+    "publisher": "MTN (Money Today Broadcasting)",
+    "primary": false
+   },
+   {
+    "url": "https://www.mt.co.kr/finance/2026/10/02/2026100217414963078",
+    "publisher": "Money Today",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "First report of the KB leak that grew to 2,210 people on 26 Oct (artex-kb-2210). The bank's own notice was not opened."
+ },
+ {
+  "id": "artex-hana-leak",
+  "thread": "artex",
+  "parent": "artex-shinhan-leak",
+  "t": "2026-10-02T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Hana Bank finds 89 customers' data taken from its sales-support system",
+  "summary": "After Shinhan's disclosure Hana Bank checks its own systems and finds that an outside hacking agent took resident numbers, names, addresses, emails, phones and workplaces of 89 customers from its internal sales-support system (ODS). It reports to the FSS.",
+  "sources": [
+   {
+    "url": "https://biz.sbs.co.kr/amp/article/20000338176",
+    "publisher": "SBS Biz",
+    "primary": false
+   },
+   {
+    "url": "https://www.newspim.com/news/view/20261002001278",
+    "publisher": "Newspim",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "SBS Biz published at 17:53 KST on 2 Oct; the hour is approximate. Woori and NH NongHyup said attack attempts did not get through."
+ },
+ {
+  "id": "artex-bnk-busan-exposure",
+  "thread": "artex",
+  "parent": "artex-shinhan-leak",
+  "t": "2026-10-02T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "BNK Busan Bank: web-server attack exposes data of 11 outsourced developers",
+  "summary": "BNK Busan Bank reports an attack on its external web server aimed at internal staff systems such as mobile sales support; names, phones, birth dates and emails of 11 outsourced developers were exposed on a web page. It says no customer data leaked and reports to regulators.",
+  "sources": [
+   {
+    "url": "https://www.newspim.com/news/view/20261002001278",
+    "publisher": "Newspim",
+    "primary": false
+   },
+   {
+    "url": "https://www.imaeil.com/page/view/2026100219003869050",
+    "publisher": "Maeil Shinmun",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Reports differ on detection: about 21:00 KST on 1 Oct versus about 04:30 KST on 2 Oct. One report says the bank called the attack AI-agent driven."
+ },
+ {
+  "id": "artex-welcome-leak",
+  "thread": "artex",
+  "parent": "artex-shinhan-leak",
+  "t": "2026-10-04T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Welcome Savings Bank reports a hack leaking about 2,200 corporate-customer records",
+  "summary": "Welcome Savings Bank tells regulators a self-check on 3 Oct found that hackers took corporate customer data: company names and contact staff names, emails and phones, about 2,200 records. Press counts seven leaking firms by then, Hyundai Capital among them.",
+  "sources": [
+   {
+    "url": "https://news.mtn.co.kr/news-detail/2026100416365681836",
+    "publisher": "MTN (Money Today Broadcasting)",
+    "primary": false
+   },
+   {
+    "url": "https://www.dailian.co.kr/news/view/1697861",
+    "publisher": "Dailian",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "MTN published at 16:42 KST on 4 Oct; the hour is approximate. The seven named: Shinhan, KB Kookmin, Hana, Busan, Yegaram, Hyundai Capital, Welcome."
+ },
+ {
+  "id": "artex-detect-lag",
+  "thread": "artex",
+  "parent": "artex-welcome-leak",
+  "t": "2026-10-06T23:03:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Assembly data: Welcome and Hyundai Capital found 27 Sep intrusions only five days later",
+  "summary": "FSS incident reports released by a lawmaker show the attack on Welcome Savings Bank began at 17:09 KST on 27 Sep and was found on 2 Oct after the FSS shared attacker IPs, with 2,370 records out. Hyundai Capital was hit for 24 minutes on 27 Sep; data of 146 mortgage-loan agents leaked.",
+  "sources": [
+   {
+    "url": "https://www.dailian.co.kr/news/view/1698564",
+    "publisher": "Dailian",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Source is Rep. Han Chang-min's office citing FSS reports, via the press. Hyundai Capital says no customer data leaked."
+ },
+ {
+  "id": "artex-msit-joins-probe",
+  "thread": "artex",
+  "parent": "artex-msit-emergency",
+  "t": "2026-10-07T02:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "MSIT joins the regulators' on-site probe of the AI-driven bank hacks at the FSC's request",
+  "summary": "The science ministry says the FSC and FSS asked it for help and its staff could start on-site work with financial supervisors as early as 7 Oct. Financial regulators keep the lead on the probe of the Shinhan, KB Kookmin and Hana attacks.",
+  "sources": [
+   {
+    "url": "https://inews24.com/view/2012588",
+    "publisher": "iNews24",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "daiwa-scala-access",
+  "thread": "daiwa-scala",
+  "parent": null,
+  "t": "2026-10-02T11:33:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Intruder accesses Scala Communications' server holding Daiwa Securities inquiry records",
+  "summary": "Unauthorised access hits the server of Scala Communications, which runs Daiwa Securities' web inquiry management, from about 20:33 JST on 2 Oct to about 08:01 JST on 3 Oct. Scala tells Daiwa on 3 Oct that its customer data was accessed and taken.",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/8601/tdnet/2891437/00.pdf",
+    "publisher": "Daiwa Securities (TDnet filing)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Wave link: part of the Japanese breach-notice wave the ledger tracks, a contractor-held customer system hit in early October like the Blastmail, Cuenote and Y-Mail cases. Daiwa's own systems were not accessed."
+ },
+ {
+  "id": "daiwa-scala-notice",
+  "thread": "daiwa-scala",
+  "parent": "daiwa-scala-access",
+  "t": "2026-10-05T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Daiwa Securities: names, emails and account numbers of about 110,000 customers at risk",
+  "summary": "Daiwa Securities says inquiry records of about 110,000 customers, about 220,000 records with anonymous ones, may have leaked from its contractor. The data cannot be used to enter accounts or trade, no misuse is seen, and it is checking its other contractors.",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/8601/tdnet/2891437/00.pdf",
+    "publisher": "Daiwa Securities (TDnet filing)",
+    "primary": true
+   },
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/27/56573.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "rt-access",
+  "thread": "resorttrust",
+  "parent": null,
+  "t": "2026-10-05T11:30:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Unauthorised access makes Resorttrust's website system misbehave for three hours",
+  "summary": "Resorttrust's website system runs abnormally from about 20:30 to 23:30 JST on 5 Oct. The company notices on 6 Oct, confirms a data leak from unauthorised access on 7 Oct and blocks the access.",
+  "sources": [
+   {
+    "url": "https://www.resorttrust.co.jp/wp_api/wp-content/uploads/2026/10/20261009.pdf",
+    "publisher": "Resorttrust",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Wave link: one of the Japanese listed-company web-system breach notices of October 2026 that the ledger tracks as a wave. The notice gives no attack method."
+ },
+ {
+  "id": "rt-notice",
+  "thread": "resorttrust",
+  "parent": "rt-access",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Resorttrust: about 26,000 member and 36,000 Kahala Yokohama booking records leaked",
+  "summary": "Resorttrust says data of about 26,000 group members and about 36,000 people who booked The Kahala Hotel & Resort Yokohama leaked from a server behind its website. The system held no card, bank, email, medical or ID data; hotels run as normal.",
+  "sources": [
+   {
+    "url": "https://www.resorttrust.co.jp/wp_api/wp-content/uploads/2026/10/20261009.pdf",
+    "publisher": "Resorttrust",
+    "primary": true
+   },
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/27/56582.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-chromium-crs43-commit",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-public",
+  "t": "2026-10-20T19:51:45Z",
+  "tPrecision": "minute",
+  "kind": "ca-action",
+  "title": "Chromium source drops emSign ECC Root CA - G3 as Chrome Root Store moves to version 43",
+  "summary": "An automatic PKI metadata update in the Chromium source raises the Chrome Root Store to version 43 and deletes the emSign ECC Root CA - G3 trust anchor. This is the change that Google says reaches all Chrome devices on 27 October.",
+  "sources": [
+   {
+    "url": "https://github.com/chromium/chromium/commit/8793082f793c2533dccf28e83e33f0e700c52d28",
+    "publisher": "Chromium (GitHub mirror)",
+    "primary": true
+   },
+   {
+    "url": "https://chromium-review.googlesource.com/c/chromium/src/+/8619055",
+    "publisher": "Chromium Gerrit",
+    "primary": true
+   },
+   {
+    "url": "https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/",
+    "publisher": "Google",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Commit 'Automatic update for 2026-10-20 UTC' by the PKI Metadata Updates Bot, 19:51:45 UTC: root_store.textproto version_major 42 -> 43, trust anchor crs_root_id 28 (emSign ECC Root CA - G3, sha256 86a1ecba...) removed. No later root_store.textproto commit was listed up to 26 Oct 23:00 UTC, so the 27 Oct rollout ships this version."
+ },
+ {
+  "id": "emu-chrome-remaining-review",
+  "thread": "emudhra",
+  "parent": "emu-chrome-removal-date",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Chrome Root Program reviews whether eMudhra's other CA certificates stay trusted",
+  "summary": "Google's blog post says that, due to the seriousness of the incident, the Chrome Root Program is closely investigating the ongoing inclusion of eMudhra's remaining CA certificates in the Chrome Root Store. It will post updates on the CCADB Public list.",
+  "sources": [
+   {
+    "url": "https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/",
+    "publisher": "Google",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Same post as the 27 Oct removal date. No CCADB Public post on the review was listed as of 26 Oct 23:00 UTC. The post also says Chrome checked that no other key in its root stores shares the weak-entropy failure."
+ },
+ {
+  "id": "emu-pkcert-nca20",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-public",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Pakistan's National CERT rates the eMudhra key compromise critical (NCA-20.211026)",
+  "summary": "National CERT Pakistan tells federal and provincial government bodies, critical infrastructure and banks to update trust stores and distrust the eight eMudhra intermediates. It warns that Java, Python, Node.js, Go binaries, containers and embedded systems are not fixed by browser updates.",
+  "sources": [
+   {
+    "url": "https://pkcert.gov.pk/advisory/26/20.pdf",
+    "publisher": "National CERT Pakistan",
+    "primary": true
+   },
+   {
+    "url": "https://pkcert.gov.pk/advisories.asp",
+    "publisher": "National CERT Pakistan",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Advisory ID NCA-20.211026, severity Critical. It also notes the 16 Sectigo cross-signed certificate instances as possible other trust paths. A later advisory, NCA-24.261026 (26 Oct, https://pkcert.gov.pk/advisory/26/24.pdf), on the Node.js October releases again names the eMudhra trust-store removal."
+ },
+ {
+  "id": "emu-mdsp-weak-key-monitoring",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-public",
+  "t": "2026-10-25T17:31:57Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "List post asks Mozilla and Chrome why no automated weak-key scan covered CCADB",
+  "summary": "A dev-security-policy post notes the weak keys were found by running the open-source paranoid_crypto tool out of the box against the CCADB corpus, after 18 months of disclosure. It asks both root programs whether they will scan every CA certificate at disclosure and at intervals.",
+  "sources": [
+   {
+    "url": "https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE",
+    "publisher": "Mozilla dev-security-policy",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Google Groups shows 25 Oct 2026, 10:31:57 AM in US Pacific time (PDT, UTC-7), converted to UTC. Thread 'Compromised eMudhra Intermediate Certificates'. Similar to the Bugzilla question in emu-chrome-paranoid-question, but on the list and put to both programs."
+ },
+ {
+  "id": "emu-mdsp-paranoid-archived",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-weak-key-monitoring",
+  "t": "2026-10-26T16:42:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "List post: Google archived paranoid_crypto, the tool that found the keys, in August",
+  "summary": "A dev-security-policy post points out that Google archived its paranoid_crypto repository on 19 August 2026. It asks whether Google will revive it, and whether Chrome has put the checks into its own monitoring.",
+  "sources": [
+   {
+    "url": "https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE",
+    "publisher": "Mozilla dev-security-policy",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/google/paranoid_crypto",
+    "publisher": "Google (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Google Groups shows '9:42 AM (6 hours ago)' on 26 Oct in US Pacific time, so about 16:42 UTC. The GitHub API reports the repository as archived (last push June 2025); the 19 August archive date comes from the post. No Google reply was posted as of about 23:00 UTC."
+ },
+ {
+  "id": "cairn-vulone-report",
+  "thread": "cairn",
+  "parent": "cairn-norforge-scan",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "VULONE: a Cairn-based platform got into 48 targets, Asian ministries among them",
+  "summary": "VULONE says an exposed server shows one China-linked, money-driven operator ran 66 Cairn projects on DeepSeek-backed agents from 24 Sep to 14 Oct, with 48 reaching some access. Named targets include ministries in Vietnam, Taiwan and Indonesia, India's C-DAC, Air India, Juspay and China Airlines.",
+  "sources": [
+   {
+    "url": "https://vulone.com/blog/a-china-linked-operator-used-ai-agents-to-attack-governments-across-asia",
+    "publisher": "VULONE",
+    "primary": true
+   },
+   {
+    "url": "https://securityonline.info/ai-driven-hacking-campaign-asia/",
+    "publisher": "SecurityOnline",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Marked reported because the victims have not confirmed the access claims, which come from the operator's own records. VULONE dates the post 19 Oct (byline 18 Oct). It finds no evidence of state sponsorship and says the operation is not proven to be the SOUL campaign that Gambit Security described on 22 Sep, which also used Cairn on DeepSeek v4.1 Flash."
  }
 ];

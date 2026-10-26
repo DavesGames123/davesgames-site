@@ -171,6 +171,8 @@ export const THREAD_NAMES = Object.freeze({
   giftee: "giftee e-gift mis-issue",
   'rakuten-travel': "Rakuten Travel booking sites",
   doutor: "Doutor Coffee staff data",
+  'daiwa-scala': "Daiwa Securities / Scala inquiry system",
+  resorttrust: "Resorttrust website",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
