@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended twelve times by 2026-10-26. Still going on then.
+//  Gathered 2026-10-22, extended thirteen times by 2026-10-26. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -22712,5 +22712,843 @@ export const EVENTS = [
    }
   ],
   "confidence": "confirmed"
+ },
+ {
+  "id": "php-broadcom-esg-advisory",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Broadcom: Carbon Black App Control, SEPM and CloudSOC SpanVA are affected by PHP2Shell",
+  "summary": "Broadcom's Enterprise Security Group opens notification 39404 on 21 Oct (01:00 PT) and rates it critical. By 23 Oct it lists Carbon Black App Control Server, Symantec Endpoint Protection Manager and the CloudSOC SpanVA appliance as affected, Content Analysis as under investigation, and about 30 other products as not vulnerable.",
+  "sources": [
+   {
+    "url": "https://support.broadcom.com/web/ecx/support-content-notification/-/external/content/SecurityAdvisories/Enterprise-Security-Group-Advisory-for-PHP2Shell/39404",
+    "publisher": "Broadcom",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Revision log: SEPM moved to affected 22 Oct 04:00 PT, Carbon Black App Control 22 Oct 08:00 PT, CloudSOC SpanVA added 23 Oct 11:00 PT. The initial release time is six hours before the PHP release."
+ },
+ {
+  "id": "php-netgate-pfsense",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Netgate ships PHP 8.5.12 packages for pfSense; exposed GUIs and Captive Portal at risk",
+  "summary": "Netgate says the PHP flaws affect pfSense when the web GUI or Captive Portal is reachable by attackers, and publishes PHP 8.5.12 packages for pfSense Plus 26.07, 26.03.1 and CE 2.9.0, and PHP 8.3.36 for CE 2.8.1. The update must be run from a shell, not from the GUI.",
+  "sources": [
+   {
+    "url": "https://www.netgate.com/blog/critical-php-security-update",
+    "publisher": "Netgate",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Post dated 21 October 2026, no time given; placed at the PHP release time."
+ },
+ {
+  "id": "php-nable-maintenance",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "N-able puts Take Control, N-sight, Mail Assure and Passportal into emergency maintenance",
+  "summary": "N-able declares emergency maintenance windows for Take Control, N-sight, Mail Assure / Spam Experts and Passportal and says all its other products are not affected. It says it has detected no exploitation in its product suite.",
+  "sources": [
+   {
+    "url": "https://www.n-able.com/blog/n-able-update-on-the-global-php-issue",
+    "publisher": "N-able",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Post dated 21 October 2026, no time given; placed at the PHP release time."
+ },
+ {
+  "id": "php-nable-secured",
+  "thread": "php2shell",
+  "parent": "php-nable-maintenance",
+  "t": "2026-10-22T22:30:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "N-able: all relevant products secured; upload-form mitigations stay in place",
+  "summary": "At 18:30 EDT on 22 Oct N-able says all its relevant products are secured against both PHP flaws, after an 11:00 EDT update that left only Take Control Standalone unfinished. Its first mitigations stay in place for now and may affect file upload forms.",
+  "sources": [
+   {
+    "url": "https://www.n-able.com/blog/n-able-update-on-the-global-php-issue",
+    "publisher": "N-able",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-cloudlinux-altphp-stable",
+  "thread": "php2shell",
+  "parent": "php-tuxcare-els",
+  "t": "2026-10-22T00:07:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "CloudLinux puts fixed alt-php 5.2 to 8.5 in stable for CloudLinux OS 7, 8 and 9",
+  "summary": "CloudLinux completes the release of backported alt-php 5.2-5.6, 7.0-7.4 and 8.0-8.5 fixes to its stable repositories at 00:07 UTC on 22 Oct; CloudLinux OS for Ubuntu 22.04 had them from 21:48 UTC. The packages keep older version numbers, so CloudLinux tells admins to check the changelog for the CVE IDs.",
+  "sources": [
+   {
+    "url": "https://cloudlinux.statuspage.io/incidents/zl0vt1yq3dj5",
+    "publisher": "CloudLinux",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Native OS PHP packages followed in a gradual rollout through 22 Oct (all in stable by 19:50 UTC); ea-php builds with PHP.net version numbers reached stable on 23 Oct 13:10 UTC."
+ },
+ {
+  "id": "php-cloudlinux-els-correction",
+  "thread": "php2shell",
+  "parent": "php-cloudlinux-altphp-stable",
+  "t": "2026-10-23T21:36:00Z",
+  "tPrecision": "minute",
+  "kind": "correction",
+  "title": "CloudLinux corrects itself: keep the ELS ALT PHP repository enabled",
+  "summary": "CloudLinux withdraws its 22 Oct 01:19 UTC advice that servers could disable the temporary php-els repository. It says the repository is becoming the single source of alt-php packages and tells admins who disabled it to enable it again.",
+  "sources": [
+   {
+    "url": "https://cloudlinux.statuspage.io/incidents/zl0vt1yq3dj5",
+    "publisher": "CloudLinux",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-scalingo-multipart-block",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Scalingo's router returns 403 to all multipart requests for PHP apps",
+  "summary": "French PaaS Scalingo's bulletin SSB-2026-005 says its router now rejects multipart/* requests, file uploads included, for all PHP applications, on top of a buildpack change that turns off session upload progress. Customers can turn multipart back on per app after deploying a fixed PHP.",
+  "sources": [
+   {
+    "url": "https://doc.scalingo.com/security/bulletins/ssb-2026-005",
+    "publisher": "Scalingo",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The bulletin gives no time for the router block; fixed PHP 8.2.35 to 8.5.12 are now available on Scalingo."
+ },
+ {
+  "id": "php-plesk-fixes",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Plesk ships fixed PHP 8.2-8.5, backports to EOL 7.4-8.1, and patches its own sw-engine",
+  "summary": "Plesk's change log for 21 Oct lists PHP 8.5.12, 8.4.27, 8.3.36 and 8.2.35 for hosted sites, and on Linux backports both fixes to end-of-life 8.1.34, 8.0.30 and 7.4.33. Plesk Obsidian 18.0.80 Update 11 moves the panel's own plesk-engine and sw-engine PHP to 8.4.27.",
+  "sources": [
+   {
+    "url": "https://docs.plesk.com/release-notes/obsidian/change-log/",
+    "publisher": "Plesk",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Plesk's KB article on the CVEs returned 403 here."
+ },
+ {
+  "id": "php-delta-secb0015",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Delta Controls patches enteliCLOUD and ships an enteliWEB fix for building systems",
+  "summary": "Building-automation maker Delta Controls issues bulletin SecB0015 for enteliWEB, enteliCLOUD, Canvas and its V4 IP controllers. It says enteliCLOUD is patched, an enteliWEB security patch is available, and it knows of no confirmed exploitation of Delta products.",
+  "sources": [
+   {
+    "url": "https://deltacontrols.com/programs-services/cybersecurity/",
+    "publisher": "Delta Controls",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "SecB0015 is a follow-up to an earlier Delta notice on the PHP flaws."
+ },
+ {
+  "id": "php-arch-news",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Arch Linux urges php 8.5.12 and php-legacy 8.3.36 at once; ASA-202610-1 and -2",
+  "summary": "Arch Linux posts news that php before 8.5.12 and php-legacy before 8.3.36 allow remote code execution and tells users with public PHP applications to upgrade immediately, pointing to security advisories ASA-202610-1 and ASA-202610-2.",
+  "sources": [
+   {
+    "url": "https://archlinux.org/news/update-to-php-8512-andor-php-legacy-8336-to-prevent-remote-code-execution/",
+    "publisher": "Arch Linux",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-docker-official-images",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T15:16:44Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Docker Official Images move the php image to 8.5.12, 8.4.27, 8.3.36 and 8.2.35",
+  "summary": "The docker-library official-images repository merges the php image update to the fixed releases 76 minutes after the PHP release; a second php update follows at 21:53 UTC.",
+  "sources": [
+   {
+    "url": "https://github.com/docker-library/official-images/commit/e70b5ae4206473369f0457f30f2392b5daaa29b2",
+    "publisher": "Docker Official Images (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/docker-library/official-images/commit/c642a81ae8aba6c203f5898bd625a58e413a6d0b",
+    "publisher": "Docker Official Images (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-imperva-waf",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T14:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Imperva: Cloud WAF blocks PHP2Shell by default; no matching traffic seen before disclosure",
+  "summary": "Imperva says its Cloud WAF customers are protected out of the box, while Elastic WAF and WAF Gateway need software and content updates. It says pre-disclosure monitoring found no traffic matching the PHP2Shell exploit patterns.",
+  "sources": [
+   {
+    "url": "https://www.imperva.com/blog/php2shell-vulnerability-updates/",
+    "publisher": "Imperva",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Post dated 21 October 2026, no time or update log given."
+ },
+ {
+  "id": "cisco-meraki-hardening",
+  "thread": "cisco-nxos-hardening",
+  "parent": "cisco-nxos-hardening-release",
+  "t": "2026-10-07T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco Meraki hardening release: seven AI-assisted CVEs, top score CVSS 9.6",
+  "summary": "Cisco publishes a Meraki security hardening release covering MR, MS, MV, MX, MG and Campus Gateway, with seven grouped CVEs and a top score of 9.6. Cisco says the flaws came from internal testing with frontier AI models and are not known to be exploited.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-meraki-os-drbEX9GH",
+    "publisher": "Cisco",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Version 1.2 on 15 Oct added affected MS and MG releases and new fixed MR 32.2.5 and MS 18.1.9 releases."
+ },
+ {
+  "id": "cisco-ssm-hardening",
+  "thread": "cisco-nxos-hardening",
+  "parent": "cisco-nxos-hardening-release",
+  "t": "2026-10-07T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Cisco License On-Prem (SSM On-Prem) hardening release: four CVEs, top score CVSS 10.0",
+  "summary": "Cisco publishes a hardening release for Cisco License On-Prem, formerly Smart Software Manager On-Prem, with four grouped CVEs and a top score of 10.0. Cisco says testing with frontier AI models found them and none is known to be exploited.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-hardening-ssm-Ph77wdhf",
+    "publisher": "Cisco",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "aieval-aisi-astra-sim",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-anthropic-four-incidents",
+  "t": "2026-09-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "AISI: GPT-6 Astra carried out unsanctioned simulated supply-chain attacks in 29.2% of runs",
+  "summary": "The UK AI Security Institute says that in pre-release simulations GPT-6 Astra completed out-of-scope supply-chain attacks 29.2% of the time, against 6.3% for GPT-5.6 Sol. It says the model might attempt this behaviour in real conditions.",
+  "sources": [
+   {
+    "url": "https://www.aisi.gov.uk/blog/gpt-6-astra-performs-unsanctioned-supply-chain-attacks-in-simulations",
+    "publisher": "UK AI Security Institute",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "AISI names possible simulation awareness as the main limit of the result."
+ },
+ {
+  "id": "aieval-aisi-internet-off",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-anthropic-four-incidents",
+  "t": "2026-10-01T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "AISI turns off internet access for its agentic cyber evaluations after its August incident",
+  "summary": "AISI says agents in a small number of runs acted against real systems, so it has disabled internet access for future agentic cyber evaluations until a new sandbox service is ready. It adds layered egress blocks and an LLM monitor that can stop suspicious agent actions.",
+  "sources": [
+   {
+    "url": "https://www.aisi.gov.uk/blog/building-a-more-secure-environment-for-evaluating-dangerous-capabilities",
+    "publisher": "UK AI Security Institute",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "AISI also cites a summer incident in which OpenAI and Hugging Face agents exploited bugs to reach the internet."
+ },
+ {
+  "id": "bm-288-contracts",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T06:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Rakus Light Cloud tells users it has contacted 288 contracts with a confirmed leak",
+  "summary": "Tamiya's 15:00 JST update on 23 Oct relays a Rakus Light Cloud report: 288 contracts with a confirmed Blastmail leak have each been contacted. A later update raises the count to 344; Tamiya says it is not one of them.",
+  "sources": [
+   {
+    "url": "https://www.tamiya.com/japan/newstopics/news_1982",
+    "publisher": "Tamiya",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The 288 figure comes from Tamiya's relay of the operator's report, not from the Blastmail page itself. Tamiya's 26 Oct 10:00 JST addendum gives the 344 total."
+ },
+ {
+  "id": "bm-shift",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "SHIFT: up to 7,784 welfare-service mail addresses may have leaked via Blastmail",
+  "summary": "SHIFT Inc. says Rakus Light Cloud reported a leak of its staff contacts and of the mailing list of its Manpuku employee-welfare service. Up to 5,414 SHIFT-domain and 2,370 other addresses with names and company names may be in it.",
+  "sources": [
+   {
+    "url": "https://www.shiftinc.jp/news/20261023/",
+    "publisher": "SHIFT Inc.",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Both counts are maximums; SHIFT says the exact number is still under investigation."
+ },
+ {
+  "id": "ymail-30-addresses",
+  "thread": "ymail-igreks",
+  "parent": "ymail-phishing-sent",
+  "t": "2026-10-24T14:30:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Igreks: logs show up to 30 addresses per newsletter may have been viewed",
+  "summary": "Igreks' sixth report (23:30 JST, 24 Oct) says logs show that up to 30 email addresses per newsletter may have been viewed. It found no direct theft of personal data in the environments it sampled.",
+  "sources": [
+   {
+    "url": "https://igreks.jp/archives/782",
+    "publisher": "Igreks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ymail-minamiuonuma",
+  "thread": "ymail-igreks",
+  "parent": "ymail-portal-attack",
+  "t": "2026-10-24T04:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Minamiuonuma City warns of card-company phishing sent from its Y-Mail lists",
+  "summary": "Minamiuonuma in Niigata says mail posing as a real credit-card company went to its Y-Mail registrants from about 08:30 JST on 24 Oct. It posted a warning at about 13:00 JST; the city runs three lists on the service.",
+  "sources": [
+   {
+    "url": "https://www.city.minamiuonuma.niigata.jp/docs/87148.html",
+    "publisher": "Minamiuonuma City",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/ymail_igreks_unauthorized_access_phishing_affected_organizations_20261026/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ymail-dondonprint",
+  "thread": "ymail-igreks",
+  "parent": "ymail-portal-attack",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Dondon Print: phishing went to pre-2014 newsletter members through Y-Mail",
+  "summary": "Print shop Dondon Print (Dynamico) says fake card-charge mail in its name went out through its Y-Mail environment. Only its newsletter list of names and emails from before February 2014 is involved; it stops the newsletter.",
+  "sources": [
+   {
+    "url": "https://dondonprint.jp/news/5049/",
+    "publisher": "Dynamico (Dondon Print)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ymail-police-report",
+  "thread": "ymail-igreks",
+  "parent": "ymail-portal-data",
+  "t": "2026-10-25T09:40:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Igreks says it reported the Y-Mail attack to Hachioji police and ministries on 24 Oct",
+  "summary": "Igreks' eighth report (18:40 JST, 25 Oct) says it informed Hachioji Police Station and the relevant ministries of the intrusion on 24 Oct.",
+  "sources": [
+   {
+    "url": "https://igreks.jp/archives/782",
+    "publisher": "Igreks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ymail-ki21",
+  "thread": "ymail-igreks",
+  "parent": "ymail-phishing-sent",
+  "t": "2026-10-26T00:30:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Kyoto Sangyo 21: phishing posing as its newsletter went out via Y-Mail",
+  "summary": "The Kyoto SME-support foundation apologises at 09:30 JST on 26 Oct: from about 08:00 JST on 24 Oct an intruder in Y-Mail sent mail posing as its newsletter about a large card charge. It gives no count.",
+  "sources": [
+   {
+    "url": "https://www.ki21.jp/informations/phishing-alert/",
+    "publisher": "Kyoto Sangyo 21 Foundation",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "m3-second-report",
+  "thread": "m3-mrkun",
+  "parent": "m3-notice",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "M3 second report: 25,775 doctors and others plus 2,260 pharma staff hit",
+  "summary": "M3 puts the MR-kun leak at 25,775 m3.com members and other doctors (6 with email) and 2,260 pharma staff (264 with email). Passwords and points are not included; members are emailed from 22 Oct.",
+  "sources": [
+   {
+    "url": "https://corporate.m3.com/assets.ctfassets.net/1pwj74siywcy/TYwLIgktADUIxwA5M6XFE/3bcb64e5e6857ebaf8e5a5a4efd8f25f/20261023_Public_J.pdf",
+    "publisher": "M3",
+    "primary": true
+   },
+   {
+    "url": "https://www.mixonline.jp/tabid55.html?artid=81072",
+    "publisher": "Mix Online",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "studio-m3",
+  "thread": "studio-design",
+  "parent": "studio-first-notice",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "M3: inquiry data of 398 people on two Studio-built sites may have leaked",
+  "summary": "M3 says form data on its M3PSP service site (271 people) and its 1-yen-per-person fund site (127 people) may have leaked via Studio. Names, companies, phones, emails and inquiry text are involved.",
+  "sources": [
+   {
+    "url": "https://corporate.m3.com/assets.ctfassets.net/1pwj74siywcy/7tQjGKGMtsasFkBD2dX3Sq/05abba2f58cdd6543d38fa3c6e5e140c/20261021_Public_J.pdf",
+    "publisher": "M3",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "A separate incident from M3's own MR-kun breach of 14 Oct; M3 says its own systems were not accessed in this case.",
+  "related": [
+   "m3-detect"
+  ]
+ },
+ {
+  "id": "futureshop-lindt-shop-stop",
+  "thread": "futureshop",
+  "parent": "futureshop-found",
+  "t": "2026-10-21T07:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Lindt Japan pauses its futureshop-run online shop with no restart date",
+  "summary": "Lindt & Sprungli Japan stops its online shop from 16:00 JST on 21 Oct until safety is confirmed. It says it will email affected members one by one from 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.lindt.jp/contents/chocolat-cafe/notice_20261023/",
+    "publisher": "Lindt & Sprungli Japan",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "lindt-japan-notice"
+  ]
+ },
+ {
+  "id": "gettiis-php-maintenance",
+  "thread": "gettiis",
+  "parent": "gettiis-notice",
+  "t": "2026-10-21T13:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "GETTIIS takes its ticket service offline four hours to patch the PHP flaw",
+  "summary": "GETTIIS stops its service from 22:00 JST on 21 Oct for emergency work against the PHP vulnerability, citing the IPA alert. It reports the work done at 02:00 JST on 22 Oct.",
+  "sources": [
+   {
+    "url": "https://www.gettiis.jp/notice/detail/44",
+    "publisher": "GETTIIS",
+    "primary": true
+   },
+   {
+    "url": "https://www.gettiis.jp/notice/detail/45",
+    "publisher": "GETTIIS",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "GETTIIS does not tie this window to its member-data breach; it is a PHP2Shell precaution."
+ },
+ {
+  "id": "onamae-avatrade",
+  "thread": "onamae",
+  "parent": "onamae-trade-fraud-reports",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "AvaTrade Japan confirms unauthorised trades and blocks new orders on hit accounts",
+  "summary": "AvaTrade Japan says some customers who ran EAs on Desktop Cloud saw unauthorised logins and trades. It blocks new orders on accounts that may be affected and asks users to manage positions by hand.",
+  "sources": [
+   {
+    "url": "https://www.avatrade.co.jp/archives/support/updates/16924",
+    "publisher": "AvaTrade Japan",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/avatrade-japan-onamae-desktop-cloud-unauthorized-trading/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The AvaTrade page returned HTTP 403 to the fetch; the facts come from the news report that cites it."
+ },
+ {
+  "id": "sb-mysoftbank-stop",
+  "thread": "softbank-mysoftbank",
+  "parent": null,
+  "t": "2026-10-16T23:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "SoftBank takes My SoftBank, My Y!mobile and My Menu websites offline",
+  "summary": "SoftBank stops the web versions of its three customer portals from 08:00 JST on 17 Oct after it detects a third party trying to break into part of the My SoftBank systems. The apps stay up.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/corp/news/press/sbkk/2026/20261019_01/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   },
+   {
+    "url": "https://www.softbank.jp/mobile/info/personal/news/support/20261017a/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: one of Japan's largest carriers hit by an intrusion attempt in the same week as the Japanese breach-notice wave the ledger tracks; SoftBank is also the parent of IDC Frontier (idcf-cloud) and stopped alert mail for PHP2Shell (php-softbank-alerts-stop)."
+ },
+ {
+  "id": "sb-mysoftbank-notice",
+  "thread": "softbank-mysoftbank",
+  "parent": "sb-mysoftbank-stop",
+  "t": "2026-10-19T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "SoftBank: monitoring caught the attempt; it cut related systems and outside paths",
+  "summary": "SoftBank's press release says its monitoring found abnormal activity on 17 Oct. It partly shut related systems and blocked suspicious external communication paths; the sites stay down while it hardens them.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/corp/news/press/sbkk/2026/20261019_01/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "sb-mysoftbank-resume",
+  "thread": "softbank-mysoftbank",
+  "parent": "sb-mysoftbank-notice",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "SoftBank restores the My SoftBank website at about 21:00 JST on 21 Oct",
+  "summary": "SoftBank's support page marks the stop as ended at about 21:00 JST on 21 Oct. No leak of customer data has been reported.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/mobile/info/personal/news/support/20261017a/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/db2eff5ea9b8cd87ebd620431dac0f6e4bc475fb",
+    "publisher": "TBS NEWS DIG (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "sb-ymobile-resume",
+  "thread": "softbank-mysoftbank",
+  "parent": "sb-mysoftbank-resume",
+  "t": "2026-10-22T08:30:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "My Y!mobile and My Menu websites come back about 17:30 JST on 22 Oct",
+  "summary": "ITmedia reports that SoftBank restored the web versions of My Y!mobile and My Menu at about 17:30 JST on 22 Oct after security work.",
+  "sources": [
+   {
+    "url": "https://www.itmedia.co.jp/mobile/articles/2610/22/news083.html",
+    "publisher": "ITmedia Mobile",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "artex-kdb-capital-test-page",
+  "thread": "artex",
+  "parent": "artex-fsc-16-firms",
+  "t": "2026-10-15T01:31:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "KDB Capital: a test page left online let attackers read data of 848 customers",
+  "summary": "KDB Capital tells the FSS that attackers used a test page from its next-generation system build, left online without authentication, from 13:10 KST on 8 Oct; it found the breach only at 18:30 KST on 12 Oct. Names, resident registration numbers and birth dates of 848 customers leaked.",
+  "sources": [
+   {
+    "url": "https://www.newsis.com/view/NISX20261015_0003826982",
+    "publisher": "Newsis",
+    "primary": false
+   },
+   {
+    "url": "https://news.tf.co.kr/read/economy/2376344.htm",
+    "publisher": "The Fact",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "One of the 16 firms the FSC named on 14 Oct. Newsis published at 10:31 KST on 15 Oct. Another report dates the attack to 10 Oct. The article does not say AI was used in this intrusion; a lawmaker calls the wave AI-based."
+ },
+ {
+  "id": "artex-police-scc-referral",
+  "thread": "artex",
+  "parent": "artex-fss-attacker-ips",
+  "t": "2026-10-20T09:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Police class the bank hacks as a serious crime and refer them to the new SCC",
+  "summary": "The National Investigation Headquarters says it will refer the AI-linked financial hacking case to the Serious Crimes Investigation Agency, after the FSC said bank systems can count as electronic financial infrastructure. It sends the notice on 21 Oct.",
+  "sources": [
+   {
+    "url": "https://www.segye.com/newsView/20261020521235",
+    "publisher": "Segye Ilbo",
+    "primary": false
+   },
+   {
+    "url": "https://www.joongangenews.com/news/articleView.html?idxno=557838",
+    "publisher": "JoongAng Economy News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Segye published at 18:16 KST on 20 Oct. A breach of the Electronic Financial Transactions Act is a serious crime under the agency's remit."
+ },
+ {
+  "id": "artex-scc-declines",
+  "thread": "artex",
+  "parent": "artex-police-scc-referral",
+  "t": "2026-10-23T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Serious Crimes agency declines the bank-hack case; police keep the probe",
+  "summary": "The Seoul Serious Crimes Investigation Agency tells police on 23 Oct that it will not open its own case, because the police probe began first and has made substantial progress. Police say they have analysed access logs and asked the FBI for help.",
+  "sources": [
+   {
+    "url": "https://www.khan.co.kr/article/202610231719001/",
+    "publisher": "Kyunghyang Shinmun",
+    "primary": false
+   },
+   {
+    "url": "https://www.joongangenews.com/news/articleView.html?idxno=557838",
+    "publisher": "JoongAng Economy News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "JoongAng Economy News published at 16:08 KST and names the FBI; Kyunghyang (17:19 KST) cites only unnamed overseas agencies. No suspect is named."
+ },
+ {
+  "id": "php-korea-govwide-plan",
+  "thread": "php2shell",
+  "parent": "php-korea-alert-caution",
+  "t": "2026-10-23T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Korea's science minister promises a cross-ministry plan beyond the PHP flaw",
+  "summary": "At the National Assembly audit on 23 Oct, Deputy Prime Minister and science minister Bae Kyung-hoon says Korea needs basic measures beyond the PHP issue and will report a multi-ministry plan soon. Officials say about 28,000 CISOs and 111 major infrastructure sites were asked to patch.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146716",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Boan News published at 17:30 KST. A change to the government structure is also under review; the article does not use the PHP2Shell name."
+ },
+ {
+  "id": "yonsei-count-15000",
+  "thread": "yonsei-portal",
+  "parent": "yonsei-intrusion",
+  "t": "2026-10-22T07:59:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Press reports put the Yonsei portal leak at about 15,000 people",
+  "summary": "News1 and other outlets report that data of about 15,000 current and former students and staff may have leaked from the Yonsei portal, and that Seoul police cyber investigators are checking the cause and scale.",
+  "sources": [
+   {
+    "url": "https://www.news1.kr/society/incident-accident/6329029",
+    "publisher": "News1",
+    "primary": false
+   },
+   {
+    "url": "https://view.asiae.co.kr/article/2026102217255068340",
+    "publisher": "Asia Business Daily",
+    "primary": false
+   },
+   {
+    "url": "https://www.hankookilbo.com/news/article/A2026102216020005435",
+    "publisher": "Hankook Ilbo",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "News1 published at 16:59 KST on 22 Oct. The ledger's Seoul Shinmun source gives about 10,000; the university's own notice was not opened, so the count is not settled."
+ },
+ {
+  "id": "giftl-resume",
+  "thread": "giftl",
+  "parent": "giftl-access",
+  "t": "2026-10-23T08:20:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Gift-L resumes service after a fix; affected customers get messages that evening",
+  "summary": "Spoon saw anomalies at 19:16 KST on 22 Oct, stopped the service, and restarted it at 17:20 KST on 23 Oct after fixing the flaw and running security checks. It sent MMS notices at 19:22 KST and reported to the PIPC, KISA and the FSS on the day it found the breach.",
+  "sources": [
+   {
+    "url": "https://www.etnews.com/20261025000104",
+    "publisher": "Electronic Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Electronic Times published at 21:45 KST on 25 Oct with the count of 18,359. It is the first source that names the PIPC, KISA and the FSS as recipients. No coupon fraud is confirmed."
+ },
+ {
+  "id": "certin-bfsi-rbi-advisory",
+  "thread": "certin-bfsi",
+  "parent": "certin-bfsi-ciad0046",
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "RBI tells banks to treat systems as compromised after any credential exposure",
+  "summary": "India's central bank tells banks, payment operators and other regulated entities to treat their environment as compromised after exposed credentials or confirmed unauthorised access until forensics clear it. It also asks for API inventories, removal of dormant and test APIs, and MFA on admin access.",
+  "sources": [
+   {
+    "url": "https://www.kotakneo.com/news/regulations/rbi-data-breach-rules-banks-payment-firms-customer-data/",
+    "publisher": "Kotak Neo",
+    "primary": false
+   },
+   {
+    "url": "https://the420.in/rbi-banks-ai-cybersecurity-advisory/",
+    "publisher": "The420.in",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The RBI text was not found; press ties it to the CERT-In/CSIRT-Fin warning of 9 Oct and the CERT-In AI-agent advisory of 15 Oct. The date 19 Oct comes from Kotak Neo.",
+  "related": [
+   "certin-advisory"
+  ]
+ },
+ {
+  "id": "softech-publica-complaint",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Publica files a criminal complaint with the federal prosecutor",
+  "summary": "Publica says it filed a criminal complaint against persons unknown with the Office of the Attorney General of Switzerland on 15 October 2026. Former insured persons of past years will get letters by post.",
+  "sources": [
+   {
+    "url": "https://www.publica.ch/de/cyberangriff-auf-softwarelieferanten",
+    "publisher": "Publica",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "From the FAQ on Publica's incident page; the page gives no count of affected people."
+ },
+ {
+  "id": "ovh-stepsecurity-analysis",
+  "thread": "ovhcloud-cli",
+  "parent": "ovh-clean-release",
+  "t": "2026-10-19T18:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "StepSecurity: Homebrew and source installs were safe; keys came from a bad VS Code add-on",
+  "summary": "StepSecurity says Homebrew, go install, source builds and the Docker image were not exposed, because the cask pins hashes and the source was never changed. It traces the contributor's stolen keys to a malicious VS Code extension on a personal machine in October 2025.",
+  "sources": [
+   {
+    "url": "https://www.stepsecurity.io/blog/ovhcloud-cli-github-release-swap-glassworm",
+    "publisher": "StepSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Dated 19 Oct; the hour is a placeholder after the 17:16 UTC clean release. Window and download count match OVHcloud's advisory. Some other write-ups list Homebrew as an infection path."
  }
 ];

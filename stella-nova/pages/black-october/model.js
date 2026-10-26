@@ -164,6 +164,7 @@ export const THREAD_NAMES = Object.freeze({
   'tokai-tlc': "TOKAI TLC member services",
   'douzone-smarta': "Douzone Bizon Smart A 10",
   'kf-mailer': "Korea Foundation mailer",
+  'softbank-mysoftbank': "My SoftBank access attempt",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
