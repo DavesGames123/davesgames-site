@@ -190,10 +190,12 @@ export function spanOf(t, prec) {
 // no free angle, an event with a day or hour stamp tries other rings inside
 // its span (never nearer the centre than its parent), nearest ring first.
 function placeNode(t, e, p, th, nodes, radiusOf, tw, rand, o) {
-  const r0 = radiusOf(t), a0 = p ? p.a : (th.a0 + th.a1) / 2;
+  const [s0, s1] = spanOf(t, e.tPrecision), a0 = p ? p.a : (th.a0 + th.a1) / 2;
+  // A parent that moved out inside its span pulls the child out with it.
+  let r0 = radiusOf(t);
+  if (p && t >= tw && p.r > r0) r0 = Math.min(p.r, radiusOf(s1));
   let a = placeAngle(r0, a0, th, nodes, rand, o);
   if (placeAngle.room >= o.minGap || t < tw) return [r0, a];
-  const [s0, s1] = spanOf(t, e.tPrecision);
   const lo = Math.max(radiusOf(Math.max(s0, tw)), p ? p.r : 0), hi = radiusOf(s1);
   let best = [r0, a], bestRoom = placeAngle.room;
   const n = Math.min(24, Math.floor((hi - lo) / (o.minGap * 0.5)));
