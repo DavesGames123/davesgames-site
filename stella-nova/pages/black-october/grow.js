@@ -152,6 +152,11 @@ export function sectors(threads, o) {
   // th.need (optional): the least width that the thread's crowded ring
   // asks for. A thread under its need gets the need, and the other threads
   // share what is left by weight.
+  // Needs are scaled down when the width they add over the weights would
+  // take more than half of the room, so a sector never goes to a hair.
+  const extra = threads.reduce((acc, th, i) => acc + Math.max(0, (th.need || 0) - room * w[i] / sum), 0);
+  const k = extra > room / 2 ? room / 2 / extra : 1;
+  threads.forEach(th => { th.need = (th.need || 0) * k; });
   const width = w.map(x => room * x / sum), fixed = new Set();
   for (let pass = 0; pass < threads.length; pass++) {
     const free = room - [...fixed].reduce((acc, i) => acc + width[i], 0);
@@ -335,17 +340,21 @@ export function layout(events, opts = {}) {
     const th = byThread.get(e.thread);
     th.count++;
     if (e.parent == null) { th.root = e.id; th.t = t; }
-    if (t >= tw && e.tPrecision === 'minute') (th.rs ||= []).push(radiusOf(t));
+    if (t >= tw) (th.rs ||= []).push([radiusOf(t), e.tPrecision === 'minute' ? 1 : 0]);
   }
-  // A minute stamp cannot leave its ring. Events of one thread that fall on
-  // nearly one ring must sit side by side: k of them need (k + 1) minGap of arc.
+  // A minute stamp cannot leave its ring. A day or hour stamp tries its own
+  // ring first and moves out only when that ring is full. So m minute
+  // events of one thread on nearly one ring, plus one day or hour event if
+  // there is one, must sit side by side: k of them need (k + 1) minGap of arc.
   for (const th of byThread.values()) {
-    const rs = (th.rs || []).sort((a, b) => a - b);
+    const rs = (th.rs || []).sort((a, b) => a[0] - b[0]);
     let need = 0;
     for (let i = 0, j = 0; i < rs.length; i++) {
-      while (rs[i] - rs[j] >= o.minGap) j++;
-      const k = i - j + 1;
-      if (k > 1) need = Math.max(need, (k + 1) * o.minGap / rs[j]);
+      while (rs[i][0] - rs[j][0] >= o.minGap) j++;
+      let m = 0;
+      for (let q = j; q <= i; q++) m += rs[q][1];
+      const k = m + (m < i - j + 1 ? 1 : 0);
+      if (m && k > 1) need = Math.max(need, (k + 1) * o.minGap / rs[j][0]);
     }
     th.need = need; delete th.rs;
   }
