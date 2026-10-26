@@ -1,0 +1,13 @@
+Correct body for 2d603d1b (its committed body is an unfinished placeholder; the event and thread counts in it are wrong):
+
+The Black October ledger (data/events.js) grows from 1055 events in 143 threads to 1096 events in 144 threads. Three research agents checked for new items after 04:00Z on 26 Oct and found few, then filled gaps from earlier in October. The model.js THREAD_NAMES table gets softbank-mysoftbank.
+
+The user wrote 'update again!'. Main additions: twelve PHP2Shell vendor and host responses that the NCSC-NL tracker lists and the ledger lacked (Broadcom, Netgate pfSense, N-able, CloudLinux, Scalingo, Plesk, Delta Controls, Arch Linux, the Docker php image, Imperva), the Cisco Meraki and Smart Software Manager hardening releases of 7 Oct, two AISI evaluation events, Blastmail and Y-Mail customer notices, M3's second report, the My SoftBank intrusion attempt, and the Korean finance-wave police steps.
+
+The AISI event of 28 Sep falls before the window. So the tests.mjs pins move: the before-October band goes from 72 to 73 events, and revealCount at the window start from 73 to 74.
+
+Validation:
+  node tools/check-events.mjs -> layout: 1096 nodes, 952 edges, 25 day rings / ok
+  node tests.mjs -> 160 passed, 0 failed
+  node import of main.js -> ReferenceError document is not defined
+No browser ran.
