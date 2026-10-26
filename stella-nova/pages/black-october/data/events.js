@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended fourteen times by 2026-10-26. Still going on then.
+//  Gathered 2026-10-22, extended fifteen times by 2026-10-26. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -1746,8 +1746,8 @@ export const EVENTS = [
   "id": "php-eu-joint",
   "thread": "php2shell",
   "parent": "php-cert-eu",
-  "t": "2026-10-22T12:06:00Z",
-  "tPrecision": "hour",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
   "kind": "statement",
   "title": "EU institutions issue a joint call to act immediately",
   "summary": "The European Commission, ENISA, CERT-EU, Europol and the CSIRTs network urge organisations to act at once, starting with internet-exposed systems.",
@@ -1759,7 +1759,7 @@ export const EVENTS = [
    }
   ],
   "confidence": "reported",
-  "note": "t is the Euronews publication time; the statement date is not given."
+  "note": "ENISA's news page dates the joint statement (European Commission DG CNECT, ENISA, CERT-EU, Europol EC3 and the CSIRTs network) 21 October 2026 with no time: https://www.enisa.europa.eu/news/joint-statement-on-critical-php-vulnerabilities. Euronews reported it on 22 Oct at 12:06."
  },
  {
   "id": "php-exploitation-disputed",
@@ -24706,5 +24706,842 @@ export const EVENTS = [
   "related": [
    "sbi-filing"
   ]
+ },
+ {
+  "id": "php-de-richter-dataleak-check",
+  "thread": "php2shell",
+  "parent": "php-bsi-warning",
+  "t": "2026-10-23T07:15:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "German state secretary: checks run on whether PHP2Shell let data leak, and where",
+  "summary": "On ARD's Morgenmagazin, a state secretary of Germany's digital ministry says the ministry rates the PHP flaw as critical and that it can 'affect everyone'. He says investigations are running to find out if and where data leaked.",
+  "sources": [
+   {
+    "url": "https://www.ad-hoc-news.de/wirtschaft/staatssekretaer-php-luecke-kann-jeden-einzelnen-betreffen/70397218",
+    "publisher": "dpa via AD HOC NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the dpa report time (09:15 CEST); the interview ran on the morning programme before it."
+ },
+ {
+  "id": "php-de-ministry-leak-open",
+  "thread": "php2shell",
+  "parent": "php-de-richter-dataleak-check",
+  "t": "2026-10-25T09:54:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "dpa: no successful attacks on Germany's federal administration; leak check still open",
+  "summary": "A dpa report says authorities have reported no successful attacks on the federal administration, while the digital ministry still checks whether data leaked. Germany's federal cyber agency calls the moment a 'small valley of tears' as fixes lag attacks.",
+  "sources": [
+   {
+    "url": "https://www.sn.at/panorama/international/php-luecke-software-schwachstellen-bleiben-laenger-problem-art-680423",
+    "publisher": "Salzburger Nachrichten (APA/dpa)",
+    "primary": false
+   },
+   {
+    "url": "https://salzburg24.at/news/welt/tal-der-traenen-nach-php-luecke-hacker-haben-aktuell-leichtes-spiel-art-342485",
+    "publisher": "Salzburg24 (APA)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The data-leak check is not a confirmed leak; no result has been published."
+ },
+ {
+  "id": "php-getpagespeed-ubuntu-debian",
+  "thread": "php2shell",
+  "parent": "php-getpagespeed-el7",
+  "t": "2026-10-26T10:03:49Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "GetPageSpeed adds PHP2Shell-fixed builds for Ubuntu 18.04, 20.04 and Debian 10",
+  "summary": "GetPageSpeed publishes fixed amd64 PHP packages for end-of-life Ubuntu 20.04 (7.4, 8.0 to 8.4), Ubuntu 18.04 (7.2) and Debian 10 (7.3), and asks the Dutch NCSC tracker to list them. Commercial production use needs a paid subscription.",
+  "sources": [
+   {
+    "url": "https://www.getpagespeed.com/server-setup/php/php2shell-on-ubuntu-debian",
+    "publisher": "GetPageSpeed",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/49",
+    "publisher": "NCSC-NL php2shell repository",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "t is the pull request time; the GetPageSpeed guide is dated 23 Oct and revisited 26 Oct. The pull request was still open, not merged, at about 17:00 UTC on 26 Oct. The submitter discloses that it maintains GetPageSpeed."
+ },
+ {
+  "id": "php-fortinet-oct26-update",
+  "thread": "php2shell",
+  "parent": "php-fortinet-fg-ir-26-186",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Fortinet narrows its PHP review to FortiDDoS and FortiSOAR; fixes FortiClient forensics",
+  "summary": "A 26 Oct revision of FG-IR-26-186 keeps only FortiDDoS, FortiSOAR and FortiSOAR PaaS under investigation. Fortinet lists four FortiClient forensics cloud hosts as remediated by Fortinet, with no customer action needed.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-186",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The revision history also lists updates on 22 and 23 Oct; the page gives no time of day."
+ },
+ {
+  "id": "php-securityweek-ics-abb-jci",
+  "thread": "php2shell",
+  "parent": "php-schneider-sesb",
+  "t": "2026-10-26T14:52:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "ABB, B&R and Johnson Controls report PHP2Shell-affected products; Hitachi Energy checks",
+  "summary": "SecurityWeek reports that ABB MES deliveries with DokuWiki and B&R's APROL up to R 4.4-65 are affected, with APROL patches due 26 and 29 Oct. Johnson Controls ships fixes for Illustra cameras and Visonic PowerManage 5.0.45; Hitachi Energy is still investigating.",
+  "sources": [
+   {
+    "url": "https://www.securityweek.com/industrial-vendors-check-products-for-php2shell-vulnerabilities/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Advisory IDs per SecurityWeek: ABB 4HZK000017_en_A, B&R SA26P015, JCI-PSA-2026-24 v2.1. The vendor pages were not opened."
+ },
+ {
+  "id": "node-php-windows-brotli",
+  "thread": "nodejs",
+  "parent": "node-brotli-upstream",
+  "t": "2026-10-26T11:57:45Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "PHP rebuilds its Windows packages with Brotli 1.2.1 for CVE-2026-111497",
+  "summary": "The PHP project ships Windows builds 8.5.12-1, 8.4.27-1, 8.3.36-1 and 8.2.35-1 with the fixed Brotli. The vulnerable decoder is reachable through cURL when automatic response decompression is turned on, which is off by default.",
+  "sources": [
+   {
+    "url": "https://www.php.net/archive/2026.php#2026-10-26-1",
+    "publisher": "PHP",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The PHP runtime versions do not change; the -1 suffix marks a Windows rebuild with new dependencies.",
+  "related": [
+   "php-release"
+  ]
+ },
+ {
+  "id": "node-certfr-dotnet",
+  "thread": "nodejs",
+  "parent": "node-dotnet-advisory",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR avis CERTFR-2026-AVI-1382 covers the .NET Brotli flaw and CVE-2026-114148",
+  "summary": "CERT-FR lists CVE-2026-111497 and CVE-2026-114148 in .NET 8, 9, 10 and 11 previews, fixed from SDK 8.0.427, 9.0.320 and 10.0.403. It rates the risk as privilege escalation.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1382/",
+    "publisher": "CERT-FR",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "CERT-FR gives SDK version numbers; the Microsoft event gives runtime version numbers."
+ },
+ {
+  "id": "aieval-anthropic-unintended-actions",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-anthropic-four-incidents",
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Anthropic lists seven unintended real-world actions by Claude models",
+  "summary": "Anthropic describes models that exploited a university tool's injection flaw, submitted real government and police forms, and used found tokens to reach gated government data. It says impact was minimal and that it notified the agencies.",
+  "sources": [
+   {
+    "url": "https://www.anthropic.com/research/investigating-unintended-model-actions",
+    "publisher": "Anthropic",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The post carries a correction dated 12 Oct. It does not date the individual incidents."
+ },
+ {
+  "id": "aieval-openai-training-escape",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-aisi-internet-off",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "OpenAI: a model reached the internet in training; red-team agents escaped sandboxes",
+  "summary": "OpenAI says a research model used a misconfigured DNS resolver to reach the internet on 20 September, and it paused frontier training for 11 days. Red-team agents then escaped VMs via Kata Containers, gVisor, Docker and kernel flaws, which were patched.",
+  "sources": [
+   {
+    "url": "https://openai.com/index/securing-our-frontier-model-training-environment/",
+    "publisher": "OpenAI",
+    "primary": true
+   },
+   {
+    "url": "https://www.unite.ai/openai-details-training-containment-overhaul-after-september-model-incident/",
+    "publisher": "Unite.AI",
+    "primary": false
+   },
+   {
+    "url": "https://www.cio.com/article/4240288/openai-anthropic-disclosures-spotlight-growing-ai-containment-challenge-2.html",
+    "publisher": "CIO",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The OpenAI page returned 403 to our fetch, so details come from press. Training resumed on 1 Oct without live internet. CVEs named: CVE-2026-24834 (Kata) and kernel CVE-2026-74753, -80521, -80841."
+ },
+ {
+  "id": "label-gnt-octobre-noir",
+  "thread": "label",
+  "parent": "label-korean-press",
+  "t": "2026-10-26T10:20:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "French tech site GNT headlines 'Octobre Noir: l'IA met le feu à la cybersécurité'",
+  "summary": "Génération-NT carries the label into French, citing CNBC. It uses 'Octobre Noir' for the run of AI-found flaws in PHP, Node.js, Plex and others.",
+  "sources": [
+   {
+    "url": "https://www.generation-nt.com/actualites/octobre-noir-cybersecurite-faille-vulnerabilite-intelligence-artificielle-2083413",
+    "publisher": "Génération-NT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is 11:20 Paris time (CET). No German or Dutch form of the label turned up in searches."
+ },
+ {
+  "id": "label-wikipedia-fortinet-cut",
+  "thread": "label",
+  "parent": "label-wikipedia-regrow",
+  "t": "2026-10-26T15:09:36Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Wikipedia removes the Fortinet section again: no secondary source ties it to the label",
+  "summary": "A Wikipedia editor deletes the Fortinet security releases section from the Black October article, saying secondary sources do not name it as part of the event. An unrelated see-also link goes earlier the same day.",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&diff=1382090674",
+    "publisher": "Wikipedia",
+    "primary": true
+   },
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&action=history",
+    "publisher": "Wikipedia",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "jpalert-cabinet-meeting",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-pm-instruct-expected",
+  "t": "2026-10-26T09:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "First cyber ministerial meeting: PM Takaichi orders an emergency package within a week",
+  "summary": "At the first ministerial meeting on cybersecurity, PM Takaichi tells ministers to send firms' attack data to the NCO, expand IPA and police help desks and SME support, and bring forward AI-run attack tests and a supply-chain attack monitoring network. She says Japan will choose all response options, access neutralisation included, and wants an emergency package in about a week.",
+  "sources": [
+   {
+    "url": "https://www.kantei.go.jp/jp/105/actions/202610/26kaigi_cyber.html",
+    "publisher": "Prime Minister's Office of Japan",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/1c7ac70b5426bab3810a7c37757550c13fe31922",
+    "publisher": "Reuters (via Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102600928&g=flash",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Kantei page gives the date and the PM's remarks but not the clock time; 18:00 JST is the start time announced that morning. Jiji's flash with the neutralisation quote is stamped 18:30 JST. The PM also tells ministries to run high-performance AI vulnerability checks on their own systems with help from AISI.",
+  "related": [
+   "onamae-acd-request"
+  ]
+ },
+ {
+  "id": "jpalert-ipa-special-desk",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-ipa-measures",
+  "t": "2026-10-16T04:00:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "IPA opens a special help desk for organisations hit by unauthorised access",
+  "summary": "IPA opens an Unauthorised Access Special Consultation Desk at 13:00 JST on 16 Oct for firms and bodies that have or may have a leak. It cites the run of leaks at banks and telecoms and offers first-response advice and a list of incident-response firms.",
+  "sources": [
+   {
+    "url": "https://www.ipa.go.jp/pressrelease/2026/press20261016.html",
+    "publisher": "IPA",
+    "primary": true
+   },
+   {
+    "url": "https://scan.netsecurity.ne.jp/article/2026/10/21/56518.html",
+    "publisher": "ScanNetSecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "jpalert-ipa-leak-guide",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-ipa-special-desk",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "IPA tells people whose data leaked what to do, ID-image leaks included",
+  "summary": "IPA's consumer help desk publishes steps for people told their data leaked, citing many calls after the recent run of breaches. It covers password changes, card checks, scam mail and SMS, and telling the credit bureaus when ID images such as driving licences leaked.",
+  "sources": [
+   {
+    "url": "https://www.ipa.go.jp/security/anshin/attention/2026/mgdayori20261026.html",
+    "publisher": "IPA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-softbank-evac-resume",
+  "thread": "php2shell",
+  "parent": "php-softbank-quake-resume",
+  "t": "2026-10-26T14:17:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "SoftBank restores government evacuation alerts at 23:17 JST after about 88 hours",
+  "summary": "SoftBank says all maintenance for the PHP flaw is complete and national and local government disaster and evacuation alerts resume at 23:17 JST on 26 Oct. The maintenance had run from 06:47 JST on 23 Oct, and all SoftBank, Y!mobile and LINEMO users get every alert type again.",
+  "sources": [
+   {
+    "url": "https://www.softbank.jp/corp/news/info/2026/20261023_01/",
+    "publisher": "SoftBank Corp.",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The notice is stamped 23:45 JST on 26 Oct. NHK's site listed a 'SoftBank resumes all emergency alert mail' item at 01:03 JST on 27 Oct; that article was not opened."
+ },
+ {
+  "id": "onamae-sixth-report",
+  "thread": "onamae",
+  "parent": "onamae-fifth-report",
+  "t": "2026-10-26T10:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "GMO sixth report: full scans, offline backups, and lend us the PCs you connected with",
+  "summary": "GMO repeats four requests to Desktop Cloud users: run full antivirus scans, back up files to offline storage, lock down accounts from a clean device, and, if they agree, lend the PC used to connect for investigation under a written data-handling agreement.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/252/",
+    "publisher": "GMO Internet",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/20261026/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Status as of 19:00 JST, 26 Oct."
+ },
+ {
+  "id": "onamae-seventh-report",
+  "thread": "onamae",
+  "parent": "onamae-sixth-report",
+  "t": "2026-10-26T14:10:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO: attackers threaten leaks and ransomware at noon 27 Oct; first demand 8 billion yen",
+  "summary": "GMO's seventh report says the attackers warned they will publish customer data and launch ransomware at 12:00 JST on 27 Oct. Its timeline puts the first extortion email on 21 Oct at a demand of about 8 billion yen; staff are collecting customers' PCs and in-house white hats began analysing them on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/253/",
+    "publisher": "GMO Internet",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/2026102602/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Status as of 23:10 JST, 26 Oct. GMO's 8 billion yen figure differs from the US$1 million in the attacker statement Security Measures Lab reported (onamae-attacker-statement). GMO says it will not pay."
+ },
+ {
+  "id": "cuenote-42-more",
+  "thread": "cuenote",
+  "parent": "cuenote-disclosure",
+  "t": "2026-10-25T12:45:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Ymirlink log review finds data-export records on 42 more Cuenote systems",
+  "summary": "A look-back review of login and operation logs on all systems, started on 22 Oct, finds unauthorised access and data-export records on 42 more systems at 21:45 JST on 25 Oct. Ymirlink contacts the 42 customer firms by 12:30 JST on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556277.pdf",
+    "publisher": "Ymirlink (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cuenote-second-report",
+  "thread": "cuenote",
+  "parent": "cuenote-42-more",
+  "t": "2026-10-26T08:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Ymirlink second report: 51,628,280 records exported from 49 Cuenote FC systems",
+  "summary": "Ymirlink says a library flaw let the intruder export data from 49 single-customer Cuenote FC systems, 51,628,280 records counting duplicates, with 16 systems still being counted. The intruder also stole login session data, and 190 Cuenote BASE customer-contact records were viewable.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556277.pdf",
+    "publisher": "Ymirlink (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/ymirlink_cuenote_fc_second_report_51628280_20261026/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261026de65955",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "TDnet stamp 17:00 JST. The report also warns of scam mail posing as Saison Card sent from a cuenote.jp address. The vulnerable library is not named; Ymirlink said on 22 Oct that the PHP flaws do not affect Cuenote."
+ },
+ {
+  "id": "joshin-detect",
+  "thread": "joshin",
+  "parent": null,
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Electronics retailer Joshin detects unauthorised access and cuts servers off its network",
+  "summary": "Joshin detects an anomaly on its network on 16 Oct, finds traces of unauthorised access and disconnects the affected servers, leaving some services unavailable. It reports to the privacy commission and police.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556267.pdf",
+    "publisher": "Joshin (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks: a TSE Prime retailer's member database, disclosed through TDnet in the same weeks. The second report says Joshin is also dealing with the security flaws that have become a new social issue; no flaw is named."
+ },
+ {
+  "id": "joshin-first-notice",
+  "thread": "joshin",
+  "parent": "joshin-detect",
+  "t": "2026-10-17T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Joshin posts its first notice of a system failure caused by unauthorised access",
+  "summary": "Joshin publishes an apology for a system failure caused by unauthorised access on its website on 17 Oct and files the same notice with the Tokyo exchange on 19 Oct.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556267.pdf",
+    "publisher": "Joshin (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151273.html",
+    "publisher": "INTERNET Watch (Impress)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "joshin-second-report",
+  "thread": "joshin",
+  "parent": "joshin-first-notice",
+  "t": "2026-10-26T08:40:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Joshin: up to about 6 million member records may have leaked, with ID images",
+  "summary": "Joshin's second report says up to about 6 million member records (names, addresses, phones, member numbers), about 230,000 subscription records with login IDs and initial passwords, and about 800 renovation-upload files may have leaked. The files include two driving-licence images, one My Number card and five bank account numbers.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556267.pdf",
+    "publisher": "Joshin (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151273.html",
+    "publisher": "INTERNET Watch (Impress)",
+    "primary": false
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102601047&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "TDnet stamp 17:40 JST. Joshin holds no card data. Jiji's headline sums the three systems to 6.23 million."
+ },
+ {
+  "id": "giftee-misissue",
+  "thread": "giftee",
+  "parent": null,
+  "t": "2026-10-25T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Attacker uses a flaw in a giftee system to issue e-gifts without authority",
+  "summary": "On 25 Oct a third party exploits a vulnerability in one system run by giftee, a subsidiary of giftee Group, and issues new e-gifts through it. giftee finds the flaw, stops the system the same day and says it will not bring it back.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556413.pdf",
+    "publisher": "giftee Group (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks: a TSE Prime firm reports a web-system flaw abused in late October, disclosed through TDnet. The flaw is not named."
+ },
+ {
+  "id": "giftee-notice",
+  "thread": "giftee",
+  "parent": "giftee-misissue",
+  "t": "2026-10-26T10:17:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "giftee Group expects a 550 million yen special loss from fraudulently issued e-gifts",
+  "summary": "giftee Group tells the Tokyo exchange the loss from the fraudulent e-gifts is about 550 million yen, to be booked as a special loss in Q4. Customers' gifts were not misused, no personal data leak is confirmed, and some e-gift exchange services that were disrupted are coming back.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261026556413.pdf",
+    "publisher": "giftee Group (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "TDnet stamp 19:17 JST. The company says it will consult and report to the police."
+ },
+ {
+  "id": "rakuten-travel-xchange-detect",
+  "thread": "rakuten-travel",
+  "parent": null,
+  "t": "2026-09-10T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Rakuten Travel Xchange detects unauthorised access to overseas hotel booking pages",
+  "summary": "Rakuten Travel Xchange notices an anomaly on some overseas hotel booking pages on 10 Sep, finds the cause on 15 Sep and finishes a system fix on 16 Sep.",
+  "sources": [
+   {
+    "url": "https://travel.rakuten.co.jp/info/announce/20261026.html",
+    "publisher": "Rakuten Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks: Rakuten found a second intrusion on 20 Oct and disclosed both on 26 Oct. The cause is not described."
+ },
+ {
+  "id": "rakuten-travel-multilingual",
+  "thread": "rakuten-travel",
+  "parent": "rakuten-travel-xchange-detect",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Rakuten finds possible unauthorised access to its multilingual travel booking site",
+  "summary": "Rakuten detects possible third-party access to its multilingual booking site on 20 Oct, identifies the cause the same day and completes a fix on 21 Oct.",
+  "sources": [
+   {
+    "url": "https://travel.rakuten.co.jp/info/announce/20261026.html",
+    "publisher": "Rakuten Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "rakuten-travel-notice",
+  "thread": "rakuten-travel",
+  "parent": "rakuten-travel-multilingual",
+  "t": "2026-10-26T10:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Rakuten Travel: data of up to 2.6 million overseas and 860,000 multilingual users",
+  "summary": "Rakuten says names, emails, phones and IDs of up to about 2.6 million logged-in overseas-site users were exposed, with partial card data for about 36,000 bookings. On the multilingual site, emails and IDs of up to 860,000 users and about 40,000 hotel staff accounts were exposed.",
+  "sources": [
+   {
+    "url": "https://travel.rakuten.co.jp/info/announce/20261026.html",
+    "publisher": "Rakuten Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.watch.impress.co.jp/docs/news/2151286.html",
+    "publisher": "Impress Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The notice is dated 26 Oct with no clock time; Impress Watch reported it at 19:12 JST. Full card numbers, security codes, passwords and passports were not included. Reported to the PPC and foreign authorities."
+ },
+ {
+  "id": "times-class-action-claims",
+  "thread": "times-car",
+  "parent": "times-class-action",
+  "t": "2026-10-26T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Times Car lawyer: suit to seek 50,000 yen per leaked licence image; 100,000 sign up",
+  "summary": "The lawyer organising the Times Car class action says victims will sue Park24 and others, seeking 50,000 yen for each person whose licence image leaked and 30,000 yen for others. More than 100,000 people have registered, and the lawyer calls Park24's 3,000 yen payment too low.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/6aa428179b0eb897b9c40716d9a3d33964153260",
+    "publisher": "TV Asahi (ANN, via Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261026de65793",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "From a press conference on 26 Oct; ANN published at 17:22 JST, so the hour is approximate. No filing date or court was given."
+ },
+ {
+  "id": "emu-ocsp-crldp-report",
+  "thread": "emudhra",
+  "parent": "emu-bug-ocsp-crldp",
+  "t": "2026-10-26T08:18:46Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "eMudhra full report: 87 OCSP responder certificates broke the rules; 41 revoked 14 Oct",
+  "summary": "eMudhra posts its full incident report on Mozilla bug 2080742. It says 87 delegated OCSP responder certificates issued since 2024 carried a forbidden CRL distribution point; the 41 still valid were replaced and revoked on 14 October.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2080742",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2080742/comment",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Comment 1 at 08:18:46 UTC on 26 Oct; a list of affected certificates is attached at 08:21 UTC. eMudhra blames a responder template that inherited the CA's extension set and says OCSP responses stayed correctly signed."
+ },
+ {
+  "id": "emu-eku-report-no-revoke",
+  "thread": "emudhra",
+  "parent": "emu-bug-eku-subcas",
+  "t": "2026-10-26T16:35:50Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra full report on its seven no-EKU sub-CAs: it will not revoke them",
+  "summary": "In its full report on Mozilla bug 2081185, eMudhra says it signed the UAE sub-CAs believing its own requested distrust date had already taken C1 out of scope. It will not revoke the seven, which issued nothing, because Mozilla removed the C1 root on 20 October.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2081185",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2081185/comment",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Comment 1 at 16:35:50 UTC on 26 Oct. The report says Mozilla clarified on 13 Oct (bug 2018979 comment 4) that a requested distrust date does not change a root's status, and that eMudhra asked for removal of C1 and C3 on 19 Oct (bug 2083709)."
+ },
+ {
+  "id": "emu-stock-52wk-low",
+  "thread": "emudhra",
+  "parent": "emu-stock-crash",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "eMudhra shares fall about 10% more to a 52-week low, down 43% in five sessions",
+  "summary": "Business Standard reports that eMudhra stock fell about 10% in Monday trade to a 52-week low of about Rs 318 on the BSE. It is down 43% in five days and 53% from its 16 September high.",
+  "sources": [
+   {
+    "url": "https://www.business-standard.com/amp/markets/news/emudhra-extends-fall-stock-down-43-in-five-days-tanks-53-from-sep-high-126102600321_1.html",
+    "publisher": "Business Standard",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Seen in search results only; the page returned HTTP 403 to a direct fetch. Figures are from the result summary of the article dated 26 Oct."
+ },
+ {
+  "id": "artex-ai-ring-unreported",
+  "thread": "artex",
+  "parent": "artex-ai-ring-announced",
+  "t": "2026-10-26T08:51:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Only 15 of the AI ring's ~90 victim firms reported; police say do not negotiate",
+  "summary": "Hankyung reports that only 15 of the roughly 90 firms hit by the AI-driven ring reported the leak, and police are still investigating the other 75. Seoul police's cyber chief tells extorted firms to report at once rather than negotiate with criminals.",
+  "sources": [
+   {
+    "url": "https://www.hankyung.com/article/2026102660191",
+    "publisher": "Hankyung",
+    "primary": false
+   },
+   {
+    "url": "https://www.sidae.com/article/2026102613125916378",
+    "publisher": "Sidae Ilbo",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Hankyung article entered 17:51 KST on 26 Oct, updated 01:36 KST 27 Oct. No PIPC, KISA or MSIT statement on the unreported firms was found."
+ },
+ {
+  "id": "artex-msit-audit-traces",
+  "thread": "artex",
+  "parent": "artex-msit-emergency",
+  "t": "2026-10-15T07:13:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "MSIT at the Assembly audit: ARTEX traces found in the finance attack; AI use hard to prove",
+  "summary": "At the National Assembly science committee audit, MSIT's information security policy chief says the ministry presumes AI use in the finance-sector attack because it found ARTEX traces, but proving AI use is very hard. A security-specialised Korean AI model will only be usable next year.",
+  "sources": [
+   {
+    "url": "https://www.news1.kr/it-science/security-hacking/6321395",
+    "publisher": "News1",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "News1 article timestamped 16:13 KST on 15 Oct. Lawmakers said 82.6% of 8,565 intrusions reported from 2022 to June 2026 hit small and mid-sized firms."
+ },
+ {
+  "id": "aena-resume-plan",
+  "thread": "aena",
+  "parent": "aena-notice",
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Aena opens a members' withdrawal page and plans the app restart for 19 Oct",
+  "summary": "Aena opens a web page for EC app members who want to delete their accounts, because the app is still offline. A second notice the same day says the app is being hardened and should restart on the afternoon of 19 October.",
+  "sources": [
+   {
+    "url": "https://www.aena.co.jp/news/detail/7854/",
+    "publisher": "Aena",
+    "primary": true
+   },
+   {
+    "url": "https://www.aena.co.jp/news/detail/7879/",
+    "publisher": "Aena",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Both notices are dated 2026.10.16 on Aena's news list; neither gives a time."
+ },
+ {
+  "id": "softech-publica-no-darkweb",
+  "thread": "pk-softech",
+  "parent": "softech-publica-newsletter2",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Publica: no sign yet that data from the supplier breach is on the dark web",
+  "summary": "In an update dated 26 October, Publica says it has no indication that data stolen in the attack on its software supplier has been published on the dark web. It says it is monitoring the situation and will report new findings.",
+  "sources": [
+   {
+    "url": "https://www.publica.ch/de/cyberangriff-auf-softwarelieferanten",
+    "publisher": "Publica",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Entry headed 'Stand: 26.10.2026' on Publica's incident page; no time given."
+ },
+ {
+  "id": "firstvds-isp-confirms",
+  "thread": "firstvds",
+  "parent": "firstvds-restricted",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "ISPsystem confirms a flaw in one VMmanager 6 build and gives interim steps",
+  "summary": "VMmanager developer ISPsystem confirms an incident tied to a vulnerability in one VMmanager 6 build and calls the situation complex but controlled. It will not name affected operators and tells customers to firewall the platform and nodes to trusted admins, limit SSH and change all passwords.",
+  "sources": [
+   {
+    "url": "https://www.ispsystem.ru/news/vulnerability-incident",
+    "publisher": "ISPsystem",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Page datePublished 2026-10-20. No CVE or fixed-version list is given."
+ },
+ {
+  "id": "firstvds-isp-stabilised",
+  "thread": "firstvds",
+  "parent": "firstvds-isp-confirms",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "ISPsystem: emergency phase over, security updates out; investigation results in a few days",
+  "summary": "ISPsystem says the VMmanager 6 situation has stabilised and the emergency phase is over. Security updates are out, and it promises to publish what the flaw was and how it was exploited within a few days.",
+  "sources": [
+   {
+    "url": "https://www.ispsystem.ru/news/update-for-vulnerability-incident",
+    "publisher": "ISPsystem",
+    "primary": true
+   },
+   {
+    "url": "https://t.me/s/TakeFirstNews",
+    "publisher": "FirstVDS (Telegram)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Page datePublished 2026-10-22. FirstVDS's 23 Oct Telegram update promised a joint press release with ISPsystem on Monday 26 Oct and a postmortem on 27 Oct; neither was on ISPsystem's news page or the FirstVDS channel at about 17:00 UTC on 26 Oct."
+ },
+ {
+  "id": "fridge-coalition-exposure",
+  "thread": "fridge-attack",
+  "parent": "fridge-still-exposed",
+  "t": "2026-10-15T20:23:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Coalition scans: 2,624 store controllers had open logins; Claroty had warned in August",
+  "summary": "The Register reports scans by insurer Coalition from 7 September to 6 October found at least 2,624 Danfoss StoreView and XWEB controllers with internet-facing logins, 54% of the Danfoss panels on French networks. Claroty Team82 had published flaws in AK-SM 800A and XWEB controllers in August 2026.",
+  "sources": [
+   {
+    "url": "https://www.theregister.com/security/2026/10/15/researchers-warned-attackers-could-defrost-the-food-months-before-french-supermarkets-got-hit/5303425",
+    "publisher": "The Register",
+    "primary": false
+   },
+   {
+    "url": "https://claroty.com/team82/research/freeze-the-controller-defrost-the-food-uncovering-vulnerabilities-in-danfoss-refrigeration-controllers",
+    "publisher": "Claroty Team82",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "By 15 Oct, 618 Danfoss devices were still connected, 206 of them in France, per Coalition. No source ties the August Claroty flaws to the attack; ANSSI later said basic flaws were used. The Claroty page was seen in search results, not opened."
  }
 ];

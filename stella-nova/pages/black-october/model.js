@@ -167,6 +167,9 @@ export const THREAD_NAMES = Object.freeze({
   'softbank-mysoftbank': "My SoftBank access attempt",
   'mhlw-1fedu': "MHLW 1FEdu contractor site",
   gdo: "Golf Digest Online",
+  joshin: "Joshin member database",
+  giftee: "giftee e-gift mis-issue",
+  'rakuten-travel': "Rakuten Travel booking sites",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
