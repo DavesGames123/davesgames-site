@@ -201,9 +201,10 @@ section('the full ledger has room');
   const win = L.nodes.filter(n => n.t >= L.tw);
   let stacked = 0;
   for (let i = 0; i < win.length; i++) for (let j = i + 1; j < win.length; j++) if (Math.hypot(win[i].x - win[j].x, win[i].y - win[j].y) < DEFAULTS.minGap / 2) stacked++;
-  // The count goes up with the ledger (9 at 920 events, 17 at 1019); the
-  // collapse that this test catches gave hundreds. Allow 1 pair per 40 nodes.
-  ok(stacked <= win.length / 40, `${stacked} window node pairs nearer than half of minGap (limit ${(win.length / 40).toFixed(0)})`);
+  // Same-minute events of a small thread stacked when its sector was
+  // narrower than they need (26 pairs at 1096 events); th.need now widens
+  // such sectors (7 pairs). The collapse of 507e413c gave hundreds.
+  ok(stacked <= win.length / 100, `${stacked} window node pairs nearer than half of minGap (limit ${(win.length / 100).toFixed(0)})`);
 }
 
 section('saver shots');

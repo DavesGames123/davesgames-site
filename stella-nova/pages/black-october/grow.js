@@ -149,7 +149,22 @@ export function sectors(threads, o) {
   const gap = Math.min(o.sectorGap, Math.PI * 2 * o.gapShare / Math.max(threads.length, 1));
   const room = Math.PI * 2 - gap * threads.length;
   let a = -Math.PI / 2 + gap / 2;
-  threads.forEach((th, i) => { th.a0 = a; th.a1 = a + room * w[i] / sum; a = th.a1 + gap; });
+  // th.need (optional): the least width that the thread's crowded ring
+  // asks for. A thread under its need gets the need, and the other threads
+  // share what is left by weight.
+  const width = w.map(x => room * x / sum), fixed = new Set();
+  for (let pass = 0; pass < threads.length; pass++) {
+    const free = room - [...fixed].reduce((acc, i) => acc + width[i], 0);
+    const fw = w.reduce((acc, x, i) => fixed.has(i) ? acc : acc + x, 0);
+    let moved = false;
+    threads.forEach((th, i) => {
+      if (fixed.has(i)) return;
+      width[i] = free * w[i] / fw;
+      if ((th.need || 0) > width[i]) { width[i] = th.need; fixed.add(i); moved = true; }
+    });
+    if (!moved) break;
+  }
+  threads.forEach((th, i) => { th.a0 = a; th.a1 = a + width[i]; a = th.a1 + gap; });
   return threads;
 }
 
@@ -320,6 +335,19 @@ export function layout(events, opts = {}) {
     const th = byThread.get(e.thread);
     th.count++;
     if (e.parent == null) { th.root = e.id; th.t = t; }
+    if (t >= tw && e.tPrecision === 'minute') (th.rs ||= []).push(radiusOf(t));
+  }
+  // A minute stamp cannot leave its ring. Events of one thread that fall on
+  // nearly one ring must sit side by side: k of them need (k + 1) minGap of arc.
+  for (const th of byThread.values()) {
+    const rs = (th.rs || []).sort((a, b) => a - b);
+    let need = 0;
+    for (let i = 0, j = 0; i < rs.length; i++) {
+      while (rs[i] - rs[j] >= o.minGap) j++;
+      const k = i - j + 1;
+      if (k > 1) need = Math.max(need, (k + 1) * o.minGap / rs[j]);
+    }
+    th.need = need; delete th.rs;
   }
   const threads = sectors([...byThread.values()].sort((a, b) => a.t - b.t || (a.id < b.id ? -1 : 1)), o);
   const thOf = new Map(threads.map(th => [th.id, th]));
