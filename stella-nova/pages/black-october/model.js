@@ -160,6 +160,10 @@ export const THREAD_NAMES = Object.freeze({
   'medley-atlink': "Medley @link clinic system",
   'dip-baitoru': "Dip Baitoru job sites",
   'kiau-site': "International University of the Arts site breach",
+  'ymail-igreks': "Y-Mail (Igreks) intrusion",
+  'tokai-tlc': "TOKAI TLC member services",
+  'douzone-smarta': "Douzone Bizon Smart A 10",
+  'kf-mailer': "Korea Foundation mailer",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
