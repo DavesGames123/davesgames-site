@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended fifteen times by 2026-10-26. Still going on then.
+//  Gathered 2026-10-22, extended sixteen times by 2026-10-26. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -25543,5 +25543,642 @@ export const EVENTS = [
   ],
   "confidence": "reported",
   "note": "By 15 Oct, 618 Danfoss devices were still connected, 206 of them in France, per Coalition. No source ties the August Claroty flaws to the attack; ANSSI later said basic flaws were used. The Claroty page was seen in search results, not opened."
+ },
+ {
+  "id": "php-azure-waf-guidance",
+  "thread": "php2shell",
+  "parent": "php-release",
+  "t": "2026-10-21T18:42:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Microsoft publishes Azure WAF custom rules and upgrade guidance for PHP2Shell",
+  "summary": "Microsoft's Azure network security team says upgrading PHP is the only full fix and gives interim custom rules for Front Door, Application Gateway and Application Gateway for Containers. It adds a response-side rewrite for Application Gateway and a disabled-by-default Front Door managed rule, 99006001.",
+  "sources": [
+   {
+    "url": "https://techcommunity.microsoft.com/blog/azurenetworksecurityblog/addressing-php2shell-cve-2026-109618-and-cve-2026-109619-upgrade-guidance-and-az/4566623",
+    "publisher": "Microsoft Tech Community (Azure Network Security Blog)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Time is the post's postTime (11:42 PDT). The page was modified on 26 Oct 09:36 UTC and says the Front Door managed rule rollout is expected to complete on 28 October; Application Gateway and AGC managed rules come 'at a later date'. Several commenters report that the suggested rewrite rule caused 502 errors or empty responses on their gateways."
+ },
+ {
+  "id": "php-netapp-ontap-affected",
+  "thread": "php2shell",
+  "parent": "php-preannounce",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "NetApp: ONTAP 9 is affected by CVE-2026-109618, limited to a PHP jail",
+  "summary": "NetApp advisory NTAP-20261021-0021 moves ONTAP 9 to affected on its release day. NetApp says ONTAP is hit only by CVE-2026-109618 and an attacker would get the www user inside a PHP jail.",
+  "sources": [
+   {
+    "url": "https://security.netapp.com/advisory/NTAP-20261021-0021",
+    "publisher": "NetApp",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/39",
+    "publisher": "Dutch NCSC (GitHub tracker)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Revision history: v1.0 and v2.0 (ONTAP 9 moved to affected) both dated 20261021, no time given. The Dutch NCSC tracker PR adding it was still open on 26 Oct."
+ },
+ {
+  "id": "php-netapp-ontap-hotfixes",
+  "thread": "php2shell",
+  "parent": "php-netapp-ontap-affected",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "NetApp completes ONTAP 9 PHP hotfixes on six branches with 9.14.1P18HF1",
+  "summary": "Between 24 and 26 October NetApp adds hotfixes 9.16.1P16HF1, 9.17.1P11HF1, 9.19.1P3HF1, 9.15.1P20HF1, 9.18.1P8HF1 and 9.14.1P18HF1 to its advisory. On 26 October it also replaces the workaround text with a KB link.",
+  "sources": [
+   {
+    "url": "https://security.netapp.com/advisory/NTAP-20261021-0021",
+    "publisher": "NetApp",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Advisory revisions 4.0 to 9.0 (dated 20261024 to 20261026); status still 'Interim'."
+ },
+ {
+  "id": "php-crowdstrike-obstacles",
+  "thread": "php2shell",
+  "parent": "php-exploitation-disputed",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "CrowdStrike: no successful PHP2Shell exploitation seen; a universal exploit is unlikely",
+  "summary": "CrowdStrike Counter Adversary Operations says it has seen only testing, probing and failed attempts, and that many public PoCs only crash PHP. It expects targeted use against specific deployment profiles and wide use if a public exploit for a common deployment appears.",
+  "sources": [
+   {
+    "url": "https://www.crowdstrike.com/en-us/blog/obstacles-to-weaponizing-php2shell-likely-constrain-exploitation/",
+    "publisher": "CrowdStrike",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-mandiant-no-widescale",
+  "thread": "php2shell",
+  "parent": "php-exploitation-disputed",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Mandiant CTO: no evidence of widescale exploitation; some PoCs work on mod_php only",
+  "summary": "Mandiant's CTO says many circulating PoCs appear 'vibe coded' and cannot reach code execution. Google and Mandiant validated some that reach RCE against default mod_php deployments but not PHP-FPM, and he warns limited exploitation may already have begun.",
+  "sources": [
+   {
+    "url": "https://www.cybersecuritydive.com/news/php-exploitation-slower-than-expected/833855/",
+    "publisher": "Cybersecurity Dive",
+    "primary": false
+   },
+   {
+    "url": "https://cloud.google.com/blog/products/identity-security/responding-to-core-php-vulnerabilities-cve-2026-109618-cve-2026-109619",
+    "publisher": "Google Cloud",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "The statement was a LinkedIn post quoted by Cybersecurity Dive; the post itself was not opened. Google Cloud's blog added Mandiant Consulting guidance on 23 Oct 15:20 PDT and says Mandiant is hunting for intrusion activity related to this campaign."
+ },
+ {
+  "id": "php-apigee-portals",
+  "thread": "php2shell",
+  "parent": "php-gcloud",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Google bulletin GCP-2026-072: Drupal-based Apigee developer portals are affected",
+  "summary": "Google says Apigee products themselves do not use PHP, but customer-run Drupal developer portals, including the Marketplace Kickstart image, are affected. New Marketplace deployments use PHP 8.3.36; existing portal VMs must be patched by the customer.",
+  "sources": [
+   {
+    "url": "https://docs.cloud.google.com/apigee/docs/security-bulletins/security-bulletins#gcp-2026-072",
+    "publisher": "Google Cloud (Apigee)",
+    "primary": true
+   },
+   {
+    "url": "https://docs.cloud.google.com/support/bulletins#gcp-2026-072",
+    "publisher": "Google Cloud",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Google says updating the Apigee Drupal modules does not fix the flaws; the latest module releases require a fixed PHP version."
+ },
+ {
+  "id": "php-honeypot-shells",
+  "thread": "php2shell",
+  "parent": "php-exploitation-disputed",
+  "t": "2026-10-24T15:35:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Perplexity researcher's honeypots record 35 PHP2Shell shells from two source IPs",
+  "summary": "Honeypots run by a Perplexity security researcher record 35 shell starts on three PHP 8.4.26 mod_php targets on 24 October, matching the public PoC family; no second-stage payload was fetched. An Expel analyst calls it the best confirmation of in-the-wild exploitation so far.",
+  "sources": [
+   {
+    "url": "https://www.securityweek.com/php2shell-exploitation-moves-from-probes-to-working-shells/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   },
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/php2shell-security-flaws-now-sucessfully-exploited-in-the-wild/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time is the first confirmed shell (15:35 UTC) in the researcher's report; the press stories ran on 26 Oct (BleepingComputer 05:19 ET, SecurityWeek 09:30 ET). The researcher says the single-worker setup was deliberately favourable and is not a measure of exploit reliability. The researcher's evidence repository holds packet captures and is not linked here. The CISA KEV catalog (version 2026.10.23, checked 26 Oct 19:37 UTC) still does not list either PHP CVE."
+ },
+ {
+  "id": "php-broadcom-casma-review",
+  "thread": "php2shell",
+  "parent": "php-broadcom-esg-advisory",
+  "t": "2026-10-26T17:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "Broadcom clears Content Analysis and puts CASMA under PHP2Shell investigation",
+  "summary": "Broadcom's Enterprise Security Group moves Content Analysis to not vulnerable and adds Content Analysis and Malware Analysis (CASMA) as under investigation. Carbon Black App Control, SEPM and CloudSOC SpanVA stay affected.",
+  "sources": [
+   {
+    "url": "https://support.broadcom.com/web/ecx/support-content-notification/-/external/content/SecurityAdvisories/Enterprise-Security-Group-Advisory-for-PHP2Shell/39404",
+    "publisher": "Broadcom",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Revision entry dated 2026-10-26 10:00 PT."
+ },
+ {
+  "id": "node-amazon-linux-brotli",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Amazon Linux 2023 fixes brotli and nodejs24; no fix planned for nodejs20",
+  "summary": "Amazon Linux ships ALAS2023-2026-3334 for brotli and ALAS2023-2026-3330 for nodejs24 on 24 October. It marks nodejs20 and the base nodejs package 'No Fix Planned', and Amazon Linux 2027 Preview fixes as pending.",
+  "sources": [
+   {
+    "url": "https://explore.alas.aws.amazon.com/CVE-2026-111497.html",
+    "publisher": "Amazon Linux Security Center",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "node-msrc-vs-powershell",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-25T14:00:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "MSRC lists Visual Studio and PowerShell 7 builds as well as .NET for the Brotli CVE",
+  "summary": "Microsoft's Security Update Guide entry rates the Brotli CVE critical for its products and lists fixed builds of Visual Studio 2019, 2022 and 2026, PowerShell 7.4, 7.5 and 7.6, and .NET 8 to 11. Microsoft says Brotli decompression is off by default in .NET.",
+  "sources": [
+   {
+    "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-111497",
+    "publisher": "Microsoft Security Response Center",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/node2shell-brotli-flaw-triggers-patching-across-microsoft-node-js-python-packages/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Release time 2026-10-25T07:00-07:00 from the MSRC API. Microsoft scores it CVSS 3.1 8.1, elevation of privilege, 'Exploitation More Likely', not exploited. Fixed builds include PowerShell 7.4.22, 7.5.13, 7.6.9 and Visual Studio 17.14.43 and 18.11.2."
+ },
+ {
+  "id": "node-ubuntu-usn-brotli",
+  "thread": "nodejs",
+  "parent": "node-ubuntu-nodejs-not-affected",
+  "t": "2026-10-26T15:54:30Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Ubuntu USN-8956-1 fixes brotli for 22.04, 24.04, 26.04 and 26.10",
+  "summary": "Ubuntu ships a brotli security notice for the Brotli decoder flaw on jammy, noble, resolute and stonking. Focal and older releases stay at needs-triage, and focal's nodejs package is still marked as needing a fix.",
+  "sources": [
+   {
+    "url": "https://ubuntu.com/security/notices/USN-8956-1",
+    "publisher": "Canonical",
+    "primary": true
+   },
+   {
+    "url": "https://ubuntu.com/security/CVE-2026-111497",
+    "publisher": "Canonical",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "nginx-amazon-linux",
+  "thread": "nginx",
+  "parent": "nginx-debian-dsa",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Amazon Linux fixes nginx on AL2023 and the AL2 nginx1 extra; nginx1.12 gets none",
+  "summary": "Amazon Linux publishes ALAS2023-2026-3263 and ALAS2NGINX1-2026-017 for the October nginx flaws on 24 October. It marks the Amazon Linux 2 nginx1.12 extra 'No Fix Planned' and the 2027 Preview packages pending.",
+  "sources": [
+   {
+    "url": "https://explore.alas.aws.amazon.com/CVE-2026-15176.html",
+    "publisher": "Amazon Linux Security Center",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Checked for CVE-2026-15176 only; Amazon rates it Medium (CVSS 3.1 5.9)."
+ },
+ {
+  "id": "nginx-ubuntu-usn",
+  "thread": "nginx",
+  "parent": "nginx-distros-unpatched",
+  "t": "2026-10-26T15:34:05Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Ubuntu USN-8955-1 fixes all five October nginx flaws on four releases",
+  "summary": "Ubuntu ships fixes for CVE-2026-15176, -93479, -95101, -97205 and -97629 on 22.04, 24.04, 26.04 and 26.10. Focal and older stay at needs-triage, and Red Hat still lists RHEL 8, 9 and 10 nginx as affected.",
+  "sources": [
+   {
+    "url": "https://ubuntu.com/security/notices/USN-8955-1",
+    "publisher": "Canonical",
+    "primary": true
+   },
+   {
+    "url": "https://ubuntu.com/security/CVE-2026-15176",
+    "publisher": "Canonical",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-15176.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Red Hat status checked 26 Oct about 19:40 UTC; only Red Hat Hardened Images had a fix (RHSA-2026:83427)."
+ },
+ {
+  "id": "aieval-metr-openai-monitor",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-metr-risk-review",
+  "t": "2026-10-22T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "METR and Redwood red-team OpenAI's agent monitor and find coverage gaps, now patched",
+  "summary": "METR reports a three-week summer pilot that stress-tested OpenAI's internal misalignment monitoring. It found unmonitored compaction events, about 10% of internal Codex traffic from May to July, and headers that could switch monitoring off; OpenAI says production issues are fixed.",
+  "sources": [
+   {
+    "url": "https://metr.org/blog/2026-10-22-red-teaming-openai-agent-monitoring/",
+    "publisher": "METR",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The findings describe the system as of 21 July 2026; the public post is high-level by agreement with OpenAI. It does not mention OpenAI's September training-environment incident."
+ },
+ {
+  "id": "node-jpcert-at0034",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-26T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC alert AT-2026-0034 on the Brotli out-of-bounds write CVE-2026-111497",
+  "summary": "JPCERT/CC issues alert JPCERT-AT-2026-0034 for the Brotli C decoder flaw. It names Node.js, Bun and the Python Brotli package as products that embed the library, tells users to move to Brotli 1.2.1, 1.1.1 or 1.0.10, and to check for compromise.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260034.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   },
+   {
+    "url": "https://www.jpcert.or.jp/",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The alert and the JPCERT/CC front page give the date 2026-10-26 only; the time is set to 12:00 JST. The alert does not say whether the flaw is exploited. KISA posted its own Brotli advisory the same day (node-kisa-brotli-advisory)."
+ },
+ {
+  "id": "php-jpcert-update-1026",
+  "thread": "php2shell",
+  "parent": "php-jpcert",
+  "t": "2026-10-26T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "JPCERT/CC updates its PHP alert: many exploit claims, more attempts, third CVE added",
+  "summary": "JPCERT/CC updates alert AT-2026-0033 to say that much exploit code claiming to abuse the PHP flaws is public and reports of exploitation attempts are rising. It adds CVE-2026-115560 and the interim setting that disables session upload progress until PHP ships a fix.",
+  "sources": [
+   {
+    "url": "https://www.jpcert.or.jp/at/2026/at260033.html",
+    "publisher": "JPCERT/CC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The update history lists 2026-10-26 with no time; the time is set to 12:00 JST. JPCERT/CC says whether public code reaches code execution depends on PHP version, environment and memory layout. Servers that already applied the setting for CVE-2026-109619 need no more action.",
+  "related": [
+   "node-jpcert-at0034"
+  ]
+ },
+ {
+  "id": "onamae-ceo-blog-demand-image",
+  "thread": "onamae",
+  "parent": "onamae-ceo-blog",
+  "t": "2026-10-26T14:20:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "GMO chief adds images of the attackers' US$50 million demand to his blog; no payment",
+  "summary": "GMO's group chief adds to his 25 October blog post that the attackers demanded US$50 million (about 8 billion yen) from the company, and posts two images of the amount section of the 21 October demand. He repeats that GMO has not met the demand and has paid nothing.",
+  "sources": [
+   {
+    "url": "https://www.kumagai.com/?eid=19600",
+    "publisher": "GMO Internet Group (Kumagai.com blog)",
+    "primary": true
+   },
+   {
+    "url": "https://www.j-cast.com/2026/10/26518712.html",
+    "publisher": "J-CAST News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The two additions are marked as added on 26 Oct; the blog timeline is stamped 23:20 JST on 26 Oct, so the time is approximate. The images carry a note dated 21 Oct 11:57. The dollar figure explains the 8 billion yen in GMO's seventh report (onamae-seventh-report)."
+ },
+ {
+  "id": "artex-kb-2210",
+  "thread": "artex",
+  "parent": "artex-fss-attacker-ips",
+  "t": "2026-10-26T10:00:00Z",
+  "tPrecision": "hour",
+  "kind": "correction",
+  "title": "KB Kookmin finds 2,091 more people in its hack leak, now 2,210 including 460 staff",
+  "summary": "KB Kookmin Bank says a re-check of the hacked system with supervisors found 2,091 more people whose data leaked, 1,631 customers and 460 employees, taking the total from 119 to 2,210. It says there was no new attack and will notify each person.",
+  "sources": [
+   {
+    "url": "https://nocutnews.co.kr/news/6597381",
+    "publisher": "Nocut News",
+    "primary": false
+   },
+   {
+    "url": "https://www.businesskorea.co.kr/news/articleView.html?idxno=279684",
+    "publisher": "BusinessKorea",
+    "primary": false
+   },
+   {
+    "url": "https://www.etnews.com/20261026000437",
+    "publisher": "Electronic Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Nocut News published at 19:07 KST on 26 Oct. The 119 figure is from the early-October leak count (artex-fss-attacker-ips). One outlet (Jaekyung Ilbo) says the leaked items rose from 17 to 39 with financial data added; that is not in the other reports."
+ },
+ {
+  "id": "artex-mirae-life",
+  "thread": "artex",
+  "parent": "artex-fsc-16-firms",
+  "t": "2026-10-26T07:30:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Mirae Asset Life: hack of its subscription system leaks customer data, an insurer first",
+  "summary": "Mirae Asset Life says it saw abnormal signs in some systems on 25 October and confirmed a leak of customers' personal credit data early on 26 October. The intruder hit the customer subscription system and part of the website; the scale is not yet known.",
+  "sources": [
+   {
+    "url": "https://news.jkn.co.kr/post/1050550",
+    "publisher": "Jaekyung Ilbo",
+    "primary": false
+   },
+   {
+    "url": "https://www.newspim.com/news/view/20261026001149",
+    "publisher": "Newspim",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Link to the wave: press calls it the first hacking leak reported by a Korean insurer and places it in this month's run of financial-sector hacks; no source names ARTEX or AI tools. Jaekyung Ilbo published at 16:30 KST. The company's own website notice was not opened; its homepage was restricted."
+ },
+ {
+  "id": "artex-mirae-fss-inspection",
+  "thread": "artex",
+  "parent": "artex-mirae-life",
+  "t": "2026-10-26T09:27:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "FSS starts an emergency on-site inspection of Mirae Asset Life; about 41 files viewed",
+  "summary": "The Financial Supervisory Service begins an emergency on-site inspection of Mirae Asset Life to check the intrusion route, the size of the leak and customer harm. Reports say the hacker viewed about 41 files in internal systems; it is not known how many held customer data.",
+  "sources": [
+   {
+    "url": "https://www.ebn.co.kr/news/articleView.html?idxno=1729219",
+    "publisher": "EBN",
+    "primary": false
+   },
+   {
+    "url": "https://www.etnews.com/20261026000437",
+    "publisher": "Electronic Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "EBN published at 18:27 KST on 26 Oct; the inspection time is not given. The FSS release was not found."
+ },
+ {
+  "id": "nol-interpark-tour-customers",
+  "thread": "nol-universe",
+  "parent": "nol-notice",
+  "t": "2026-10-26T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "NOL Universe: ex-Interpark Tour lodging bookers' data also leaked, via a 22 Oct access",
+  "summary": "NOL Universe says an attacker used a flaw to reach the booking lookup of the former Interpark Tour domestic lodging service at about 02:05 KST on 22 October. Nine items of bookings made 15 Feb to 8 Sep, names, phones, emails, stay dates and amounts among them, leaked.",
+  "sources": [
+   {
+    "url": "https://zdnet.co.kr/view/?no=20261026145504",
+    "publisher": "ZDNet Korea",
+    "primary": false
+   },
+   {
+    "url": "https://www.etnews.com/20261026000437",
+    "publisher": "Electronic Times",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "ZDNet Korea article id indicates about 14:55 KST on 26 Oct. The number of people is not disclosed. NOL suspended lookup of bookings made before 23 Oct and asked KISA for technical support. Flight, overseas lodging, tour and ticket bookings are not affected."
+ },
+ {
+  "id": "arcadia-hiroshima-12",
+  "thread": "arcadia-raiden",
+  "parent": "arcadia-first-report",
+  "t": "2026-10-17T01:15:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Asahi: about 120,000 records in 12 Hiroshima cities and towns may be out via RAIDEN",
+  "summary": "Asahi reports that eight cities and four towns in Hiroshima Prefecture say residents' and staff names, emails and phone numbers in their disaster-alert mail, about 110,000 records, may have leaked. Hiroshima City adds about 10,000 staff records from its staff call-out system.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/1e62034b67a9263a89538ee86ef723172a1c8988",
+    "publisher": "Asahi Shimbun via Yahoo! News Japan",
+    "primary": false
+   },
+   {
+    "url": "https://www.city.hiroshima.lg.jp/saigaiinfo/saigai/1025420/1025521/1054483.html",
+    "publisher": "Hiroshima City",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Asahi published at 10:15 JST on 17 Oct and does not name the provider; Hiroshima City's page (updated 15 Oct) names Arcadia's SpeeCAN RAIDEN and says its resident alert mail was not hit, only the staff call-out system. The cities are Fukuyama, Hatsukaichi, Etajima, Otake, Higashihiroshima, Fuchu, Takehara and Miyoshi."
+ },
+ {
+  "id": "bm-hiroshima-city",
+  "thread": "blastmail",
+  "parent": "bm-clients",
+  "t": "2026-10-23T09:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Hiroshima City: industry-centre newsletter subscribers' data may have leaked via Rakus",
+  "summary": "Hiroshima City says personal data of people registered for the mail magazine of its Industrial Promotion Center may have leaked because Rakus Light Cloud, which runs the delivery system, was accessed without authority. The newsletter is stopped.",
+  "sources": [
+   {
+    "url": "https://www.chugoku-np.co.jp/articles/-/914021",
+    "publisher": "Chugoku Shimbun",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261023de64542",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Rakus Light Cloud operates Blastmail. The city's own release was not found; a search snippet gives 4,424 registrations, but the article text opened does not show the figure, so it is left out. NHK (20:15 JST, 23 Oct) reports it with a separate Hiroshima Prefecture newsletter-prize leak at a contractor."
+ },
+ {
+  "id": "doutor-staff-notice",
+  "thread": "doutor",
+  "parent": null,
+  "t": "2026-10-26T05:47:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Doutor Coffee: data of 951 staff and former staff at four Tokyo-area shops may have leaked",
+  "summary": "Doutor Coffee says it detected unauthorised access to part of its systems on 20 October and that names, birth dates, addresses, emails, phones and bank account numbers of 951 current and former staff of four shops may have been viewed and taken. No customer data access is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.doutor.co.jp/news/newsrelease/detail/20261026144748.html",
+    "publisher": "Doutor Coffee",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: one more notice in the Japanese breach-notice run the ledger tracks (jp-wave-alerts), posted the same day as Joshin, Ymirlink and Rakuten Travel. Time is from the release URL stamp 14:47:48 JST. Doutor does not name the system or method and is reporting to the privacy commission."
+ },
+ {
+  "id": "emu-c1-c3-removal",
+  "thread": "emudhra",
+  "parent": "emu-bug-eku-subcas",
+  "t": "2026-10-19T12:43:01Z",
+  "tPrecision": "minute",
+  "kind": "ca-action",
+  "title": "eMudhra asks Mozilla to remove its C1 and C3 roots; the NSS change lands next day",
+  "summary": "In Mozilla bug 2083709, eMudhra asks for full removal of emSign Root CA - C1 and emSign ECC Root CA - C3 from NSS, in place of its earlier distrust-after proposal. Mozilla pushes the removal to NSS at 12:47 UTC on 20 October.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083709",
+    "publisher": "Mozilla Bugzilla, bug 2083709",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2083709/comment",
+    "publisher": "Mozilla Bugzilla (REST API)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Comment 0 at 12:43:01 UTC on 19 Oct follows up bug 2018979 comment 4 (dual-purpose root transition plan). Comments 4 and 5 record the NSS pushes at 12:47:58 and 12:48:28 UTC on 20 Oct; the bug was resolved FIXED on 21 Oct. eMudhra says this removal is not related to the key incident; curl's 20 Oct bundle (emu-curl-cacert) reflects it."
+ },
+ {
+  "id": "emu-izenpe-ua-filter",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-26T13:58:35Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Spanish CA Izenpe reports the same User-Agent filtering on its OCSP responder",
+  "summary": "Izenpe files a preliminary incident report in Mozilla bug 2085787: its OCSP responder returned HTTP 403 to some HTTP client User-Agent values and 200 to others. A third party reported the problem to Izenpe by email.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085787",
+    "publisher": "Mozilla Bugzilla, bug 2085787",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2085787/comment",
+    "publisher": "Mozilla Bugzilla (REST API)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The link to the eMudhra case is an inference: the Izenpe bug does not name eMudhra, but it reports the same fault class as eMudhra bug 2085612 (filed 25 Oct) one day later and cites the same Baseline Requirements section 4.10.2. Treat it as spillover of the community checks on revocation hosts, not as part of eMudhra's incident."
+ },
+ {
+  "id": "fridge-copeland-bulletin",
+  "thread": "fridge-attack",
+  "parent": "fridge-certfr-update",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Copeland bulletin: XWEB EVO supervisors are end of service and must leave the internet",
+  "summary": "Copeland Controls, maker of Dixell XWEB, issues a French security bulletin saying XWEB EVO is end of service and gets no more security fixes. It tells customers to remove internet exposure, use a restricted VPN, change default passwords and plan a move to XWEB PRO.",
+  "sources": [
+   {
+    "url": "https://dixell.fr/wp-content/uploads/2026/10/Recommandations-pour-une-utilisation-securisee-des-superviseurs-XWEB-v1.0.pdf",
+    "publisher": "Copeland Controls (Dixell)",
+    "primary": true
+   },
+   {
+    "url": "https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-012/",
+    "publisher": "CERT-FR",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The bulletin is dated 14 October 2026; the PDF on dixell.fr was last modified 18 October. CERT-FR lists it under Documentation in alert CERTFR-2026-ALE-012. The bulletin says an in-depth investigation is under way and does not name the supermarket attacks."
+ },
+ {
+  "id": "softech-police-fraud-warning",
+  "thread": "pk-softech",
+  "parent": "softech-publica-confirms",
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Swiss police warn of fake investment calls using the stolen pension data",
+  "summary": "The Swiss police platform cybercrimepolice.ch warns that criminals could use personal and pension data from the attack on a pension software supplier to pose as financial advisers by phone. It tells people not to invest because of unsolicited calls.",
+  "sources": [
+   {
+    "url": "https://cybercrimepolice.ch/de/faelle/betrugerische-investitionsanrufe-nach-datenabfluss-bei-pensionskassendienstleister",
+    "publisher": "cybercrimepolice.ch (Swiss police)",
+    "primary": true
+   },
+   {
+    "url": "https://www.swisscybersecurity.net/news/2026-10-08/bundespensionskasse-publica-meldet-datenabfluss",
+    "publisher": "Swiss Cybersecurity",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The police page is dated 14 Oct; Swiss Cybersecurity logs it as a 15 Oct update from the Zurich and Bern cantonal police. The warning is in the conditional: no case of actual misuse was reported at the time."
  }
 ];

@@ -170,6 +170,7 @@ export const THREAD_NAMES = Object.freeze({
   joshin: "Joshin member database",
   giftee: "giftee e-gift mis-issue",
   'rakuten-travel': "Rakuten Travel booking sites",
+  doutor: "Doutor Coffee staff data",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
