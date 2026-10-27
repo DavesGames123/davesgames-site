@@ -118,6 +118,9 @@
 //      tokenkit.js         tokenKit, the mana token meshes
 //      placeholder-fly.js  PLACEHOLDER_FLY, the stand-in fly and its clips
 //      lights.js           buildLights (key, rim, fill)
+//      toss.js             createToss: the loser throws its hand
+//      pick.js             createPicker: pickPermanent, pickCard, pickFace
+//      highlight.js        createHighlights: rings and block arrows
 //
 //  GREP MAP
 //      grep -rn 'export const TABLE' scene/   table and layout numbers
@@ -131,16 +134,16 @@
 //      grep -n 'function layout'              where every card goes
 //      grep -n 'const STEP'                   one handler per choreo op
 //      grep -n 'the toss'                     the loser throws its hand
-//      grep -n 'function tossUpdate'          thrown cards: flight, landing
+//      grep -rn 'function tossUpdate' scene/  thrown cards: flight, landing
 //      grep -n 'function applyHats'           the fedora on the opponent
 //      grep -n 'function shotPose'            camera place per shot
 //      grep -rn 'export const WATCH' scene/   watch framing numbers
 //      grep -n 'function seatRects'           board boxes of the seat view
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
-//      grep -n 'function pickFace'            any card under a point (zoom)
+//      grep -rn 'function pickFace' scene/    any card under a point (zoom)
 //      grep -n 'function seatHide'            first person: your fly hides
-//      grep -n 'function blockArrows'         blocker -> attacker arrows
+//      grep -rn 'function blockArrows' scene/ blocker -> attacker arrows
 //      grep -n 'function setRig'              saver hook: the reel camera
 //      grep -n 'function deckBoxesOf'         the deck boxes print the game decks
 //      grep -n 'const regame'                 between two games (regame.js)
@@ -163,11 +166,14 @@ import { makeCanvas, canvasTexture } from './scene/canvas.js';
 import { cardGeometry, ringGeometry } from './scene/cardmesh.js';
 import { textureCache } from './scene/textures.js';
 import { spriteFactory } from './scene/sprites.js';
-import { easeOut, easeIO, rngf } from './scene/ease.js';
+import { easeOut, easeIO } from './scene/ease.js';
 import { CardObj } from './scene/cardobj.js';
 import { tokenKit } from './scene/tokenkit.js';
 import { PLACEHOLDER_FLY, PLACEHOLDER_CLIPS } from './scene/placeholder-fly.js';
 import { buildLights } from './scene/lights.js';
+import { createToss } from './scene/toss.js';
+import { createPicker } from './scene/pick.js';
+import { createHighlights } from './scene/highlight.js';
 
 export { TABLE, CLOSE_TO_BOARD, WATCH } from './scene/table.js';
 export { textureCache, MYSTERY_GLYPH } from './scene/textures.js';
@@ -770,111 +776,8 @@ export function createDuelScene(canvas, opts = {}) {
   }
 
   // ---------------------------------------------------------- the toss
-  // The loser throws its hand (choreo op toss, user: "we should have the
-  // loser throw their cards and put their head down on the table if they
-  // lose"). The fly plays headDown; at CLIPS.headDown.release the cards
-  // leave the fan and fly on ballistic arcs with spin. A card lands on the
-  // table top (or on a card that lies there) when it comes down inside the
-  // table, else on the floor. Below the table top a card does not go into
-  // the table: it hits the side and drops. On landing the card turns flat
-  // (face up or down, as it fell) and slides a little. Z.tossed holds the
-  // thrown cards; the mirror keeps them in the hand (stats().hand counts
-  // them). Reduced motion: the fly cuts to the end pose and the cards
-  // are at once where the same throw puts them. In play mode the human
-  // seat does not throw (the human has no body): that fly keeps the slump.
-  const TOSS = { g: 16, rest: 0.005, floorRest: 0.005, stackGap: 0.0016, slide: 0.15, settle: 0.12, maxT: 6 };
-  const _tv = new THREE.Vector3(), _tw = new THREE.Vector3(), _tq = new THREE.Quaternion(), _tn = new THREE.Vector3(), _te = new THREE.Euler();
-  const insideTable = (x, z, m = 0) => Math.abs(x) <= T.halfLen - m && Math.abs(z) <= T.halfDepth - m;
-  // The launch of card i of n of seat p: a fan of forward throws, and now
-  // and then a card that slips out to the side and falls to the floor.
-  function tossLaunch(p, i, n, seed) {
-    const r = rngf((seed * 977 + p * 131 + i * 31 + 7) >>> 0);
-    const side = p === 0 ? 1 : -1;
-    let a = (n > 1 ? (i / (n - 1) - 0.5) * 1.15 : 0) + (r() - 0.5) * 0.35;
-    let sp = 2.4 + 2.2 * r(), vy = 2.6 + 1.6 * r();
-    if (n > 2 && r() < 0.2) { a = (r() < 0.5 ? -1 : 1) * (1.6 + 0.4 * r()); sp = 2.6 + 1.2 * r(); vy = 1.6 + 1.0 * r(); }
-    const vel = new THREE.Vector3(side * Math.sin(a) * sp, vy, -side * Math.cos(a) * sp);
-    const spin = new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize().multiplyScalar(9 + 9 * r());
-    return { vel, spin };
-  }
-  function tossStart(p) {
-    const H = Z.hand[p];
-    if (!H.length) return;
-    const seed = (cur?.rec?.i ?? cur?.rec?.idx ?? 0) + 1;
-    const n = H.length;
-    H.splice(0).forEach((o, i) => {
-      const { vel, spin } = tossLaunch(p, i, n, seed);
-      o.toss = { p, vel, spin, rested: false, landT: 0, slideV: new THREE.Vector3(), fromQ: new THREE.Quaternion(), toQ: new THREE.Quaternion(), surface: null };
-      o.ring.visible = false; o.lunge = null; o.t = 1; o.delay = 0;
-      Z.tossed.push(o);
-    });
-    if (W.reduced) { for (let k = 0; k < TOSS.maxT * 120 && Z.tossed.some(o => !o.toss.rested); k++) tossUpdate(1 / 120, true); }
-  }
-  // Rest height at (x, z) on the table: the table top, or over the cards
-  // already there (permanents, graveyard, other thrown cards).
-  function restOn(x, z, self) {
-    let y = T.y + TOSS.rest;
-    const near = (o) => { const q = o.mesh.position; if (Math.abs(q.x - x) < T.cardH * 0.7 && Math.abs(q.z - z) < T.cardH * 0.7 && q.y > T.y - 0.01) y = Math.max(y, q.y + TOSS.stackGap + 0.004); };
-    for (const o of Z.perms.values()) near(o);
-    for (const g of Z.grave) for (const o of g) near(o);
-    for (const o of Z.tossed) if (o !== self && o.toss.rested && o.toss.surface === 'table') near(o);
-    return y;
-  }
-  function tossLand(o, surface, y) {
-    const st = o.toss, m = o.mesh;
-    st.surface = surface; st.rested = true; st.landT = 0;
-    m.position.y = y;
-    // flat, face up or down as it fell, the heading of the card kept
-    _tn.set(0, 0, 1).applyQuaternion(m.quaternion);
-    const up = _tn.y >= 0;
-    _tw.set(0, 1, 0).applyQuaternion(m.quaternion); _tw.y = 0;
-    // Rx(-pi/2) puts the card top at -z (face up), Rx(pi/2) at +z
-    const yaw = _tw.lengthSq() > 1e-6 ? (up ? Math.atan2(-_tw.x, -_tw.z) : Math.atan2(_tw.x, _tw.z)) : 0;
-    st.fromQ.copy(m.quaternion);
-    st.toQ.setFromEuler(_te.set(up ? -Math.PI / 2 : Math.PI / 2, yaw, 0, 'YXZ'));
-    st.slideV.set(st.vel.x, 0, st.vel.z).multiplyScalar(TOSS.slide / Math.max(1e-6, Math.hypot(st.vel.x, st.vel.z)) * Math.min(1, Math.hypot(st.vel.x, st.vel.z) / 4));
-    st.vel.set(0, 0, 0);
-  }
-  function tossUpdate(dt, instant = false) {
-    const steps = Math.max(1, Math.ceil(dt / (1 / 120))), h = dt / steps;
-    for (const o of Z.tossed) {
-      const st = o.toss, m = o.mesh;
-      if (st.rested) {
-        if (st.landT >= 1) continue;
-        st.landT = instant ? 1 : Math.min(1, st.landT + dt / TOSS.settle);
-        const k = easeOut(st.landT);
-        m.quaternion.slerpQuaternions(st.fromQ, st.toQ, k);
-        // a short slide, which stays on the table when it landed there
-        const nx = m.position.x + st.slideV.x * (instant ? 1 : dt / TOSS.settle) * (1 - k * 0.5);
-        const nz = m.position.z + st.slideV.z * (instant ? 1 : dt / TOSS.settle) * (1 - k * 0.5);
-        if (st.surface !== 'table' || insideTable(nx, nz, 0.02)) { m.position.x = nx; m.position.z = nz; }
-        if (st.landT >= 1) { m.quaternion.copy(st.toQ); if (st.surface === 'table') m.position.y = restOn(m.position.x, m.position.z, o); }
-        continue;
-      }
-      for (let k = 0; k < steps && !st.rested; k++) {
-        const prevY = m.position.y;
-        st.vel.y -= TOSS.g * h;
-        const nx = m.position.x + st.vel.x * h, ny = m.position.y + st.vel.y * h, nz = m.position.z + st.vel.z * h;
-        const inNow = insideTable(nx, nz);
-        if (ny < T.y && inNow && prevY >= T.y - 1e-6) {
-          // down onto the table top (or the cards on it)
-          m.position.x = nx; m.position.z = nz;
-          tossLand(o, 'table', restOn(nx, nz, o));
-          break;
-        }
-        if (ny < T.y && inNow && prevY < T.y) {
-          // under the top level and moving into the table: hit the side
-          if (Math.abs(nx) > T.halfLen - 1e-3 || Math.abs(m.position.x) > T.halfLen) st.vel.x *= -0.2;
-          if (Math.abs(nz) > T.halfDepth - 1e-3 || Math.abs(m.position.z) > T.halfDepth) st.vel.z *= -0.2;
-          m.position.y = ny;
-        } else m.position.set(nx, ny, nz);
-        if (m.position.y <= TOSS.floorRest) { tossLand(o, 'floor', TOSS.floorRest + Z.tossed.filter(x => x.toss.rested && x.toss.surface === 'floor').length * TOSS.stackGap); break; }
-        // spin
-        _tq.setFromAxisAngle(_tv.copy(st.spin).normalize(), st.spin.length() * h);
-        m.quaternion.premultiply(_tq);
-      }
-    }
-  }
+  // The loser throws its hand (ui/fly3d/scene/toss.js, grep -n 'the toss' there).
+  const { start: tossStart, update: tossUpdate } = createToss({ Z, W, seed: () => (cur?.rec?.i ?? cur?.rec?.idx ?? 0) + 1 });
   const handAnchor = p => seatPos(p, 0, T.handY + 0.15, T.handV + 0.05);
   const restAnchor = p => seatPos(p, 0, 0.02, T.halfDepth - 0.15);
   const flyHead = p => seatPos(p, 0, 1.15, T.seatV - 0.15);
@@ -1641,126 +1544,10 @@ export function createDuelScene(canvas, opts = {}) {
   function orbitBy(dx, dy) { if (!orbitStart()) return null; fpOrbit = orbitDrag(fpOrbit, +dx || 0, +dy || 0); return { ...fpOrbit }; }
   function zoomBy(k) { if (!orbitStart()) return null; fpOrbit = orbitZoom(fpOrbit, k); return { ...fpOrbit }; }
   function seatView() { fpOrbit = null; return fpSeat; }
-  // Screen point (client px, as a pointer event gives) -> NDC.
-  const _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2();
-  function toNdc(x, y) {
-    const r = canvas?.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: canvas?.clientWidth || 960, height: canvas?.clientHeight || 540 };
-    if (!(r.width > 0 && r.height > 0)) return null;
-    return _ndc.set(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
-  }
-  function castAt(x, y, objs) {
-    const n = toNdc(x, y);
-    if (!n) return null;
-    camera.updateMatrixWorld();
-    _ray.setFromCamera(n, camera);
-    const hits = _ray.intersectObjects(objs, false);
-    return hits[0] || null;
-  }
-  // A permanent under the point: { uid, id, seat, point } or null. A tap
-  // on a fly or its life dice gives { uid: null, player: seat }.
-  function pickPermanent(x, y) {
-    const list = [], owner = new Map();
-    for (let p = 0; p < 2; p++) for (const pe of mirror?.players[p].battlefield || []) { const o = Z.perms.get(pe.uid); if (o) { list.push(o.mesh); owner.set(o.mesh, { uid: pe.uid, id: pe.id, seat: p }); } }
-    const h = castAt(x, y, list);
-    if (h) return { ...owner.get(h.object), point: h.point.clone() };
-    const bodies = [];
-    for (let p = 0; p < 2; p++) { drums[p].grp.traverse(o => { if (o.isMesh) { o.userData.seat = p; bodies.push(o); } }); if (flies[p].holder.visible) flies[p].built?.root.traverse(o => { if (o.isMesh && !o.isInstancedMesh) { o.userData.seat = p; bodies.push(o); } }); }
-    const b = castAt(x, y, bodies);
-    return b ? { uid: null, player: b.object.userData.seat, point: b.point.clone() } : null;
-  }
-  // A hand card under the point: { seat, index, id } or null.
-  function pickCard(x, y) {
-    const list = [], at = new Map();
-    // a hidden card (the hand of the other fly in play mode) gives no id
-    for (let p = 0; p < 2; p++) Z.hand[p].forEach((o, i) => { list.push(o.mesh); at.set(o.mesh, { seat: p, index: i, id: o.hidden ? null : o.id }); });
-    const h = castAt(x, y, list);
-    return h ? at.get(h.object) : null;
-  }
-  // Any card under the point, for the card zoom (ui/cardzoom.js):
-  // { id, zone, seat, uid } or null. zone: hand, perm, held (a card
-  // being cast), grave, tossed. A hidden card (the question-mark back of
-  // play mode) gives id null, so the zoom never shows its face.
-  function pickFace(x, y) {
-    const list = [], at = new Map();
-    const add = (o, zone, seat) => { if (!o?.mesh?.visible) return; list.push(o.mesh); at.set(o.mesh, { id: o.hidden ? null : o.id, zone, seat, uid: o.uid ?? null }); };
-    for (let p = 0; p < 2; p++) {
-      Z.hand[p].forEach(o => add(o, 'hand', p));
-      Z.grave[p].forEach(o => add(o, 'grave', p));
-      add(Z.held[p], 'held', p);
-      for (const pe of mirror?.players[p].battlefield || []) add(Z.perms.get(pe.uid), 'perm', p);
-    }
-    Z.tossed.forEach(o => add(o, 'tossed', -1));
-    const h = castAt(x, y, list);
-    return h ? at.get(h.object) : null;
-  }
-  // highlight(ids, kind) or highlight(spec). kind: 'eligible' (can act),
-  // 'attack', 'block', 'target', 'pending'. spec (ui/play/play.js): {
-  // eligible, attackers, blocks: [[attacker, blocker]], targets, pending }.
-  // highlight(null) clears every mark. A step mark (attacking, blocking,
-  // a spell target) wins over a highlight mark.
-  const HL_COLOUR = { eligible: TOKENS.ink2, attack: null, block: null, target: TOKENS.app, pending: TOKENS.ink };
-  const hl = new Map();
-  function highlight(a, kind) {
-    if (a == null) { hl.clear(); hlPairs = []; return hl.size; }
-    if (Array.isArray(a)) {
-      const k = HL_COLOUR[kind] !== undefined ? kind : 'eligible';
-      for (const [u, v] of [...hl]) if (v === k) hl.delete(u);
-      for (const u of a) if (u != null) hl.set(u, k);
-      return hl.size;
-    }
-    hl.clear();
-    hlPairs = [];
-    const add = (list, k) => { for (const u of list || []) if (u != null && u !== -1) hl.set(u, k); };
-    add(a.eligible, 'eligible');
-    add(a.targets, 'target');
-    add(a.attackers, 'attack');
-    const bl = Array.isArray(a.blocks) ? a.blocks : a.blocks && typeof a.blocks === 'object' ? Object.entries(a.blocks).map(([x, y]) => [+x, y]) : [];
-    for (const q of bl) { if (Array.isArray(q)) { hl.set(q[1], 'block'); if (!hl.has(q[0])) hl.set(q[0], 'attack'); hlPairs.push([q[0], q[1]]); } }
-    add(a.pending, 'pending');
-    return hl.size;
-  }
-  const hlColour = (uid, seat) => { const k = hl.get(uid); return k == null ? null : HL_COLOUR[k] ?? FLY[seat]; };
-  // Block arrows (play mode): a flat bar with a head from each blocker to
-  // the attacker that it blocks (highlight spec blocks), in the colour of
-  // the blocker's seat, just over the cards. blockArrows() runs each frame,
-  // so an arrow follows its cards. highlight(null) or a spec with no
-  // blocks takes the arrows off.
-  let hlPairs = [];
-  const arrows = new THREE.Group(); arrows.name = 'block-arrows';
-  scene.add(arrows);
-  const ARROW = { w: 0.07, t: 0.012, head: 0.24, headR: 0.13, gapB: 0.38, gapA: 0.46, lift: 0.07 };
-  const arrowBar = new THREE.BoxGeometry(1, 1, 1);
-  const arrowHead = new THREE.ConeGeometry(1, 1, 3).rotateX(Math.PI / 2);   // the tip at +z
-  const _a0 = new THREE.Vector3(), _a1 = new THREE.Vector3(), _ad = new THREE.Vector3();
-  function blockArrows() {
-    const live = hlPairs.filter(([a, b]) => Z.perms.get(a) && Z.perms.get(b));
-    while (arrows.children.length < live.length) {
-      const g = new THREE.Group();
-      const mat = new THREE.MeshBasicMaterial({ color: TOKENS.ink });
-      g.add(new THREE.Mesh(arrowBar, mat), new THREE.Mesh(arrowHead, mat));
-      arrows.add(g);
-    }
-    arrows.children.forEach((g, i) => {
-      const q = live[i];
-      g.visible = !!q;
-      if (!q) return;
-      const [a, b] = q;
-      const seat = mirror?.players.findIndex(pl => pl.battlefield.some(x => x.uid === b)) ?? -1;
-      g.children[0].material.color.set(FLY[seat] || TOKENS.ink);
-      _a0.copy(Z.perms.get(b).mesh.position); _a1.copy(Z.perms.get(a).mesh.position);
-      _a0.y = _a1.y = Math.max(_a0.y, _a1.y) + ARROW.lift;
-      _ad.subVectors(_a1, _a0);
-      const d = _ad.length();
-      if (d < 1e-3) { g.visible = false; return; }
-      _ad.multiplyScalar(1 / d);
-      const len = Math.max(0.05, d - ARROW.gapB - ARROW.gapA - ARROW.head);
-      g.position.copy(_a0).addScaledVector(_ad, ARROW.gapB);
-      g.lookAt(_a1);
-      const [bar, head] = g.children;
-      bar.scale.set(ARROW.w, ARROW.t, len); bar.position.set(0, 0, len / 2);
-      head.scale.set(ARROW.headR, ARROW.t * 2, ARROW.head); head.position.set(0, 0, len + ARROW.head / 2);
-    });
-  }
+  // Pointer picks: pickPermanent, pickCard, pickFace (ui/fly3d/scene/pick.js).
+  const { pickPermanent, pickCard, pickFace } = createPicker({ canvas, camera, Z, flies, drums, mirror: () => mirror });
+  // Highlight marks and block arrows (ui/fly3d/scene/highlight.js).
+  const { highlight, hlColour, hl, blockArrows, arrows } = createHighlights({ scene, Z, mirror: () => mirror });
 
   // ---------------------------------------------------------- API
   function play(rec) {
