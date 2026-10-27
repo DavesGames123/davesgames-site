@@ -25,6 +25,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { latLonToVec3 } from '../core/geo.js';
+import { isISS } from '../core/tle.js';
 
 let ctx = null;
 export function initLabels(c) { ctx = c; }
@@ -117,15 +118,14 @@ export function rebuildStationLabels() {
     if (sats[i].cat !== 'station') continue;
     const el = document.createElement('div');
     el.className = 'station-label';
-    const upper = sats[i].name.toUpperCase();
-    const isISS = sats[i].noradId === 25544 || /\bISS\b|ZARYA/.test(upper);
-    if (isISS) el.classList.add('iss');
+    const iss = isISS(sats[i]);
+    if (iss) el.classList.add('iss');
     const short = sats[i].name.replace(/\s*\(.*\)\s*/g, '').trim();
-    el.textContent = isISS ? 'ISS · INTL SPACE STATION' : short;
+    el.textContent = iss ? 'ISS · INTL SPACE STATION' : short;
     const idx = i;
     el.addEventListener('click', (e) => { e.stopPropagation(); ctx.flyToSat(idx); });
     document.body.appendChild(el);
-    stationLabels.push({ idx, el, isISS });
+    stationLabels.push({ idx, el, isISS: iss });
   }
 }
 // Reposition station labels each frame, hiding any parked object or one hidden

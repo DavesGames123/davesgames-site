@@ -4,7 +4,7 @@
 //  Checks the core/ modules (no DOM, no browser, no network):
 //    format ..... time, delta and rate strings; the two log-scale sliders
 //                 map to their stated values and invert
-//    tle ........ classify; parseTLE skips bad triples; the demo catalog
+//    tle ........ classify; isISS; parseTLE skips bad triples; the demo catalog
 //                 elements (pinned from the pre-split main.js); liveState
 //                 is NaN where SGP4 has no solution; mergeParsed dedupes,
 //                 caps and forces the class
@@ -62,6 +62,7 @@ ok(near(F.rateSpeedToFrac(F.rateFracToSpeed(0.37)), 0.37), 'rate slider inverts'
 // ── tle ─────────────────────────────────────────────────────────────────────
 const cls = ['STARLINK-1007', 'ISS (ZARYA)', 'CSS (TIANHE)', 'FENGYUN 1C DEB', 'COSMOS 2251 DEBRIS', 'SL-16 R/B', 'ATLAS BOOSTER', 'GOES 16'].map(T.classify);
 ok(same(cls, ['starlink', 'station', 'station', 'debris', 'debris', 'rocket', 'rocket', 'payload']), 'classify by name');
+ok(same([{ noradId: 25544, name: 'X' }, { noradId: 1, name: 'ISS (NAUKA)' }, { noradId: 2, name: 'zarya' }, { noradId: 3, name: 'MISSION' }].map(T.isISS), [true, true, true, false]), 'isISS by id or name');
 const demo = T.demoDataset();
 ok(same(demo.map(p => [p.name, p.cat, p.noradId]), [['ISS (ZARYA)', 'station', 25544], ['TIANGONG', 'station', 48274], ['HUBBLE SPACE TELESCOPE', 'payload', 20580]]), 'demo catalog records');
 const OE = [

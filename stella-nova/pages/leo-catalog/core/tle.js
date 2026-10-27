@@ -7,13 +7,14 @@
 //
 //    record      { satrec, name, cat, noradId, notable }
 //    classify    name -> starlink | station | debris | rocket | payload
+//    isISS       NORAD 25544, or ISS / ZARYA in the name
 //    elements    T = 2 pi / n,  a = (MU / n^2)^(1/3),
 //                apogee / perigee = a (1 +- e) - R_earth,  n in rad/s
 //    live state  SGP4 at a date -> geodetic altitude, lat, lon and |v|
 //    merge       append new records (deduped by NORAD id) up to a cap
 //
 //  grep -n targets: "export const EARTH_R_KM", "export const MU",
-//  "export function classify", "export function parseTLE",
+//  "export function classify", "export function isISS", "export function parseTLE",
 //  "export function demoDataset", "export function orbitalElements",
 //  "export function liveState", "export function mergeParsed"
 // ============================================================================
@@ -31,6 +32,11 @@ export function classify(name) {
   if (/ DEB( |$)|DEBRIS/.test(n))                         return 'debris';
   if (/ R\/B|ROCKET BODY| BOOSTER/.test(n))               return 'rocket';
   return 'payload';
+}
+// The ISS: its NORAD id, or a name with ISS or ZARYA (the station labels and
+// trails draw it brighter).
+export function isISS(s) {
+  return s.noradId === 25544 || /\bISS\b|ZARYA/.test(s.name.toUpperCase());
 }
 // Parse a two-line-element text block into satellite records (name + SGP4
 // satrec + NORAD id + category), skipping malformed or unparseable triples.

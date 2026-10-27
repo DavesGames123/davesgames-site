@@ -18,7 +18,7 @@
 //        │    │                              source: shaders/satellite.*.glsl
 //        │    ├─ streamMesh     wind streamlines (LineSegments, GPU-animated)
 //        │    │                              source: shaders/streamline.*.glsl
-//        │    └─ trailLine + stationTrails   orbit paths (THREE.Line)
+//        │    └─ trailLine + stationTrails   orbit paths (view/trails.js)
 //        ├─ atmosphere shell    fresnel glow   source: shaders/atmosphere.*.glsl
 //        └─ stars               THREE.Points backdrop
 //
@@ -47,6 +47,7 @@
 //      view/boot-ui.js ...... splash log, #acq strip, load rows, status, tweens
 //      view/earth.js ........ Earth map texture, placeholder, atmosphere, stars
 //      view/labels.js ....... city, station and sat HTML labels (per frame)
+//      view/trails.js ....... orbit loops: the selected object and the stations
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -59,7 +60,7 @@
 //      storms ............... "function loadStorms"  NOAA active cyclones
 //      streamlines .......... "function buildStreamlineMesh"  GPU comet mesh
 //      labels ............... "initLabels"        page state for view/labels.js
-//      orbit trails ......... "function buildTrailFor"  selected + station paths
+//      orbit trails ......... "initTrails"        page state for view/trails.js
 //      filters / overlays ... "// FILTERS"         checkbox wiring
 //      picking .............. "function pickAt"    hover/lock chip + reticle
 //      object info .......... "function showObjectInfo"  right-hand panel
@@ -83,6 +84,7 @@ import { CYCLONES, traceStreamlines } from './core/wind.js';
 import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
+import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
 import { initLabels, buildCityLabels, updateCityLabels, hideCityLabels, rebuildStationLabels, updateStationLabels,
          buildSatLabelPool, updateSatLabels, clearSatLabels } from './view/labels.js';
 import { REDUCED_MOTION, splash, setGauge, tweenNumber, retrigger, playIntro, acqCountEl, showStrip, finishAcquisition,
@@ -471,116 +473,9 @@ initLabels({
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// ORBIT TRAIL (selected sat)
+// ORBIT TRAILS  (selected object and stations: view/trails.js)
 // ═══════════════════════════════════════════════════════════════════
-// Orbit trail for the selected object: one closed loop sampled over one period.
-let trailLine = null;
-let trailLastBuildTime = 0;
-let trailLastIdx = -1;
-let chipTrailEnabled = true;
-// Rebuild the selected object's trail by propagating it across one orbital
-// period and stringing the points into a line.
-function buildTrailFor(idx) {
-  if (idx < 0 || idx >= sats.length) return;
-  const s = sats[idx];
-  if (!s.satrec || s._isStorm) return;
-  const periodMin = (2*Math.PI) / s.satrec.no;
-  const N = 96;
-  const pts = [];
-  const baseT = SIM.time.getTime();
-  for (let i = 0; i <= N; i++) {
-    const t = new Date(baseT + (i/N) * periodMin * 60000);
-    const pv = satellite.propagate(s.satrec, t);
-    if (!pv.position) continue;
-    const gmst = satellite.gstime(t);
-    const ecef = satellite.eciToEcf(pv.position, gmst);
-    const v = new THREE.Vector3();
-    ecefToScene(ecef.x, ecef.y, ecef.z, v);
-    pts.push(v);
-  }
-  if (trailLine) {
-    earthRoot.remove(trailLine);
-    trailLine.geometry.dispose();
-    trailLine = null;
-  }
-  if (pts.length < 2) return;
-  const geom = new THREE.BufferGeometry().setFromPoints(pts);
-  const mat = new THREE.LineBasicMaterial({
-    color: 0x5ad7ff, transparent: true, opacity: 0.55,
-  });
-  trailLine = new THREE.Line(geom, mat);
-  earthRoot.add(trailLine);
-}
-// Rebuild the selected trail only when the selection changes or sim time has
-// drifted far enough that the old loop is stale.
-function maybeRebuildTrail() {
-  if (!OVERLAY.trails || !chipTrailEnabled) {
-    if (trailLine) { earthRoot.remove(trailLine); trailLine.geometry.dispose(); trailLine = null; }
-    return;
-  }
-  if (selectedIdx < 0) {
-    if (trailLine) { earthRoot.remove(trailLine); trailLine.geometry.dispose(); trailLine = null; }
-    return;
-  }
-  const dtSinceBuild = SIM.time.getTime() - trailLastBuildTime;
-  if (selectedIdx !== trailLastIdx || Math.abs(dtSinceBuild) > 300000) {
-    buildTrailFor(selectedIdx);
-    trailLastIdx = selectedIdx;
-    trailLastBuildTime = SIM.time.getTime();
-  }
-}
-
-// Always-on orbital trails for every station (ISS, Tiangong, Dragon, Cygnus, etc.)
-// Every station gets a permanent orbit loop (ISS drawn brighter). Rebuilt from
-// the catalog and refreshed periodically as SGP4 drifts.
-const stationTrails = [];
-let lastStationTrailBuild = -Infinity;
-function rebuildStationTrails() {
-  for (const st of stationTrails) {
-    earthRoot.remove(st.line);
-    st.line.geometry.dispose();
-    st.line.material.dispose();
-  }
-  stationTrails.length = 0;
-  for (let i = 0; i < sats.length; i++) {
-    if (sats[i].cat !== 'station') continue;
-    const s = sats[i];
-    if (!s.satrec || s._isStorm) continue;
-    const periodMin = (2*Math.PI) / s.satrec.no;
-    const N = 96;
-    const pts = [];
-    const baseT = SIM.time.getTime();
-    for (let k = 0; k <= N; k++) {
-      const t = new Date(baseT + (k/N) * periodMin * 60000);
-      const pv = satellite.propagate(s.satrec, t);
-      if (!pv.position) continue;
-      const gmst = satellite.gstime(t);
-      const ecef = satellite.eciToEcf(pv.position, gmst);
-      const v = new THREE.Vector3();
-      ecefToScene(ecef.x, ecef.y, ecef.z, v);
-      pts.push(v);
-    }
-    if (pts.length < 2) continue;
-    const upper = s.name.toUpperCase();
-    const isISS = s.noradId === 25544 || /\bISS\b|ZARYA/.test(upper);
-    const geom = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({
-      color: isISS ? 0xffd070 : 0xe8e8d8,
-      transparent: true,
-      opacity: isISS ? 0.65 : 0.32,
-    });
-    const line = new THREE.Line(geom, mat);
-    earthRoot.add(line);
-    stationTrails.push({ idx: i, line, isISS });
-  }
-  lastStationTrailBuild = SIM.time.getTime();
-}
-function maybeRebuildStationTrails() {
-  // Rebuild every 60 sec of sim time so the closed loops stay accurate as
-  // SGP4 drifts; also catches the case where stations were added later.
-  const elapsed = SIM.time.getTime() - lastStationTrailBuild;
-  if (Math.abs(elapsed) > 60000) rebuildStationTrails();
-}
+initTrails({ earthRoot, SIM, OVERLAY, sats: () => sats, selectedIdx: () => selectedIdx });
 
 // ═══════════════════════════════════════════════════════════════════
 // FILTERS + OVERLAYS
@@ -741,8 +636,7 @@ const chipTrailBtn = document.getElementById('chip-trail');
 const chipFocusBtn = document.getElementById('chip-focus');
 chipTrailBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  chipTrailEnabled = !chipTrailEnabled;
-  chipTrailBtn.classList.toggle('active', chipTrailEnabled);
+  chipTrailBtn.classList.toggle('active', toggleChipTrail());
   maybeRebuildTrail();
 });
 chipFocusBtn.addEventListener('click', (e) => {
