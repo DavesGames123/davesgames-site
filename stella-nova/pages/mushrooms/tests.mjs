@@ -209,6 +209,30 @@ test('every saver code extract resolves in the shipped source', () => {
   }
 });
 
+// A fingerprint of the engine output (every form and random, two seeds)
+// and of the param helpers, pinned on 2026-10-27 before the engine split.
+// A change of this hash is a change of behaviour.
+test('engine output and param helpers match the pinned fingerprint', async () => {
+  const E = await import('./engine.js');
+  const fnv = (h, x) => Math.imul(h ^ x, 16777619) >>> 0;
+  const hashArr = (h, a) => { for (const x of new Uint32Array(new Float64Array(a).buffer)) h = fnv(h, x); return h; };
+  const hashS = (h, s) => { for (let i = 0; i < s.length; i++) h = fnv(h, s.charCodeAt(i)); return h; };
+  const specHash = s => {
+    let h = 2166136261;
+    for (const a of [s.xy, s.offs, s.kinds, s.part, s.lens]) h = hashArr(h, a);
+    for (const w of s.washes) { h = hashArr(h, w.xy); h = hashS(h, w.color + w.part); }
+    return hashS(h, s.name + JSON.stringify(s.bbox) + JSON.stringify(s.stats));
+  };
+  const out = [];
+  for (const f of [...FORM_KEYS, 'random']) for (const seed of [3, 4242]) out.push(specHash(buildSpecimen(formParams(f, seed), seed)));
+  const r = mulberry(9), a = randomParams(11), b = randomParams(12);
+  const fn = JSON.stringify([mutate(a, 0.6, r, new Set(['capR'])), blendParams(a, b, 0.3), E.takeGroup(a, b, 'stem', new Set(['stemH'])),
+    E.applyLocks(a, b, new Set(['capHue'])), diffParams(a, b), encodeShare({ f: 'fly', s: 5, p: diffParams(a, DEFAULTS) }),
+    decodeShare('#f=fly&s=5&p=capR:80,bad:1'), E.hsl(200, 0.4, 0.5), E.roundTo(1.23456, 0.01), randomName(77), E.UNIT_MM, E.PART_NAMES, E.GROUPS.length, PARAMS.length]);
+  const got = hashS(hashArr(2166136261, out), fn).toString(16);
+  ok(got === 'a2c6ede7', 'fingerprint ' + got + ', want a2c6ede7');
+});
+
 // ── tree of life ────────────────────────────────────────────────────────────
 const treeOf = (seed, extra = {}) => buildTree(Object.assign({ rootParams: formParams('fly', 1), rootSeed: 77, seed, maxTips: 24 }, extra));
 const treeKey = t => JSON.stringify(t.nodes.map(n => [n.parent, n.kind, +n.t.toFixed(9), n.name, n.seed, PARAMS.map(d => n.params[d.key])]));
