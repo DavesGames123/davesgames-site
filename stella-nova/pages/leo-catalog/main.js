@@ -52,6 +52,7 @@
 //      view/selection.js .... picking, chip, reticle, info panel, fly-to
 //      view/filters.js ...... class filter rows, highlight, overlay boxes, counts
 //      view/catalog.js ...... the sats array: TLE groups, merge order, demo, storms
+//      view/intro-camera.js . the camera swing-in at reveal
 //      view/earth.js ........ Earth map texture, placeholder, atmosphere, stars
 //      view/labels.js ....... city, station and sat HTML labels (per frame)
 //      view/trails.js ....... orbit loops: the selected object and the stations
@@ -87,6 +88,7 @@ import { fmtRate, rateSpeedToFrac } from './core/format.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { initIntroCamera, startIntroCamera, stepIntroCamera } from './view/intro-camera.js';
 import { sats, initCatalog, loadCatalog, useDemoIfEmpty, loadStorms } from './view/catalog.js';
 import { initFilters, highlightCat, updateCounts } from './view/filters.js';
 import { initSelection, selectedIdx, chipLocked, setSelection, lockChipTo, unlockChip, flyToSat, flyTo, isFlying,
@@ -272,27 +274,9 @@ buildCityLabels();
 buildSatLabelPool();
 
 
-// Intro camera: swing in from far out and to the side to the default view.
-// Spherical coordinates about the origin, eased with a quintic ease-out.
-// Any user drag cancels the move.
-const INTRO_MS = 2600;
-const introEnd = new THREE.Spherical().setFromVector3(camera.position);
-const introStart = new THREE.Spherical(7.5, introEnd.phi + 0.35, introEnd.theta - 1.5);
-const _introSph = new THREE.Spherical();
-let introT0 = -1;
-camera.position.setFromSpherical(introStart);
-controls.addEventListener('start', () => { introT0 = -1; });
-function stepIntroCamera(now) {
-  if (introT0 < 0) return;
-  const k = Math.min(1, (now - introT0) / INTRO_MS);
-  const e = 1 - Math.pow(1 - k, 5);
-  _introSph.set(
-    introStart.radius + (introEnd.radius - introStart.radius) * e,
-    introStart.phi    + (introEnd.phi    - introStart.phi)    * e,
-    introStart.theta  + (introEnd.theta  - introStart.theta)  * e);
-  camera.position.setFromSpherical(_introSph);
-  if (k >= 1) introT0 = -1;
-}
+// Intro camera (view/intro-camera.js): park the camera far out; the reveal
+// swings it in to the default view.
+initIntroCamera(camera, controls);
 
 // Lift the title card: start the camera swing, power on the panels (CSS
 // boot-in), show the #acq strip, and let every object that already arrived
@@ -305,8 +289,7 @@ function revealScene() {
   setTimeout(() => { splashGone = true; }, 700);
   document.body.classList.replace('boot-wait', 'boot-in');
   showStrip();
-  if (REDUCED_MOTION) camera.position.setFromSpherical(introEnd);
-  else introT0 = performance.now();
+  startIntroCamera(REDUCED_MOTION);
   stampBirths(0, sats.length, 2.2);
   pingGlobe(0x66e0ff);
 }
