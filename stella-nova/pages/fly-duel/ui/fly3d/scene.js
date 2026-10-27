@@ -37,8 +37,8 @@
 //
 //  The fly. ui/fly3d/fly.js (another package) gives buildFly({ colour,
 //  seed }) -> { root, rig, dispose } and animate(rig, clip, t, opts). Until
-//  that file exists, a placeholder fly with the same API (in this file)
-//  stands in. The scene loads fly.js with a dynamic import and changes to
+//  that file exists, a placeholder fly with the same API
+//  (ui/fly3d/scene/placeholder-fly.js) stands in. The scene loads fly.js with a dynamic import and changes to
 //  it when the import works. The brain map (ui/fly3d/brain3d.js,
 //  createBrainMap) loads the same way. Without it there is no map.
 //
@@ -107,30 +107,34 @@
 //      canvas null or headless: true builds the scene graph without a
 //      renderer (node tests).
 //
+//  MODULE TREE   (ui/fly3d/scene/, one concern per file)
+//      table.js            TABLE, WATCH, CLOSE_TO_BOARD, YAW, seatPos, seatQuat
+//      canvas.js           makeCanvas, canvasTexture
+//      cardmesh.js         cardOutline, cardGeometry, ringGeometry
+//      textures.js         textureCache (faces, back, mystery), fontsReady
+//      sprites.js          spriteFactory (damage numbers, banners)
+//      ease.js             easeOut, easeIO, rngf
+//      cardobj.js          class CardObj, one card on the table
+//      tokenkit.js         tokenKit, the mana token meshes
+//      placeholder-fly.js  PLACEHOLDER_FLY, the stand-in fly and its clips
+//      lights.js           buildLights (key, rim, fill)
+//
 //  GREP MAP
-//      grep -n 'export const TABLE'           table and layout numbers
-//      grep -n 'function seatPos'             seat space -> world
-//      grep -n 'const FACE_PX'                card face canvas size
-//      grep -n 'function fontsReady'          wait for STIX Two Text
-//      grep -n 'function textureCache'        faces and back (ui/cardface.js)
-//      grep -n 'function cardGeometry'        chamfered card mesh
-//      grep -n 'class CardObj'                one card on the table
-//      grep -n 'setHidden(on)'                question-mark caps, no id
-//      grep -n 'function drawMystery'         the question-mark back
+//      grep -rn 'export const TABLE' scene/   table and layout numbers
+//      grep -rn 'function seatPos' scene/     seat space -> world
+//      grep -rn 'const FACE_PX' scene/        card face canvas size
+//      grep -rn 'class CardObj' scene/        one card on the table
+//      grep -rn 'setHidden(on)' scene/        question-mark caps, no id
 //      grep -n 'function hiddenSeat'          whose hand is hidden
 //      ui/fly3d/hall.js buildHall             hall, folding table, mats,
 //                                             chairs, crowd, other tables
-//      grep -n 'function buildLights'         key, rim, fill
-//      grep -n 'function placeholderBuildFly' stand-in fly
-//      grep -n 'function placeholderAnimate'  stand-in clips
 //      grep -n 'function layout'              where every card goes
 //      grep -n 'const STEP'                   one handler per choreo op
 //      grep -n 'the toss'                     the loser throws its hand
 //      grep -n 'function tossUpdate'          thrown cards: flight, landing
 //      grep -n 'function applyHats'           the fedora on the opponent
 //      grep -n 'function shotPose'            camera place per shot
-//      grep -n 'export const WATCH'           watch framing numbers
-//      grep -n 'export const CLOSE_TO_BOARD'  the close shot keeps the board
+//      grep -rn 'export const WATCH' scene/   watch framing numbers
 //      grep -n 'function seatRects'           board boxes of the seat view
 //      grep -n 'const SEAT_POSE'              play seat camera
 //      grep -n 'function shotSubject'         what a shot looks at (tests)
@@ -146,584 +150,31 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CARD } from '../../game/cards.js';
 import { PALETTE, colourKey } from '../art.js';
-import { drawCard, cardBack, loadCardArt, getCardArt } from '../cardface.js';
-import { TOKENS, FLY, SANS, MONO } from '../tokens.js';
+import { TOKENS, FLY, MONO } from '../tokens.js';
 import { choreograph, mirrorOf, applyStep, mirrorDiff } from './choreo.js';
-import { landProduces, colourHex, tokenShape, stackLayout, STACK } from './mana.js';
-import { buildHall, HALL, CROWD_SECTOR, MAT } from './hall.js';
+import { landProduces, colourHex, stackLayout } from './mana.js';
+import { buildHall, CROWD_SECTOR, MAT } from './hall.js';
 import { createDirector, recordInfo, SHOTS, orbitFrom, orbitPos, orbitDrag, orbitZoom } from './director.js';
 import { createLifeDice } from './d20.js';
 import { createDice } from './dice3d.js';
 import { createRegame } from './regame.js';
+import { TABLE as T, YAW, CLOSE_TO_BOARD, WATCH, seatPos, seatQuat } from './scene/table.js';
+import { makeCanvas, canvasTexture } from './scene/canvas.js';
+import { cardGeometry, ringGeometry } from './scene/cardmesh.js';
+import { textureCache } from './scene/textures.js';
+import { spriteFactory } from './scene/sprites.js';
+import { easeOut, easeIO, rngf } from './scene/ease.js';
+import { CardObj } from './scene/cardobj.js';
+import { tokenKit } from './scene/tokenkit.js';
+import { PLACEHOLDER_FLY, PLACEHOLDER_CLIPS } from './scene/placeholder-fly.js';
+import { buildLights } from './scene/lights.js';
 
-// ------------------------------------------------------------ dimensions
-export const TABLE = {
-  y: 2.0, thick: 0.09, halfLen: 4.6, halfDepth: 3.45,
-  cardW: 0.56, cardH: 0.784, cardT: 0.008,
-  landV: 2.2, creatureV: 1.2, attackV: 0.48, rowHalf: 1.75,
-  deckU: 2.35, deckV: 1.35, graveU: 2.35, graveV: 0.45,
-  lifeU: -2.52, lifeV: 1.12, lifeSize: 0.27,
-  handV: 3.75, handY: 0.12, handR: 0.38,
-  stageU: 0.7, stageV: 2.0, stageY: 1.0,
-  seatV: 4.2, seatTop: 1.16,
-  flyScale: 2.0, handScale: 0.78, fanR: 0.3,
-};
-const T = TABLE;
-const YAW = [0, Math.PI];
-// Watch-mode framing of the wide (and win) shot and of the tall-frame
-// wide and combat shots: radius, elevation, look height above the table,
-// the side drift, and the field of view of every watch shot. Tuned so the
-// flies fill the frame with both heads, both seats and both maps in it
-// (tests/fly3d.test.mjs 'camera framing').
-// fillTall: the tall shot radius factor of a fill frame (setClear fill):
-// the camera goes nearer, the table ends may lie under the brains.
-// The close shot looks this far from the held card toward the centre of
-// the board (0: at the card, 1: at the centre).
-export const CLOSE_TO_BOARD = 0.7;
-export const WATCH = { wideR: 7.6, wideEl: 0.42, wideLook: 0.7, drift: 0.3, tallR: 11.5, tallEl: 0.55, fov: 40, fitAspect: 1.7, fillTall: 0.78 };
-
-// Seat space (u, y above the table top, v) -> world.
-function seatPos(p, u, y, v, out = new THREE.Vector3()) {
-  return p === 0 ? out.set(u, T.y + y, v) : out.set(-u, T.y + y, -v);
-}
-const _e = new THREE.Euler(), _q = new THREE.Quaternion();
-// Seat yaw, then local XYZ euler (radians).
-function seatQuat(p, x = 0, y = 0, z = 0, out = new THREE.Quaternion()) {
-  out.setFromEuler(_e.set(0, YAW[p], 0));
-  return out.multiply(_q.setFromEuler(_e.set(x, y, z, 'YXZ')));
-}
-
-// --------------------------------------------------------- canvas utils
-function makeCanvas(w, h) {
-  if (typeof document !== 'undefined' && document.createElement) {
-    const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
-  }
-  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
-  return null;
-}
-
-function canvasTexture(cv, { srgb = true, aniso = 8 } = {}) {
-  if (!cv) return null;
-  const t = new THREE.CanvasTexture(cv);
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = aniso;
-  return t;
-}
-
-// The card shape: the elytron plate of ui/cardface.js. The top corners
-// are cut at 45 degrees (chamfer = 7 % of the width), the bottom corners
-// are round (radius = 5 % of the width). Counter-clockwise points.
-function cardOutline(W, H, arcSeg = 4) {
-  const c = 0.07 * W, r = 0.05 * W, x0 = -W / 2, x1 = W / 2, y0 = -H / 2, y1 = H / 2;
-  const pts = [];
-  const arc = (cx, cy, a0, a1) => { for (let i = 0; i <= arcSeg; i++) { const a = a0 + (a1 - a0) * i / arcSeg; pts.push(new THREE.Vector2(cx + r * Math.cos(a), cy + r * Math.sin(a))); } };
-  arc(x1 - r, y0 + r, -Math.PI / 2, 0);
-  pts.push(new THREE.Vector2(x1, y1 - c), new THREE.Vector2(x1 - c, y1), new THREE.Vector2(x0 + c, y1), new THREE.Vector2(x0, y1 - c));
-  arc(x0 + r, y0 + r, Math.PI, Math.PI * 1.5);
-  return pts;
-}
-
-// ------------------------------------------------------------ card face
-// The card faces and the card back come from ui/cardface.js (drawCard,
-// cardBack): the same painted plate cards as the DOM cards of section 01.
-// One canvas per card id, 5:7. FACE_PX[0] is the desktop size, so a
-// close-up shot stays sharp. FACE_PX[1] is the phone size (less texture
-// memory). The texture has mipmaps, so the wide shot does not shimmer.
-const FACE_PX = [[360, 504], [256, 358]];
-// The card text is STIX Two Text (lib/sci.css). A canvas does not wait
-// for a web font: it draws the fallback serif. fontsReady() resolves when
-// the three faces of the card text are loaded (or at once without a DOM).
-let fontsPromise = null;
-function fontsReady() {
-  if (fontsPromise) return fontsPromise;
-  const fs = typeof document !== 'undefined' ? document.fonts : null;
-  if (!fs?.load) return (fontsPromise = Promise.resolve(false));
-  const fam = "'STIX Two Text'";
-  fontsPromise = Promise.all([`500 20px ${fam}`, `600 20px ${fam}`, `italic 400 20px ${fam}`].map(f => fs.load(f).catch(() => null)))
-    .then(() => true, () => false);
-  return fontsPromise;
-}
-
-// --------------------------------------------------------- texture cache
-// face(id) -> CanvasTexture or null (node: no canvas, the caller uses a
-// flat colour). The face is drawn at once with the placeholder picture,
-// then again when the font loads and when loadCardArt() resolves.
-export function textureCache({ coarse = false } = {}) {
-  const faces = new Map();
-  let back = null;
-  const all = [];
-  const [FW, FH] = FACE_PX[coarse ? 1 : 0];
-  const small = FW < 300;
-  function face(id) {
-    if (faces.has(id)) return faces.get(id);
-    const card = CARD[id] || { id, name: id, type: 'spell', colour: 'none', cost: {} };
-    const cv = makeCanvas(FW, FH);
-    const g = cv?.getContext?.('2d');
-    let tex = null;
-    if (g) {
-      const paint = () => {
-        g.setTransform(1, 0, 0, 1, 0, 0);
-        g.clearRect(0, 0, FW, FH);
-        drawCard(g, card, { w: FW, h: FH, art: getCardArt(id, { small }) });
-        if (tex) tex.needsUpdate = true;
-      };
-      paint();
-      tex = canvasTexture(cv);
-      tex.userData.repaint = paint;
-      fontsReady().then(paint);
-      loadCardArt(id, { small }).then(img => { if (img && faces.get(id) === tex) paint(); }).catch(() => {});
-      all.push(tex);
-    }
-    faces.set(id, tex);
-    return tex;
-  }
-  // One back for the deck, the hidden side of every card and the hand of
-  // the other fly (the back material is on the back cap of each card).
-  function backTex() {
-    if (back !== null) return back;
-    const cv = makeCanvas(FW, FH);
-    const g = cv?.getContext?.('2d');
-    if (g) {
-      const paint = () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FW, FH); cardBack(g, { w: FW, h: FH }); if (back) back.needsUpdate = true; };
-      paint();
-      back = canvasTexture(cv);
-      back.userData.repaint = paint;
-      fontsReady().then(paint);
-      all.push(back);
-    } else back = undefined;
-    return back;
-  }
-  // The hidden card (play mode): the card back with a big question mark.
-  // Both caps of a hand card of the other fly and the top of its library
-  // show it, so no camera angle shows a face (and the texture carries no
-  // card id). Our own design, from cardBack().
-  let mystery = null;
-  function mysteryTex() {
-    if (mystery !== null) return mystery;
-    const cv = makeCanvas(FW, FH);
-    const g = cv?.getContext?.('2d');
-    if (g) {
-      const paint = () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FW, FH); drawMystery(g, FW, FH); if (mystery) mystery.needsUpdate = true; };
-      paint();
-      mystery = canvasTexture(cv);
-      mystery.userData.repaint = paint;
-      mystery.userData.mystery = true;
-      all.push(mystery);
-    } else mystery = undefined;
-    return mystery;
-  }
-  return { face, back: backTex, mystery: mysteryTex, size: [FW, FH], dispose() { for (const t of all) t.dispose(); faces.clear(); } };
-}
-
-// The question mark on the card back: a dark disc in the centre with a
-// bronze ring and a big '?' (MYSTERY_GLYPH). Shared by the 3D hidden card.
-export const MYSTERY_GLYPH = '?';
-function drawMystery(g, w, h) {
-  cardBack(g, { w, h });
-  const r = Math.min(w, h) * 0.34, cx = w / 2, cy = h / 2;
-  g.save();
-  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2);
-  g.fillStyle = 'rgba(10,8,5,0.88)'; g.fill();
-  g.lineWidth = Math.max(2, r * 0.07); g.strokeStyle = '#c9a45a'; g.stroke();
-  g.fillStyle = '#e8cf8a';
-  g.font = `700 ${Math.round(r * 1.5)}px ${SANS}`;
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(MYSTERY_GLYPH, cx, cy + r * 0.06);
-  g.restore();
-}
-
-// Text on a sprite (damage numbers, banners). Crisp: a dark outline, no
-// glow. Cached by text and colour.
-function spriteFactory() {
-  const cache = new Map();
-  function tex(text, colour, { size = 64, pad = 18, panel = false } = {}) {
-    const key = `${text}|${colour}|${size}|${panel}`;
-    if (cache.has(key)) return cache.get(key);
-    const font = `700 ${size}px ${panel ? SANS : MONO}`;
-    let cv = makeCanvas(8, 8), w = 8, h = 8, t = null;
-    if (cv && cv.getContext) {
-      let g = cv.getContext('2d'); g.font = font;
-      w = Math.ceil(g.measureText(text).width + pad * 2); h = Math.ceil(size * 1.45);
-      cv.width = w; cv.height = h; g = cv.getContext('2d'); g.font = font;
-      g.textAlign = 'center'; g.textBaseline = 'middle';
-      if (panel) {
-        g.fillStyle = TOKENS.panel; g.strokeStyle = colour; g.lineWidth = 3;
-        g.beginPath(); g.roundRect ? g.roundRect(1.5, 1.5, w - 3, h - 3, 10) : g.rect(1.5, 1.5, w - 3, h - 3); g.fill(); g.stroke();
-        g.fillStyle = TOKENS.ink; g.fillText(text, w / 2, h / 2 + 2);
-      } else {
-        g.lineJoin = 'round'; g.lineWidth = size * 0.16; g.strokeStyle = TOKENS.bg; g.strokeText(text, w / 2, h / 2);
-        g.fillStyle = colour; g.fillText(text, w / 2, h / 2);
-      }
-      t = canvasTexture(cv, { aniso: 1 });
-    }
-    const out = { tex: t, aspect: w / h };
-    cache.set(key, out);
-    return out;
-  }
-  function make(text, colour, height = 0.3, o = {}) {
-    const { tex: t, aspect } = tex(text, colour, o);
-    const mat = new THREE.SpriteMaterial({ map: t, color: t ? 0xffffff : new THREE.Color(colour), depthTest: false, transparent: true });
-    const s = new THREE.Sprite(mat);
-    s.scale.set(height * aspect, height, 1);
-    s.renderOrder = 10;
-    return s;
-  }
-  return { make, dispose() { for (const v of cache.values()) v.tex?.dispose(); cache.clear(); } };
-}
-
-// ----------------------------------------------------------- card mesh
-// One BufferGeometry: front cap (group 0), back cap (group 1), edge
-// (group 2). The back UVs are mirrored so the back reads the right way.
-function cardGeometry(W = T.cardW, H = T.cardH, D = T.cardT) {
-  const pts = cardOutline(W, H);
-  const tris = THREE.ShapeUtils.triangulateShape(pts, []);
-  const pos = [], nor = [], uv = [], idx = [];
-  const n = pts.length;
-  const x0 = -W / 2, y0 = -H / 2;
-  // front
-  for (const p of pts) { pos.push(p.x, p.y, D / 2); nor.push(0, 0, 1); uv.push((p.x - x0) / W, (p.y - y0) / H); }
-  for (const t of tris) idx.push(t[0], t[1], t[2]);
-  const nf = idx.length;
-  // back
-  for (const p of pts) { pos.push(p.x, p.y, -D / 2); nor.push(0, 0, -1); uv.push(1 - (p.x - x0) / W, (p.y - y0) / H); }
-  for (const t of tris) idx.push(n + t[0], n + t[2], n + t[1]);
-  const nb = idx.length - nf;
-  // edge
-  const base = 2 * n;
-  for (let i = 0; i < n; i++) {
-    const a = pts[i], b = pts[(i + 1) % n];
-    const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1, nx = dy / l, ny = -dx / l;
-    const k = base + i * 4;
-    pos.push(a.x, a.y, D / 2, b.x, b.y, D / 2, b.x, b.y, -D / 2, a.x, a.y, -D / 2);
-    for (let j = 0; j < 4; j++) { nor.push(nx, ny, 0); uv.push(0, 0); }
-    idx.push(k, k + 3, k + 1, k + 1, k + 3, k + 2);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  g.addGroup(0, nf, 0); g.addGroup(nf, nb, 1); g.addGroup(nf + nb, idx.length - nf - nb, 2);
-  return g;
-}
-
-// An outline ring just outside the card (attack, block, target marks).
-function ringGeometry(W = T.cardW, H = T.cardH, w = 0.035) {
-  const outer = cardOutline(W + 2 * w, H + 2 * w), inner = cardOutline(W, H);
-  const s = new THREE.Shape(outer);
-  s.holes.push(new THREE.Path(inner.slice().reverse()));
-  return new THREE.ShapeGeometry(s);
-}
-
-const easeOut = t => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
-// A small seeded random number source (the toss of a hand is the same
-// for the same record).
-function rngf(seed) { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-const easeIO = t => { t = Math.min(1, Math.max(0, t)); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
-
-// One card on the table. It moves toward its target with an arc.
-class CardObj {
-  constructor(W, id) {
-    this.W = W; this.id = id; this.uid = null;
-    const face = W.tex.face(id);
-    this.front = new THREE.MeshStandardMaterial({
-      map: face || null, color: face ? 0xffffff : new THREE.Color(PALETTE[colourKey(CARD[id]?.colour)]?.ink || TOKENS.none),
-      roughness: 0.58, metalness: 0, emissive: 0xffffff, emissiveMap: face || null, emissiveIntensity: 0,
-    });
-    this.mesh = new THREE.Mesh(W.cardGeo, [this.front, W.backMat, W.edgeMat]);
-    this.mesh.castShadow = true; this.mesh.receiveShadow = true;
-    this.mesh.userData.card = id;
-    this.ring = new THREE.Mesh(W.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
-    this.ring.position.z = -T.cardT / 2 - 0.002; this.ring.visible = false;
-    this.mesh.add(this.ring);
-    this.badge = null; this.badgeKey = '';
-    this.fromP = new THREE.Vector3(); this.fromQ = new THREE.Quaternion();
-    this.toP = new THREE.Vector3(); this.toQ = new THREE.Quaternion();
-    this.t = 1; this.dur = 0; this.arc = 0;
-    this.next = null;                 // { dur, arc } for the next move
-    this.dim = 1; this.dimTo = 1; this.glow = 0; this.glowTo = 0;
-    this.scale = 1; this.scaleTo = 1;
-    this.lunge = null;                // { dir: Vector3, t, dur }
-    this.pulse = 0;
-    this.hidden = false;
-    W.cards.add(this.mesh);
-  }
-  // Hidden (play mode, a hand card of the other fly): both caps show the
-  // question-mark back, and the mesh carries no card id.
-  setHidden(on) {
-    on = !!on;
-    if (on === this.hidden) return;
-    this.hidden = on;
-    const ms = this.mesh.material;
-    ms[0] = on ? this.W.mysteryMat : this.front;
-    ms[1] = on ? this.W.mysteryMat : this.W.backMat;
-    this.mesh.userData.card = on ? null : this.id;
-  }
-  place(p, q) { this.mesh.position.copy(p); this.mesh.quaternion.copy(q); this.toP.copy(p); this.toQ.copy(q); this.t = 1; this.dur = 0; }
-  // Move toward p, q. A zone change (this.next) always starts a new arc.
-  // follow: a small change of the target (a fan that moves with the
-  // fly's hand) changes the end point and does not start a new move.
-  target(p, q, dur = 0.35, arc = 0, follow = false) {
-    let delay = 0;
-    const d2 = this.toP.distanceToSquared(p), dq = Math.abs(this.toQ.dot(q));
-    if (this.next) { ({ dur, arc } = this.next); delay = this.next.delay || 0; this.next = null; }
-    else {
-      if (d2 < 1e-8 && dq > 0.999999) return;
-      if (follow && d2 < 0.0025 && dq > 0.9995) { this.toP.copy(p); this.toQ.copy(q); return; }
-    }
-    this.fromP.copy(this.basePos ?? this.mesh.position); this.fromQ.copy(this.mesh.quaternion);
-    this.toP.copy(p); this.toQ.copy(q);
-    this.t = 0; this.dur = this.W.reduced ? 0 : Math.max(0, dur); this.arc = arc;
-    this.delay = this.W.reduced ? 0 : delay;
-  }
-  update(dt) {
-    const m = this.mesh;
-    if (this.delay > 0) { this.delay -= dt; dt = this.delay < 0 ? -this.delay : 0; if (this.delay < 0) this.delay = 0; }
-    if (this.delay > 0) { /* wait at the start pose */ }
-    else if (this.t < 1) {
-      this.t = this.dur > 0 ? Math.min(1, this.t + dt / this.dur) : 1;
-      const e = easeIO(this.t);
-      m.position.lerpVectors(this.fromP, this.toP, e);
-      m.position.y += this.arc * 4 * e * (1 - e);
-      m.quaternion.slerpQuaternions(this.fromQ, this.toQ, e);
-    } else { m.position.copy(this.toP); m.quaternion.copy(this.toQ); }
-    this.basePos = this.basePos || new THREE.Vector3();
-    this.basePos.copy(m.position);
-    if (this.lunge) {
-      const L = this.lunge; L.t += dt;
-      const k = Math.min(1, L.t / L.dur);
-      m.position.addScaledVector(L.dir, Math.sin(Math.PI * k) * L.len);
-      if (k >= 1) this.lunge = null;
-    }
-    const a = 1 - Math.exp(-dt * 14);
-    this.dim += (this.dimTo - this.dim) * a;
-    this.glow += (this.glowTo - this.glow) * a;
-    this.scale += (this.scaleTo - this.scale) * a;
-    if (this.pulse > 0) this.pulse = Math.max(0, this.pulse - dt * 2.2);
-    const s = this.scale * (1 + 0.12 * Math.sin(Math.PI * this.pulse));
-    m.scale.setScalar(s);
-    this.front.color.setScalar(this.dim);
-    this.front.emissiveIntensity = this.glow;
-  }
-  dispose() {
-    this.mesh.parent?.remove(this.mesh);
-    this.front.dispose(); this.ring.material.dispose();
-    if (this.badge) { this.badge.material.map?.dispose(); this.badge.material.dispose(); }
-  }
-}
-
-// --------------------------------------------------------- mana tokens
-// The tokens are thick (0.08) and large (a third of the card width or
-// more), so the mana on each stack reads in the wide shot. Each colour of
-// game/cards.js has its own prism (ui/fly3d/mana.js tokenShape: amber a
-// honeycomb cell, moss a diamond, the other colours the next free shape)
-// and its own hue (colourHex). Generic mana is a grey square. A token of
-// a dual land is the prism of its first colour with an inset of the
-// second colour on top.
-// A dark hull behind each token (back faces, 1.16 times the size) gives
-// a hard edge. Without it, an amber token on an amber land has almost
-// no contrast. It is an outline, not a glow: no blur, no blend.
-const TOKEN_HULL = 1.16;
-const TOKEN_H = 0.08;
-function tokenKit() {
-  const geos = new Map(), mats = new Map();
-  const hull = new THREE.MeshBasicMaterial({ color: new THREE.Color('#07080c'), side: THREE.BackSide });
-  function geo(key) {
-    const sides = key === 'generic' ? 0 : tokenShape(key);
-    const k = 's' + sides;
-    if (!geos.has(k)) {
-      const r = sides === 0 ? 0 : sides === 3 ? 0.165 : sides === 4 ? 0.15 : 0.135;
-      geos.set(k, sides === 0 ? new THREE.BoxGeometry(0.2, TOKEN_H, 0.2) : new THREE.CylinderGeometry(r, r, TOKEN_H, sides));
-    }
-    return geos.get(k);
-  }
-  function inset(key) {
-    const sides = tokenShape(key) || 4, k = 'i' + sides;
-    if (!geos.has(k)) { const r = 0.075; geos.set(k, new THREE.CylinderGeometry(r, r, TOKEN_H * 1.08, sides)); }
-    return geos.get(k);
-  }
-  function mat(key) {
-    if (!mats.has(key)) {
-      const c = key === 'generic' ? TOKENS.none : colourHex(key);
-      mats.set(key, new THREE.MeshStandardMaterial({ color: new THREE.Color(c), emissive: new THREE.Color(c), emissiveIntensity: key === 'generic' ? 0.35 : 0.5, roughness: 0.35, metalness: 0.1 }));
-    }
-    return mats.get(key);
-  }
-  // A token mesh for a list of colours ([] or ['generic'] = generic).
-  function make(colours) {
-    const cs = colours && colours.length ? colours : ['generic'];
-    const m = new THREE.Mesh(geo(cs[0]), mat(cs[0]));
-    m.castShadow = true;
-    const h = new THREE.Mesh(geo(cs[0]), hull);
-    h.scale.setScalar(TOKEN_HULL); h.name = 'token-hull'; m.add(h);
-    if (cs[1]) { const i = new THREE.Mesh(inset(cs[1]), mat(cs[1])); i.name = 'token-inset'; m.add(i); }
-    m.userData.kind = cs.join('+');
-    m.rotation.y = cs[0] === 'amber' ? Math.PI / 6 : 0;
-    return m;
-  }
-  // Turn a token into a generic one (a token that pays a generic cost).
-  function toGeneric(m) {
-    m.geometry = geo('generic'); m.material = mat('generic'); m.userData.kind = 'generic';
-    if (m.children[0]) m.children[0].geometry = geo('generic');
-    for (const c of m.children) if (c.name === 'token-inset') c.visible = false;
-  }
-  // Show only the paid colour (a dual land that pays its second colour).
-  function toColour(m, key) {
-    m.geometry = geo(key); m.material = mat(key); m.userData.kind = key;
-    if (m.children[0]) m.children[0].geometry = geo(key);
-    for (const c of m.children) if (c.name === 'token-inset') c.visible = false;
-  }
-  function dispose() { for (const g of geos.values()) g.dispose(); for (const x of mats.values()) x.dispose(); hull.dispose(); }
-  return { make, toGeneric, toColour, mat, geo, dispose };
-}
-
-// ======================================================== placeholder fly
-// Stand-in with the API of ui/fly3d/fly.js. Origin at the seat, +y up, +z
-// forward (toward the table). About TABLE.flyH tall.
-function placeholderBuildFly({ colour = '#39d0f0', seed = 1, detail = 'high' } = {}) {
-  const root = new THREE.Group(); root.name = 'fly-placeholder';
-  const tan = new THREE.MeshStandardMaterial({ color: 0xc8954e, roughness: 0.55 });
-  const ochre = new THREE.MeshStandardMaterial({ color: 0xa8732f, roughness: 0.5 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.6 });
-  const eyeM = new THREE.MeshStandardMaterial({ color: 0xa3242a, roughness: 0.28, metalness: 0.05 });
-  const wingM = new THREE.MeshPhysicalMaterial({ color: 0xe8f2ff, transparent: true, opacity: 0.32, roughness: 0.12, iridescence: 1, iridescenceIOR: 1.3, side: THREE.DoubleSide, depthWrite: false });
-  const collarM = new THREE.MeshStandardMaterial({ color: new THREE.Color(colour), roughness: 0.4, emissive: new THREE.Color(colour), emissiveIntensity: 0.2 });
-  const seg = detail === 'low' ? 10 : 20;
-  const ell = (rx, ry, rz, m) => { const e = new THREE.Mesh(new THREE.SphereGeometry(1, seg, Math.round(seg * 0.7)), m); e.scale.set(rx, ry, rz); e.castShadow = true; return e; };
-  const body = new THREE.Group(); root.add(body);
-  const abdomen = new THREE.Group(); abdomen.position.set(0, 0.42, -0.08); body.add(abdomen);
-  abdomen.add(ell(0.4, 0.5, 0.4, tan));
-  for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.TorusGeometry(0.39 - i * 0.06, 0.05, 6, seg), dark); b.rotation.x = Math.PI / 2; b.position.y = -0.05 - i * 0.16; b.scale.set(1, 1, 1); abdomen.add(b); }
-  const thorax = new THREE.Group(); thorax.position.set(0, 1.05, 0.02); body.add(thorax);
-  thorax.add(ell(0.33, 0.36, 0.31, ochre));
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, seg), collarM); collar.rotation.x = Math.PI / 2 - 0.2; collar.position.set(0, 0.33, 0.04); thorax.add(collar);
-  const head = new THREE.Group(); head.position.set(0, 1.62, 0.1); body.add(head);
-  head.add(ell(0.25, 0.22, 0.22, tan));
-  const eyes = [-1, 1].map(s => { const e = ell(0.17, 0.2, 0.16, eyeM); e.position.set(s * 0.19, 0.03, 0.06); head.add(e); return e; });
-  const prob = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.22, 8), ochre); prob.position.set(0, -0.2, 0.12); prob.rotation.x = 0.4; head.add(prob);
-  const antennae = [-1, 1].map(s => {
-    const a = new THREE.Group(); a.position.set(s * 0.06, 0.08, 0.2); head.add(a);
-    const s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.1, 6), ochre); s1.position.y = 0.05; a.add(s1);
-    const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), ochre); s2.position.y = 0.12; a.add(s2);
-    const ar = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.22, 4), dark); ar.position.set(s * 0.06, 0.2, 0.03); ar.rotation.z = -s * 0.6; a.add(ar);
-    a.rotation.x = 0.5;
-    return a;
-  });
-  const wingShape = new THREE.Shape(); wingShape.moveTo(0, 0); wingShape.bezierCurveTo(0.25, 0.1, 0.9, 0.05, 1.0, -0.12); wingShape.bezierCurveTo(0.85, -0.3, 0.3, -0.26, 0, -0.06);
-  const wingGeo = new THREE.ShapeGeometry(wingShape, 12);
-  const wings = [-1, 1].map(s => {
-    const w = new THREE.Group(); w.position.set(s * 0.18, 1.18, -0.18); body.add(w);
-    const m = new THREE.Mesh(wingGeo, wingM); m.scale.set(s * 0.9, 0.9, 0.9); m.rotation.y = s * Math.PI / 2; w.add(m);
-    w.rotation.set(0.9, 0, -s * 0.35);
-    return w;
-  });
-  // legs: segments placed every frame from two-bone IK
-  const segGeo = new THREE.CylinderGeometry(1, 0.8, 1, 6); segGeo.translate(0, 0.5, 0);
-  const attach = [[-0.16, 0.93, 0.2], [0.16, 0.93, 0.2], [-0.26, 0.88, 0.06], [0.26, 0.88, 0.06], [-0.22, 0.78, -0.06], [0.22, 0.78, -0.06]];
-  const lens = [[0.42, 0.42, 0.18], [0.42, 0.42, 0.18], [0.5, 0.52, 0.2], [0.5, 0.52, 0.2], [0.5, 0.5, 0.18], [0.5, 0.5, 0.18]];
-  const legs = attach.map((a, i) => {
-    const segs = [0, 1, 2].map(k => { const m = new THREE.Mesh(segGeo, k === 2 ? dark : ochre); m.castShadow = true; root.add(m); return m; });
-    return { attach: new THREE.Vector3(...a), len: lens[i], segs, target: new THREE.Vector3(), side: i % 2 ? 1 : -1, r: [0.04, 0.032, 0.022] };
-  });
-  const rig = { root, body, head, eyes, antennae, wings, abdomen, thorax, legs, seed, phase: (seed * 1.7) % 6.28 };
-  const dispose = () => { root.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } }); [tan, ochre, dark, eyeM, wingM, collarM].forEach(m => m.dispose()); };
-  return { root, rig, dispose };
-}
-
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
-function placeSeg(m, a, b, r) {
-  _v1.subVectors(b, a); const l = _v1.length() || 1e-4;
-  m.position.copy(a); m.quaternion.setFromUnitVectors(_up, _v1.multiplyScalar(1 / l)); m.scale.set(r, l, r);
-}
-// Two-bone IK in the fly's local space: hip -> knee -> ankle, then the
-// tarsus to the target. pole: the side the knee bends to.
-function legTo(leg, target, pole) {
-  const H = _v2.copy(leg.attach), [a, b, c] = leg.len;
-  const P = new THREE.Vector3().copy(target);
-  const dir = new THREE.Vector3().subVectors(P, H);
-  let d = dir.length(); dir.normalize();
-  const ankle = new THREE.Vector3().copy(P).addScaledVector(dir, -c);
-  const toA = new THREE.Vector3().subVectors(ankle, H); d = Math.min(a + b - 1e-3, Math.max(Math.abs(a - b) + 1e-3, toA.length())); toA.normalize();
-  const ca = (a * a + d * d - b * b) / (2 * a * d), sa = Math.sqrt(Math.max(0, 1 - ca * ca));
-  const perp = new THREE.Vector3().copy(pole).addScaledVector(toA, -pole.dot(toA)).normalize();
-  const knee = new THREE.Vector3().copy(H).addScaledVector(toA, a * ca).addScaledVector(perp, a * sa);
-  const ank = new THREE.Vector3().copy(H).addScaledVector(toA, d);
-  placeSeg(leg.segs[0], H, knee, leg.r[0]);
-  placeSeg(leg.segs[1], knee, ank, leg.r[1]);
-  placeSeg(leg.segs[2], ank, _v3.copy(ank).addScaledVector(toA, c * 0.4).add(new THREE.Vector3(0, -c * 0.8, 0)).lerp(P, 0.6), leg.r[2]);
-}
-
-// Clips: idle, think, groom, reach, place, tap, push, raiseArms, slump.
-// t: seconds into the clip. opts: { dur, time, hand, rest, target, droop,
-// shake } (points in world space).
-function placeholderAnimate(rig, clipIn, t, opts = {}) {
-  const clip = typeof clipIn === 'string' ? clipIn : clipIn?.name || 'idle';
-  if (clipIn && typeof clipIn === 'object' && clipIn.target) opts = { ...opts, target: clipIn.target };
-  const time = opts.time ?? t, dur = PLACEHOLDER_CLIPS[clip]?.duration || 1, k = Math.min(1, t / dur);
-  const env = Math.sin(Math.PI * k);
-  const root = rig.root;
-  const local = v => v ? root.worldToLocal(_v3.copy(v)).clone() : null;
-  const hand = local(opts.hand) || new THREE.Vector3(0, 1.3, 0.8);
-  const rest = local(opts.rest) || new THREE.Vector3(0, 0.6, 0.9);
-  const tgt = local(opts.target);
-  // breathing and idle head motion
-  rig.abdomen.scale.set(1, 1 + 0.025 * Math.sin(time * 2.1 + rig.phase), 1);
-  rig.head.rotation.set(0.05 * Math.sin(time * 0.7 + rig.phase), 0.12 * Math.sin(time * 0.43 + rig.phase), 0);
-  const tw = Math.sin(time * 9 + rig.phase) * 0.06;
-  rig.antennae.forEach((a, i) => { a.rotation.x = 0.5 + tw * (i ? 1 : -1); });
-  const droop = opts.droop || 0;
-  rig.wings.forEach((w, i) => { const s = i ? 1 : -1; w.rotation.set(0.9 + droop * 0.5, 0, -s * (0.35 - droop * 0.25)); });
-  rig.body.rotation.set(0, 0, 0); rig.body.position.set(0, 0, 0);
-  let fl = new THREE.Vector3(hand.x - 0.22, hand.y, hand.z), fr = new THREE.Vector3(hand.x + 0.22, hand.y, hand.z);
-  let ml = new THREE.Vector3(rest.x - 0.55, rest.y, rest.z), mr = new THREE.Vector3(rest.x + 0.55, rest.y, rest.z);
-  const hl = new THREE.Vector3(-0.5, 0.0, 0.2), hr = new THREE.Vector3(0.5, 0.0, 0.2);
-  switch (clip) {
-    case 'think':
-      rig.head.rotation.x += 0.25 * env; rig.head.rotation.z = 0.15 * env * Math.sin(rig.phase + 1);
-      rig.antennae.forEach((a, i) => { a.rotation.x = 0.5 + Math.sin(time * 26 + i) * 0.18 * env; });
-      break;
-    case 'groom': {
-      const rub = Math.sin(time * 14) * 0.06;
-      const hp = new THREE.Vector3(0, 1.55, 0.32);
-      fl.lerp(new THREE.Vector3(hp.x - 0.1 + rub, hp.y, hp.z), env); fr.lerp(new THREE.Vector3(hp.x + 0.1 - rub, hp.y, hp.z), env);
-      rig.head.rotation.x += 0.2 * env;
-      break;
-    }
-    case 'reach': if (tgt) fr.lerp(tgt, env); rig.head.rotation.x += 0.2 * env; break;
-    case 'place': case 'tap': if (tgt) mr.lerp(tgt, env); rig.body.rotation.x = 0.12 * env; rig.head.rotation.x += 0.25 * env; break;
-    case 'push': if (tgt) { ml.lerp(new THREE.Vector3(tgt.x - 0.3, tgt.y, tgt.z), env); mr.lerp(new THREE.Vector3(tgt.x + 0.3, tgt.y, tgt.z), env); } rig.body.rotation.x = 0.18 * env; break;
-    case 'raiseArms': {
-      const up = Math.min(1, k * 4);
-      fl.lerp(new THREE.Vector3(-0.55, 2.1, 0.25), up); fr.lerp(new THREE.Vector3(0.55, 2.1, 0.25), up);
-      rig.wings.forEach((w, i) => { w.rotation.z = (i ? -1 : 1) * (0.35 + 0.5 * Math.abs(Math.sin(time * 38))); });
-      rig.head.rotation.x = -0.25 * up;
-      break;
-    }
-    case 'slump': {
-      const s = Math.min(1, k * 3);
-      rig.body.rotation.x = 0.35 * s; rig.head.rotation.x = 0.5 * s;
-      fl.lerp(new THREE.Vector3(-0.3, 0.75, 0.75), s); fr.lerp(new THREE.Vector3(0.3, 0.75, 0.75), s);
-      rig.wings.forEach((w, i) => { w.rotation.x = 1.5; w.rotation.z = (i ? -1 : 1) * 0.05; });
-      break;
-    }
-    default: break;
-  }
-  if (opts.shake) rig.body.position.x = Math.sin(time * 31) * 0.012;
-  const pole = new THREE.Vector3(0, -0.3, -1);
-  const legsT = [fl, fr, ml, mr, hl, hr];
-  rig.legs.forEach((leg, i) => {
-    const pl = i < 2 ? new THREE.Vector3(leg.side * 1, -1, -0.2) : i < 4 ? new THREE.Vector3(leg.side, 1, 0) : new THREE.Vector3(leg.side, 0.4, 1);
-    legTo(leg, legsT[i], pl.normalize().add(pole.clone().multiplyScalar(0.2)));
-  });
-}
-// Clip lengths of the stand-in: the CLIPS table shape of ui/fly3d/fly.js.
-const PLACEHOLDER_CLIPS = {
-  idle: { duration: 6, loop: true }, think: { duration: 2, loop: true }, groom: { duration: 2.8 },
-  reach: { duration: 1.0, contact: 0.48 }, place: { duration: 1.3, contact: 0.66 }, tap: { duration: 0.8, contact: 0.36 },
-  push: { duration: 1.2, contact: 0.38 }, raiseArms: { duration: 1.4, hold: true }, slump: { duration: 1.6, hold: true },
-};
-export const PLACEHOLDER_FLY = { buildFly: placeholderBuildFly, animate: placeholderAnimate, CLIPS: PLACEHOLDER_CLIPS, placeholder: true };
+export { TABLE, CLOSE_TO_BOARD, WATCH } from './scene/table.js';
+export { textureCache, MYSTERY_GLYPH } from './scene/textures.js';
+export { PLACEHOLDER_FLY } from './scene/placeholder-fly.js';
 const PLACEHOLDER = PLACEHOLDER_FLY;
+// Scratch vectors of the scene closure.
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
 // ================================================================ scene
 export function createDuelScene(canvas, opts = {}) {
@@ -2381,30 +1832,4 @@ export function createDuelScene(canvas, opts = {}) {
     between: () => regame.busy, skipBetween: () => regame.skip(),
     world: { W, Z, flies, drums, piles, lights, hall, dice, arrows, get mirror() { return mirror; }, cam, director, dir, shotSubject, get sceneT() { return sceneT; }, brains, ops: Object.keys(STEP), regame },
   };
-}
-
-// ---------------------------------------------------------------- lights
-// The hall light: fluorescent panels over every table. A cool white
-// hemisphere fill and one high key light (the only shadow light, its
-// shadow box fits the feature table). A warm low rim from the camera
-// side keeps the flies apart from the dark floor. Crisp: no bloom.
-function buildLights(scene, W, coarse) {
-  const hemi = new THREE.HemisphereLight(0xeef3ff, 0x2a2f3a, 1.25);
-  scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xf4f7ff, 2.4);
-  key.position.set(2.5, 14, 3.5);
-  key.target.position.set(0, T.y, 0);
-  key.castShadow = !coarse;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
-  const sc = key.shadow.camera;
-  sc.left = -6.5; sc.right = 6.5; sc.top = 6.5; sc.bottom = -6.5; sc.near = 4; sc.far = 22;
-  scene.add(key, key.target);
-  const rim = new THREE.DirectionalLight(0x9fc4ff, 0.9);
-  rim.position.set(-6, 8, -5);
-  scene.add(rim);
-  const rim2 = new THREE.DirectionalLight(0xffe2c4, 0.55);
-  rim2.position.set(7, 4, 6);
-  scene.add(rim2);
-  return { hemi, key, rim, rim2 };
 }
