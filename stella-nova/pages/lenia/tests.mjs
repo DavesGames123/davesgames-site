@@ -1,6 +1,10 @@
 // tests.mjs - node checks for pages/lenia that need no GPU and no browser.
 //   node stella-nova/pages/lenia/tests.mjs
 // The engine tests (WebGPU through Deno) are in tools/engine_test.js.
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 import { renderBudget, BUDGET } from './budget.js';
 import { wrap, wrapDelta } from './app/torus.js';
 import { familyOf, familyColor, cellsOf, rotate, lut } from './app/catalog.js';
@@ -63,6 +67,48 @@ check(growthTeX(1, 0.15, 0.015) === String.raw`G(u) = 2\Big(1 - \tfrac{(u-\class
 check(growthTeX(2, 0.15, 0.015) === String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-\class{m5}{0.150})^2}{2\cdot \class{m6}{0.0150}^2}\Big) - 1`, 'tex: growthTeX gn 2');
 check(growthTeX(3, 0.2, 0.03) === String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-\class{m5}{0.200}| \le \class{m6}{0.0300}`, 'tex: growthTeX gn 3');
 check(CORE_TEX.length === 4 && SAVER_CORE.length === 4 && GROWTH_SYM.length === 3 && SAVER_GROWTH.length === 3 && RULE_CLASS.m === 'm5', 'tex: table sizes and RULE_CLASS');
+
+// The page in jsdom with no WebGPU: boot, the catalog, the panel and the
+// keys. It needs jsdom on NODE_PATH, and it is skipped without it.
+let JSDOM = null;
+try { JSDOM = createRequire(import.meta.url)('jsdom').JSDOM; } catch (e) { console.log('SKIP  page boot in jsdom: no jsdom on NODE_PATH'); }
+if (JSDOM) {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const html = fs.readFileSync(dir + '/index.html', 'utf8').replace(/<script[^>]*src=[^>]*><\/script>/g, '');
+  const dom = new JSDOM(html, { url: 'http://localhost/stella-nova/pages/lenia/index.html', pretendToBeVisual: true });
+  const w = dom.window, errors = [];
+  const noop = new Proxy(function () {}, { get: () => noop, apply: () => noop });
+  w.HTMLCanvasElement.prototype.getContext = () => noop;
+  w.HTMLElement.prototype.scrollIntoView = () => {};
+  const mq = q => ({ matches: q.includes('fine'), addEventListener() {} });
+  const glob = { window: w, document: w.document, location: w.location, localStorage: w.localStorage, navigator: w.navigator, matchMedia: mq,
+    devicePixelRatio: 2, ResizeObserver: class { observe() {} }, IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
+    requestAnimationFrame: () => 0, Event: w.Event, addEventListener: (...a) => w.addEventListener(...a),
+    fetch: async u => ({ json: async () => JSON.parse(fs.readFileSync(dir + '/' + u, 'utf8')) }) };
+  for (const [k, v] of Object.entries(glob)) Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true });
+  const warn = console.warn; console.warn = () => {};
+  w.addEventListener('error', e => errors.push(e.message));
+  await import('./main.js');
+  for (let i = 0; i < 100 && !w.document.querySelector('.br-item'); i++) await new Promise(r => setTimeout(r, 20));
+  const $ = id => w.document.getElementById(id), key = k => w.dispatchEvent(new w.KeyboardEvent('keydown', { key: k }));
+  const n = JSON.parse(fs.readFileSync(dir + '/creatures.json', 'utf8')).creatures.length;
+  check($('curName').textContent === 'Orbium unicaudatus' && $('curIdx').textContent === `1 / ${n}`, 'page boot: the default creature O2u');
+  check(w.document.querySelectorAll('.br-item').length === n && $('famChips').children.length === w.document.querySelectorAll('.br-group').length, 'page boot: one list item per creature, one chip per family group');
+  check($('rule').children.length === 4 && $('eqs').children.length === 2 && !$('nogpu').hidden && w.document.body.classList.contains('nogpu'), 'page boot: 4 rule rows, 2 equations, the no-WebGPU notice');
+  $('nextBtn').click(); key('ArrowRight'); key('ArrowRight');
+  check($('curIdx').textContent === `4 / ${n}` && w.localStorage.getItem('stella-nova.lenia.creature') === 'O2bi' && w.document.querySelector('.br-item.on').dataset.idx === '3', 'page: next and two arrow keys step to creature 4 and store it');
+  key(' '); key('f'); key(']'); $('dockTool').click();
+  check($('playBtn').textContent === 'Play' && $('followBtn').textContent === 'Follow on' && $('brushV').textContent === '1.75 R' && $('dockTool').textContent === '✎', 'page: space, f, ] and the dock tool button');
+  $('search').value = 'orbium'; $('search').dispatchEvent(new w.Event('input'));
+  const hits = w.document.querySelectorAll('.br-item').length;
+  check(hits > 0 && hits < n, 'page: the search filters the list');
+  $('browseBtn').click(); const opened = $('browser').classList.contains('open'); key('Escape');
+  check(opened && !$('browser').classList.contains('open'), 'page: the browse button opens the catalog, Escape closes it');
+  const sv = await window.snSaver.enter({ seed: 3, calm: 0 });
+  check(sv.canvas.id === 'gl' && w.document.documentElement.classList.contains('saver') && !$('panel').classList.contains('open'), 'page: snSaver.enter with no engine gives #gl and hides the GUI');
+  check(errors.length === 0, 'page: no error in an event handler' + (errors.length ? ': ' + errors[0] : ''));
+  console.warn = warn;
+}
 
 console.log(fails ? `${fails} FAIL` : 'ALL PASS');
 process.exit(fails ? 1 : 0);
