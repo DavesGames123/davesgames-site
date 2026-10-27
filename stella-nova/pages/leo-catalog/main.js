@@ -16,7 +16,7 @@
 //        │    │                              source: shaders/earth.*.glsl
 //        │    ├─ satPoints      one THREE.Points, PERF_CAP glyphs
 //        │    │                              source: shaders/satellite.*.glsl
-//        │    ├─ streamMesh     wind streamlines (LineSegments, GPU-animated)
+//        │    ├─ streamMesh     wind streamlines (view/weather.js, GPU-animated)
 //        │    │                              source: shaders/streamline.*.glsl
 //        │    └─ trailLine + stationTrails   orbit paths (view/trails.js)
 //        ├─ atmosphere shell    fresnel glow   source: shaders/atmosphere.*.glsl
@@ -43,6 +43,7 @@
 //      core/info.js ......... curated descriptions, chip and panel HTML
 //      core/geo.js .......... frame conversions, sun direction
 //      core/search.js ....... name/NORAD search, rank order, result HTML
+//      core/storms.js ....... NOAA feed URLs, storm parse, storm records
 //
 //  VIEW MODULES   (DOM and three.js parts; main.js passes them state)
 //      view/boot-ui.js ...... splash log, #acq strip, load rows, status, tweens
@@ -52,6 +53,7 @@
 //      view/saver.js ........ window.snSaver: slow orbit, tour and label plate
 //      view/time-control.js . scrub slider, transport buttons, rate, readouts
 //      view/search.js ....... search box, quick tags, result clicks
+//      view/weather.js ...... NOAA storm fetch; wind streamline mesh
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -61,8 +63,7 @@
 //      satellites ........... "// SATELLITES"      point cloud + attributes
 //      arrival .............. "function stampBirths"    fall-in times, ping rings
 //      propagation .......... "function propagateAll"   SGP4 every frame
-//      storms ............... "function loadStorms"  NOAA active cyclones
-//      streamlines .......... "function buildStreamlineMesh"  GPU comet mesh
+//      storms ............... "function loadStorms"  NOAA cyclones into the catalog
 //      labels ............... "initLabels"        page state for view/labels.js
 //      orbit trails ......... "initTrails"        page state for view/trails.js
 //      filters / overlays ... "// FILTERS"         checkbox wiring
@@ -84,11 +85,12 @@ import { wireXR } from './xr.js';
 import { fmtRate, rateSpeedToFrac } from './core/format.js';
 import { parseTLE, demoDataset, mergeParsed } from './core/tle.js';
 import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
-import { CYCLONES, traceStreamlines } from './core/wind.js';
+import { stormRecord } from './core/storms.js';
 import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { fetchStorms, initWeather, loadWeather, updateWindFlow, setWeatherVisible } from './view/weather.js';
 import { initSearch } from './view/search.js';
 import { initTimeControl, applyRate, advanceClock, showTime, btnPlay, btnNow } from './view/time-control.js';
 import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
@@ -350,57 +352,17 @@ function propagateAll() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STORMS (NOAA)
+// STORMS (NOAA) + WIND LAYER  (view/weather.js)
 // ═══════════════════════════════════════════════════════════════════
-// Fetch active tropical cyclones from NOAA (trying direct then CORS proxies)
-// and add each as a storm-category marker parked at its lat/lon.
+// Add each active NOAA cyclone as a storm-class record parked at its lat/lon.
 async function loadStorms() {
-  setGauge('storms', 25);
-  const urls = [
-    'https://www.nhc.noaa.gov/CurrentStorms.json',
-    'https://corsproxy.io/?url=' + encodeURIComponent('https://www.nhc.noaa.gov/CurrentStorms.json'),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.nhc.noaa.gov/CurrentStorms.json'),
-  ];
-  let j = null;
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      const res = await fetch(urls[i], { mode: 'cors' });
-      if (!res.ok) throw new Error('HTTP '+res.status);
-      j = await res.json();
-      setGauge('storms', 60 + i * 13);
-      break;
-    } catch (e) { setGauge('storms', 25 + (i+1) * 15); }
-  }
-  if (!j) {
-    setGauge('storms', 100, { fail: true });
-    splash('noaa storms: blocked', 'err');
-    return;
-  }
+  const storms = await fetchStorms();
+  if (!storms) return;
   try {
-    const arr = j.activeStorms || [];
-    const storms = arr.map(s => ({
-      lat: parseFloat(s.latitudeNumeric ?? s.latitude),
-      lon: parseFloat(s.longitudeNumeric ?? s.longitude),
-      name: s.name || s.binNumber || 'STORM',
-      classification: (s.classification || s.intensity || '').toUpperCase(),
-      wind: s.intensity ? parseInt(s.intensity, 10) : null,
-    })).filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon));
-    if (storms.length === 0) {
-      setGauge('storms', 100, { done: true });
-      splash('noaa storms: 0 active (off-season)', 'ok');
-      return;
-    }
-    setGauge('storms', 100, { done: true });
-    splash(`storms ${storms.length}`, 'ok');
     const first = sats.length;
     for (const st of storms) {
       if (sats.length >= PERF_CAP) break;
-      sats.push({
-        satrec: null, _isStorm: true,
-        name: `${st.classification || 'STORM'} ${st.name}`,
-        cat: 'storm', noradId: null, notable: null,
-        _stormData: st,
-      });
+      sats.push(stormRecord(st));
     }
     rebuildAttributesFromSats();
     stampBirths(first, sats.length, 0.6);
@@ -409,66 +371,7 @@ async function loadStorms() {
     splash('noaa storms: parse fail', 'err');
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════
-// STREAMLINE MESH — pre-traced through analytical field, GPU-animated
-// ═══════════════════════════════════════════════════════════════════
-const NUM_STREAMS  = IS_MOBILE ? 10000 : 30000;
-const STREAM_STEPS = IS_MOBILE ? 24    : 40;
-let   streamMesh = null;
-let   streamMat  = null;
-
-// Trace every streamline through the analytical wind field (core/wind.js)
-// into one big buffer and build the LineSegments mesh with the streamline
-// shader. Traced once; animation is purely a shader uniform.
-function buildStreamlineMesh() {
-  const { positions, arclens, streamIds, speeds, segPos } =
-    traceStreamlines(NUM_STREAMS, STREAM_STEPS, f => setGauge('streams', f * 100));
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geom.setAttribute('arclen',   new THREE.BufferAttribute(arclens, 1));
-  geom.setAttribute('streamId', new THREE.BufferAttribute(streamIds, 1));
-  geom.setAttribute('speed',    new THREE.BufferAttribute(speeds, 1));
-  geom.setAttribute('segPos',   new THREE.BufferAttribute(segPos, 1));
-  streamMat = new THREE.ShaderMaterial({
-    uniforms: { flowTime: { value: 0 } },
-    vertexShader: SH['shaders/streamline.vert.glsl'],
-    fragmentShader: SH['shaders/streamline.frag.glsl'],
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  streamMesh = new THREE.LineSegments(geom, streamMat);
-  streamMesh.frustumCulled = false;
-  streamMesh.visible = !!OVERLAY.weather;
-  earthRoot.add(streamMesh);
-}
-
-// Boot the weather layer: advance its gauges, then trace the streamline mesh.
-async function loadWeather() {
-  splash('wind model: 3-cell zonal + planetary waves');
-  setGauge('weather', 35);
-  await new Promise(r => setTimeout(r, 30));
-  setGauge('weather', 70);
-  await new Promise(r => setTimeout(r, 30));
-  setGauge('weather', 100, { done: true });
-  splash(`wind model: ${CYCLONES.length} pressure centers active`, 'ok');
-  splash(`tracing ${NUM_STREAMS} × ${STREAM_STEPS} streamlines…`);
-  setGauge('streams', 0);
-  // Yield once so the gauge update paints before the heavy synchronous trace
-  await new Promise(r => setTimeout(r, 0));
-  buildStreamlineMesh();
-  setGauge('streams', 100, { done: true });
-  splash(`streamlines: ${(NUM_STREAMS * STREAM_STEPS / 1000).toFixed(0)}k segments`, 'ok');
-}
-
-// Per-frame: just advance the shader phase. ~0 CPU cost.
-function updateWindFlow(dt) {
-  if (!streamMat || !streamMesh) return;
-  streamMesh.visible = !!OVERLAY.weather;
-  if (!OVERLAY.weather) return;
-  streamMat.uniforms.flowTime.value += dt * 0.000025;
-}
+initWeather({ earthRoot, SH, OVERLAY, isMobile: IS_MOBILE });
 
 // ═══════════════════════════════════════════════════════════════════
 // LABELS  (city, station and sat labels: view/labels.js)
@@ -522,7 +425,7 @@ document.querySelectorAll('.filter-row[data-overlay]').forEach(row => {
   const cb = row.querySelector('input[type=checkbox]');
   cb.addEventListener('change', () => {
     OVERLAY[k] = cb.checked;
-    if (k === 'weather' && streamMesh) streamMesh.visible = cb.checked;
+    if (k === 'weather') setWeatherVisible(cb.checked);
     if (k === 'cities' && !cb.checked) hideCityLabels();
     if (k === 'trails') maybeRebuildTrail();
     if (k === 'satlabels' && !cb.checked) clearSatLabels();

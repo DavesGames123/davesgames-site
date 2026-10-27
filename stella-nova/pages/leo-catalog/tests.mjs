@@ -18,6 +18,7 @@
 //                 the storm rows
 //    search ..... name or NORAD substring, the class order, the cap,
 //                 escaped result HTML
+//    storms ..... the NOAA feed parse, the storm record, the source order
 //    geo ........ ECEF to scene axes; lat/lon on the sphere; |sun| = 1
 //  fetch is a local stub. This file never sends a request to CelesTrak (it
 //  IP-bans for 2 h). satellite.js loads from vendor/ into globalThis; "three"
@@ -40,6 +41,7 @@ const W = await import('./core/wind.js');
 const I = await import('./core/info.js');
 const G = await import('./core/geo.js');
 const SR = await import('./core/search.js');
+const ST = await import('./core/storms.js');
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } else if (process.argv.includes('-v')) console.log('ok  ', msg); };
@@ -176,6 +178,20 @@ ok(!I.infoPanelHTML(storm, at).includes('n2yo') && I.infoPanelHTML(storm, at).in
   ok(SR.searchCatalog(many, 'obj').length === SR.SEARCH_MAX, 'at most SEARCH_MAX matches');
   ok(SR.searchResultsHTML([]) === '<div class="search-empty">no matches</div>', 'no-match HTML');
   ok(SR.searchResultsHTML(SR.searchCatalog(cat, 'deb')).includes('data-idx="1"') && SR.searchResultsHTML(SR.searchCatalog(cat, 'deb')).includes('X &lt;DEB&gt;'), 'result HTML escapes the name');
+}
+
+// ── storms ──────────────────────────────────────────────────────────────────
+{
+  const feed = { activeStorms: [
+    { name: 'Alpha', classification: 'hu', intensity: '95', latitudeNumeric: 22.5, longitudeNumeric: -71.25 },
+    { binNumber: 'EP2', latitude: '14.1', longitude: '-120.7' }, { name: 'Bad', latitude: 'x' }] };
+  const st = ST.parseStorms(feed);
+  ok(same(st, [{ lat: 22.5, lon: -71.25, name: 'Alpha', classification: 'HU', wind: 95 },
+    { lat: 14.1, lon: -120.7, name: 'EP2', classification: '', wind: null }]), 'parseStorms: numeric or text fields, bad position dropped');
+  ok(same(ST.parseStorms({}), []), 'parseStorms: no activeStorms');
+  const r = ST.stormRecord(st[1]);
+  ok(r.name === 'STORM EP2' && r.cat === 'storm' && r._isStorm && r.satrec === null && r._stormData === st[1], 'stormRecord');
+  ok(ST.STORM_URLS.length === 3 && ST.STORM_URLS[0] === 'https://www.nhc.noaa.gov/CurrentStorms.json' && ST.STORM_URLS.slice(1).every(u => u.endsWith(encodeURIComponent(ST.STORM_URLS[0]))), 'storm sources: direct, then two proxies');
 }
 
 // ── geo ─────────────────────────────────────────────────────────────────────
