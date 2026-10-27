@@ -22,13 +22,19 @@
 //                (concrete and glass), filtered, against one sample per pixel. Far away (cells under 1.2 px)
 //                the grain and the shimmer must drop to half or less; close up the
 //                filtered image must stay within 0.02 RMS of the 8 x 8 supersampled truth.
+//   8 page       main.js boots in jsdom without WebGPU (the fallback shows), worker.js runs
+//                in this thread; the head, the foot, the keys T C W L I M Esc, the overlay
+//                drawer, the about sheet, the atlas, a city switch and the saver hook.
+//                Skipped (and said so) when jsdom does not load (NODE_PATH).
 // Exit code 1 when any check fails.
 //
 // grep: function check  const SPOTS  function spot  function meshCheck  function windCheck  function windowCheck
+//       function pageCheck
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import { parseCity, inflate, buildingsOf } from './data.js';
 import { buildMesh, heightRaster, LOD_SIZES, STRIDE } from './mesh.js';
 
@@ -344,6 +350,79 @@ async function windowCheck() {
   }
 }
 
+// The page in jsdom: no GPU, so renderer.js fails and the fallback shows; the
+// worker runs here (a fake self catches its onmessage), fetch reads the files.
+async function pageCheck() {
+  let JSDOM;
+  try { ({ JSDOM } = createRequire(import.meta.url)('jsdom')); } catch { console.log('page: SKIPPED (jsdom not on NODE_PATH)'); return; }
+  const html = readFileSync(`${HERE}index.html`, 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+  const w = new JSDOM(html, { url: 'https://site.test/stella-nova/pages/city-atlas/index.html#chicago', pretendToBeVisual: true }).window;
+  w.Element.prototype.scrollIntoView = () => {};
+  const g = globalThis, store = new Map(), raf = [];
+  const mm = (q) => ({ matches: false, media: q, addEventListener() {} });
+  Object.assign(g, {
+    window: w, document: w.document, location: w.location, history: w.history, innerWidth: 1024, innerHeight: 768,
+    sessionStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) },
+    matchMedia: mm, requestAnimationFrame: (f) => raf.push(f), cancelAnimationFrame: () => {},
+  });
+  Object.assign(w, { matchMedia: mm, requestAnimationFrame: g.requestAnimationFrame, cancelAnimationFrame: g.cancelAnimationFrame });
+  const realFetch = g.fetch;
+  g.fetch = async (u) => {
+    const b = readFileSync(fileURLToPath(String(u)));
+    return { ok: true, status: 200, json: async () => JSON.parse(b), text: async () => b.toString(), arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) };
+  };
+  let onmsg = null;
+  g.Worker = class extends w.EventTarget {
+    constructor(url) {
+      super();
+      const self = { postMessage: (data) => setTimeout(() => { const e = new w.Event('message'); e.data = data; this.dispatchEvent(e); }) };
+      this.ready = (async () => { g.self = self; await import(String(url)); onmsg = self.onmessage; })();
+    }
+    postMessage(data) { this.ready.then(() => onmsg({ data })); }
+  };
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const $ = (id) => w.document.getElementById(id);
+    const until = async (f) => { for (let t = Date.now(); !f(); await new Promise((r) => setTimeout(r, 20))) { if (Date.now() - t > 60000) throw new Error('timeout'); raf.splice(0).forEach((cb) => cb(0)); } };
+    const key = (k) => w.document.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: k, bubbles: true }));
+    await import(pathToFileURL(`${HERE}main.js`).href);
+    await until(() => w.__cityAtlas?.ready);
+    check($('ttl').textContent === 'Chicago', `page: title ${$('ttl').textContent}, want Chicago`);
+    check(!$('fallback').hidden && w.document.body.classList.contains('no-gpu'), 'page: no WebGPU fallback shown');
+    check(/buildings/.test($('params').innerHTML) && /relief/.test($('params').innerHTML), 'page: foot params lack buildings or relief');
+    check($('locCount').textContent === `${index.findIndex((c) => c.id === 'chicago') + 1} / ${index.length}`, `page: city count ${$('locCount').textContent}`);
+    check($('chipTerrain').getAttribute('aria-pressed') === 'true' && $('chipWind').getAttribute('aria-pressed') === 'true', 'page: terrain and wind not on at load');
+    key('t');
+    check($('chipTerrain').getAttribute('aria-pressed') === 'false' && !/relief/.test($('params').innerHTML), 'page: T does not turn terrain off');
+    key('l');
+    check(!$('layers').hidden && $('layersBody').querySelectorAll('.lg').length === 4, 'page: L does not open the four overlay groups');
+    $('wdSpeed').value = '7.5';
+    $('wdSpeed').dispatchEvent(new w.Event('input'));
+    check($('wdSpeedOut').textContent === '7.5 m/s' && /7\.5 m\/s/.test($('params').innerHTML), `page: wind speed ${$('wdSpeedOut').textContent}`);
+    key('i');
+    check(!$('caption').hidden && $('capBody').querySelector('#capCredits') && $('atlas').hidden, 'page: I does not open the about sheet with credits');
+    key('m');
+    check(!$('atlas').hidden && $('caption').hidden && $('atlasBody').querySelectorAll('.a-item').length === index.length, 'page: M does not open the atlas of every city');
+    key('Escape');
+    check($('atlas').hidden && $('caption').hidden && $('layers').hidden, 'page: Esc leaves a sheet open');
+    await w.__cityAtlas.go('miami');
+    check($('ttl').textContent === 'Miami' && w.location.hash === '#miami' && store.get('city-atlas.city') === 'miami', 'page: switch to Miami');
+    key('c');
+    check($('chipOcean').getAttribute('aria-pressed') === 'true' && !$('scrub').classList.contains('off'), 'page: C does not show the Miami currents');
+    const r = await w.snSaver.enter({ calm: 0.5, seed: 7, label: () => {} });
+    check(r.canvas === $('map') && w.document.body.classList.contains('saver'), 'page: saver enter');
+    w.snSaver.exit();
+    check(!w.document.body.classList.contains('saver'), 'page: saver exit');
+    console.log(`page: jsdom boot, ${w.document.querySelectorAll('.lbl').length} labels, ${index.length} cities in the atlas`);
+  } catch (err) {
+    check(false, `page: ${err.stack || err}`);
+  } finally {
+    console.warn = warn;
+    g.fetch = realFetch;
+  }
+}
+
 const cities = JSON.parse(readFileSync(`${HERE}tools/cities.json`, 'utf8'));
 const index = existsSync(`${HERE}data/index.json`) ? JSON.parse(readFileSync(`${HERE}data/index.json`, 'utf8')) : [];
 check(index.length === cities.length, `index lists ${index.length} cities, cities.json ${cities.length}`);
@@ -356,5 +435,6 @@ for (const c of cities) {
 console.log(`data: ${(total / 1e6).toFixed(1)} MB in the city files checked`);
 windCheck();
 await windowCheck();
+if (!only.length) await pageCheck();
 console.log(`${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
