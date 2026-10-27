@@ -31,36 +31,41 @@
 //                                   ▼
 //      HTML overlays reprojected: city / station / sat labels, chip, reticle
 //
-//  COORDINATE FRAMES
+//  COORDINATE FRAMES   (core/geo.js)
 //      ECEF   +X=lon0, +Y=lon90E, +Z=north      (satellite.js output)
 //      scene  +X=lon0, +Y=north,  -Z=lon90E     (ecefToScene remaps)
+//
+//  MODULES   (pure parts, node-tested by tests.mjs)
+//      core/format.js ....... time, delta and rate text; the slider scales
+//      core/tle.js .......... classify, parseTLE, demo catalog, elements, merge
+//      core/tle-fetch.js .... snapshot/CelesTrak fetch, cache, source order
+//      core/wind.js ......... analytical wind model + RK2 streamline trace
+//      core/info.js ......... curated descriptions, chip and panel HTML
+//      core/geo.js .......... frame conversions, sun direction
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
 //      shader load .......... "loadShaders"        fetch .glsl before build
-//      constants ............ "// CONSTANTS"       scene scale, categories, SIM
+//      constants ............ "// CONSTANTS"       categories, filters, SIM
 //      splash / strip ....... "// SPLASH LOGGER"   title card, #acq strip, tweens
 //      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
 //      earth map ............ "function buildEarthMap"  canvas-drawn continents
-//      coord helpers ........ "function latLonToVec3"   frame conversions
 //      satellites ........... "// SATELLITES"      point cloud + attributes
 //      arrival .............. "function stampBirths"    fall-in times, ping rings
 //      propagation .......... "function propagateAll"   SGP4 every frame
 //      storms ............... "function loadStorms"  NOAA active cyclones
-//      wind field ........... "function sampleWindAt"  analytical wind model
-//      streamlines .......... "function traceStreamline"  RK2 trace + GPU comet
+//      streamlines .......... "function buildStreamlineMesh"  GPU comet mesh
 //      cities ............... "function buildCityLabels"  tiered LOD labels
 //      station labels ....... "function rebuildStationLabels"  always-on labels
 //      sat labels ........... "function updateSatLabels"  pooled LOD labels
 //      orbit trails ......... "function buildTrailFor"  selected + station paths
 //      filters / overlays ... "// FILTERS"         checkbox wiring
 //      picking .............. "function pickAt"    hover/lock chip + reticle
-//      tle loader ........... "function fetchTLE"    snapshot/CelesTrak fetch
-//      tle sources .......... "TLE_SNAPSHOT_DIRS"   source order per group
-//      object info .......... "OBJECT_KNOWLEDGE"   curated descriptions panel
+//      object info .......... "function showObjectInfo"  right-hand panel
 //      fly-to ............... "function flyTo"     animated camera moves
 //      search ............... "function doSearch"  name/NORAD search
 //      time control ......... "// TIME CONTROL"    scrub + rate sliders
+//      tle groups ........... "function fetchGroup"  load rows, merge order
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
 //      xr ................... "function startXR"   VR/AR via xr.js + lib/xr-view.js
@@ -70,6 +75,12 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
 import { wireXR } from './xr.js';
+import { fmt, fmtTime, fmtDelta, fmtRate, escHtml, fracToOffsetMs, offsetMsToFrac, rateFracToSpeed, rateSpeedToFrac } from './core/format.js';
+import { EARTH_R_KM, parseTLE, demoDataset, orbitalElements, mergeParsed } from './core/tle.js';
+import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
+import { CYCLONES, traceStreamlines } from './core/wind.js';
+import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
+import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
 // building any material, so init runs in the original synchronous order.
@@ -87,19 +98,13 @@ const SH = await loadShaders(import.meta.url, [
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
-// Earth radius sets the scene scale: 1 scene unit = 1 Earth radius. MU is the
-// gravitational parameter for orbital-element math. PERF_CAP bounds the object
+// 1 scene unit = 1 Earth radius (core/geo.js). PERF_CAP bounds the object
 // count so mobile stays interactive.
-const EARTH_R_KM   = 6378.137;
-const KM_TO_SCENE  = 1.0 / EARTH_R_KM;
-const MU           = 398600.4418;
 const IS_MOBILE    = window.matchMedia('(max-width: 880px)').matches;
 const PERF_CAP     = IS_MOBILE ? 3500 : 12000;
 
 // Object classes. CAT_INDEX maps each to the glyph id the satellite shader draws;
 // CAT_COLOR and CAT_SIZE give per-class sprite colour and pixel size.
-const CATEGORIES = ['starlink','payload','station','rocket','debris','storm'];
-// Glyph indices used by the shader
 const CAT_INDEX  = { payload:0, station:1, rocket:2, debris:3, storm:4, starlink:5 };
 const CAT_COLOR  = {
   starlink: new THREE.Color(0x4fdc7a),  // bright green
@@ -134,22 +139,7 @@ const SIM = {
   playing: true,
 };
 
-// Logarithmic slider mapping — fine seconds/minutes near NOW, days/months at edges.
-// offset = sign(s) * (exp(|s|*K) - 1) / (exp(K) - 1) * range,  s = frac*2 - 1 ∈ [-1, 1]
-const SLIDER_K     = 9;
-const SLIDER_KM1   = Math.exp(SLIDER_K) - 1;
-// Slider fraction [0,1] to a signed time offset in ms. The exponential curve
-// gives fine control near NOW (centre) and days/months toward the edges.
-function fracToOffsetMs(frac) {
-  const s = frac * 2 - 1;
-  return Math.sign(s) * (Math.exp(Math.abs(s) * SLIDER_K) - 1) / SLIDER_KM1 * SIM.range;
-}
-// Inverse of fracToOffsetMs: a time offset back to a slider fraction.
-function offsetMsToFrac(offsetMs) {
-  const r = Math.max(-1, Math.min(1, offsetMs / SIM.range));
-  const s = Math.sign(r) * Math.log(1 + Math.abs(r) * SLIDER_KM1) / SLIDER_K;
-  return (s + 1) / 2;
-}
+// The slider mappings (log scale, fine near NOW) live in core/format.js.
 
 let splashGone = false;
 
@@ -453,57 +443,6 @@ earthRoot.add(fallbackShell);
   scene.add(stars);
 }
 
-// ── Helpers ──
-// Coord convention: world +X = lon 0 (Greenwich), world +Y = north pole,
-// world -Z = lon +90 (east). So +Z faces Americas → camera at +Z sees east go right.
-function latLonToVec3(latDeg, lonDeg, r) {
-  const lat = latDeg * Math.PI/180;
-  const lon = lonDeg * Math.PI/180;
-  return new THREE.Vector3(
-    r * Math.cos(lat) * Math.cos(lon),
-    r * Math.sin(lat),
-    -r * Math.cos(lat) * Math.sin(lon),
-  );
-}
-function ecefToScene(x, y, z, out) {
-  // ECEF: +X=lon0, +Y=lon90, +Z=northpole.  Scene: +X=lon0, +Y=northpole, -Z=lon90.
-  out.set(x * KM_TO_SCENE, z * KM_TO_SCENE, -y * KM_TO_SCENE);
-  return out;
-}
-// Sun direction in the scene frame for a given date: a low-precision solar
-// ephemeris in ECI, rotated into ECEF by GMST, then remapped to scene axes.
-// Feeds the Earth shader's day/night terminator.
-function sunDirEcef(date) {
-  const t = (date.getTime() - Date.UTC(2000,0,1,12,0,0)) / 86400000;
-  const L = (280.46 + 0.9856474*t) * Math.PI/180;
-  const g = (357.528 + 0.9856003*t) * Math.PI/180;
-  const lambda = L + (1.915*Math.sin(g) + 0.020*Math.sin(2*g)) * Math.PI/180;
-  const eps = 23.439 * Math.PI/180;
-  const xEci = Math.cos(lambda);
-  const yEci = Math.cos(eps) * Math.sin(lambda);
-  const zEci = Math.sin(eps) * Math.sin(lambda);
-  const gmst = satellite.gstime(date);
-  const cg = Math.cos(gmst), sg = Math.sin(gmst);
-  const xEc =  cg*xEci + sg*yEci;
-  const yEc = -sg*xEci + cg*yEci;
-  const zEc =  zEci;
-  return new THREE.Vector3(xEc, zEc, -yEc).normalize();
-}
-// Local east/north/radial basis at a lat/lon on the sphere (scene frame).
-function tangentAt(latDeg, lonDeg) {
-  const lat = latDeg * Math.PI/180;
-  const lon = lonDeg * Math.PI/180;
-  const cl = Math.cos(lat), sl = Math.sin(lat);
-  const cn = Math.cos(lon), sn = Math.sin(lon);
-  const rx = cl*cn, ry = sl, rz = -cl*sn;
-  let ex = -rz, ey = 0, ez = -rx;
-  const eL = Math.hypot(ex, ey, ez);
-  if (eL > 1e-9) { ex/=eL; ey/=eL; ez/=eL; }
-  const nx = ry*ez - rz*ey;
-  const ny = rz*ex - rx*ez;
-  const nz = rx*ey - ry*ex;
-  return { east:[ex,ey,ez], north:[nx,ny,nz], radial:[rx,ry,rz] };
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // SATELLITES
@@ -515,34 +454,6 @@ let sats = [];
 let positions, sizesAttr, colorsAttr, alphasAttr, glyphAttr, birthAttr;
 let satGeo, satMat, satPoints;
 const HIDE = -10000;
-
-// Classify an object into a display category from its name.
-function classify(name) {
-  const n = name.toUpperCase();
-  if (/^STARLINK/.test(n))                                return 'starlink';
-  if (/ISS \(ZARYA|TIANGONG|TIANHE|MIR|CSS \(/.test(n))   return 'station';
-  if (/ DEB( |$)|DEBRIS/.test(n))                         return 'debris';
-  if (/ R\/B|ROCKET BODY| BOOSTER/.test(n))               return 'rocket';
-  return 'payload';
-}
-// Parse a two-line-element text block into satellite records (name + SGP4
-// satrec + NORAD id + category), skipping malformed or unparseable triples.
-function parseTLE(text) {
-  const lines = text.replace(/\r/g,'').split('\n');
-  const out = [];
-  for (let i = 0; i+2 < lines.length; i += 3) {
-    const name = lines[i].trim();
-    const l1 = lines[i+1], l2 = lines[i+2];
-    if (!name || !l1 || !l2 || l1[0] !== '1' || l2[0] !== '2') continue;
-    try {
-      const satrec = satellite.twoline2satrec(l1, l2);
-      if (satrec.error) continue;
-      const noradId = parseInt(l1.substring(2, 7).trim(), 10);
-      out.push({ satrec, name, cat: classify(name), noradId, notable: null });
-    } catch (e) {}
-  }
-  return out;
-}
 
 // Allocate the fixed-size point cloud and its dynamic attribute buffers once,
 // then build the THREE.Points with the satellite shader. Frustum culling is
@@ -701,7 +612,7 @@ async function loadStorms() {
     'https://corsproxy.io/?url=' + encodeURIComponent('https://www.nhc.noaa.gov/CurrentStorms.json'),
     'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://www.nhc.noaa.gov/CurrentStorms.json'),
   ];
-  let j = null, lastErr = null;
+  let j = null;
   for (let i = 0; i < urls.length; i++) {
     try {
       const res = await fetch(urls[i], { mode: 'cors' });
@@ -709,7 +620,7 @@ async function loadStorms() {
       j = await res.json();
       setGauge('storms', 60 + i * 13);
       break;
-    } catch (e) { lastErr = e; setGauge('storms', 25 + (i+1) * 15); }
+    } catch (e) { setGauge('storms', 25 + (i+1) * 15); }
   }
   if (!j) {
     setGauge('storms', 100, { fail: true });
@@ -751,87 +662,6 @@ async function loadStorms() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// WIND FLOW FIELD — analytical climatological model
-// ═══════════════════════════════════════════════════════════════════
-// Three components combined per sample:
-//   1. Three-cell zonal base — trade winds (0-30°), westerlies (30-60°), polar easterlies (60-90°)
-//   2. Planetary-wave perturbations — stationary Rossby-wave-like meridional/zonal variation
-//   3. Cyclonic features — fixed semi-permanent lows/highs (Aleutian, Icelandic, Bermuda, Pacific, etc)
-// Returns (u, v) in km/h scale and a derived speed magnitude. Sub-microsecond per sample.
-// ═══════════════════════════════════════════════════════════════════
-const CYCLONES = [
-  // {lat, lon, r (degrees), str (km/h), spin: +1 cyclonic-N / -1 anticyclonic-N}
-  // Northern hemisphere semi-permanent features
-  { lat:  55, lon: -170, r: 26, str:  24, spin: +1 },   // Aleutian Low
-  { lat:  60, lon:  -30, r: 24, str:  22, spin: +1 },   // Icelandic Low
-  { lat:  32, lon:  -60, r: 30, str:  18, spin: -1 },   // Bermuda High
-  { lat:  30, lon: -140, r: 32, str:  20, spin: -1 },   // Pacific High
-  { lat:  35, lon:  -25, r: 26, str:  16, spin: -1 },   // Azores High
-  { lat:  28, lon:   75, r: 26, str:  22, spin: +1 },   // South Asian monsoon Low
-  { lat:  10, lon:  165, r: 22, str:  18, spin: +1 },   // Tropical W Pacific
-  // Southern hemisphere
-  { lat: -60, lon:   30, r: 28, str:  22, spin: -1 },   // Sub-Antarctic low (S spins CW)
-  { lat: -55, lon:  140, r: 30, str:  24, spin: -1 },
-  { lat: -60, lon:  -90, r: 28, str:  22, spin: -1 },
-  { lat: -30, lon:  -90, r: 28, str:  18, spin: +1 },   // S Pacific High (S highs spin CCW)
-  { lat: -30, lon:  100, r: 28, str:  16, spin: +1 },   // S Indian High
-  { lat: -32, lon:    5, r: 26, str:  16, spin: +1 },   // S Atlantic High
-];
-
-// Evaluate the analytical wind field at a lat/lon: the three-cell zonal base,
-// planetary-wave perturbations, and the semi-permanent cyclones sum into a
-// (u,v) vector and its speed. Cheap enough to call per streamline step.
-function sampleWindAt(lat, lon) {
-  // ─── 1. Three-cell zonal base
-  // u_base is symmetric about equator, alternates sign 3× per hemisphere
-  // v_base is antisymmetric (toward equator in Hadley/Polar, away in Ferrel)
-  const absLat = Math.abs(lat);
-  const cellPhase = absLat * Math.PI / 30;       // period = 60°
-  const baseMag   = -Math.sin(cellPhase) * 22;   // ±22 km/h
-  const u = baseMag;                              // zonal
-  let v = baseMag * Math.sign(lat);              // meridional, sign-mirrored
-
-  // ─── 2. Planetary-wave perturbations
-  // Multi-mode Fourier series over longitude, latitude-windowed by Gaussian envelopes
-  const lonR = lon * Math.PI / 180;
-  let du = 0, dv = 0;
-  // Mid-latitude wave train
-  du += 7  * Math.sin(2 * lonR + 0.5)  * Math.exp(-Math.pow((lat - 35) / 32, 2));
-  du += 6  * Math.sin(3 * lonR - 1.2)  * Math.exp(-Math.pow((lat + 35) / 32, 2));
-  du += 4  * Math.sin(5 * lonR + 2.3)  * Math.exp(-Math.pow(lat / 55, 2));
-  // Tropical perturbation
-  du -= 5  * Math.cos(4 * lonR - 0.8)  * Math.exp(-Math.pow(lat / 18, 2));
-  // Subtropical jet meanders
-  dv += 6  * Math.cos(2 * lonR - 0.3)  * Math.exp(-Math.pow((lat - 30) / 22, 2));
-  dv += 5  * Math.cos(4 * lonR + 1.7)  * Math.exp(-Math.pow((lat + 35) / 22, 2));
-  dv -= 5  * Math.cos(3 * lonR - 0.8)  * Math.exp(-Math.pow((lat - 50) / 28, 2));
-  dv += 4  * Math.sin(5 * lonR + 0.6)  * Math.exp(-Math.pow(lat / 40, 2));
-
-  // ─── 3. Cyclonic features
-  let cu = 0, cv = 0;
-  for (let i = 0; i < CYCLONES.length; i++) {
-    const c = CYCLONES[i];
-    const dlat = lat - c.lat;
-    let dlon = lon - c.lon;
-    if (dlon >  180) dlon -= 360;
-    if (dlon < -180) dlon += 360;
-    const d2 = dlat * dlat + dlon * dlon;
-    const r2 = c.r * c.r;
-    if (d2 > 9 * r2) continue;                  // outside ~3× radius
-    const falloff = Math.exp(-d2 / r2);
-    const ang = Math.atan2(dlat, dlon);          // rad, from +east axis CCW
-    // Tangent direction (CCW perp to radial); spin flips it
-    cu += -Math.sin(ang) * c.str * falloff * c.spin;
-    cv +=  Math.cos(ang) * c.str * falloff * c.spin;
-  }
-
-  const finalU = u + du + cu;
-  const finalV = v + dv + cv;
-  const speed = Math.sqrt(finalU * finalU + finalV * finalV);
-  return { u: finalU, v: finalV, speed };
-}
-
-// ═══════════════════════════════════════════════════════════════════
 // STREAMLINE MESH — pre-traced through analytical field, GPU-animated
 // ═══════════════════════════════════════════════════════════════════
 const NUM_STREAMS  = IS_MOBILE ? 10000 : 30000;
@@ -839,78 +669,12 @@ const STREAM_STEPS = IS_MOBILE ? 24    : 40;
 let   streamMesh = null;
 let   streamMat  = null;
 
-// RK2 trace through the analytical field. Writes 2 verts per segment.
-// Trace one streamline from a random seed point through the wind field with an
-// RK2 (midpoint) integrator, writing two vertices per step into the shared line
-// buffers. segPos is the 0..1 position along the line, used by the comet shader.
-function traceStreamline(streamId, vi, positions, arclens, streamIds, speeds, segPos) {
-  let lat = -84 + Math.random() * 168;
-  let lon = -180 + Math.random() * 360;
-  const r = 1.012;
-  let arclen = 0;
-  let latR = lat * Math.PI / 180;
-  let lonR = lon * Math.PI / 180;
-  let prevX = Math.cos(latR) * Math.cos(lonR) * r;
-  let prevY = Math.sin(latR) * r;
-  let prevZ = -Math.cos(latR) * Math.sin(lonR) * r;
-  let prevArclen = 0;
-  let prevSpeed = 0;
-  const stepGain = 0.05;
-  for (let k = 0; k < STREAM_STEPS; k++) {
-    // RK2 midpoint
-    const w1 = sampleWindAt(lat, lon);
-    const cosLat1 = Math.max(0.15, Math.cos(lat * Math.PI / 180));
-    const dlatMid = w1.v * stepGain * 0.5;
-    const dlonMid = w1.u * stepGain * 0.5 / cosLat1;
-    let latMid = lat + dlatMid;
-    let lonMid = lon + dlonMid;
-    if (lonMid >  180) lonMid -= 360;
-    if (lonMid < -180) lonMid += 360;
-    const w2 = sampleWindAt(latMid, lonMid);
-    const cosLat2 = Math.max(0.15, Math.cos(latMid * Math.PI / 180));
-    lat += w2.v * stepGain;
-    lon += w2.u * stepGain / cosLat2;
-    if (lon >  180) lon -= 360;
-    if (lon < -180) lon += 360;
-    if (lat >  86) lat =  86;
-    if (lat < -86) lat = -86;
-    latR = lat * Math.PI / 180;
-    lonR = lon * Math.PI / 180;
-    const x = Math.cos(latR) * Math.cos(lonR) * r;
-    const y = Math.sin(latR) * r;
-    const z = -Math.cos(latR) * Math.sin(lonR) * r;
-    const dx = x - prevX, dy = y - prevY, dz = z - prevZ;
-    arclen += Math.sqrt(dx*dx + dy*dy + dz*dz);
-    const fracPrev = k / STREAM_STEPS;
-    const fracNow  = (k + 1) / STREAM_STEPS;
-    positions[vi*3+0] = prevX; positions[vi*3+1] = prevY; positions[vi*3+2] = prevZ;
-    arclens[vi] = prevArclen; streamIds[vi] = streamId; speeds[vi] = prevSpeed; segPos[vi] = fracPrev;
-    vi++;
-    positions[vi*3+0] = x; positions[vi*3+1] = y; positions[vi*3+2] = z;
-    arclens[vi] = arclen;     streamIds[vi] = streamId; speeds[vi] = w2.speed; segPos[vi] = fracNow;
-    vi++;
-    prevX = x; prevY = y; prevZ = z;
-    prevArclen = arclen;
-    prevSpeed = w2.speed;
-  }
-  return vi;
-}
-
-// Trace every streamline into one big buffer and build the LineSegments mesh
-// with the streamline shader. Traced once; animation is purely a shader uniform.
+// Trace every streamline through the analytical wind field (core/wind.js)
+// into one big buffer and build the LineSegments mesh with the streamline
+// shader. Traced once; animation is purely a shader uniform.
 function buildStreamlineMesh() {
-  const segCount  = NUM_STREAMS * STREAM_STEPS;
-  const vertCount = segCount * 2;
-  const positions = new Float32Array(vertCount * 3);
-  const arclens   = new Float32Array(vertCount);
-  const streamIds = new Float32Array(vertCount);
-  const speeds    = new Float32Array(vertCount);
-  const segPos    = new Float32Array(vertCount);
-  let vi = 0;
-  for (let s = 0; s < NUM_STREAMS; s++) {
-    vi = traceStreamline(s, vi, positions, arclens, streamIds, speeds, segPos);
-    if ((s & 1023) === 0) setGauge('streams', (s / NUM_STREAMS) * 100);
-  }
+  const { positions, arclens, streamIds, speeds, segPos } =
+    traceStreamlines(NUM_STREAMS, STREAM_STEPS, f => setGauge('streams', f * 100));
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geom.setAttribute('arclen',   new THREE.BufferAttribute(arclens, 1));
@@ -930,8 +694,6 @@ function buildStreamlineMesh() {
   streamMesh.visible = !!OVERLAY.weather;
   earthRoot.add(streamMesh);
 }
-
-function initWindFlowField() { /* nothing to allocate up front */ }
 
 // Boot the weather layer: advance its gauges, then trace the streamline mesh.
 async function loadWeather() {
@@ -1423,26 +1185,6 @@ function pickAt(clientX, clientY) {
   for (const h of hits) if (h.distanceToRay < best.distanceToRay) best = h;
   return best.index;
 }
-// Format a number to d decimals, or an em dash when it is not finite.
-function fmt(v, d=1) { return Number.isFinite(v) ? v.toFixed(d) : '—'; }
-// Escape a string for safe insertion into innerHTML.
-function escHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-// Derive period, apogee, perigee, and inclination from an SGP4 satrec.
-function orbitalElements(satrec) {
-  if (!satrec) return null;
-  const periodMin = (2*Math.PI) / satrec.no;
-  const n = satrec.no / 60;
-  const a = Math.pow(MU / (n*n), 1/3);
-  const e = satrec.ecco;
-  return {
-    periodMin,
-    apogee:  a*(1+e) - EARTH_R_KM,
-    perigee: a*(1-e) - EARTH_R_KM,
-    incDeg:  satrec.inclo * 180/Math.PI,
-  };
-}
 // Populate the info chip for one object: storm fields for storms, live orbital
 // readouts (altitude, lat/lon, velocity, elements) for satellites.
 function fillChip(idx) {
@@ -1450,37 +1192,7 @@ function fillChip(idx) {
   const s = sats[idx];
   chip.querySelector('.ch-name').textContent = s.name;
   chip.querySelector('.ch-cat').textContent  = s.cat.toUpperCase();
-  const body = chip.querySelector('.ch-body');
-  if (s._isStorm) {
-    const st = s._stormData;
-    body.innerHTML =
-      `<div class="ch-row"><span class="k">CLASS</span><span class="v">${escHtml(st.classification || '—')}</span></div>` +
-      `<div class="ch-row"><span class="k">LAT</span><span class="v dyn">${fmt(st.lat, 2)}°</span></div>` +
-      `<div class="ch-row"><span class="k">LON</span><span class="v dyn">${fmt(st.lon, 2)}°</span></div>` +
-      `<div class="ch-row"><span class="k">WIND</span><span class="v">${st.wind ? st.wind+' kt' : '—'}</span></div>` +
-      `<div class="ch-row"><span class="k">SRC</span><span class="v">NOAA NHC</span></div>`;
-    return true;
-  }
-  const oe = orbitalElements(s.satrec);
-  const pv = satellite.propagate(s.satrec, SIM.time);
-  let alt = NaN, lat = NaN, lon = NaN, speed = NaN;
-  if (pv.position) {
-    const gmst = satellite.gstime(SIM.time);
-    const geo = satellite.eciToGeodetic(pv.position, gmst);
-    alt = geo.height;
-    lat = geo.latitude * 180/Math.PI;
-    lon = geo.longitude * 180/Math.PI;
-    if (pv.velocity) speed = Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z);
-  }
-  body.innerHTML =
-    `<div class="ch-row"><span class="k">NORAD</span><span class="v">${s.noradId}</span></div>` +
-    `<div class="ch-row"><span class="k">ALT</span><span class="v dyn">${fmt(alt, 0)} km</span></div>` +
-    `<div class="ch-row"><span class="k">LAT / LON</span><span class="v dyn">${fmt(lat, 1)}° / ${fmt(lon, 1)}°</span></div>` +
-    `<div class="ch-row"><span class="k">VEL</span><span class="v dyn">${fmt(speed, 2)} km/s</span></div>` +
-    `<div class="ch-row"><span class="k">INC</span><span class="v">${fmt(oe.incDeg, 1)}°</span></div>` +
-    `<div class="ch-row"><span class="k">PERIOD</span><span class="v">${fmt(oe.periodMin, 1)} min</span></div>` +
-    `<div class="ch-row"><span class="k">APO / PER</span><span class="v">${fmt(oe.apogee, 0)} / ${fmt(oe.perigee, 0)} km</span></div>` +
-    (s.notable ? `<div class="ch-row"><span class="k">EVENT</span><span class="v">${escHtml(s.notable)}</span></div>` : '');
+  chip.querySelector('.ch-body').innerHTML = chipBodyHTML(s, SIM.time);
   return true;
 }
 // Show the floating chip next to the pointer while hovering (unless locked).
@@ -1616,88 +1328,10 @@ function updateReticle() {
 setInterval(() => { if (chipLocked && selectedIdx >= 0) fillChip(selectedIdx); }, 500);
 
 // ═══════════════════════════════════════════════════════════════════
-// TLE LOADER
+// TLE LOADER  (fetch, cache and source order: core/tle-fetch.js)
 // ═══════════════════════════════════════════════════════════════════
-// Fetch TLE text with an abort-based timeout so a slow source cannot hang boot.
-// Responses go into the Cache API for TLE_TTL_MS. CelesTrak updates each group
-// about every 2 h and blocks clients that download more often, so a reload in
-// that window reads the cache. A stale cache entry is the fallback when the
-// network fetch fails.
-// CelesTrak sends 403 (IP block) or 429 (rate limit) to a client that
-// downloads too much, or it holds the connection with no response. Each new
-// request extends the block, so after the first 403, 429, timeout or network
-// error this page sends no more requests to CelesTrak.
-// The timeout covers the time to the response headers, not the body, so a
-// large group on a slow link does not trip it.
-const TLE_CACHE   = 'leo-catalog-tle-v1';
-const TLE_TTL_MS  = 2 * 60 * 60 * 1000;
-const HAS_CACHE   = typeof caches !== 'undefined';
-let celestrakBlocked = false;
-async function cacheRead(url) {
-  if (!HAS_CACHE) return null;
-  try {
-    const hit = await (await caches.open(TLE_CACHE)).match(url);
-    if (!hit) return null;
-    const at = Number(hit.headers.get('x-fetched-at')) || 0;
-    return { text: await hit.text(), fresh: Date.now() - at < TLE_TTL_MS };
-  } catch (e) { return null; }
-}
-async function cacheWrite(url, text) {
-  if (!HAS_CACHE) return;
-  try {
-    const c = await caches.open(TLE_CACHE);
-    await c.put(url, new Response(text, { headers: { 'x-fetched-at': String(Date.now()) } }));
-  } catch (e) {}
-}
-async function fetchTLE(url, timeout = 8000) {
-  const cached = await cacheRead(url);
-  if (cached && cached.fresh) return cached.text;
-  const isCelestrak = url.startsWith('https://celestrak.org/');
-  if (isCelestrak && celestrakBlocked) {
-    if (cached) return cached.text;
-    throw new Error('CelesTrak blocked');
-  }
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const res = await fetch(url, { mode: 'cors', signal: ctrl.signal });
-    clearTimeout(id);
-    if (isCelestrak && (res.status === 403 || res.status === 429)) celestrakBlocked = true;
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    const text = await res.text();
-    // CelesTrak answers a rate-limited request with 200 and a plain-text notice.
-    if (!/^1 \d/m.test(text)) throw new Error('no TLE in response');
-    cacheWrite(url, text);
-    return text;
-  } catch (e) {
-    clearTimeout(id);
-    // AbortError is the timeout; TypeError is a network or CORS failure.
-    if (isCelestrak && (e.name === 'AbortError' || e.name === 'TypeError')) celestrakBlocked = true;
-    if (cached) return cached.text;
-    throw e;
-  }
-}
 // NORAD ids already in sats, so each dedupe check is O(1).
 const knownIds = new Set();
-// Fetch and parse one TLE source, adding new (deduped by NORAD id) objects to
-// the catalog up to PERF_CAP; returns how many were added.
-async function loadSource(url, notableLabel = null, forceCat = null) {
-  const txt = await fetchTLE(url);
-  const parsed = parseTLE(txt);
-  let added = 0;
-  for (const p of parsed) {
-    if (sats.length >= PERF_CAP) break;
-    if (knownIds.has(p.noradId)) continue;
-    if (notableLabel) p.notable = notableLabel;
-    if (forceCat)     p.cat = forceCat;
-    sats.push(p);
-    knownIds.add(p.noradId);
-    added++;
-  }
-  return added;
-}
-const URL_GP    = (group) => `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
-const URL_CATNR = (n)     => `https://celestrak.org/NORAD/elements/gp.php?CATNR=${n}&FORMAT=tle`;
 
 // ═══════════════════════════════════════════════════════════════════
 // OBJECT INFO PANEL  (replaces encyclopedia)
@@ -1707,197 +1341,20 @@ const URL_CATNR = (n)     => `https://celestrak.org/NORAD/elements/gp.php?CATNR=
 const infoBody = document.getElementById('info-body');
 const banner = document.getElementById('banner');
 
-// Curated descriptions, returned for the first regex that matches.
-// Each entry: [matcher, { description, wiki, [extra fields] }]
-const OBJECT_KNOWLEDGE = [
-  [/^ISS\b|ZARYA/, {
-    desc: 'International Space Station. Football-field-sized, continuously crewed since November 2000. Joint US, Russia, ESA, Japan, Canada project. Orbits ~400 km up at 51.6° inclination, lapping Earth every 92 minutes. Slated for deorbit around 2030.',
-    wiki: 'International_Space_Station',
-  }],
-  [/TIANGONG|TIANHE|WENTIAN|MENGTIAN|CSS \(|SHENZHOU|TIANZHOU/, {
-    desc: 'Chinese space station and visiting vehicles. Tiangong is China\'s permanent crewed station — three modules (Tianhe core, Wentian and Mengtian labs) at ~390 km, 41.5° inc. Crewed continuously since June 2022. Shenzhou are crewed taxis; Tianzhou are cargo.',
-    wiki: 'Tiangong_space_station',
-  }],
-  [/^DRAGON|^CREW DRAGON/, {
-    desc: 'SpaceX Crew/Cargo Dragon docked to or rendezvousing with ISS. Reusable capsule first crewed in 2020 (Demo-2). Up to 4 crew per flight on Falcon 9.',
-    wiki: 'SpaceX_Dragon_2',
-  }],
-  [/^PROGRESS/, {
-    desc: 'Russian Progress cargo spacecraft — an uncrewed Soyuz-derived ferry that resupplies ISS. Burns up on reentry after delivering its load.',
-    wiki: 'Progress_(spacecraft)',
-  }],
-  [/^CYGNUS/, {
-    desc: 'Northrop Grumman Cygnus cargo spacecraft. Launches on Antares (or Falcon 9 in recent missions); delivers cargo to ISS then disposes of itself in atmosphere.',
-    wiki: 'Cygnus_(spacecraft)',
-  }],
-  [/^STARLINK/, {
-    desc: 'SpaceX Starlink LEO broadband. ~6,500+ active. Two main shells: 550 km @ 53° (bulk) and 600 km @ 70–97° (polar). Launched 20–60 per Falcon 9 since 2019. Provides direct-to-consumer internet via flat phased-array terminals.',
-    wiki: 'Starlink',
-  }],
-  [/^ONEWEB/, {
-    desc: 'OneWeb LEO broadband constellation — ~648 satellites at 1,200 km in 87° polar orbit. Targets enterprise, government, aviation, and mobility markets. Owned by Eutelsat after the 2022 merger.',
-    wiki: 'OneWeb_satellite_constellation',
-  }],
-  [/^GPS BIIR|^GPS BIIF|^NAVSTAR/, {
-    desc: 'US Air Force GPS navigation satellite. Constellation of 31+ active birds in 6 planes at 20,200 km altitude, 55° inclination, ~12-hour period. Each broadcasts coded ranging signals that civilian and military receivers use to trilateral their position to within meters.',
-    wiki: 'GPS_satellite_blocks',
-  }],
-  [/^GSAT|^GALILEO/, {
-    desc: 'European Galileo GNSS satellite. The EU\'s answer to GPS. 23,222 km altitude in 56° inclination MEO — slightly higher than GPS, so the orbit looks ‘weird\' compared to LEO. Provides sub-meter positioning to authorized users via the Public Regulated Service.',
-    wiki: 'Galileo_(satellite_navigation)',
-  }],
-  [/^COSMOS 24|^COSMOS 25(0|1|2|3|4|5)/, {
-    desc: 'Russian GLONASS navigation satellite (Cosmos series numbering). ~19,100 km, 64.8° MEO orbit. Provides global navigation; the original Soviet GPS analog, fully restored to operational status in 2011.',
-    wiki: 'GLONASS',
-  }],
-  [/^IRIDIUM/, {
-    desc: 'Iridium satphone & data constellation. 66 active birds at 780 km, 86.4° polar. Each spot-beams cellphone-style coverage to a moving footprint on the surface. The 2017–2019 NEXT generation replaced the original 1997 hardware. Famous for the bright pre-NEXT "Iridium flares".',
-    wiki: 'Iridium_satellite_constellation',
-  }],
-  [/HUBBLE|HST|^HST/, {
-    desc: 'Hubble Space Telescope. Launched 24 Apr 1990 by STS-31. 2.4 m primary mirror. Five Shuttle servicing missions (1993, 1997, 1999, 2002, 2009) — the first famously corrected a manufacturing flaw in the mirror. Currently ~535 km, 28.5° inc; without a reboost it will reenter sometime in the 2030s.',
-    wiki: 'Hubble_Space_Telescope',
-  }],
-  [/^VANGUARD 1\b/, {
-    desc: 'The oldest artificial object still in orbit. Launched 17 Mar 1958 — a 1.46 kg grapefruit-sized solar-cell test article. Its 654 × 3,840 km elliptical orbit means atmospheric drag is essentially nil; predicted to last another ~240 years.',
-    wiki: 'Vanguard_1',
-  }],
-  [/ENVISAT/, {
-    desc: 'ENVISAT — 8-tonne ESA environmental observation satellite at 768 km. Lost contact 8 Apr 2012 and never recovered. Largest dead object in heavily populated LEO; it will linger ~150 years and is the #1 collision risk in orbit. Several active-removal mission concepts have targeted it; none flown.',
-    wiki: 'Envisat',
-  }],
-  [/^COSMOS 1408/, {
-    desc: 'Russia\'s 15 Nov 2021 ASAT test target — a defunct Tselina-D ELINT bird destroyed by a PL-19 Nudol direct-ascent missile at 480 km. The strike created 1,500+ tracked fragments. ISS crew sheltered in capsules during the closest pass; the cloud still threatens LEO objects.',
-    wiki: 'Russian_anti-satellite_weapon_test',
-  }],
-  [/^FENGYUN 1C/, {
-    desc: 'Chinese weather satellite destroyed in the 11 Jan 2007 SC-19 ASAT test at 865 km. The single most debris-generating event in spaceflight history — ~3,500 fragments still tracked. Triggered global condemnation and accelerated debris-mitigation regulation.',
-    wiki: '2007_Chinese_anti-satellite_missile_test',
-  }],
-  [/IRIDIUM 33 DEB|COSMOS 2251 DEB/, {
-    desc: 'Fragment from the 10 Feb 2009 Iridium 33 + Cosmos 2251 collision. First catastrophic collision between two intact satellites — 11.7 km/s impact at 789 km over Siberia. ~2,000 trackable fragments produced. Drove the development of conjunction warning services.',
-    wiki: 'Satellite_collision',
-  }],
-  [/^GOES|^METEOSAT|^HIMAWARI|^FY-?[234]/, {
-    desc: 'Geostationary weather satellite. ~35,786 km altitude. Sits over a fixed longitude relative to Earth\'s surface, scanning a full disk every 5–15 minutes. The reason your weather forecast has those swirling cloud-top images.',
-    wiki: 'Geostationary_orbit',
-  }],
-  [/^INTELSAT|^SES |^EUTELSAT/, {
-    desc: 'Commercial geostationary communications satellite. 35,786 km altitude, equatorial, ~24-hour period — appears motionless from the ground. Carries TV, radio, broadband, and trunked telecom traffic to fixed-position dishes.',
-    wiki: 'Communications_satellite',
-  }],
-  [/^WESTFORD/, {
-    desc: 'Westford Needles — 480 million 1.78 cm copper dipole antennas USAF dispersed in 1963 to create an artificial ionospheric reflector for HF radio. Most de-orbited via solar pressure by the 1990s as designed; a few clumped masses failed to disperse and remain at ~3,500 km.',
-    wiki: 'Project_West_Ford',
-  }],
-];
-
-// Pick a description for an object: the first matching curated entry, else a
-// category-level fallback (station, rocket, debris, or generic payload).
-function describeObject(s) {
-  if (s._isStorm) {
-    return {
-      desc: 'Active tropical cyclone tracked by the NOAA National Hurricane Center. Position updated from the Current Storms feed.',
-      wiki: 'Tropical_cyclone',
-    };
-  }
-  for (const [pat, info] of OBJECT_KNOWLEDGE) {
-    if (pat.test(s.name)) return info;
-  }
-  // Fall back to category-level descriptions
-  if (s.cat === 'station') return {
-    desc: 'Crewed orbital platform or a vehicle visiting one. Stations support continuous human habitation, science research, and Earth observation.',
-    wiki: 'Space_station',
-  };
-  if (s.cat === 'rocket') return {
-    desc: 'Spent upper stage left behind after deploying its payload. Typically aluminum-titanium tankage, often still containing residual propellant. Without active deorbiting, these decay over years (LEO) to centuries (high orbit).',
-    wiki: 'Spent_upper_stage',
-  };
-  if (s.cat === 'debris') return {
-    desc: 'Tracked space debris — a fragment from a collision, explosion, or anti-satellite test. Each piece is catalogued by USSPACECOM. Even paint flecks at orbital velocity can shatter spacecraft windows.',
-    wiki: 'Space_debris',
-  };
-  // Generic payload
-  return {
-    desc: 'Earth-orbiting satellite. Use the orbital elements below to gauge its purpose: low circular orbits (~500 km) tend to be Earth observation or comms; mid (~20,000 km) are usually navigation; geosynchronous (~36,000 km) are weather or telecom.',
-    wiki: 'Satellite',
-  };
-}
-
-// Build the orbital-element rows for the info panel (storm or satellite).
-function infoOrbitRowsHTML(s) {
-  if (s._isStorm) {
-    const st = s._stormData;
-    return (
-      `<div class="info-row"><span class="k">classification</span><span class="v">${escHtml(st.classification || '—')}</span></div>` +
-      `<div class="info-row"><span class="k">lat</span><span class="v dyn">${fmt(st.lat, 2)}°</span></div>` +
-      `<div class="info-row"><span class="k">lon</span><span class="v dyn">${fmt(st.lon, 2)}°</span></div>` +
-      `<div class="info-row"><span class="k">wind</span><span class="v">${st.wind ? st.wind+' kt' : '—'}</span></div>`
-    );
-  }
-  if (!s.satrec) return '';
-  const oe = orbitalElements(s.satrec);
-  const pv = satellite.propagate(s.satrec, SIM.time);
-  let alt = NaN, lat = NaN, lon = NaN, speed = NaN;
-  if (pv.position) {
-    const gmst = satellite.gstime(SIM.time);
-    const geo = satellite.eciToGeodetic(pv.position, gmst);
-    alt = geo.height;
-    lat = geo.latitude * 180/Math.PI;
-    lon = geo.longitude * 180/Math.PI;
-    if (pv.velocity) speed = Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z);
-  }
-  return (
-    `<div class="info-row"><span class="k">norad id</span><span class="v">${s.noradId}</span></div>` +
-    `<div class="info-row"><span class="k">altitude</span><span class="v dyn">${fmt(alt, 0)} km</span></div>` +
-    `<div class="info-row"><span class="k">lat / lon</span><span class="v dyn">${fmt(lat, 1)}° / ${fmt(lon, 1)}°</span></div>` +
-    `<div class="info-row"><span class="k">velocity</span><span class="v dyn">${fmt(speed, 2)} km/s</span></div>` +
-    `<div class="info-row"><span class="k">inclination</span><span class="v">${fmt(oe.incDeg, 1)}°</span></div>` +
-    `<div class="info-row"><span class="k">period</span><span class="v">${fmt(oe.periodMin, 1)} min</span></div>` +
-    `<div class="info-row"><span class="k">apogee / perigee</span><span class="v">${fmt(oe.apogee, 0)} / ${fmt(oe.perigee, 0)} km</span></div>`
-  );
-}
-
 // Render the full info panel for an object: category, name, description, live
 // elements, and external reference links. Empty prompt when nothing selected.
 function showObjectInfo(idx) {
   if (!infoBody) return;
   if (idx < 0 || idx >= sats.length) {
-    infoBody.innerHTML = '<div class="info-empty">click any satellite, debris, or station to see details</div>';
+    infoBody.innerHTML = INFO_EMPTY_HTML;
     return;
   }
-  const s = sats[idx];
-  const info = describeObject(s);
-  const wikiURL = `https://en.wikipedia.org/wiki/${info.wiki}`;
-  const n2yoURL = s.noradId ? `https://www.n2yo.com/satellite/?s=${s.noradId}` : null;
-  const cstrURL = s.noradId ? `https://celestrak.org/satcat/tle.php?CATNR=${s.noradId}` : null;
-  infoBody.innerHTML =
-    `<div class="info-section">` +
-      `<span class="info-cat">${s.cat.toUpperCase()}</span>` +
-      `<h3 class="info-name">${escHtml(s.name)}</h3>` +
-      `<div class="info-desc">${escHtml(info.desc)}</div>` +
-    `</div>` +
-    `<div class="info-section">` +
-      `<div class="info-label">orbital elements</div>` +
-      infoOrbitRowsHTML(s) +
-    `</div>` +
-    `<div class="info-section">` +
-      `<div class="info-label">external references</div>` +
-      `<div class="info-links">` +
-        `<a class="info-link" href="${wikiURL}" target="_blank" rel="noopener">Wikipedia</a>` +
-        (n2yoURL ? `<a class="info-link" href="${n2yoURL}" target="_blank" rel="noopener">N2YO live track</a>` : '') +
-        (cstrURL ? `<a class="info-link" href="${cstrURL}" target="_blank" rel="noopener">CelesTrak TLE</a>` : '') +
-      `</div>` +
-    `</div>`;
+  infoBody.innerHTML = infoPanelHTML(sats[idx], SIM.time);
 }
 // Refresh dynamic orbit values periodically while locked
 setInterval(() => { if (chipLocked && selectedIdx >= 0) showObjectInfo(selectedIdx); }, 800);
 
-// Stubs for a removed encyclopedia/banner feature, kept so existing callers
-// (boot, hideBanner, notable events) stay harmless without dead references.
-// Stub the encyclopedia/banner pieces so the rest of the code that references them is harmless
-function renderNotableList() {}
-function showBanner() {}
+// The legacy banner: its close button clears the selection.
 function hideBanner() {
   if (banner) banner.classList.remove('visible');
   unlockChip();
@@ -1906,7 +1363,6 @@ if (banner) {
   const btn = document.getElementById('banner-close');
   if (btn) btn.addEventListener('click', hideBanner);
 }
-function flyToNotable() {}
 // Fly the camera to an object: propagate its current position, place the camera
 // just outside it, still aimed at Earth's centre, and lock the chip onto it.
 function flyToSat(idx) {
@@ -2029,25 +1485,6 @@ const btnPlay = document.getElementById('btn-play');
 const btnNow = document.getElementById('btn-now');
 const btnRewind = document.getElementById('btn-rewind');
 
-// Format a Date as a UTC timestamp string.
-function fmtTime(d) {
-  const Y = d.getUTCFullYear();
-  const M = String(d.getUTCMonth()+1).padStart(2,'0');
-  const D = String(d.getUTCDate()).padStart(2,'0');
-  const h = String(d.getUTCHours()).padStart(2,'0');
-  const m = String(d.getUTCMinutes()).padStart(2,'0');
-  const s = String(d.getUTCSeconds()).padStart(2,'0');
-  return `${Y}-${M}-${D} ${h}:${m}:${s}Z`;
-}
-// Format a signed time offset from NOW compactly (minutes, hours, or days).
-function fmtDelta(ms) {
-  if (Math.abs(ms) < 60000) return '+0m';
-  const sign = ms > 0 ? '+' : '−';
-  const s = Math.abs(ms) / 1000;
-  if (s < 3600)  return `${sign}${(s/60)|0}m`;
-  if (s < 86400) return `${sign}${(s/3600).toFixed(1)}h`;
-  return `${sign}${(s/86400).toFixed(1)}d`;
-}
 
 // Move the time handle to pointer x and set SIM.time from the log-scale mapping.
 let sliderDragging = false;
@@ -2056,7 +1493,7 @@ function setSliderPos(x) {
   let frac = (x - rect.left) / rect.width;
   frac = Math.max(0, Math.min(1, frac));
   sliderHandle.style.left = (frac * 100) + '%';
-  SIM.time = new Date(SIM.base.getTime() + fracToOffsetMs(frac));
+  SIM.time = new Date(SIM.base.getTime() + fracToOffsetMs(frac, SIM.range));
 }
 // Time slider drag: pause playback and scrub SIM.time as the handle moves.
 slider.addEventListener('pointerdown', (e) => {
@@ -2095,27 +1532,10 @@ btnNow.addEventListener('click', () => {
 btnRewind.addEventListener('click', () => {
   SIM.time = new Date(SIM.time.getTime() - 86400000);
   const offset = SIM.time.getTime() - SIM.base.getTime();
-  const frac = offsetMsToFrac(offset);
+  const frac = offsetMsToFrac(offset, SIM.range);
   sliderHandle.style.left = (Math.max(0, Math.min(1, frac)) * 100) + '%';
 });
-// Continuous log-scale rate slider: SIM.speed = 0.1 × 10^(frac × 6)
-//   frac=0    → 0.1×
-//   frac=1/6  → 1× (real time)
-//   frac=1/2  → 100×
-//   frac=2/3  → 1000×
-//   frac=1    → 100000×
-const RATE_K = 6;
-// Log-scale mapping between the rate slider fraction and SIM.speed, and back.
-function rateFracToSpeed(frac) { return 0.1 * Math.pow(10, frac * RATE_K); }
-function rateSpeedToFrac(speed) { return Math.log10(Math.max(speed, 0.001) / 0.1) / RATE_K; }
-// Format the playback rate compactly (×, k×).
-function fmtRate(s) {
-  if (s < 1)     return s.toFixed(2) + '×';
-  if (s < 10)    return s.toFixed(1) + '×';
-  if (s < 1000)  return Math.round(s) + '×';
-  if (s < 10000) return (s/1000).toFixed(1) + 'k×';
-  return Math.round(s/1000) + 'k×';
-}
+// Continuous log-scale rate slider: SIM.speed = 0.1 × 10^(frac × 6), see core/format.js.
 const rateSlider = document.getElementById('rate-slider');
 const rateHandle = document.getElementById('rate-slider-handle');
 const rateValue  = document.getElementById('rate-value');
@@ -2179,36 +1599,8 @@ function setStatus(text, cls) { statusEl.className = cls; statusEl.innerHTML = t
 
 // Allocate scene resources before any data loads.
 buildPointCloud();
-initWindFlowField();
 buildCityLabels();
 buildSatLabelPool();
-renderNotableList();
-
-// Hard-coded fallback catalog (ISS, Tiangong, Hubble) used only when every
-// network TLE source fails, so the globe is never empty.
-function demoDataset() {
-  const tles = [
-`ISS (ZARYA)
-1 25544U 98067A   26138.50000000  .00012345  00000+0  22345-3 0  9991
-2 25544  51.6400 123.4567 0001234  12.3456 347.6543 15.49000000400001`,
-`TIANGONG
-1 48274U 21035A   26138.50000000  .00015432  00000+0  18765-3 0  9990
-2 48274  41.4700 234.5678 0002345  34.5678 325.4321 15.62000000300002`,
-`HUBBLE SPACE TELESCOPE
-1 20580U 90037B   26138.50000000  .00001234  00000+0  12345-4 0  9993
-2 20580  28.4700  45.6789 0002468 123.4567 236.5432 15.09000000400003`,
-  ];
-  const out = [];
-  for (const block of tles) {
-    const ls = block.split('\n');
-    try {
-      const satrec = satellite.twoline2satrec(ls[1], ls[2]);
-      const noradId = parseInt(ls[1].substring(2,7).trim(), 10);
-      out.push({ satrec, name: ls[0].trim(), cat: classify(ls[0]), noradId, notable: null });
-    } catch (e) {}
-  }
-  return out;
-}
 
 // Persistent load-status panel
 // Load-status panel: a persistent row per TLE group showing load/ok/fail/retry
@@ -2240,21 +1632,6 @@ function setLoadStatus(group, status, count) {
   acqSegSet(group, status);
 }
 
-// Each group has three sources, tried in order:
-//   1. data/<group>.txt next to this module. The tle-snapshot workflow
-//      downloads it from CelesTrak every 2 h and puts it in the Pages deploy.
-//   2. The same file on the live site, for local servers that have no data/.
-//      GitHub Pages sends Access-Control-Allow-Origin: *.
-//   3. CelesTrak, only when neither snapshot is available.
-// So a visitor sends no request to CelesTrak while a snapshot exists.
-const TLE_SNAPSHOT_DIRS = [...new Set([
-  new URL('data/', import.meta.url).href,
-  'https://davesgames.io/stella-nova/pages/leo-catalog/data/',
-])];
-function urlsForGroup(group) {
-  return [...TLE_SNAPSHOT_DIRS.map(d => d + group + '.txt'), URL_GP(group)];
-}
-
 // Download one TLE group: try its URLs in order and parse the first that
 // works. Returns the parsed records, or null after every URL failed. Touches
 // no catalog state, so several groups can download at the same time.
@@ -2279,17 +1656,8 @@ async function fetchGroup(group) {
 // merge order sets which forceCat wins and which group gets PERF_CAP room.
 function mergeGroup(group, parsed, opts = {}) {
   if (!parsed) return -1;
-  const forceCat = opts.forceCat || null;
-  let n = 0;
   const first = sats.length;
-  for (const p of parsed) {
-    if (sats.length >= PERF_CAP) break;
-    if (knownIds.has(p.noradId)) continue;
-    if (forceCat) p.cat = forceCat;
-    sats.push(p);
-    knownIds.add(p.noradId);
-    n++;
-  }
+  const n = mergeParsed(sats, knownIds, parsed, PERF_CAP, opts.forceCat || null);
   setLoadStatus(group, 'ok', n);
   splash(`${group} +${n.toLocaleString()}`, n ? 'ok' : '');
   rebuildAttributesFromSats();
@@ -2454,7 +1822,7 @@ function animate(now) {
     SIM.time = new Date(SIM.time.getTime() + dt * SIM.speed);
     if (!sliderDragging) {
       const offset = SIM.time.getTime() - SIM.base.getTime();
-      const frac = offsetMsToFrac(offset);
+      const frac = offsetMsToFrac(offset, SIM.range);
       sliderHandle.style.left = (frac * 100) + '%';
     }
   }
