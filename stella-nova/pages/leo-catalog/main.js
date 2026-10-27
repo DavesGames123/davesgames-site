@@ -49,6 +49,7 @@
 //      view/labels.js ....... city, station and sat HTML labels (per frame)
 //      view/trails.js ....... orbit loops: the selected object and the stations
 //      view/saver.js ........ window.snSaver: slow orbit, tour and label plate
+//      view/time-control.js . scrub slider, transport buttons, rate, readouts
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -67,7 +68,7 @@
 //      object info .......... "function showObjectInfo"  right-hand panel
 //      fly-to ............... "function flyTo"     animated camera moves
 //      search ............... "function doSearch"  name/NORAD search
-//      time control ......... "// TIME CONTROL"    scrub + rate sliders
+//      time control ......... "initTimeControl"   wires view/time-control.js
 //      tle groups ........... "function fetchGroup"  load rows, merge order
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
@@ -78,7 +79,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
 import { wireXR } from './xr.js';
-import { fmtTime, fmtDelta, fmtRate, escHtml, fracToOffsetMs, offsetMsToFrac, rateFracToSpeed, rateSpeedToFrac } from './core/format.js';
+import { fmtRate, escHtml, rateSpeedToFrac } from './core/format.js';
 import { parseTLE, demoDataset, mergeParsed } from './core/tle.js';
 import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
 import { CYCLONES, traceStreamlines } from './core/wind.js';
@@ -86,6 +87,7 @@ import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { initTimeControl, applyRate, advanceClock, showTime, btnPlay, btnNow } from './view/time-control.js';
 import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
 import { initLabels, buildCityLabels, updateCityLabels, hideCityLabels, rebuildStationLabels, updateStationLabels,
          buildSatLabelPool, updateSatLabels, clearSatLabels } from './view/labels.js';
@@ -869,96 +871,9 @@ document.querySelectorAll('.qtag').forEach(b => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// TIME CONTROL
+// TIME CONTROL  (scrub, transport and rate: view/time-control.js)
 // ═══════════════════════════════════════════════════════════════════
-const slider = document.getElementById('slider');
-const sliderHandle = document.getElementById('slider-handle');
-const tcTime = document.getElementById('tc-time');
-const mobileTime = document.getElementById('mobile-time');
-const btnPlay = document.getElementById('btn-play');
-const btnNow = document.getElementById('btn-now');
-const btnRewind = document.getElementById('btn-rewind');
-
-
-// Move the time handle to pointer x and set SIM.time from the log-scale mapping.
-let sliderDragging = false;
-function setSliderPos(x) {
-  const rect = slider.getBoundingClientRect();
-  let frac = (x - rect.left) / rect.width;
-  frac = Math.max(0, Math.min(1, frac));
-  sliderHandle.style.left = (frac * 100) + '%';
-  SIM.time = new Date(SIM.base.getTime() + fracToOffsetMs(frac, SIM.range));
-}
-// Time slider drag: pause playback and scrub SIM.time as the handle moves.
-slider.addEventListener('pointerdown', (e) => {
-  sliderDragging = true;
-  SIM.playing = false;
-  btnPlay.classList.remove('playing');
-  btnPlay.innerHTML = '&#x25B6;';
-  tcTime.classList.add('scrubbing');
-  setSliderPos(e.clientX);
-  slider.setPointerCapture(e.pointerId);
-});
-slider.addEventListener('pointermove', (e) => {
-  if (!sliderDragging) return;
-  setSliderPos(e.clientX);
-});
-slider.addEventListener('pointerup', (e) => {
-  sliderDragging = false;
-  try { slider.releasePointerCapture(e.pointerId); } catch (_) {}
-});
-// Transport buttons: play/pause, jump to NOW (recentre), and rewind one day.
-btnPlay.addEventListener('click', () => {
-  SIM.playing = !SIM.playing;
-  btnPlay.classList.toggle('playing', SIM.playing);
-  btnPlay.innerHTML = SIM.playing ? '&#x25B6;' : '&#x23F8;';
-  tcTime.classList.toggle('scrubbing', !SIM.playing);
-});
-btnNow.addEventListener('click', () => {
-  SIM.base = new Date();
-  SIM.time = new Date(SIM.base);
-  sliderHandle.style.left = '50%';
-  SIM.playing = true;
-  btnPlay.classList.add('playing');
-  btnPlay.innerHTML = '&#x25B6;';
-  tcTime.classList.remove('scrubbing');
-});
-btnRewind.addEventListener('click', () => {
-  SIM.time = new Date(SIM.time.getTime() - 86400000);
-  const offset = SIM.time.getTime() - SIM.base.getTime();
-  const frac = offsetMsToFrac(offset, SIM.range);
-  sliderHandle.style.left = (Math.max(0, Math.min(1, frac)) * 100) + '%';
-});
-// Continuous log-scale rate slider: SIM.speed = 0.1 × 10^(frac × 6), see core/format.js.
-const rateSlider = document.getElementById('rate-slider');
-const rateHandle = document.getElementById('rate-slider-handle');
-const rateValue  = document.getElementById('rate-value');
-// Apply a rate-slider fraction: set SIM.speed, move the handle, update the label.
-function applyRate(frac) {
-  frac = Math.max(0, Math.min(1, frac));
-  SIM.speed = rateFracToSpeed(frac);
-  rateHandle.style.left = (frac * 100) + '%';
-  rateValue.textContent = fmtRate(SIM.speed);
-}
-applyRate(rateSpeedToFrac(SIM.speed)); // init from default SIM.speed (3×)
-// Rate slider drag: set playback speed from the pointer x.
-let rateDragging = false;
-function setRateFromX(x) {
-  const rect = rateSlider.getBoundingClientRect();
-  applyRate((x - rect.left) / rect.width);
-}
-rateSlider.addEventListener('pointerdown', (e) => {
-  rateDragging = true;
-  setRateFromX(e.clientX);
-  rateSlider.setPointerCapture(e.pointerId);
-});
-rateSlider.addEventListener('pointermove', (e) => {
-  if (rateDragging) setRateFromX(e.clientX);
-});
-rateSlider.addEventListener('pointerup', (e) => {
-  rateDragging = false;
-  try { rateSlider.releasePointerCapture(e.pointerId); } catch (_) {}
-});
+initTimeControl(SIM);
 
 // ═══════════════════════════════════════════════════════════════════
 // MOBILE MENU
@@ -1163,7 +1078,6 @@ function startXR() {
 // MAIN LOOP
 // ═══════════════════════════════════════════════════════════════════
 let lastFrame = performance.now();
-const statTimePill = document.getElementById('stat-time-pill');
 
 // The per-frame loop. Advances SIM.time, updates the sun, propagates objects at
 // PROP_HZ, tracks the locked object with the camera, reprojects every HTML
@@ -1172,14 +1086,7 @@ function animate(now) {
   requestAnimationFrame(animate);
   const dt = now - lastFrame;
   lastFrame = now;
-  if (SIM.playing) {
-    SIM.time = new Date(SIM.time.getTime() + dt * SIM.speed);
-    if (!sliderDragging) {
-      const offset = SIM.time.getTime() - SIM.base.getTime();
-      const frac = offsetMsToFrac(offset, SIM.range);
-      sliderHandle.style.left = (frac * 100) + '%';
-    }
-  }
+  advanceClock(dt);
   earthUniforms.uSunDir.value.copy(sunDirEcef(SIM.time));
   satMat.uniforms.uTime.value = now / 1000;
   updatePings(now / 1000);
@@ -1218,11 +1125,7 @@ function animate(now) {
   // Wind flow particles
   updateWindFlow(dt);
   renderer.render(scene, camera);
-  const t = fmtTime(SIM.time);
-  const delta = SIM.time.getTime() - SIM.base.getTime();
-  tcTime.innerHTML = `${t}<span class="delta">${fmtDelta(delta)}</span>`;
-  mobileTime.textContent = t;
-  if (statTimePill) statTimePill.textContent = t;
+  showTime();
 }
 
 // Kick off data loading and start the render loop.
