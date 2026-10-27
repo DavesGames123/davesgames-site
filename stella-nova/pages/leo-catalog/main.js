@@ -35,7 +35,7 @@
 //      ECEF   +X=lon0, +Y=lon90E, +Z=north      (satellite.js output)
 //      scene  +X=lon0, +Y=north,  -Z=lon90E     (ecefToScene remaps)
 //
-//  MODULES   (pure parts, node-tested by tests.mjs)
+//  CORE MODULES   (pure parts, node-tested by tests.mjs)
 //      core/format.js ....... time, delta and rate text; the slider scales
 //      core/tle.js .......... classify, parseTLE, demo catalog, elements, merge
 //      core/tle-fetch.js .... snapshot/CelesTrak fetch, cache, source order
@@ -43,11 +43,13 @@
 //      core/info.js ......... curated descriptions, chip and panel HTML
 //      core/geo.js .......... frame conversions, sun direction
 //
+//  VIEW MODULES   (DOM and three.js parts; main.js passes them state)
+//      view/boot-ui.js ...... splash log, #acq strip, load rows, status, tweens
+//
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
 //      shader load .......... "loadShaders"        fetch .glsl before build
 //      constants ............ "// CONSTANTS"       categories, filters, SIM
-//      splash / strip ....... "// SPLASH LOGGER"   title card, #acq strip, tweens
 //      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
 //      earth map ............ "function buildEarthMap"  canvas-drawn continents
 //      satellites ........... "// SATELLITES"      point cloud + attributes
@@ -81,6 +83,8 @@ import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
 import { CYCLONES, traceStreamlines } from './core/wind.js';
 import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
+import { REDUCED_MOTION, splash, setGauge, tweenNumber, retrigger, playIntro, acqCountEl, showStrip, finishAcquisition,
+         setStatus, addLoadRow, hasLoadRow, setLoadStatus, stopLoadDot } from './view/boot-ui.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
 // building any material, so init runs in the original synchronous order.
@@ -143,130 +147,6 @@ const SIM = {
 
 let splashGone = false;
 
-// ═══════════════════════════════════════════════════════════════════
-// SPLASH LOGGER + ACQUISITION STRIP
-// ═══════════════════════════════════════════════════════════════════
-// Boot has two surfaces. #splash is a short title card over the scene; it
-// lifts as soon as the Earth map is ready (see revealScene). #acq is the strip
-// at the top that stays up while TLE groups land on the visible globe: one
-// segment per group, an object counter, the latest log line, and one chip per
-// subsystem (GEO, CAT, STM, WND, STR).
-const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const splashLines = document.getElementById('splash-lines');
-const acqEl      = document.getElementById('acq');
-const acqLine    = document.getElementById('acq-line');
-const acqSegsEl  = document.getElementById('acq-segs');
-const acqCountEl = document.getElementById('acq-count');
-const acqTitle   = document.getElementById('acq-title');
-
-// Log one boot line: append it to the splash log (last 3 kept) and make it the
-// strip's current line, re-running the strip's line-in animation.
-function splash(msg, cls = '') {
-  if (splashLines && splashLines.isConnected) {
-    const div = document.createElement('div');
-    div.className = 'ln ' + cls;
-    div.textContent = msg;
-    splashLines.appendChild(div);
-    while (splashLines.childElementCount > 3) splashLines.firstChild.remove();
-  }
-  if (acqLine) {
-    acqLine.textContent = msg;
-    acqLine.className = 'acq-line ' + cls;
-    void acqLine.offsetWidth;
-    acqLine.classList.add('in');
-  }
-}
-
-// Subsystem chips. pct > 0 marks the chip busy; {done} or {fail} marks the
-// finish. Callers pass percentages from when these were dial gauges; only the
-// state is shown now.
-function setGauge(name, pct, state) {
-  const el = acqEl && acqEl.querySelector(`[data-sys="${name}"]`);
-  if (!el) return;
-  const st = state && state.fail ? 'fail' : state && state.done ? 'ok' : pct > 0 ? 'busy' : 'idle';
-  if (el.dataset.state !== st) el.dataset.state = st;
-}
-
-// Group segments, mirrored from the load-status panel by addLoadRow and
-// setLoadStatus. The CAT chip is done when every segment is ok or fail.
-const acqSegs = new Map(); // group → element
-function acqSegAdd(group) {
-  if (!acqSegsEl || acqSegs.has(group)) return;
-  const seg = document.createElement('span');
-  seg.className = 'seg loading';
-  seg.title = group;
-  seg.style.setProperty('--i', acqSegs.size);
-  acqSegsEl.appendChild(seg);
-  acqSegs.set(group, seg);
-  catalogGaugeRecompute();
-}
-function acqSegSet(group, status) {
-  const seg = acqSegs.get(group);
-  if (!seg) return;
-  seg.className = 'seg ' + status;
-  catalogGaugeRecompute();
-}
-function catalogGaugeRecompute() {
-  let done = 0;
-  acqSegs.forEach(s => { if (s.classList.contains('ok') || s.classList.contains('fail')) done++; });
-  setGauge('catalog', acqSegs.size ? 1 + 99 * done / acqSegs.size : 0,
-           acqSegs.size && done === acqSegs.size ? { done: true } : null);
-}
-
-// Count a number element up (or down) to target over ~0.7 s with an ease-out
-// curve. A new call on the same element takes over from the shown value.
-const tweens = new Map(); // element → { from, to, t0 }
-function tweenNumber(el, to) {
-  if (!el) return;
-  const shown = Number(String(el.textContent).replace(/[^0-9]/g, '')) || 0;
-  if (REDUCED_MOTION || shown === to) { el.textContent = to.toLocaleString(); return; }
-  const had = tweens.size > 0;
-  tweens.set(el, { from: shown, to, t0: performance.now() });
-  if (!had) requestAnimationFrame(stepTweens);
-}
-function stepTweens(now) {
-  tweens.forEach((tw, el) => {
-    const k = Math.min(1, (now - tw.t0) / 700);
-    const e = 1 - Math.pow(1 - k, 3);
-    el.textContent = Math.round(tw.from + (tw.to - tw.from) * e).toLocaleString();
-    if (k >= 1) tweens.delete(el);
-  });
-  if (tweens.size) requestAnimationFrame(stepTweens);
-}
-
-// Re-run a one-shot CSS animation class on an element.
-function retrigger(el, cls) {
-  if (!el) return;
-  el.classList.remove(cls);
-  void el.offsetWidth;
-  el.classList.add(cls);
-}
-
-// Resolve the splash logo from random glyphs to its text, left to right, over
-// ~0.9 s. Resolves when the minimum title-card time has passed.
-function playIntro() {
-  const logo = document.getElementById('splash-logo');
-  const MIN_MS = REDUCED_MOTION ? 200 : 1500;
-  if (logo && !REDUCED_MOTION) {
-    const final = logo.textContent;
-    const GLYPHS = '<>/\\|#*+=01';
-    const t0 = performance.now();
-    const step = (now) => {
-      const k = (now - t0) / 900;
-      let out = '';
-      for (let i = 0; i < final.length; i++) {
-        const lockAt = (i + 1) / final.length;
-        out += (final[i] === ' ' || k >= lockAt) ? final[i]
-             : GLYPHS[(Math.random() * GLYPHS.length) | 0];
-      }
-      logo.textContent = out;
-      if (k < 1) requestAnimationFrame(step);
-      else logo.textContent = final;
-    };
-    requestAnimationFrame(step);
-  }
-  return new Promise(r => setTimeout(r, MIN_MS));
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // THREE.JS BASE
@@ -1593,50 +1473,18 @@ window.addEventListener('resize', () => {
 // ═══════════════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════════════
-// Set the status readout text and colour class.
-const statusEl = document.getElementById('stat-status');
-function setStatus(text, cls) { statusEl.className = cls; statusEl.innerHTML = text; }
 
 // Allocate scene resources before any data loads.
 buildPointCloud();
 buildCityLabels();
 buildSatLabelPool();
 
-// Persistent load-status panel
-// Load-status panel: a persistent row per TLE group showing load/ok/fail/retry
-// and the object count, mirrored into the #acq strip segments.
-const loadRowsEl = document.getElementById('load-rows');
-const loadDotEl  = document.getElementById('load-dot');
-const loadRows = new Map();
-function addLoadRow(group) {
-  const row = document.createElement('div');
-  row.className = 'load-row lr-in';
-  row.style.setProperty('--i', loadRows.size);
-  row.innerHTML =
-    `<span class="lr-name">${group}</span>` +
-    `<span class="lr-status loading">load</span>` +
-    `<span class="lr-count">—</span>`;
-  loadRowsEl.appendChild(row);
-  loadRows.set(group, row);
-  acqSegAdd(group); // strip mirror
-}
-function setLoadStatus(group, status, count) {
-  const row = loadRows.get(group);
-  if (!row) return;
-  const st = row.querySelector('.lr-status');
-  const cn = row.querySelector('.lr-count');
-  st.className = 'lr-status ' + status;
-  st.textContent = status;
-  if (count !== undefined) cn.textContent = `+${count.toLocaleString()}`;
-  retrigger(row, 'lr-flash');
-  acqSegSet(group, status);
-}
 
 // Download one TLE group: try its URLs in order and parse the first that
 // works. Returns the parsed records, or null after every URL failed. Touches
 // no catalog state, so several groups can download at the same time.
 async function fetchGroup(group) {
-  if (!loadRows.has(group)) addLoadRow(group);
+  if (!hasLoadRow(group)) addLoadRow(group);
   let lastErr = null;
   for (const url of urlsForGroup(group)) {
     try {
@@ -1717,21 +1565,13 @@ function revealScene() {
   setTimeout(() => sp.remove(), 1100);
   setTimeout(() => { splashGone = true; }, 700);
   document.body.classList.replace('boot-wait', 'boot-in');
-  if (acqEl) acqEl.classList.add('on');
+  showStrip();
   if (REDUCED_MOTION) camera.position.setFromSpherical(introEnd);
   else introT0 = performance.now();
   stampBirths(0, sats.length, 2.2);
   pingGlobe(0x66e0ff);
 }
 
-// Close the strip: flash it green, then slide it away.
-function finishAcquisition() {
-  if (!acqEl) return;
-  acqTitle.textContent = sats.length ? 'CATALOG NOMINAL' : 'CATALOG OFFLINE';
-  acqEl.classList.add('done');
-  pingGlobe(0x5fb872);
-  setTimeout(() => acqEl.classList.add('off'), 2600);
-}
 
 // Boot sequence: the title card, the Earth map and the catalog start together.
 // The scene is revealed when the title card and the Earth map are both done,
@@ -1761,11 +1601,11 @@ async function boot() {
   rebuildStationLabels();
   rebuildStationTrails();
   loadStorms();
-  if (loadDotEl) loadDotEl.style.animation = 'none';
+  stopLoadDot();
   setStatus('NOMINAL', 'status-ok');
   await loadWeather();
   splash(`ready :: ${sats.length.toLocaleString()} obj`, 'ok');
-  finishAcquisition();
+  finishAcquisition(sats.length, () => pingGlobe(0x5fb872));
   startXR();
 }
 
