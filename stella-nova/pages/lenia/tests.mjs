@@ -2,6 +2,10 @@
 //   node stella-nova/pages/lenia/tests.mjs
 // The engine tests (WebGPU through Deno) are in tools/engine_test.js.
 import { renderBudget, BUDGET } from './budget.js';
+import { wrap, wrapDelta } from './app/torus.js';
+import { familyOf, familyColor, cellsOf, rotate, lut } from './app/catalog.js';
+import { CORE_TEX, GROWTH_SYM, RULE_CLASS, SAVER_CORE, SAVER_GROWTH, growthTeX } from './app/tex.js';
+import { mulberry, saverGrid, gridCentroid, gridPeaks } from './app/saver/grid.js';
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
@@ -31,6 +35,34 @@ check(d2.dpr < 2 && d2.px <= 8.3e6 + 1e4, 'desk saver 3008x1692 @2: held to 8.3 
 const d3 = show('desk page 1440x900 @2', { dpr: 2, cssW: 1440, cssH: 900 });
 check(d3.dpr === 2 && d3.cubicMin === 3, 'desk page: dpr 2, cubic from 3 px');
 check(renderBudget({ dpr: 1, cssW: 1280, cssH: 800, saver: true }).dpr === 1, 'desk saver @1: dpr 1');
+
+// The pure app/ modules. The expected values come from the functions as they
+// were in main.js before the split (run once on the old source).
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const fix = (v, d = 4) => +v.toFixed(d);
+check(same([wrap(-1, 10), wrap(23, 10), wrapDelta(9, 10), wrapDelta(-6, 10)], [9, 3, -1, 4]), 'torus: wrap and wrapDelta');
+const rng = mulberry(42);
+check(same(Array.from({ length: 5 }, rng).map(v => fix(v, 8)), [0.60110375, 0.44829056, 0.85246579, 0.66973404, 0.1748139]), 'saver grid: mulberry(42) sequence');
+{
+  const W = 64, H = 48, A = new Float32Array(W * H);
+  const blob = (cx, cy, r, v) => { for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const d = Math.hypot(wrapDelta(x - cx, W), wrapDelta(y - cy, H)); if (d < r) A[y * W + x] = v * (1 - d / r); } };
+  blob(10, 10, 6, 1); blob(40, 30, 5, 0.8); blob(62, 46, 4, 0.9);
+  const g = saverGrid(A, W, H, 4), sum = a => fix(Array.from(a).reduce((s, v) => s + v, 0));
+  check(same({ gw: g.gw, gh: g.gh, m: sum(g.m), mx: sum(g.mx), my: sum(g.my) }, { gw: 16, gh: 12, m: 73.6033, mx: 1970.5995, my: 1564.6279 }), 'saver grid: block sums');
+  const cen = [[10, 10, 8], [1, 1, 8], [25, 5, 3]].map(([x, y, r]) => { const c = gridCentroid(g, { x, y }, r); return c && { x: fix(c.x), y: fix(c.y), m: fix(c.m) }; });
+  check(same(cen, [{ x: 10, y: 10, m: 37.6862 }, { x: 62.4033, y: 46.4033, m: 15.8144 }, null]), 'saver grid: gridCentroid across the wrap, and null on empty space');
+  check(same(gridPeaks(g).map(p => ({ x: p.x, y: p.y, v: fix(p.v) })), [{ x: 10, y: 10, v: 37.6862 }, { x: 42, y: 30, v: 20.8425 }]), 'saver grid: gridPeaks');
+}
+check(same([familyOf({ rank: ['a', 'b', 'c', 'd'] }), familyOf({ rank: ['a', 'b', '(note)', 'd'] }), familyOf({ rank: ['', '', '', ''] })], ['c', 'b', 'Other']), 'catalog: familyOf');
+check(familyColor('Orbidae') === 'hsl(5 62% 62%)', 'catalog: familyColor');
+const p32 = { w: 3, h: 2, data: Float32Array.from([1, 2, 3, 4, 5, 6]) };
+check(rotate(p32, 1).data.join(',') === '4,1,5,2,6,3' && rotate(p32, 3).data.join(',') === '3,6,2,5,1,4' && rotate(p32, 1).w === 2, 'catalog: rotate');
+check(same(Array.from(cellsOf({ id: 't', w: 2, h: 2, cells: btoa(String.fromCharCode(0, 51, 255, 128)) }).data).map(v => fix(v, 6)), [0, 0.2, 1, 0.501961]), 'catalog: cellsOf');
+check(lut('lenia').length === 768, 'catalog: lut has 256 rgb entries');
+check(growthTeX(1, 0.15, 0.015) === String.raw`G(u) = 2\Big(1 - \tfrac{(u-\class{m5}{0.150})^2}{9\cdot \class{m6}{0.0150}^2}\Big)_+^4 - 1`, 'tex: growthTeX gn 1');
+check(growthTeX(2, 0.15, 0.015) === String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-\class{m5}{0.150})^2}{2\cdot \class{m6}{0.0150}^2}\Big) - 1`, 'tex: growthTeX gn 2');
+check(growthTeX(3, 0.2, 0.03) === String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-\class{m5}{0.200}| \le \class{m6}{0.0300}`, 'tex: growthTeX gn 3');
+check(CORE_TEX.length === 4 && SAVER_CORE.length === 4 && GROWTH_SYM.length === 3 && SAVER_GROWTH.length === 3 && RULE_CLASS.m === 'm5', 'tex: table sizes and RULE_CLASS');
 
 console.log(fails ? `${fails} FAIL` : 'ALL PASS');
 process.exit(fails ? 1 : 0);

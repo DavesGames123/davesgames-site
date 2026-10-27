@@ -42,9 +42,13 @@
      grep -n 'function setOpen'         the panel, the phone sheet, the dock
      grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
-import { createEngine, kernelShell, GROWTH, resample, PALETTES, paletteData } from './engine.js';
+import { createEngine, kernelShell, GROWTH, resample, PALETTES } from './engine.js';
 import { typeset } from '../../lib/sci-math.js';
 import { renderBudget } from './budget.js';
+import { wrap, wrapDelta } from './app/torus.js';
+import { familyOf, familyColor, cellsOf, rotate, lut } from './app/catalog.js';
+import { RULES, RULE_CLASS, GENERAL, CORE_TEX, growthTeX, GROWTH_SYM, SAVER_GROWTH, SAVER_CORE } from './app/tex.js';
+import { mulberry, saverGrid, gridCentroid, gridPeaks } from './app/saver/grid.js';
 
 const $ = id => document.getElementById(id);
 // The phone layout. This query matches the PHONE block in style.css.
@@ -85,24 +89,7 @@ function toast(msg, err = false, ms = 2400) {
   clearTimeout(toastT);
   toastT = setTimeout(() => t.classList.remove('show'), ms);
 }
-const wrap = (a, n) => ((a % n) + n) % n;
-const wrapDelta = (d, n) => wrap(d + n / 2, n) - n / 2;
 
-// Family label: the family rank, or the next rank up when the family rank is
-// empty or a note in parentheses.
-function familyOf(c) {
-  for (const k of [2, 1, 0]) { const r = c.rank[k]; if (r && !r.startsWith('(')) return r; }
-  return 'Other';
-}
-const famCache = new Map();
-function familyColor(f) {
-  if (famCache.has(f)) return famCache.get(f);
-  let h = 0;
-  for (const ch of f) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const col = `hsl(${(h * 137.5) % 360} 62% 62%)`;
-  famCache.set(f, col);
-  return col;
-}
 function chipEl(f, tag = 'span') {
   const c = document.createElement(tag);
   c.className = 'chip';
@@ -111,37 +98,6 @@ function chipEl(f, tag = 'span') {
   return c;
 }
 
-// Start cells as a float patch, decoded once per creature.
-const cellCache = new Map();
-function cellsOf(c) {
-  if (cellCache.has(c.id)) return cellCache.get(c.id);
-  const bin = atob(c.cells);
-  const data = new Float32Array(c.w * c.h);
-  for (let i = 0; i < data.length; i++) data[i] = bin.charCodeAt(i) / 255;
-  const p = { w: c.w, h: c.h, data };
-  cellCache.set(c.id, p);
-  return p;
-}
-function rotate(p, q) {
-  let out = p;
-  for (let k = 0; k < q; k++) {
-    const r = { w: out.h, h: out.w, data: new Float32Array(out.data.length) };
-    for (let y = 0; y < out.h; y++) for (let x = 0; x < out.w; x++) r.data[x * r.w + (out.h - 1 - y)] = out.data[y * out.w + x];
-    out = r;
-  }
-  return out;
-}
-
-// 256 rgb entries of a palette as css colors, for 2D canvas work.
-const lutCache = new Map();
-function lut(name) {
-  if (lutCache.has(name)) return lutCache.get(name);
-  const d = paletteData(name);
-  const out = new Uint8ClampedArray(256 * 3);
-  for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) out[i * 3 + c] = Math.round(d[i * 4 + c] * 255);
-  lutCache.set(name, out);
-  return out;
-}
 
 // --------------------------------------------------------------------- boot
 async function boot() {
@@ -373,26 +329,6 @@ function drawPlots() {
   g.textAlign = 'left';
 }
 
-// ---------------------------------------------------------------- equations
-// One color per quantity, in the equations, the rule labels and the About
-// text: the world A, the kernel K, the growth G, the time scale T, the
-// growth center m and the growth width s. The live values of m and s in
-// G(u) take the color of m and s.
-const RULES = [['A', 'm1'], ['K_c', 'm2'], ['K', 'm2'], ['G', 'm3'], ['T', 'm4'], ['m', 'm5'], ['s', 'm6']];
-const RULE_CLASS = Object.fromEntries(RULES);
-const GENERAL = String.raw`A^{t+\Delta t} = \Big[\,A^t + \tfrac{1}{T}\,G\big(K * A^t\big)\Big]_0^1`;
-const CORE_TEX = [
-  String.raw`K_c(r) = \big(4r(1-r)\big)^4`,
-  String.raw`K_c(r) = \exp\!\Big(4 - \tfrac{1}{r(1-r)}\Big)`,
-  String.raw`K_c(r) = \mathbf{1}\big[\tfrac14 \le r \le \tfrac34\big]`,
-  String.raw`K_c(r) = \mathbf{1}\big[\tfrac14 \le r \le \tfrac34\big] + \tfrac12\,\mathbf{1}\big[r < \tfrac14\big]`,
-];
-function growthTeX(gn, m, s) {
-  const M = `\\class{m5}{${m.toFixed(3)}}`, Sv = `\\class{m6}{${s.toFixed(4)}}`;
-  if (gn === 1) return String.raw`G(u) = 2\Big(1 - \tfrac{(u-${M})^2}{9\cdot ${Sv}^2}\Big)_+^4 - 1`;
-  if (gn === 3) return String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-${M}| \le ${Sv}`;
-  return String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-${M})^2}{2\cdot ${Sv}^2}\Big) - 1`;
-}
 // Typeset one TeX string into el as color-coded MathJax SVG.
 function tex(el, src, display = true) {
   el.classList.add('sci-eq');
@@ -985,70 +921,6 @@ const SHOTS = {
   herd: [['wide', 'push', 'drift'], ['push', 'wide', 'ahead'], ['wide', 'drift', 'push']],
   grow: [['wide', 'pan', 'push'], ['push', 'pan', 'wide']],
 };
-function mulberry(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6D2B79F5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-// The world as blocks of B x B cells: mass and mass-weighted x, y per block.
-function saverGrid(A, W, H, B) {
-  const gw = Math.ceil(W / B), gh = Math.ceil(H / B);
-  const m = new Float32Array(gw * gh), mx = new Float32Array(gw * gh), my = new Float32Array(gw * gh);
-  for (let y = 0; y < H; y++) {
-    const row = y * W, gy = ((y / B) | 0) * gw;
-    for (let x = 0; x < W; x++) {
-      const a = A[row + x];
-      if (a < 0.02) continue;
-      const g = gy + ((x / B) | 0);
-      m[g] += a; mx[g] += a * x; my[g] += a * y;
-    }
-  }
-  return { gw, gh, B, W, H, m, mx, my };
-}
-// The torus centroid of the blocks within rad cells of p, or null if empty.
-function gridCentroid(g, p, rad) {
-  let M = 0, X = 0, Y = 0;
-  const n = Math.ceil(rad / g.B);
-  const bx = Math.floor(p.x / g.B), by = Math.floor(p.y / g.B);
-  for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) {
-    const k = wrap(by + j, g.gh) * g.gw + wrap(bx + i, g.gw), mk = g.m[k];
-    if (mk <= 0) continue;
-    const dx = wrapDelta(g.mx[k] / mk - p.x, g.W), dy = wrapDelta(g.my[k] / mk - p.y, g.H);
-    if (dx * dx + dy * dy > rad * rad) continue;
-    M += mk; X += mk * dx; Y += mk * dy;
-  }
-  return M > 1e-3 ? { x: wrap(p.x + X / M, g.W), y: wrap(p.y + Y / M, g.H), m: M } : null;
-}
-// Points with mass: the blocks whose 3 x 3 sum is a local maximum above a
-// quarter of the largest. One point per creature, near enough.
-function gridPeaks(g) {
-  const s = new Float32Array(g.m.length);
-  let top = 0;
-  for (let y = 0; y < g.gh; y++) for (let x = 0; x < g.gw; x++) {
-    let v = 0;
-    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) v += g.m[wrap(y + j, g.gh) * g.gw + wrap(x + i, g.gw)];
-    s[y * g.gw + x] = v; top = Math.max(top, v);
-  }
-  const out = [];
-  for (let y = 0; y < g.gh; y++) for (let x = 0; x < g.gw; x++) {
-    const v = s[y * g.gw + x];
-    if (v < top * 0.25) continue;
-    let max = true;
-    for (let j = -2; j <= 2 && max; j++) for (let i = -2; i <= 2; i++) {
-      if ((i || j) && s[wrap(y + j, g.gh) * g.gw + wrap(x + i, g.gw)] > v) { max = false; break; }
-    }
-    if (max) out.push({ x: (x + 0.5) * g.B, y: (y + 0.5) * g.B, v });
-  }
-  return out;
-}
-// Plate text, index gn - 1 and kn - 1 (the order of growthTeX and CORE_TEX).
-const SAVER_GROWTH = ['G(u) = 2(1 − (u − m)²/9s²)₊⁴ − 1', 'G(u) = 2 exp(−(u − m)²/2s²) − 1', 'G(u) = +1 if |u − m| ≤ s, else −1'];
-const SAVER_CORE = ['k(r) = (4r(1 − r))⁴', 'k(r) = exp(4 − 1/(r(1 − r)))', 'k(r) = 1 if ¼ ≤ r ≤ ¾, else 0',
-  'k(r) = 1 if ¼ ≤ r ≤ ¾, ½ if r < ¼, else 0'];
 // The values on the plate are the live rule (S.rule), so a slider change in
 // the panel shows here too. tex is the panel TeX (GENERAL, growthTeX,
 // CORE_TEX) in the RULES colours. The growth line holds the values of m
@@ -1064,8 +936,7 @@ function saverLabel(label) {
     { sym: 'R', name: 'kernel radius', value: R + ' cells' },
   ];
   if (c.b.length > 1) params.push({ sym: '\\beta', name: 'ring heights', value: '(' + c.b.map(v => +v.toFixed(3)).join(', ') + ')' });
-  const growth = [String.raw`G(u) = 2\Big(1 - \tfrac{(u-m)^2}{9 s^2}\Big)_+^4 - 1`, String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-m)^2}{2 s^2}\Big) - 1`,
-    String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-m| \le s`][c.gn - 1] || '';
+  const growth = GROWTH_SYM[c.gn - 1] || '';
   label({
     title: c.name, sub: `Lenia · ${c.code}${c.cname ? ' · ' + c.cname : ''}`, params,
     lines: c.cls === 'grow' ? ['Grows without limit'] : [],
