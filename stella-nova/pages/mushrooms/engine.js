@@ -50,309 +50,50 @@
 //  order (outlines first); washes: [{ xy, color, part }] back to front.
 //  opts.debug adds { occs, vis }: the fills and the clipped lines (tests).
 //
+//  MODULES. engine.js keeps the binomen and the fruit body: capShape,
+//  makeBody, capItems, morelNet, underItems and stemItems. saver.js cuts
+//  code extracts of those functions from this file by name, so they stay
+//  here. The rest is in engine/, and engine.js re-exports every public
+//  name, so callers import from engine.js only.
+//    engine/params.js    the parameter schema, sanitize, mutate, blend
+//    engine/forms.js     the presets, randomParams, formParams
+//    engine/shade.js     hsl, vector helpers, LIGHT, dark
+//    engine/path.js      makePath, readPath (a meridian with arc length)
+//    engine/items.js     PART_NAMES, item(), runs()
+//    engine/place.js     placeBodies (position and size of each body)
+//    engine/ground.js    groundItems (ground, leaves, grass, moss)
+//    engine/flatten.js   painter order, hidden lines, flat typed arrays
+//    engine/share.js     encodeShare, decodeShare
+//
 //  GREP MAP
-//    grep -n 'export const PARAMS'        the parameter schema
-//    grep -n 'export const FORMS'         the presets
-//    grep -n 'export function randomParams' a plausible random species
 //    grep -n 'export function randomName' the binomen
 //    grep -n 'function capShape'          the meridian of the cap
 //    grep -n 'function makeBody'          one fruit body, all its items
 //    grep -n 'function capItems'          outline, rim, hatching, marks
+//    grep -n 'function morelNet'          the pits and ridges of a morel
 //    grep -n 'function underItems'        gills, pores, teeth, ridges
 //    grep -n 'function stemItems'         stem, textures, ring, volva
-//    grep -n 'function groundItems'       ground, leaves, grass, moss
 //    grep -n 'export function buildSpecimen' the whole specimen
-//    grep -n 'export function encodeShare' the share link
+//    grep -n "from './engine/"            the modules and the re-exports
 // ============================================================================
-import { clamp, lerp, smoothstep, TAU, mulberry, hashStr, makeNoise, makePeriodic, periodicTable,
-  pointInPoly, hideLines, rdp } from './geom.js';
+import { clamp, lerp, smoothstep, TAU, mulberry, makeNoise, makePeriodic, periodicTable, pointInPoly } from './geom.js';
+import { sanitize, SHAPES, MOREL, PUFF } from './engine/params.js';
+import { hsl, dot, norm, cross, LIGHT, dark } from './engine/shade.js';
+import { makePath, readPath } from './engine/path.js';
+import { PART_NAMES, item, runs } from './engine/items.js';
+import { placeBodies } from './engine/place.js';
+import { groundItems } from './engine/ground.js';
+import { flatten } from './engine/flatten.js';
+
+export { PROFILES, GROUPS, PARAMS, PARAM_BY_KEY, DEFAULTS, roundTo, sanitize, mutate, blendParams, takeGroup, applyLocks,
+  diffParams } from './engine/params.js';
+export { FORMS, FORM_KEYS, randomParams, formParams } from './engine/forms.js';
+export { hsl } from './engine/shade.js';
+export { PART_NAMES } from './engine/items.js';
+export { encodeShare, decodeShare } from './engine/share.js';
 
 export const UNIT_MM = 0.5;
-export const PART_NAMES = ['cap', 'marks', 'under', 'stem', 'ring', 'volva', 'ground', 'leaf', 'grass', 'moss'];
 const PI = Math.PI;
-const PIDX = Object.fromEntries(PART_NAMES.map((p, i) => [p, i]));
-
-// ── PARAMS ──────────────────────────────────────────────────────────────────
-export const PROFILES = ['Egg', 'Convex', 'Bell', 'Conical', 'Plane', 'Umbonate', 'Funnel', 'Parasol', 'Morel', 'Puffball'];
-// q: superellipse power (1 cone, 2 dome, 4 flat top); cl: closure past
-// the equator; um: umbo; dp: central depression; fl: margin flare.
-const SHAPES = [
-  { q: 2.0, cl: 0.7, um: 0, dp: 0, fl: 0 },
-  { q: 2.2, cl: 0.12, um: 0, dp: 0, fl: 0 },
-  { q: 1.55, cl: 0, um: 0, dp: 0, fl: 0.55 },
-  { q: 1.12, cl: 0, um: 0, dp: 0, fl: 0.1 },
-  { q: 4.0, cl: 0.02, um: 0, dp: 0, fl: 0 },
-  { q: 3.0, cl: 0, um: 0.6, dp: 0, fl: 0 },
-  { q: 2.0, cl: 0, um: 0, dp: 1, fl: 0 },
-  { q: 2.6, cl: 0, um: 0.45, dp: 0, fl: 0 },
-  { q: 1.35, cl: 0, um: 0, dp: 0, fl: 0 },
-  { q: 2.0, cl: 1.05, um: 0, dp: 0, fl: 0 },
-];
-const MOREL = 8, PUFF = 9;
-
-const E_ = (key, group, label, opts) => ({ key, group, label, kind: 'enum', opts, min: 0, max: opts.length - 1, step: 1 });
-const B_ = (key, group, label) => ({ key, group, label, kind: 'bool', min: 0, max: 1, step: 1 });
-const I_ = (key, group, label, min, max) => ({ key, group, label, kind: 'int', min, max, step: 1 });
-const F_ = (key, group, label, min, max, step = 0.01) => ({ key, group, label, kind: 'float', min, max, step });
-
-export const GROUPS = [
-  { id: 'cap', label: 'Cap' },
-  { id: 'under', label: 'Underside' },
-  { id: 'stem', label: 'Stem' },
-  { id: 'surface', label: 'Surface' },
-  { id: 'colour', label: 'Colour wash' },
-  { id: 'cluster', label: 'Cluster and ground' },
-  { id: 'view', label: 'View' },
-];
-export const PARAMS = [
-  E_('profile', 'cap', 'Profile', PROFILES),
-  F_('capR', 'cap', 'Cap radius', 12, 120, 1),
-  F_('capH', 'cap', 'Cap height', 0.05, 2.6),
-  F_('age', 'cap', 'Age', 0, 1),
-  F_('margin', 'cap', 'Margin', -1, 1),
-  F_('umbo', 'cap', 'Umbo', 0, 1),
-  F_('flesh', 'cap', 'Flesh', 0.05, 0.6),
-  F_('wobble', 'cap', 'Wavy margin', 0, 1),
-  E_('under', 'under', 'Underside', ['Gills', 'Pores', 'Teeth', 'Ridges', 'Smooth']),
-  I_('gills', 'under', 'Gill count', 10, 110),
-  I_('lamellulae', 'under', 'Short gills', 0, 3),
-  F_('stemH', 'stem', 'Stem height', 0.15, 6),
-  F_('stemTop', 'stem', 'Top width', 0.05, 0.9),
-  F_('stemBot', 'stem', 'Base width', 0.05, 1),
-  F_('bulb', 'stem', 'Bulb', 0, 1),
-  F_('lean', 'stem', 'Lean', -0.5, 0.5),
-  F_('curve', 'stem', 'Curve', -0.6, 0.6),
-  E_('ring', 'stem', 'Ring', ['None', 'Ring', 'Skirt']),
-  F_('ringPos', 'stem', 'Ring height', 0.2, 0.95),
-  F_('volva', 'stem', 'Volva', 0, 1),
-  E_('stemTex', 'stem', 'Texture', ['Smooth', 'Fibres', 'Snakeskin', 'Net', 'Scaly']),
-  E_('marks', 'surface', 'Cap marks', ['None', 'Warts', 'Spots', 'Scales', 'Zones', 'Granules']),
-  I_('markN', 'surface', 'Mark count', 0, 240),
-  F_('markSize', 'surface', 'Mark size', 0.3, 2.5),
-  F_('striate', 'surface', 'Striations', 0, 1),
-  F_('hatch', 'surface', 'Hatch density', 0, 1),
-  F_('shade', 'surface', 'Shading', 0, 1),
-  F_('capHue', 'colour', 'Cap hue', 0, 360, 1),
-  F_('capSat', 'colour', 'Cap saturation', 0, 1),
-  F_('capLit', 'colour', 'Cap lightness', 0.08, 0.97),
-  F_('markLit', 'colour', 'Mark lightness', 0.05, 0.98),
-  F_('gillHue', 'colour', 'Underside hue', 0, 360, 1),
-  F_('gillSat', 'colour', 'Underside saturation', 0, 1),
-  F_('gillLit', 'colour', 'Underside lightness', 0.08, 0.97),
-  F_('fleshHue', 'colour', 'Stem hue', 0, 360, 1),
-  F_('fleshSat', 'colour', 'Stem saturation', 0, 1),
-  F_('fleshLit', 'colour', 'Stem lightness', 0.08, 0.97),
-  I_('count', 'cluster', 'Count', 1, 7),
-  F_('ageSpread', 'cluster', 'Age spread', 0, 1),
-  F_('sizeVar', 'cluster', 'Size spread', 0, 1),
-  F_('scatter', 'cluster', 'Scatter', 0, 1),
-  B_('ground', 'cluster', 'Ground'),
-  F_('moss', 'cluster', 'Moss', 0, 1),
-  I_('grass', 'cluster', 'Grass tufts', 0, 14),
-  I_('litter', 'cluster', 'Leaf litter', 0, 16),
-  F_('elev', 'view', 'Camera height', -0.45, 0.45),
-];
-export const PARAM_BY_KEY = Object.fromEntries(PARAMS.map(d => [d.key, d]));
-
-export const DEFAULTS = {
-  profile: 1, capR: 70, capH: 0.6, age: 0.55, margin: 0, umbo: 0, flesh: 0.25, wobble: 0.15,
-  under: 0, gills: 60, lamellulae: 1,
-  stemH: 1.6, stemTop: 0.2, stemBot: 0.26, bulb: 0.2, lean: 0, curve: 0.1, ring: 0, ringPos: 0.8, volva: 0, stemTex: 0,
-  marks: 0, markN: 40, markSize: 1, striate: 0.2, hatch: 0.5, shade: 0.6,
-  capHue: 28, capSat: 0.5, capLit: 0.45, markLit: 0.9, gillHue: 40, gillSat: 0.2, gillLit: 0.85, fleshHue: 40, fleshSat: 0.2, fleshLit: 0.88,
-  count: 1, ageSpread: 0.5, sizeVar: 0.4, scatter: 0.5, ground: 1, moss: 0.3, grass: 3, litter: 4, elev: 0.12,
-};
-
-// ── FORMS ───────────────────────────────────────────────────────────────────
-// The presets. Each names the look of a real group of mushrooms; the
-// params are our own estimates. No psilocybin species.
-export const FORMS = {
-  fly: { label: 'Fly agaric', latin: 'Amanita-like', p: { profile: 1, capR: 78, capH: 0.62, age: 0.55, margin: 0.05, umbo: 0, flesh: 0.25, wobble: 0.12,
-    under: 0, gills: 72, lamellulae: 2, stemH: 1.9, stemTop: 0.16, stemBot: 0.24, bulb: 0.85, lean: 0.04, curve: 0.08, ring: 2, ringPos: 0.84, volva: 0.3, stemTex: 0,
-    marks: 1, markN: 70, markSize: 1, striate: 0.45, hatch: 0.55, shade: 0.6, capHue: 4, capSat: 0.82, capLit: 0.47, markLit: 0.96,
-    gillHue: 50, gillSat: 0.2, gillLit: 0.93, fleshHue: 50, fleshSat: 0.15, fleshLit: 0.94,
-    count: 2, ageSpread: 0.65, sizeVar: 0.4, scatter: 0.5, ground: 1, moss: 0.5, grass: 4, litter: 5, elev: 0.14 } },
-  parasol: { label: 'Parasol', latin: 'Macrolepiota-like', p: { profile: 7, capR: 105, capH: 0.3, age: 0.72, margin: 0.05, umbo: 0.6, flesh: 0.15, wobble: 0.1,
-    under: 0, gills: 96, lamellulae: 1, stemH: 2.5, stemTop: 0.08, stemBot: 0.13, bulb: 0.75, lean: -0.05, curve: 0.12, ring: 1, ringPos: 0.74, volva: 0, stemTex: 2,
-    marks: 3, markN: 90, markSize: 1.1, striate: 0, hatch: 0.5, shade: 0.55, capHue: 34, capSat: 0.3, capLit: 0.8, markLit: 0.32,
-    gillHue: 40, gillSat: 0.1, gillLit: 0.92, fleshHue: 35, fleshSat: 0.14, fleshLit: 0.84,
-    count: 2, ageSpread: 0.8, sizeVar: 0.3, scatter: 0.7, ground: 1, moss: 0.2, grass: 7, litter: 3, elev: 0.04 } },
-  bolete: { label: 'Bolete', latin: 'Boletus-like', p: { profile: 1, capR: 85, capH: 0.55, age: 0.55, margin: -0.05, umbo: 0, flesh: 0.45, wobble: 0.1,
-    under: 1, gills: 60, lamellulae: 0, stemH: 1.15, stemTop: 0.36, stemBot: 0.52, bulb: 0.6, lean: 0.05, curve: 0.1, ring: 0, ringPos: 0.8, volva: 0, stemTex: 3,
-    marks: 0, markN: 0, markSize: 1, striate: 0, hatch: 0.6, shade: 0.65, capHue: 24, capSat: 0.55, capLit: 0.36, markLit: 0.5,
-    gillHue: 52, gillSat: 0.65, gillLit: 0.68, fleshHue: 38, fleshSat: 0.3, fleshLit: 0.78,
-    count: 2, ageSpread: 0.5, sizeVar: 0.4, scatter: 0.45, ground: 1, moss: 0.3, grass: 2, litter: 8, elev: -0.14 } },
-  chanterelle: { label: 'Chanterelle', latin: 'Cantharellus-like', p: { profile: 6, capR: 55, capH: 0.12, age: 0.6, margin: -0.15, umbo: 0, flesh: 0.3, wobble: 0.85,
-    under: 3, gills: 46, lamellulae: 0, stemH: 1.1, stemTop: 0.32, stemBot: 0.17, bulb: 0, lean: 0, curve: 0.15, ring: 0, ringPos: 0.8, volva: 0, stemTex: 0,
-    marks: 0, markN: 0, markSize: 1, striate: 0, hatch: 0.5, shade: 0.55, capHue: 40, capSat: 0.85, capLit: 0.55, markLit: 0.5,
-    gillHue: 40, gillSat: 0.8, gillLit: 0.6, fleshHue: 42, fleshSat: 0.7, fleshLit: 0.7,
-    count: 3, ageSpread: 0.5, sizeVar: 0.5, scatter: 0.5, ground: 1, moss: 0.6, grass: 0, litter: 6, elev: -0.06 } },
-  inkcap: { label: 'Shaggy ink cap', latin: 'Coprinus-like', p: { profile: 2, capR: 30, capH: 2.3, age: 0.35, margin: -0.05, umbo: 0.1, flesh: 0.15, wobble: 0.2,
-    under: 0, gills: 80, lamellulae: 1, stemH: 3.4, stemTop: 0.3, stemBot: 0.36, bulb: 0.3, lean: 0.05, curve: 0.1, ring: 1, ringPos: 0.28, volva: 0, stemTex: 1,
-    marks: 3, markN: 110, markSize: 0.9, striate: 0.2, hatch: 0.5, shade: 0.5, capHue: 32, capSat: 0.12, capLit: 0.93, markLit: 0.55,
-    gillHue: 20, gillSat: 0.08, gillLit: 0.82, fleshHue: 40, fleshSat: 0.05, fleshLit: 0.95,
-    count: 3, ageSpread: 0.7, sizeVar: 0.4, scatter: 0.4, ground: 1, moss: 0, grass: 9, litter: 1, elev: 0.06 } },
-  bonnet: { label: 'Bonnet', latin: 'Mycena-like', p: { profile: 3, capR: 16, capH: 1.05, age: 0.55, margin: 0, umbo: 0.2, flesh: 0.1, wobble: 0.2,
-    under: 0, gills: 24, lamellulae: 1, stemH: 5.6, stemTop: 0.12, stemBot: 0.15, bulb: 0, lean: 0.15, curve: 0.35, ring: 0, ringPos: 0.8, volva: 0, stemTex: 0,
-    marks: 0, markN: 0, markSize: 1, striate: 0.95, hatch: 0.45, shade: 0.5, capHue: 28, capSat: 0.25, capLit: 0.55, markLit: 0.5,
-    gillHue: 30, gillSat: 0.1, gillLit: 0.88, fleshHue: 30, fleshSat: 0.12, fleshLit: 0.78,
-    count: 6, ageSpread: 0.8, sizeVar: 0.5, scatter: 0.5, ground: 1, moss: 0.8, grass: 0, litter: 3, elev: 0.1 } },
-  morel: { label: 'Morel', latin: 'Morchella-like', p: { profile: 8, capR: 30, capH: 2.0, age: 0.6, margin: 0, umbo: 0, flesh: 0.2, wobble: 0.3,
-    under: 4, gills: 30, lamellulae: 0, stemH: 1.35, stemTop: 0.78, stemBot: 0.95, bulb: 0.3, lean: 0.03, curve: 0.08, ring: 0, ringPos: 0.8, volva: 0, stemTex: 4,
-    marks: 0, markN: 120, markSize: 1, striate: 0, hatch: 0.6, shade: 0.6, capHue: 34, capSat: 0.38, capLit: 0.55, markLit: 0.25,
-    gillHue: 40, gillSat: 0.2, gillLit: 0.8, fleshHue: 45, fleshSat: 0.3, fleshLit: 0.88,
-    count: 2, ageSpread: 0.4, sizeVar: 0.4, scatter: 0.5, ground: 1, moss: 0.3, grass: 3, litter: 7, elev: 0.12 } },
-  puffball: { label: 'Puffball', latin: 'Lycoperdon-like', p: { profile: 9, capR: 42, capH: 0.85, age: 0.6, margin: 0, umbo: 0, flesh: 0.2, wobble: 0.15,
-    under: 4, gills: 30, lamellulae: 0, stemH: 0.3, stemTop: 0.38, stemBot: 0.32, bulb: 0, lean: 0, curve: 0.05, ring: 0, ringPos: 0.8, volva: 0, stemTex: 1,
-    marks: 5, markN: 160, markSize: 0.6, striate: 0, hatch: 0.5, shade: 0.65, capHue: 40, capSat: 0.12, capLit: 0.9, markLit: 0.7,
-    gillHue: 40, gillSat: 0.15, gillLit: 0.85, fleshHue: 40, fleshSat: 0.15, fleshLit: 0.88,
-    count: 3, ageSpread: 0.5, sizeVar: 0.5, scatter: 0.4, ground: 1, moss: 0.4, grass: 5, litter: 3, elev: 0.22 } },
-};
-export const FORM_KEYS = Object.keys(FORMS);
-
-// ── sanitize, mutate, blend ─────────────────────────────────────────────────
-export function roundTo(v, step) {
-  const d = Math.min(4, Math.max(0, Math.ceil(-Math.log10(step) - 1e-9)));
-  return +(+v).toFixed(d);
-}
-// Clamps each field to its range and rounds int, enum and bool fields.
-// Unknown keys drop out; missing keys take DEFAULTS.
-export function sanitize(p) {
-  const o = {};
-  for (const d of PARAMS) {
-    let v = p && p[d.key] !== undefined ? +p[d.key] : DEFAULTS[d.key];
-    if (!Number.isFinite(v)) v = DEFAULTS[d.key];
-    v = clamp(v, d.min, d.max);
-    o[d.key] = d.kind === 'float' ? v : Math.round(v);
-  }
-  return o;
-}
-function gauss(rnd) {
-  const u = Math.max(1e-9, rnd()), v = rnd();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
-}
-// spread 0..1; locked: a Set of keys that do not change. Profile and
-// underside switch rarely, so a mutation keeps the species readable.
-export function mutate(p, spread, rnd, locked = null) {
-  const o = Object.assign({}, p);
-  for (const d of PARAMS) {
-    if (locked && locked.has(d.key)) continue;
-    if (rnd() > 0.3 + spread) continue;
-    const v = +o[d.key];
-    if (d.kind === 'float' || d.kind === 'int') {
-      const k = d.group === 'colour' ? 0.35 : 0.5;
-      o[d.key] = roundTo(clamp(v + gauss(rnd) * spread * (d.max - d.min) * k, d.min, d.max), d.step);
-    } else if (d.kind === 'enum') {
-      const rare = d.key === 'profile' || d.key === 'under' ? 0.12 : 0.35;
-      if (rnd() < spread * rare) o[d.key] = Math.floor(rnd() * d.opts.length);
-    } else if (rnd() < spread * 0.2) o[d.key] = v ? 0 : 1;
-  }
-  return sanitize(o);
-}
-export function blendParams(a, b, t) {
-  const o = {};
-  for (const d of PARAMS) {
-    const x = +a[d.key], y = +b[d.key];
-    if (d.kind === 'float') {
-      if (d.key.endsWith('Hue')) { let dh = ((y - x + 540) % 360) - 180; o[d.key] = (x + dh * t + 360) % 360; }
-      else o[d.key] = x + (y - x) * t;
-    } else if (d.kind === 'int') o[d.key] = Math.round(x + (y - x) * t);
-    else o[d.key] = t < 0.5 ? x : y;
-  }
-  return sanitize(o);
-}
-export function takeGroup(p, fresh, group, locked = null) {
-  const o = Object.assign({}, p);
-  for (const d of PARAMS) if (d.group === group && !(locked && locked.has(d.key))) o[d.key] = fresh[d.key];
-  return sanitize(o);
-}
-export function applyLocks(p, keep, locked) {
-  if (!locked || !locked.size) return p;
-  const o = Object.assign({}, p);
-  for (const k of locked) if (k in keep) o[k] = keep[k];
-  return sanitize(o);
-}
-export function diffParams(p, base) {
-  const o = {};
-  for (const d of PARAMS) {
-    if (+p[d.key] === +base[d.key]) continue;
-    o[d.key] = roundTo(p[d.key], d.kind === 'float' ? Math.min(d.step, 0.001) : 1);
-  }
-  return o;
-}
-
-// ── randomParams ────────────────────────────────────────────────────────────
-// A plausible random species: the profile first, then the rest in the
-// ranges that suit it, and a natural palette.
-const PALETTES = [
-  [4, 0.8, 0.46], [18, 0.75, 0.48], [28, 0.55, 0.38], [24, 0.45, 0.28], [34, 0.35, 0.62], [40, 0.12, 0.9],
-  [48, 0.7, 0.58], [60, 0.3, 0.45], [80, 0.2, 0.42], [270, 0.12, 0.5], [210, 0.08, 0.55], [0, 0.6, 0.35], [30, 0.25, 0.7],
-];
-const pickW = (rnd, w) => { let s = 0; for (const x of w) s += x; let t = rnd() * s; for (let i = 0; i < w.length; i++) { t -= w[i]; if (t <= 0) return i; } return w.length - 1; };
-const rr = (rnd, a, b) => a + (b - a) * rnd();
-export function randomParams(seed) {
-  const rnd = mulberry((seed ^ 0x6A09E667) >>> 0);
-  const p = Object.assign({}, DEFAULTS);
-  const prof = pickW(rnd, [0.05, 0.2, 0.1, 0.12, 0.1, 0.1, 0.1, 0.08, 0.07, 0.08]);
-  p.profile = prof;
-  const H = [[0.8, 1.2], [0.42, 0.8], [1.1, 2.3], [0.8, 1.4], [0.12, 0.32], [0.18, 0.4], [0.05, 0.2], [0.25, 0.4], [1.6, 2.4], [0.75, 1.0]][prof];
-  p.capH = rr(rnd, H[0], H[1]);
-  p.capR = 18 + 82 * Math.pow(rnd(), 1.3);
-  p.age = rr(rnd, 0.25, 0.85);
-  p.margin = rnd() < 0.3 ? rr(rnd, -0.6, 0.4) : 0;
-  p.umbo = rnd() < 0.25 ? rr(rnd, 0.1, 0.7) : 0;
-  p.flesh = rr(rnd, 0.1, 0.45);
-  p.wobble = prof === 6 ? rr(rnd, 0.5, 1) : rr(rnd, 0, 0.35);
-  if (prof === MOREL || prof === PUFF) p.under = 4;
-  else p.under = pickW(rnd, prof === 6 ? [0.3, 0.05, 0.1, 0.55, 0] : [0.66, prof === 1 || prof === 4 ? 0.2 : 0.05, 0.08, 0.06, 0.03]);
-  p.gills = Math.round(rr(rnd, 20, 100));
-  p.lamellulae = Math.floor(rnd() * 4);
-  const steep = prof === 2 || prof === 3;
-  p.stemH = prof === PUFF ? rr(rnd, 0.2, 0.4) : prof === MOREL ? rr(rnd, 1, 1.6) : steep ? rr(rnd, 2.4, 5.6) : rr(rnd, 0.8, 2.6);
-  p.stemTop = prof === MOREL ? rr(rnd, 0.65, 0.85) : p.under === 1 ? rr(rnd, 0.25, 0.42) : rr(rnd, 0.08, 0.32);
-  p.stemBot = prof === MOREL ? p.stemTop * rr(rnd, 1.05, 1.25) : p.stemTop * rr(rnd, 0.7, 1.6);
-  if (prof === PUFF) { p.stemTop = rr(rnd, 0.3, 0.42); p.stemBot = p.stemTop * 0.85; }
-  p.bulb = rnd() < 0.35 ? rr(rnd, 0.2, 0.9) : 0;
-  p.lean = rr(rnd, -0.2, 0.2);
-  p.curve = rr(rnd, -0.3, 0.3);
-  const plain = prof === MOREL || prof === PUFF || prof === 6;
-  p.ring = plain ? 0 : pickW(rnd, [0.62, 0.23, 0.15]);
-  p.ringPos = rr(rnd, 0.55, 0.9);
-  p.volva = !plain && rnd() < 0.15 ? rr(rnd, 0.2, 0.9) : 0;
-  p.stemTex = prof === MOREL ? 4 : pickW(rnd, [0.4, 0.25, 0.1, p.under === 1 ? 0.4 : 0.05, 0.1]);
-  p.marks = prof === MOREL ? 0 : prof === PUFF ? 5 : pickW(rnd, [0.45, 0.14, 0.12, 0.12, 0.1, 0.07]);
-  p.markN = Math.round(prof === MOREL ? rr(rnd, 60, 200) : rr(rnd, 20, 140));
-  p.markSize = rr(rnd, 0.6, 1.6);
-  p.striate = rnd() < 0.35 ? rr(rnd, 0.2, 1) : 0;
-  p.hatch = rr(rnd, 0.3, 0.8);
-  p.shade = rr(rnd, 0.4, 0.8);
-  const pal = PALETTES[Math.floor(rnd() * PALETTES.length)];
-  p.capHue = (pal[0] + rr(rnd, -8, 8) + 360) % 360;
-  p.capSat = clamp(pal[1] + rr(rnd, -0.1, 0.1), 0, 1);
-  p.capLit = clamp(pal[2] + rr(rnd, -0.06, 0.06), 0.1, 0.95);
-  p.markLit = p.capLit > 0.6 ? rr(rnd, 0.2, 0.45) : rr(rnd, 0.85, 0.97);
-  p.fleshHue = (p.capHue + rr(rnd, -15, 20) + 360) % 360;
-  p.fleshSat = rr(rnd, 0.05, 0.35);
-  p.fleshLit = rr(rnd, 0.72, 0.93);
-  p.gillHue = p.under === 1 ? rr(rnd, 40, 60) : p.fleshHue;
-  p.gillSat = p.under === 1 ? rr(rnd, 0.4, 0.7) : rr(rnd, 0.05, 0.3);
-  p.gillLit = rr(rnd, 0.62, 0.9);
-  p.count = 1 + Math.floor(Math.pow(rnd(), 1.6) * 7);
-  p.ageSpread = rr(rnd, 0.2, 0.9);
-  p.sizeVar = rr(rnd, 0.2, 0.7);
-  p.scatter = rr(rnd, 0.3, 0.8);
-  p.ground = 1;
-  p.moss = rnd() < 0.6 ? rr(rnd, 0.2, 0.9) : 0;
-  p.grass = rnd() < 0.5 ? Math.floor(rr(rnd, 1, 9)) : 0;
-  p.litter = Math.floor(rr(rnd, 0, 10));
-  p.elev = rr(rnd, -0.25, 0.32);
-  return sanitize(p);
-}
-// The params of a form key ('random' uses the seed).
-export function formParams(form, seed) {
-  if (FORMS[form]) return sanitize(Object.assign({}, DEFAULTS, FORMS[form].p));
-  return randomParams(seed >>> 0);
-}
 
 // ── randomName ──────────────────────────────────────────────────────────────
 // A Latin-like binomen from our own syllable lists. The epithet ending
@@ -380,53 +121,10 @@ export function randomName(seed) {
   return genus + ' ' + sp.toLowerCase();
 }
 
-// ── colour ──────────────────────────────────────────────────────────────────
-export function hsl(h, s, l) {
-  h = ((h % 360) + 360) % 360 / 360;
-  const f = n => {
-    const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
-    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(clamp(c, 0, 1) * 255).toString(16).padStart(2, '0');
-  };
-  return '#' + f(0) + f(8) + f(4);
-}
-
-// ── vectors ─────────────────────────────────────────────────────────────────
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-// The light: from the upper left and a little in front.
-const LIGHT = norm([-0.55, 0.62, 0.56]);
-// darkness 0 (lit) .. 1 (away from the light).
-const dark = (n, L) => clamp((0.5 - dot(n, L)) / 1.0, 0, 1);
-
 // ── capShape ────────────────────────────────────────────────────────────────
 // The meridian of one cap: top (apex to rim, then the inrolled curl),
 // under (rim to the junction with the stem), and a bit table of the
 // closed meridian for inside(). r, h in units, h up from the rim plane.
-function makePath(pts) {
-  const n = pts.length, r = new Float64Array(n), h = new Float64Array(n), s = new Float64Array(n);
-  for (let i = 0; i < n; i++) { r[i] = pts[i][0]; h[i] = pts[i][1]; if (i) s[i] = s[i - 1] + Math.hypot(r[i] - r[i - 1], h[i] - h[i - 1]); }
-  const L = s[n - 1] || 1;
-  for (let i = 0; i < n; i++) s[i] /= L;
-  const dr = new Float64Array(n), dh = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1), ds = (s[b] - s[a]) || 1e-6;
-    dr[i] = (r[b] - r[a]) / ds; dh[i] = (h[b] - h[a]) / ds;
-  }
-  return { n, r, h, s, dr, dh, L };
-}
-// Linear read of a path at arc-length fraction u: [r, h, dr/du, dh/du].
-function readPath(P, u) {
-  const s = P.s;
-  if (u <= 0) return [P.r[0], P.h[0], P.dr[0], P.dh[0]];
-  if (u >= 1) { const k = P.n - 1; return [P.r[k], P.h[k], P.dr[k], P.dh[k]]; }
-  let lo = 0, hi = P.n - 1;
-  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (s[m] <= u) lo = m; else hi = m; }
-  const t = (u - s[lo]) / ((s[hi] - s[lo]) || 1e-9);
-  return [P.r[lo] + (P.r[hi] - P.r[lo]) * t, P.h[lo] + (P.h[hi] - P.h[lo]) * t, P.dr[lo] + (P.dr[hi] - P.dr[lo]) * t, P.dh[lo] + (P.dh[hi] - P.dh[lo]) * t];
-}
-
 function capShape(P, b) {
   const prof = P.profile, S = SHAPES[prof], a = b.age;
   const special = prof >= MOREL;
@@ -492,18 +190,6 @@ function capShape(P, b) {
   };
   return { R, rs, hj, top: makePath(top), under: makePath(under), inside, rmax, hmin, hmax, M, prof, special, rim };
 }
-
-// ── helpers for items ───────────────────────────────────────────────────────
-// Splits a sampled line into runs of visible points.
-function runs(pts, vis, kind, part, out) {
-  let cur = null;
-  for (let i = 0; i < pts.length; i++) {
-    if (vis[i]) (cur || (cur = [])).push(pts[i]);
-    else { if (cur && cur.length > 1) out.push({ pts: cur, kind, part }); cur = null; }
-  }
-  if (cur && cur.length > 1) out.push({ pts: cur, kind, part });
-}
-const item = (part, z = 0) => ({ part, lines: [], fill: null, washes: [], z });
 
 // ── makeBody ────────────────────────────────────────────────────────────────
 // All items of one fruit body, in painter order. C: the shared context.
@@ -1196,160 +882,6 @@ function stemItems(C, K) {
   return { stem, back, front };
 }
 
-// ── groundItems ─────────────────────────────────────────────────────────────
-// The ground patch (a wash and short strokes, behind everything), leaves,
-// grass tufts and moss clumps, each with a depth z for the painter order.
-function groundItems(C, bodies, rnd) {
-  const { P, seg, ce, colors } = C;
-  const out = [];
-  const gp = (x, y, z) => [x, z * seg - y * ce];
-  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, maxH = 0, R0 = 0;
-  for (const b of bodies) { x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x); z0 = Math.min(z0, b.z); z1 = Math.max(z1, b.z); maxH = Math.max(maxH, b.H); R0 = Math.max(R0, b.R); }
-  const xc = (x0 + x1) / 2, zc = (z0 + z1) / 2;
-  const Rx = (x1 - x0) / 2 + R0 * 1.15 + 8, Rz = Math.max(Rx * 0.5, (z1 - z0) / 2 + R0 * 0.6);
-  const ss = clamp((Rx + maxH * 0.3) / 150, 0.3, 3);
-  const nzg = makeNoise(hashStr('ground') ^ (C.seed >>> 0));
-  const nearBase = (x, z) => { let d = Infinity; for (const b of bodies) d = Math.min(d, Math.hypot(x - b.x, z - b.z) - b.rBot * 1.6); return d; };
-  const inPatch = () => {
-    for (let t = 0; t < 40; t++) {
-      const a = rnd() * TAU, r = Math.sqrt(rnd());
-      const x = xc + Rx * r * Math.cos(a), z = zc + Rz * r * Math.sin(a);
-      if (nearBase(x, z) > 2 * ss) return [x, z];
-    }
-    return [xc + Rx, zc];
-  };
-  if (P.ground) {
-    const g = item('ground', -Infinity);
-    const patch = [];
-    for (let k = 0; k < 64; k++) {
-      const a = k / 64 * TAU, f = 1 + 0.12 * nzg(Math.cos(a) * 2 + 3, Math.sin(a) * 2);
-      patch.push(gp(xc + Rx * 1.05 * f * Math.cos(a), 0, zc + Rz * 1.05 * f * Math.sin(a)));
-    }
-    g.washes.push({ pts: patch, color: colors.ground });
-    const n = Math.round(18 + 60 * P.hatch);
-    for (let i = 0; i < n; i++) {
-      let x = 0, z = 0;
-      for (let t = 0; t < 12; t++) {
-        [x, z] = inPatch();
-        let d = Infinity;
-        for (const b of bodies) d = Math.min(d, Math.hypot(x - b.x, (z - b.z) * 1.4));
-        if (rnd() < 0.3 + 0.7 * Math.exp(-(d * d) / (2 * R0 * R0 * 0.6))) break;
-      }
-      const l = (5 + 14 * rnd()) * ss, tilt = (rnd() - 0.5) * 0.12, p = [];
-      for (let j = 0; j <= 4; j++) {
-        const t = j / 4 - 0.5;
-        p.push(gp(x + t * l, 0.4 * ss * nzg(x * 0.1 + j, z * 0.1), z + t * l * tilt));
-      }
-      g.lines.push({ pts: p, kind: 3, part: 'ground' });
-    }
-    out.push({ z: -Infinity, items: [g] });
-  }
-  // Leaves.
-  const leafHues = [[22, 0.55, 0.5], [32, 0.6, 0.55], [12, 0.5, 0.42], [45, 0.5, 0.58], [70, 0.3, 0.45]];
-  for (let i = 0; i < P.litter; i++) {
-    const [cx, cz] = inPatch();
-    const L = (16 + 22 * rnd()) * ss, Wd = L * (0.28 + 0.2 * rnd()), th = rnd() * TAU, shape = Math.floor(rnd() * 3);
-    const curl = 0.05 * L * rnd();
-    const lp = (t, w) => {
-      const lx = (t - 0.5) * L, c = Math.cos(th), s = Math.sin(th);
-      return gp(cx + lx * c - w * s, curl * (2 * t - 1) * (2 * t - 1) + Math.abs(w) / Wd * curl, cz + (lx * s + w * c) * 0.9);
-    };
-    const half = t => {
-      let w = Wd / 2 * Math.pow(Math.sin(PI * t), shape === 1 ? 1.1 : 0.75);
-      if (shape === 2) w *= 0.72 + 0.28 * Math.cos(t * PI * 9);
-      return w;
-    };
-    const outline = [];
-    for (let k = 0; k <= 20; k++) outline.push(lp(k / 20, half(k / 20)));
-    for (let k = 20; k >= 0; k--) outline.push(lp(k / 20, -half(k / 20)));
-    const it = item('leaf', cz);
-    it.fill = outline;
-    it.lines.push({ pts: outline, kind: 1, part: 'leaf' });
-    it.lines.push({ pts: [lp(-0.12, 0), lp(0, 0), lp(0.5, 0), lp(0.97, 0)], kind: 1, part: 'leaf' });
-    const nv = 3 + Math.floor(rnd() * 3);
-    for (let v = 1; v <= nv; v++) {
-      const t = v / (nv + 1) * 0.85 + 0.05;
-      for (const sg of [-1, 1]) it.lines.push({ pts: [lp(t, 0), lp(t + 0.12, sg * half(t + 0.12) * 0.8)], kind: 2, part: 'leaf' });
-    }
-    const lh = leafHues[Math.floor(rnd() * leafHues.length)];
-    it.washes.push({ pts: outline, color: hsl(lh[0] + (rnd() - 0.5) * 10, lh[1], lh[2]) });
-    out.push({ z: cz, items: [it] });
-  }
-  // Grass tufts.
-  for (let i = 0; i < P.grass; i++) {
-    const [cx, cz] = inPatch();
-    const it = item('grass', cz), nb = 3 + Math.floor(rnd() * 5);
-    for (let k = 0; k < nb; k++) {
-      const hb = (18 + 34 * rnd()) * ss, dx = (rnd() - 0.5) * hb * 0.8, x0b = cx + (rnd() - 0.5) * 4 * ss, p = [];
-      for (let j = 0; j <= 6; j++) { const t = j / 6; p.push(gp(x0b + dx * t * t, hb * t, cz + (rnd() - 0.5) * 0.5)); }
-      it.lines.push({ pts: p, kind: 1, part: 'grass' });
-    }
-    out.push({ z: cz, items: [it] });
-  }
-  // Moss clumps at the stem bases.
-  if (P.moss > 0.02) {
-    for (const b of bodies) {
-      if (rnd() > 0.35 + 0.65 * P.moss) continue;
-      const cx = b.x + (rnd() - 0.5) * b.rBot, cz = b.z + b.rBot * 0.9;
-      const rm = clamp(b.rBot * (0.9 + 0.9 * P.moss), 3 * ss, 0.38 * b.R + 2 * ss) + 2 * ss;
-      const it = item('moss', cz), top = [], fill = [];
-      const base = gp(cx, 0, cz);
-      for (let k = 0; k <= 32; k++) {
-        const a = PI + PI * k / 32, bump = 1 + 0.18 * Math.abs(Math.sin(a * 7 + b.seed % 7)) + 0.08 * nzg(k * 0.6, b.seed % 13);
-        top.push([base[0] + rm * Math.cos(a), base[1] + rm * 0.42 * Math.sin(a) * bump]);
-      }
-      fill.push(...top);
-      for (let k = 1; k < 16; k++) { const a = PI * (1 - k / 16); fill.push([base[0] + rm * Math.cos(a), base[1] + rm * 0.28 * seg * Math.sin(a)]); }
-      it.fill = fill;
-      it.lines.push({ pts: top, kind: 1, part: 'moss' });
-      const nst = Math.round(8 + 22 * P.moss);
-      for (let k = 0; k < nst; k++) {
-        const a = PI + PI * (0.1 + 0.8 * rnd()), r = rm * Math.sqrt(rnd()) * 0.8;
-        const px = base[0] + r * Math.cos(a), py = base[1] + r * 0.5 * Math.sin(a), s = 0.9 * ss + rm * 0.05;
-        it.lines.push({ pts: [[px - s, py], [px - s * 0.4, py - s * 0.8], [px + s * 0.4, py - s * 0.8], [px + s, py]], kind: 2, part: 'moss' });
-      }
-      it.washes.push({ pts: fill, color: colors.moss });
-      out.push({ z: cz, items: [it] });
-    }
-  }
-  return out;
-}
-
-// ── placeBodies ─────────────────────────────────────────────────────────────
-function placeBodies(P, rnd, seed) {
-  const n = P.count, R0 = P.capR, out = [];
-  const Rc = R0 * (0.25 + 0.5 * Math.sqrt(Math.max(0, n - 1))) * (0.5 + P.scatter);
-  const special = P.profile >= MOREL;
-  for (let i = 0; i < n; i++) {
-    const s = i ? 1 - P.sizeVar * 0.6 * rnd() : 1;
-    const age = i ? clamp(P.age + (rnd() * 2 - 1) * P.ageSpread * 0.75, 0, 1) : P.age;
-    const ga = smoothstep(0, 0.6, age);
-    const R = R0 * s * (special ? 0.6 + 0.4 * ga : 0.42 + 0.58 * ga);
-    const k = 0.72 + 0.28 * ga;
-    const rTop = P.stemTop * R0 * s * k, rBot = Math.max(P.stemBot * R0 * s * k, 1);
-    const H = Math.max(P.stemH * R0 * s * (special ? 0.8 + 0.2 * ga : 0.42 + 0.58 * smoothstep(0, 0.7, age)) * (i ? 0.8 + 0.4 * rnd() : 1), rBot * 0.6, 2);
-    let x = 0, z = 0;
-    if (i) {
-      let best = [Rc, 0];
-      for (let t = 0; t < 60; t++) {
-        const a = rnd() * TAU, rr2 = Rc * (0.3 + 0.7 * Math.sqrt(rnd()));
-        const cx = rr2 * Math.cos(a), cz = rr2 * Math.sin(a) * 0.8;
-        best = [cx, cz];
-        let ok = true;
-        for (const o of out) if (Math.hypot(o.x - cx, o.z - cz) < 1.9 * (o.rBot + rBot) + 0.08 * R0) { ok = false; break; }
-        if (ok) break;
-      }
-      [x, z] = best;
-    }
-    const outward = n > 1 && Rc > 0 ? x / Rc : 0;
-    out.push({ i, x, z, s, age, R: Math.max(R, rTop * 1.3), rTop, rBot, H,
-      lean: clamp(P.lean + outward * 0.28 + (i ? (rnd() - 0.5) * 0.22 : 0), -0.7, 0.7),
-      curve: P.curve + (i ? (rnd() - 0.5) * 0.3 : 0),
-      seed: (Math.imul((seed ^ 0x2545F491) >>> 0, i + 1) + Math.imul(i + 1, 0x9E3779B1)) >>> 0 });
-  }
-  return out;
-}
-
 // ── buildSpecimen ───────────────────────────────────────────────────────────
 export function buildSpecimen(params, seed, opts = null) {
   const P = sanitize(params);
@@ -1370,85 +902,8 @@ export function buildSpecimen(params, seed, opts = null) {
   groups.push(...groundItems(C, bodies, rnd));
   groups.sort((a, b) => a.z - b.z);
 
-  // Painter order, then hidden lines.
-  let ord = 0;
-  const lines = [], occs = [], washes = [];
-  for (const g of groups) for (const it of g.items) {
-    const o = ord++;
-    for (const l of it.lines) lines.push({ pts: l.pts, kind: l.kind, part: l.part, ord: o });
-    if (it.fill && it.fill.length > 2) occs.push({ poly: it.fill, ord: o });
-    for (const w of it.washes) if (w.pts.length > 2) washes.push({ pts: w.pts, color: w.color, part: it.part });
-  }
-  const step = Math.max(0.3, P.capR * 0.005);
-  const vis = hideLines(lines, occs, step, step * 0.8);
-  const eps = Math.max(0.03, P.capR * 0.0006);
-  const polys = [];
-  for (const l of vis) {
-    const pts = rdp(l.pts, eps);
-    if (pts.length > 1) polys.push({ pts, kind: l.kind, part: l.part, ord: l.ord });
-  }
-  // Draw-on order: outlines, details, hatching, ground; painter order inside.
-  polys.sort((a, b) => a.kind - b.kind || a.ord - b.ord);
-
-  // Flatten.
-  let n = 0;
-  for (const p of polys) n += p.pts.length;
-  const xy = new Float64Array(n * 2), offs = new Uint32Array(polys.length + 1), lens = new Float64Array(polys.length);
-  const kinds = new Uint8Array(polys.length), part = new Uint8Array(polys.length);
-  let k = 0, total = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  const grow = (x, y) => { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; };
-  polys.forEach((p, i) => {
-    offs[i] = k; kinds[i] = p.kind; part[i] = PIDX[p.part] ?? 0;
-    let L = 0;
-    for (let j = 0; j < p.pts.length; j++) {
-      const x = p.pts[j][0], y = p.pts[j][1];
-      xy[k * 2] = x; xy[k * 2 + 1] = y; k++;
-      grow(x, y);
-      if (j) L += Math.hypot(x - p.pts[j - 1][0], y - p.pts[j - 1][1]);
-    }
-    lens[i] = L; total += L;
-  });
-  offs[polys.length] = k;
-  const wout = washes.map(w => {
-    const a = new Float64Array(w.pts.length * 2);
-    w.pts.forEach((q, i) => { a[i * 2] = q[0]; a[i * 2 + 1] = q[1]; grow(q[0], q[1]); });
-    return { xy: a, color: w.color, part: w.part };
-  });
-  const order = new Uint32Array(polys.length);
-  for (let i = 0; i < polys.length; i++) order[i] = i;
-  const stats = { lines: polys.length, points: n, bodies: bodies.length, items: ord, occluders: occs.length, washes: wout.length, perPart: {} };
-  for (const p of polys) stats.perPart[p.part] = (stats.perPart[p.part] || 0) + 1;
-  const debug = opts && opts.debug ? { occs, vis } : undefined;
-  return { debug, name: randomName(seed), seed, params: P, xy, offs, lens, total, kinds, part, order, washes: wout, parts: PART_NAMES,
-    bbox: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, stats };
-}
-
-// ── share link ──────────────────────────────────────────────────────────────
-// #f=fly&s=12345&p=capR:80,age:0.3&m=single&t=cream
-// f: the form key; s: the seed; p: the fields that differ from the form.
-export function encodeShare(state) {
-  const q = new URLSearchParams();
-  for (const [k, v] of Object.entries(state)) {
-    if (v == null || v === '') continue;
-    if (k === 'p') {
-      const s = Object.entries(v).filter(([key]) => PARAM_BY_KEY[key]).map(([key, x]) => key + ':' + x).join(',');
-      if (s) q.set('p', s);
-    } else q.set(k, String(v));
-  }
-  return q.toString();
-}
-export function decodeShare(hash) {
-  const q = new URLSearchParams(String(hash || '').replace(/^#/, ''));
-  const out = {};
-  for (const [k, v] of q) {
-    if (k === 'p') {
-      const p = {};
-      for (const pair of v.split(',')) {
-        const [key, x] = pair.split(':');
-        if (PARAM_BY_KEY[key] && x !== undefined && x !== '' && Number.isFinite(+x)) p[key] = +x;
-      }
-      out.p = p;
-    } else out[k] = v;
-  }
-  return out;
+  const F = flatten(groups, P.capR, bodies.length);
+  const debug = opts && opts.debug ? { occs: F.occs, vis: F.vis } : undefined;
+  return { debug, name: randomName(seed), seed, params: P, xy: F.xy, offs: F.offs, lens: F.lens, total: F.total, kinds: F.kinds,
+    part: F.part, order: F.order, washes: F.washes, parts: PART_NAMES, bbox: F.bbox, stats: F.stats };
 }
