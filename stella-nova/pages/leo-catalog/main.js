@@ -51,6 +51,7 @@
 //      view/sat-cloud.js .... point cloud buffers, fall-in, pings, SGP4 pass
 //      view/selection.js .... picking, chip, reticle, info panel, fly-to
 //      view/filters.js ...... class filter rows, highlight, overlay boxes, counts
+//      view/catalog.js ...... the sats array: TLE groups, merge order, demo, storms
 //      view/earth.js ........ Earth map texture, placeholder, atmosphere, stars
 //      view/labels.js ....... city, station and sat HTML labels (per frame)
 //      view/trails.js ....... orbit loops: the selected object and the stations
@@ -66,14 +67,13 @@
 //      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
 //      satellites ........... "initCloud"         page state for view/sat-cloud.js
 //      propagation rate ..... "PROP_HZ"           SGP4 pass rate, XR override
-//      storms ............... "function loadStorms"  NOAA cyclones into the catalog
 //      labels ............... "initLabels"        page state for view/labels.js
 //      orbit trails ......... "initTrails"        page state for view/trails.js
 //      filters / overlays ... "initFilters"       wires view/filters.js
 //      selection ............ "initSelection"     wires view/selection.js
 //      search ............... "initSearch"        wires view/search.js
 //      time control ......... "initTimeControl"   wires view/time-control.js
-//      tle groups ........... "function fetchGroup"  load rows, merge order
+//      catalog .............. "initCatalog"       view/catalog.js: groups, demo, storms
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
 //      xr ................... "function startXR"   VR/AR via xr.js + lib/xr-view.js
@@ -84,25 +84,22 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
 import { wireXR } from './xr.js';
 import { fmtRate, rateSpeedToFrac } from './core/format.js';
-import { parseTLE, demoDataset, mergeParsed } from './core/tle.js';
-import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
-import { stormRecord } from './core/storms.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { sats, initCatalog, loadCatalog, useDemoIfEmpty, loadStorms } from './view/catalog.js';
 import { initFilters, highlightCat, updateCounts } from './view/filters.js';
 import { initSelection, selectedIdx, chipLocked, setSelection, lockChipTo, unlockChip, flyToSat, flyTo, isFlying,
          updateChipPositionLocked, updateReticle } from './view/selection.js';
-import { CAT_COLOR, initCloud, positions, satMat, satPoints, buildPointCloud, rebuildAttributesFromSats,
+import { initCloud, positions, satMat, satPoints, buildPointCloud, rebuildAttributesFromSats,
          stampBirths, markRevealed, pingGlobe, updatePings, propagateAll } from './view/sat-cloud.js';
-import { fetchStorms, initWeather, loadWeather, updateWindFlow } from './view/weather.js';
+import { initWeather, loadWeather, updateWindFlow } from './view/weather.js';
 import { initSearch } from './view/search.js';
 import { initTimeControl, applyRate, advanceClock, showTime, btnPlay, btnNow } from './view/time-control.js';
 import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
 import { initLabels, buildCityLabels, updateCityLabels, hideCityLabels, rebuildStationLabels, updateStationLabels,
          buildSatLabelPool, updateSatLabels, clearSatLabels } from './view/labels.js';
-import { REDUCED_MOTION, splash, playIntro, showStrip, finishAcquisition,
-         setStatus, addLoadRow, hasLoadRow, setLoadStatus, stopLoadDot } from './view/boot-ui.js';
+import { REDUCED_MOTION, splash, playIntro, showStrip, finishAcquisition, setStatus, stopLoadDot } from './view/boot-ui.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
 // building any material, so init runs in the original synchronous order.
@@ -183,9 +180,9 @@ const fallbackShell = addBackdrop(scene, earthRoot, SH, IS_MOBILE);
 // ═══════════════════════════════════════════════════════════════════
 // SATELLITES  (point cloud, arrival, pings and SGP4: view/sat-cloud.js)
 // ═══════════════════════════════════════════════════════════════════
-// sats is the master catalog array, shared by index with the point cloud's
-// GPU attribute buffers.
-let sats = [];
+// sats (view/catalog.js) is the master catalog array, shared by index with
+// the point cloud's GPU attribute buffers.
+initCatalog(PERF_CAP);
 initCloud({
   scene, renderer, camera, SH, FILTER, SIM,
   sats: () => sats, selectedIdx: () => selectedIdx, highlightCat: () => highlightCat,
@@ -203,25 +200,8 @@ const PROP_DT = 1000 / PROP_HZ;
 let propDt = PROP_DT;
 
 // ═══════════════════════════════════════════════════════════════════
-// STORMS (NOAA) + WIND LAYER  (view/weather.js)
+// WIND LAYER  (view/weather.js; NOAA storms load with the catalog)
 // ═══════════════════════════════════════════════════════════════════
-// Add each active NOAA cyclone as a storm-class record parked at its lat/lon.
-async function loadStorms() {
-  const storms = await fetchStorms();
-  if (!storms) return;
-  try {
-    const first = sats.length;
-    for (const st of storms) {
-      if (sats.length >= PERF_CAP) break;
-      sats.push(stormRecord(st));
-    }
-    rebuildAttributesFromSats();
-    stampBirths(first, sats.length, 0.6);
-    updateCounts(sats);
-  } catch (e) {
-    splash('noaa storms: parse fail', 'err');
-  }
-}
 initWeather({ earthRoot, SH, OVERLAY, isMobile: IS_MOBILE });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -247,12 +227,6 @@ initFilters({ FILTER, OVERLAY });
 // PICKING, CHIP, RETICLE, INFO PANEL, FLY-TO  (view/selection.js)
 // ═══════════════════════════════════════════════════════════════════
 initSelection({ camera, controls, canvas, SIM, sats: () => sats, isMobile: IS_MOBILE });
-
-// ═══════════════════════════════════════════════════════════════════
-// TLE LOADER  (fetch, cache and source order: core/tle-fetch.js)
-// ═══════════════════════════════════════════════════════════════════
-// NORAD ids already in sats, so each dedupe check is O(1).
-const knownIds = new Set();
 
 // ═══════════════════════════════════════════════════════════════════
 // SEARCH  (search box and quick tags: view/search.js)
@@ -297,59 +271,6 @@ buildPointCloud(PERF_CAP);
 buildCityLabels();
 buildSatLabelPool();
 
-
-// Download one TLE group: try its URLs in order and parse the first that
-// works. Returns the parsed records, or null after every URL failed. Touches
-// no catalog state, so several groups can download at the same time.
-async function fetchGroup(group) {
-  if (!hasLoadRow(group)) addLoadRow(group);
-  let lastErr = null;
-  for (const url of urlsForGroup(group)) {
-    try {
-      return parseTLE(await fetchTLE(url));
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  setLoadStatus(group, 'fail', 0);
-  splash(`${group}: ${lastErr ? lastErr.message : 'fail'}`, 'err');
-  return null;
-}
-
-// Add one downloaded group to the catalog: add deduped objects up to
-// PERF_CAP, refresh the buffers and counts, and mark the load row ok.
-// The first group to merge keeps an object shared by two groups, so the
-// merge order sets which forceCat wins and which group gets PERF_CAP room.
-function mergeGroup(group, parsed, opts = {}) {
-  if (!parsed) return -1;
-  const first = sats.length;
-  const n = mergeParsed(sats, knownIds, parsed, PERF_CAP, opts.forceCat || null);
-  setLoadStatus(group, 'ok', n);
-  splash(`${group} +${n.toLocaleString()}`, n ? 'ok' : '');
-  rebuildAttributesFromSats();
-  if (n > 0) {
-    stampBirths(first, sats.length);
-    pingGlobe(CAT_COLOR[sats[first].cat]);
-  }
-  updateCounts(sats);
-  return n;
-}
-
-// Both groups download at the same time. The merge order stays stations
-// first, then 'active': 'active' also holds the station modules, and the
-// first merge keeps them with the 'station' category and PERF_CAP room.
-// The 'active' group holds every active payload, so it also holds the
-// objects of the old per-constellation groups (starlink, oneweb, gnss, and
-// so on). classify() sets the category from the name, so the group does not
-// change it. Objects land on the globe as each group merges.
-async function loadCatalog() {
-  const groups = ['stations', 'active'];
-  const downloads = groups.map(fetchGroup);
-  mergeGroup('stations', await downloads[0], { forceCat: 'station' });
-  rebuildStationLabels();
-  rebuildStationTrails();
-  mergeGroup('active', await downloads[1]);
-}
 
 // Intro camera: swing in from far out and to the side to the default view.
 // Spherical coordinates about the origin, eased with a quintic ease-out.
@@ -408,12 +329,7 @@ async function boot() {
   revealScene();
   await catalog;
 
-  if (sats.length === 0) {
-    splash('demo dataset', 'err');
-    sats = demoDataset();
-    for (const d of sats) knownIds.add(d.noradId);
-    stampBirths(0, sats.length);
-  }
+  useDemoIfEmpty();
   rebuildAttributesFromSats();
   updateCounts(sats);
   rebuildStationLabels();
