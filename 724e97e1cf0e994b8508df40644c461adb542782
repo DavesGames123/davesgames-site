@@ -1,0 +1,1 @@
+Count correction for 724e97e1: the commit adds 37 events, not 40. The research files had 40; the merge dropped 3 by review (named in the body). 1245 + 37 = 1282.
