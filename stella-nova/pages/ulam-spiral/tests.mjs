@@ -2,6 +2,8 @@
 //
 // RUN
 //   node stella-nova/pages/ulam-spiral/tests.mjs
+// With jsdom on NODE_PATH, the last check also boots main.js in jsdom
+// and compares a scripted session with a fingerprint (BOOT_FP).
 // The GPU twins of the maps (glsl.js) are checked in the page itself:
 // window.__ulam.selfTest() over CDP (transform feedback and read-back).
 // The process exits with code 1 when a check fails.
@@ -248,6 +250,138 @@ console.log(`sieve to 1e8: ${Date.now() - t0} ms`);
     if (Math.max(fitW, fitH) > 0.87 || Math.abs(dx) > 2 || Math.abs(dy) > 2 || f.zoom < 1 || f.zoom > 4) ok = false;
   }
   check('3D saver framing: fit3Step puts the subject inside the clear band', ok, rows.join(', '));
+}
+
+// ------------------------------------------------------------- the page in jsdom
+// main.js and the modules it imports boot in jsdom: index.html, a 2D
+// context that logs each call, a WebGL2 stub that accepts every call, a
+// worker stub and a fake clock. A scripted session (the sieve message,
+// frames, go-to, every mode, preset and shape, pointer and key input, the
+// walk, two morphs, a tile, the panel buttons, selfTest) gives a JSON of
+// the DOM readouts, the camera, the frame states and the overlay logs.
+// Its sha256 must equal BOOT_FP, the value main.js gave before the split
+// into modules. A change of page behaviour changes the value: with
+// ULAM_FP_DUMP=<file>, the JSON goes to that file for a diff.
+// Needs jsdom on NODE_PATH; without it the check prints a skip line.
+{
+  const BOOT_FP = 'd9ad562815d9ec6d1d0133237c004c799d7e58b63b1b32bf3e1e396f107b2268';
+  const { createRequire } = await import('node:module');
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const { fileURLToPath } = await import('node:url');
+  const HERE = fileURLToPath(new URL('.', import.meta.url));
+  let JSDOM = null;
+  for (const dir of (process.env.NODE_PATH || '').split(':').filter(Boolean)) {
+    try { ({ JSDOM } = createRequire(dir + '/x.js')('jsdom')); break; } catch (e) { /* next */ }
+  }
+  if (!JSDOM) console.log('SKIP page boot in jsdom: jsdom not on NODE_PATH');
+  else {
+    const html = readFileSync(HERE + 'index.html', 'utf8').replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
+    const dom = new JSDOM(html, { url: new URL('index.html', import.meta.url).href, pretendToBeVisual: true });
+    const w = dom.window, d = w.document;
+    const log = [], glCalls = { n: 0 };
+    const num = x => (typeof x === 'number' ? +x.toFixed(2) : typeof x === 'object' ? '#' : x);
+    const rec = name => new Proxy({}, {
+      get(t, k) {
+        if (k in t) return t[k];
+        if (k === 'createLinearGradient' || k === 'createRadialGradient') return (...a) => { log.push([name, k, ...a.map(num)]); return { addColorStop: (o, c) => log.push([name, 'stop', o, c]) }; };
+        if (k === 'measureText') return s => ({ width: String(s).length * 6 });
+        if (k === 'createImageData') return (ww, hh) => ({ data: new Uint8ClampedArray(ww * hh * 4) });
+        return (...a) => { log.push([name, k, ...a.map(num)]); };
+      },
+      set(t, k, v) { t[k] = v; log.push([name, '=' + String(k), typeof v === 'object' ? '#' : v]); return true; },
+    });
+    const gl = new Proxy({}, {
+      get(t, k) {
+        if (typeof k !== 'string') return undefined;
+        if (/^[A-Z0-9_]+$/.test(k)) return 1;
+        if (k === 'getParameter') return () => 4096;
+        if (k === 'getActiveUniform') return () => ({ name: 'u' });
+        if (k === 'getShaderInfoLog' || k === 'getProgramInfoLog') return () => '';
+        if (k === 'isContextLost') return () => false;
+        return () => { glCalls.n++; return {}; };
+      },
+    });
+    w.HTMLCanvasElement.prototype.getContext = function (type) { return type === 'webgl2' ? gl : type === '2d' ? rec(this.id || 'c') : null; };
+    w.matchMedia = q => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} });
+    const frames = [];
+    w.requestAnimationFrame = fn => { frames.push(fn); return frames.length; };
+    w.Element.prototype.setPointerCapture = () => {};
+    w.HTMLElement.prototype.scrollIntoView = () => {};
+    const posted = [];
+    let wk = null;
+    w.Worker = class { constructor() { wk = this; } postMessage(m) { posted.push({ ...m, P: m.P && { ...m.P } }); } };
+    let clock = 0;
+    const saved = {};
+    for (const k of ['window', 'document', 'navigator', 'HTMLElement', 'matchMedia', 'requestAnimationFrame', 'getComputedStyle', 'Worker', 'location', 'performance', 'addEventListener', 'devicePixelRatio']) saved[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    const put = (k, value) => Object.defineProperty(globalThis, k, { value, configurable: true, writable: true });
+    for (const k of ['window', 'document', 'navigator', 'HTMLElement', 'matchMedia', 'requestAnimationFrame', 'getComputedStyle', 'Worker', 'location']) put(k, w[k]);
+    put('addEventListener', w.addEventListener.bind(w));
+    put('performance', { now: () => clock });
+    put('devicePixelRatio', 2);
+    for (const id of ['gl', 'ov']) { const el = d.getElementById(id); Object.defineProperty(el, 'clientWidth', { value: 800 }); Object.defineProperty(el, 'clientHeight', { value: 600 }); }
+    let bootErr = null;
+    try { await import('./main.js'); } catch (e) { bootErr = e; }
+    check('page boot in jsdom: main.js imports and runs', !bootErr, bootErr ? bootErr.stack.split('\n').slice(0, 3).join(' | ') : '');
+    if (!bootErr) {
+      const U = w.__ulam, app = U.app, S = U.S;
+      const out = {};
+      const $ = id => d.getElementById(id);
+      const snap = k => { out[k] = { ro: $('readout').innerHTML, pi: $('piRead').innerHTML, q: $('quadRead').innerHTML, lg: $('legend').innerHTML, st: $('stShape').textContent + '|' + $('stRight').textContent, mn: $('modeNote').textContent, cam: JSON.stringify(S.cam), c3: JSON.stringify(S.cam3), sh: S.shape.key, mode: S.mode, log: log.length, glc: glCalls.n }; };
+      const run = (n, t0) => { for (let f = 0; f < n; f++) { clock = t0 + f * 16.7; const q = frames.splice(0); for (const fn of q) fn(clock); } };
+      const fsj = o => JSON.stringify(o, (k, v) => (k === 'shape' ? v && v.key : v instanceof Float32Array ? [...v].map(x => +x.toFixed(4)) : typeof v === 'number' ? +v.toFixed(6) : v));
+      const hash = s => createHash('sha256').update(s).digest('hex');
+      const ovHash = () => hash(JSON.stringify(log)).slice(0, 16) + ' ' + log.length;
+      const v = { w: 800, h: 600, cx: 400, cy: 300, cw: 800, ch: 600, o: { l: 0, r: 0, t: 0, b: 0 } };
+      snap('boot');
+      wk.onmessage({ data: { type: 'progress', done: 5, total: 10 } });
+      wk.onmessage({ data: { type: 'primes', bits: T.sieveOdd(1e7), limit: 1e7, ms: 5 } });
+      snap('primes');
+      run(4, 1000); snap('frames');
+      out.fsHome = fsj(app.frameState(v));
+      S.cam = { x: 0.3, y: -0.2, z: 40 }; S.diag = true; app.computeRays(); log.length = 0; app.drawOverlay(v); out.ovSquare = ovHash();
+      for (const [k, t] of [['goto1009', '1009'], ['goto1000', '1000'], ['gotoBig', '1e12+39'], ['gotoBad', 'abc']]) { U.gotoNumber(t); snap(k); }
+      run(120, 2000); snap('fly');
+      for (const m of app.MODES) { U.setMode(m.id); snap('mode' + m.key); }
+      U.setMode(T.MODE.primes);
+      for (const b of d.querySelectorAll('#quadPresets button')) { b.click(); snap('preset ' + b.textContent); }
+      $('morphOn').checked = false; $('morphOn').dispatchEvent(new w.Event('change'));
+      for (const sh of L.SHAPES) {
+        U.setShape(sh); run(2, 4000); snap('shape ' + sh.key);
+        out['fs ' + sh.key] = hash(fsj(app.frameState(v))).slice(0, 16);
+        S.cam.z = sh.kind === 'pt' ? 30 : 40; if (S.cam3) S.cam3.dist = 60;
+        log.length = 0; app.drawOverlay(v); out['ov ' + sh.key] = ovHash();
+      }
+      U.setShape(L.SHAPE.square);
+      const cv = $('gl');
+      const pe = (type, o) => { const e = new w.Event(type, { bubbles: true, cancelable: true }); Object.defineProperties(e, Object.fromEntries(Object.entries(o).map(([k, val]) => [k, { value: val }]))); cv.dispatchEvent(e); };
+      pe('pointermove', { pointerId: 9, pointerType: 'mouse', offsetX: 410, offsetY: 290 }); snap('hover');
+      pe('pointerdown', { pointerId: 1, pointerType: 'touch', offsetX: 300, offsetY: 300 });
+      pe('pointermove', { pointerId: 1, pointerType: 'touch', offsetX: 340, offsetY: 280 });
+      pe('pointerup', { pointerId: 1, pointerType: 'touch', offsetX: 340, offsetY: 280 }); snap('drag');
+      pe('pointerdown', { pointerId: 2, pointerType: 'touch', offsetX: 400, offsetY: 300 });
+      pe('pointerup', { pointerId: 2, pointerType: 'touch', offsetX: 400, offsetY: 300 }); snap('tap');
+      pe('wheel', { deltaY: -120, deltaMode: 0, offsetX: 200, offsetY: 100 }); snap('wheel');
+      for (const key of ['+', '-', 'ArrowLeft', 'ArrowUp', 'h']) { w.dispatchEvent(new w.KeyboardEvent('keydown', { key })); snap('key' + key); }
+      run(100, 6000); snap('home');
+      $('walkBtn').click(); run(60, 9000); snap('walk'); $('walkBtn').click();
+      S.morph = null; $('morphOn').checked = true; $('morphOn').dispatchEvent(new w.Event('change'));
+      U.setShape(L.SHAPE.helix); run(200, 12000); snap('morph3d');
+      U.setShape(L.SHAPE.hex); run(200, 16000); snap('morphHex');
+      wk.onmessage({ data: { type: 'tile', data: new Uint8Array(4), x0: 0, y0: 0, w: 1, h: 1, ms: 1 } }); snap('tile');
+      U.gotoNumber('99999999999'); run(200, 20000); snap('farTile');
+      $('dockMode').click(); snap('dockMode');
+      for (const id of ['gear', 'panelClose', 'dockPanel', 'homeBtn']) { $(id).click(); snap('click ' + id); }
+      d.querySelectorAll('#palettes button')[2].click(); d.querySelectorAll('#bgs button')[1].click(); d.querySelectorAll('#styleSeg button')[0].click(); snap('swatch');
+      out.selfTest = JSON.stringify(await U.selfTest());
+      out.posted = JSON.stringify(posted);
+      out.frames = U.frames();
+      const fp = hash(JSON.stringify(out));
+      if (process.env.ULAM_FP_DUMP) writeFileSync(process.env.ULAM_FP_DUMP, JSON.stringify(out, null, 1));
+      check('page boot in jsdom: the scripted session matches the fingerprint', fp === BOOT_FP, `${fp.slice(0, 16)} (${out.frames} frames, ${glCalls.n} GL calls)`);
+    }
+    for (const [k, desc] of Object.entries(saved)) { if (desc) Object.defineProperty(globalThis, k, desc); else delete globalThis[k]; }
+  }
 }
 
 console.log(`\n${passes} passed, ${fails} failed`);
