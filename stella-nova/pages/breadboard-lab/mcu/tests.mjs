@@ -459,6 +459,20 @@ if (existsSync(join(HERE, '..', 'sim', 'engine.js'))) {
   }
 }
 
+// ── the compiler modules (mcu/compile/) ─────────────────────────────────────
+section('compiler modules: the exports of compile.js and the assembled Gen');
+{
+  const C = await import('./compile.js');
+  const names = Object.keys(C).sort().join(' ');
+  ok(names === 'BUILTINS CErr LIBS compileSketch isFloat isInt isNum lex', 'compile.js keeps its exports', names);
+  const { Gen } = await import('./compile/gen.js');
+  const want = ['program', 'funcBody', 'stmt', 'localVar', 'expr', 'incdec', 'call', 'objCall', 'conv', 'constEval'];
+  const missing = want.filter(m => typeof Gen.prototype[m] !== 'function');
+  ok(!missing.length, 'Gen has the methods of every part (core, decls, stmts, exprs, calls)', missing.join(', ') || want.length + ' methods');
+  const e = C.compileSketch('void setup() {\n  struct P { int x; };\n}\nvoid loop() {}');
+  ok(!e.ok && e.errors[0].line === 2 && e.errors[0].msg.includes('structs'), 'a CErr from the parser module keeps its line', JSON.stringify(e.errors[0]));
+}
+
 // ── speed ───────────────────────────────────────────────────────────────────
 section('speed');
 {

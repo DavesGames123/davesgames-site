@@ -24,7 +24,7 @@ export const LIBS = {
 };
 const LIB_LIST = 'LiquidCrystal.h, Servo.h (ESP32Servo.h on the ESP32), and the C headers math.h, stdint.h, stdlib.h, string.h';
 
-function preprocess(toks, board, warnings) {
+export function preprocess(toks, board, warnings) {
   const B = BOARDS[board];
   const macros = new Map();
   const def = (name, v) => macros.set(name, { params: null, body: [{ k: 'num', v, num: { isFloat: false, radix: 10, u: false, l: v > 32767 ? 1 : 0 } }] });
