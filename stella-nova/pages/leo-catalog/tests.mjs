@@ -16,6 +16,8 @@
 //                 traceStreamlines fills every vertex on the 1.012 shell
 //    info ....... the curated match, the class fallbacks, escaped HTML,
 //                 the storm rows
+//    search ..... name or NORAD substring, the class order, the cap,
+//                 escaped result HTML
 //    geo ........ ECEF to scene axes; lat/lon on the sphere; |sun| = 1
 //  fetch is a local stub. This file never sends a request to CelesTrak (it
 //  IP-bans for 2 h). satellite.js loads from vendor/ into globalThis; "three"
@@ -37,6 +39,7 @@ const T = await import('./core/tle.js');
 const W = await import('./core/wind.js');
 const I = await import('./core/info.js');
 const G = await import('./core/geo.js');
+const SR = await import('./core/search.js');
 
 let fail = 0, n = 0;
 const ok = (c, msg) => { n++; if (!c) { fail++; console.log('FAIL', msg); } else if (process.argv.includes('-v')) console.log('ok  ', msg); };
@@ -158,6 +161,22 @@ ok(chip.startsWith('<div class="ch-row"><span class="k">NORAD</span><span class=
 const storm = { _isStorm: true, satrec: null, name: 'HU Alpha', cat: 'storm', noradId: null, _stormData: { lat: 22.5, lon: -71.25, classification: 'HU', wind: 95 } };
 ok(I.chipBodyHTML(storm, at) === '<div class="ch-row"><span class="k">CLASS</span><span class="v">HU</span></div><div class="ch-row"><span class="k">LAT</span><span class="v dyn">22.50°</span></div><div class="ch-row"><span class="k">LON</span><span class="v dyn">-71.25°</span></div><div class="ch-row"><span class="k">WIND</span><span class="v">95 kt</span></div><div class="ch-row"><span class="k">SRC</span><span class="v">NOAA NHC</span></div>', 'storm chip rows');
 ok(!I.infoPanelHTML(storm, at).includes('n2yo') && I.infoPanelHTML(storm, at).includes('Tropical_cyclone'), 'storm panel: no NORAD links');
+
+// ── search ──────────────────────────────────────────────────────────────────
+{
+  const cat = [
+    { name: 'STARLINK-1', cat: 'starlink', noradId: 44 }, { name: 'X <DEB>', cat: 'debris', noradId: 25 },
+    { name: 'ISS (ZARYA)', cat: 'station', noradId: 25544 }, { name: 'NOAA 19', cat: 'payload', noradId: 33591 },
+    { name: 'HU Alpha', cat: 'storm', noradId: null },
+  ];
+  ok(same(SR.searchCatalog(cat, '  ').length, 0) && same(SR.searchCatalog(cat, '').length, 0), 'blank query, no matches');
+  ok(same(SR.searchCatalog(cat, '25').map(m => m.idx), [2, 1]), 'NORAD substring; station ranks before debris');
+  ok(same(SR.searchCatalog(cat, 'a').map(m => m.cat), ['station', 'payload', 'starlink', 'storm']), 'rank: station, payload, starlink, storm');
+  const many = Array.from({ length: 250 }, (_, i) => ({ name: 'OBJ ' + i, cat: 'payload', noradId: i + 1 }));
+  ok(SR.searchCatalog(many, 'obj').length === SR.SEARCH_MAX, 'at most SEARCH_MAX matches');
+  ok(SR.searchResultsHTML([]) === '<div class="search-empty">no matches</div>', 'no-match HTML');
+  ok(SR.searchResultsHTML(SR.searchCatalog(cat, 'deb')).includes('data-idx="1"') && SR.searchResultsHTML(SR.searchCatalog(cat, 'deb')).includes('X &lt;DEB&gt;'), 'result HTML escapes the name');
+}
 
 // ── geo ─────────────────────────────────────────────────────────────────────
 {

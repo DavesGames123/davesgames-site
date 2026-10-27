@@ -42,6 +42,7 @@
 //      core/wind.js ......... analytical wind model + RK2 streamline trace
 //      core/info.js ......... curated descriptions, chip and panel HTML
 //      core/geo.js .......... frame conversions, sun direction
+//      core/search.js ....... name/NORAD search, rank order, result HTML
 //
 //  VIEW MODULES   (DOM and three.js parts; main.js passes them state)
 //      view/boot-ui.js ...... splash log, #acq strip, load rows, status, tweens
@@ -50,6 +51,7 @@
 //      view/trails.js ....... orbit loops: the selected object and the stations
 //      view/saver.js ........ window.snSaver: slow orbit, tour and label plate
 //      view/time-control.js . scrub slider, transport buttons, rate, readouts
+//      view/search.js ....... search box, quick tags, result clicks
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -67,7 +69,7 @@
 //      picking .............. "function pickAt"    hover/lock chip + reticle
 //      object info .......... "function showObjectInfo"  right-hand panel
 //      fly-to ............... "function flyTo"     animated camera moves
-//      search ............... "function doSearch"  name/NORAD search
+//      search ............... "initSearch"        wires view/search.js
 //      time control ......... "initTimeControl"   wires view/time-control.js
 //      tle groups ........... "function fetchGroup"  load rows, merge order
 //      boot ................. "function boot"      load groups, then reveal
@@ -79,7 +81,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
 import { wireXR } from './xr.js';
-import { fmtRate, escHtml, rateSpeedToFrac } from './core/format.js';
+import { fmtRate, rateSpeedToFrac } from './core/format.js';
 import { parseTLE, demoDataset, mergeParsed } from './core/tle.js';
 import { fetchTLE, urlsForGroup } from './core/tle-fetch.js';
 import { CYCLONES, traceStreamlines } from './core/wind.js';
@@ -87,6 +89,7 @@ import { chipBodyHTML, infoPanelHTML, INFO_EMPTY_HTML } from './core/info.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { initSearch } from './view/search.js';
 import { initTimeControl, applyRate, advanceClock, showTime, btnPlay, btnNow } from './view/time-control.js';
 import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
 import { initLabels, buildCityLabels, updateCityLabels, hideCityLabels, rebuildStationLabels, updateStationLabels,
@@ -809,66 +812,9 @@ function flyTo(targetPos, lookAt, dur = 1500) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SEARCH
+// SEARCH  (search box and quick tags: view/search.js)
 // ═══════════════════════════════════════════════════════════════════
-const searchInput   = document.getElementById('search-input');
-const searchResults = document.getElementById('search-results');
-let searchTimer = null;
-
-// Search the catalog by name or NORAD id, rank stations and payloads first, and
-// render clickable results that fly the camera to the chosen object.
-function doSearch(query) {
-  if (!searchResults) return;
-  if (!query || !query.trim()) { searchResults.innerHTML = ''; return; }
-  const q = query.toUpperCase().trim();
-  const matches = [];
-  for (let i = 0; i < sats.length && matches.length < 100; i++) {
-    const s = sats[i];
-    const nameU = s.name.toUpperCase();
-    if (nameU.includes(q) || (s.noradId && String(s.noradId).includes(q))) {
-      matches.push({ idx: i, name: s.name, cat: s.cat });
-    }
-  }
-  if (matches.length === 0) {
-    searchResults.innerHTML = `<div class="search-empty">no matches</div>`;
-    return;
-  }
-  // Group: stations + notable first, then payloads, then everything else
-  const rank = { station: 0, starlink: 2, payload: 1, rocket: 3, debris: 4, storm: 5 };
-  matches.sort((a, b) => (rank[a.cat] ?? 9) - (rank[b.cat] ?? 9));
-  searchResults.innerHTML = matches.map(m =>
-    `<div class="search-result" data-idx="${m.idx}">
-      <span class="sr-name">${escHtml(m.name)}</span>
-      <span class="sr-cat">${escHtml(m.cat)}</span>
-    </div>`).join('');
-  searchResults.querySelectorAll('.search-result').forEach(el => {
-    el.addEventListener('click', () => {
-      const idx = parseInt(el.dataset.idx, 10);
-      if (!Number.isFinite(idx)) return;
-      flyToSat(idx);
-      if (IS_MOBILE) document.getElementById('leftpanel').classList.remove('open');
-    });
-  });
-}
-// Debounce typing before searching; Escape clears the box and results.
-if (searchInput) {
-  searchInput.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => doSearch(searchInput.value), 150);
-  });
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { searchInput.value = ''; searchResults.innerHTML = ''; }
-  });
-}
-// Quick-tag buttons run a preset search query.
-document.querySelectorAll('.qtag').forEach(b => {
-  b.addEventListener('click', () => {
-    if (!searchInput) return;
-    searchInput.value = b.dataset.q;
-    doSearch(b.dataset.q);
-    searchInput.focus();
-  });
-});
+initSearch({ sats: () => sats, flyToSat: idx => flyToSat(idx), isMobile: IS_MOBILE });
 
 // ═══════════════════════════════════════════════════════════════════
 // TIME CONTROL  (scrub, transport and rate: view/time-control.js)
