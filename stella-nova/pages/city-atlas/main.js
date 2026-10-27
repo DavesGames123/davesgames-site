@@ -14,16 +14,25 @@
 //   Drag to orbit, wheel or pinch to zoom, right-drag or two fingers to pan.
 //   #<id> in the URL picks a city.
 //
+// The DOM-free parts are in app/: text.js (formats), sources.js (credits,
+// about sheet), forms.js (foot and drawer HTML), view.js (first view),
+// quality.js (governor levels), tour.js (saver shots and plate).
+//
 // grep: function buildOverlay  function buildLayers  function switchTo  function frame
-//       function bindOrbit  function liveWind  function placeLabels  function captionHTML
-//       function defaultView  function sourcesHTML  window.snSaver  function saverShot
+//       function bindOrbit  function liveWind  function placeLabels  function governor
+//       const defaultView  window.snSaver  const saverShot
 
 import { project } from './camera.js';
 import { LIGHTS, lightFor } from './renderer.js';
 import { tilt } from '../../lib/tilt.js';
+import { KNOTS, ICON_PAUSE, ICON_PLAY, esc, wait, clamp, compass, fmt, titleCase, hoursOf, stamp as stampAt, latLon } from './app/text.js';
+import { currentSource, captionHTML } from './app/sources.js';
+import { paramsHTML, notesHTML, windTop, layersHTML, RAMP } from './app/forms.js';
+import { waterBearing, sunAzOf, defaultView as viewOf, contourStep, ease } from './app/view.js';
+import { QUALITY, PIXELS, med, stepQuality } from './app/quality.js';
+import { mulberry32, shuffle, saverShot as shotOf, CODE, extract, plateOf } from './app/tour.js';
 
 const $ = (id) => document.getElementById(id);
-const stage = $('stage');
 const canvas = $('map');
 const overlay = $('overlay');
 const fadeEl = $('fade');
@@ -42,11 +51,6 @@ const IDLE_MS = 2500;
 const ORBIT_IDLE_MS = 6000;         // auto-orbit after this much time without input
 const STORE_KEY = 'city-atlas.city';
 const DEFAULT_ID = 'new-york';
-const KNOTS = 1 / 0.514444;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const ICON_PAUSE = '<svg viewBox="0 0 14 14" aria-hidden="true"><rect x="2.5" y="1.5" width="3" height="11" rx="0.6"/><rect x="8.5" y="1.5" width="3" height="11" rx="0.6"/></svg>';
-const ICON_PLAY = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3.5 1.6v10.8a.5.5 0 0 0 .76.43l8.6-5.4a.5.5 0 0 0 0-.86l-8.6-5.4a.5.5 0 0 0-.76.43z"/></svg>';
-const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 // ─── state ──────────────────────────────────────────────────────────────────
 let cities = [];
@@ -85,28 +89,11 @@ const el = (tag, cls, html) => {
   if (html != null) e.innerHTML = html;
   return e;
 };
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const lastHour = () => Math.max(1, (meta?.current?.hours ?? 49) - 1);
-const LINK = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${esc(text)}</a>`;
-const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
-const fmt = (v, d = 0) => Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+const lastHour = () => hoursOf(meta);
+const stamp = (h) => stampAt(meta, h);
 
 function storeGet() { try { return sessionStorage.getItem(STORE_KEY); } catch { return null; } }
 function storeSet(v) { try { sessionStorage.setItem(STORE_KEY, v); } catch { /* private mode */ } }
-
-// The data window in the city's local time zone.
-function stamp(h) {
-  const start = Date.parse(meta?.current?.startUTC || '2026-09-24T00:00:00Z');
-  const d = new Date(start + Math.floor(h) * 3600e3);
-  try {
-    const f = new Intl.DateTimeFormat('en-GB', { timeZone: meta?.tz || 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
-    return f.format(d).replace(',', '');
-  } catch {
-    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${String(d.getUTCHours()).padStart(2, '0')}:00 UTC`;
-  }
-}
 
 const coarse = matchMedia('(pointer: coarse)');
 function device() {
@@ -129,37 +116,7 @@ function pageMark() {
   return { text: `No. ${String(hit.n).padStart(3, '0')} · ${hit.con}`, color: hit.color };
 }
 
-// ─── sources ────────────────────────────────────────────────────────────────
-// Who made each dataset and under what terms. The foot line, the overlay
-// groups and the about sheet read these, so they cannot disagree.
-function currentSource(m) {
-  const c = m?.current;
-  if (!c) return null;
-  const parts = [];
-  if (c.tidal) {
-    if (c.tidal.agency === 'Marine Institute') parts.push({ short: 'Marine Institute NEATL · CC BY 4.0', html: `Currents near the city: ${esc(c.tidal.modelLong || 'Marine Institute NEATL')}, © Irish Marine Institute, ${LINK('https://erddap.marine.ie/erddap/griddap/IMI_NEATL.html', 'Marine Institute ERDDAP')}, ${LINK('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')}. Changes: hourly surface currents resampled to this map's grid.` });
-    else parts.push({ short: `NOAA ${c.tidal.model} · public domain`, html: `Currents near the city: ${esc(c.tidal.modelLong || 'NOAA ' + c.tidal.model)}, ${LINK('https://tidesandcurrents.noaa.gov/models.html', 'NOAA NOS CO-OPS')}. U.S. Government work, public domain.` });
-  }
-  if (c.sources.includes('HYCOM')) parts.push({ short: 'HYCOM ESPC-D-V02', html: `${c.tidal ? 'Currents offshore' : 'Currents'}: Navy ESPC-D-V02 global HYCOM analysis, 1/12° (cells of about 4 to 9 km), hourly surface velocity, from ${LINK('https://www.hycom.org/dataserver/espc-d-v02', 'HYCOM.org')} (U.S. Navy, FNMOC; freely available). It resolves the regional current and the tide, not the harbour channels; near the coast its field is carried a short way into the harbour and fades out over 3 km.` });
-  return { short: parts.map((p) => p.short).join(' + '), html: parts.map((p) => `<li>${p.html}</li>`).join('') };
-}
-
-function sourcesHTML(m) {
-  const items = [];
-  items.push(`<li>Buildings, water and place names: ${LINK('https://overturemaps.org/', 'Overture Maps Foundation')} release 2026-09-23.1, ${LINK('https://opendatacommons.org/licenses/odbl/1-0/', 'ODbL 1.0')}. Includes © ${LINK('https://www.openstreetmap.org/copyright', 'OpenStreetMap contributors')} and the other sources that ${LINK('https://docs.overturemaps.org/attribution/', 'Overture lists')}. The building and water data of this page are a derived database under the same licence.</li>`);
-  items.push(`<li>Land cover: © ESA WorldCover project 2021 / contains modified Copernicus Sentinel data (2021) processed by the ESA WorldCover consortium, ${LINK('https://esa-worldcover.org/', 'esa-worldcover.org')}, ${LINK('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')}.</li>`);
-  items.push(`<li>Elevation and sea floor: ${LINK('https://registry.opendata.aws/terrain-tiles/', 'Terrain Tiles on AWS')} (Mapzen terrarium). United States 3DEP (formerly NED) and global GMTED2010 and SRTM terrain data courtesy of the U.S. Geological Survey. Global ETOPO1 terrain data U.S. National Oceanic and Atmospheric Administration. Europe terrain data produced using Copernicus data and information funded by the European Union - EU-DEM layers. United Kingdom terrain data © Environment Agency copyright and/or database right 2015. All rights reserved. Canada terrain data contains information licensed under the Open Government Licence – Canada. Australia terrain data © Commonwealth of Australia (Geoscience Australia) 2017. Full list: ${LINK('https://github.com/tilezen/joerd/blob/master/docs/attribution.md', 'terrain tile attribution')}.</li>`);
-  const cs = currentSource(m);
-  if (cs) items.push(cs.html);
-  items.push(`<li>Default wind (2025 wind rose): ERA5 reanalysis via the ${LINK('https://open-meteo.com/', 'Open-Meteo')} historical API. Live wind: Open-Meteo forecast API. Weather data by Open-Meteo.com, ${LINK('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')}.</li>`);
-  items.push(`<li>Idea: ${LINK('https://github.com/opengeos/GeoLibre', 'GeoLibre')} by Qiusheng Wu (opengeos, MIT), which shows open buildings and terrarium terrain in the browser. This page uses none of its code.</li>`);
-  items.push('<li>Renderer, wind solver, current streaks and design: Dave, for Stella Nova.</li>');
-  return `<section id="capCredits" class="credits"><h3>Credits and licences</h3><ul>${items.join('')}</ul></section>`;
-}
-
 // ─── overlay content (head, foot, labels) ───────────────────────────────────
-const param = (v, label, extra = '') => `<div class="p"><span class="v">${v}</span>${extra}<small>${esc(label)}</small></div>`;
-
 function buildOverlay() {
   overlay.textContent = '';
   $('ttl').textContent = meta.title;
@@ -183,30 +140,13 @@ function buildOverlay() {
   ui = { labels };
   fillParams();
 }
-const titleCase = (s) => s.toLowerCase().replace(/(^|[\s.-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
 
 function fillParams() {
   invalidate(3);
   if (!meta) return;
-  const b = meta.buildings;
-  const parts = [param(`${fmt(b.count)}`, 'buildings'), param(`<i class="sym">h</i><sub>max</sub> = ${fmt(b.tallest)} m`, 'tallest')];
-  if (ov.ocean.on && meta.current) parts.push(param('<i class="sym">t</i> = <span id="pTime"></span>', 'current data'));
-  if (ov.ocean.on && meta.current) parts.push(param(`<i class="sym m1">u</i><sub>max</sub> = ${fmt(meta.curMax * KNOTS, 1)} kn`, 'fastest water'));
-  if (ov.wind.on) parts.push(param(`<i class="sym">U</i> = ${fmt(ov.wind.speed, 1)} m/s ${compass(ov.wind.dirFrom)}`, ov.wind.live ? 'live wind' : 'wind'));
-  if (ov.terrain.on) parts.push(param(`× ${fmt(ov.terrain.exag, 1)}`, 'relief'));
-  $('params').innerHTML = parts.join('');
+  $('params').innerHTML = paramsHTML(meta, ov);
   ui.time = $('pTime');
-  const what = [];
-  if (ov.terrain.on) what.push('real relief, sea floor in blue');
-  if (ov.ocean.on) what.push(meta.current ? 'streaks follow the surface current' : 'no current data here');
-  if (ov.wind.on) what.push('streaks follow a simulated wind');
-  if (!what.length) what.push('drag to orbit, pick an overlay below');
-  const cs = currentSource(meta);
-  const src = ['© OpenStreetMap contributors · Overture Maps · ESA WorldCover'];
-  if (ov.ocean.on && cs) src.push(cs.short);
-  if (ov.wind.on && ov.wind.live) src.push('Open-Meteo');
-  const line = what.join('; ');
-  $('notes').innerHTML = `${esc(meta.region)}. ${esc(line[0].toUpperCase() + line.slice(1))}.<span class="src">${esc(src.join(' · '))}</span>`;
+  $('notes').innerHTML = notesHTML(meta, ov);
   scrubEl.classList.toggle('off', !(ov.ocean.on && meta.current));
   updateClockUI(true);
 }
@@ -298,39 +238,13 @@ function placeLabels(t) {
 }
 
 // ─── about sheet ────────────────────────────────────────────────────────────
-function captionHTML() {
-  const m = meta, b = m.buildings, w = m.wind;
-  const paras = [`<p>${esc(m.blurb)}</p>`];
-  const facts = [
-    ['Buildings in the disc', `${fmt(b.count)} (radius ${fmt(m.r, 1)} km)`],
-    ['With a mapped height', `${fmt(100 * b.tagged / Math.max(1, b.count))} %`],
-    ['Tallest (mapped)', `${fmt(b.tallest)} m`],
-    ['Over 100 m', fmt(b.over100)],
-    ['Highest ground (12 km square)', `${fmt(m.terrain.max)} m`],
-    ['Deepest water (64 km square)', `${fmt(-Math.min(0, m.terrain.deepest))} m`],
-    ['Prevailing wind, 2025', `from ${compass(w.prevail.dir)}, mean ${fmt(w.mean, 1)} m/s`],
-  ];
-  if (m.current) facts.push(['Fastest surface water', `${fmt(m.curMax * KNOTS, 1)} kn (${fmt(m.curMax, 2)} m/s)`]);
-  paras.push(`<div class="facts">${facts.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('')}</div>`);
-  paras.push('<p><b>Buildings</b> stand on their real footprints and heights. Their roofs, floors, windows and materials are made up by the page from the footprint, the height and the use alone (gable and hip roofs on small rectangles, parapets and rooftop plant on flat roofs, tiers on some towers), so they show the kind of building, not the real facade. Colour: Facade shows the materials; Height and Use colour the walls by those instead.</p>');
-  paras.push('<h3 class="sub">The overlays</h3>');
-  paras.push('<p><b>Terrain</b> lifts the ground and the sea floor to their real heights, with a vertical exaggeration. Land shows contour lines; water is darker where it is deeper, and the relief of the sea floor shows through it.</p>');
-  paras.push(m.current
-    ? `<p><b>Currents</b> plays two days of hourly surface currents (${esc(stamp(0))} to ${esc(stamp(lastHour()))}). Each streak moves along the current; brighter and yellower is faster. The streak speed on screen is compressed (it grows with the 0.6 power of the real speed), so slack water still moves.</p>`
-    : '<p><b>Currents</b>: no open ocean model in this atlas covers the water here, so this overlay is off for this city.</p>');
-  paras.push(`<p><b>Wind</b> is a simplified simulation, not a forecast. Two nested 2D lattice Boltzmann solvers run on your GPU: a coarse one over 12 km, where hills higher than about ${fmt((m.groundRef || 0) + 160)} m are walls and the land and the city add drag, and a fine one over the buildings (cells of about ${fmt(2 * m.fHalf / 640)} m), where every building taller than the slice height is a wall. The fine solver takes its inflow from the coarse one. It shows channelling along streets, wakes and vortex shedding behind towers, and the slower wind over the city than over water. It has no vertical motion and no heat, and its Reynolds number is far below the real one, so the speeds are only relative. The optional sea breeze adds a weak push from the sea toward the land.</p>`);
-  paras.push('<h3 class="sub">Controls</h3><p>Drag to orbit. Wheel or pinch to zoom. Right-drag or two fingers to pan. Double-click to reset. Keys: T, C and W turn the overlays on and off; L opens their settings; Left and Right change the city.</p>');
-  paras.push(sourcesHTML(m));
-  return paras.join('');
-}
-
 function setCaption(open) {
   if (open) { setAtlas(false); if (device().phone) setLayers(false); }
   captionEl.hidden = !open;
   $('info').setAttribute('aria-pressed', String(open));
   if (open && meta) {
-    $('capTitle').innerHTML = `${esc(meta.title)}<small>${esc(meta.country)} · ${fmt(Math.abs(meta.lat), 3)}° ${meta.lat >= 0 ? 'N' : 'S'}, ${fmt(Math.abs(meta.lon), 3)}° ${meta.lon >= 0 ? 'E' : 'W'}</small>`;
-    $('capBody').innerHTML = captionHTML();
+    $('capTitle').innerHTML = `${esc(meta.title)}<small>${esc(meta.country)} · ${latLon(meta, 3)}</small>`;
+    $('capBody').innerHTML = captionHTML(meta);
   }
   syncScrim();
 }
@@ -419,51 +333,11 @@ function bindSheetDrag(sheet, grip, close) {
 }
 
 // ─── overlay settings drawer ────────────────────────────────────────────────
-const sw = (id, on, label) => `<button class="sw" id="${id}" type="button" role="switch" aria-checked="${on}" aria-label="${esc(label)}"></button>`;
-const range = (id, label, min, max, step, val) =>
-  `<label class="row"><span>${esc(label)}</span><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}"><output id="${id}Out"></output></label>`;
-const seg = (id, label, opts, cur) => `<div class="row two"><span>${esc(label)}</span><span class="seg" id="${id}">${opts.map(([v, t]) =>
-  `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(cur)}">${esc(t)}</button>`).join('')}</span></div>`;
-
 function buildLayers() {
   const body = $('layersBody');
-  body.innerHTML = `
-  <section class="lg" data-k="terrain" id="lgTerrain">
-    <h3>Terrain ${sw('swTerrain', ov.terrain.on, 'Terrain')}</h3>
-    <p class="why">Real elevation and sea floor, draped and lit, with the buildings standing on it.</p>
-    ${range('trExag', 'Exaggeration', 1, 6, 0.25, ov.terrain.exag)}
-    <div class="row two"><span>Contours</span>${sw('swContour', ov.terrain.contour, 'Contour lines')}</div>
-    <p class="src">Terrain Tiles on AWS (terrarium) · ESA WorldCover</p>
-  </section>
-  <section class="lg" data-k="ocean" id="lgOcean">
-    <h3>Currents ${sw('swOcean', ov.ocean.on, 'Currents')}</h3>
-    <p class="why" id="ocWhy"></p>
-    ${range('ocTime', 'Time', 0, 48, 1, 0)}
-    <div class="legend" id="ocLegend"></div><div class="ticks" id="ocTicks"></div>
-    <p class="src" id="ocSrc"></p>
-  </section>
-  <section class="lg" data-k="wind" id="lgWind">
-    <h3>Wind ${sw('swWind', ov.wind.on, 'Wind')}</h3>
-    <p class="why">A simplified 2D flow simulation around the buildings and hills. Speeds are relative.</p>
-    <div class="row two"><span>Live wind</span>${sw('swLive', ov.wind.live, 'Live wind from Open-Meteo')}</div>
-    <div class="status" id="wdStatus"></div>
-    ${range('wdDir', 'From', 0, 359, 1, ov.wind.dirFrom)}
-    ${range('wdSpeed', 'Speed', 1, 20, 0.5, ov.wind.speed)}
-    ${range('wdSlice', 'Slice height', 5, 150, 5, ov.wind.slice)}
-    <div class="row two"><span>Speed map</span>${sw('swHeat', ov.wind.heat, 'Wind speed map')}</div>
-    <div class="row two"><span>Sea breeze</span>${sw('swBreeze', ov.wind.seaBreeze, 'Sea breeze')}</div>
-    <div class="legend" id="wdLegend"></div><div class="ticks" id="wdTicks"></div>
-    <p class="src">Lattice Boltzmann D2Q9 on WebGPU · default wind: ERA5 2025 rose via Open-Meteo (CC BY 4.0)</p>
-  </section>
-  <section class="lg" data-k="view" id="lgView">
-    <h3>View</h3>
-    ${seg('vwLight', 'Light', Object.keys(LIGHTS).map((k) => [k, k[0].toUpperCase() + k.slice(1)]), ov.view.light)}
-    ${seg('vwColour', 'Colour', [[2, 'Facade'], [0, 'Height'], [1, 'Use']], ov.view.colour)}
-    <div class="row two"><span>Slow orbit</span>${sw('swOrbit', ov.view.orbit, 'Slow orbit when idle')}</div>
-  </section>`;
-  const ramp = 'linear-gradient(90deg, rgb(20,41,115), rgb(26,140,217) 25%, rgb(77,217,166) 50%, rgb(250,219,89) 75%, rgb(255,247,230))';
-  $('ocLegend').style.background = ramp;
-  $('wdLegend').style.background = ramp;
+  body.innerHTML = layersHTML(ov, Object.keys(LIGHTS));
+  $('ocLegend').style.background = RAMP;
+  $('wdLegend').style.background = RAMP;
   const onSw = (id, fn) => $(id).addEventListener('click', (e) => {
     const b = e.currentTarget;
     const v = b.getAttribute('aria-checked') !== 'true';
@@ -521,7 +395,7 @@ function syncLayers() {
   $('wdSpeedOut').textContent = `${fmt(ov.wind.speed, 1)} m/s`;
   $('wdSlice').value = String(ov.wind.slice);
   $('wdSliceOut').textContent = `${ov.wind.slice} m`;
-  const top = windTop();
+  const top = windTop(ov);
   $('wdTicks').innerHTML = `<span>0</span><span>${fmt(top / 4, 1)}</span><span>${fmt(top, 1)} m/s</span>`;   // square-root scale
   for (const id of ['vwLight', 'vwColour']) {
     const cur = id === 'vwLight' ? ov.view.light : ov.view.colour;
@@ -542,7 +416,6 @@ function syncLayers() {
   $('chipOcean').disabled = !!meta && !meta.current;
 }
 
-const windTop = () => Math.max(ov.wind.speed * 2.2, 2.5);
 function setWindStatus(text, err = false) {
   const s = $('wdStatus');
   if (!s) return;
@@ -736,11 +609,9 @@ function bindOrbit() {
 
 // ─── layout ─────────────────────────────────────────────────────────────────
 // RENDER SIZE. lib/render-scale.js sizes the canvas: the window x dpr (at
-// most 2), then a pixel budget, then a factor that its frame-rate control
-// lowers below 45 fps. The budget (PIXELS) was 3600 px long side, MSAA 4x:
-// 2880 x 1800 x 4 samples on a 1440 x 900 Retina laptop. The GPU-time rule
-// in governor() lowers the budget too, for a browser whose rAF does not slow.
-const PIXELS = { desktop: 2.4e6, phone: 1.3e6, min: 0.7e6 };
+// most 2), then a pixel budget (app/quality.js PIXELS), then a factor that
+// its frame-rate control lowers below 45 fps. The GPU-time rule in
+// governor() lowers the budget too, for a browser whose rAF does not slow.
 let pixelBudget = 0, rs = null;
 function makeScale() {
   const { phone } = device();
@@ -770,32 +641,8 @@ function relayout() {
 }
 
 // ─── city view ──────────────────────────────────────────────────────────────
-// The camera looks at the skyline from the side with the most water, so
-// the first view of each city is the classic one from the harbour.
-function waterBearing(c) {
-  const a = c.arrays.wf_in, n = a.shape[0], half = c.meta.grid.inner.half, R = c.meta.r * 1000;
-  let best = 200, bestW = -1;
-  for (let deg = 0; deg < 360; deg += 10) {
-    const s = Math.sin(deg * Math.PI / 180), co = Math.cos(deg * Math.PI / 180);
-    let w = 0;
-    for (const f of [0.7, 1.0, 1.3, 1.7, 2.1]) {
-      const x = s * R * f, y = co * R * f;
-      const i = Math.floor((x + half) / (2 * half) * n), j = Math.floor((y + half) / (2 * half) * n);
-      if (i >= 0 && j >= 0 && i < n && j < n) w += a.data[j * n + i] / 255;
-    }
-    if (w > bestW + 0.01) { bestW = w; best = deg; }
-  }
-  return best;
-}
-
-// A portrait screen sees less across, so the camera backs off to keep the disc in view.
-function defaultView() {
-  const R = (meta?.r || 2.4) * 1000;
-  const yawDeg = meta?._bearing ?? 200;
-  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-  const k = Math.max(1, Math.pow(1.25 / aspect, 0.75));
-  return { target: [0, 0, (meta?.groundRef || 0)], yaw: yawDeg * Math.PI / 180, pitch: 0.42, dist: R * 2.05 * k };
-}
+// app/view.js: the first view of a city, from its harbour side.
+const defaultView = () => viewOf(meta, window.innerWidth, window.innerHeight);
 
 // ─── city switch ────────────────────────────────────────────────────────────
 // requestCity resolves on the worker's first stage (terrain, sea, wind
@@ -939,7 +786,7 @@ async function switchTo(i, opts = {}) {
   pushWind();
   if (ov.wind.live) liveWind();
   hour = Math.min(hour, lastHour());
-  sunAz = ((meta._bearing ?? 200) + 55) % 360;
+  sunAz = sunAzOf(meta);
   if (!opts.view) { Object.assign(cam, defaultView()); cam.target = cam.target.slice(); camGoal = null; }
   else Object.assign(cam, opts.view);
   buildOverlay();
@@ -960,29 +807,16 @@ async function switchTo(i, opts = {}) {
 }
 
 // ─── frame loop ─────────────────────────────────────────────────────────────
-// QUALITY GOVERNOR, aiming at 60 fps. render-scale.js handles the pixels
-// from the frame rate. This rule reads the GPU time (submit to done) every
-// 2 s: over 13 ms it lowers, in order, the wind lattice steps per frame,
-// the streak count, then the pixel budget; under 6.5 ms for 6 s it raises
-// them back in the reverse order. Level 0 is full quality.
-const QUALITY = [
-  { wind: 1, share: 1, pix: 1 },
-  { wind: 0.6, share: 1, pix: 1 },
-  { wind: 0.4, share: 0.7, pix: 1 },
-  { wind: 0.4, share: 0.6, pix: 0.75 },
-  { wind: 0.25, share: 0.5, pix: 0.55 },
-  { wind: 0.25, share: 0.4, pix: 0.4 },
-];
-let qLevel = 0, govAt = 0, govGood = 0;
+// QUALITY GOVERNOR (app/quality.js), every 2 s.
+const qState = { level: 0, good: 0 };
+let qLevel = 0, govAt = 0;
 function governor(t) {
   if (t - govAt < 2000 || !renderer) return;
   govAt = t;
   const g = med(renderer.info.gpuHist);
   if (!g) return;
-  let next = qLevel;
-  if (g > 13 && qLevel < QUALITY.length - 1) { next = qLevel + 1; govGood = 0; }
-  else if (g < 6.5) { if (++govGood >= 3 && qLevel > 0) { next = qLevel - 1; govGood = 0; } }
-  else govGood = 0;
+  qState.level = qLevel;
+  const next = stepQuality(qState, g);
   if (next === qLevel) return;
   const pixBefore = QUALITY[qLevel].pix;
   qLevel = next;
@@ -1013,8 +847,6 @@ function animating(t) {
   }
   return (ov.ocean.on && !!meta?.current) || ov.wind.on;
 }
-
-function ease(cur, goal, dt, tau) { return cur + (goal - cur) * (1 - Math.exp(-dt / tau)); }
 
 function frame(t) {
   requestAnimationFrame(frame);
@@ -1055,7 +887,7 @@ function frame(t) {
       light: lightFor(ov.view.light, sunAz), exag: E, terrain: ov.terrain.amt,
       contour: ov.terrain.contour ? contourStep(meta) : 0, colourMode: ov.view.colour,
       ocean: { on: ov.ocean.amt * (meta.current ? 1 : 0), hour },
-      wind: { on: ov.wind.amt, heat: ov.wind.heat ? 1 : 0, slice: ov.wind.slice, speed: ov.wind.speed, colourTop: windTop() },
+      wind: { on: ov.wind.amt, heat: ov.wind.heat ? 1 : 0, slice: ov.wind.slice, speed: ov.wind.speed, colourTop: windTop(ov) },
       offsetY: saver ? saverOffsetY : 0, fovY: 0.75,
       // streak speed on screen follows the zoom: the reference current and
       // the free-stream wind move about 6 % of the view distance per second
@@ -1079,11 +911,6 @@ function frame(t) {
   governor(t);
 }
 let idleFrames = 0;
-
-function contourStep(m) {
-  const relief = Math.max(10, (m.terrain.max || 50) - (m.groundRef || 0));
-  return relief > 600 ? 50 : relief > 200 ? 20 : relief > 60 ? 10 : 5;
-}
 
 function showFallback() {
   document.body.classList.add('no-gpu');
@@ -1134,42 +961,8 @@ async function start() {
 let saverLabel = null, saverPlateT = 0, saverRate = 1, saverOffsetY = 0;
 const tour = { order: [], k: 0, shot: null, next: null, rnd: null, calm: 0, band: null, bandAt: -1e9, bandFn: null, cutting: false };
 
-function mulberry32(a) {
-  return () => {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// One shot: city index, orbit, light and overlays, all from the seeded rng.
-function saverShot(i) {
-  const r = tour.rnd;
-  const c = cities[i];
-  const lights = [['golden', 0.36], ['dusk', 0.28], ['day', 0.2], ['night', 0.16]];
-  let x = r(), light = 'golden';
-  for (const [k, w] of lights) { if ((x -= w) <= 0) { light = k; break; } }
-  const has = !!c.current;
-  // primary overlay: terrain, currents, wind or none; terrain often rides along
-  const pick = r();
-  let primary = pick < 0.3 ? 'terrain' : pick < 0.62 && has ? 'ocean' : pick < 0.88 ? 'wind' : 'none';
-  if (primary === 'ocean' && !has) primary = 'terrain';
-  const calm = tour.calm;
-  return {
-    i, light, primary,
-    terrain: primary === 'terrain' || r() < 0.45,
-    exag: primary === 'terrain' ? 1.6 + r() * 1.4 : 1.25 + r() * 0.5,
-    ocean: primary === 'ocean',
-    wind: primary === 'wind',
-    yaw0: r() * Math.PI * 2,
-    yawRate: (r() < 0.5 ? -1 : 1) * (0.028 + r() * 0.02) / (1 + calm * 0.6),
-    pitch: 0.34 + r() * 0.24,
-    distK: 1.7 + r() * 0.9,
-    seconds: (8 + r() * 4) * (1 + calm * 0.3),
-    heat: r() < 0.2,
-  };
-}
+// One shot: app/tour.js saverShot, from the seeded rng.
+const saverShot = (i) => shotOf(tour.rnd, cities[i], i, tour.calm);
 
 async function saverStart(shot, first) {
   const c = cities[shot.i];
@@ -1190,7 +983,7 @@ async function saverStart(shot, first) {
   pushWind();
   // overlays start at their target, no fade-in from zero
   for (const k of ['terrain', 'ocean', 'wind']) ov[k].amt = ov[k].on ? 1 : 0;
-  sunAz = ((meta._bearing ?? 200) + 55) % 360;
+  sunAz = sunAzOf(meta);
   const R = meta.r * 1000;
   cam.target = [0, 0, meta.groundRef || 0];
   cam.yaw = shot.yaw0; cam.pitch = shot.pitch; cam.dist = R * shot.distK;
@@ -1206,11 +999,6 @@ async function saverStart(shot, first) {
   if (tour.k === 0) tour.order = shuffle(tour.order.slice(), tour.rnd);
   tour.next = saverShot(tour.order[tour.k]);
   setTimeout(() => slotFor(tour.next.i, { full: true }).catch(() => {}), 1500);
-}
-
-function shuffle(a, r) {
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
 }
 
 function saverTick(dt, t) {
@@ -1241,41 +1029,15 @@ async function shaderText(name) {
   if (!codeCache.has(name)) codeCache.set(name, fetch(new URL(`shaders/${name}`, import.meta.url)).then((r) => r.text()).catch(() => ''));
   return codeCache.get(name);
 }
-function extract(src, from, lines) {
-  const a = src.split('\n');
-  const i = a.findIndex((l) => l.includes(from));
-  return i < 0 ? '' : a.slice(i, i + lines).join('\n');
-}
-const CODE = {
-  wind: ['lbm.wgsl', 'let Q = pxx * pxx', 12, 'Smagorinsky BGK collision'],
-  ocean: ['tracers.wgsl', 'fn stepOf(u: vec2f)', 10, 'current streak step'],
-  terrain: ['terrain.wgsl', '  let w = waterAt(p);', 12, 'water over the sea floor'],
-  none: ['buildings.wgsl', '  // lit windows after dusk', 13, 'lit windows after dusk'],
-};
 let saverCode = null;
 function saverPlate() {
   if (!saverLabel || !meta || !tour.shot) return;
-  const sh = tour.shot, b = meta.buildings;
-  const params = [
-    { sym: 'N', name: 'buildings', value: fmt(b.count) },
-    { sym: 'h_{\\max}', name: 'tallest', value: `${fmt(b.tallest)} m` },
-  ];
-  if (ov.terrain.on) params.push({ sym: 'E', name: 'relief', value: `× ${fmt(ov.terrain.exag, 1)}` });
-  if (ov.ocean.on && meta.current) params.push({ sym: 'u_{\\max}', name: 'fastest water', value: `${fmt(meta.curMax * KNOTS, 1)} kn`, cls: 'm1' });
-  if (ov.wind.on) params.push({ sym: 'U', name: 'wind', value: `${fmt(ov.wind.speed, 1)} m/s from ${compass(ov.wind.dirFrom)}`, cls: 'm1' });
-  const lines = [`${meta.country}. ${fmt(Math.abs(meta.lat), 2)}° ${meta.lat >= 0 ? 'N' : 'S'}, ${fmt(Math.abs(meta.lon), 2)}° ${meta.lon >= 0 ? 'E' : 'W'}.`];
-  if (ov.ocean.on && meta.current) lines.push(`Surface currents, ${stamp(hour)}. ${currentSource(meta).short}.`);
-  if (ov.wind.on) lines.push('Wind: a simplified 2D lattice Boltzmann simulation around the buildings.');
-  const tex = sh.primary === 'wind'
-    ? [String.raw`f_q(\mathbf{x}+\mathbf{c}_q,t+1)=f_q-\frac{1}{\tau}\big(f_q-f_q^{\mathrm{eq}}(\rho,\mathbf{u})\big)`]
-    : sh.primary === 'ocean' ? [String.raw`\mathbf{x}_{n+1}=\mathbf{x}_n+\Delta t\,\hat{\mathbf{u}}\big(\mathbf{x}_n+\tfrac{\Delta t}{2}\hat{\mathbf{u}}(\mathbf{x}_n)\big)`]
-      : sh.primary === 'terrain' ? [String.raw`z=E\,h(x,y),\qquad h<0:\ \text{sea floor}`] : [];
+  const sh = tour.shot;
+  const plate = plateOf(meta, ov, sh, hour);
   const k = CODE[sh.primary] || CODE.none;
   try {
     saverLabel({
-      title: meta.title,
-      sub: `${meta.region} · ${sh.primary === 'none' ? 'buildings' : sh.primary === 'ocean' ? 'ocean currents' : sh.primary}`,
-      params, lines, tex, rules: [['\\mathbf{u}', 'm1'], ['\\hat{\\mathbf{u}}', 'm1']],
+      ...plate,
       code: saverCode && saverCode.key === sh.primary ? saverCode.code : undefined,
     });
   } catch { /* the plate is optional */ }
@@ -1321,7 +1083,6 @@ let framesDrawn = 0;
 const loadLog = { cur: null, list: [] };
 const bootLog = {};
 const frameCpu = [], rafGaps = [];
-const med = (a) => { const s = a.filter((x) => x > 0).sort((x, y) => x - y); return s.length ? s[s.length >> 1] : 0; };
 window.__cityAtlas = {
   get ready() { return !!meta && document.body.classList.contains('shown') && fadeEl.classList.contains('clear'); },
   get frames() { return framesDrawn; },

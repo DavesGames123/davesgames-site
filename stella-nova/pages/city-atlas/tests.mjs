@@ -26,10 +26,12 @@
 //                in this thread; the head, the foot, the keys T C W L I M Esc, the overlay
 //                drawer, the about sheet, the atlas, a city switch and the saver hook.
 //                Skipped (and said so) when jsdom does not load (NODE_PATH).
+//   9 modules    the DOM-free modules of app/: text formats, the quality rule, the
+//                first view, the seeded tour and its plate, the foot and drawer HTML.
 // Exit code 1 when any check fails.
 //
 // grep: function check  const SPOTS  function spot  function meshCheck  function windCheck  function windowCheck
-//       function pageCheck
+//       function pageCheck  function moduleCheck
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -331,8 +333,8 @@ async function windowCheck() {
     'let fw = vec2f(fu / max(run, 0.01) * bays, fz / M.cell.y);', 'smoothstep(0.4, 0.7, max(fw.x, fw.y))']) {
     check(wgsl.includes(k), `windows: buildings.wgsl lacks ${k} (facade-check.mjs is out of step)`);
   }
-  // the saver plate shows an extract of fs from this anchor (main.js SAVER_CODE)
-  const anchor = /none: \['buildings\.wgsl', '([^']+)'/.exec(readFileSync(`${HERE}main.js`, 'utf8'));
+  // the saver plate shows an extract of fs from this anchor (app/tour.js CODE)
+  const anchor = /none: \['buildings\.wgsl', '([^']+)'/.exec(readFileSync(`${HERE}app/tour.js`, 'utf8'));
   check(anchor && wgsl.includes(anchor[1]), `windows: the saver code anchor ${anchor && anchor[1]} is not in buildings.wgsl`);
   const { measure, materials } = await import('./tools/facade-check.mjs');
   check(materials().length === 5, `windows: ${materials().length} materials read from matOf, want 5`);
@@ -348,6 +350,41 @@ async function windowCheck() {
       check(f.flicker <= t.flicker * 1.1 + 0.002, `windows: ${name} ${r.d} m shimmer ${f.flicker} above the truth ${t.flicker}`);
     }
   }
+}
+
+async function moduleCheck() {
+  const tx = await import('./app/text.js');
+  const got = [tx.compass(359), tx.compass(-90), tx.compass(202.5), tx.latLon({ lat: -33.9, lon: 18.42 }, 2), tx.hoursOf(null), tx.hoursOf({ current: { hours: 25 } }),
+    tx.stamp({ current: { startUTC: '2026-09-24T00:00:00Z' }, tz: 'America/New_York' }, 5.7), tx.stamp(null, 0), tx.titleCase('EAST RIVER'), tx.esc('<a&"b">')].join(' | ');
+  check(got === 'N | W | SSW | 33.90° S, 18.42° E | 48 | 24 | 24 Sept 01:00 GMT-4 | 24 Sept 00:00 UTC | East River | &lt;a&amp;&quot;b&quot;&gt;', `modules: text.js ${got}`);
+  const { stepQuality, med } = await import('./app/quality.js');
+  const q = { level: 0, good: 0 };
+  const seq = [20, 20, 20, 20, 20, 20, 3, 3, 3, 9].map((g) => (q.level = stepQuality(q, g)) + ':' + q.good).join(' ');
+  check(seq === '1:0 2:0 3:0 4:0 5:0 5:0 5:1 5:2 4:0 4:0' && med([0, 5, 1, 9]) === 5 && med([]) === 0, `modules: quality.js ${seq}`);
+  const v = await import('./app/view.js');
+  const dv = v.defaultView({ r: 2, _bearing: 90, groundRef: 5 }, 400, 800);
+  check(Math.abs(dv.dist - 8151.525) < 1e-3 && dv.target[2] === 5 && Math.abs(dv.yaw - Math.PI / 2) < 1e-12 && v.defaultView({ r: 2 }, 1600, 800).dist === 4100, `modules: view.js defaultView ${JSON.stringify(dv)}`);
+  check(v.contourStep({ terrain: { max: 700 }, groundRef: 0 }) === 50 && v.contourStep({ terrain: { max: 30 } }) === 5 && v.sunAzOf({ _bearing: 330 }) === 25, 'modules: view.js contour step or sun');
+  const t = await import('./app/tour.js');
+  const r = t.mulberry32(7);
+  check([r(), r(), r()].map((x) => x.toFixed(6)).join(' ') === '0.011705 0.061958 0.976908', 'modules: tour.js mulberry32(7)');
+  check(t.shuffle(index.map((_, i) => i), t.mulberry32(7)).join() === '13,17,20,5,11,10,9,4,14,19,2,16,7,3,15,6,8,12,18,1,0' || index.length !== 21, 'modules: tour.js shuffle');
+  const sh = t.saverShot(t.mulberry32(3), { current: {} }, 0, 0.5);
+  check(sh.light === 'day' && sh.primary === 'terrain' && sh.terrain && Math.abs(sh.seconds - 10.410979) < 1e-6 && Math.abs(sh.yawRate - 0.028941) < 1e-6, `modules: tour.js saverShot ${JSON.stringify(sh)}`);
+  const src = readFileSync(`${HERE}shaders/buildings.wgsl`, 'utf8');
+  check(t.extract(src, t.CODE.none[1], t.CODE.none[2]).split('\n').length === t.CODE.none[2], 'modules: tour.js extract of the lit windows');
+  const m = { title: 'X', region: 'R', country: 'C', lat: 1, lon: -2, buildings: { count: 1234, tallest: 300 }, curMax: 1, current: { sources: ['HYCOM'] } };
+  const ov = { terrain: { on: true, exag: 2 }, ocean: { on: true }, wind: { on: true, speed: 5, dirFrom: 270, live: false } };
+  const pl = t.plateOf(m, ov, { primary: 'ocean' }, 3);
+  check(pl.sub === 'R · ocean currents' && pl.params.map((p) => p.sym).join() === 'N,h_{\\max},E,u_{\\max},U' && pl.lines[1] === 'Surface currents, 24 Sept 03:00 UTC. HYCOM ESPC-D-V02.' && pl.tex.length === 1, `modules: tour.js plateOf ${JSON.stringify(pl)}`);
+  const f = await import('./app/forms.js');
+  const ph = f.paramsHTML(m, ov);
+  check(['buildings', 'tallest', 'current data', 'fastest water', 'wind', 'relief'].join() === [...ph.matchAll(/<small>([^<]+)<\/small>/g)].map((x) => x[1]).join() && ph.includes('1.9 kn') && ph.includes('5.0 m/s W'), `modules: forms.js paramsHTML ${ph}`);
+  check(f.notesHTML(m, ov) === 'R. Real relief, sea floor in blue; streaks follow the surface current; streaks follow a simulated wind.<span class="src">© OpenStreetMap contributors · Overture Maps · ESA WorldCover · HYCOM ESPC-D-V02</span>', 'modules: forms.js notesHTML');
+  check(f.windTop({ wind: { speed: 5 } }) === 11 && f.windTop({ wind: { speed: 1 } }) === 2.5, 'modules: forms.js windTop');
+  const { captionHTML } = await import('./app/sources.js');
+  const cap = captionHTML({ ...m, blurb: 'B', r: 2, fHalf: 3200, terrain: { max: 10, deepest: -20 }, wind: { prevail: { dir: 90 }, mean: 4 }, buildings: { count: 10, tagged: 5, tallest: 30, over100: 0 } });
+  check(cap.includes('<span>With a mapped height</span><span>50 %</span>') && cap.includes('id="capCredits"') && cap.includes('HYCOM.org'), 'modules: sources.js captionHTML');
 }
 
 // The page in jsdom: no GPU, so renderer.js fails and the fallback shows; the
@@ -435,6 +472,7 @@ for (const c of cities) {
 console.log(`data: ${(total / 1e6).toFixed(1)} MB in the city files checked`);
 windCheck();
 await windowCheck();
+await moduleCheck();
 if (!only.length) await pageCheck();
 console.log(`${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);
