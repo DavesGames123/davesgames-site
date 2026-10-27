@@ -8,6 +8,10 @@
 //  the whole catalog can be run forward or back. Overlays add orbit trails,
 //  city labels, live storms (NOAA), and an analytical wind-flow streamline field.
 //
+//  This file is the composition root: it owns the renderer, scene, camera,
+//  controls, SIM, FILTER and OVERLAY, hands them to the core/ and view/
+//  modules below, runs boot() and the animate() loop, and wires xr.js.
+//
 //  SCENE GRAPH
 //  -----------
 //      scene
@@ -64,10 +68,11 @@
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
 //      shader load .......... "loadShaders"        fetch .glsl before build
-//      constants ............ "// CONSTANTS"       categories, filters, SIM
+//      constants ............ "// CONSTANTS"       PERF_CAP, FILTER, OVERLAY, SIM
 //      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
 //      satellites ........... "initCloud"         page state for view/sat-cloud.js
 //      propagation rate ..... "PROP_HZ"           SGP4 pass rate, XR override
+//      wind layer ........... "initWeather"       page state for view/weather.js
 //      labels ............... "initLabels"        page state for view/labels.js
 //      orbit trails ......... "initTrails"        page state for view/trails.js
 //      filters / overlays ... "initFilters"       wires view/filters.js
@@ -75,6 +80,7 @@
 //      search ............... "initSearch"        wires view/search.js
 //      time control ......... "initTimeControl"   wires view/time-control.js
 //      catalog .............. "initCatalog"       view/catalog.js: groups, demo, storms
+//      intro camera ......... "initIntroCamera"   park the camera for the swing-in
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
 //      xr ................... "function startXR"   VR/AR via xr.js + lib/xr-view.js
@@ -140,10 +146,7 @@ const SIM = {
   playing: true,
 };
 
-// The slider mappings (log scale, fine near NOW) live in core/format.js.
-
 let splashGone = false;
-
 
 // ═══════════════════════════════════════════════════════════════════
 // THREE.JS BASE
@@ -177,7 +180,6 @@ scene.add(earthRoot);
 // The Earth sphere, its placeholder shell, the atmosphere and the stars
 // (view/earth.js). buildEarthMap() runs at boot and drops the shell.
 const fallbackShell = addBackdrop(scene, earthRoot, SH, IS_MOBILE);
-
 
 // ═══════════════════════════════════════════════════════════════════
 // SATELLITES  (point cloud, arrival, pings and SGP4: view/sat-cloud.js)
@@ -273,7 +275,6 @@ buildPointCloud(PERF_CAP);
 buildCityLabels();
 buildSatLabelPool();
 
-
 // Intro camera (view/intro-camera.js): park the camera far out; the reveal
 // swings it in to the default view.
 initIntroCamera(camera, controls);
@@ -293,7 +294,6 @@ function revealScene() {
   stampBirths(0, sats.length, 2.2);
   pingGlobe(0x66e0ff);
 }
-
 
 // Boot sequence: the title card, the Earth map and the catalog start together.
 // The scene is revealed when the title card and the Earth map are both done,
@@ -419,7 +419,6 @@ function animate(now) {
 // Kick off data loading and start the render loop.
 boot();
 animate(performance.now());
-
 
 // ═══════════════════════════════════════════════════════════════════
 // SCREENSAVER  (window.snSaver: view/saver.js)
