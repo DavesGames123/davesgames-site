@@ -50,6 +50,7 @@
 //      view/boot-ui.js ...... splash log, #acq strip, load rows, status, tweens
 //      view/sat-cloud.js .... point cloud buffers, fall-in, pings, SGP4 pass
 //      view/selection.js .... picking, chip, reticle, info panel, fly-to
+//      view/filters.js ...... class filter rows, highlight, overlay boxes, counts
 //      view/earth.js ........ Earth map texture, placeholder, atmosphere, stars
 //      view/labels.js ....... city, station and sat HTML labels (per frame)
 //      view/trails.js ....... orbit loops: the selected object and the stations
@@ -68,7 +69,7 @@
 //      storms ............... "function loadStorms"  NOAA cyclones into the catalog
 //      labels ............... "initLabels"        page state for view/labels.js
 //      orbit trails ......... "initTrails"        page state for view/trails.js
-//      filters / overlays ... "// FILTERS"         checkbox wiring
+//      filters / overlays ... "initFilters"       wires view/filters.js
 //      selection ............ "initSelection"     wires view/selection.js
 //      search ............... "initSearch"        wires view/search.js
 //      time control ......... "initTimeControl"   wires view/time-control.js
@@ -89,17 +90,18 @@ import { stormRecord } from './core/storms.js';
 import { latLonToVec3, ecefToScene, sunDirEcef } from './core/geo.js';
 import { earthUniforms, buildEarthMap, addBackdrop } from './view/earth.js';
 import { installSaver } from './view/saver.js';
+import { initFilters, highlightCat, updateCounts } from './view/filters.js';
 import { initSelection, selectedIdx, chipLocked, setSelection, lockChipTo, unlockChip, flyToSat, flyTo, isFlying,
          updateChipPositionLocked, updateReticle } from './view/selection.js';
 import { CAT_COLOR, initCloud, positions, satMat, satPoints, buildPointCloud, rebuildAttributesFromSats,
          stampBirths, markRevealed, pingGlobe, updatePings, propagateAll } from './view/sat-cloud.js';
-import { fetchStorms, initWeather, loadWeather, updateWindFlow, setWeatherVisible } from './view/weather.js';
+import { fetchStorms, initWeather, loadWeather, updateWindFlow } from './view/weather.js';
 import { initSearch } from './view/search.js';
 import { initTimeControl, applyRate, advanceClock, showTime, btnPlay, btnNow } from './view/time-control.js';
 import { initTrails, maybeRebuildTrail, toggleChipTrail, rebuildStationTrails, maybeRebuildStationTrails } from './view/trails.js';
 import { initLabels, buildCityLabels, updateCityLabels, hideCityLabels, rebuildStationLabels, updateStationLabels,
          buildSatLabelPool, updateSatLabels, clearSatLabels } from './view/labels.js';
-import { REDUCED_MOTION, splash, tweenNumber, retrigger, playIntro, acqCountEl, showStrip, finishAcquisition,
+import { REDUCED_MOTION, splash, playIntro, showStrip, finishAcquisition,
          setStatus, addLoadRow, hasLoadRow, setLoadStatus, stopLoadDot } from './view/boot-ui.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
@@ -123,11 +125,11 @@ const SH = await loadShaders(import.meta.url, [
 const IS_MOBILE    = window.matchMedia('(max-width: 880px)').matches;
 const PERF_CAP     = IS_MOBILE ? 3500 : 12000;
 
-// FILTER toggles which classes are shown; OVERLAY toggles the extra layers;
-// highlightCat dims every other class while one is hovered or locked.
+// FILTER toggles which classes are shown; OVERLAY toggles the extra layers.
+// highlightCat (view/filters.js) dims every other class while one is hovered
+// or locked.
 const FILTER  = { starlink:true, payload:true, station:true, rocket:true, debris:true, storm:true };
 const OVERLAY = { trails:true, cities:true, weather:false, satlabels:true };
-let highlightCat = null;
 
 // Simulation clock. time is the propagation epoch; base is "now" (the slider
 // centre); range is the maximum scrub each way; speed multiplies real time.
@@ -215,7 +217,7 @@ async function loadStorms() {
     }
     rebuildAttributesFromSats();
     stampBirths(first, sats.length, 0.6);
-    updateCounts();
+    updateCounts(sats);
   } catch (e) {
     splash('noaa storms: parse fail', 'err');
   }
@@ -237,62 +239,9 @@ initLabels({
 initTrails({ earthRoot, SIM, OVERLAY, sats: () => sats, selectedIdx: () => selectedIdx });
 
 // ═══════════════════════════════════════════════════════════════════
-// FILTERS + OVERLAYS
+// FILTERS + OVERLAYS  (panel rows and counters: view/filters.js)
 // ═══════════════════════════════════════════════════════════════════
-// Category filter rows: the checkbox toggles visibility; clicking the row locks
-// or unlocks a highlight, and hovering previews it while nothing is locked.
-let lockedHighlight = null;
-document.querySelectorAll('.filter-row[data-cat]').forEach(row => {
-  const cat = row.dataset.cat;
-  const cb = row.querySelector('input[type=checkbox]');
-  cb.addEventListener('change', () => { FILTER[cat] = cb.checked; });
-  cb.addEventListener('click', (e) => e.stopPropagation());
-  row.addEventListener('click', (e) => {
-    if (e.target.matches('input')) return;
-    if (lockedHighlight === cat) {
-      lockedHighlight = null;
-      highlightCat = null;
-    } else {
-      lockedHighlight = cat;
-      highlightCat = cat;
-    }
-    document.querySelectorAll('.filter-row[data-cat]').forEach(r => {
-      r.classList.toggle('locked', r.dataset.cat === lockedHighlight);
-    });
-  });
-  row.addEventListener('pointerenter', () => {
-    if (!lockedHighlight) highlightCat = cat;
-  });
-  row.addEventListener('pointerleave', () => {
-    if (!lockedHighlight) highlightCat = null;
-  });
-});
-// Overlay checkboxes: toggle each optional layer and do any layer-specific
-// cleanup when it is switched off.
-document.querySelectorAll('.filter-row[data-overlay]').forEach(row => {
-  const k = row.dataset.overlay;
-  const cb = row.querySelector('input[type=checkbox]');
-  cb.addEventListener('change', () => {
-    OVERLAY[k] = cb.checked;
-    if (k === 'weather') setWeatherVisible(cb.checked);
-    if (k === 'cities' && !cb.checked) hideCityLabels();
-    if (k === 'trails') maybeRebuildTrail();
-    if (k === 'satlabels' && !cb.checked) clearSatLabels();
-  });
-});
-// Recount objects per category and update the panel counters.
-function updateCounts() {
-  const c = {starlink:0, payload:0, station:0, rocket:0, debris:0, storm:0};
-  for (const s of sats) c[s.cat]++;
-  for (const k of Object.keys(c)) {
-    const el = document.getElementById('cnt-'+k);
-    if (!el) continue;
-    if (el.textContent !== c[k].toLocaleString()) retrigger(el.closest('.filter-row'), 'bump');
-    tweenNumber(el, c[k]);
-  }
-  tweenNumber(document.getElementById('stat-count'), sats.length);
-  tweenNumber(acqCountEl, sats.length);
-}
+initFilters({ FILTER, OVERLAY });
 
 // ═══════════════════════════════════════════════════════════════════
 // PICKING, CHIP, RETICLE, INFO PANEL, FLY-TO  (view/selection.js)
@@ -382,7 +331,7 @@ function mergeGroup(group, parsed, opts = {}) {
     stampBirths(first, sats.length);
     pingGlobe(CAT_COLOR[sats[first].cat]);
   }
-  updateCounts();
+  updateCounts(sats);
   return n;
 }
 
@@ -466,7 +415,7 @@ async function boot() {
     stampBirths(0, sats.length);
   }
   rebuildAttributesFromSats();
-  updateCounts();
+  updateCounts(sats);
   rebuildStationLabels();
   rebuildStationTrails();
   loadStorms();
