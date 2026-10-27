@@ -289,7 +289,7 @@ section('page logic (model.js, render.js)');
   const R = await import('./render.js');
   const L = layout(EVENTS, M.LAYOUT_OPTS), N = L.nodes.length;
   ok(L.band && L.band.label === 'before October' && L.band.count === 74, `ledger band: ${L.band && L.band.label}, ${L.band && L.band.count} events`);
-  ok(L.rings.length === 25 && L.rings[0].label === '2026-10-02', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
+  ok(L.rings.length === 26 && L.rings[0].label === '2026-10-02', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
   ok(L.threads.every(t => M.THREAD_NAMES[t.id]), 'every thread has a display name');
   const C = M.threadColors(L.threads);
   ok(new Set(C.values()).size === L.threads.length, 'thread colours are distinct');

@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended seventeen times by 2026-10-27. Still going on then.
+//  Gathered 2026-10-22, extended eighteen times by 2026-10-27. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -26866,5 +26866,883 @@ export const EVENTS = [
   ],
   "confidence": "reported",
   "note": "Marked reported because the victims have not confirmed the access claims, which come from the operator's own records. VULONE dates the post 19 Oct (byline 18 Oct). It finds no evidence of state sponsorship and says the operation is not proven to be the SOUL campaign that Gambit Security described on 22 Sep, which also used Cairn on DeepSeek v4.1 Flash."
+ },
+ {
+  "id": "php-paloalto-critical-1027",
+  "thread": "php2shell",
+  "parent": "php-paloalto-111-hotfixes",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Palo Alto raises its PHP advisory to Critical; four more PAN-OS hotfixes ship",
+  "summary": "On 27 Oct Palo Alto raises the severity of its PAN-OS PHP advisory to Critical and the urgency to Highest, and marks 12.1.7-h11, 12.2.4-h1, 10.2.13-h27 and 10.2.16-h12 as released. Nine hotfixes are still listed with ETAs from 27 to 30 Oct, 11.2.13-h4 among them for 27 Oct.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-109618",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The advisory timeline gives no reason for the severity change. Earlier press reported a product score of 8.7 (High). Time is the day of the timeline entry only."
+ },
+ {
+  "id": "php-certfr-ale014-attempts",
+  "thread": "php2shell",
+  "parent": "php-certfr-poc-update",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-FR ALE-014 update: exploitation attempts seen; adds CVE-2026-115560",
+  "summary": "CERT-FR says it has seen exploitation attempts against CVE-2026-109618 and CVE-2026-109619 on specific PHP deployments, adds the third flaw CVE-2026-115560 and points to the NCSC-NL product list. A 27 Oct revision clarifies affected products and remediations.",
+  "sources": [
+   {
+    "url": "https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-014/",
+    "publisher": "CERT-FR (ANSSI)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The revision table lists 26 Oct (CVE-2026-115560, NCSC-NL link) and 27 Oct (affected products and remediations clarified); the page does not show what the 27 Oct change was."
+ },
+ {
+  "id": "php-citrix-fixed-builds",
+  "thread": "php2shell",
+  "parent": "php-citrix-netscaler",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Citrix names fixed NetScaler builds for the PHP flaws: 14.1-73.49 and 13.1-64.32",
+  "summary": "Citrix updates CTX697263 on 27 Oct with remediation versions for NetScaler ADC and Gateway: 14.1-73.49, 13.1-64.32, 14.1-73.49 FIPS and 13.1-37.286 FIPS/NDcPP or later. On 22 Oct the advisory had no fixed builds.",
+  "sources": [
+   {
+    "url": "https://support.citrix.com/external/article/CTX697263/",
+    "publisher": "Citrix (Cloud Software Group)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/ThomasPoppelgaard/netscaler-ctx697096-checker/releases/tag/1.18",
+    "publisher": "netscaler-ctx697096-checker (GitHub)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Changelog entry 2026-10-27: 'Updated remediation versions'. The page's Updated On field is blank, so the time is the day only."
+ },
+ {
+  "id": "php-ncscnl-investigation-1027",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-vendor-review",
+  "t": "2026-10-27T10:06:35Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker resolves 15 'Investigation' products; TerraMaster TOS 6 vulnerable",
+  "summary": "The Dutch NCSC merges a check of 15 products against official vendor pages: 11 move to Fix (among them IONOS and OVHcloud web hosting, WordPress.com, FreePBX 17), HumHub and TerraMaster TOS 6 are Vulnerable, and Cisco CPC and Broadcom Content Analysis are Not vulnerable. TerraMaster's fix requires migration to TOS 7.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/51",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Merge time of PR #51. The same day the tracker also merged Ubiquiti UISP CRM (fixed in UISP Application 3.1.70, PR #44), Broadcom SpanVA and CASMA scopes (PR #52) and Cleo Streem (PR #41). The PR says 380 products were still under Investigation before this change."
+ },
+ {
+  "id": "php-ncscnl-115560-guidance",
+  "thread": "php2shell",
+  "parent": "php-cve-2026-115560",
+  "t": "2026-10-27T13:58:55Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker adds CVE-2026-115560 guidance to its PHP2Shell advisory",
+  "summary": "The Dutch NCSC merges a community change that brings the PHP project's 23 Oct informational advisory on CVE-2026-115560 into the tracker's advisory text, then trims the prerequisite detail in follow-up commits.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/35",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Merge time of PR #35; follow-up commits 'tighten' and 'trim CVE-2026-115560 prerequisite detail' landed at 14:03 and 14:06 UTC (PR #53)."
+ },
+ {
+  "id": "php-delft-telemetry",
+  "thread": "php2shell",
+  "parent": "php-cisa-kev-added",
+  "t": "2026-10-27T14:45:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Delft lab counts 50,000+ PHP2Shell requests from 600+ IPs; 171 sent exploit code",
+  "summary": "The Register reports that Delft University's Threat Intelligence Lab tracked more than 50,000 exploitation requests from over 600 IP addresses in 70 countries, of which 171 sent exploit code or malware droppers. CISA still names no compromised organisation.",
+  "sources": [
+   {
+    "url": "https://www.theregister.com/cyber-crime/2026/10/27/cisa-confirms-php2shell-under-attack-as-researchers-clock-successful-exploits/5305681",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The lab's own publication was not found; the figures are from The Register only. Requests and droppers are not successful compromises."
+ },
+ {
+  "id": "node-redhat-brotli-errata",
+  "thread": "nodejs",
+  "parent": "node-redhat-rhsb-015",
+  "t": "2026-10-26T19:45:54Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Red Hat ships Brotli errata for RHEL 10, 9 and 8; Node.js 24 and 26 modules still open",
+  "summary": "Red Hat releases RHSA-2026:90449 (RHEL 10), RHSA-2026:90495 (RHEL 9) and RHSA-2026:90501 (RHEL 8) for the Brotli flaw CVE-2026-111497 between 19:45 and 22:31 UTC on 26 Oct. Its CVE page still lists the RHEL 9 nodejs:24 and nodejs:26 modules as affected.",
+  "sources": [
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/csaf/RHSA-2026:90449.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/csaf/RHSA-2026:90495.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/csaf/RHSA-2026:90501.json",
+    "publisher": "Red Hat",
+    "primary": true
+   },
+   {
+    "url": "https://access.redhat.com/hydra/rest/securitydata/cve/CVE-2026-111497.json",
+    "publisher": "Red Hat",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Times are the CSAF initial_release_date of each advisory (19:45:54, 22:08:33, 22:31:12 UTC); all three were revised at 10:32 UTC on 27 Oct. SUSE Liberty Linux carries the same errata."
+ },
+ {
+  "id": "node-oss-git-remote-https",
+  "thread": "nodejs",
+  "parent": "node-oss-ghostscript-silent",
+  "t": "2026-10-26T08:54:57Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "oss-security: git's HTTPS transport is exposed to the Brotli flaw via libcurl",
+  "summary": "A researcher posts that git-remote-https is also affected by CVE-2026-111497 when libcurl is built with Brotli support, which is usual on distributions. Scans for affected apps should also look for the old libcurl option name CURLOPT_ENCODING.",
+  "sources": [
+   {
+    "url": "https://www.openwall.com/lists/oss-security/2026/10/26/16",
+    "publisher": "oss-security (Openwall)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Post dated 10:54:57 EET. A system libbrotli fix (for example the RHEL, Debian and Ubuntu errata) covers git through libcurl; no git release is involved."
+ },
+ {
+  "id": "label-wikipedia-brotli-section",
+  "thread": "label",
+  "parent": "label-wikipedia-fortinet-cut",
+  "t": "2026-10-27T03:46:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Wikipedia's Black October article gains a Brotli section after a revert and a new source",
+  "summary": "A temporary account adds a Google Brotli section at 02:33 UTC; an editor reverts it at 02:46 because the links do not mention the topic, then restores it at 03:46 after finding a source and adds that source at 03:48.",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&diff=1382184003",
+    "publisher": "Wikipedia",
+    "primary": true
+   },
+   {
+    "url": "https://en.wikipedia.org/w/index.php?title=Black_October_(information_security)&action=history",
+    "publisher": "Wikipedia",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Revisions 1382177201 (add), 1382178475 (revert), 1382184003 (restore), 1382184238 (source). Later on 27 Oct a notability-tag edit was added and reverted (1382262697, 1382264648)."
+ },
+ {
+  "id": "label-dailydot",
+  "thread": "label",
+  "parent": "label-gnt-octobre-noir",
+  "t": "2026-10-27T10:08:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Daily Dot: 'Black October' sparks a debate on whether AI is making attacks harder to stop",
+  "summary": "The Daily Dot says tech workers on forums named the run of flaws and breaches 'Black October', citing PHP2Shell, GitLab and AOMEI. It notes the incidents differ in nature and scale and that a disclosed flaw is not an attack.",
+  "sources": [
+   {
+    "url": "https://dailydot.com/is-ai-making-cyberattacks-harder-to-stop-black-october-sparks-a-debate-about-threat-to-humanity-and-digital-security",
+    "publisher": "The Daily Dot",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Published 5:08 AM CDT on 27 Oct. Sources are Reddit and forum users; no organisation is quoted."
+ },
+ {
+  "id": "onamae-eighth-report",
+  "thread": "onamae",
+  "parent": "onamae-seventh-report",
+  "t": "2026-10-27T00:58:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO eighth report: no pay; back up, then unplug your PCs before the noon deadline",
+  "summary": "Two hours before the attackers' noon deadline, GMO says it will not meet their demand and asks customers to scan, back up, then disconnect and power off their PCs. It says security and AI firms, Trend Micro among them, have offered help.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/254/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/20261027/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Published 9:58 JST, partly corrected at 10:56 JST (the unplug step)."
+ },
+ {
+  "id": "onamae-ninth-report",
+  "thread": "onamae",
+  "parent": "onamae-eighth-report",
+  "t": "2026-10-27T02:59:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO ninth report at 11:59 JST: no malware found yet on the collected customer PCs",
+  "summary": "GMO says its white-hat team has found no malware, ransomware included, on the customer PCs analysed so far, though this does not clear every device. It offers a replacement PC of the same class to any customer hit by ransomware.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/255/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/2026102702/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/0283cbd8ebb5bf1d2323257f562205aa11d7df65",
+    "publisher": "ITmedia NEWS (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-leak-published",
+  "thread": "onamae",
+  "parent": "onamae-ninth-report",
+  "t": "2026-10-27T03:30:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "At the deadline the attackers post one person's data and promise more every day at noon",
+  "summary": "After the noon deadline the attackers post what they call one GMO customer's personal data on a Japanese-language site and say they will publish more daily at noon unless GMO gives in. GMO confirms the post at 12:30 JST; its truth is not verified.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/256/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://news.infoseek.co.jp/article/yomiuri_20261027_gyt1t00211",
+    "publisher": "Yomiuri Shimbun (Infoseek)",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC2748H0X21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "GMO's tenth report (13:55 JST) states the 12:30 confirmation and warns that the attackers collect data from visitors to the site. Nikkei says the post holds one person's name, birth date, address, phone and browsing habits; Yomiuri says name and phone."
+ },
+ {
+  "id": "onamae-tenth-report",
+  "thread": "onamae",
+  "parent": "onamae-leak-published",
+  "t": "2026-10-27T04:55:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO tenth report: no ransomware seen by 13:55 JST; legal steps against spreaders",
+  "summary": "GMO says it has not seen the threatened ransomware attack, asks people not to open or share the leak site, and prepares evidence preservation, disclosure requests and criminal complaints against malicious spreaders. It starts to discuss an extra payment for customers whose data is posted.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/256/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/2026102703/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.itmedia.co.jp/news/article/2610/27/2000002640/",
+    "publisher": "ITmedia NEWS",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The eleventh report (14:55 JST, internet.gmo/news/article/257/) repeats the do-not-share request and the no-payment policy."
+ },
+ {
+  "id": "onamae-shares-1027",
+  "thread": "onamae",
+  "parent": "onamae-shares-close-1026",
+  "t": "2026-10-27T04:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "GMO Internet Group shares turn lower in the afternoon after the attackers' post",
+  "summary": "After a steadier morning following the 16% fall of 26 October, GMO Internet Group shares turn lower in the afternoon session on reports that the attackers posted one person's data.",
+  "sources": [
+   {
+    "url": "https://kabutan.jp/news/marketnews/?b=n202610270669",
+    "publisher": "Kabutan",
+    "primary": false
+   },
+   {
+    "url": "https://finance.yahoo.co.jp/quote/9449.T",
+    "publisher": "Yahoo! Finance Japan",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Kabutan headline only (page refused the fetch). Yahoo! Finance showed 3,159 yen, down 20 yen (0.63%), with a low of 3,040 yen; the close figure was not checked against TSE data."
+ },
+ {
+  "id": "onamae-kihara-condemns",
+  "thread": "onamae",
+  "parent": "onamae-leak-published",
+  "t": "2026-10-27T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Chief Cabinet Secretary: posting GMO customers' data is cowardly; five FX firms hit",
+  "summary": "At his afternoon briefing Chief Cabinet Secretary Kihara calls the data post a cowardly act that cannot be allowed, asks the public not to spread it, and says unauthorised trades hit customers of five FX firms. He repeats that an emergency package is due next week.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/48ec5785df5c8d274019e63c0324ae1ad3c33b62",
+    "publisher": "TV Asahi / ANN (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUA277Y00X21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.infoseek.co.jp/article/jiji_2026102701038/",
+    "publisher": "Jiji Press (Infoseek)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The briefing started shortly after 16:00 JST. The Kantei record page for the 27 Oct afternoon briefing has video only, no transcript.",
+  "related": [
+   "jpalert-cabinet-meeting"
+  ]
+ },
+ {
+  "id": "onamae-special-payment",
+  "thread": "onamae",
+  "parent": "onamae-tenth-report",
+  "t": "2026-10-27T10:10:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "GMO twelfth report: up to 3 million yen to each customer whose data is posted",
+  "summary": "GMO sets a special payment for customers whose data the attackers post: 10,000 yen for basic data, 15,000 for financial or login data and 25,000 for sensitive data, added up to 3 million yen. It is on top of the 5,000-yen payment to every user.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/258/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/2026102705/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.kumagai.com/?eid=19600",
+    "publisher": "GMO Internet Group chief executive (blog)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Published 19:10 JST. GMO says it may revise the amounts if the scope or method of publication changes."
+ },
+ {
+  "id": "onamae-bounty",
+  "thread": "onamae",
+  "parent": "onamae-special-payment",
+  "t": "2026-10-27T10:10:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO offers a US$1 million cybercrime bounty for information that leads to the attackers",
+  "summary": "GMO opens a bounty of up to US$1 million in total (about 150 million yen) for verifiable information on the attackers' identity, infrastructure, money flows or messages, from 12:00 JST on 28 October until an arrest. Tipsters must not hack, contact or pay the attackers.",
+  "sources": [
+   {
+    "url": "https://internet.gmo/news/article/258/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://group.gmo/info/alert/2026102705/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The cap covers the whole programme, not each tip. Accepted in Japanese, English and Chinese."
+ },
+ {
+  "id": "onamae-mpd-probe",
+  "thread": "onamae",
+  "parent": "onamae-leak-published",
+  "t": "2026-10-27T13:00:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Tokyo police investigate the GMO intrusion under the Unauthorized Computer Access Act",
+  "summary": "Investigative sources say the Metropolitan Police Department is investigating the attack on GMO's FX hosting service as a possible breach of the Unauthorized Computer Access Act and other laws, and is hearing GMO staff and customers on the damage.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUD27BK30X21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/1352c9be4583cddc57771886c729e5b5987bad8e",
+    "publisher": "Kyodo News (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://topics.smt.docomo.ne.jp/article/mainichi/nation/mainichi-20261027k0000m040313000c",
+    "publisher": "Mainichi Shimbun (d menu news)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Nikkei headline time 22:27 JST. No police statement; based on investigative sources."
+ },
+ {
+  "id": "bm-update-1027",
+  "thread": "blastmail",
+  "parent": "bm-345-contracts",
+  "t": "2026-10-27T03:30:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Blastmail 27 Oct update: still 345 contracts leaked, no restart date; next report 28 Oct",
+  "summary": "Rakus Light Cloud reports no new leaks since 26 October; all 345 contracts with more than contract data leaked have been told. Admin screens, API and mail delivery stay down since 21 October with no restart date.",
+  "sources": [
+   {
+    "url": "https://info.blastmail.jp/information_20261021.html",
+    "publisher": "Rakus Light Cloud",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Stamped 12:30 JST on 27 Oct. Next report set for about 12:00 JST on 28 Oct."
+ },
+ {
+  "id": "bm-daihatsu",
+  "thread": "blastmail",
+  "parent": "bm-344-contracts",
+  "t": "2026-10-27T08:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Daihatsu: press-site users' names, firms, titles and emails may have leaked via Blastmail",
+  "summary": "Daihatsu Motor says data registered on its Daihatsu Media Site for journalists, such as names, company names, job titles and emails, may have leaked through the Blastmail intrusion. The site is down with no return date; the count is under investigation.",
+  "sources": [
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUF277DU0X21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   },
+   {
+    "url": "https://response.jp/article/2026/10/27/418277.html",
+    "publisher": "Response",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Nikkei published at 17:21 JST. Daihatsu's own notice was not opened."
+ },
+ {
+  "id": "cuenote-cybozu-vc",
+  "thread": "cuenote",
+  "parent": "cuenote-42-more",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Cybozu and ValueCommerce: Ymirlink now says their Cuenote FC lists were exported",
+  "summary": "Cybozu says Ymirlink told it at 13:15 JST on 26 Oct that its environment was hit after all, reversing a 20 Oct all-clear; notice-mail addresses may have leaked. ValueCommerce says its address book was exported on 16 Oct.",
+  "sources": [
+   {
+    "url": "https://topics.cybozu.co.jp/news/2026/10/26-19556.html",
+    "publisher": "Cybozu",
+    "primary": true
+   },
+   {
+    "url": "https://www.valuecommerce.co.jp/news/c_news/6819/",
+    "publisher": "ValueCommerce",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151621.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Neither firm gives a count. Cybozu says kintone, Garoon, Cybozu Office and Mailwise are not affected. Mainichi Shimbun posted a similar notice the same day (not opened)."
+ },
+ {
+  "id": "cuenote-resona",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-27T04:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Resona, Saitama Resona and Kansai Mirai banks: customer data may have leaked via Cuenote",
+  "summary": "Resona Group says customer data of its three banks held in an outsourced mail-delivery system, Ymirlink's Cuenote FC, may have leaked. Ymirlink first told the banks on 19 October; counts are under investigation.",
+  "sources": [
+   {
+    "url": "https://news.livedoor.com/topics/detail/32667471/",
+    "publisher": "MBS News (livedoor)",
+    "primary": false
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151621.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   },
+   {
+    "url": "https://www.resona-gr.co.jp/holdings/news/newsrelease_c/2026/files/20261027_1t.pdf",
+    "publisher": "Resona Holdings",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Resona PDF refused the fetch (HTTP 403), so this rests on press reports. livedoor posted at 13:27 JST."
+ },
+ {
+  "id": "cuenote-impress",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Impress stops all Cuenote newsletters; subscriber emails and some names may have leaked",
+  "summary": "Publisher Impress says Ymirlink told it its Cuenote environment may be affected; email addresses and, for some readers, names and company names may have leaked. It has stopped every newsletter sent through the system.",
+  "sources": [
+   {
+    "url": "https://www.impress.co.jp/newsrelease/2026/10/info20261027.html",
+    "publisher": "Impress",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151621.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "No count given. Impress says the system held no card numbers, bank accounts or passwords."
+ },
+ {
+  "id": "artex-mirae-services-halt",
+  "thread": "artex",
+  "parent": "artex-mirae-life",
+  "t": "2026-10-27T05:00:00Z",
+  "tPrecision": "hour",
+  "kind": "mitigation",
+  "title": "Mirae Asset Life halts M-LIFE, online sales and digital ARS after its hack",
+  "summary": "Mirae Asset Life posts a notice that its M-LIFE PC and mobile services, online insurance sales and digital ARS are stopped until further measures. Whether health data from the hit subscription system leaked is still unknown.",
+  "sources": [
+   {
+    "url": "https://www.insightkorea.co.kr/news/articleView.html?idxno=257389",
+    "publisher": "Insight Korea",
+    "primary": false
+   },
+   {
+    "url": "https://www.etoday.co.kr/news/view/2640648",
+    "publisher": "eToday",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Insight Korea published at 14:27 KST on 27 Oct and says the notice went up that day; the notice itself was not opened. The Financial Security Institute is checking for a link to the bank attacks; none is confirmed."
+ },
+ {
+  "id": "sonet-access",
+  "thread": "sonet",
+  "parent": null,
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Outside attacker accesses the So-net ISP member database",
+  "summary": "Sony Network Communications later says its So-net member database was accessed from outside on Monday 19 October.",
+  "sources": [
+   {
+    "url": "https://www.sonynetwork.co.jp/corporation/release/2026/v5e5u00000000zwj-att/20261027.pdf",
+    "publisher": "Sony Network Communications",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: part of the Japanese breach-notice wave the ledger tracks (So-net reported it to the PPC). The cause is \"under investigation\"; no flaw named, and no tie to PHP2Shell is stated."
+ },
+ {
+  "id": "sonet-detect",
+  "thread": "sonet",
+  "parent": "sonet-access",
+  "t": "2026-10-23T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "So-net finds the intrusion, stops the server and blocks the source",
+  "summary": "So-net confirms the access on 23 October, stops the affected server and cuts traffic from the source. On 24 October it confirms personal data leaked and fixes the items and counts.",
+  "sources": [
+   {
+    "url": "https://www.sonynetwork.co.jp/corporation/release/2026/v5e5u00000000zwj-att/20261027.pdf",
+    "publisher": "Sony Network Communications",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "sonet-notice",
+  "thread": "sonet",
+  "parent": "sonet-detect",
+  "t": "2026-10-27T07:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "So-net: 2.14 million member and 443,000 plala S records leaked; 54,401 mail passwords",
+  "summary": "So-net says names, phones, emails, user IDs, birth dates, gender and connection IDs of 2,141,986 So-net and 443,495 plala S-course members leaked, plus 54,401 mail addresses with passwords and 16 bank accounts. It reset the mail passwords on 27 October.",
+  "sources": [
+   {
+    "url": "https://www.sonynetwork.co.jp/corporation/release/2026/v5e5u00000000zwj-att/20261027.pdf",
+    "publisher": "Sony Network Communications",
+    "primary": true
+   },
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2151585.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Release dated 27 Oct with no time; INTERNET Watch published at 16:51 JST. No card data; NURO not affected. Former members who left before March 2026 are not affected."
+ },
+ {
+  "id": "emu-chrome-paranoid-answer",
+  "thread": "emudhra",
+  "parent": "emu-chrome-paranoid-question",
+  "t": "2026-10-27T15:16:59Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Chrome: its weak-key pipeline scanned only CT, so the dormant eMudhra CAs never entered it",
+  "summary": "The Chrome Root Program says Google's paranoid_crypto pipeline read only CT-logged certificates, and standard linters lacked the small-scalar EC checks. It now scans CCADB-disclosed CA certificates too and asks for weak-key gating in CCADB (CCADB-Tools issue 185).",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c50",
+    "publisher": "Mozilla Bugzilla (Chrome Root Program)",
+    "primary": true
+   },
+   {
+    "url": "https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE",
+    "publisher": "dev-security-policy (Chrome Root Program)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/mozilla/CCADB-Tools/issues/185",
+    "publisher": "mozilla/CCADB-Tools on GitHub",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Chrome Root Program posted a short summary to dev-security-policy at 09:44 PDT (16:44 UTC). CCADB-Tools issue 185 was opened on 21 Oct. Chrome says the repository status of paranoid_crypto is for another Google team."
+ },
+ {
+  "id": "emu-chrome-fourth-app-denied",
+  "thread": "emudhra",
+  "parent": "emu-chrome-remaining-review",
+  "t": "2026-10-27T15:16:59Z",
+  "tPrecision": "minute",
+  "kind": "ca-action",
+  "title": "Chrome denies eMudhra's fourth new-root application; three earlier ones failed screening",
+  "summary": "Chrome says eMudhra's current roots came in with the 2022 baseline without a full inclusion review. Since then eMudhra filed four new-root applications: three failed screening, and the fourth, pending at the breach, is now denied.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c50",
+    "publisher": "Mozilla Bugzilla (Chrome Root Program)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The failed screenings put eMudhra on a six-month cool-down. Chrome gives no date for the denial."
+ },
+ {
+  "id": "emu-msrc-oob-roots",
+  "thread": "emudhra",
+  "parent": "emu-microsoft-block",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "ca-action",
+  "title": "Microsoft removes seven eMudhra-linked roots from Windows in an out-of-band update",
+  "summary": "MSRC says an out-of-band Windows update on 26 Oct removes seven certificates: eMudhra G3 roots and one AAA Certificate Services cross-sign. It plans the same removal in Edge on 27 Oct and reviews eMudhra's other roots separately.",
+  "sources": [
+   {
+    "url": "https://www.microsoft.com/msrc/blog/2026/10/microsoft-response-to-compromised-emudhra-certificate-authority-keys",
+    "publisher": "Microsoft Security Response Center",
+    "primary": true
+   },
+   {
+    "url": "https://support.microsoft.com/en-gb/servicing/os/windows-11/2026/10/kb5134133-windows-11-24h2-25h2-26h2-update",
+    "publisher": "Microsoft Support",
+    "primary": true
+   },
+   {
+    "url": "https://petri.com/microsoft-windows-certificate-update/",
+    "publisher": "Petri",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "KB5134133 (released 26 Oct) carries a new trusted-root payload for devices without automatic CTL updates. The MSRC post says the Disallowed CTL block came on 20 Oct. The Edge removal on 27 Oct was a plan when published; it was not checked."
+ },
+ {
+  "id": "emu-ms-crl-ua-bug",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-27T17:05:51Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Microsoft PKI opens its own bug: www.microsoft.com refuses Wget CRL downloads",
+  "summary": "Microsoft PKI Services reports that anti-DDoS filtering on www.microsoft.com gives 403 to Wget and bare 'Mozilla/5.0' User-Agents on CRL downloads. It is the same fault class first filed against eMudhra on 25 Oct.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086195",
+    "publisher": "Mozilla Bugzilla (Microsoft PKI Services)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: the User-Agent checks began with eMudhra bug 2085612. A community comment on the bug lists 30 Microsoft CA certificates whose CRLs are on www.microsoft.com and says the questions came from a restricted bug 2085682."
+ },
+ {
+  "id": "emu-pkimetal-paranoid",
+  "thread": "emudhra",
+  "parent": "emu-mdsp-paranoid-archived",
+  "t": "2026-10-26T17:11:40Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "pkimetal merges a paranoid_crypto linter, on by default for CA certificates",
+  "summary": "The pkimetal certificate linter adds Google's paranoid_crypto as a backend for certificates, CRLs and OCSP responses. Because it is about 50 times slower, it runs by default only on CA certificate profiles.",
+  "sources": [
+   {
+    "url": "https://github.com/pkimetal/pkimetal/pull/2099",
+    "publisher": "pkimetal on GitHub",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Chrome Root Program names this change in its 27 Oct reply as a community tool that is adding the missing checks."
+ },
+ {
+  "id": "cairn-panel-takeover",
+  "thread": "cairn",
+  "parent": "cairn-norforge-report",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "NorForge: automated campaigns now hijack exposed Cairn panels to turn their agents",
+  "summary": "NorForge reports that since 20 Oct at least 17 exposed Cairn panels, some of them owned by researchers and CTF teams, got injected tasks. The tasks make the agents plant SSH keys and take secrets such as model API keys.",
+  "sources": [
+   {
+    "url": "https://norforge.com/blog/automated-subversion-attempted-takeover",
+    "publisher": "NorForge",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "NorForge sees reconnaissance from 10 Oct and names two suspected clusters, AIA0009 and AIA0010; it says AIA0009 deployed Poseidon malware."
+ },
+ {
+  "id": "firstvds-isp-postmortem",
+  "thread": "firstvds",
+  "parent": "firstvds-isp-stabilised",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "ISPsystem post-mortem: AI-tool attack on several dozen VMmanager 6 hosts via a zero-day",
+  "summary": "ISPsystem says a coordinated attack hit several dozen hosting providers through an unknown flaw in an internal service, first traced on 12 Oct. It says the attacker used AI-based tools and takes responsibility for a web-server setting.",
+  "sources": [
+   {
+    "url": "https://www.ispsystem.ru/news/post-mortem",
+    "publisher": "ISPsystem",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Link to the wave: the vendor names AI-based attack tools. Timeline per ISPsystem (MSK): first provider report 14 Oct 00:40, actual flaw found 19 Oct 16:00, fix 21:00. It cannot confirm or rule out data theft. Its evidence for AI use is script patterns and speed; this is the vendor's claim."
+ },
+ {
+  "id": "firstvds-postmortem",
+  "thread": "firstvds",
+  "parent": "firstvds-panels-closed",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "FirstVDS post-mortem: stealer archives on 457 nodes, 117 GiB; public panel access ends",
+  "summary": "FirstVDS finds encrypted collection archives on 457 virtualization nodes, 117.24 GiB in total, holding files copied from customer VM disks. Direct customer access to VMmanager will not come back; compensation terms follow.",
+  "sources": [
+   {
+    "url": "https://firstvds.ru/blog/postmortem-ataka-na-firstvds-17102026",
+    "publisher": "FirstVDS",
+    "primary": true
+   },
+   {
+    "url": "https://t.me/TakeFirstNews/1469",
+    "publisher": "FirstVDS on Telegram",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The archives are encrypted with the attacker's key, so FirstVDS cannot list the copied files. A panel database copy found on one server held account data, but FirstVDS says no customer personal data. Its report does not mention AI."
+ },
+ {
+  "id": "node-certin-ciad0055",
+  "thread": "nodejs",
+  "parent": "node-brotli-cve",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-In CIAD-2026-0055 rates the Brotli decoder flaw critical across runtimes",
+  "summary": "India's CERT-In issues an advisory on CVE-2026-111497, listing Brotli, Node.js, Bun, .NET, Envoy, Istio, the Python Brotli packages and PHP as affected. It tells users to apply the vendor updates.",
+  "sources": [
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&VLCODE=CIAD-2026-0055",
+    "publisher": "CERT-In",
+    "primary": true
+   },
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&year=2026",
+    "publisher": "CERT-In",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
  }
 ];

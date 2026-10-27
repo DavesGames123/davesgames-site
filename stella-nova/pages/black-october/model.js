@@ -173,6 +173,7 @@ export const THREAD_NAMES = Object.freeze({
   doutor: "Doutor Coffee staff data",
   'daiwa-scala': "Daiwa Securities / Scala inquiry system",
   resorttrust: "Resorttrust website",
+  sonet: "So-net member database",
   label: "The 'Black October' label",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
