@@ -296,6 +296,27 @@ section('Coastlines: file format, line runs, culling, level of detail');
 
 // ── GPU solver (Deno) ────────────────────────────────────────────────────
 let gpuNote = '';
+// ── globe labels (labels.js) ─────────────────────────────────────────────
+section('globe labels: inside the clear area, apart, capped, by priority');
+{
+  const { pickLabels, labelPri } = await import('./labels.js');
+  const clear = { l: 0, r: 390, t: 120, b: 640 };   // a phone, under the legend and card
+  const c = (id, x, y, pri, sel = false, w = 80, h = 18) => ({ id, x, y, w, h, pri, sel });
+  check('a label under the top strip is culled', !pickLabels([c('a', 200, 100, 3)], clear).has('a'));
+  check('a label over the bottom bars is culled', !pickLabels([c('a', 200, 630, 3)], clear).has('a'));
+  check('a label cut by the side is culled', !pickLabels([c('a', 20, 300, 3)], clear).has('a'));
+  const two = pickLabels([c('ev', 200, 300, labelPri('event')), c('st', 210, 305, labelPri('storm', 120))], clear);
+  check('of two touching labels the storm wins', two.has('st') && !two.has('ev'), [...two].join());
+  const sel = pickLabels([c('st', 200, 300, 4), c('ev', 210, 305, 0.5, true)], clear);
+  check('the selected label shows over a stronger one', sel.has('ev'), [...sel].join());
+  const many = Array.from({ length: 18 }, (_, i) => c('e' + i, 60 + (i % 3) * 130, 140 + Math.floor(i / 3) * 80, 0.5));
+  check('the phone cap holds', pickLabels(many, clear, { max: 6 }).size === 6);
+  const all = pickLabels(many, clear, { max: 99, pad: 4 });
+  const bx = [...all].map(id => many.find(m => m.id === id)).map(m => ({ l: m.x - 40, r: m.x + 40, t: m.y, b: m.y + 18 }));
+  check('no two shown boxes overlap', bx.every((a, i) => bx.every((b, j) => i === j || a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t)));
+  check('a stronger storm outranks a weaker one', labelPri('storm', 140) > labelPri('storm', 40) && labelPri('storm', 0) > labelPri('low'));
+}
+
 if (typeof navigator !== 'undefined' && navigator.gpu) {
   const { runSolverTests } = await import('./tests-solver.mjs');
   await runSolverTests({ section, check, near });

@@ -37,6 +37,7 @@
 //    card ............. "function showCard"
 //    flights, tour .... "function flyTo", "function tourTick"
 //    framing .......... "function occlusion", "function clearArea", "function frameAltFor"
+//    globe labels ..... "function placeLabels" (which show: labels.js pickLabels)
 //    coastlines ....... "async function loadCoast"
 //    particle speed ... "WIND_VIS"
 //    input ............ "function bindPointer"
@@ -44,6 +45,7 @@
 //    debug API ........ "window.__stormGlobe"
 // ============================================================================
 import { loadSnapshot, fetchLiveStorms, fetchLiveEvents, fetchLiveWinds, snapshotAgeH, STALE_H } from './data.js';
+import { pickLabels, labelPri } from './labels.js';
 import { mergeStorms, dedupeEvents, eventScore, stormKind, category, KT, EONET_CATS } from './sources.js';
 import { createSolver } from './solver.js';
 import { createRenderer } from './render.js';
@@ -560,7 +562,10 @@ function placeLabels(b) {
   const host = $('labels');
   if (!ST.layers.labels || ST.saver) { host.style.display = 'none'; return; }
   host.style.display = '';
-  const W = canvas.clientWidth, Hh = canvas.clientHeight, seen = new Set();
+  const W = canvas.clientWidth, Hh = canvas.clientHeight, seen = new Set(), cands = [];
+  // a phone shows fewer, shorter labels (labels.js keeps them apart and
+  // inside the clear area, so none sits under the legend, card or bars)
+  const phone = PHONE_Q.matches, cut = phone ? 20 : 34;
   const want = ST.stops.filter(o => o.kind !== 'event' || ST.layers.events).slice(0, 18);
   for (const o of want) {
     const p = stopPos(o);
@@ -573,19 +578,28 @@ function placeLabels(b) {
       el.onclick = () => { stopTour(); select(o.id, true); };
       host.appendChild(el); labelEls.set(o.id, el);
     }
-    const txt = o.kind === 'storm' ? `<b>${o.s.name}</b><i>${catLabel(p.st.vmax)} ${Math.round(p.st.vmax)} kt</i>` : o.kind === 'low' ? `<b>L</b> <i>${Math.round(o.l.hpa)} hPa</i>` : o.kind === 'jet' ? `<i>${Math.round(o.l.wind)} m/s</i>` : `${o.e.title.length > 34 ? o.e.title.slice(0, 32) + '…' : o.e.title}`;
-    if (el._t !== txt) { el.innerHTML = txt; el._t = txt; }
+    const txt = o.kind === 'storm' ? `<b>${o.s.name}</b><i>${catLabel(p.st.vmax)} ${Math.round(p.st.vmax)} kt</i>` : o.kind === 'low' ? `<b>L</b> <i>${Math.round(o.l.hpa)} hPa</i>` : o.kind === 'jet' ? `<i>${Math.round(o.l.wind)} m/s</i>` : `${o.e.title.length > cut ? o.e.title.slice(0, cut - 2) + '…' : o.e.title}`;
+    // measure once per text: offsetWidth forces a layout
+    if (el._t !== txt) { el.innerHTML = txt; el._t = txt; el.style.display = ''; el._w = el.offsetWidth; el._h = el.offsetHeight; }
     el.classList.toggle('sel', o.id === ST.sel);
-    el.style.transform = `translate(${((q.x + 1) / 2 * W).toFixed(1)}px, ${((1 - q.y) / 2 * Hh + 12).toFixed(1)}px) translate(-50%, 0)`;
+    const x = (q.x + 1) / 2 * W, y = (1 - q.y) / 2 * Hh + 12;
+    el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, 0)`;
+    cands.push({ id: o.id, x, y, w: el._w || 60, h: el._h || 18, pri: labelPri(o.kind, o.kind === 'storm' ? p.st.vmax : 0), sel: o.id === ST.sel });
     seen.add(o.id);
   }
-  for (const [id, el] of labelEls) if (!seen.has(id)) { el.remove(); labelEls.delete(id); }
+  const show = pickLabels(cands, occlusion(), { max: phone ? 6 : 14, pad: phone ? 6 : 4 });
+  for (const [id, el] of labelEls) {
+    if (!seen.has(id)) { el.remove(); labelEls.delete(id); continue; }
+    const on = show.has(id);
+    if (on !== (el.style.display !== 'none')) el.style.display = on ? '' : 'none';
+  }
 }
 
 // ── input ────────────────────────────────────────────────────────────────
 const drag = { on: false, x: 0, y: 0, vx: 0, vy: 0, pts: new Map(), pinch: 0, moved: 0, mode: 'turn' };
 function userMoved() {
   userTouched = true; ST.fly = null;
+  if (PHONE_Q.matches) $('card').classList.add('fold');
   if (ST.tour.on) stopTour();
 }
 function turnBy(dx, dy) {
@@ -662,6 +676,9 @@ function setOpen(grp) {
   else { p.classList.add('open'); p.dataset.grp = grp; }
   for (const g of p.querySelectorAll('.grp')) g.classList.toggle('show', g.dataset.grp === p.dataset.grp);
   for (const t of document.querySelectorAll('#dock .tab[data-grp]')) t.classList.toggle('on', t.dataset.grp === p.dataset.grp);
+  // the sheet takes the lower half: the legend and the card leave the top
+  // half to the globe until it closes
+  document.documentElement.classList.toggle('sheet-open', !!p.dataset.grp);
 }
 function buildUI() {
   buildList();
