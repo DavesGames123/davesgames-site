@@ -311,6 +311,19 @@ for (const frameName of ['16:9', '9:16']) {
   ok(calls.flyTo.length === n && n <= 2, `stop: no flights after stop (${n})`);
 }
 
+// stop while a cut waits for its tiles: no contrast and no flight after stop
+{
+  const clock = makeClock();
+  const { calls, director } = fakePage(clock);
+  director.start();
+  for (let t = 0; t < 20000 && director.debug().phase !== 'load'; t += 20) await clock.run(t);
+  const phase = director.debug().phase;
+  director.stop();
+  const nC = calls.contrast.length, nF = calls.flyTo.length;
+  await clock.run(clock.now() + 60000);
+  ok(phase === 'load' && calls.contrast.length === nC && calls.flyTo.length === nF, `stop in a cut: no contrast or flight after stop (phase ${phase}, contrast +${calls.contrast.length - nC}, flights +${calls.flyTo.length - nF})`);
+}
+
 // ── 5 the real page in jsdom: CORE, VIEW and CATALOG, a synthetic volume ──
 // jsdom from NODE_PATH or JSDOM_DIR, the fake WebGL2 of pages/coral-reef.
 // The saver plays in real time for a few shots at 16:9 and at 9:16.
@@ -496,6 +509,23 @@ for (const frameName of ['16:9', '9:16']) {
   // enter twice is safe
   await S.enter({ seed: 9 }); await S.enter({ seed: 10 }); S.exit();
   ok(!cls.has('sn-saver') && !els.length, 'hook: enter twice, one exit cleans up');
+  // exit while enter waits for CORE: enter must not start after the exit
+  {
+    let go; globalThis.__em.ready = new Promise((r) => { go = r; });
+    const p = S.enter({ seed: 3 });
+    S.exit();
+    go(true);
+    const res2 = await p;
+    ok(!res2 && !cls.has('sn-saver') && !els.length && S.debug() === null, `hook: exit during the wait for CORE stops enter (class ${cls.has('sn-saver')}, ${els.length} elements)`);
+    // two enter calls in one wait: one exit leaves no veil or style
+    globalThis.__em.ready = new Promise((r) => { go = r; });
+    const a = S.enter({ seed: 4 }), b = S.enter({ seed: 5 });
+    go(true);
+    await Promise.all([a, b]);
+    S.exit();
+    ok(!cls.has('sn-saver') && !els.length, `hook: two enter calls in one wait, one exit cleans up (${els.length} elements)`);
+    globalThis.__em.ready = Promise.resolve(true);
+  }
 }
 
 console.log(`${pass} passed, ${fail} failed`);

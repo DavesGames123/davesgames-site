@@ -606,8 +606,14 @@ else {
   P.win.removeEventListener('keydown', spy);
   ok(vw.calls.filter((c) => c[0] === 'goTo').length === goTos && vw.calls.filter((c) => c[0] === 'setPlane').length === planes, 'the keys n and 2 do not move the hidden slice view');
   ok(reached === 0, `the keys do not reach the slice view's window listener (${reached})`);
+  const semCanvas0 = P.$('semView');
   P.key('Escape');
   ok(!sem.isOpen() && !P.doc.documentElement.classList.contains('em-sem'), 'Escape goes back to the slice explorer');
+  // dispose() lets the WebGL2 context go: the next open needs a new canvas
+  ok(P.$('semView') && P.$('semView') !== semCanvas0 && !semCanvas0.isConnected, 'close puts a new #semView in place of the canvas whose context is gone');
+  const again = await sem.open('puffball');
+  ok(again === true && sem.isOpen() && P.$('semMsg').textContent === '', `the mode opens again on the new canvas (${P.$('semMsg').textContent})`);
+  P.key('Escape');
   vw.goTo({ x: 11, y: 21, z: 31, zoom: 0.5 });
   await sleep(600);
   ok(/d=alpha&/.test(P.win.location.hash), `after close the slice view writes the hash again (${P.win.location.hash})`);

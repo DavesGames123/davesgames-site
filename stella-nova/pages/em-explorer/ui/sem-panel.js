@@ -21,7 +21,8 @@
 //  for tests and the saver.
 //
 //  grep -n targets: "export function mountSemMode", "async function open",
-//                   "function close", "async function show", "function build"
+//                   "function close", "function freeViewer",
+//                   "async function show", "function build"
 // ============================================================================
 
 const BASE = new URL('../sem/', import.meta.url);
@@ -253,6 +254,21 @@ export function mountSemMode({ doc = document, win = window } = {}) {
 
   function onResize() { if (S.viewer && S.open) S.viewer.resize(); }
 
+  // dispose() lets the WebGL2 context go (loseContext), and a canvas keeps
+  // its first context: put a new canvas with the same attributes in place
+  function freeViewer() {
+    if (!S.viewer) return;
+    try { S.viewer.dispose(); } catch (e) { /* gone */ }
+    S.viewer = null;
+    win.removeEventListener('resize', onResize);
+    const old = S.ui && S.ui.canvas;
+    if (old && old.parentNode) {
+      const c = old.cloneNode(false);
+      old.parentNode.replaceChild(c, old);
+      S.ui.canvas = c;
+    }
+  }
+
   function close() {
     if (!S.open) return;
     S.open = false;
@@ -261,7 +277,7 @@ export function mountSemMode({ doc = document, win = window } = {}) {
     if (S.layer) S.layer.hidden = true;
     setPressed(false);
     // free the GPU: the slice view is the page's main work
-    if (S.viewer) { try { S.viewer.dispose(); } catch (e) { /* gone */ } S.viewer = null; win.removeEventListener('resize', onResize); }
+    freeViewer();
     try { win.history.replaceState(null, '', S.savedHash && !hashId(S.savedHash) ? S.savedHash : String(win.location.href).split('#')[0]); } catch (e) { /* sandboxed */ }
     try { const v = byId('view'); if (v) v.focus({ preventScroll: true }); } catch (e) { /* old browser */ }
   }
@@ -286,7 +302,7 @@ export function mountSemMode({ doc = document, win = window } = {}) {
   // the page swap in the shell: free our context too
   const prevRelease = win.__snRelease;
   win.__snRelease = function () {
-    try { if (S.viewer) { S.viewer.dispose(); S.viewer = null; } } catch (e) { /* gone */ }
+    freeViewer();
     if (typeof prevRelease === 'function') return prevRelease.apply(this, arguments);
   };
 

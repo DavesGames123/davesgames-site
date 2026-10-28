@@ -647,7 +647,8 @@ export function createViewer(canvas, opts = {}) {
     const list = [];
     computeWants(vw, 0, list);
     cam.center = save.center; cam.nmPerPx = save.nmPerPx;
-    extra = list.filter(d => d.prio < 1000).map(d => ({ ...d, prio: d.prio + 3000 }));
+    // no band: the store never holds a prefetch tile (view/tiles.js "Bands")
+    extra = list.filter(d => d.prio < 1000).map(d => ({ ...d, prio: d.prio + 3000, band: undefined }));
     invalidate();
   }
 
@@ -726,9 +727,9 @@ export function createViewer(canvas, opts = {}) {
     get volume() { return vol; },
     saverShots: {
       flyTo, prefetch, isReady,
-      setBand(b) { band = b ? { t: b.t || 0, b: b.b || 0 } : null; relayout(); invalidate(); },
+      setBand(b) { band = b ? { t: b.t || 0, b: b.b || 0 } : null; if (!b) extra = []; relayout(); invalidate(); },
     },
-    _debug: { store, cam, views: () => views, computeWants: () => { const w = []; views.forEach((v, i) => computeWants(v, i, w)); return w; }, frame: t => frame(t ?? now()) },
+    _debug: { store, cam, extra: () => extra, views: () => views, computeWants: () => { const w = []; views.forEach((v, i) => computeWants(v, i, w)); return w; }, frame: t => frame(t ?? now()) },
   };
 }
 

@@ -119,6 +119,7 @@ export function createDirector(deps) {
     } else {
       let a = null;
       await until(() => { a = viewer.autoContrast ? viewer.autoContrast() : { lo: 0, hi: 1 }; return !!a; }, 2500);
+      if (!st.alive) return;
       st.win = a ? { lo: a.lo, hi: a.hi } : { lo: 0, hi: 1 }; st.gamma = 1;
     }
     st.winFor = d.id;
@@ -147,7 +148,9 @@ export function createDirector(deps) {
     }
     st.phase = 'load';
     await until(() => shots.isReady(sv) >= 0.85, 5000, () => shots.prefetch(sv));
+    if (!st.alive) return false;
     if (st.winFor !== d.id) await windowFor(d);
+    if (!st.alive) return false;
     return true;
   }
 

@@ -20,7 +20,8 @@
 //  dataset credit.
 //
 //  exit() stops the director and puts back the dataset and the view that
-//  were on screen before enter().
+//  were on screen before enter(). exit() also changes the enter token, so
+//  an enter() that still waits for CORE returns null and starts nothing.
 //
 //  grep -n targets
 //    enter ............ "async enter"
@@ -39,13 +40,17 @@ const CSS = 'html.sn-saver .emv-ov,html.sn-saver #nonet,html.sn-saver #nogl{disp
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let run = null;
+let gen = 0;          // enter() token: exit() and a later enter() change it
 
 window.snSaver = {
   async enter(o = {}) {
     if (run) this.exit();
+    const my = ++gen;
     const em = window.__em;
     if (!em) throw new Error('em-explorer saver: no window.__em');
     await Promise.race([Promise.resolve(em.ready).catch(() => false), sleep(10000)]);
+    // exit() or a later enter() came during the wait: do not start
+    if (my !== gen) return null;
     const viewer = em.viewer, canvas = document.getElementById('view');
     if (!viewer || !viewer.saverShots || !canvas) throw new Error('em-explorer saver: no viewer (WebGL2?)');
 
@@ -96,6 +101,7 @@ window.snSaver = {
   },
 
   exit() {
+    gen++;
     const r = run;
     if (!r) return;
     run = null;

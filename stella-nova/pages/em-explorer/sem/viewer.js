@@ -113,7 +113,7 @@ export function createSemViewer(canvas, { onChange = null } = {}) {
     model: null, method: 'mesh', vao: null, bufs: [], tex: null, count: 0, type: 0,
     yaw: 0, pitch: 0, dist: 1, home: null, radius: 1, centre: [0, 0, 0],
     auto: true, idleAt: 0, t0: 0, raf: 0, dirty: true, disposed: false,
-    w: 1, h: 1, dpr: 1, pointers: new Map(), pinch: null, lastTap: 0,
+    w: 1, h: 1, dpr: 1, pointers: new Map(), pinch: null, lastTap: -Infinity,
   };
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
@@ -276,9 +276,12 @@ export function createSemViewer(canvas, { onChange = null } = {}) {
         const [a, b] = [...S.pointers.values()];
         S.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: S.dist };
       }
-      const t = now();
-      if (e.pointerType !== 'mouse' && t - S.lastTap < 300) reset();
-      S.lastTap = t;
+      // a double tap is one finger, two times; a second finger (a pinch)
+      // is not a tap, and the tap after a pinch is a first tap again
+      if (S.pointers.size === 1 && e.pointerType !== 'mouse') {
+        const t = now();
+        if (t - S.lastTap < 300) { reset(); S.lastTap = -Infinity; } else S.lastTap = t;
+      } else S.lastTap = -Infinity;
       touchIdle();
     } else if (e.type === 'pointermove') {
       const p = S.pointers.get(e.pointerId);

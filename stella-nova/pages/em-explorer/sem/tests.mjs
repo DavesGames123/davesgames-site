@@ -157,10 +157,24 @@ else {
   ok(Math.abs(v.umPerPx() - u0) < 1e-9, 'double click resets the view');
   const st = MODELS.aphid.m;
   await v.setModel(st, { method: 'stereo' });
+  const uS = v.umPerPx();
   fire('pointerdown', { clientX: 100, clientY: 100 });
   fire('pointermove', { clientX: 2100, clientY: 100 });
   fire('pointerup', {});
   ok(Math.abs(Math.abs(v.state().yaw) - 55 * Math.PI / 180) < 1e-9, `stereo: the turn stops at 55 deg (${(v.state().yaw * 180 / Math.PI).toFixed(1)} deg)`);
+  // a pinch: the second finger must not count as the second tap of a double tap
+  fire('wheel', { deltaY: -400, deltaMode: 0 });
+  const uIn = v.umPerPx();
+  const touch = (t, id, x) => fire(t, { pointerType: 'touch', pointerId: id, clientX: x, clientY: 100 });
+  touch('pointerdown', 11, 100); touch('pointerdown', 12, 200);
+  ok(Math.abs(v.umPerPx() - uIn) < 1e-9, `the second finger of a pinch does not reset the view (${uIn.toFixed(4)} -> ${v.umPerPx().toFixed(4)})`);
+  touch('pointermove', 12, 300);
+  const uPinch = v.umPerPx();
+  touch('pointerup', 11, 100); touch('pointerup', 12, 300);
+  touch('pointerdown', 13, 150); touch('pointerup', 13, 150);
+  ok(Math.abs(v.umPerPx() - uPinch) < 1e-9 && uPinch < uIn, 'a tap just after a pinch does not reset the view');
+  touch('pointerdown', 13, 150); touch('pointerup', 13, 150);
+  ok(Math.abs(v.umPerPx() - uS) < 1e-9, 'a one finger double tap resets the view');
   for (let i = 0; i < 30; i++) fire('wheel', { deltaY: 2000, deltaMode: 0 });
   const far = v.umPerPx();
   ok(Number.isFinite(far) && far < u0 * 1e4, 'zoom out has a limit');

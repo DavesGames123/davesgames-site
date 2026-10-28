@@ -277,6 +277,13 @@ function mockGL() {
   v.saverShots.setBand({ t: 100, b: 150 });
   ok(v._debug.views()[0].fy === 100 + (700 - 250) / 2, 'setBand moves the focus into the clear band');
   v.saverShots.setBand(null);
+  // a saver prefetch has no band, so the store never holds it or the view behind it
+  v.saverShots.setBand({ t: 100, b: 150 });
+  v.saverShots.prefetch({ x: 12000, y: 9000, z: 700, zoom: 1 });
+  const ex = v._debug.extra ? v._debug.extra() : null;
+  ok(ex && ex.length > 0 && ex.every(d => d.band === undefined && d.prio >= 3000), `prefetch descriptors carry no band (${ex && ex.length} tiles, bands ${ex && [...new Set(ex.map(d => d.band))].join(',')})`);
+  v.saverShots.setBand(null);
+  ok(v._debug.extra && v._debug.extra().length === 0, 'setBand(null) drops the saver prefetch');
   // gestures through the canvas listeners
   {
     v.goTo({ x: 20000, y: 15000, z: 1000, zoom: 0.5 }); await tick(1);
