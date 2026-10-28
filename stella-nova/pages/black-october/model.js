@@ -174,6 +174,8 @@ export const THREAD_NAMES = Object.freeze({
   'daiwa-scala': "Daiwa Securities / Scala inquiry system",
   resorttrust: "Resorttrust website",
   sonet: "So-net member database",
+  hanacupid: "Hana-cupid flower EC sites",
+  'eneos-power': "ENEOS Power electricity customer system",
   label: "The 'Black October' label",
   'sony-life': "Sony Life (Medicare Life policies)",
   'tfd-levelenter': "Tokyo Fire Dept grader (Level Enter)",

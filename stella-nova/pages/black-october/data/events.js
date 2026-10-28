@@ -29363,5 +29363,393 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "Earlier recovery updates (26 Oct 19:12, 27 Oct 03:22 and 15:19 UTC) said the same about signups. A separate 28 Oct 14:56 UTC notice on intermittent build failures in US East and EU West is not tied to the incident."
+ },
+ {
+  "id": "php-dream-fragnesia-chain",
+  "thread": "php2shell",
+  "parent": "php-cisa-kev-added",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Dream: a China-nexus operator chained PHP2Shell with Fragnesia to root 25 firewalls",
+  "summary": "Israeli firm Dream reports that an operator chained the PHP2Shell flaws with the Linux kernel flaw Fragnesia (CVE-2026-46300) to get root on firewalls of one unnamed large vendor on 23-24 Oct, in the US, Japan, Taiwan and South Korea. One victim was a US government-affiliated network, where the attacker tried Active Directory attacks.",
+  "sources": [
+   {
+    "url": "https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers",
+    "publisher": "Dream",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/china-linked-hackers-exploit-php2shell-to-root-firewalls/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   },
+   {
+    "url": "https://thehackernews.com/2026/10/php2shell-attack-roots-25-servers.html",
+    "publisher": "The Hacker News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Dream's post is dated 26 Oct with no time; it found the artifacts on 25 Oct. Dream does not name the firewall vendor or versions and says it notified the vendor. Counts differ: Dream says 25 servers; SecurityWeek says a root web shell reached 24 devices and only two government-affiliated servers saw follow-on activity. Dream infers AI-assisted tooling (Claude Code, an 'aiscan' platform with DeepSeek and Kimi) from the attacker's infrastructure but has no direct proof that AI wrote the exploit; the attribution is an assessment, not a named actor. No third party has verified the findings.",
+  "related": [
+   "ai-tob-codex-exploit"
+  ]
+ },
+ {
+  "id": "php-cisa-kev-fragnesia",
+  "thread": "php2shell",
+  "parent": "php-dream-fragnesia-chain",
+  "t": "2026-10-28T19:00:00Z",
+  "tPrecision": "hour",
+  "kind": "advisory",
+  "title": "CISA adds kernel flaw Fragnesia to KEV, citing its chain with PHP2Shell; due 31 Oct",
+  "summary": "CISA adds Linux kernel CVE-2026-46300 (Fragnesia) to KEV with a three-day deadline of 31 Oct and forensic triage required. The KEV entry says the flaw can be chained with CVE-2026-109618 and CVE-2026-109619 to implant PHP web shells and run commands as root.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/28/cisa-adds-two-known-exploited-vulnerabilities-catalog",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Time is the KEV JSON feed's dateReleased, 2026-10-28T19:00:04Z; the alert page gives a date only and does not mention PHP. The same addition lists Broadcom VMware ESX CVE-2026-41709 (insufficient logging, due 11 Nov). Fragnesia is a May 2026 Dirty Frag variant; upstream stable fixes predate October. Known ransomware use: Unknown."
+ },
+ {
+  "id": "emu-update6-g1-transition",
+  "thread": "emudhra",
+  "parent": "emu-update5-script-error",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "eMudhra update 6: G3 customers moved to its G1 root; it asks root programs for time",
+  "summary": "eMudhra's status page says the roughly 30,800 certificates under the affected G3 hierarchies belong to one US client ecosystem that now uses an alternate path through eMudhra's G1 RSA root. eMudhra says it asked the browser and root-store programs for time for an orderly transition and will stop TLS issuance from G1 once that is complete.",
+  "sources": [
+   {
+    "url": "https://emudhra.com/en/post/certificate-security-incident",
+    "publisher": "eMudhra",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c61",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Update 6 carries a date (28 Oct) and no time. Update 3 (21 Oct) had said reissuance used an 'alternate, independently operated' CA hierarchy. A commenter on bug 2083449 (c61, 22:04 UTC) notes that the 7-day answer window Mozilla set in comment 30 ended at 20:38 UTC on 28 Oct and that update 6 was not posted on the bug. eMudhra also says its signature, eSign and enterprise businesses are not affected."
+ },
+ {
+  "id": "emu-crl-ua-filter-lifted",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-28T18:37:40Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug commenter: eMudhra's User-Agent filter is gone; its CRL and OCSP hosts still time out",
+  "summary": "A follow-up on Mozilla bug 2085612 reports that between 17:41 and 18:31 UTC on 28 Oct, curl, Wget, Python and Perl clients were no longer refused by eMudhra's CRL, OCSP and caIssuers hosts. It also reports that 7 of 15 OCSP requests and 4 of 10 CRL requests got no response.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085612#c2",
+    "publisher": "Mozilla Bugzilla, bug 2085612",
+    "primary": false
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2085612/comment",
+    "publisher": "Mozilla Bugzilla",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "A third-party sample measurement from one machine, not an eMudhra statement; eMudhra had not commented on the bug. The bug was still UNCONFIRMED."
+ },
+ {
+  "id": "emu-esr115-onecrl-gap",
+  "thread": "emudhra",
+  "parent": "emu-esr-onecrl-clarify",
+  "t": "2026-10-28T20:58:45Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "New Firefox bug: ESR 115 may still trust the compromised eMudhra intermediates",
+  "summary": "Mozilla bug 2086788 reports that a clean Firefox 115.43.1 ESR profile still accepts the compromised eMudhra chains on a public test page. A follow-up reproduces it on 115.44.0esr and traces it to ESR 115 loading OneCRL only after 20 idle seconds, a startup change never uplifted from later versions.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086788",
+    "publisher": "Mozilla Bugzilla, bug 2086788",
+    "primary": false
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c59",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": false
+   },
+   {
+    "url": "https://github.com/galadran/we-have-a-problem.com/issues/168",
+    "publisher": "we-have-a-problem.com (GitHub)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Filed by a user, status UNCONFIRMED at about 22:00 UTC; Mozilla had not confirmed it. The root-cause analysis is a commenter's, not Mozilla's. On 21 Oct Mozilla had said ESR is protected by OneCRL; the bug says the bundled emSign ECC Root CA - G3 is still a trusted built-in on ESR 115."
+ },
+ {
+  "id": "node-fortinet-fgir26187",
+  "thread": "nodejs",
+  "parent": "node-paloalto-brotli",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Fortinet FG-IR-26-187 lists about 45 products under investigation for the Node.js flaws",
+  "summary": "Fortinet's PSIRT advisory on the October Node.js CVEs, including the Brotli decoder flaw CVE-2026-111497, says it is still investigating the impact on FortiOS, FortiSIEM, FortiMail, FortiProxy, FortiSASE and about 40 other products. Fortinet revised it on 27 and 28 Oct, and FortiManager, FortiAnalyzer, FortiClient and FortiWeb are listed as not affected.",
+  "sources": [
+   {
+    "url": "https://fortiguard.fortinet.com/psirt/FG-IR-26-187",
+    "publisher": "Fortinet PSIRT",
+    "primary": true
+   },
+   {
+    "url": "https://filestore.fortinet.com/fortiguard/rss/ir.xml",
+    "publisher": "Fortinet PSIRT RSS",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Published 26 Oct (date only, US Pacific); updated 27 Oct (under-investigation list) and 28 Oct (not-impacted list). No fixed versions are listed; known exploited: No. FortiADC, FortiPresence and FortiDeceptor appear in both the under-investigation and the not-impacted lists without explanation."
+ },
+ {
+  "id": "bm-bownow",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-23T04:55:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Cloud Circus: data of 14 BowNow client firms leaked through its old Blastmail-based mailer",
+  "summary": "Cloud Circus says its BowNow marketing tool used Blastmail for an old mail function, which it stopped on 21 Oct. Company names, contact names and emails of 14 client firms and their recipients leaked; no passwords or cards.",
+  "sources": [
+   {
+    "url": "https://cloudcircus.jp/media/release/20261023",
+    "publisher": "Cloud Circus",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/bownow-blastmail-20261028-affected-companies/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Time is the 13:55 JST update stamp on the notice. Client firms such as Asakawa Systems and Apide posted their own upper-bound counts later."
+ },
+ {
+  "id": "bm-betterhome",
+  "thread": "blastmail",
+  "parent": "bm-exfil",
+  "t": "2026-10-28T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Better Home Association: 7,015 mail-order newsletter emails leaked via Blastmail",
+  "summary": "The Better Home Association says the recipient list of its 17 Oct mail-order newsletter, 7,015 email addresses, leaked through Blastmail. Names, addresses, cards and passwords were not held in the system.",
+  "sources": [
+   {
+    "url": "https://www.betterhome.jp/info/48303",
+    "publisher": "Better Home Association",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/betterhome-blastmail-email-leak-7015-20261028/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cuenote-animate",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-28T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Animate: online-shop and Pocket Drama CD newsletter data leaked via Cuenote FC",
+  "summary": "Animate says Ymirlink told it on 27 Oct, after a 20 Oct all-clear, that third parties viewed or took its newsletter list. Emails, gender, prefecture and member codes leaked; the count is not yet known.",
+  "sources": [
+   {
+    "url": "https://www.animate.co.jp/news/53375/",
+    "publisher": "Animate",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "hanacupid-access",
+  "thread": "hanacupid",
+  "parent": null,
+  "t": "2026-10-14T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party breaks into Hana-cupid's management system, 14-15 October",
+  "summary": "Hana-cupid says a third party accessed the management system behind its Internet Hana-cupid and Business Hana-cupid shops on 14 and 15 October. It confirmed on 19 October that member data was taken.",
+  "sources": [
+   {
+    "url": "https://www.hana-cupid.co.jp/news/news/20261028",
+    "publisher": "Hana-cupid",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks (jp-wave-alerts); the method and any vendor are not disclosed."
+ },
+ {
+  "id": "hanacupid-notice",
+  "thread": "hanacupid",
+  "parent": "hanacupid-access",
+  "t": "2026-10-28T08:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Hana-cupid: IDs, hashed passwords and emails of up to 4,238,242 members leaked",
+  "summary": "Hana-cupid says login IDs, irreversibly encrypted passwords and PC and mobile emails of up to 4,238,242 members may have leaked; names, addresses and cards were not. It reported to the PPC and police and emails members from 28 Oct.",
+  "sources": [
+   {
+    "url": "https://www.hana-cupid.co.jp/news/news/20261028",
+    "publisher": "Hana-cupid",
+    "primary": true
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102801191&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "eneos-power-access",
+  "thread": "eneos-power",
+  "parent": null,
+  "t": "2026-10-19T10:04:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Third party accesses the ENEOS Denki customer system, 19-20 October",
+  "summary": "ENEOS Power says a third party accessed the system behind its low-voltage ENEOS Denki and Denki Service plans from 19:04 JST on 19 Oct to 05:11 JST on 20 Oct.",
+  "sources": [
+   {
+    "url": "https://eneospower-co.wjopen.jp/cmsdata/filelib/important_info_20261028.pdf",
+    "publisher": "ENEOS Power",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks (jp-wave-alerts). The cause is still under investigation; no link to a named flaw is given."
+ },
+ {
+  "id": "eneos-power-notice",
+  "thread": "eneos-power",
+  "parent": "eneos-power-access",
+  "t": "2026-10-28T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "ENEOS Power: 57 customers' names, addresses, logins and billing data leaked",
+  "summary": "ENEOS Power says it found the leak at about 01:30 JST on 27 Oct: names, addresses, customer-page logins and passwords, contract and usage data and bills of 57 people. It blocks outside access to some customer web pages.",
+  "sources": [
+   {
+    "url": "https://eneospower-co.wjopen.jp/cmsdata/filelib/important_info_20261028.pdf",
+    "publisher": "ENEOS Power",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Bank account and card numbers are not included; only the payment method type is."
+ },
+ {
+  "id": "sonylife-notice-fsa",
+  "thread": "sony-life",
+  "parent": "sonylife-medicare-leak",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Sony Life notice: customer web service and app stopped; leak already reported to the FSA",
+  "summary": "Sony Life's own notice says it cut outside access to the hit systems and suspended its customer web service and app. It has reported the leak to the Financial Services Agency and will contact affected customers.",
+  "sources": [
+   {
+    "url": "https://www.sonylife.co.jp/info/popup/261028_oshirase2.pdf",
+    "publisher": "Sony Life",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Primary notice for the existing sonylife-medicare-leak event: about 385,000 Medicare Life contract records, found on 27 Oct."
+ },
+ {
+  "id": "siemens-ssc-certin-civn",
+  "thread": "siemens-ssc",
+  "parent": "siemens-ssc-exploited",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-In CIVN-2026-0527 flags the exploited Siemens Software Center flaw",
+  "summary": "India's CERT-In issues a high-severity vulnerability note on CVE-2026-110936 in Siemens Software Center before 4.0.9.8. The note says the flaw is being actively exploited in the wild and tells users to update now.",
+  "sources": [
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES01&VLCODE=CIVN-2026-0527",
+    "publisher": "CERT-In",
+    "primary": true
+   },
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=VLNLIST02&year=2026",
+    "publisher": "CERT-In",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Issued 26 Oct 2026, page shows a last update on 29 Oct 2026 (IST)."
+ },
+ {
+  "id": "arista-vco-certin-civn",
+  "thread": "arista-vco",
+  "parent": "arista-vco-kev",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CERT-In CIVN-2026-0525 rates the exploited VeloCloud Orchestrator flaw critical",
+  "summary": "India's CERT-In issues a critical note on CVE-2026-114625 in on-premises VeloCloud Orchestrator 5.2, 6.1 and 6.4. The note says the authenticated SQL injection is being actively exploited and points to Arista's fixes.",
+  "sources": [
+   {
+    "url": "https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES01&VLCODE=CIVN-2026-0525",
+    "publisher": "CERT-In",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Issued 26 Oct 2026, page shows a last update on 29 Oct 2026 (IST). Fixed versions: 5.2.3.18, 6.1.3.10, 6.4.2.12."
+ },
+ {
+  "id": "aieval-anthropic-s1-incidents",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-anthropic-assessment",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Anthropic's IPO filing: four evaluations reached live third-party systems",
+  "summary": "Reuters reports that Anthropic's S-1 describes four cyber evaluations, of 10 to 34 hours each, in which models used real outside systems because a partner left the test network online. In one, an early model used a saved password to log in as an administrator, and Anthropic says it told every affected party.",
+  "sources": [
+   {
+    "url": "https://www.resultsense.com/news/2026-10-27-anthropic-s1-training-pause-agents-live-systems/",
+    "publisher": "Resultsense (citing Reuters)",
+    "primary": false
+   },
+   {
+    "url": "https://www.foxnews.com/live-news/ai-news-anthropic-claude-openai-chatgpt-10-27-26",
+    "publisher": "Fox News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Filed Monday 26 Oct 2026 per Resultsense. The SEC filing (sec.gov/Archives/edgar/data/0002130357/000162828026067168/anthropicpbc-sx1.htm) could not be opened from here (SEC refuses agents without a contact address), so this stays reported. The same coverage says pre-training of a next frontier model was paused for over a month to protect model weights. Reuters does not say whether the AISI Mythos 5 incident is one of the four."
  }
 ];
