@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Hairline by Lucas Marques: thirty-three isometric line figures that answer the pointer, running live from the MIT library, with a palette lab and code for each figure.">
+<title>Hairline: isometric line figures that answer the pointer — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HAIRLINE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A showcase of github.com/lucasmarkes/hairline, by Lucas Marques (MIT,
+   see vendor/LICENSE-hairline.txt). Every figure on the page is the real
+   library: vendor/hairline.js is a byte copy of dist/index.js of
+   @lucasmarkes/hairline 0.5.1 from npm, not changed. The other files are
+   our own code. The figure descriptions are the README table of the repo.
+
+   FILES
+     vendor/hairline.js          upstream bundle, not changed (no imports)
+     vendor/LICENSE-hairline.txt the MIT licence of the bundle
+     catalog.js   the 33 figures, the groups, the palettes, the repo facts
+     code.js      the snippets of the focus view (no DOM)
+     mirror.js    a live figure SVG painted onto a canvas (for the saver)
+     saver.js     window.snSaver: one large figure per shot, cut by cut
+     main.js      hero, gallery, controls, focus view, boot
+     style.css    the page
+     tests.mjs    node tests (bundle hash, catalog, snippets, saver maths,
+                  a jsdom mount of every figure)
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. lib/wishlist.js, lib/stats-beacon.js
+     3. style.css, then lib/sci.css (Inter and STIX Two Text)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #hero ...... title, facts, links, and #heroFig with a stepper
+     #gallery ... a sticky #toolbar (#filters, #intensity, #palettes,
+                  #stroke, #play) over #grid, one card per figure
+     #use ....... #installTabs, the two snippets, the options table
+     #how, #make, footer credits
+     #focus ..... the dialog: #focusFig, read-out, own intensity and play,
+                  #codeTabs and #code. A bottom sheet on a phone.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<main id="page">
+  <header class="hero" id="hero">
+    <div class="hero-text">
+      <p class="kicker">Studio Tools · open-source library · MIT</p>
+      <h1>Hairline</h1>
+      <p class="lede">Thirty-three isometric line figures that answer the pointer. For React and for anything with a DOM.</p>
+      <p class="byline">A library by <a href="https://github.com/lucasmarkes" target="_blank" rel="noopener">Lucas Marques</a>. Every figure on this page is the real library, running live in your browser.</p>
+      <div class="facts">
+        <div><b>33</b><span>figures, one function each</span></div>
+        <div><b>0</b><span>dependencies, ESM only</span></div>
+        <div><b id="heroVer">v0.5.1</b><span>on npm, TypeScript</span></div>
+        <div><b id="heroStars">3.1k</b><span id="heroStarsOn">stars on GitHub</span></div>
+      </div>
+      <div class="links">
+        <a class="btn pri" href="https://github.com/lucasmarkes/hairline" target="_blank" rel="noopener">GitHub repository</a>
+        <a class="btn" href="https://hairline.lucasmarkes.com" target="_blank" rel="noopener">Official site</a>
+        <a class="btn" href="https://www.npmjs.com/package/@lucasmarkes/hairline" target="_blank" rel="noopener">npm</a>
+        <a class="btn" href="https://lucasmarkes.com/lab/hairline" target="_blank" rel="noopener">The essay</a>
+      </div>
+    </div>
+    <figure class="hero-fig">
+      <div id="heroFig" class="plate-host"></div>
+      <figcaption>
+        <button type="button" class="step" id="heroPrev" aria-label="Previous figure">‹</button>
+        <div class="hero-cap"><b id="heroName">Terrain</b> <span class="read" id="heroRead"></span><span class="hero-what" id="heroWhat"></span></div>
+        <span class="count" id="heroCount"></span>
+        <button type="button" class="step" id="heroNext" aria-label="Next figure">›</button>
+      </figcaption>
+    </figure>
+  </header>
+
+  <section id="gallery" aria-labelledby="galleryH">
+    <div class="sec-head">
+      <h2 id="galleryH">The figures</h2>
+      <p>Move the pointer over a figure, or drag a finger across it. Each one answers in its own way, and writes a read-out to its corner. <span id="shown"></span> shown.</p>
+    </div>
+    <div class="toolbar" id="toolbar">
+      <div class="filters" id="filters" role="group" aria-label="Filter figures"></div>
+      <div class="ctrls">
+        <label class="ctrl"><span>intensity <b id="intensityVal">0.50</b></span><input type="range" id="intensity" min="0" max="1" step="0.01"></label>
+        <label class="ctrl"><span>stroke <b id="strokeVal">0.90</b></span><input type="range" id="stroke" min="0.5" max="2" step="0.05"></label>
+        <div class="ctrl"><span>palette</span><div class="palettes" id="palettes" role="group" aria-label="Palette"></div></div>
+        <button type="button" class="btn sm" id="play" aria-pressed="true">Pause tours</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="use" class="prose" aria-labelledby="useH">
+    <h2 id="useH">Use it</h2>
+    <div class="install">
+      <div class="tabs" id="installTabs" role="tablist" aria-label="Install"></div>
+      <div class="cmd"><code id="installCmd"></code><button type="button" class="btn sm" id="installCopy">Copy</button></div>
+    </div>
+    <div class="two">
+      <div><h3>Anything with a DOM</h3><pre><code id="useJs"></code></pre>
+        <p>A figure draws into the element you give it, at that element’s width and a 5:4 aspect ratio. <code>update</code> changes options on the running figure; <code>destroy</code> removes what the figure added. That is the shape of a Svelte action, so <code>use:terrain</code> works as it is.</p></div>
+      <div><h3>React</h3><pre><code id="useReact"></code></pre>
+        <p>Every component takes the same options and every <code>&lt;div&gt;</code> attribute, and forwards its ref. On the server it renders an empty 5:4 box, so nothing shifts when it draws.</p></div>
+    </div>
+    <h3>Five options, the same on every figure</h3>
+    <div class="table-wrap"><table class="opts">
+      <thead><tr><th>Option</th><th>Type</th><th>Default</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><code>intensity</code></td><td><code>number</code></td><td><code>0.5</code></td><td>How strongly the figure answers the pointer, from 0 (subtle) to 1 (strong).</td></tr>
+        <tr><td><code>theme</code></td><td><code>"auto" | "light" | "dark"</code></td><td><code>"auto"</code></td><td>Auto follows the page: an ancestor with class <code>dark</code> or <code>data-theme="dark"</code>, then the page’s <code>color-scheme</code>.</td></tr>
+        <tr><td><code>label</code></td><td><code>string</code></td><td>English</td><td>The accessible name.</td></tr>
+        <tr><td><code>onRead</code></td><td><code>(text) =&gt; void</code></td><td></td><td>The figure’s caption each time it changes, such as <code>"03"</code> or <code>"gap 28.0"</code>. The corner read-outs on this page come from it.</td></tr>
+        <tr><td><code>play</code></td><td><code>boolean</code></td><td><code>false</code></td><td>Walks the figure through its answer on its own, until the pointer or focus arrives. The tours on this page are this option.</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Theme with six custom properties</h3>
+    <p>The palette buttons above set these on the page. The figure’s styles have no specificity, so any rule of yours wins. Plates are filled, not transparent, so <code>--hairline-plate</code> must match the background behind the figure.</p>
+    <pre><code>.figures {
+  --hairline-plate: #101014;  /* the fill of every plate */
+  --hairline-hi: #fafafa;     /* what is lit */
+  --hairline-edge: #a1a1aa;   /* silhouettes */
+  --hairline-mid: #52525b;    /* every other stroke */
+  --hairline-lo: #27272a;     /* what recedes */
+  --hairline-stroke: 0.9;     /* stroke width, in CSS px at any size */
+}</code></pre>
+  </section>
+
+  <section id="how" class="prose" aria-labelledby="howH">
+    <h2 id="howH">How it behaves</h2>
+    <ul class="notes">
+      <li><b>One frame loop.</b> Every figure on a page shares one <code>requestAnimationFrame</code> loop. A figure off screen or at rest does no work, and the loop stops when nothing moves. This page mounts all thirty-three for that reason.</li>
+      <li><b>Lines, not pixels.</b> Each figure is an SVG of filled plates drawn back to front, with non-scaling strokes, so the hairline stays one width at any size.</li>
+      <li><b>Accessibility.</b> A figure is an image with a description. Riffle is a focusable group: the arrow keys walk its cards and a live region reads them out.</li>
+      <li><b>Reduced motion.</b> With <code>prefers-reduced-motion</code>, the figures that play on their own hold still, and every figure still answers the pointer.</li>
+      <li><b>Shadow DOM.</b> A figure mounted inside a shadow root styles itself there.</li>
+    </ul>
+  </section>
+
+  <section id="make" class="prose" aria-labelledby="makeH">
+    <h2 id="makeH">Make your own</h2>
+    <p>The repository also ships two skills for coding agents. <code>/hairline-create a sales funnel</code> offers concepts, draws the one you pick on the same engine, checks it against Hairline’s ten rules, and hands over one HTML file with no dependencies. <code>/hairline-adopt icons/deploy.svg</code> rebuilds an SVG icon or logo as a figure and proposes what the pointer does to it. See <a href="https://hairline.lucasmarkes.com/skills" target="_blank" rel="noopener">what both skills drew</a> and <a href="https://hairline.lucasmarkes.com/inspo" target="_blank" rel="noopener">how Hairline was made</a>.</p>
+  </section>
+
+  <footer class="credits">
+    <p><b>Hairline</b> © 2026 Lucas Marques, MIT licence. This page runs an unchanged copy of <code>@lucasmarkes/hairline</code> 0.5.1 (<a href="vendor/LICENSE-hairline.txt" target="_blank">licence text</a>); the figure descriptions are from its README. The page, its palettes other than Ink and Paper, and the code around the library are ours. Not affiliated with the author.</p>
+  </footer>
+
+  <p class="noscript" id="noscript">The figures on this page are mounted by a JavaScript module. If you can read this line for more than a moment, the module did not run in this browser.</p>
+</main>
+
+<div class="focus" id="focus" hidden role="dialog" aria-modal="true" aria-labelledby="focusName">
+  <div class="focus-card">
+    <div class="focus-top">
+      <span class="num" id="focusNum">01</span>
+      <h2 id="focusName">Figure</h2>
+      <span class="read" id="focusRead"></span>
+      <button type="button" class="step" id="focusPrev" aria-label="Previous figure">‹</button>
+      <button type="button" class="step" id="focusNext" aria-label="Next figure">›</button>
+      <button type="button" class="x" id="focusClose" aria-label="Close">×</button>
+    </div>
+    <div class="focus-body">
+      <div class="focus-fig"><div id="focusFig" class="plate-host"></div></div>
+      <div class="focus-side">
+        <p id="focusWhat"></p>
+        <p class="more"><span>A stronger intensity:</span> <span id="focusMore"></span></p>
+        <div class="ctrls">
+          <label class="ctrl"><span>intensity <b id="focusIntensityVal">0.50</b></span><input type="range" id="focusIntensity" min="0" max="1" step="0.01"></label>
+          <button type="button" class="btn sm" id="focusPlay" aria-pressed="false">play</button>
+        </div>
+        <div class="tabs" id="codeTabs" role="tablist" aria-label="Code"></div>
+        <div class="code-box"><pre><code id="code"></code></pre><button type="button" class="btn sm" id="copy">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
