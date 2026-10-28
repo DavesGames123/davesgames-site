@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended nineteen times by 2026-10-28. Still going on then.
+//  Gathered 2026-10-22, extended twenty times by 2026-10-28. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -28662,5 +28662,706 @@ export const EVENTS = [
   ],
   "confidence": "confirmed",
   "note": "Dated 26 Oct on Douzone's site. The same release repeats that the APO backup breach was an Ahsay zero-day. Whether the dev-server breach is one of the two cases the MSIT judged major is not stated."
+ },
+ {
+  "id": "onamae-eleventh-report",
+  "thread": "onamae",
+  "parent": "onamae-tenth-report",
+  "t": "2026-10-27T05:55:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO eleventh report: do not open or spread the posted data; visitors' data is taken",
+  "summary": "GMO's eleventh report, as of 14:55 JST on 27 October, asks people not to open, repost or link the data the attackers posted, and says it has confirmed that the attackers take information on people who visit their site. GMO tells visitors to run a full antivirus scan and says it is preparing disclosure requests and criminal complaints against malicious spreaders.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/2026102704/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-tip-desk-open",
+  "thread": "onamae",
+  "parent": "onamae-bounty",
+  "t": "2026-10-28T03:00:00Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "GMO opens its bounty tip desk at noon JST on 28 October",
+  "summary": "GMO opens the dedicated desk for tips under its bounty of up to US$1 million (about 150 million yen) at 12:00 JST on 28 October. It accepts tips for up to a year, until an arrest or an international wanted notice.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/2026102802/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102800527&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   },
+   {
+    "url": "https://news.livedoor.com/topics/detail/32678515/",
+    "publisher": "Livedoor News",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-no-noon-post-1028",
+  "thread": "onamae",
+  "parent": "onamae-leak-site-down",
+  "t": "2026-10-28T03:00:00Z",
+  "tPrecision": "hour",
+  "kind": "other",
+  "title": "No new victim post at the attackers' promised noon 28 Oct release",
+  "summary": "Jiji Press reports that the attackers' site, which had promised new personal data every day at noon, was not updated as of noon JST on 28 October. A security firm said parts of the site stayed viewable for a time after GMO confirmed it down at about 04:00 JST.",
+  "sources": [
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102800527&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Jiji attributes the 'not updated' finding to security firms; GMO's fourteenth report does not mention any new post on 28 October."
+ },
+ {
+  "id": "onamae-fourteenth-report",
+  "thread": "onamae",
+  "parent": "onamae-thirteenth-report",
+  "t": "2026-10-28T09:20:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO fourteenth report: 113 tips in six hours; 20 warnings sent to X posts",
+  "summary": "GMO's fourteenth report, as of 18:20 JST on 28 October, says the bounty desk received 113 tips in its first six hours and that it has sent warnings to 20 X posts that linked to the attackers' site. GMO will publish tip counts at 18:00 JST each weekday and says no malware or ransomware traces are found so far on the customer devices it examined.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/2026102802/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/f8bac5b8c9ddc904cf06af03ba72255ee4767c9f",
+    "publisher": "FNN Prime Online (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/1a9a834cbba454d52f933f3bd5e316c8beffe81f",
+    "publisher": "TV Asahi ANN (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "113 is a count of tips received, not of tips judged useful; GMO says it is still checking them."
+ },
+ {
+  "id": "idcf-seventh-report",
+  "thread": "idcf-cloud",
+  "parent": "idcf-backup-resume",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "IDC Frontier: attacker used an open-source flaw in the portal login to seize the platform",
+  "summary": "IDC Frontier's seventh report closes its investigation: a third party exploited a vulnerability in open-source software in the IDCF Cloud portal's authentication system, took administrator rights on the virtualization platform through the management console and encrypted customer servers. Unauthorized portal lookups reached up to 71 companies (up to 31 with personal names or emails, 4 passwords changed); recoverable backups rose from 194 to 206 customers, and no data exfiltration was found.",
+  "sources": [
+   {
+    "url": "https://www.idcf.jp/news/topics/20261027001",
+    "publisher": "IDC Frontier",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The report names no CVE and gives no restart date; it sets out a three-phase plan ending with customers running the portal themselves again."
+ },
+ {
+  "id": "cuenote-mainichi",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Mainichi Shimbun: news and event newsletter emails likely taken via Cuenote FC",
+  "summary": "Mainichi Shimbun says Ymirlink told it that email addresses and other data of people registered for its news and event newsletters were likely taken; card data is not included. It gives no count and stops the newsletters again.",
+  "sources": [
+   {
+    "url": "https://www.mainichi.co.jp/info/news/20261026.html",
+    "publisher": "Mainichi Shimbun",
+    "primary": false
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/mainichi-cuenote-fc-email-data-leak-20261026/",
+    "publisher": "Security Measures Lab (Rocket Boys)",
+    "primary": false
+   },
+   {
+    "url": "https://news.mynavi.jp/techplus/article/20261028-5209023/",
+    "publisher": "Mynavi TECH+",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Mainichi notice could not be fetched; details come from the Security Measures Lab write-up and Mynavi's list of affected firms."
+ },
+ {
+  "id": "cuenote-nttpc-confirmed",
+  "thread": "cuenote",
+  "parent": "cuenote-clients",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "NTTPC follow-up: Ymirlink confirms some NTTPC customers' data is in the leak",
+  "summary": "NTTPC says Ymirlink reported on 26 October that information of customers of some NTTPC services, such as contact email addresses, is included in the Cuenote FC leak. NTTPC gives no count and is still checking the exact contents.",
+  "sources": [
+   {
+    "url": "https://www.nttpc.co.jp/press/info/2026/10/202610271600.html",
+    "publisher": "NTT PC Communications",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cuenote-morecontact",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Rise UP: 1,548,002 MoreContact customer records leaked via Cuenote FC",
+  "summary": "Rise UP, which runs the coloured-contact-lens store MoreContact, says Ymirlink told it on 26 October that customer data leaked: 1,548,002 records (with duplicates) of email addresses, internal IDs, purchase counts, last shipping dates and mail send dates. Names, addresses, phone numbers, card data and passwords were not held in Cuenote FC.",
+  "sources": [
+   {
+    "url": "https://r-up.jp/news/2026-10-28-cuenote-fc/",
+    "publisher": "Rise UP",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "amadeus-jal",
+  "thread": "amadeus-airlines",
+  "parent": "amadeus-scope-open",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "JAL: about 92,000 reservations viewed through the Amadeus breach",
+  "summary": "Japan Airlines says records of about 92,000 JAL and JTA reservations made between 10 August 2023 and 23 September 2026 were viewed by an outsider at its reservation-system provider Amadeus. For about 2,000 people the data includes passport numbers, nationality and contact details; card numbers and passwords were not included and no misuse is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.jal.co.jp/ja-jp/news/general/2026/other/261028.html",
+    "publisher": "Japan Airlines",
+    "primary": false
+   },
+   {
+    "url": "https://www.itmedia.co.jp/business/articles/2610/28/news078.html",
+    "publisher": "ITmedia Business Online",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261028de67365",
+    "publisher": "NHK",
+    "primary": false
+   },
+   {
+    "url": "https://www.newsweekjapan.jp/articles/-/338336",
+    "publisher": "Newsweek Japan (Reuters)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The JAL release returned HTTP 403; facts are from ITmedia (19:08 JST) and Reuters via Newsweek Japan."
+ },
+ {
+  "id": "skyticket-bank-accounts",
+  "thread": "skyticket",
+  "parent": "skyticket-cards",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "skyticket: 32,341 bank-account records and up to 936,000 cards' data leaked",
+  "summary": "Adventure says the October intrusion also exposed 32,341 bank-account records (account numbers and holder names) registered for refunds between March 2022 and May 2024, and that data of about 936,000 cards used in the three years to 2024 may have leaked, without security codes. It says the data was kept after it was no longer needed.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/587f3f25054f50d4d6db48bdfd489dd4fdac3de1",
+    "publisher": "TV Asahi ANN (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261028dw67382",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Adventure's own notice was not fetched (skyticket.jp returned HTTP 403). The card figure is far larger than the 6,140 card numbers of 16 October; the reports do not explain how the two relate."
+ },
+ {
+  "id": "jpalert-meti-sme-desk",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "METI opens a free cyber help desk for small firms at 47 prefectural centres",
+  "summary": "METI opens a free 'special cybersecurity consultation desk' for small and mid-sized firms on 27 October, through the Yorozu support centres in all 47 prefectures and SME Support Japan's online IT Management Support Center. It answers PM Takaichi's 26 October order to widen help after the run of leaks, and METI will also push information through trade groups, banks and tax accountants.",
+  "sources": [
+   {
+    "url": "https://www.meti.go.jp/press/2026/10/20261027003.html",
+    "publisher": "METI",
+    "primary": false
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/37fcb76cc7a5d1164d2c1e8abd4616d94bcd343f",
+    "publisher": "Jiji Press (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://netshop.impress.co.jp/n/2026/10/28/16943",
+    "publisher": "Netshop Watch (Impress)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The METI release returned HTTP 403; facts are from Jiji (11:13 JST on 27 Oct) and Impress."
+ },
+ {
+  "id": "jpalert-hiroshima-check",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Hiroshima Prefecture starts an emergency check of all its systems and websites",
+  "summary": "NHK reports that Hiroshima Prefecture begins an emergency inspection of every information system and website it manages, after the nationwide run of leaks from unauthorized access. NHK gives no counts.",
+  "sources": [
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261028de66772",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "jpalert-mpd-seminar",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-mpd-warning",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "Tokyo police hold an anti-intrusion seminar for convenience-store and restaurant chains",
+  "summary": "The Metropolitan Police Department holds a seminar in Minato Ward on 28 October for firms such as convenience-store and restaurant-chain operators, telling them to tighten defences against unauthorized access as personal-data leaks continue.",
+  "sources": [
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261028de67370",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "sonylife-medicare-leak",
+  "thread": "sony-life",
+  "parent": null,
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Sony Life: about 385,000 customer contract records leaked through its customer site",
+  "summary": "Sony Life says unauthorized access to the systems behind its customer website leaked about 385,000 contract records, with names, addresses and policy numbers but no card or bank data. The records cover Medicare Life policies Sony Life sold as an agent; the access was found on 27 October and no misuse is confirmed.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/62ef76a1d8398cd07442e38a70411486c4260a88",
+    "publisher": "Kyodo News (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261028dw67390",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: one more notice in the late-October run of Japanese breach disclosures. No Sony Life release was found on its news page; no source links the cause to the other incidents."
+ },
+ {
+  "id": "levelenter-intrusion",
+  "thread": "tfd-levelenter",
+  "parent": null,
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Exam-grading contractor Level Enter finds unauthorized access to its server",
+  "summary": "Level Enter, which grades essays in Tokyo Fire Department hiring exams, finds on 21 October that its in-house server was accessed without authorization and reports to the department the next day. It moves to a new server and orders a third-party investigation.",
+  "sources": [
+   {
+    "url": "https://www.tfd.metro.tokyo.lg.jp/inf/saiyo-hacking.html",
+    "publisher": "Tokyo Fire Department",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread. The notice does not give the cause or link it to other incidents."
+ },
+ {
+  "id": "tfd-levelenter-notice",
+  "thread": "tfd-levelenter",
+  "parent": "levelenter-intrusion",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Tokyo Fire Department: 198 past exam essays may have leaked via Level Enter",
+  "summary": "The Tokyo Fire Department says 198 items, images of past hiring-exam essays and the contractor's corrections given for a service trial, may have leaked; one contains a staff member's name. Hiring results are not affected and no misuse is confirmed.",
+  "sources": [
+   {
+    "url": "https://www.tfd.metro.tokyo.lg.jp/inf/saiyo-hacking.html",
+    "publisher": "Tokyo Fire Department",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/5832bb821b9ea89d9f76e9d78f1fcadf2ac5e47e",
+    "publisher": "Jiji Press (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The page shows 27 October as its update date; it gives no separate first-publication date."
+ },
+ {
+  "id": "jpre-extortion-wave",
+  "thread": "jp-realestate-extortion",
+  "parent": null,
+  "t": "2026-10-09T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Extortion wave hits about 20 Japanese real-estate sites on shared hosting",
+  "summary": "SOCRadar reports that an operator using the handle kkkkevin777 breached a Japanese real-estate services company and reached about 20 other mostly real-estate and property-buying sites on the same shared hosting, posting ransom pages on 9 to 11 October with a deadline of 04:00 JST on 11 October. The first victim's member export holds 16,061 records with plaintext passwords.",
+  "sources": [
+   {
+    "url": "https://socradar.io/blog/php2shell-weaponized-japanese-real-estate-extortion/",
+    "publisher": "SOCRadar",
+    "primary": false
+   },
+   {
+    "url": "https://malware.news/t/php2shell-weaponized-after-japanese-real-estate-extortion/126746",
+    "publisher": "Malware News (SOCRadar feed)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread. The SOCRadar post returned HTTP 403; facts are from its Malware News copy. Victims are not named; the attacker's claim of 167,000 affected members is unverified."
+ },
+ {
+  "id": "jpre-socradar-php2shell",
+  "thread": "jp-realestate-extortion",
+  "parent": "jpre-extortion-wave",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "SOCRadar: the extortion server gains PHP2Shell tooling on 21 October",
+  "summary": "SOCRadar finds the operator's exposed server with more than 3,800 files, including a weaponized PHP2Shell reproducer added on 21 October, about ten days after the extortion wave, and data pulled from a Taiwanese company on 22 to 23 October. The files show no link between PHP2Shell and the real-estate intrusions and no confirmed successful exploitation.",
+  "sources": [
+   {
+    "url": "https://socradar.io/blog/php2shell-weaponized-japanese-real-estate-extortion/",
+    "publisher": "SOCRadar",
+    "primary": false
+   },
+   {
+    "url": "https://malware.news/t/php2shell-weaponized-after-japanese-real-estate-extortion/126746",
+    "publisher": "Malware News (SOCRadar feed)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "How the operator first got in is not recorded in the files. Attribution to kkkkevin777 is an investigative lead.",
+  "related": [
+   "php-socradar-attacker-server"
+  ]
+ },
+ {
+  "id": "php-ncscnl-panos-netscaler-fix",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-115560-guidance",
+  "t": "2026-10-28T10:16:23Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker moves PAN-OS, Panorama and NetScaler from Vulnerable to Fix",
+  "summary": "The Dutch NCSC merges two community pull requests that record the fixed releases from Palo Alto's PHP advisory (PAN-OS and Panorama, five branches from 10.2 to 12.2) and Citrix CTX697263 (NetScaler ADC and Gateway 14.1-73.49, 13.1-64.32 and FIPS builds). Both entries change from Vulnerable to Fix; earlier builds stay affected.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/54",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/55",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "t is the merge of #54 (Palo Alto); #55 (Citrix) merged at 09:58:25 UTC. The Palo Alto table in #54 lists six hotfixes that the vendor still showed with ETAs of 29 and 30 Oct. #54, written on 27 Oct, says 'No known malicious exploitation', which no longer matches the vendor page (see php-panos-exploited-certfr)."
+ },
+ {
+  "id": "php-panos-exploited-certfr",
+  "thread": "php2shell",
+  "parent": "php-paloalto-hotfixes-1028",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Palo Alto now reports attacks on exposed PAN-OS management; CERT-FR issues an avis",
+  "summary": "Palo Alto's PAN-OS PHP advisory now says active exploitation has been observed against management interfaces exposed to the internet, with exploit maturity ATTACKED. CERT-FR publishes CERTFR-2026-AVI-1402 on 28 Oct, listing the fixed hotfixes and six still pending.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-109618",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   },
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1402/",
+    "publisher": "CERT-FR",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The advisory timeline does not date the change in exploitation status. Revisions up to 25 Oct said Palo Alto knew of no malicious exploitation; the change may belong to the 27 Oct raise to Critical and urgency Highest, but no source says so. t is the CERT-FR publication day. The advisory does not say how many devices were attacked."
+ },
+ {
+  "id": "php-getpagespeed-amzn2",
+  "thread": "php2shell",
+  "parent": "php-getpagespeed-ubuntu-debian",
+  "t": "2026-10-28T12:47:13Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "GetPageSpeed offers a PHP2Shell-fixed PHP 7.2 build for Amazon Linux 2",
+  "summary": "GetPageSpeed publishes PHP 7.2.34-33.amzn2 for x86_64 and aarch64 with fixes for CVE-2026-109618 and CVE-2026-109619, and opens a pull request on the Dutch NCSC tracker. Its guide says Amazon's own PHP 7.2 to 8.1 extras stay vulnerable, only 8.2.35-1.amzn2.0.1 is fixed, and AWS lists core PHP 5.4.16 as 'No Fix Planned'.",
+  "sources": [
+   {
+    "url": "https://www.getpagespeed.com/server-setup/php/php2shell-on-amazon-linux-2",
+    "publisher": "GetPageSpeed",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/63",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "t is the pull request time; the guide is dated 27 Oct. The pull request was still open, not merged, at about 16:00 UTC. The Amazon package statuses are GetPageSpeed's statement; the AWS tracker was not checked."
+ },
+ {
+  "id": "php-ncscnl-investigation-1028",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-panos-netscaler-fix",
+  "t": "2026-10-28T15:28:09Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker resolves 11 more 'Investigation' entries; eight PHP bundles get Fix",
+  "summary": "An NCSC-NL review moves XAMPP, WampServer, MAMP, Laragon, Laravel Herd, the Nextcloud Snap, CyberPanel and Laravel Vapor images to Fix for both CVEs, scoped to specific builds. Cisco URWB and ISE Portal Builder are marked Vulnerable, and Juniper J-Web stays Vulnerable for CVE-2026-109618 only.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/61",
+    "publisher": "NCSC-NL (GitHub)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The pull request says the findings 'do not establish that existing installations are patched'. 21 status changes in all."
+ },
+ {
+  "id": "cw-28oct-m365-restore-begins",
+  "thread": "connectwise",
+  "parent": "cw-27oct-awaiting-validation",
+  "t": "2026-10-28T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "ConnectWise starts phased Cloud Backup restoration with Microsoft 365 via a new app",
+  "summary": "ConnectWise's 28 Oct update says phased restoration begins with Microsoft 365 backups and restores through a new 'ConnectWise Cloud Backup for M365' application. Partners must reset passwords, set up MFA and re-authorize each tenant, and must not re-enable the old disabled applications.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "ConnectWise says re-authorization alone does not confirm that backups have resumed. Portal access and monitoring come next, then health reporting, exports and billing, and notifications last. The update does not say whether the third-party validation finished."
+ },
+ {
+  "id": "emu-sectigo-ua-filter",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-28T08:31:25Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Sectigo files a bug: some User-Agents got 403 from its China-based CRL domains",
+  "summary": "Sectigo's preliminary report in Mozilla bug 2086490 says a 25 Oct problem report found its China-based CRL domains returning 403 to a few User-Agents; about 0.33% of requests in 30 days got 403. Sectigo asks the community whether 'publicly-accessible' means any User-Agent must be served.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086490",
+    "publisher": "Mozilla Bugzilla (Sectigo report)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The Sectigo bug does not name eMudhra. The link is an inference: it is the fourth CA to report the User-Agent fault class first filed against eMudhra in bug 2085612 on 25 Oct, after Izenpe and Microsoft."
+ },
+ {
+  "id": "emu-ceremony-code-demand",
+  "thread": "emudhra",
+  "parent": "emu-reply-mozilla-private",
+  "t": "2026-10-28T09:09:20Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug commenters reject private answers and ask eMudhra to publish its key-ceremony code",
+  "summary": "In bug 2083449, one commenter asks whether the account that posted eMudhra's private-answer reply speaks for eMudhra; a second says the key-ceremony source code should be public. A third asks how weak keys got past the HSM controls without a bypassed control or a process failure.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c53",
+    "publisher": "Mozilla Bugzilla, bug 2083449",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/rest/bug/2083449/comment",
+    "publisher": "Mozilla Bugzilla (REST API)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Comments 53 (09:09 UTC), 54 (09:35 UTC) and 55 (10:15 UTC) by community members, not by a root program. Comment 51 was posted from a scott.rea@emudhra.com account. Comment 55 says it alleges no misconduct."
+ },
+ {
+  "id": "emu-validity-full-report",
+  "thread": "emudhra",
+  "parent": "emu-bug-validity-1s",
+  "t": "2026-10-28T13:02:30Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "eMudhra full report: 15,032 TLS certificates were valid one second too long",
+  "summary": "eMudhra's full report in bug 2082408 counts 15,032 TLS certificates issued from 19 Nov 2025 to 15 Oct 2026 with a 90-day-and-1-second validity. Of 8,116 still valid, 7,761 were revoked from 15 to 19 Oct and 355 expired first.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2082408",
+    "publisher": "Mozilla Bugzilla (eMudhra report)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "A separate compliance bug, not part of the key compromise. eMudhra says issuance was not stopped; it changed validity to 89 days on 15-16 Oct. The revocations used reasonCode superseded."
+ },
+ {
+  "id": "artex-fsc-bithumb-meeting",
+  "thread": "artex",
+  "parent": "artex-bithumb-miraeam",
+  "t": "2026-10-28T06:41:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "FSC holds an emergency meeting on Bithumb; on-site probe starts, full compensation vowed",
+  "summary": "The FSC's digital finance policy director meets the FSS, FSI, DAXA and Bithumb. Bithumb reports a leak of staff data of it, its subsidiaries and partners from a staff-support system; no wallet data leak is confirmed. Regulators start an on-site probe and plan bank-level security rules for crypto firms.",
+  "sources": [
+   {
+    "url": "https://www.fsc.go.kr/no010101/88010",
+    "publisher": "Financial Services Commission (Korea)",
+    "primary": true
+   },
+   {
+    "url": "https://www.etoday.co.kr/news/view/2641244",
+    "publisher": "Etoday",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The FSC release gives only the date; t is the Etoday story (15:41 KST). The release also says the FSS and FSI will investigate Mirae Asset Life, Mirae Asset Global Investments and Daishin Securities. Whether customer data leaked at Bithumb is still under review. Financial News says Bithumb reported the 27 Oct intrusion to KISA and the PIPC the same day."
+ },
+ {
+  "id": "artex-nso-meeting-held",
+  "thread": "artex",
+  "parent": "artex-cheongwadae-meeting",
+  "t": "2026-10-28T08:36:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Security Office meeting agrees real-time sharing of attack data; public told to beware",
+  "summary": "Song Ki-ho's meeting with the FSC, MSIT, PIPC, FSI and KISA reviews each incident and steps against smishing and voice phishing. The agencies agree to share attack data and findings in real time. Song asks for extra care at small firms, and the public is told to watch for calls and texts that impersonate financial firms.",
+  "sources": [
+   {
+    "url": "https://m.inews24.com/v/2020087",
+    "publisher": "iNews24",
+    "primary": false
+   },
+   {
+    "url": "https://www.hankookilbo.com/news/article/A2026102816490002132",
+    "publisher": "Hankook Ilbo",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the iNews24 story (17:36 KST); the meeting itself was held that afternoon. The meeting covered banking, securities, insurance, online investment-linked finance and virtual assets."
+ },
+ {
+  "id": "artex-nk-ip-scan",
+  "thread": "artex",
+  "parent": "artex-fsi-700-ips",
+  "t": "2026-10-28T09:30:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Report: the FSC's FIRST system logged 4.4M scans from a North Korean IP range on 21 Oct",
+  "summary": "Hankook Ilbo says the FSC's FIRST monitoring system detected large-scale scanning of the financial sector from 175.45.176.0/22, mostly North Korean, from about 3 a.m. on 21 Oct: about 4,404,101 attempts by the time an advisory went to firms. No breach from that range has been reported.",
+  "sources": [
+   {
+    "url": "https://www.hankookilbo.com/news/article/A2026102816490002132",
+    "publisher": "Hankook Ilbo",
+    "primary": false
+   },
+   {
+    "url": "https://www.fnnews.com/news/202610281816137089",
+    "publisher": "Financial News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the Hankook Ilbo story (18:30 KST). Hankook Ilbo calls it the first official confirmation of North Korean IPs since the hacks came to light. An FSC official and Financial News both caution that an IP address alone does not show nationality. No source ties the scans to the confirmed intrusions."
+ },
+ {
+  "id": "artex-police-preliminary",
+  "thread": "artex",
+  "parent": "artex-bithumb-miraeam",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Police open a preliminary inquiry into the Daishin, Mirae Asset GI and Bithumb hacks",
+  "summary": "The National Police Agency's National Investigation Headquarters starts a pre-charge inquiry on the morning of 28 Oct. The team already investigating the earlier hacks of 16 financial firms takes it and compares the methods, without ruling out the same attacker.",
+  "sources": [
+   {
+    "url": "https://m.sedaily.com/article/20107402",
+    "publisher": "Seoul Economic Daily",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Seoul Economic Daily published at 18:22 KST and gives only 'morning' for the start. No link between the cases is confirmed yet."
+ },
+ {
+  "id": "rw-signups-still-paused",
+  "thread": "railway",
+  "parent": "rw-ai-key-notice-closed",
+  "t": "2026-10-28T15:27:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Railway: new signups stay paused a week after the breach; daily recovery updates",
+  "summary": "Railway's recovery update for the 21 Oct security incident says new signups remain paused and gives no reopening date. It moves to daily updates, with the next due by 16:00 UTC on 29 Oct.",
+  "sources": [
+   {
+    "url": "https://status.railway.com/",
+    "publisher": "Railway status page",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Earlier recovery updates (26 Oct 19:12, 27 Oct 03:22 and 15:19 UTC) said the same about signups. A separate 28 Oct 14:56 UTC notice on intermittent build failures in US East and EU West is not tied to the incident."
  }
 ];

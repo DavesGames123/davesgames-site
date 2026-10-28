@@ -175,6 +175,9 @@ export const THREAD_NAMES = Object.freeze({
   resorttrust: "Resorttrust website",
   sonet: "So-net member database",
   label: "The 'Black October' label",
+  'sony-life': "Sony Life (Medicare Life policies)",
+  'tfd-levelenter': "Tokyo Fire Dept grader (Level Enter)",
+  'jp-realestate-extortion': "Japanese real-estate site extortion",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
 
