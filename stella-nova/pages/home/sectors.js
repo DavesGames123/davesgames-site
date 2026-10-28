@@ -132,7 +132,7 @@ const THUMBS = new Set(THUMB_KEYS);
 // lead is the page the inspector opens first. The game sector's lead is an
 // in-page anchor (#features).
 const SECTOR_TEXT = {
-  game: { at: [99, 128], tilt: 20, lead: 'features',
+  game: { at: [94, 128], tilt: 20, lead: 'features',
     blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.' },
   wiki: { at: [140, 300], tilt: -45, lead: 'wiki',
     blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
@@ -142,9 +142,9 @@ const SECTOR_TEXT = {
     blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
   quantum: { at: [542, 75], tilt: 53, lead: 'orbital',
     blurb: 'Atoms and qubits: hydrogen orbitals in 3D, quantum circuits that encode and decode data and images, and a particle collider.' },
-  chemistry: { at: [572, 291], tilt: 5, lead: 'periodic-table',
+  chemistry: { at: [572, 291], tilt: 0, lead: 'periodic-table',
     blurb: 'The elements and what they make: a periodic table in eleven shapes with the live atom of every element, two atoms that share an electron, over a thousand molecules in 3D, and famous syntheses step by step.' },
-  life: { at: [720, 150], tilt: -40, lead: 'protein-viewer',
+  life: { at: [730, 150], tilt: -40, lead: 'protein-viewer',
     blurb: 'Real protein structures, a chain that folds and viruses in 3D, a human skull and skeleton you can pull apart, CT scans from the X-ray up, neurons that fire, and plants, coral and an epidemic that grow.' },
   fluids: { at: [888, 104], tilt: 33, lead: 'fluidlab',
     blurb: 'Stable fluids, grid, FLIP and particle water, a wind tunnel and fire, and the Navier-Stokes equations from 1D to the open blowup question.' },
@@ -417,6 +417,7 @@ const BLURBS = {
   filmcraft: 'The FilmCraft video editor: timeline, colour, sound.',
   effectcraft: 'The EffectCraft motion graphics compositor.',
   'manim-live': 'Write real ManimCE code and watch it render beside the editor.',
+  'hairline': 'Thirty-three live isometric line figures by Lucas Marques that answer the pointer, with palettes and code.',
   printcraft: 'The PrintCraft PDF workbench.',
   billiard: 'A pool table in 2D and 3D: the computer plays, the maths draws itself.',
   // Ten Minute Physics ports (Matthias Müller and contributors, MIT).

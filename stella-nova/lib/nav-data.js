@@ -471,7 +471,8 @@ w.SN_NAV = [
   ] },
   { id: "tools", label: "Studio Tools", short: "Tools", icon: "⚒", color: "#9fd8a0", color2: "#ffd27a", groups: [
     { h: "Animation & Video", p: [
-      ["manim-live", "Manim live", "NEW"]
+      ["manim-live", "Manim live", "NEW"],
+      ["hairline", "Hairline", "SVG"]
     ] },
     { h: "Pattern & Print", p: [
       ["pattern-designer", "Pattern Designer", "SVG"],

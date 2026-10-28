@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-238 registered pages in 6 regions and 26 constellations.
+239 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -388,6 +388,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `effectcraft` | EffectCraft | Crafting Apps > Video & Motion | RUST | The EffectCraft motion graphics compositor. |  | shown | no | no |
 | `printcraft` | PrintCraft | Crafting Apps > Documents | RUST | The PrintCraft PDF workbench. |  | shown | no | no |
 | `manim-live` | Manim live | Studio Tools > Animation & Video | NEW | Write real ManimCE code and watch it render beside the editor. |  | shown | no | yes |
+| `hairline` | Hairline | Studio Tools > Animation & Video | SVG | Thirty-three live isometric line figures by Lucas Marques that answer the pointer, with palettes and code. |  | shown | no | yes |
 | `pattern-designer` | Pattern Designer | Studio Tools > Pattern & Print | SVG | Generative vector patterns for posters. |  | shown | hook, tier 3, default | yes |
 | `pattern-animator` | Animated Pattern Designer | Studio Tools > Pattern & Print | NEW | The pattern book in motion: seamless loops to video and GIF. |  | shown | hook, tier 3, default | yes |
 | `thread-art` | Thread Art | Studio Tools > Pattern & Print | WGSL | A portrait drawn by one thread from peg to peg. |  | shown | hook, tier 4, default | yes |
