@@ -18,7 +18,14 @@
 //    modelThumb { id, size }                 -> { relief }
 //    tiles      { ids, size, seed, tpal }    -> [Image + { id }]
 //    practice   { w, h, dpi, mode }          -> { stereo, relief }
-//    turntable  { state, w, h, dpi, n, colors } -> { n, sepFar }
+//    turntable  { state, w, h, dpi, n, colors, gen } -> { n, sepFar, stale }
+//    turnGen    { gen }                      -> { gen }
+//  TURNTABLE GENERATION. The page sends turnGen when it starts or stops a
+//  turntable. A turntable makes one frame at a time and yields between
+//  frames, so a turnGen message can arrive. The page sends gens in order,
+//  so the last gen to arrive is the newest. When args.gen is not the
+//  newest gen, the turntable stops and returns stale: true with the
+//  frames made so far (n). A turntable with no gen (the saver) never stops.
 //  state is the page state (state.js). dpi is the output px per inch.
 //
 //  CACHES. Meshes stay loaded (the library is small). The last raw depth
@@ -45,6 +52,7 @@ class LRU {
   set(k, v) { this.m.set(k, v); while (this.m.size > this.n) this.m.delete(this.m.keys().next().value); return v; }
 }
 const depthCache = new LRU(6), tileCache = new LRU(24);
+let turnGen = 0;     // the newest turntable generation from the page
 
 export function meshOf(id) {
   if (!meshes.has(id)) {
@@ -174,18 +182,31 @@ export async function handle(msg, post) {
       const stereo = E.sirds(dm, { eyeSep: 2.5, dpi: args.dpi, mu: 0.3333, mode: args.mode, oversample: 2, guides: true, source: 'dots', seed: 7, dot: args.dot || 1 });
       const relief = reliefImage(dm);
       result = { stereo, relief }; transfer = bufs(stereo, relief);
+    } else if (op === 'turnGen') {
+      turnGen = args.gen | 0;
+      result = { gen: turnGen };
     } else if (op === 'turntable') {
+      const gen = args.gen == null ? null : args.gen | 0;
+      if (gen != null) turnGen = gen;
+      const stale = () => gen != null && gen !== turnGen;
       const st = args.state, mesh = await meshOf(st.src.id);
-      const n = args.n | 0;
-      const depths = E.turntable(mesh, n, { w: args.w, h: args.h, yaw: st.src.yaw, pitch: st.src.pitch, roll: st.src.roll || 0, fit: st.src.fit,
-        match: { mu: st.view.mu, relief: st.src.relief, lift: st.src.lift } });
+      const n = args.n | 0, y0 = st.src.yaw || 0;
+      const turnOpts = { w: args.w, h: args.h, pitch: st.src.pitch, roll: st.src.roll || 0, fit: st.src.fit,
+        match: { mu: st.view.mu, relief: st.src.relief, lift: st.src.lift } };
       const opts = stereoOpts(st, args.dpi, args.colors);
-      let sepFar = 0;
-      E.animate(depths.map(d => shapeDepth(d, st.src.relief, st.src.lift)), opts, (k, frame) => {
-        sepFar = frame.sepFar;
-        post({ id, progress: { k, n, frame } }, [frame.data.buffer]);
-      });
-      result = { n, sepFar };
+      let sepFar = 0, k = 0;
+      // One frame at a time: E.turntable with n = 1 at the yaw of frame k
+      // gives frame k of E.turntable(n), and E.animate with its fixed seed
+      // keeps the wall still. The yield lets a turnGen message in.
+      for (; k < n && !stale(); k++) {
+        const d = E.turntable(mesh, 1, Object.assign({}, turnOpts, { yaw: y0 + 360 * k / n }))[0];
+        E.animate([shapeDepth(d, st.src.relief, st.src.lift)], opts, (i, frame) => {
+          sepFar = frame.sepFar;
+          post({ id, progress: { k, n, frame } }, [frame.data.buffer]);
+        });
+        await new Promise(r => setTimeout(r, 0));
+      }
+      result = { n: k, sepFar, stale: k < n };
     } else throw new Error('unknown op ' + op);
     post({ id, ok: true, result }, transfer);
   } catch (err) {

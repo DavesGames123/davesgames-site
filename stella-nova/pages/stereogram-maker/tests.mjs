@@ -257,6 +257,19 @@ const last = msgs => msgs[msgs.length - 1];
     const msgs = await call('turntable', { state: ms, w: 160, h: 120, dpi: 72, n: 6 });
     const prog = msgs.filter(x => x.m.progress);
     ok(prog.length === 6 && prog.every(x => x.m.progress.frame.w === 160 && x.tr.length === 1) && last(msgs).m.ok, 'turntable streams 6 frames');
+    // a newer generation stops a stale turntable between two frames
+    {
+      const got = [];
+      const done = new Promise(res => W.handle({ id: 2, op: 'turntable', args: { state: ms, w: 160, h: 120, dpi: 72, n: 12, gen: 101 } }, m => {
+        got.push(m);
+        if (m.progress && m.progress.k === 1) W.handle({ id: 3, op: 'turnGen', args: { gen: 102 } }, () => {});
+        if (!m.progress) res(m);
+      }));
+      const end = await done, np = got.filter(m => m.progress).length;
+      ok(end.ok && end.result.stale === true && np >= 2 && np < 12 && end.result.n === np, 'a newer turnGen stops a stale turntable (' + np + ' of 12 frames, ' + JSON.stringify(end.result) + ')');
+      const fresh = await call('turntable', { state: ms, w: 160, h: 120, dpi: 72, n: 4, gen: 102 });
+      ok(fresh.filter(x => x.m.progress).length === 4 && last(fresh).m.result.stale === false, 'the newest generation makes all its frames');
+    }
     t0 = Date.now(); let bad = [];
     for (const m of E.MODELS) {
       const s = ST.cloneState(ms); s.src.id = m.id;
@@ -299,6 +312,12 @@ section('saver');
   ok(a.every((s, i) => i === 0 || s.model !== a[i - 1].model), 'no model twice in a row');
   ok(new Set(a.map(s => s.model)).size >= Math.min(12, E.MODELS.length), 'shots reach many models');
   ok([1, 10, 60, 600].every(x => SV.holdSeconds(x) >= 5 && SV.holdSeconds(x) <= 12), 'hold 5..12 s');
+  // a frame keeps its own shape in a rect of another shape (letterbox)
+  ok(typeof SV.fitFrame === 'function', 'saver.js exports fitFrame');
+  const fit = SV.fitFrame || ((r) => r);
+  const fa = fit({ x: 10, y: 20, w: 400, h: 400 }, 1600, 900), fb = fit({ x: 0, y: 0, w: 1600, h: 400 }, 800, 600);
+  ok(Math.abs(fa.w / fa.h - 16 / 9) < 1e-9 && fa.w === 400 && Math.abs(fa.y - (20 + (400 - 225) / 2)) < 1e-9 && fa.x === 10, 'fitFrame: a wide frame in a square rect ' + JSON.stringify(fa));
+  ok(Math.abs(fb.w / fb.h - 4 / 3) < 1e-9 && fb.h === 400 && Math.abs(fb.x - (1600 - 400 * 4 / 3) / 2) < 1e-9, 'fitFrame: a 4:3 frame in a wide rect ' + JSON.stringify(fb));
 }
 
 // 10. boot in jsdom
@@ -322,7 +341,7 @@ async function bootInJsdom(JSDOM) {
   const puts = [];
   w.HTMLCanvasElement.prototype.getContext = function () {
     const c = this;
-    return { putImageData: (img) => puts.push([c.id, img.width]), drawImage: () => puts.push([c.id, 'draw']), fillRect() {}, getImageData: (x, y, ww, hh) => ({ data: new Uint8ClampedArray(ww * hh * 4) }) };
+    return { putImageData: (img) => puts.push([c.id, img.width]), drawImage: (img, x, y, dw, dh) => puts.push([c.id, 'draw', img && img.width, img && img.height, dw, dh]), fillRect() {}, getImageData: (x, y, ww, hh) => ({ data: new Uint8ClampedArray(ww * hh * 4) }) };
   };
   w.HTMLCanvasElement.prototype.toBlob = function (cb) { cb(null); };
   class ImageDataN { constructor(d, ww, hh) { this.data = d; this.width = ww; this.height = hh; } }
@@ -382,14 +401,29 @@ async function bootInJsdom(JSDOM) {
     if (!/Look closer/.test(doc.getElementById('capMain').textContent)) errors.push('text caption: ' + doc.getElementById('capMain').textContent);
     // The saver: enter gives the #saver canvas, a shot draws and names
     // itself on the plate, exit puts the page back.
-    globalThis.createImageBitmap = async img => ({ width: img.width, height: img.height, close() {} });
+    // Each bitmap takes 30 ms, so a shot must wait for its last frames.
+    const bitmaps = [];
+    globalThis.createImageBitmap = async img => { await new Promise(r => setTimeout(r, 30)); const b = { width: img.width, height: img.height, closed: false, close() { this.closed = true; } }; bitmaps.push(b); return b; };
     const labels = [];
-    const ret = w.snSaver.enter({ seed: 3, seconds: 30, calm: 0.5, label: info => labels.push(info) });
+    let madeAtLabel = -1;
+    const ret = w.snSaver.enter({ seed: 3, seconds: 30, calm: 0.5, label: info => { if (madeAtLabel < 0) madeAtLabel = bitmaps.length; labels.push(info); } });
     if (!ret || !ret.canvas || ret.canvas.id !== 'saver' || !doc.documentElement.classList.contains('sn-saver')) errors.push('saver enter');
     if (!await waitFor(() => labels.length && labels[0] && puts.some(p => p[0] === 'saver' && p[1] === 'draw'), 60000)) errors.push('the saver drew no shot');
     else if (!E.MODELS.some(m => m.name === labels[0].title)) errors.push('saver label: ' + JSON.stringify(labels[0]));
+    if (madeAtLabel < 32) errors.push('the first saver shot started with ' + madeAtLabel + ' of 32 frames');
+    // A new frame shape: the frames keep their own shape (letterbox).
+    globalThis.innerWidth = 600; globalThis.innerHeight = 900; w.dispatchEvent(new w.Event('resize'));
+    const nd = puts.length;
+    await waitFor(() => puts.slice(nd).filter(p => p[0] === 'saver' && p[1] === 'draw').length >= 3, 5000);
+    const sd = puts.slice(nd).filter(p => p[0] === 'saver' && p[1] === 'draw');
+    const bad = sd.filter(p => Math.abs((p[4] / p[5]) / (p[2] / p[3]) - 1) > 0.01);
+    if (!sd.length || bad.length) errors.push('saver frames stretched after a resize: ' + (bad[0] ? bad[0].slice(2).map(v => Math.round(v)).join(' ') : 'no draws'));
     w.snSaver.exit();
     if (doc.documentElement.classList.contains('sn-saver') || labels[labels.length - 1] !== null) errors.push('saver exit');
+    await new Promise(r => setTimeout(r, 400));
+    const open = bitmaps.filter(b => !b.closed).length;
+    if (open) errors.push(open + ' of ' + bitmaps.length + ' saver bitmaps not closed after exit');
+    globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
     delete globalThis.createImageBitmap;
     const n = sel => doc.querySelectorAll(sel).length;
     const msg = `out canvas ${outOk ? 'painted' : 'not painted'}, then example, tile, help, turntable, text and saver steps in ${Date.now() - t0} ms; ${n('.excard')} examples, ${n('.mcard')} model cards, ${n('.tcard')} tile cards, ${n('#dotPals .pal')} palettes, ${n('#shapeGrid button')} shapes, ${n('#sizes button')} sizes; snSaver ${typeof w.snSaver === 'object' || typeof globalThis.window.snSaver === 'object' ? 'set' : 'missing'}; caption "${doc.getElementById('capMain').textContent} ${doc.getElementById('capSub').textContent}"` + (errors.length ? '; errors: ' + errors.join('; ') : '');

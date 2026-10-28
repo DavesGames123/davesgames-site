@@ -24,7 +24,10 @@
 //  TURNTABLE. The worker streams the frames of a full turn (engine
 //  animate: one tile and one seed for every frame, so the wall stays
 //  still). Each frame becomes an ImageBitmap; a timer plays them at the
-//  Speed setting. A change of state makes the frames again.
+//  Speed setting. A change of state makes the frames again. One turntable
+//  job is in flight and only the newest job waits (turnQ). Each start and
+//  stop sends turnGen to the worker, and the worker stops a stale job
+//  between two frames (worker.js "TURNTABLE GENERATION").
 //
 //  grep -n targets
 //    worker client ......... "function client", "function lane"
@@ -704,13 +707,38 @@ async function takeUpload(input, kind) {
 // ── turntable ──────────────────────────────────────────────────────────────
 const turn = { on: false, gen: 0, frames: [], k: 0, timer: 0, paused: false };
 let turnT = 0;
+// One turntable job in flight, only the newest waiting. A job that is
+// stale before it goes to the worker, or that a newer job replaces while
+// it waits, resolves to null.
+const turnQ = { busy: false, next: null };
+function turnPump() {
+  if (turnQ.busy || !turnQ.next) return;
+  const job = turnQ.next; turnQ.next = null;
+  if (job.gen !== turn.gen) { job.res(null); turnPump(); return; }
+  turnQ.busy = true;
+  stageW.call('turntable', job.args, [], job.onProgress).then(job.res, job.rej)
+    .finally(() => { turnQ.busy = false; turnPump(); });
+}
+function queueTurntable(args, onProgress) {
+  return new Promise((res, rej) => {
+    if (turnQ.next) turnQ.next.res(null);
+    turnQ.next = { gen: args.gen, args, onProgress, res, rej };
+    turnPump();
+  });
+}
+// A new generation: the worker stops the turntable that it makes now.
+function bumpTurn() {
+  const gen = ++turn.gen;
+  stageW.call('turnGen', { gen }).catch(() => { /* worker gone */ });
+  return gen;
+}
 function startTurntable(delay = 0) {
   clearTimeout(turnT);
   if (delay) { turnT = setTimeout(() => startTurntable(0), delay); return; }
   if (S.src.kind !== 'model' || !renderDims) return;
   stopPlayback();
   turn.on = true; turn.paused = false; press($('turnBtn'), true); press($('dockTurn'), true);
-  const gen = ++turn.gen, d = renderDims, n = S.view.frames;
+  const gen = bumpTurn(), d = renderDims, n = S.view.frames;
   const f = turntableSize(d.w, d.h, n, TURN_BUDGET()), k = f.w / d.w;
   const st = cloneState(S);
   if (!d.file) st.view.dot = Math.max(1, S.view.dot * Math.round(d.scale * k));
@@ -718,14 +746,16 @@ function startTurntable(delay = 0) {
   let made = 0;
   busy(true);
   caption('Making the turntable · 0 of ' + n);
-  stageW.call('turntable', { state: st, w: f.w, h: f.h, dpi: d.dpi * k, n, colors: paletteColors() }, [], async p => {
+  queueTurntable({ state: st, w: f.w, h: f.h, dpi: d.dpi * k, n, colors: paletteColors(), gen }, async p => {
     if (gen !== turn.gen) return;
     const img = new ImageData(p.frame.data, p.frame.w, p.frame.h);
-    frames[p.k] = typeof createImageBitmap === 'function' ? await createImageBitmap(img) : img;
+    const fr = typeof createImageBitmap === 'function' ? await createImageBitmap(img) : img;
+    if (gen !== turn.gen) { if (fr.close) fr.close(); return; }
+    frames[p.k] = fr;
     made++;
     if (gen === turn.gen) caption('Making the turntable · ' + made + ' of ' + n);
-  }).then(() => {
-    if (gen !== turn.gen) return;
+  }).then(r => {
+    if (!r || gen !== turn.gen) { for (const fr of frames) if (fr && fr.close) fr.close(); return; }
     const wait = () => { if (gen !== turn.gen) return; if (made < n) { setTimeout(wait, 30); return; } busy(false); caption(); turn.frames = frames; turn.k = 0; play(gen); };
     wait();
   }).catch(e => { if (gen === turn.gen) { busy(false); toast('The turntable failed: ' + e.message); stopTurntable(); } });
@@ -754,7 +784,7 @@ function stopPlayback() {
 function stopTurntable() {
   clearTimeout(turnT);
   if (!turn.on) return;
-  turn.on = false; turn.gen++;
+  turn.on = false; bumpTurn();
   stopPlayback(); busy(false);
   press($('turnBtn'), false); press($('dockTurn'), false);
   if (stillImage) { out.width = stillImage.width; out.height = stillImage.height; out.getContext('2d').putImageData(stillImage, 0, 0); }

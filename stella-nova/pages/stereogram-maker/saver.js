@@ -13,14 +13,23 @@
 //  between the label plate texts, and the width of the visible column
 //  (the full frame at 16:9, the middle column at 9:16). The stereogram
 //  fills that band and that column, so no text covers it. Without a plate
-//  the stereogram fills the frame with a small margin.
+//  the stereogram fills the frame with a small margin. A shot is sized
+//  for the rect at the time it renders. The band and the frame can change
+//  after that, so draw() letterboxes each frame to its own shape inside
+//  the rect of now (fitFrame), and never stretches it.
+//
+//  FRAMES. A shot waits until each of its n frames is an ImageBitmap. A
+//  bitmap that finishes after its shot is dropped, or after exit(), is
+//  closed at once. exit() also drops each shot that is still in the
+//  making (the set making), because its worker call never resolves.
 //
 //  SHOTS. shotList(seed, n) is a seeded shuffle of models, each paired
 //  with a pattern tile (and now and then coloured dots), with no model or
 //  tile twice in a row. calm 1 plays the turn slowest.
 //
 //  grep -n targets: "export function shotList", "export function holdSeconds",
-//                   "export function installSaver", "function frameRect"
+//                   "export function installSaver", "function frameRect",
+//                   "export function fitFrame"
 // ============================================================================
 import { MODELS, TILES, modelMeta, tileMeta } from './engine-api.js';
 import { DEFAULT_STATE, DOT_PALETTE_IDS, cloneState } from './state.js';
@@ -32,6 +41,14 @@ function rng(seed) {
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 export const holdSeconds = seconds => Math.max(5, Math.min(12, (seconds || 60) / 5));
+
+// The largest rect with the shape w:h, centred in r (the letterbox).
+export function fitFrame(r, w, h) {
+  const a = w / h;
+  if (!(a > 0) || !Number.isFinite(a)) return { x: r.x, y: r.y, w: r.w, h: r.h };
+  const fw = r.w / r.h > a ? r.h * a : r.w, fh = r.w / r.h > a ? r.h : r.w / a;
+  return { x: r.x + (r.w - fw) / 2, y: r.y + (r.h - fh) / 2, w: fw, h: fh };
+}
 
 // n shots: { model, tile | null, palette, tileSeed }. Fixed by seed.
 export function shotList(seed, n = 24) {
@@ -57,7 +74,8 @@ function shotState(shot) {
 }
 
 export function installSaver(page = {}) {
-  let on = false, cv = null, g = null, worker = null, seq = 0, pend = new Map();
+  let on = false, cv = null, g = null, worker = null, seq = 0, pend = new Map(), life = 0;
+  const making = new Set();     // shots whose frames are still coming
   let shots = [], si = 0, cur = null, next = null, fade = null, timer = 0, raf = 0, opts = null, band = null, bandFn = null, bandAt = 0;
 
   function call(op, args, onProgress) {
@@ -86,15 +104,27 @@ export function installSaver(page = {}) {
     const r = frameRect(), n = 32, calm = opts.calm ?? 0.7;
     const f = turntableSize(r.w, r.h, n, 14e6), k = f.w / (r.w / (cv.width / innerWidth));
     const st = shotState(shot), pal = PALETTES.find(p => p.id === DOT_PALETTE_IDS[shot.palette]);
-    const frames = new Array(n);
-    await call('turntable', { state: st, w: f.w, h: f.h, dpi: screenDpi(Math.max(0.5, k), false), n, colors: pal ? [pal.bg, ...pal.ink] : null }, async p => {
-      const img = new ImageData(p.frame.data, p.frame.w, p.frame.h);
-      frames[p.k] = await createImageBitmap(img);
-    });
-    for (let tries = 0; frames.some(x => !x) && tries < 100; tries++) await new Promise(r2 => setTimeout(r2, 20));
-    return { shot, frames, k: 0, fps: 6 + 8 * (1 - calm), t0: performance.now() };
+    // fill(null): .some() skips the holes of new Array(n)
+    const s = { shot, frames: new Array(n).fill(null), k: 0, fps: 6 + 8 * (1 - calm), t0: 0, dead: false, life };
+    making.add(s);
+    try {
+      await call('turntable', { state: st, w: f.w, h: f.h, dpi: screenDpi(Math.max(0.5, k), false), n, colors: pal ? [pal.bg, ...pal.ink] : null }, async p => {
+        const img = new ImageData(p.frame.data, p.frame.w, p.frame.h);
+        const bm = await createImageBitmap(img);
+        // the shot is gone (drop or exit): no one will close this bitmap
+        if (s.dead || !on || s.life !== life) { if (bm && bm.close) bm.close(); return; }
+        s.frames[p.k] = bm;
+      });
+      for (let tries = 0; s.frames.some(x => !x) && tries < 100; tries++) await new Promise(r2 => setTimeout(r2, 20));
+    } finally { making.delete(s); }
+    s.t0 = performance.now();
+    return s;
   }
-  function drop(s) { if (s) for (const f of s.frames) if (f && f.close) f.close(); }
+  function drop(s) {
+    if (!s) return;
+    s.dead = true;
+    for (const f of s.frames) if (f && f.close) f.close();
+  }
   function label(shot) {
     if (!opts || !opts.label || opts.labels === false) return;
     const m = modelMeta(shot.model), t = shot.tile ? tileMeta(shot.tile) : null;
@@ -115,7 +145,8 @@ export function installSaver(page = {}) {
       const i = Math.floor((now - s.t0) / 1000 * s.fps) % s.frames.length, f = s.frames[i];
       if (!f) return;
       g.globalAlpha = a; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-      g.drawImage(f, r.x, r.y, r.w, r.h);
+      const q = fitFrame(r, f.width, f.height);
+      g.drawImage(f, q.x, q.y, q.w, q.h);
       g.globalAlpha = 1;
     };
     if (fade) {
@@ -136,7 +167,8 @@ export function installSaver(page = {}) {
   }
   async function prepare() {
     const shot = shots[si++ % shots.length];
-    try { const s = await makeShot(shot); if (on) next = s; else drop(s); }
+    const my = life;
+    try { const s = await makeShot(shot); if (on && my === life) next = s; else drop(s); }
     catch (e) { if (on) setTimeout(prepare, 400); }
   }
   function resize() {
@@ -148,6 +180,7 @@ export function installSaver(page = {}) {
   window.snSaver = {
     enter(o) {
       opts = o || {};
+      life++;
       if (page.stopTurntable) page.stopTurntable();
       import('../../lib/saver-clear.js').then(m => { bandFn = m.plateBand; }).catch(() => { /* no band: the full frame */ });
       cv = document.getElementById('saver');
@@ -163,11 +196,14 @@ export function installSaver(page = {}) {
       return { canvas: cv, warmupMs: 2600 };
     },
     exit() {
-      on = false;
+      on = false; life++;
       clearTimeout(timer); cancelAnimationFrame(raf);
       removeEventListener('resize', resize);
       document.documentElement.classList.remove('sn-saver');
       drop(cur); drop(next); if (fade) drop(fade.from);
+      // exit ends the worker, so a shot in the making never resolves
+      for (const s of making) drop(s);
+      making.clear();
       cur = next = fade = null;
       if (worker) { worker.terminate(); worker = null; pend = new Map(); }
       if (opts && opts.label) try { opts.label(null); } catch (e) { /* shell gone */ }
