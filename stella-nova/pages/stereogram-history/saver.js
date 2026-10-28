@@ -14,7 +14,10 @@
 //
 //  The images of a shot come from worker jobs (client.js). The saver asks
 //  for the next shot while the current one plays; a shot whose images
-//  are not ready yet shows the eyes figure, which needs none.
+//  are not ready yet shows the eyes figure, which needs none. S.data keeps
+//  the images of the shots S.i - 1 to S.i + 1 only: each shot change
+//  (and cut) deletes the keys below S.i - 1 (prune), and a job that ends
+//  after its shot went keeps its images out of S.data.
 //
 //  grep -n targets
 //    images for a shot ..... "async function prepare"
@@ -120,6 +123,8 @@ const PAINT = {
 const NEEDS = { turn: 'frames', reveal: 'img', rds: 'img', row: 'st', wall: 'tile' };
 
 let S = null;
+// Delete the images of every shot below S.i - 1.
+function prune() { for (const k of [...S.data.keys()]) if (k < S.i - 1) S.data.delete(k); }
 window.snSaver = {
   enter(o = {}) {
     if (S) this.exit();
@@ -141,7 +146,7 @@ window.snSaver = {
       if (!NEEDS[sh.id] || S.data.has(i)) return;
       S.data.set(i, null);
       const run0 = S;
-      prepare(sh, boxNow()).then(d => { if (S === run0) S.data.set(i, d); }, e => { if (S === run0) { S.errs++; S.lastErr = String(e); } });
+      prepare(sh, boxNow()).then(d => { if (S === run0 && i >= S.i - 1) S.data.set(i, d); }, e => { if (S === run0) { S.errs++; S.lastErr = String(e); } });
     };
     want(0); want(1);
     const frame = now => {
@@ -151,7 +156,7 @@ window.snSaver = {
       if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
       let shot = plan[S.i % plan.length];
       S.tau += dt; S.t += dt;
-      if (S.tau >= shot.sec) { S.data.delete(S.i - 1); S.tau = 0; S.i++; shot = plan[S.i % plan.length]; }
+      if (S.tau >= shot.sec) { S.tau = 0; S.i++; prune(); shot = plan[S.i % plan.length]; }
       want(S.i); want(S.i + 1);
       const k = S.tau / shot.sec, box = boxNow();
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -178,5 +183,5 @@ window.snSaver = {
     S = null; window.__sgSaver = false;
   },
 };
-window.snSaver.debug = () => S ? { i: S.i, id: S.plan[S.i % S.plan.length].id, tau: S.tau, ready: S.data.get(S.i) != null, errs: S.errs, lastErr: S.lastErr } : null;
-window.snSaver.cut = id => { if (!S) return; const j = S.plan.findIndex((s, n) => n > S.i && s.id === id); if (j > 0) { S.i = j; S.tau = 0; } };
+window.snSaver.debug = () => S ? { i: S.i, id: S.plan[S.i % S.plan.length].id, tau: S.tau, ready: S.data.get(S.i) != null, errs: S.errs, lastErr: S.lastErr, keys: [...S.data.keys()] } : null;
+window.snSaver.cut = id => { if (!S) return; const j = S.plan.findIndex((s, n) => n > S.i && s.id === id); if (j > 0) { S.i = j; S.tau = 0; prune(); } };

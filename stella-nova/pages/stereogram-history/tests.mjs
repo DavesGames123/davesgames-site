@@ -15,7 +15,8 @@
 //    shots .......... the saver plan and framing at 16:9 and 9:16
 //    page ........... main.js links in node, ids, head order, [hidden],
 //                     banned fonts, no uppercase letter-spaced labels
-//    jsdom boot ..... the page text fills in a DOM (when jsdom is found)
+//    jsdom boot ..... the page text fills in a DOM (when jsdom is found);
+//                     the saver keeps the images of shots i - 1 .. i + 1
 // ============================================================================
 import * as G from './geometry.js';
 import * as Dt from './data.js';
@@ -258,7 +259,7 @@ section('jsdom boot');
     const w = dom.window;
     const g = globalThis;
     const keep = {};
-    for (const k of ['window', 'document', 'matchMedia', 'IntersectionObserver', 'requestAnimationFrame', 'getComputedStyle', 'innerWidth', 'innerHeight', 'addEventListener', 'devicePixelRatio', 'ImageData', 'HTMLElement']) keep[k] = Object.getOwnPropertyDescriptor(g, k);
+    for (const k of ['window', 'document', 'matchMedia', 'IntersectionObserver', 'requestAnimationFrame', 'cancelAnimationFrame', 'getComputedStyle', 'innerWidth', 'innerHeight', 'addEventListener', 'devicePixelRatio', 'ImageData', 'HTMLElement']) keep[k] = Object.getOwnPropertyDescriptor(g, k);
     const set = (k, v) => Object.defineProperty(g, k, { value: v, configurable: true, writable: true });
     set('window', w); set('document', w.document);
     set('matchMedia', q => ({ matches: /reduce/.test(q), addEventListener() {} }));
@@ -309,6 +310,28 @@ section('jsdom boot');
     d.getElementById('revealBtn').click();
     await new Promise(r => setTimeout(r, 3000));
     ok(d.getElementById('revealBtn').getAttribute('aria-pressed') === 'true', 'reveal toggles');
+    // The saver keeps the images of shots i - 1 .. i + 1 only. The frames
+    // run in one go, so the jobs of the first shots end after their shots.
+    {
+      let rafCb = null;
+      set('requestAnimationFrame', f => { rafCb = f; return 1; });
+      set('cancelAnimationFrame', () => { rafCb = null; });
+      const sv = w.snSaver;
+      sv.enter({ seed: 5, calm: 0 });
+      let now = 1000;
+      const step = n => { for (let k = 0; k < n && rafCb; k++) { const f = rafCb; rafCb = null; now += 50; f(now); } };
+      for (let guard = 0; guard < 4000 && sv.debug().i < 4; guard++) step(1);
+      const i4 = sv.debug().i;
+      await new Promise(r => setTimeout(r, 6000));
+      step(1);
+      const dbg = sv.debug(), stale = dbg.keys.filter(k => k < dbg.i - 1);
+      ok(i4 >= 4 && stale.length === 0, `saver: no images kept below shot i - 1 after late jobs (i ${dbg.i}, keys ${dbg.keys.join(',')})`);
+      sv.cut('wall'); step(1);
+      const dc = sv.debug(), stale2 = dc.keys.filter(k => k < dc.i - 1);
+      ok(stale2.length === 0, `saver: a cut deletes the old images (i ${dc.i}, keys ${dc.keys.join(',')})`);
+      sv.exit();
+      set('requestAnimationFrame', () => 0);
+    }
     for (const [k, v] of Object.entries(keep)) { if (v) Object.defineProperty(g, k, v); else delete g[k]; }
   }
 }
