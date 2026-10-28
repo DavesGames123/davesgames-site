@@ -29751,5 +29751,523 @@ export const EVENTS = [
   ],
   "confidence": "reported",
   "note": "Filed Monday 26 Oct 2026 per Resultsense. The SEC filing (sec.gov/Archives/edgar/data/0002130357/000162828026067168/anthropicpbc-sx1.htm) could not be opened from here (SEC refuses agents without a contact address), so this stays reported. The same coverage says pre-training of a next frontier model was paused for over a month to protect model weights. Reuters does not say whether the AISI Mythos 5 incident is one of the four."
+ },
+ {
+  "id": "ai-firefox159-codex-credits",
+  "thread": "ai-discovery",
+  "parent": "ai-node-codex-credit",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Firefox 159 fixes 167 CVEs; OpenAI's Codex Security is credited for 34 of them",
+  "summary": "Mozilla's advisory MFSA 2026-118 for Firefox 159 lists 167 CVEs, 108 rated high, with 34 credited to 'OpenAI Codex Security' and 7 more to an OpenAI researcher. Mozilla now gives each internally found memory-safety bug its own CVE, so the total is not comparable with older releases.",
+  "sources": [
+   {
+    "url": "https://www.mozilla.org/en-US/security/advisories/mfsa2026-118/",
+    "publisher": "Mozilla",
+    "primary": true
+   },
+   {
+    "url": "https://cert.cyber.gouv.fr/avis/CERTFR-2026-AVI-1406/",
+    "publisher": "CERT-FR",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/chrome-and-firefox-updates-patch-over-200-vulnerabilities/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Announced 27 Oct, date only. Firefox ESR 115.44, ESR 153.6 and Thunderbird 159 and 153.6 ship the same day (MFSA 2026-119 to -122); CERT-FR covers them in CERTFR-2026-AVI-1406 on 28 Oct. No CVE is rated critical and none is reported as exploited. The same SecurityWeek report covers Chrome 156 (52 security fixes), where Google says unrewarded bugs were 'found internally or with the aid of AI' without naming tools."
+ },
+ {
+  "id": "ai-epics-cisa-icsa",
+  "thread": "ai-discovery",
+  "parent": "ai-node-codex-credit",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA advisory on four EPICS Base flaws an autonomous AI agent found in under 4 hours",
+  "summary": "CISA advisory ICSA-26-300-01 covers four flaws in the EPICS Base control-system toolkit, one rated CVSS 9.8, fixed in 7.0.11 and reported by Causal Security. Causal Security says its autonomous agent 'Cipher' found and checked all four in about 3 hours 49 minutes.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/ics-advisories/icsa-26-300-01",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.theregister.com/security/2026/10/27/ai-hacker-finds-4-severe-bugs-in-popular-industrial-control-software-in-under-4-hours/5305811",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "CISA confirms the CVEs (CVE-2026-114595 to -114598), the fixed version and the reporter. The AI-agent claim and the timing come from Causal Security via The Register, not from CISA. EPICS Base is open source, first built at Los Alamos and Argonne national laboratories."
+ },
+ {
+  "id": "artex-123reg-uk",
+  "thread": "artex",
+  "parent": "artex-zscaler-global",
+  "t": "2026-10-28T11:45:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "UK registrar 123 Reg discloses an 'AI-driven' breach and suspects the ARTEX actor",
+  "summary": "GoDaddy-owned 123 Reg tells customers an intruder read contact and account data on 18 Sep in what it calls its first known AI-driven attack. It says the attacker used AI attack skills on Chinese infrastructure and suspects the same China-nexus actor that CrowdStrike linked to ARTEX attacks on South Korean finance firms.",
+  "sources": [
+   {
+    "url": "https://www.theregister.com/cyber-crime/2026/10/28/123-reg-discloses-ai-cyberattack-on-customer-data-suspects-china-nexus/5305936",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Link to the wave: 123 Reg itself names the ARTEX actor tracked in this thread (CrowdStrike CSA-261162, 7 Oct) as its suspect, on timing and infrastructure; the attribution is the company's suspicion, not confirmed. Time is The Register's publication. Data: names, phone numbers, countries, account products, VAT numbers and marketing preferences; 123 Reg says the actor only read data but copies may exist. It notified the FTC and UK and EU data-protection authorities. No 123 Reg primary statement was found online; the customer email is quoted by The Register.",
+  "related": [
+   "cc-crowdstrike-report"
+  ]
+ },
+ {
+  "id": "emu-macos2672-certpem",
+  "thread": "emudhra",
+  "parent": "emu-apple-support-doc",
+  "t": "2026-10-27T10:03:36Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Test: macOS 26.7.2 puts both distrusted roots back into /etc/ssl/cert.pem",
+  "summary": "A tester on the public eMudhra test site's tracker reports that updating a Mac to macOS 26.7.2 (shipped 26 Oct) restored emSign ECC Root CA - G3 and Sectigo's AAA root in /etc/ssl/cert.pem, so curl again accepted the compromised chains. Apple's support page still says the command-line fix comes in a future update.",
+  "sources": [
+   {
+    "url": "https://github.com/galadran/we-have-a-problem.com/issues/157",
+    "publisher": "we-have-a-problem.com (GitHub)",
+    "primary": false
+   },
+   {
+    "url": "https://support.apple.com/en-us/149555",
+    "publisher": "Apple",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "One Mac tested (26.7.1 to 26.7.2, build 25G332); 27.2 and 15.8.2 were not tested. The restored file matched the system template dated 22 Oct byte for byte, so a manual or MDM workaround is undone by each update. Apple's page (published 23 Oct) confirms only that curl and git use /etc/ssl/cert.pem and still accept the certificates until a future update. On 28 Oct the test site added an Apple-specific page."
+ },
+ {
+  "id": "artex-twenty-firms",
+  "thread": "artex",
+  "parent": "artex-police-preliminary",
+  "t": "2026-10-28T20:43:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Korean press: breached financial firms reach 20; self-check finds 130 of 555 weak",
+  "summary": "News1 counts 20 breached Korean financial firms, adding Mirae Asset Life, Daishin, Mirae Asset GI and Bithumb to the 14 Oct list of 16. It says a regulator self-check of 555 firms on 12 items found gaps at 130 (23.4%).",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610290543384323",
+    "publisher": "News1 (Financial News)",
+    "primary": false
+   },
+   {
+    "url": "https://www.fnnews.com/news/202610290501032531",
+    "publisher": "News1 (Financial News)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the 05:43 KST 29 Oct story. The article says a gap does not mean a breach, and no PHP flaw is confirmed as used in the finance hacks. The self-check date is given only as 'the 8th'."
+ },
+ {
+  "id": "amadeus-ana-checking",
+  "thread": "amadeus-airlines",
+  "parent": "amadeus-jal",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "ANA was also notified by Amadeus and says it is checking the impact",
+  "summary": "Asahi Shimbun reports that All Nippon Airways, which uses the same Amadeus system, also got an unauthorized-access notice from Amadeus. ANA says it is checking the facts; no count is given.",
+  "sources": [
+   {
+    "url": "https://news.yahoo.co.jp/articles/90998d5f2cf02f80f9e1639959d435faece5d216",
+    "publisher": "Asahi Shimbun (Yahoo! News)",
+    "primary": false
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC288G50Y6A021C2000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Asahi story posted 18:30 JST on 28 Oct; t is set to the day so it does not precede the JAL event. No ANA release was found."
+ },
+ {
+  "id": "twitcas-detect-stop",
+  "thread": "twitcasting",
+  "parent": null,
+  "t": "2026-10-28T01:30:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Moi finds intrusion traces and takes TwitCasting and its corporate site offline",
+  "summary": "Moi detects a system anomaly at about 10:30 JST on 28 Oct and finds traces of outside access to TwitCasting servers. From about 10:40 JST it stops the live-streaming service and its corporate site and cuts the network.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261028558252.pdf",
+    "publisher": "Moi (TDnet)",
+    "primary": true
+   },
+   {
+    "url": "https://news.yahoo.co.jp/articles/ba6a56da0a31a41cd77c3f4115f735897f5eceda",
+    "publisher": "CNET Japan (Yahoo! News)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Part of the Japanese breach-notice wave the ledger tracks (jp-wave-alerts). The entry route and any user-data impact are not disclosed."
+ },
+ {
+  "id": "twitcas-tdnet-first",
+  "thread": "twitcasting",
+  "parent": "twitcas-detect-stop",
+  "t": "2026-10-28T09:10:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Moi first report to the exchange: TwitCasting restart will take considerable time",
+  "summary": "Moi's first TDnet notice says the restart waits on a careful safety check and will take considerable time. It will post updates only on TDnet and its official X account while its site is down.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261028558252.pdf",
+    "publisher": "Moi (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Filed 18:10 JST. The effect on earnings is under review."
+ },
+ {
+  "id": "fc-fourth-report",
+  "thread": "furusato-choice",
+  "parent": "fc-third-report",
+  "t": "2026-10-28T07:05:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Furusato Choice fourth report: partner-site donation link restarts 28 Oct",
+  "summary": "Change Holdings says Trustbank restarts the system that links Furusato Choice to partner sites that take donations end to end, after outside experts checked it. The donor site itself stays down.",
+  "sources": [
+   {
+    "url": "https://www.release.tdnet.info/inbs/140120261028558254.pdf",
+    "publisher": "Change Holdings (TDnet)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Filed 16:05 JST. Partner sites restart one by one; no leak of partner-site donation data is confirmed."
+ },
+ {
+  "id": "goweb-found",
+  "thread": "goweb-cloud",
+  "parent": null,
+  "t": "2026-10-15T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "GoWeb Cloud learns its rental-application service was hit by SQL injection",
+  "summary": "GoWeb Cloud says its development and maintenance contractor reported on 15 Oct that a third party used SQL injection through a program flaw in the GoWeb tenant-application service. The flaw is fixed.",
+  "sources": [
+   {
+    "url": "https://gowebcloud.co.jp/news-ir/803",
+    "publisher": "GoWeb Cloud",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "New thread: a Japanese cloud-vendor breach in the October notice wave (jp-wave-alerts) that reaches several real-estate firms; no source links it to the real-estate extortion thread. The access dates are not given."
+ },
+ {
+  "id": "goweb-good-fudousan",
+  "thread": "goweb-cloud",
+  "parent": "goweb-found",
+  "t": "2026-10-20T03:16:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Good Fudousan: third party accessed GoWeb, which holds tenant applicants' data",
+  "summary": "Good Fudousan says it confirmed on 17 Oct that a third party accessed GoWeb, the cloud it uses for tenant applications, which holds applicants' data and brokers' user data. A leak is still under investigation.",
+  "sources": [
+   {
+    "url": "https://www.good-fudousan.co.jp/app/wp-content/uploads/2026/10/6224bc5384d9939bf332ddebab21c679.pdf",
+    "publisher": "Good Fudousan",
+    "primary": true
+   },
+   {
+    "url": "https://www.good-realestate.co.jp/important/",
+    "publisher": "Good Real Estate",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Notice dated 20 Oct. Good Real Estate posted a similar notice. The firms give 15, 16 and 17 Oct as the date they confirmed the access."
+ },
+ {
+  "id": "goweb-notice",
+  "thread": "goweb-cloud",
+  "parent": "goweb-good-fudousan",
+  "t": "2026-10-26T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "GoWeb Cloud: applicants', co-residents' and contacts' data at several client firms at risk",
+  "summary": "GoWeb Cloud says names, birth dates, addresses, phones and emails of applicants, co-residents and emergency contacts, and brokers' accounts, may be affected in several clients' environments. ID images were not accessed; no count yet.",
+  "sources": [
+   {
+    "url": "https://gowebcloud.co.jp/news-ir/803",
+    "publisher": "GoWeb Cloud",
+    "primary": true
+   },
+   {
+    "url": "https://rocket-boys.co.jp/security-measures-lab/goweb-cloud-sql-injection-multiple-real-estate-companies-20261027/",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "GoWeb reported to the PPC on 26 Oct on behalf of client firms, at the commission's request."
+ },
+ {
+  "id": "jpalert-ai-digital-council",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-nco-roundup",
+  "t": "2026-10-22T06:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "New AI and Digital Reform Council will consider revising the AI Act for cyber safety",
+  "summary": "At the first meeting of the AI and Digital Reform Promotion Council at the Prime Minister's office, the government says it will draft AI and digital reform principles by year-end. To strengthen defences against cyber attacks it will consider revising the AI Act and related laws.",
+  "sources": [
+   {
+    "url": "https://kumanichi.com/articles/2049497",
+    "publisher": "Kyodo News (Kumamoto Nichinichi)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Afternoon meeting on 22 Oct; no exact time given."
+ },
+ {
+  "id": "jpalert-ai-law-wg",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-28T10:36:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "Government working group starts talks on revising the AI Act as cyber attacks spread",
+  "summary": "A government working group on AI legal systems holds its first meeting and will sort out issues for an AI Act revision by year-end. Cabinet Office staff cite a new risk that autonomous AI could enable unauthorized access.",
+  "sources": [
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102800846&g=pol",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the Jiji story (19:36 JST); the meeting time is not given. Senior Vice Minister Shiozaki of the Cabinet Office attended."
+ },
+ {
+  "id": "jpalert-macnica-count",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-27T22:11:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Macnica: 216 site- and app-based leak notices this year, 2.6x last year; 101 in October",
+  "summary": "Jiji reports a Macnica count of 216 Japanese leak or suspected-leak notices from attacks on public websites and apps so far this year, 2.6 times all of last year, with 101 in October through the 26th. AI-made probing is suspected but not proven.",
+  "sources": [
+   {
+    "url": "https://www.jiji.com/jc/article?k=2026102700773&g=eco",
+    "publisher": "Jiji Press",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the Jiji story (07:11 JST, 28 Oct). The AI link is an assessment voiced at the 26 Oct cabinet meeting, not a finding."
+ },
+ {
+  "id": "maeunsoft-intrusion",
+  "thread": "maeunsoft",
+  "parent": null,
+  "t": "2026-09-19T05:47:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Attacker enters a Maeun Soft training-site server and takes data the next morning",
+  "summary": "Korean e-learning vendor Maeun Soft, which runs learning sites for firms and public bodies, is first accessed at about 14:47 KST on 19 Sep; data is taken at about 10:04 KST on 20 Sep. A client's report of spam texts from its SMS account reveals it on 22 Sep.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610130601397826",
+    "publisher": "Yonhap (Financial News)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: one of the Korean breach notices of the autumn wave the ledger tracks (hollys, kepco-staff, douzone-smarta); it came to light on 13 Oct. The entry method is not reported."
+ },
+ {
+  "id": "maeunsoft-237m",
+  "thread": "maeunsoft",
+  "parent": "maeunsoft-intrusion",
+  "t": "2026-10-12T21:01:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Maeun Soft reports about 2.37 million records leaked from 20-plus client sites",
+  "summary": "Yonhap reports Maeun Soft told the PIPC about 2.37 million records leaked: IDs, encrypted passwords, phones, emails, addresses and CI/DI identity values. The Anti-Corruption Commission, Defence Ministry and others are among over 20 clients hit; the PIPC investigates.",
+  "sources": [
+   {
+    "url": "https://www.fnnews.com/news/202610130601397826",
+    "publisher": "Yonhap (Financial News)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the Yonhap story (06:01 KST, 13 Oct). Maeun Soft filed reports on 22, 24 and 29 Sep; the PIPC opened its probe on 30 Sep and is still checking the count."
+ },
+ {
+  "id": "fujitv-promo-access",
+  "thread": "fujitv-promo",
+  "parent": null,
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Third party breaks into Fuji TV's programme-promotion system on the night of 19 Oct",
+  "summary": "Fuji Television confirms that a third party accessed the system it uses to send programme publicity to media contacts on the night of 19 October and stops using it.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/191719",
+    "publisher": "Security NEXT",
+    "primary": false
+   },
+   {
+    "url": "https://rocket-boys.co.jp/?p=44573",
+    "publisher": "Security Measures Lab",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Japanese breach notice in the October wave (jp-wave-alerts). The entry route is not disclosed; Fuji TV's own notice was not opened."
+ },
+ {
+  "id": "fujitv-promo-notice",
+  "thread": "fujitv-promo",
+  "parent": "fujitv-promo-access",
+  "t": "2026-10-20T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Fuji TV: names, firms and emails of up to 730 media contacts may have leaked",
+  "summary": "Fuji TV says names, company names and emails of up to 730 registered media contacts may have leaked from the promotion system. It says no viewer data was held there.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/191719",
+    "publisher": "Security NEXT",
+    "primary": false
+   },
+   {
+    "url": "https://atsoho.com/blog/fujitv-promotion-system-data-breach",
+    "publisher": "atsoho",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "bandai-logipal-detect",
+  "thread": "bandai-logipal",
+  "parent": null,
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Bandai Logipal finds a third party misusing an account on its logistics servers",
+  "summary": "Bandai Namco logistics arm Bandai Logipal finds signs of a breach on a logistics-system server on 21 Oct; an investigation shows a third party misused an account. It takes the logistics system offline.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/191994",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "New thread: a Japanese breach notice in the October wave (jp-wave-alerts). The company notice was not opened; Security NEXT links only the Bandai Namco Holdings home page."
+ },
+ {
+  "id": "bandai-logipal-ichibankuji",
+  "thread": "bandai-logipal",
+  "parent": "bandai-logipal-detect",
+  "t": "2026-10-27T03:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Ichiban Kuji Online buyers' names, addresses and phones may have leaked via Bandai Logipal",
+  "summary": "Bandai Logipal says it found suspicious traces on 22 Oct on the server with delivery data it handles for BANDAI SPIRITS' Ichiban Kuji Online. Names, addresses and phones may have leaked; the count is not given. It reported to the PPC on 26 Oct.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/191994",
+    "publisher": "Security NEXT",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "t is the Security NEXT story date. No misuse is confirmed."
+ },
+ {
+  "id": "quest-paused-systems-restored",
+  "thread": "quest",
+  "parent": "quest-lsm-restored",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Quest: systems paused as a precaution are also restored",
+  "summary": "Quest updates its Quanum notice to say that the systems it paused as a precaution are restored and operating securely. The notice still gives no patient count and says letters will follow the investigation.",
+  "sources": [
+   {
+    "url": "https://www.questdiagnostics.com/links/quanum-notice",
+    "publisher": "Quest Diagnostics",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Notice stamped 'As of 8:00 am ET, October 26, 2026' (12:00 UTC)."
+ },
+ {
+  "id": "aomei-statement-oct27",
+  "thread": "aomei",
+  "parent": "aomei-not-notified",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "AOMEI updates its statement: still notifying users, scope still under investigation",
+  "summary": "AOMEI's statement, last updated 27 Oct, says it is continuing to notify relevant users and to investigate the scope of affected users. It still lists three tampering windows and gives no count.",
+  "sources": [
+   {
+    "url": "https://www.aomeitech.com/company/investigating-ephemeral-tampering.html",
+    "publisher": "AOMEI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The page shows 'Last Updated' 27 Oct 2026 but does not mark what changed; the notification wording differs from the 20 Oct report that no users had been notified."
+ },
+ {
+  "id": "quest-class-actions",
+  "thread": "quest",
+  "parent": "quest-notice-oct23",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "At least six proposed class actions over the Quanum breach are filed in New Jersey",
+  "summary": "Proposed class actions against Quest Diagnostics over the Quanum LSM breach are filed in the US District Court for New Jersey from 22 to 26 Oct, starting with case 2:26-cv-13795. The complaints allege negligence and weak safeguards, and no court has ruled.",
+  "sources": [
+   {
+    "url": "https://openclassactions.com/lawsuits/data-breaches/quest-diagnostics-quanum-data-breach-class-action-lawsuit.php",
+    "publisher": "Open Class Actions",
+    "primary": false
+   },
+   {
+    "url": "https://www.morningstar.com/news/pr-newswire/20261023ph80187/quest-diagnostics-data-breach-investigation-edelson-lechtzin-llp-probes-class-action-claims-after-unauthorized-access-to-patient-records",
+    "publisher": "PR Newswire (Edelson Lechtzin LLP)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Dated to the sixth listed filing (26 Oct); the first was filed 22 Oct. Case numbers 2:26-cv-13795, -13852, -13889, -13911, -13913 and 1:26-cv-13940 are from the aggregator, not checked on PACER. Plaintiff names left out on purpose."
  }
 ];
