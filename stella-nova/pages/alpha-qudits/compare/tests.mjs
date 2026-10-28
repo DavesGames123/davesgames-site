@@ -221,6 +221,12 @@ section('dom');
         ok(!e2 && inst.current().scene === id, `show(${id}) and play(t)` + (e2 ? ': ' + e2.message : ''));
         ok(host.querySelector('.cmp-cap').textContent.length > 10, `${id} writes its caption`);
       }
+      // a 270 px card on a 320 px phone: the drawing is 270 px wide, not squeezed from 280
+      host.getBoundingClientRect = () => ({ width: 270, height: 0, left: 0, top: 0 });
+      inst.resize();
+      const cv = host.querySelector('canvas'), dpr = Math.min(2, w.devicePixelRatio || 1);
+      ok(cv.width === Math.round(270 * dpr), `a 270 px card: canvas ${cv.width} px at dpr ${dpr}`);
+      host.getBoundingClientRect = () => ({ width: 360, height: 0, left: 0, top: 0 });
       inst.pause(); inst.resume(); inst.resize(); inst.setBand({ t: 100, b: 200 }); inst.setBand(null);
       inst.dispose();
       ok(!host.querySelector('.cmp-fig'), 'dispose() removes the figure');

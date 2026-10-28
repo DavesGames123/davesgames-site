@@ -155,7 +155,8 @@ export function createRecords(host, opts = {}) {
 
   function resize() {
     const r = host.getBoundingClientRect();
-    W = Math.max(280, Math.round((fill ? r.width : wrapEl.getBoundingClientRect().width) || r.width || 360));
+    // 240 as ENDS: a 320 px phone gives a card of about 270 px
+    W = Math.max(240, Math.round((fill ? r.width : wrapEl.getBoundingClientRect().width) || r.width || 360));
     H = fill ? Math.max(220, Math.round(r.height || 400)) : Math.round(opts.height || (mod && mod.height ? mod.height(W) : Math.min(480, Math.max(300, W * 0.72))));
     dpr = Math.min(2, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);

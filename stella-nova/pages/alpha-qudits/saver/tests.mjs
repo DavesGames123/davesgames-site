@@ -326,6 +326,20 @@ else {
       assert(!W.document.getElementById('aqSaverCv') && !W.document.querySelector('.aqs-host'), 'canvas or host left after exit');
       assert(W.__aqSaver === false, '__aqSaver not cleared');
       assert(W.snSaver.debug() === null, 'debug after exit');
+      // exit while enter waits on its loads: the late enter starts nothing
+      const styles = () => [...W.document.querySelectorAll('style')].filter(s => s.textContent.includes('aqSaverCv')).length;
+      const late = W.snSaver.enter({ seed: 3 });
+      W.snSaver.exit();
+      const lr = await late;
+      assert(!lr && !W.document.getElementById('aqSaverCv') && !styles() && W.__aqSaver === false && W.snSaver.debug() === null,
+        `exit during the loads: enter went on (result ${!!lr}, canvas ${!!W.document.getElementById('aqSaverCv')}, ${styles()} styles)`);
+      // two enter calls in one wait: one canvas, and one exit leaves nothing
+      const e1 = W.snSaver.enter({ seed: 4 }), e2 = W.snSaver.enter({ seed: 5 });
+      await Promise.all([e1, e2]);
+      const nCv = W.document.querySelectorAll('#aqSaverCv').length, nSt = styles();
+      W.snSaver.exit();
+      assert(nCv === 1 && nSt === 1 && !W.document.getElementById('aqSaverCv') && !styles(),
+        `two enter calls: ${nCv} canvases and ${nSt} styles, after exit ${W.document.querySelectorAll('#aqSaverCv').length} and ${styles()}`);
     } finally {
       for (const [k, v] of Object.entries(keep)) { if (v) Object.defineProperty(g, k, v); else delete g[k]; }
       dom.window.close();

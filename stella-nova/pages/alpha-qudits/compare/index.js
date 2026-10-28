@@ -184,7 +184,8 @@ export function createCompare(host, opts = {}) {
 
   function measure() {
     const r = host.getBoundingClientRect ? host.getBoundingClientRect() : { width: 0, height: 0 };
-    W = Math.max(280, Math.round(r.width || host.clientWidth || 360));
+    // 240 as ENDS: a 320 px phone gives a card of about 270 px
+    W = Math.max(240, Math.round(r.width || host.clientWidth || 360));
     H = fill ? Math.max(200, Math.round(r.height || host.clientHeight || 400)) : Math.round(opts.height || MODS[scene].height(W, states.get(scene)));
     dpr = Math.min(2, win.devicePixelRatio || 1);
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);

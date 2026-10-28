@@ -24,6 +24,10 @@
 //  window.__aqSaver is true while the saver runs, so main.js stops its
 //  play(t) calls.
 //
+//  ENTER TOKEN. enter() waits on loadAll() and loadCode(). exit() or a
+//  later enter() in that wait changes the token (gen), and the old
+//  enter() returns null with no canvas and no style element.
+//
 //  grep -n targets
 //    load packages ........ "async function loadAll"
 //    code extracts ........ "async function loadCode"
@@ -141,14 +145,19 @@ function drawerFor(L, shot, box, rate) {
 }
 
 let run = null;
+// The enter token. exit() and each enter() change it, so an enter() that
+// still waits on loadAll() or loadCode() returns null and makes no canvas.
+let gen = 0;
 window.snSaver = {
   async enter(o = {}) {
     if (run) this.exit();
+    const my = ++gen;
     const calm = clamp(o.calm == null ? 0.7 : +o.calm, 0, 1);
     const seed = (o.seed >>> 0) || 1;
     const L = await loadAll();
-    if (!L.shots.length) return null;
+    if (my !== gen || !L.shots.length) return null;
     await loadCode(L);
+    if (my !== gen) return null;
     const plan = shotPlan(L.shots, seed, 120, calm);
     const css = document.createElement('style');
     css.textContent = 'html,body{overflow:hidden!important}body>*:not(#aqSaverCv){visibility:hidden!important}' +
@@ -204,6 +213,7 @@ window.snSaver = {
     return { canvas: cv, warmupMs: 700 };
   },
   exit() {
+    gen++;
     if (!run) return;
     cancelAnimationFrame(run.raf);
     if (run.drawer) run.drawer.dispose();

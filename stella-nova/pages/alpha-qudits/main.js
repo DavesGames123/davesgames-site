@@ -207,7 +207,8 @@ function placeholder(host, pkg, scene) {
   const draw = t => {
     const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
     const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
-    if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+    // canvas sizes are integers: compare the rounded size, as fit() does
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
     const g = cv.getContext('2d'); if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
     const cols = ['#62c4ff', '#ff9a62', '#86dc7c'];

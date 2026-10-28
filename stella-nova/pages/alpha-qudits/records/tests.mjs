@@ -194,6 +194,15 @@ else {
       ok(+c.style.width.replace('px', '') === 340 && c.width === 680, `${s}: canvas 340 css px at dpr 2`);
     }
     ok(!host.querySelector('.rec-notes'), 'notes: false hides the analogy notes');
+    // a 270 px card on a 320 px phone: the canvas must not be wider than the card
+    {
+      const keepRect = w.HTMLElement.prototype.getBoundingClientRect;
+      w.HTMLElement.prototype.getBoundingClientRect = function () { return { left: 0, top: 0, width: 270, height: 600, right: 270, bottom: 600 }; };
+      inst.resize();
+      const c = host.querySelector('canvas');
+      ok(c.style.width === '270px' && c.width === 540, `a 270 px card: canvas ${c.style.width} at ${c.width} px`);
+      w.HTMLElement.prototype.getBoundingClientRect = keepRect; inst.resize();
+    }
     inst.show('grid', { step: 'sectors' });
     inst.play(5);
     // tap a record cell: the first cell of the first group
