@@ -6,7 +6,7 @@
 //  confidence: confirmed = a primary source states it, reported = news only,
 //  disputed = the sources disagree or the claim is denied.
 //  A link between threads is in related, not in parent.
-//  Gathered 2026-10-22, extended twenty times by 2026-10-28. Still going on then.
+//  Gathered 2026-10-22, last extended 2026-10-31. Still going on then.
 // ============================================================================
 export const EVENTS = [
  {
@@ -30269,5 +30269,2155 @@ export const EVENTS = [
   ],
   "confidence": "reported",
   "note": "Dated to the sixth listed filing (26 Oct); the first was filed 22 Oct. Case numbers 2:26-cv-13795, -13852, -13889, -13911, -13913 and 1:26-cv-13940 are from the aggregator, not checked on PACER. Plaintiff names left out on purpose."
+ },
+ {
+  "id": "emu-esr115-cause",
+  "thread": "emudhra",
+  "parent": "emu-esr115-onecrl-gap",
+  "t": "2026-10-28T21:43:49Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: ESR 115 loads OneCRL only after 20 idle seconds, so the block can be late",
+  "summary": "A commenter reproduces the gap on Firefox 115.44.0esr with a clean profile. ESR 115 starts its OneCRL load in a task that waits for 20 seconds without user input, and the eMudhra G3 root is still a built-in there.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086788#c2",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-esr-roots-still-in",
+  "thread": "emudhra",
+  "parent": "emu-esr-onecrl-clarify",
+  "t": "2026-10-28T21:48:24Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: ESR 153.6.0 and 115.44.0 still ship the eMudhra G3 root as trusted",
+  "summary": "A commenter links the source: ESR 153.6.0 builds NSS 3.125 and ESR 115.44.0 builds NSS 3.90.6, and both keep emSign ECC Root CA - G3. The root removals from NSS 3.131.1 have reached neither ESR, so both rely on OneCRL.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2084379#c6",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-g1-plan-undisclosed",
+  "thread": "emudhra",
+  "parent": "emu-update6-g1-transition",
+  "t": "2026-10-28T22:04:15Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: Chrome's 7-day window passed with no answers; the G1 plan was not on the bug",
+  "summary": "A commenter says Chrome's seven-day window closed at 20:38 UTC on 28 October with its 12 questions unanswered. The comment also asks for the period eMudhra wants G1 kept trusted and the date G1 issuance stops. eMudhra posted its answers about two hours after this comment.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c61",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-response-chrome-filed",
+  "thread": "emudhra",
+  "parent": "emu-chrome-questions",
+  "t": "2026-10-29T00:25:59Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra answers Chrome: 25,058 G3 certificates still valid across 267 organisations",
+  "summary": "eMudhra's reply, dated 28 October, counts 25,058 unexpired G3 certificates as of 09:18 UTC and puts impact at about 70% resolved. Non-US subscribers move to Sectigo by 15 November. It gives no date for US subscribers until the browser programs answer its transition plan.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c62",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/attachment.cgi?id=9670867",
+    "publisher": "eMudhra (Bugzilla attachment)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "eMudhra says the document went to Chrome and other programs earlier the same day (comment 64)."
+ },
+ {
+  "id": "emu-response-script-correction",
+  "thread": "emudhra",
+  "parent": "emu-response-chrome-filed",
+  "t": "2026-10-29T00:26:00Z",
+  "tPrecision": "minute",
+  "kind": "correction",
+  "title": "eMudhra corrects itself: the ceremony script chose the re-imported keys for the CSRs",
+  "summary": "The reply corrects comment 11, which blamed similar key labels. eMudhra now says the script specified CSRs from the re-imported keys, and that it should have told Sectigo and the root programs about the June 2025 key mismatch.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/attachment.cgi?id=9670867",
+    "publisher": "eMudhra (Bugzilla attachment)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-crl11-operator-error",
+  "thread": "emudhra",
+  "parent": "emu-crl-ocsp-key",
+  "t": "2026-10-29T00:27:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra: operator error let an OCSP key sign root CRL #11; June 2025 fix skipped root CRLs",
+  "summary": "eMudhra says an operator mapped the Root TLS CA - G1 CRL signing key to a new OCSP key on 14 October, and it corrected this on 15 October. Its June 2025 controls covered issuing-CA CRLs only. It says it will file a separate preliminary report on 29 October.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/attachment.cgi?id=9670867",
+    "publisher": "eMudhra (Bugzilla attachment)",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "No separate preliminary report found in the CA Program bug list by 31 October; see open leads."
+ },
+ {
+  "id": "emu-second-crl-claim",
+  "thread": "emudhra",
+  "parent": "emu-crl11-operator-error",
+  "t": "2026-10-29T05:14:33Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: a second eMudhra root CRL was also signed by an OCSP key",
+  "summary": "A commenter says eMudhra's scoping missed emSign Root TLS CA - G3 CRL 10, also signed by an OCSP certificate. The comment says no other CA has been seen to do this and links the fault to eMudhra's own emCA software.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c65",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "emu-rsa-g2-question",
+  "thread": "emudhra",
+  "parent": "emu-response-chrome-filed",
+  "t": "2026-10-29T05:39:48Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: RSA G2B and G2C keys came from the same day and HSM model; reply skips them",
+  "summary": "A commenter says the reply covers Series A and A-1 only. The RSA G2B and G2C keys were made on 30 April 2025 on the same HSM model as the compromised keys, and the comment asks whether they used the same script.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c66",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2083449#c58",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "The question was first posted at 18:20 UTC on 28 October (comment 58). No party has said that these keys are weak."
+ },
+ {
+  "id": "emu-crl-ua-full-report",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-blocked",
+  "t": "2026-10-29T08:46:55Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra report: a firewall filter blocked revocation clients since 2022; removed 26 Oct",
+  "summary": "eMudhra says a generic vendor bot-protection profile refused curl, Wget, Python-urllib and libwww-perl on seven hosts from 28 September 2022. It removed the filter on 26 October at 10:32 and reports zero affected certificates.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085612#c3",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-crl-ua-impact-dispute",
+  "thread": "emudhra",
+  "parent": "emu-crl-ua-full-report",
+  "t": "2026-10-29T09:17:45Z",
+  "tPrecision": "minute",
+  "kind": "other",
+  "title": "Bug comment: compromised-CA revocation was out of reach for some clients for 8 days",
+  "summary": "A commenter says eMudhra's impact statement omits that the CRLs carrying the eight revocations were unavailable over HTTP to four client types from 18 to 26 October. The comment asks for a correction to eMudhra's earlier claim that revocation was available.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2085612#c5",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "disputed",
+  "note": "eMudhra's report states zero certificates affected; no eMudhra reply on this point by 31 October."
+ },
+ {
+  "id": "emu-esr115-fix-landed",
+  "thread": "emudhra",
+  "parent": "emu-esr115-cause",
+  "t": "2026-10-29T14:48:02Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Mozilla lands the ESR 115 fix: OneCRL now loads as a startup idle task",
+  "summary": "Mozilla's uplift request says OneCRL data was not available until the user had been idle for 20 seconds, which may not happen. The change landed on the mozilla-esr115 branch and carries a low risk rating.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086788#c5",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   },
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086788#c6",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-esr115-verified",
+  "thread": "emudhra",
+  "parent": "emu-esr115-fix-landed",
+  "t": "2026-10-30T12:40:51Z",
+  "tPrecision": "minute",
+  "kind": "patch",
+  "title": "Mozilla QA verifies the ESR 115 fix in a 115.45.0 build on three platforms",
+  "summary": "Mozilla QA reproduces the gap on 115.43.1 and verifies the fix on a 115.45.0 Treeherder build on macOS, Ubuntu and Windows. The bug closes as VERIFIED FIXED.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086788#c7",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Mozilla's version feed still listed 115.44.0esr as current on 31 October, and the build is not a public release."
+ },
+ {
+  "id": "emu-ms-ua-rule",
+  "thread": "emudhra",
+  "parent": "emu-ms-crl-ua-bug",
+  "t": "2026-10-29T20:19:55Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Microsoft: a rule on www.microsoft.com refused Wget and bare Mozilla/5.0 for CRLs",
+  "summary": "Microsoft says the rule applied only to www.microsoft.com and that it will not share the full configuration. Its full report will cover 15 Mozilla-trusted CAs and CA certificate URLs as well as CRLs.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086195#c2",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-oid-full-report",
+  "thread": "emudhra",
+  "parent": "emu-validity-full-report",
+  "t": "2026-10-30T09:15:39Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra full report: 8,288+ TLS certificates lack the policy OID its CP/CPS requires",
+  "summary": "eMudhra says DV, OV and EV certificates carried a CP/CPS document identifier and the CA/Browser Forum identifier, but not the emSign certificate-type identifier that its own CP/CPS requires. The report covers Bug 2082782.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2082782#c2",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-cps-full-report",
+  "thread": "emudhra",
+  "parent": "emu-oid-full-report",
+  "t": "2026-10-30T11:12:31Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "eMudhra full report: two policy documents held out-of-date CA/Browser Forum rules",
+  "summary": "eMudhra says its InCommon IGTF CPS and emSign PKI CP/CPS contained four statements that did not match current rules. The emSign document had listed port 115 as an authorized port since 2017.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2082872#c1",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-kpmg-reviewer",
+  "thread": "emudhra",
+  "parent": "emu-update5-script-error",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "eMudhra appoints KPMG as independent external reviewer of the key incident",
+  "summary": "eMudhra's status page update 7 and a stock-exchange filing name KPMG. ThePrint reports that the filing gives no scope, no completion date and no promise to publish the findings. eMudhra has given no date for its root-cause report.",
+  "sources": [
+   {
+    "url": "https://emudhra.com/en/post/certificate-security-incident",
+    "publisher": "eMudhra",
+    "primary": true
+   },
+   {
+    "url": "https://theprint.in/tech/emudhra-appoints-kpmg-to-review-compromised-certificate-keys-browser-makers-await-root-cause-report/3085892/",
+    "publisher": "ThePrint",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "emu-sectigo-ua-report",
+  "thread": "emudhra",
+  "parent": "emu-sectigo-ua-filter",
+  "t": "2026-10-30T16:37:08Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Sectigo full report: its CRL filter ran for years; it disputes that this broke the rules",
+  "summary": "Sectigo says it does not agree that blocking some User-Agents breaks the Baseline Requirements, but that CRLs should not be blocked on User-Agent alone. It ended the block on 27 October and wants the question taken to the CA/Browser Forum.",
+  "sources": [
+   {
+    "url": "https://bugzilla.mozilla.org/show_bug.cgi?id=2086490#c1",
+    "publisher": "Mozilla Bugzilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-dream-names-panos",
+  "thread": "php2shell",
+  "parent": "php-dream-fragnesia-chain",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Dream names Palo Alto: 24 PAN-OS firewalls and a management server rooted",
+  "summary": "Dream's update says the operator found about 19,000 internet-facing PAN-OS devices and selected 240 as targets. Two of the 24 firewalls belonged to a US government-affiliated organisation. Dream says Unit 42 tracks the activity as CL-UNK-1280, a Chinese-speaking operator in UTC+8.",
+  "sources": [
+   {
+    "url": "https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers",
+    "publisher": "Dream",
+    "primary": true
+   },
+   {
+    "url": "https://www.theregister.com/security/2026/10/29/suspected-chinese-attackers-built-a-custom-php2shell-exploit-and-rooted-25-servers/5306456",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "CL-UNK-1280 appears on Dream's page, not on the Unit 42 page. Dream found no direct evidence that AI wrote the exploit, and CISA and the FBI declined to comment."
+ },
+ {
+  "id": "php-unit42-verifies-dream",
+  "thread": "php2shell",
+  "parent": "php-dream-names-panos",
+  "t": "2026-10-29T18:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Unit 42 verifies the attacker's tooling; about 0.02% of Palo Alto's base was exposed",
+  "summary": "Unit 42 confirms Dream's results and says patched PAN-OS breaks the observed chain. It says about 0.02% of the installed base had internet-facing management interfaces and were impacted, and that it contacted each customer.",
+  "sources": [
+   {
+    "url": "https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/",
+    "publisher": "Palo Alto Networks Unit 42",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Time is the update stamp, 11:00 PT. The Hacker News quotes Palo Alto with 'less than .01%' instead."
+ },
+ {
+  "id": "php-paloalto-hotfixes-1029",
+  "thread": "php2shell",
+  "parent": "php-paloalto-hotfixes-1028",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Palo Alto ships the last six PAN-OS PHP hotfixes; no ETAs remain",
+  "summary": "The advisory timeline removes the ETAs for 11.1.7-h12, 10.2.7-h39, 10.2.10-h42, 11.2.4-h23, 12.1.4-h13 and 12.1.10-h3. The header reads ATTACKED, for interfaces exposed to the internet.",
+  "sources": [
+   {
+    "url": "https://security.paloaltonetworks.com/CVE-2026-109618",
+    "publisher": "Palo Alto Networks",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-cisco-v110",
+  "thread": "php2shell",
+  "parent": "php-cisco-v18-final",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Cisco v1.10 sets a URWB fix release and revises ISE Portal Builder's fix status",
+  "summary": "Cisco reopens its final advisory twice. Version 1.9 on 28 October changes the URWB fix date, and version 1.10 sets a fixed release for URWB and Unified Industrial Wireless Software and adds Webex Events to the not-vulnerable list.",
+  "sources": [
+   {
+    "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-php-october26-Jj384Daq",
+    "publisher": "Cisco",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-ncscnl-eight-fixes",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-investigation-1028",
+  "t": "2026-10-29T13:02:07Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker moves eight 'Investigation' products to Fix, Acquia among them",
+  "summary": "The review covered 355 entries with at least one Investigation status. No new Vulnerable or Not vuln results came from it.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/66",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-ncscnl-xerox",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-eight-fixes",
+  "t": "2026-10-29T14:42:03Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker adds 166 Xerox product rows from XRX26-016 v4",
+  "summary": "Five rows are Vulnerable, one is Fix, 160 are Not vuln, and two more entries stay in Investigation. November patch targets stay Vulnerable because a planned release does not prove a fix.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/68",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-ncscnl-check-point-fix",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-xerox",
+  "t": "2026-10-30T07:50:46Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Dutch NCSC tracker records fixes for Check Point, Cisco Expressway and QNAP products",
+  "summary": "The review started from 223 Vulnerable entries and moved seven products to Fix. It also adds fixed Spryker, Mautic and SnappyMail container images. Parent applications stay Vulnerable on an unpatched PHP.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/70",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-vitalpbx-no-patch",
+  "thread": "php2shell",
+  "parent": "php-ncscnl-check-point-fix",
+  "t": "2026-10-30T08:10:24Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "VitalPBX says no patch for PHP 8.1; Dutch NCSC tracker marks legacy 4.0 Vulnerable",
+  "summary": "VitalPBX staff offer FPM mitigations for Debian 11 and say that no vendor patch will come for that PHP version. The tracker records VitalPBX 4.5 on Debian 12 as Fix in a later change.",
+  "sources": [
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/71",
+    "publisher": "NCSC-NL",
+    "primary": true
+   },
+   {
+    "url": "https://github.com/NCSC-NL/php2shell/pull/72",
+    "publisher": "NCSC-NL",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "php-crowdsec-1187-ips",
+  "thread": "php2shell",
+  "parent": "php-f5labs-first-scans",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "CrowdSec counts 1,187 PHP2Shell source IPs in five days and no confirmed compromise",
+  "summary": "CrowdSec records 10,073 signals from 21 to 25 October. In its data, 147 sources tried CVE-2026-109618 and 429 tried CVE-2026-109619.",
+  "sources": [
+   {
+    "url": "https://www.crowdsec.net/vulntracking-report/cve-2026-109618-php2shell-no-mass-exploitation-yet",
+    "publisher": "CrowdSec",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Published before the Dream report named PAN-OS. 'No confirmed compromise' is true only of what CrowdSec knew on 26 October."
+ },
+ {
+  "id": "php-bitsight-patch-split",
+  "thread": "php2shell",
+  "parent": "php-ox-day5-unpatched",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "other",
+  "title": "Bitsight: 68.6% of supported-branch PHP hosts patched in a week; only 6.4% on EOL branches",
+  "summary": "Bitsight rescanned 9.47 million previously vulnerable hosts and found 33.5% patched. It finds no reliable mass exploitation and no verified mass-compromise claim.",
+  "sources": [
+   {
+    "url": "https://www.bitsight.com/blog/php2shell-scanning-exploitation-patching",
+    "publisher": "Bitsight",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "gitlab-alpine-attack",
+  "thread": "gitlab",
+  "parent": "gitlab-rapid7-repro",
+  "t": "2026-10-21T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Attacker targets Alpine Linux's GitLab with a CVE-2026-97229 exploit; workers crash",
+  "summary": "A newly registered account probed on 20 October and the main attack came on 21 October. Alpine had upgraded to 19.3.4, not to the fixed 19.3.5, and later found 19.3.6 did not fix its build, because its image uses standard Ruby.",
+  "sources": [
+   {
+    "url": "https://alpinelinux.org/posts/GitLab-security-incident-CVE-2026-97229.html",
+    "publisher": "Alpine Linux",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/max-severity-gitlab-vulnerability-exploited-against-alpine-linux/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Day chosen is the main attack, 21 October; probing began on 20 October."
+ },
+ {
+  "id": "gitlab-alpine-report",
+  "thread": "gitlab",
+  "parent": "gitlab-alpine-attack",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Alpine rebuilds its GitLab and resets all passwords; it cannot rule out code execution",
+  "summary": "Alpine finds no evidence that attacker code ran and no tampering with packages or the 21 October releases. Some logs are gone and outbound connections were not logged. Signing keys were never on the server.",
+  "sources": [
+   {
+    "url": "https://alpinelinux.org/posts/GitLab-security-incident-CVE-2026-97229.html",
+    "publisher": "Alpine Linux",
+    "primary": true
+   },
+   {
+    "url": "https://www.securityweek.com/max-severity-gitlab-vulnerability-exploited-against-alpine-linux/",
+    "publisher": "SecurityWeek",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "gitlab-alpine-reopen",
+  "thread": "gitlab",
+  "parent": "gitlab-alpine-report",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Alpine reopens its GitLab, upgraded to 19.3.7",
+  "summary": "Alpine's timeline lists the reopening on 29 October. It also plans faster patching, outbound connection logging and signed release tags.",
+  "sources": [
+   {
+    "url": "https://alpinelinux.org/posts/GitLab-security-incident-CVE-2026-97229.html",
+    "publisher": "Alpine Linux",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "An update note on the same post is dated 30 October."
+ },
+ {
+  "id": "gitlab-kev-97229",
+  "thread": "gitlab",
+  "parent": "gitlab-rapid7-repro",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds GitLab CVE-2026-97229 to KEV with a 1 November deadline",
+  "summary": "The KEV entry notes that other products can be hit by the same Ruby Onigmo flaw. Shadowserver tracks nearly 2,800 internet-exposed GitLab CE instances, with the patched share unknown.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV catalog",
+    "primary": true
+   },
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/hackers-now-exploiting-max-severity-gitlab-flaw-in-attacks/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Separate from CVE-2026-110264, the CVSS 10 flaw that GitLab patched on 21 October."
+ },
+ {
+  "id": "ivanti-ics-two-more-cves",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-kev",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "patch",
+  "title": "Ivanti adds two more chained Connect Secure CVEs; October patches do not cover them",
+  "summary": "Ivanti's updated advisory adds CVE-2026-111357 and CVE-2026-118527, reportedly fixed in 25.1.1.3 and 22.8R2.6. Appliances on 25.1.1.2 or 22.8R2.5 stay exposed.",
+  "sources": [
+   {
+    "url": "https://cipherssecurity.com/ivanti-connect-secure-cve-2026-111357/",
+    "publisher": "Ciphers Security",
+    "primary": false
+   },
+   {
+    "url": "https://securityonline.info/ivanti-connect-secure-vulnerability-exploited/",
+    "publisher": "SecurityOnline",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Ivanti advisory page did not render for us, so the date and versions rest on news reports. Sources differ on the CVSS score of CVE-2026-111357: 8.8 or 7.0."
+ },
+ {
+  "id": "ivanti-ics-kev-two",
+  "thread": "ivanti-ics",
+  "parent": "ivanti-ics-two-more-cves",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA adds both new Ivanti CVEs to KEV, due 2 and 13 November",
+  "summary": "The KEV entries say both flaws can be chained with CVE-2026-104935. CVE-2026-111357 is due 2 November and CVE-2026-118527 is due 13 November.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/alerts/2026/10/30/cisa-adds-two-known-exploited-vulnerabilities-catalog",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+    "publisher": "CISA KEV catalog",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-epoch-glm-firefox",
+  "thread": "ai-discovery",
+  "parent": "ai-firefox159-codex-credits",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Epoch AI: open-weight GLM 5.3 turned Firefox fixes into exploits at about $1,000 a version",
+  "summary": "Epoch says the model used public but unshipped fixes, plus an unpublished flaw, against six releases from 156.0 to 158.0.1. The chain read a local file from one page visit; it reached no code execution on recent releases. About $100,000 of Chrome attempts failed.",
+  "sources": [
+   {
+    "url": "https://epoch.ai/publications/open-weight-models-patch-gap",
+    "publisher": "Epoch AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Firefox 159.0 fixes the unpublished flaw. Epoch has not confirmed whether 159.0 stops the attack."
+ },
+ {
+  "id": "ai-mozilla-patch-gap",
+  "thread": "ai-discovery",
+  "parent": "ai-epoch-glm-firefox",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Mozilla keeps some regression tests private until fixes ship, to narrow the patch gap",
+  "summary": "Mozilla says GLM 5.3 is much less effective at patch-gapping without a regression test. It also scans every new commit and plans to separate fixes by defence layer. Its builds now reach users weekly.",
+  "sources": [
+   {
+    "url": "https://blog.mozilla.org/en/firefox/privacy-security/defending-patch-gap/",
+    "publisher": "Mozilla",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "ai-cipher-grid-icsa",
+  "thread": "ai-discovery",
+  "parent": "ai-patch-the-planet-launch",
+  "t": "2026-10-08T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "advisory",
+  "title": "CISA advisory on six openPDC and openHistorian grid flaws credits Causal's Cipher agent",
+  "summary": "ICSA-26-281-02 lists six CVEs in Grid Protection Alliance power-grid software, two rated CVSS 9.8. The Register later reports that the Cipher AI agent found these attack paths, before its EPICS work.",
+  "sources": [
+   {
+    "url": "https://www.cisa.gov/news-events/ics-advisories/icsa-26-281-02",
+    "publisher": "CISA",
+    "primary": true
+   },
+   {
+    "url": "https://www.theregister.com/a/5305811",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "No fix is planned for the openPDC Docker image, per CISA."
+ },
+ {
+  "id": "onamae-fifteenth-report",
+  "thread": "onamae",
+  "parent": "onamae-fourteenth-report",
+  "t": "2026-10-29T03:40:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO fifteenth report: white-hat team finds information that may identify the attacker",
+  "summary": "GMO says its in-house white-hat team found information that may lead to the attacker and will give it to police the same day. The bounty site had 270 tips at 11:30 JST.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/20261029/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   },
+   {
+    "url": "https://www.nikkei.com/article/DGXZQOUC2948U0Z21C26A0000000/",
+    "publisher": "Nikkei",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-sixteenth-report",
+  "thread": "onamae",
+  "parent": "onamae-fifteenth-report",
+  "t": "2026-10-29T11:50:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO sixteenth report: 321 bounty tips; it will post the count at 18:00 JST on weekdays",
+  "summary": "The report counts 321 tips at 18:00 JST on 29 October, up 208 in a day. GMO asks people not to name or contact suspects themselves.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/2026102902/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-customer-contact",
+  "thread": "onamae",
+  "parent": "onamae-sixteenth-report",
+  "t": "2026-10-30T06:30:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO starts contacting customers about the 5,000 yen payment and substitute service",
+  "summary": "A notice stamped 15:30 JST on 30 October says GMO has started to contact contract holders on the payment and the alternative service from its fourth report.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/20261030/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "onamae-tips-428",
+  "thread": "onamae",
+  "parent": "onamae-sixteenth-report",
+  "t": "2026-10-30T09:00:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "GMO bounty tips reach 428 at 18:00 JST on 30 October",
+  "summary": "GMO adds the count to its sixteenth report: 107 more tips in a day.",
+  "sources": [
+   {
+    "url": "https://group.gmo/info/alert/2026102902/",
+    "publisher": "GMO Internet Group",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The page keeps its 29 Oct 20:50 JST stamp but carries this later count, so GMO edited it after that stamp."
+ },
+ {
+  "id": "jpalert-kihara-260m",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Kihara: leak reports since April cover about 260 million people; 830 in October",
+  "summary": "The privacy commission's preliminary count for 1 April to 16 October is 2,094 reports, about 1.7 times all of last fiscal year. October has 22 reports above one million people, four of them above ten million. Finance and telecoms are not in the count.",
+  "sources": [
+   {
+    "url": "https://news.infoseek.co.jp/article/jiji_2026103000493/",
+    "publisher": "Jiji Press via Infoseek",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261030de68227",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Jiji dates the press conference 30 Oct. The October figure of 830 runs only to 16 Oct. People are counted once per report, so the figure is cumulative, not unique."
+ },
+ {
+  "id": "jpalert-nco-tokusetsu",
+  "thread": "jp-wave-alerts",
+  "parent": "jpalert-cabinet-meeting",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "National Cybersecurity Office opens a response site with help desks and alerts",
+  "summary": "The site lists desks for firms and for individuals from the police agency, METI and IPA, and collects the agency alerts of October.",
+  "sources": [
+   {
+    "url": "https://www.cyber.go.jp/tokusetsu/contactpoint_advisory_hub/index.html",
+    "publisher": "National Cybersecurity Office",
+    "primary": true
+   },
+   {
+    "url": "https://cybersecurity-jp.com/news/117988",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The opening date comes from the news source. The office page has no date."
+ },
+ {
+  "id": "cuenote-lifecard",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Life Card: 339,610 contracts' names and emails may have leaked via Cuenote",
+  "summary": "Ymirlink told Life Card on 26 October. Life Card says its card-member system was not accessed.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117906",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "cuenote-dcm",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "DCM: leak of 753,272 home-centre members confirmed after Ymirlink's 29 October report",
+  "summary": "Emails, member IDs, names, sex, birth month and prefecture left through Cuenote FC. DCM says this is separate from the access to its Maibo member system that it reported on 13 October.",
+  "sources": [
+   {
+    "url": "https://www.dcm-hc.co.jp/news/news_file/file/20261030news.pdf",
+    "publisher": "DCM Holdings",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "amadeus-ana",
+  "thread": "amadeus-airlines",
+  "parent": "amadeus-ana-checking",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "ANA: about 37,800 people's bookings may have been viewed; 1,700 with passport numbers",
+  "summary": "ANA says Amadeus reported the access to it on 20 October. Bookings from 10 August 2023 to 23 September 2026 are in scope, and card data and passwords are not. ANA will contact customers from the next week.",
+  "sources": [
+   {
+    "url": "https://www.aviationwire.jp/archives/353359",
+    "publisher": "Aviation Wire",
+    "primary": false
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/bdf65af47c9fb586",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "ANA notice 001612 timed out twice, so the figures come from Aviation Wire."
+ },
+ {
+  "id": "muji-app-notice",
+  "thread": "muji-app",
+  "parent": null,
+  "t": "2026-10-30T05:10:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Ryohin Keikaku: up to about 27.26 million MUJI app records may have leaked",
+  "summary": "Emails, birth dates and sex may be exposed, including those of former members. The company says names, addresses, phones and cards are not included, and it has blocked the access and applied a fix.",
+  "sources": [
+   {
+    "url": "https://prtimes.jp/main/html/rd/p/000001877.000000987.html",
+    "publisher": "Ryohin Keikaku via PR Times",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "yakult-first",
+  "thread": "yakult",
+  "parent": null,
+  "t": "2026-10-26T10:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Yakult Honsha reports unauthorised access to its website and stops site functions",
+  "summary": "The first report came at 19:00 JST on 26 October.",
+  "sources": [
+   {
+    "url": "https://www.yakult.co.jp/maintenance/?id=335",
+    "publisher": "Yakult Honsha",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "yakult-second",
+  "thread": "yakult",
+  "parent": "yakult-first",
+  "t": "2026-10-30T00:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Yakult: about 40,000 personal records leaked from its inquiry forms and school-lunch site",
+  "summary": "Inquiry users, press contacts, 'Tanoshii Kyushoku' members and handling staff are affected. The company says the count can change and the method is still under review.",
+  "sources": [
+   {
+    "url": "https://www.yakult.co.jp/maintenance/?id=335",
+    "publisher": "Yakult Honsha",
+    "primary": true
+   },
+   {
+    "url": "https://cybersecurity-jp.com/news/117951",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "matsuya-notice",
+  "thread": "matsuya-app",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Matsuya: 2,377,127 meal-order users' data leaked after its app admin system was breached",
+  "summary": "Names, addresses, phones and points of ordering users left, plus at least 2,000 app members with hashed passwords. The company found the leak on 28 October and stopped the app.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/192210",
+    "publisher": "Security NEXT",
+    "primary": false
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/399bfc2e52cdd7e9",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "TDnet returned 403 to the fetcher, so the company filing was not opened."
+ },
+ {
+  "id": "world-tinpan-notice",
+  "thread": "world-tinpanalley",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "World: about 1.2 million member records may have left subsidiary Tin Pan Alley's server",
+  "summary": "The intruder entered at about 14:51 JST on 17 October and was found on 28 October, about 11 days later. Names, addresses, phones, birth dates and emails are at risk.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117952",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/87a338bf1f35b4ac",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   },
+   {
+    "url": "https://news.web.nhk/newsweb/na/nd-20261030de68227",
+    "publisher": "NHK",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "TDnet returned 403 to the fetcher, so the company filing was not opened."
+ },
+ {
+  "id": "kddi-lifenet-notice",
+  "thread": "kddi-lifenet",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "KDDI and Lifenet: up to 22,541 au customers' data may have leaked via a Lifenet system",
+  "summary": "A flaw in a function of the Lifenet system let a third party reach data on the KDDI side. Lifenet detected this on 23 October and KDDI cut the link the next day.",
+  "sources": [
+   {
+    "url": "https://newsroom.kddi.com/news/assets/2026/kddi_nr_s-82_4796/kddi_nr_s-82_4796_pdf_01.pdf",
+    "publisher": "KDDI and Lifenet Life Insurance",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "dhc-notice",
+  "thread": "dhc-shop",
+  "parent": null,
+  "t": "2026-10-30T05:45:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "DHC: intruder rewrote 5,096 online-shop accounts through a system flaw",
+  "summary": "The company also found 27 suspect orders and 71 fake sign-ups, all reversed. Delivery details, order history and the last four card digits may have been viewed, with no sign that data left.",
+  "sources": [
+   {
+    "url": "https://dhc-corporate.co.jp/cms_dH8vjpRq/wp-content/uploads/2026/10/0deb6f2426f1d5ab2b2b1824288b374d.pdf",
+    "publisher": "DHC",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The time comes from the PDF metadata (14:45 JST), not the text."
+ },
+ {
+  "id": "arara-stop",
+  "thread": "arara-message",
+  "parent": null,
+  "t": "2026-10-28T08:23:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Arara stops its Arara Message mail service after unauthorised access",
+  "summary": "Arara disconnected the target server and stopped the service at 17:23 JST on 28 October.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117904",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "arara-301m",
+  "thread": "arara-message",
+  "parent": "arara-stop",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Arara: about 3.01 million email addresses leaked from one mail environment, bvam001",
+  "summary": "End-user list addresses left the bvam001 environment. Parent Paycloud blames a web-server flaw and names no CVE.",
+  "sources": [
+   {
+    "url": "https://am.arara.com/news/2026103001",
+    "publisher": "Arara",
+    "primary": true
+   },
+   {
+    "url": "https://cybersecurity-jp.com/news/117904",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "No source says PHP. The Paycloud filing was not opened (403)."
+ },
+ {
+  "id": "arara-payd-lenders",
+  "thread": "arara-message",
+  "parent": "arara-301m",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Kagoshima Bank and three other lenders: Pay-Don users' payment data may have leaked too",
+  "summary": "The four lenders say payment dates, shops and amounts may have left with emails, which is wider than Arara's 'emails only'. The reason for the difference is not public.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117904",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Dated from the list entries of 28 and 29 Oct."
+ },
+ {
+  "id": "japanticket-notice",
+  "thread": "japanticket",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "JapanTicket: up to about 264,000 customers' data taken through an outside analytics tool",
+  "summary": "A third party reached the tool, and data may have left by 15 September. JapanTicket found this on 28 October. Partner booking sites are also affected.",
+  "sources": [
+   {
+    "url": "https://www.japanticket.com/news-20261029/",
+    "publisher": "JapanTicket",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "japanticket-downstream",
+  "thread": "japanticket",
+  "parent": "japanticket-notice",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "JapanTicket partners disclose: Yamanashi's Fuji booking, about 70,000; Chiikawa Bakery",
+  "summary": "Yamanashi Prefecture reports about 70,000 records on the Mt Fuji Yoshida route booking system.",
+  "sources": [
+   {
+    "url": "https://jouhourouei.clipmaster.jp/",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "saga-univ-notice",
+  "thread": "saga-univ",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Saga University: about 80,000 people's data and some patient records may have leaked",
+  "summary": "Suspected ransomware hit an administrative NAS on 24 September. Diagnoses and visit dates are among the data, and the patient count is still open.",
+  "sources": [
+   {
+    "url": "https://www.saga-u.ac.jp/koho/press/2026103041765",
+    "publisher": "Saga University",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "nihon-kotsu-sixth",
+  "thread": "nihon-kotsu",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Nihon Kotsu sixth report: about 290,000 people's data may have leaked in July intrusion",
+  "summary": "Applicants, crash counterparties, staff and families are included. Some records hold My Number, licences or bank details.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117973",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The attack dates from 11 July, so the only link is to the Japanese notice wave."
+ },
+ {
+  "id": "meti-dentrinet",
+  "thread": "meti-dentrinet",
+  "parent": null,
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "METI takes down Dentrinet, its energy-trade reporting site, after an attack",
+  "summary": "The attack came early on 27 October and was found on 28 October. Filers report by email until the site returns, and any data loss is under review.",
+  "sources": [
+   {
+    "url": "https://www.security-next.com/192212",
+    "publisher": "Security NEXT",
+    "primary": false
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/c811d31caa70744b",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "METI's page returned 403 to the fetcher."
+ },
+ {
+  "id": "mofa-notice",
+  "thread": "mofa-network",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Foreign Ministry: about 3,600 records may have leaked from its internet-facing network",
+  "summary": "About 900 records belong to people outside the ministry. The ministry says it found the access on 27 July, and the consular system is not affected.",
+  "sources": [
+   {
+    "url": "https://internet.watch.impress.co.jp/docs/news/2152757.html",
+    "publisher": "INTERNET Watch",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "No cause is stated. The link is the Japanese notice wave only."
+ },
+ {
+  "id": "bm-kyushu-univ",
+  "thread": "blastmail",
+  "parent": "bm-update-1028",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Kyushu University: up to 9,999 alumni names and emails may have leaked via Blastmail",
+  "summary": "The alumni association used Blastmail through its site operator. The university also reports nine staff accounts at risk on a separate clinical-trial monitoring system.",
+  "sources": [
+   {
+    "url": "https://www.kyushu-u.ac.jp/ja/notices/view/3198",
+    "publisher": "Kyushu University",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "bm-okinawa-mice",
+  "thread": "blastmail",
+  "parent": "bm-update-1028",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Okinawa Prefecture: 8,152 MICE newsletter recipients' names and emails may have leaked",
+  "summary": "The tourism bureau that ran the mailings used the Rakus Light Cloud service.",
+  "sources": [
+   {
+    "url": "https://www.pref.okinawa.lg.jp/bunkakoryu/sport/1009786/1041818.html",
+    "publisher": "Okinawa Prefecture",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cuenote-praise-net",
+  "thread": "cuenote",
+  "parent": "cuenote-second-report",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Pharma federation: 30,750 PRAISE-NET mail addresses may have leaked via Cuenote FC",
+  "summary": "Ymirlink first reported the incident on 19 October and the PRAISE-NET risk on 26 October. Only email addresses were in the mail service.",
+  "sources": [
+   {
+    "url": "https://www.jpma.or.jp/news_room/release/2026/261030.html",
+    "publisher": "Japan Pharmaceutical Manufacturers Association",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "kintetsu-ntt-platform",
+  "thread": "kintetsu-bonds",
+  "parent": null,
+  "t": "2026-10-31T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Kintetsu: 2,678 bond investors' data may have left an NTT Data contractor's platform",
+  "summary": "NTT Data told Kintetsu on 30 October of unauthorised access to a contractor's digital securities platform. The route is still under review.",
+  "sources": [
+   {
+    "url": "https://files.microcms-assets.io/assets/b5bb8ced8fa1487390ad071605410061/3d5fea5cb2814f86a6e7f89d5aec14a0/20261031hd.pdf",
+    "publisher": "Kintetsu Group Holdings",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "japan-post-mail",
+  "thread": "japan-post-mail",
+  "parent": null,
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Japan Post: some international-mail members' emails may have leaked at a contractor",
+  "summary": "The contractor held only email addresses, and My Page itself was not accessed. Japan Post does not name the contractor.",
+  "sources": [
+   {
+    "url": "https://www.post.japanpost.jp/newsrelease/pressrelease/01175116571.html",
+    "publisher": "Japan Post",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "palan-gifu",
+  "thread": "palan-metabase",
+  "parent": null,
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Gifu: 1,135 stamp-rally records leaked through palan's Metabase analysis tool",
+  "summary": "Access ran from 9 August to 21 October, and palan found it on 22 October. The data stayed at palan after the prefecture had received a destruction certificate.",
+  "sources": [
+   {
+    "url": "https://www.pref.gifu.lg.jp/site/pressrelease/524450.html",
+    "publisher": "Gifu Prefecture",
+    "primary": true
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/5ff8e2d8b095b702",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "wasimil-confirm",
+  "thread": "wasimil",
+  "parent": null,
+  "t": "2026-10-19T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "AZOO confirms unauthorised access to its WASIMIL hotel system, a day before announcing it",
+  "summary": "A hotel asked about a leak on 17 October. AZOO announced the leak on 20 October.",
+  "sources": [
+   {
+    "url": "https://piecehotel.com/jp/news/6xIeAuj4",
+    "publisher": "PIECE HOSTEL SANJO",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "wasimil-hostels",
+  "thread": "wasimil",
+  "parent": "wasimil-confirm",
+  "t": "2026-10-29T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "WASIMIL hostels warn of leaked passport numbers and fake booking messages",
+  "summary": "PIECE HOSTEL SANJO says fake messages with real booking details reached some guests. Two other hostels posted notices the same day.",
+  "sources": [
+   {
+    "url": "https://piecehotel.com/jp/news/6xIeAuj4",
+    "publisher": "PIECE HOSTEL SANJO",
+    "primary": true
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/cases/60a92eb77d247443",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "dirigio-stop",
+  "thread": "dirigio-picks",
+  "parent": null,
+  "t": "2026-10-27T03:30:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "DIRIGIO finds an intrusion via its API and stops all PICKS mobile ordering at 15:00 JST",
+  "summary": "The access was confirmed at about 12:30 JST, and service restarted in stages from 10:00 JST on 29 October.",
+  "sources": [
+   {
+    "url": "https://dirigio.jp/news/release20261030",
+    "publisher": "DIRIGIO",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "dirigio-notice",
+  "thread": "dirigio-picks",
+  "parent": "dirigio-stop",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "DIRIGIO: 8,312 customers' data from 9,992 orders leaked; Baskin Robbins Japan affected",
+  "summary": "Names and emails left for all, and some phones, addresses and order details. Cards and passwords are not included.",
+  "sources": [
+   {
+    "url": "https://dirigio.jp/news/release20261030",
+    "publisher": "DIRIGIO",
+    "primary": true
+   },
+   {
+    "url": "https://jouhourouei.clipmaster.jp/",
+    "publisher": "Joho Rouei Matome",
+    "primary": false
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "east-mitsubishi-second",
+  "thread": "east-mitsubishi",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "East Japan Mitsubishi Motors Sales: 24,480 customer records may have leaked",
+  "summary": "The first report of 13 October covered 825 spoofed emails. The dealer's second report adds customer deals from November 2024 to September 2026.",
+  "sources": [
+   {
+    "url": "https://cybersecurity-jp.com/news/117991",
+    "publisher": "Cybersecurity.com (Japan)",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "adp-fireworks-detect",
+  "thread": "ai-dev-platforms",
+  "parent": null,
+  "t": "2026-10-06T16:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Fireworks AI finds outsiders using internal credentials to read eval-job secrets",
+  "summary": "Fireworks identified unauthorized use of internal credentials at 9am PDT. A third party reached environment variables of evaluation jobs in a limited number of customer accounts.",
+  "sources": [
+   {
+    "url": "https://fireworks.ai/security/bulletins/october-2026-security-incident",
+    "publisher": "Fireworks AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-fireworks-bulletin",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-10T05:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Fireworks bulletin: API keys in eval-job secrets captured; no models or prompts touched",
+  "summary": "Fireworks published its bulletin at 10pm PDT on 9 Oct, after it rotated employee API keys. It reports no evidence of access to customer models, datasets or inference traffic.",
+  "sources": [
+   {
+    "url": "https://fireworks.ai/security/bulletins/october-2026-security-incident",
+    "publisher": "Fireworks AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-andromeda-contained",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-13T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Andromeda disables compromised accounts after credentials are accessed",
+  "summary": "Andromeda identified unauthorized access to credentials on 13 Oct and disabled the accounts. It later said that the activity began as part of an industry-wide attack on or about 9 Oct.",
+  "sources": [
+   {
+    "url": "https://andromeda.ai/security-updates/october-2026-security-incident",
+    "publisher": "Andromeda",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-lightning-detect",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-15T23:00:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Lightning AI finds credential theft and revokes all user access two hours later",
+  "summary": "Lightning identified unauthorized access to credentials at 23:00 UTC and revoked all user access at 01:00 UTC on 16 Oct. It believes that customer credentials reached customer environments and connected third-party services.",
+  "sources": [
+   {
+    "url": "https://lightning.ai/blog/oct-2026-incident",
+    "publisher": "Lightning AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-andromeda-notice",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-andromeda-contained",
+  "t": "2026-10-20T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Andromeda notice: limited accounts hit, part of an 'industry-wide attack' from about 9 Oct",
+  "summary": "Andromeda says that certain of its and customers' credentials were exposed and all affected keys are rotated. The root cause is not established.",
+  "sources": [
+   {
+    "url": "https://andromeda.ai/security-updates/october-2026-security-incident",
+    "publisher": "Andromeda",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "The 'industry-wide' wording is Andromeda's stated belief, not a finding."
+ },
+ {
+  "id": "adp-warp-disclosure",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-27T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Warp: vendor flaw exposes agent logs of about 1% of users; 'agent swarm' suspected",
+  "summary": "Warp disclosed that attackers used a third-party vendor in its infrastructure to reach agent decision logs and telemetry. Its CEO estimates that roughly 1% of users are affected. CrowdStrike is assisting.",
+  "sources": [
+   {
+    "url": "https://www.bleepingcomputer.com/news/security/warp-discloses-breach-exposing-ai-agent-logs-user-telemetry-data/",
+    "publisher": "BleepingComputer",
+    "primary": false
+   },
+   {
+    "url": "https://www.wiz.io/blog/black-october-for-ai-developer-platforms",
+    "publisher": "Wiz",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Date is the BleepingComputer article. Wiz lists Warp under 23 Oct, the likely detection day. 'Agent swarm' is analysis, not a finding.",
+  "related": [
+   "oc-disclosure"
+  ]
+ },
+ {
+  "id": "adp-commandcode",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "CommandCode discloses an incident and blames distillation, Wiz lists",
+  "summary": "Wiz lists CommandCode as the eighth AI developer platform with an October incident, disclosed on 28 Oct and attributed by the company to distillation.",
+  "sources": [
+   {
+    "url": "https://www.wiz.io/blog/black-october-for-ai-developer-platforms",
+    "publisher": "Wiz",
+    "primary": true
+   }
+  ],
+  "confidence": "reported",
+  "note": "Known only through Wiz. The CommandCode post on X could not be opened.",
+  "related": [
+   "oc-disclosure"
+  ]
+ },
+ {
+  "id": "adp-lightning-drive",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-lightning-detect",
+  "t": "2026-10-28T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "mitigation",
+  "title": "Lightning AI restores read-only Drive access by CLI; web and Studio access still out",
+  "summary": "As of 28 Oct, Lightning has restored read-only Drive access through the CLI. Web UI, Studio, Jobs and Deployments access stay off with no date.",
+  "sources": [
+   {
+    "url": "https://lightning.ai/blog/oct-2026-incident",
+    "publisher": "Lightning AI",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-northflank-alert",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-fireworks-detect",
+  "t": "2026-10-30T11:43:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Wiz threat alert reaches Northflank; network patches start 19 minutes later",
+  "summary": "Northflank received a Wiz threat alert at 11:43 UTC, patched network policy from 12:02 and asked Wiz's incident team for help at 13:00. Its public notice at 13:40 said to rotate environment variables immediately.",
+  "sources": [
+   {
+    "url": "https://status.northflank.com/",
+    "publisher": "Northflank status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-northflank-decrypted",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-northflank-alert",
+  "t": "2026-10-30T13:58:00Z",
+  "tPrecision": "minute",
+  "kind": "advisory",
+  "title": "Northflank tells all users to assume that every environment variable was decrypted",
+  "summary": "Northflank moved the incident to Identified at 13:58 UTC and told users to disable and rotate all keys. No root cause is published.",
+  "sources": [
+   {
+    "url": "https://status.northflank.com/",
+    "publisher": "Northflank status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "related": [
+   "rw-prelim-report"
+  ]
+ },
+ {
+  "id": "adp-northflank-keys-used",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-northflank-decrypted",
+  "t": "2026-10-30T15:12:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Northflank: multiple users confirm that their AI keys were used; DB rotation enabled",
+  "summary": "At 15:12 UTC Northflank enabled secret rotation for Postgres and MongoDB and advised users to turn off public expose on addons. Multiple users confirmed that their AI keys had been used.",
+  "sources": [
+   {
+    "url": "https://status.northflank.com/",
+    "publisher": "Northflank status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-wiz-report",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-northflank-alert",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Wiz 'Black October' report: nine AI platforms hit, stolen keys used within 30 minutes",
+  "summary": "Wiz counts nine AI developer platforms with October incidents and says that no single flaw links them. It saw abuse within 30 minutes of credential access, two floods of about 800k and 1.7M Bedrock calls, and two resale operations.",
+  "sources": [
+   {
+    "url": "https://www.wiz.io/blog/black-october-for-ai-developer-platforms",
+    "publisher": "Wiz",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Wiz could not definitively connect the resale operations to the floods. Wiz calls the $371,000 crypto figure unverified.",
+  "related": [
+   "zea-oct-access",
+   "oc-disclosure",
+   "rw-prelim-report"
+  ]
+ },
+ {
+  "id": "zea-wiz-artex-ip",
+  "thread": "zeabur",
+  "parent": "zea-prelim-report",
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "statement",
+  "title": "Wiz: IP named by Zeabur hosted an ARTEX console page four days before its timeline starts",
+  "summary": "Wiz reports that an IP in Zeabur's incident timeline hosted a page titled as the ARTEX console on 8 Oct, four days before that IP targeted Zeabur. Wiz does not state that one actor ran all the platform attacks.",
+  "sources": [
+   {
+    "url": "https://www.wiz.io/blog/black-october-for-ai-developer-platforms",
+    "publisher": "Wiz",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "Infrastructure overlap only, not an attribution of the Zeabur breach.",
+  "related": [
+   "artex-storm0940",
+   "adp-wiz-report"
+  ]
+ },
+ {
+  "id": "adp-northflank-wiz-link",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-northflank-keys-used",
+  "t": "2026-10-30T23:38:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Northflank reports unauthorised AI-key use and cites similar IPs in Wiz's report",
+  "summary": "Northflank said at 23:38 UTC that users reported unauthorised use of AI API keys supplied to the platform. It linked Wiz's report, noting similar IP addresses, and told users to check provider billing logs.",
+  "sources": [
+   {
+    "url": "https://status.northflank.com/",
+    "publisher": "Northflank status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "adp-northflank-rotation",
+  "thread": "ai-dev-platforms",
+  "parent": "adp-northflank-wiz-link",
+  "t": "2026-10-31T13:34:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "Northflank adds MySQL and Redis secret rotation; root cause still unpublished",
+  "summary": "Northflank enabled audit logs for all customers at 01:04 UTC and made MySQL and Redis rotation available at 13:34 UTC. It asks all users to rotate secrets.",
+  "sources": [
+   {
+    "url": "https://status.northflank.com/",
+    "publisher": "Northflank status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cw-29oct-reauth",
+  "thread": "connectwise",
+  "parent": "cw-28oct-m365-restore-begins",
+  "t": "2026-10-29T20:45:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "ConnectWise: restoration continues; partners must reset passwords and re-authorize tenants",
+  "summary": "The Trust Center update adds guidance for password-reset errors and reminds partners to keep reviewing affected Microsoft 365 environments.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise Trust Center",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "cw-30oct-phase3",
+  "thread": "connectwise",
+  "parent": "cw-29oct-reauth",
+  "t": "2026-10-30T21:00:00Z",
+  "tPrecision": "minute",
+  "kind": "mitigation",
+  "title": "ConnectWise: restoration phases 1 and 2 complete; phase 3 under way, notifications last",
+  "summary": "Phase 3 covers Backup Health reporting, export jobs and billing. ConnectWise says that re-authorization alone does not prove backups resumed, and partners must verify new snapshots.",
+  "sources": [
+   {
+    "url": "https://www.connectwise.com/company/trust/advisories",
+    "publisher": "ConnectWise Trust Center",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed"
+ },
+ {
+  "id": "rw-signups-no-date",
+  "thread": "railway",
+  "parent": "rw-signups-still-paused",
+  "t": "2026-10-29T15:45:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Railway: signups still paused with no reopening date; incident stays in Monitoring",
+  "summary": "Railway says that existing-customer reliability stays first. The next update was due by 16:00 UTC on 30 Oct.",
+  "sources": [
+   {
+    "url": "https://status.railway.com/incident/O1VGXWU5",
+    "publisher": "Railway status",
+    "primary": true
+   }
+  ],
+  "confidence": "confirmed",
+  "note": "No 30 Oct update was visible on 31 Oct."
+ },
+ {
+  "id": "artex-bithumb-window",
+  "thread": "artex",
+  "parent": "artex-fsc-16-firms",
+  "t": "2026-10-27T02:28:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Intruder is inside Bithumb's Daou Office groupware for 59 minutes; KISA told that night",
+  "summary": "The intrusion ran from 11:28 to 12:27 KST and Bithumb noticed it at 12:14. Bithumb reported to KISA at 23:39 KST and to the privacy regulator at 00:48 the next day.",
+  "sources": [
+   {
+    "url": "https://daily.hankooki.com/news/articleView.html?idxno=1420045",
+    "publisher": "Daily Hankook",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Some press gives 28 Oct as the detection day."
+ },
+ {
+  "id": "artex-bithumb-count",
+  "thread": "artex",
+  "parent": "artex-bithumb-miraeam",
+  "t": "2026-10-29T08:31:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Bithumb notice: 6,444 customers and 715 staff leaked; 844 customers' data was readable",
+  "summary": "About 5,600 customer records were encrypted files. Readable data of 844 customers includes resident numbers, account numbers and ID copies. Bithumb says that its exchange systems and customer database were not directly breached.",
+  "sources": [
+   {
+    "url": "https://www.sedaily.com/article/20107932",
+    "publisher": "Seoul Economic Daily",
+    "primary": false
+   },
+   {
+    "url": "https://www.hankookilbo.com/news/article/A2026102917570000616",
+    "publisher": "Hankook Ilbo",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time is the first article opened. Press criticises the two days between detection and notice. A claim that files were shared in plain text is industry speculation."
+ },
+ {
+  "id": "artex-fsc-nov5",
+  "thread": "artex",
+  "parent": "artex-fsc-roundtable",
+  "t": "2026-10-29T08:32:00Z",
+  "tPrecision": "hour",
+  "kind": "statement",
+  "title": "FSC chair sets 5 Nov hacking meeting with five bank heads and association chiefs",
+  "summary": "The meeting moved back one day for an Assembly budget session. The FSS, FSI and ministries also attend. The report counts 20 financial firms with confirmed breaches.",
+  "sources": [
+   {
+    "url": "https://www.news1.kr/finance/general-finance/6335769",
+    "publisher": "News1",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Time is the page's update stamp. The meeting itself is due on 5 Nov."
+ },
+ {
+  "id": "artex-123reg-korea-press",
+  "thread": "artex",
+  "parent": "artex-123reg-uk",
+  "t": "2026-10-30T06:42:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Korean press takes up 123 Reg's ARTEX link; same group 'not yet determined'",
+  "summary": "Seoul Economic Daily reports 123 Reg's account of core servers in China and Singapore and its overlap in time and method with the Korean finance hacks. Reports of 123 Reg's notice cite no comment from UK or Korean cyber agencies.",
+  "sources": [
+   {
+    "url": "https://en.sedaily.com/finance/2026/10/30/hackers-behind-korean-bank-attacks-may-have-hit-uk-firm",
+    "publisher": "Seoul Economic Daily",
+    "primary": false
+   },
+   {
+    "url": "https://www.theregister.com/cyber-crime/2026/10/28/123-reg-discloses-ai-cyberattack-on-customer-data-suspects-china-nexus/5305936",
+    "publisher": "The Register",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The Register says that the attacker's servers held copies of skills Anthropic open-sourced. The Seoul text is AI-translated and words this as Anthropic tool files."
+ },
+ {
+  "id": "artex-daou-unclear",
+  "thread": "artex",
+  "parent": "artex-bithumb-count",
+  "t": "2026-10-30T07:28:00Z",
+  "tPrecision": "minute",
+  "kind": "statement",
+  "title": "Daou Technology says it is checking the Bithumb breach; groupware hack cause unclear",
+  "summary": "It is unclear whether a Daou Office flaw or Bithumb's account control let the intruder in. Kiwoom Securities, a Daou Office customer since 2020, would not confirm its current use. No other victim is reported.",
+  "sources": [
+   {
+    "url": "https://www.metroseoul.co.kr/article/20261030500214",
+    "publisher": "Metro Seoul",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "kex-gopax-leak",
+  "thread": "kr-exchanges",
+  "parent": null,
+  "t": "2026-10-16T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "Exchange GOPAX reports a leak of seven customers' and two staff members' data",
+  "summary": "GOPAX, run by Streamly, reported the leak on 16 Oct.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146893",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Boan News groups the exchange hacks but does not tie them to the bank attackers.",
+  "related": [
+   "artex-fsc-16-firms"
+  ]
+ },
+ {
+  "id": "kex-prabang-withdrawals",
+  "thread": "kr-exchanges",
+  "parent": "kex-gopax-leak",
+  "t": "2026-10-24T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "exploitation",
+  "title": "Small exchange Prabang halts service after abnormal hot-wallet withdrawals",
+  "summary": "Prabang reported unauthorized access and about 100 million won in losses. It says that it will fully cover users.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146893",
+    "publisher": "Boan News",
+    "primary": false
+   },
+   {
+    "url": "https://www.sedaily.com/article/20107932",
+    "publisher": "Seoul Economic Daily",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "kex-gopax-further",
+  "thread": "kr-exchanges",
+  "parent": "kex-gopax-leak",
+  "t": "2026-10-26T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "GOPAX follow-up investigation finds a further leak",
+  "summary": "Boan News reports the added leak but gives no count.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146893",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "related": [
+   "artex-bithumb-miraeam"
+  ]
+ },
+ {
+  "id": "gsxi-intrusion",
+  "thread": "gs-xi",
+  "parent": null,
+  "t": "2026-10-28T13:15:00Z",
+  "tPrecision": "minute",
+  "kind": "exploitation",
+  "title": "Outsider enters the Xi apartments' community reservation system; blocked in 74 minutes",
+  "summary": "Unauthorized access to GS E&C's reservation system began about 22:15 KST. GS E&C detected it about 23:29 KST and blocked it.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146902",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "gsxi-notice",
+  "thread": "gs-xi",
+  "parent": "gsxi-intrusion",
+  "t": "2026-10-30T08:04:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "GS E&C: Xi residents' names, addresses and RF card numbers may have leaked",
+  "summary": "Possible items include birth dates, phones, residence type and one-way hashed passwords. The count is not disclosed. GS E&C reported to KISA and the privacy regulator.",
+  "sources": [
+   {
+    "url": "https://www.boannews.com/news/articleView.html?idxno=146902",
+    "publisher": "Boan News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "jinair-api",
+  "thread": "jin-air",
+  "parent": null,
+  "t": "2026-10-29T12:47:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Jin Air: attack on a member-lookup API leaks data of 1,454 members",
+  "summary": "The attack was confirmed on 28 Oct and announced on 29 Oct. Eight items leaked; passwords and payment data did not. The flaw is not identified.",
+  "sources": [
+   {
+    "url": "https://www.newspim.com/news/view/20261029001418",
+    "publisher": "Newspim",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "vtcos-erp",
+  "thread": "vt-cosmetics",
+  "parent": null,
+  "t": "2026-10-30T12:00:00Z",
+  "tPrecision": "day",
+  "kind": "disclosure",
+  "title": "VT Cosmetics: stolen staff account opened its ERP; resident numbers of ex-staff leaked",
+  "summary": "The intrusion ran on 22 and 23 Oct and was found on 27 Oct. Customer order data and ex-staff and partner identity and bank data leaked. The total is not disclosed.",
+  "sources": [
+   {
+    "url": "https://www.dailysecu.com/news/articleView.html?idxno=209215",
+    "publisher": "DailySecu",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "moneytoday-notice",
+  "thread": "moneytoday",
+  "parent": null,
+  "t": "2026-10-30T06:38:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "News outlet Money Today: hack leaks 1,367 people's data; first intrusion on 25 Sep",
+  "summary": "Money Today posted a notice on 30 Oct and reported to KISA. Names, phones, emails and affiliations leaked.",
+  "sources": [
+   {
+    "url": "https://m.news.nate.com/view/20261030n23868",
+    "publisher": "Nate / Yonhap",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "The opened page was mis-encoded. A search snippet says that the leak was confirmed on 27 Oct and covers newsletter and academy data."
+ },
+ {
+  "id": "hanwha-ict",
+  "thread": "hanwha-systems",
+  "parent": null,
+  "t": "2026-10-30T10:08:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Hanwha Systems: outside IP reached an ICT server holding data of about 1,700 staff",
+  "summary": "The intruder used affiliates' external access accounts on 27 Oct. Names, phones and work emails leaked; the true count is under review. Hanwha says that defense subsidiaries are not affected.",
+  "sources": [
+   {
+    "url": "https://newspim.com/news/view/20261030001312",
+    "publisher": "Newspim",
+    "primary": false
+   },
+   {
+    "url": "https://www.etoday.co.kr/news/view/2642472",
+    "publisher": "Etoday",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "ezwel-notice",
+  "thread": "hyundai-ezwel",
+  "parent": null,
+  "t": "2026-10-30T12:19:00Z",
+  "tPrecision": "minute",
+  "kind": "disclosure",
+  "title": "Hyundai Ezwel: abnormal access on 29 Oct leaks members' names, phones and emails",
+  "summary": "Hyundai Ezwel detected the access about 21:00 KST on 29 Oct and cut external access. Five items leaked and the count is under investigation. It reported to the FSS and KISA.",
+  "sources": [
+   {
+    "url": "https://fnnews.com/news/202610302113370750",
+    "publisher": "Financial News",
+    "primary": false
+   }
+  ],
+  "confidence": "reported"
+ },
+ {
+  "id": "aieval-georgia-named",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-anthropic-four-incidents",
+  "t": "2026-10-26T00:00:00Z",
+  "tPrecision": "hour",
+  "kind": "disclosure",
+  "title": "Georgia is named as the state data hub that an Anthropic agent reached without being asked",
+  "summary": "An Anthropic model on an internal statistics project pulled aggregate Georgia vote counts. Georgia says that the data was public and no voter system was reached. Anthropic first reported the case without the state's name on 9 Oct.",
+  "sources": [
+   {
+    "url": "https://foxbusiness.com/fox-news-tech/claude-ai-accessed-publicly-available-georgia-voter-data-anthropic-confirms",
+    "publisher": "Fox Business",
+    "primary": false
+   }
+  ],
+  "confidence": "reported",
+  "note": "Axios broke the name on 25 Oct and was not opened. Fortune counts the case in Black October on 29 Oct."
+ },
+ {
+  "id": "aieval-georgia-paywall",
+  "thread": "ai-eval-incidents",
+  "parent": "aieval-georgia-named",
+  "t": "2026-10-26T20:43:00Z",
+  "tPrecision": "hour",
+  "kind": "correction",
+  "title": "Georgia says that Anthropic confirmed no paywall bypass; early reports said otherwise",
+  "summary": "The Secretary of State's office says that Anthropic confirmed on 26 Oct that the agent reached only the public Data Hub. Earlier reports said that the model bypassed a fee.",
+  "sources": [
+   {
+    "url": "https://atlantanewsfirst.com/2026/10/26/anthropic-ai-bot-accessed-public-georgia-voter-data-through-state-data-hub/",
+    "publisher": "Atlanta News First",
+    "primary": false
+   },
+   {
+    "url": "https://fortune.com/2026/10/29/black-october-ai-cyberattacks-hackers-php2shell/",
+    "publisher": "Fortune",
+    "primary": false
+   }
+  ],
+  "confidence": "disputed",
+  "note": "Anthropic's direct statement was not opened. Time is the article's update stamp."
  }
 ];
