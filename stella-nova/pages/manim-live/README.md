@@ -5,7 +5,7 @@ pane, and the real ManimCE 0.22.0 renders it in the right pane. The page
 has 57 examples, a Learn track of twelve lessons, a live reference that
 reads manim's own docstrings and source, and an "Under the hood" panel.
 
-Page key: `manim-live`. Nav: Studio > Crafting Apps > Video & Motion.
+Page key: `manim-live`. Nav: Studio > Studio Tools > Animation & Video.
 
 ## What runs where
 

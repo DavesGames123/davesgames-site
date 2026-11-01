@@ -73,13 +73,6 @@ const NO_THUMB = {
   translate: 'a text tool; a screenshot shows nothing of use',
   'flight-board': 'a capture shows the feed error until the proxy is live',
   'gravitational-imaging': 'the figures are mostly black at thumbnail size',
-  photocraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  lightcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  vectorcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  designcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  filmcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  effectcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
-  printcraft: 'Craft Suite: an unchanged upstream app; no capture of its UI',
   'pascal-editor': 'a frame of the hosted upstream editor; no capture of its UI',
 };
 // A JPEG for one of these keys still shows on the home; the entry only
