@@ -42,7 +42,8 @@ let day = '';
 for (const l of gitLines(['log', '--reverse', '--diff-filter=A', '--format=@%ad', '--date=short', '--name-only', '--', 'stella-nova/pages/*/index.html'])) {
   if (l.startsWith('@')) { day = l.slice(1); continue; }
   const m = /^stella-nova\/pages\/([^/]+)\/index\.html$/.exec(l);
-  if (m && !added.has(m[1])) added.set(m[1], day);
+  // A deleted page leaves the history, so a run does not bring back its name.
+  if (m && !added.has(m[1]) && fs.existsSync(path.join(ROOT, l))) added.set(m[1], day);
 }
 const pages = [...added].map(([k, d]) => [d, k]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1));
 
