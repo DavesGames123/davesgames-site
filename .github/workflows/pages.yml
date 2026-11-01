@@ -45,10 +45,6 @@ jobs:
         run: node stella-nova/pages/market-forecast/tools/snapshot.mjs --max-days 1 --budget-min 25 --streams 6
         timeout-minutes: 30
         continue-on-error: true
-      # The Craft Suite pages host upstream web builds that are not in git.
-      # Download the pinned release zips and check each sha256.
-      - name: Fetch pinned Craft builds
-        run: node tools/craft-fetch.mjs && node tools/craft-fetch.mjs --check
       # Retro Shelf: the pinned engines (js-dos emulators, EmulatorJS and its
       # cores) and the freeware game archives. They are not in git. Each file
       # is sha256 checked. A failure (a mirror is down) does not stop the

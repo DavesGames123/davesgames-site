@@ -7,8 +7,7 @@
 //  cores) and the game archives are third-party files that are not in git.
 //  This tool downloads each pinned file, checks its sha256 and writes it
 //  under stella-nova/vendor/retro/fetched/. The pages workflow
-//  (.github/workflows/pages.yml) runs it before the upload, the same way as
-//  tools/craft-fetch.mjs. .gitignore keeps the output out of the index, and
+//  (.github/workflows/pages.yml) runs it before the upload. .gitignore keeps the output out of the index, and
 //  tools/offline-manifest.mjs lists only tracked files, so the service
 //  worker does not precache them.
 //

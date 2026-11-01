@@ -2,9 +2,8 @@
    PASCAL EDITOR  ·  pages/pascal-editor/style.css — the frame around the editor
    ----------------------------------------------------------------------------
    A slim top bar, a credits panel, a phone note and the iframe with our
-   build of the editor (app/), which fills the rest of the page. The colours and fonts
-   are the same as lib/craft-host.css. The editor has its own styles in its
-   own document. This file does not touch them.
+   build of the editor (app/), which fills the rest of the page. The editor
+   has its own styles in its own document. This file does not touch them.
 
    grep -n targets
      tokens ............... ":root"
