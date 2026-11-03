@@ -23,14 +23,15 @@
 //  THE BEFORE BAND. One time scale cannot hold the data: the first event is
 //  541 days before the last, and 256 of 297 events are in the last 11 days.
 //  Thus the layout has a window. windowStart 'auto' is the first event in
-//  the UTC month of the last event (for the ledger: the first October
-//  event). Events before the window go in an inner band, from bandIn to
-//  bandOut, at even steps in time order (equal times share a radius). The
-//  window starts at bandOut + bandGap and keeps radius = time to 1. Between
-//  the knots radiusOf is linear, so the radius is monotone in time over the
-//  whole set. With no event before the window there is no band, and the
-//  layout is the same as with windowStart null (one scale from the first
-//  event).
+//  the UTC month of the last event. windowStart 'YYYY-MM' is the first
+//  event in that UTC month (the ledger uses '2026-10', so November events
+//  do not move October into the band). Events before the window go in an
+//  inner band, from bandIn to bandOut, at even steps in time order (equal
+//  times share a radius). The window starts at bandOut + bandGap and keeps
+//  radius = time to 1. Between the knots radiusOf is linear, so the radius
+//  is monotone in time over the whole set. With no event before the
+//  window there is no band, and the layout is the same as with windowStart
+//  null (one scale from the first event).
 //
 //  DOM-free ES module. It runs in the page and in node tests.
 //
@@ -75,7 +76,7 @@ export const DEFAULTS = Object.freeze({
   walkSteps: 600,    // the longest angle walk of one event
   bridgeStep: 0.008, // radial length of one bridge segment
   wiggle: 0.55,      // bridge amplitude, as a part of the parent-child angle room
-  windowStart: 'auto', // 'auto', null (no band), a time in ms or an ISO string
+  windowStart: 'auto', // 'auto', 'YYYY-MM', null (no band), a time in ms or an ISO string
   bandIn: 0.05,      // radius of the first event before the window
   bandOut: 0.17,     // radius of the last event before the window
   bandGap: 0.03,     // empty ring between the band and the window
@@ -275,10 +276,11 @@ export function dayRings(t0, t1, radiusOf) {
 // month of the last event. order is sorted by t.
 export function windowOf(order, w) {
   if (w == null || !order.length) return null;
-  if (w === 'auto') {
-    const last = new Date(order[order.length - 1].t);
+  if (w === 'auto' || /^\d{4}-\d\d$/.test(w)) {
+    const last = new Date(w === 'auto' ? order[order.length - 1].t : Date.parse(w + '-01T00:00:00Z'));
     const m0 = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), 1);
-    return order.find(x => x.t >= m0).t;
+    const first = order.find(x => x.t >= m0);
+    return first ? first.t : null;
   }
   const ms = typeof w === 'number' ? w : Date.parse(w);
   return Number.isFinite(ms) ? ms : null;

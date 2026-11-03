@@ -216,7 +216,7 @@ export const threadName = id => THREAD_NAMES[id] || id;
 
 // The layout options of the page and the saver. linear: each UTC day ring
 // has the same width (the events get denser toward the last days).
-export const LAYOUT_OPTS = Object.freeze({ seed: 7, scale: 'linear' });
+export const LAYOUT_OPTS = Object.freeze({ seed: 7, scale: 'linear', windowStart: '2026-10' });
 
 export const CONF_TEXT = Object.freeze({
   confirmed: 'a primary source states it',

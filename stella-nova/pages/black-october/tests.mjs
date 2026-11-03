@@ -177,6 +177,11 @@ section('before-window band');
   const fix = layout(all, { seed: 7, windowStart: D0 - 100 * 86400e3 });
   ok(fix.band && fix.band.count === 3, `an explicit windowStart (${fix.band && fix.band.count} early)`);
   ok(layout(ev, { seed: 7 }).band === null, 'no band when no event is before the window');
+  // A ledger that runs into the next month keeps its own month as the window.
+  const { windowOf } = await import('./grow.js');
+  const mo = [Date.UTC(2026, 8, 5), Date.UTC(2026, 9, 1, 7), Date.UTC(2026, 10, 2)].map(t => ({ t }));
+  ok(windowOf(mo, 'auto') === mo[2].t && windowOf(mo, '2026-10') === mo[1].t && windowOf(mo, '2026-12') === null,
+    "windowStart 'YYYY-MM' is the first event of that month");
 }
 
 section('the full ledger has room');
