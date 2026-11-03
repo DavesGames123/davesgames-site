@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Articraft Playground — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ARTICRAFT PLAYGROUND  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Articulated objects from the Articraft dataset (Zhou et al. 2026,
+   arXiv:2605.15187, records CC BY 4.0) run as MuJoCo physics toys. The
+   MuJoCo 3.15.0 WASM build and the MuJoCo Lab renderer draw them.
+   CONTRACT.md is the spec.
+
+   FILES
+     sim.js       scene wrap, object load, modes, props, joint drive (no DOM)
+     main.js      DOM: gallery, panel, dock, sheet, keys, view, loop
+     style.css    desktop drawer, phone dock and sheet, landscape drawer
+     saver.js     screensaver hook (lane C)
+     tests.mjs    node tests (no browser)
+     data/        manifest.json + objects/ (lane A); fixture/ until then
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #stage ...... the 3D view mount point, full window
+     .topbar ..... page name, object title, gallery and panel buttons
+     #boot ....... loading and error line
+     #hint ....... the key and pointer hint
+     #panel ...... controls: object, mode, actions, joints, credits
+                   (right drawer; bottom sheet in phone portrait)
+     #dock ....... phone base dock with the primary controls
+     #gallery .... object cards by group (a dialog over the view)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Articulated objects from the Articraft dataset as MuJoCo physics toys: drive each joint, drop the object, push props, drag parts with a mouse spring. Records CC BY 4.0, MuJoCo Apache-2.0.">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage" aria-label="3D view of the object. Drag empty space to orbit, drag a part to pull it with a spring, pinch or scroll to zoom."></div>
+
+<header class="topbar">
+  <span class="brand">Articraft Playground</span>
+  <span id="objTitle" class="obj-title"></span>
+  <button type="button" id="btnGallery" class="tb-btn">Objects</button>
+  <button type="button" id="gear" class="tb-btn" aria-label="Open the controls" aria-expanded="true">⚙</button>
+</header>
+
+<div id="boot" class="boot" role="status" aria-live="polite">Loading MuJoCo…</div>
+<p id="hint" class="hint-line">1–9 joint · ← → move · A animate · R random · L loose · D drop · drag a part to pull it</p>
+
+<aside id="panel" class="panel open" aria-label="Controls">
+  <div id="sheetGrip" class="grip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button type="button" id="panelClose" class="close" aria-label="Close the controls">✕</button>
+
+  <section class="sec">
+    <h2 id="objName" class="obj-name">–</h2>
+    <p id="objMeta" class="meta"></p>
+    <button type="button" id="btnGallery2" class="btn wide">Choose another object</button>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Mode</h3>
+    <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+      <button type="button" data-mode="anchored" class="on" aria-pressed="true">Anchored</button>
+      <button type="button" data-mode="loose" aria-pressed="false">Loose</button>
+    </div>
+    <div class="actions">
+      <button type="button" id="btnAnim" class="btn" aria-pressed="false">Animate</button>
+      <button type="button" id="btnRandom" class="btn">Random pose</button>
+      <button type="button" id="btnDrop" class="btn" disabled title="Loose mode only">Drop</button>
+      <button type="button" id="btnReset" class="btn">Reset</button>
+      <button type="button" id="btnProps" class="btn" aria-pressed="false">Props</button>
+      <button type="button" id="btnPlay" class="btn" aria-pressed="true">Pause</button>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Joints</h3>
+    <div id="joints" class="joints"></div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Credits</h3>
+    <div id="credits" class="credits"></div>
+  </section>
+
+  <section class="sec about">
+    <p>Each object is one record of the Articraft dataset, compiled offline to MJCF. A position actuator drives each joint to the slider target. Anchored holds the base to the floor. Loose lets the whole object fall and slide. Drag a part with the mouse or a finger to pull it with a spring.</p>
+  </section>
+</aside>
+
+<nav id="dock" class="dock" aria-label="Main controls">
+  <button type="button" id="dockPanel" aria-label="Controls" aria-expanded="false">⚙</button>
+  <button type="button" id="dockGallery" aria-label="Objects">▦</button>
+  <div class="seg" id="dockMode" role="group" aria-label="Mode">
+    <button type="button" data-mode="anchored" class="on" aria-pressed="true">Anchored</button>
+    <button type="button" data-mode="loose" aria-pressed="false">Loose</button>
+  </div>
+  <button type="button" id="dockAnim" aria-label="Animate" aria-pressed="false">∿</button>
+  <button type="button" id="dockRandom" aria-label="Random pose">⚄</button>
+  <button type="button" id="dockDrop" aria-label="Drop" disabled>⤓</button>
+</nav>
+
+<section id="gallery" class="gallery" role="dialog" aria-modal="true" aria-labelledby="gallery-h" hidden>
+  <div class="gwrap">
+    <header class="ghead">
+      <h2 id="gallery-h">Objects</h2>
+      <p id="gallerySub">Articraft dataset records (CC BY 4.0), compiled to MuJoCo.</p>
+      <button type="button" id="galleryClose" class="close" aria-label="Close the object list">✕</button>
+    </header>
+    <div id="galleryList" class="glist"></div>
+  </div>
+</section>
+
+<footer class="credit-bar">
+  <a href="https://arxiv.org/abs/2605.15187" target="_blank" rel="noopener">Articraft</a> (Zhou et al. 2026), records CC BY 4.0 ·
+  <a href="https://github.com/google-deepmind/mujoco" target="_blank" rel="noopener">MuJoCo</a> by Google DeepMind, Apache-2.0
+</footer>
+<script type="module" src="saver.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

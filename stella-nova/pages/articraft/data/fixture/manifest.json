@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "generated": "2026-11-03",
+  "fixture": true,
+  "groups": [
+    {
+      "id": "robotic_arms_and_manipulators",
+      "title": "Robotic Arms & Manipulators"
+    },
+    {
+      "id": "furniture",
+      "title": "Furniture"
+    }
+  ],
+  "objects": [
+    {
+      "slug": "fixture-arm",
+      "title": "Two-joint test arm",
+      "group": "robotic_arms_and_manipulators",
+      "category": "Test Arm",
+      "prompt": "A small test arm with a round base, a shoulder hinge and an elbow hinge. (Fixture, not a dataset record.)",
+      "record": "fixture",
+      "revision": "rev_000000",
+      "author": "davesgames.io (test fixture)",
+      "url": "https://github.com/mattzh72/articraft-data",
+      "joints": [
+        {
+          "name": "shoulder",
+          "type": "hinge",
+          "range": [
+            -1.2,
+            1.2
+          ],
+          "act": "a_shoulder"
+        },
+        {
+          "name": "elbow",
+          "type": "hinge",
+          "range": [
+            -2,
+            2
+          ],
+          "act": "a_elbow"
+        }
+      ],
+      "bytes": 11858,
+      "extent": 0.56
+    },
+    {
+      "slug": "fixture-drawer",
+      "title": "Test drawer cabinet",
+      "group": "furniture",
+      "category": "Test Cabinet",
+      "prompt": "A box cabinet with one drawer that slides out on a straight rail. (Fixture, not a dataset record.)",
+      "record": "fixture",
+      "revision": "rev_000000",
+      "author": "davesgames.io (test fixture)",
+      "url": "https://github.com/mattzh72/articraft-data",
+      "joints": [
+        {
+          "name": "drawer_slide",
+          "type": "slide",
+          "range": [
+            0,
+            0.2
+          ],
+          "act": "a_drawer_slide"
+        }
+      ],
+      "bytes": 2338,
+      "extent": 0.3
+    }
+  ]
+}

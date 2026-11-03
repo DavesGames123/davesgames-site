@@ -1,0 +1,22 @@
+<mujoco model="fixture-drawer">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="cabinet" file="cabinet.stl"/>
+    <mesh name="drawer" file="drawer.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0 0 0.15" mass="2" diaginertia="0.03 0.03 0.03"/>
+      <geom name="g_cabinet" type="mesh" mesh="cabinet" contype="1" conaffinity="2" rgba="0.55 0.42 0.3 1"/>
+      <body name="drawer" pos="0 0 0.2">
+        <inertial pos="0.02 0 0" mass="0.3" diaginertia="0.002 0.002 0.003"/>
+        <joint name="drawer_slide" type="slide" axis="1 0 0" range="0 0.2" damping="8"/>
+        <geom name="g_drawer" type="mesh" mesh="drawer" contype="1" conaffinity="2" rgba="0.8 0.68 0.5 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_drawer_slide" joint="drawer_slide" kp="60" ctrlrange="0 0.2"/>
+  </actuator>
+</mujoco>

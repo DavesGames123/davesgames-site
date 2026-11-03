@@ -1,0 +1,204 @@
+/* ============================================================================
+   ARTICRAFT PLAYGROUND  ·  stylesheet
+   ----------------------------------------------------------------------------
+   The 3D view fills the window. Desktop: the panel is a drawer on the right
+   edge. Type comes from lib/sci.css (Inter for text, the system mono for
+   numbers only).
+
+   PHONE (max-width 768px, or a short landscape touch screen). The pattern
+   of pages/wave-membrane: a dock at the base holds the primary controls. In
+   portrait the panel is a bottom sheet above the dock. In landscape it is a
+   drawer on the right edge. Every control is 44px or more on a touch screen.
+   main.js measures the overlays and moves the camera view offset, so the
+   sheet never covers the object.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block (PHONE_Q in main.js)
+     grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'GALLERY'    the object cards
+     grep -n 'sn-saver'   the screensaver mode
+
+   An element with the hidden attribute must have no display rule of its
+   own. tests.mjs checks it.
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --bg:#06080d; --bg2:#0e121b; --ink:#d9dee8; --dim:#8b93a5; --faint:#2a3242;
+  --line:rgba(150,180,230,0.12); --line-b:rgba(150,180,230,0.24);
+  --warm:#f0a35e; --cool:#7fb4ff; --panel-w:320px; --dock-h:0px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);overflow:hidden}
+body{width:100%;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sci-sans);-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+html,body{height:100%}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+a{color:var(--cool)}
+
+#stage{position:fixed;inset:0}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+
+.topbar{
+  position:fixed;top:0;left:0;right:var(--panel-w);z-index:30;display:flex;align-items:center;gap:14px;
+  height:52px;padding:0 18px;pointer-events:none}
+body.panel-closed .topbar{right:0}
+.brand{font-family:var(--sci-serif);font-size:1.12rem;color:#eef2fa;white-space:nowrap}
+.obj-title{font-size:0.82rem;color:var(--dim);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-btn{
+  pointer-events:auto;height:34px;padding:0 12px;border:1px solid var(--line-b);border-radius:9px;
+  background:rgba(14,18,27,0.75);color:var(--ink);font-size:0.82rem;cursor:pointer}
+.tb-btn:hover{border-color:var(--warm);color:var(--warm)}
+#btnGallery{margin-left:auto}
+#gear{width:34px;padding:0;visibility:hidden}
+body.panel-closed #gear{visibility:visible}
+html.in-frame .topbar{top:0}
+
+.boot{
+  position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:25;padding:10px 16px;
+  border:1px solid var(--line);border-radius:10px;background:rgba(14,18,27,0.85);font-size:0.86rem;color:var(--dim);max-width:80vw;text-align:center}
+.boot.err{color:#ff8a7a;border-color:rgba(255,120,100,0.4)}
+.hint-line{
+  position:fixed;left:18px;bottom:34px;z-index:20;font-size:0.76rem;color:var(--dim);pointer-events:none;
+  transition:opacity 0.6s}
+.hint-line.gone{opacity:0}
+.credit-bar{
+  position:fixed;left:18px;bottom:10px;z-index:20;font-size:0.72rem;color:var(--dim)}
+
+/* ---- panel (desktop: a drawer on the right edge) ---- */
+.panel{
+  position:fixed;top:0;right:0;bottom:0;width:var(--panel-w);z-index:35;overflow-y:auto;
+  background:rgba(10,12,18,0.96);border-left:1px solid var(--line-b);padding:14px 18px 24px;
+  transform:translateX(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+.panel.open{transform:translateX(0)}
+.close{
+  position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);border-radius:7px;
+  background:transparent;color:var(--dim);cursor:pointer}
+.close:hover{color:var(--warm);border-color:var(--warm)}
+.grip{display:none}
+.sec{padding:12px 0;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.obj-name{font-size:1.02rem;font-weight:600;margin-right:40px;line-height:1.3}
+.meta{font-size:0.78rem;color:var(--dim);margin:4px 0 10px}
+.sec-label{font-size:0.74rem;font-weight:600;color:var(--dim);margin-bottom:8px;letter-spacing:0.02em}
+.btn{
+  height:32px;padding:0 10px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);
+  font-size:0.8rem;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--warm);color:var(--warm)}
+.btn:disabled{opacity:0.4;cursor:default}
+.btn.on,.btn[aria-pressed="true"]{border-color:var(--warm);color:var(--warm);background:rgba(240,163,94,0.1)}
+.btn.wide{width:100%}
+.actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+.seg{display:flex;height:32px;border:1px solid var(--line-b);border-radius:9px;overflow:hidden}
+.seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-size:0.8rem;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button.on{background:rgba(240,163,94,0.14);color:var(--warm)}
+
+.joints{display:flex;flex-direction:column;gap:2px}
+.joint{display:grid;grid-template-columns:22px 1fr 58px;grid-template-rows:auto auto;column-gap:6px;align-items:center;padding:4px 6px;border-radius:7px;border:1px solid transparent}
+.joint.sel{border-color:var(--line-b);background:rgba(127,180,255,0.06)}
+.joint .k{grid-row:1 / 3;font:0.72rem var(--sci-mono);color:var(--dim);text-align:center}
+.joint .nm{font-size:0.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.joint .val{grid-row:1 / 3;grid-column:3;font:0.72rem var(--sci-mono);color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.joint input[type=range]{grid-column:2;width:100%;accent-color:var(--warm)}
+.joints .none{font-size:0.78rem;color:var(--dim)}
+
+.credits{font-size:0.76rem;line-height:1.55;color:var(--ink)}
+.credits dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px}
+.credits dt{color:var(--dim)}
+.credits dd{min-width:0;overflow-wrap:anywhere}
+.credits details{margin-top:8px}
+.credits summary{cursor:pointer;color:var(--dim)}
+.credits blockquote{margin-top:6px;padding-left:10px;border-left:2px solid var(--faint);color:var(--dim);white-space:pre-wrap}
+.credits .note{margin-top:8px;color:var(--dim)}
+.about p{font-size:0.78rem;line-height:1.6;color:var(--dim)}
+
+.dock{display:none}
+
+/* ---- GALLERY: a dialog over the view ---- */
+.gallery{position:fixed;inset:0;z-index:60;background:rgba(4,6,10,0.88);overflow-y:auto;overscroll-behavior:contain}
+.gwrap{max-width:980px;margin:0 auto;padding:28px 20px calc(40px + env(safe-area-inset-bottom))}
+.ghead{position:relative;margin-bottom:14px;padding-right:48px}
+.ghead h2{font-size:1.2rem}
+.ghead p{font-size:0.8rem;color:var(--dim);margin-top:4px}
+.ghead .close{top:0;right:0}
+.gsec{margin-top:18px}
+.gsec h3{font-size:0.8rem;color:var(--dim);font-weight:600;margin-bottom:8px}
+.gcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.gcard{
+  text-align:left;min-height:58px;padding:10px 12px;border:1px solid var(--line-b);border-radius:10px;
+  background:var(--bg2);color:var(--ink);cursor:pointer}
+.gcard:hover,.gcard:focus-visible{border-color:var(--warm)}
+.gcard.cur{border-color:var(--warm);background:rgba(240,163,94,0.08)}
+.gcard b{display:block;font-size:0.84rem;font-weight:600;line-height:1.3}
+.gcard span{display:block;font-size:0.72rem;color:var(--dim);margin-top:3px}
+
+/* TOUCH. Any touch screen or narrow window: every target is 44px or more,
+   and all text is 11px or more. */
+@media (pointer:coarse), (max-width:768px){
+  .tb-btn{height:44px;min-width:44px}
+  .btn{height:44px;font-size:0.82rem}
+  .seg{height:44px}
+  .close{width:44px;height:44px;top:4px;right:4px}
+  .joint{min-height:52px}
+  .joint input[type=range]{-webkit-appearance:none;appearance:none;height:40px;background:transparent}
+  .joint input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .joint input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1a1320}
+  .joint input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .joint input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1a1320}
+  .joint .nm,.joint .k,.joint .val,.meta,.sec-label,.credits,.hint-line,.credit-bar,.gcard span{font-size:0.78rem}
+  .gcard{min-height:64px}
+  .credits summary{min-height:44px;display:flex;align-items:center}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{right:0;height:calc(52px + env(safe-area-inset-top));padding:env(safe-area-inset-top) calc(12px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left));gap:10px}
+  .brand{font-size:1rem}
+  .obj-title{display:none}
+  #gear,#btnGallery{display:none}
+  .hint-line,.credit-bar{display:none}
+
+  .dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;
+    padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+    background:rgba(8,10,15,0.95);border-top:1px solid var(--line-b)}
+  .dock > button{flex:0 0 46px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  .dock > button.on,.dock > button[aria-pressed="true"]{border-color:var(--warm);color:var(--warm)}
+  .dock > button:disabled{opacity:0.35}
+  .dock .seg{flex:1;height:48px;border-radius:12px}
+  .dock .seg button{font-size:0.78rem}
+
+  /* The panel is a bottom sheet above the dock. */
+  .panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    height:min(46vh,520px);height:min(46dvh,520px);
+    border-left:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1)}
+  .panel.open{transform:translateY(0)}
+  .panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  .grip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px;
+    background:linear-gradient(180deg,rgba(10,12,18,1) 65%,rgba(10,12,18,0));touch-action:none;cursor:grab}
+  .grip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .actions{grid-template-columns:1fr 1fr 1fr}
+  .gwrap{padding-top:calc(16px + env(safe-area-inset-top))}
+  .gcards{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
+   tab at the lower left. The topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar{display:none}
+  .dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  .panel,.panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(44vw,360px);height:auto;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;
+    transform:translateX(100%)}
+  .panel.open{transform:translateX(0)}
+  .grip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--bg2)}
+}
+
+/* screensaver (lib/screensaver.js, saver.js): only the saver canvas shows */
+html.sn-saver .topbar,html.sn-saver .panel,html.sn-saver .dock,html.sn-saver .hint-line,html.sn-saver .credit-bar,html.sn-saver .boot{visibility:hidden}
