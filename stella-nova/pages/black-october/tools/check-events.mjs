@@ -12,6 +12,7 @@
 // ============================================================================
 import { validate, layout } from '../grow.js';
 import { EVENTS } from '../data/events.js';
+import { LAYOUT_OPTS } from '../model.js';
 
 const out = validate(EVENTS);
 for (const e of EVENTS) {
@@ -26,7 +27,7 @@ for (const e of EVENTS) {
   }
 }
 let L = null;
-if (!out.length) { try { L = layout(EVENTS, { seed: 7 }); } catch (err) { out.push('layout: ' + err.message); } }
+if (!out.length) { try { L = layout(EVENTS, LAYOUT_OPTS); } catch (err) { out.push('layout: ' + err.message); } }
 
 const count = k => EVENTS.reduce((m, e) => (m[e[k]] = (m[e[k]] || 0) + 1, m), {});
 console.log(`${EVENTS.length} events, ${new Set(EVENTS.flatMap(e => e.sources.map(s => s.url))).size} distinct sources`);
