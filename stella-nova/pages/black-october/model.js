@@ -211,6 +211,13 @@ export const THREAD_NAMES = Object.freeze({
   'sony-life': "Sony Life (Medicare Life policies)",
   'tfd-levelenter': "Tokyo Fire Dept grader (Level Enter)",
   'jp-realestate-extortion': "Japanese real-estate site extortion",
+  'nojima-online': "Nojima Online member leak",
+  'istyle-cosme': "@cosme member leak",
+  'suntory-m365': "Suntory Microsoft 365 leak",
+  'mleague-shop': "M.League shop leak",
+  'hybe-approval': "HYBE e-approval hack",
+  'securitize-bonds': "Securitize Japan digital-bond leak",
+  'sej-7now': "7NOW delivery-contractor leak",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
 
