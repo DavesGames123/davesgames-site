@@ -71,8 +71,8 @@ export const DEFAULTS = Object.freeze({
   inner: 0.06,       // radius of T0; the centre stays clear for the title
   minGap: 0.012,     // the shortest distance between two nodes (unit disc)
   sectorGap: 0.05,   // radians between two thread sectors (at most)
-  gapShare: 0.06,    // the largest part of the circle that the gaps take
-  sectorPow: 0.9,    // sector weight count^sectorPow + 1 (0.5 gave php2shell 9 degrees)
+  gapShare: 0.04,    // the largest part of the circle that the gaps take
+  sectorPow: 0.86,   // sector weight count^sectorPow + 1 (0.5 gave php2shell 9 degrees)
   walkSteps: 600,    // the longest angle walk of one event
   bridgeStep: 0.008, // radial length of one bridge segment
   wiggle: 0.55,      // bridge amplitude, as a part of the parent-child angle room
