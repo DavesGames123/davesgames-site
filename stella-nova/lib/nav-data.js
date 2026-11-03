@@ -281,7 +281,6 @@ w.SN_NAV = [
     ] },
     { h: "Machine Learning", p: [
       ["4d-codebench", "4DCodeBench", "NEW"],
-      ["legged-rl", "Legged Robot Gym", "NEW"],
       ["cnn-explainer", "CNN Explainer", "NEW"]
     ] }
   ] }
@@ -297,14 +296,12 @@ w.SN_NAV = [
     { h: "Gears", p: [
       ["gear-types", "Gear Types", "3D"],
       ["planetary-gearbox", "Planetary Gearbox", "3D"],
-      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
       ["differential", "Differential", "3D"]
     ] },
     { h: "Transmissions & Joints", p: [
       ["manual-gearbox", "Manual Gearbox", "3D"],
       ["cvt", "CVT", "3D"],
-      ["universal-joints", "Universal & CV Joints", "3D"],
-      ["ball-screw", "Ball Screw & Lead Screw", "3D"]
+      ["universal-joints", "Universal & CV Joints", "3D"]
     ] },
     { h: "Pumps", p: [
       ["pumps", "Positive-Displacement Pumps", "3D"],
@@ -339,18 +336,26 @@ w.SN_NAV = [
       ["cannonball-vr", "Cannonball VR", "VR"],
       ["billiard", "Pool Physics", "3D"],
       ["pinball", "Pinball", "SIM"],
-      ["spatial-hashing", "Spatial Hashing", "3D"]
+      ["spatial-hashing", "Spatial Hashing", "3D"],
+      ["rigid-bodies", "Rigid Bodies", "3D"]
     ] },
     { h: "Pendulums & Beads", p: [
       ["pendulum-short", "Pendulum in 100 Lines", "SIM"],
       ["triple-pendulum", "Triple Pendulum", "SIM"],
       ["bead-on-wire", "Bead on a Wire", "SIM"],
       ["many-beads", "Many Beads", "SIM"]
-    ] },
-    { h: "Rigid Bodies & Joints", p: [
+    ] }
+  ] },
+  { id: "robotics", label: "Robotics", short: "Robotics", icon: "⌖", color: "#ffb35c", color2: "#8fd0e8", groups: [
+    { h: "Simulation", p: [
+      ["articraft", "Articraft Playground", "NEW"],
+      ["mujoco-lab", "MuJoCo Lab", "NEW"],
       ["joints", "Joint Simulation", "3D"],
-      ["rigid-bodies", "Rigid Bodies", "3D"],
-      ["mujoco-lab", "MuJoCo Lab", "NEW"]
+      ["legged-rl", "Legged Robot Gym", "NEW"]
+    ] },
+    { h: "Actuators", p: [
+      ["harmonic-drive", "Harmonic & Cycloidal Drives", "3D"],
+      ["ball-screw", "Ball Screw & Lead Screw", "3D"]
     ] }
   ] },
   { id: "softbody", label: "Soft Bodies & Cloth", short: "Soft Bodies", icon: "◐", color: "#e7a0f0", color2: "#9ad0ff", groups: [

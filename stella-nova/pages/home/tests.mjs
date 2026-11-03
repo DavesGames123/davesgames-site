@@ -375,7 +375,7 @@ async function phoneLayouts() {
     check(`${tag}: ${noChart ? 'the sector list shows and the chart hides' : 'the star chart shows'}`,
       noChart ? st($('#chart')).display === 'none' && st($('#sectors')).display === 'block' : st($('#chart')).display !== 'none' && st($('#sectors')).display === 'none');
     const secs = $$('#sectors details.sector');
-    check(`${tag}: the sector list has 6 region headings and 25 closed sectors`, $$('#sectors .sec-region').length === 6 && secs.length === 25 && secs.every(x => !x.open), `${$$('#sectors .sec-region').length} regions, ${secs.length} sectors`);
+    check(`${tag}: the sector list has 6 region headings and 26 closed sectors`, $$('#sectors .sec-region').length === 6 && secs.length === 26 && secs.every(x => !x.open), `${$$('#sectors .sec-region').length} regions, ${secs.length} sectors`);
     if (noChart) {
       secs[3].querySelector('summary').click();
       secs[7].querySelector('summary').click();

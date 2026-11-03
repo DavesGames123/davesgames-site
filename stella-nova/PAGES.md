@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-232 registered pages in 6 regions and 25 constellations.
+233 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -267,7 +267,6 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `mrna-vaccine` | The mRNA Vaccine | Research > Biology & Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |
 | `fly-duel` | Fly Brain Card Duel | Research > Biology & Medicine | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | hook, tier 4, default | yes |
 | `4d-codebench` | 4DCodeBench | Research > Machine Learning | NEW | Can coding agents rebuild a moving scene from video? Play the benchmark in your browser. |  | shown | no | yes |
-| `legged-rl` | Legged Robot Gym | Research > Machine Learning | NEW | Walking robot policies in MuJoCo, in your browser. |  | shown | hook, tier 4, default | yes |
 | `cnn-explainer` | CNN Explainer | Research > Machine Learning | NEW | A real convolutional network sorts a photo in your browser. Watch every kernel, ReLU, pool and softmax step. |  | shown | hook, tier 3, default | yes |
 
 ### Machines
@@ -280,12 +279,10 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `radial-engine` | Radial Engine | Engines & Drivetrains > Engines | 3D | A radial aero engine cut away: master and link rods. |  | shown | hook, tier 3, default | yes |
 | `gear-types` | Gear Types | Engines & Drivetrains > Gears | 3D | Spur, helical, bevel, worm and rack gears in 3D. |  | shown | hook, tier 3, default | yes |
 | `planetary-gearbox` | Planetary Gearbox | Engines & Drivetrains > Gears | 3D | Hold the sun, carrier or ring; then a Simpson set. |  | shown | hook, tier 3, default | yes |
-| `harmonic-drive` | Harmonic & Cycloidal Drives | Engines & Drivetrains > Gears | 3D | The reducers inside robot joints: a flexing strain wave gear and a cycloidal drive. |  | shown | hook, tier 3, default | yes |
 | `differential` | Differential | Engines & Drivetrains > Gears | 3D | A rear axle opened up: open, clutch and Torsen units. |  | shown | hook, tier 3, default | yes |
 | `manual-gearbox` | Manual Gearbox | Engines & Drivetrains > Transmissions & Joints | 3D | A five-speed gearbox cut open: shift and watch the synchros lock each gear. |  | shown | hook, tier 3, default | yes |
 | `cvt` | CVT | Engines & Drivetrains > Transmissions & Joints | 3D | A push-belt CVT and a toroidal drive change ratio. |  | shown | hook, tier 3, default | yes |
 | `universal-joints` | Universal & CV Joints | Engines & Drivetrains > Transmissions & Joints | 3D | Cardan joints, their ripple, and a Rzeppa CV joint. |  | shown | hook, tier 3, default | yes |
-| `ball-screw` | Ball Screw & Lead Screw | Engines & Drivetrains > Transmissions & Joints | 3D | Lead screw against ball screw: travel, balls, efficiency. |  | shown | hook, tier 3, default | yes |
 | `pumps` | Positive-Displacement Pumps | Engines & Drivetrains > Pumps | 3D | Gear, vane and Roots pumps move fluid pockets. |  | shown | hook, tier 3, default | yes |
 | `swashplate-pump` | Swashplate Piston Pump | Engines & Drivetrains > Pumps | 3D | An axial piston pump on a tilted swashplate. |  | shown | hook, tier 3, default | yes |
 | `geneva-cams` | Geneva Drive & Cams | Linkages & Clockwork > Linkages & Cams | 3D | Turn steady rotation into steps: a Geneva drive and a disc cam in 3D. |  | shown | hook, tier 3, default | yes |
@@ -307,13 +304,17 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `billiard` | Pool Physics | Dynamics > Motion & Collisions | 3D | A pool table in 2D and 3D: the computer plays, the maths draws itself. |  | shown | hook, tier 3, default | yes |
 | `pinball` | Pinball | Dynamics > Motion & Collisions | SIM | A playable pinball table: flippers, bumpers and borders. | Ten Minute Physics #4 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `spatial-hashing` | Spatial Hashing | Dynamics > Motion & Collisions | 3D | Thousands of balls collide, found fast by a spatial hash. | Ten Minute Physics #11 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `rigid-bodies` | Rigid Bodies | Dynamics > Motion & Collisions | 3D | Stacks, chains and collisions of rigid bodies in 3D. | Ten Minute Physics #22 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `pendulum-short` | Pendulum in 100 Lines | Dynamics > Pendulums & Beads | SIM | A chaotic pendulum, complete in about a hundred lines. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `triple-pendulum` | Triple Pendulum | Dynamics > Pendulums & Beads | SIM | A chaotic multi-link pendulum with position based dynamics. | Ten Minute Physics #6 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `bead-on-wire` | Bead on a Wire | Dynamics > Pendulums & Beads | SIM | A bead held on a circular wire, against the exact solution. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `many-beads` | Many Beads | Dynamics > Pendulums & Beads | SIM | Many beads collide on one circular wire. | Ten Minute Physics #5 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `joints` | Joint Simulation | Dynamics > Rigid Bodies & Joints | 3D | Hinges, ball joints and a steering linkage with XPBD. | Ten Minute Physics #25 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `rigid-bodies` | Rigid Bodies | Dynamics > Rigid Bodies & Joints | 3D | Stacks, chains and collisions of rigid bodies in 3D. | Ten Minute Physics #22 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
-| `mujoco-lab` | MuJoCo Lab | Dynamics > Rigid Bodies & Joints | NEW | The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth. |  | shown | hook, tier 4, default | yes |
+| `articraft` | Articraft Playground | Robotics > Simulation | NEW | Drive, drop and drag 66 AI-generated articulated objects from the Articraft dataset in MuJoCo physics. |  | shown | hook, tier 4, default | yes |
+| `mujoco-lab` | MuJoCo Lab | Robotics > Simulation | NEW | The MuJoCo physics engine live: robots, ragdolls, dominoes and cloth. |  | shown | hook, tier 4, default | yes |
+| `joints` | Joint Simulation | Robotics > Simulation | 3D | Hinges, ball joints and a steering linkage with XPBD. | Ten Minute Physics #25 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
+| `legged-rl` | Legged Robot Gym | Robotics > Simulation | NEW | Walking robot policies in MuJoCo, in your browser. |  | shown | hook, tier 4, default | yes |
+| `harmonic-drive` | Harmonic & Cycloidal Drives | Robotics > Actuators | 3D | The reducers inside robot joints: a flexing strain wave gear and a cycloidal drive. |  | shown | hook, tier 3, default | yes |
+| `ball-screw` | Ball Screw & Lead Screw | Robotics > Actuators | 3D | Lead screw against ball screw: travel, balls, efficiency. |  | shown | hook, tier 3, default | yes |
 | `soft-bodies` | Soft Bodies | Soft Bodies & Cloth > Soft Bodies | 3D | Squash and throw tetrahedral soft bunnies (XPBD). | Ten Minute Physics #10 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `soft-body-interaction` | Grab Interaction | Soft Bodies & Cloth > Soft Bodies | 3D | Pick up and throw a simulated body with the mouse. | Ten Minute Physics #8 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
 | `soft-body-skinning` | Soft Body Skinning | Soft Bodies & Cloth > Soft Bodies | 3D | A detailed dragon skinned to a coarse soft body. | Ten Minute Physics #12 by Matthias Müller (MIT) | shown | hook, tier 3, default | yes |
