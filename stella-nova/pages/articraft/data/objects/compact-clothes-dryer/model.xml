@@ -1,0 +1,64 @@
+<mujoco model="rec_frontload_dryer_2aa487e0070b4132bdce1eaab09647b0">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="dryer_front_frame" file="dryer_front_frame.stl"/>
+    <mesh name="dryer_opening_collar" file="dryer_opening_collar.stl"/>
+    <mesh name="dryer_door_ring" file="dryer_door_ring.stl"/>
+    <mesh name="dryer_drum_shell" file="dryer_drum_shell.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.03 0">
+      <inertial pos="0 0 0.425" mass="42" fullinertia="3.549350e+0 3.767840e+0 2.259690e+0 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.2975 0.009 0.425" pos="0 -0.261 0.425" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.261 0.425" pos="-0.2885 0 0.425" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.261 0.425" pos="0.2885 0 0.425" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.2975 0.261 0.009" pos="0 0 0.009" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.2975 0.261 0.009" pos="0 0 0.841" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="dryer_front_frame" pos="0 0.258 0.425" quat="0.70710548 0.70710808 0 0" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="dryer_opening_collar" pos="0 0.22 0.41" quat="0.70710548 0.70710808 0 0" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.215 0.005 0.039" pos="0 0.269 0.775" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.159 0.004 0.025" pos="0 0.273 0.775" rgba="0.3 0.38 0.44 0.38" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.006 0.055 0.014" pos="-0.146 0.19 0.29" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.006 0.055 0.014" pos="0.146 0.19 0.29" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.16 0.055 0.005" pos="0 0.191 0.271" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.019 0.03" pos="-0.256 0.287 0.555" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.019 0.03" pos="-0.256 0.287 0.265" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+      <body name="door" pos="-0.238 0.289 0.41">
+        <inertial pos="0.238 0.024 0" mass="4.4" fullinertia="1.004670e-1 1.926560e-1 9.482920e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_door" type="hinge" axis="0 0 1" range="0 1.65" damping="6.931944"/>
+        <geom type="mesh" mesh="dryer_door_ring" pos="0.238 0.023 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.19 0.006" pos="0.238 0.021 0" quat="0.70710548 0.70710808 0 0" rgba="0.3 0.38 0.44 0.38" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.011 0.019 0.2025" pos="0.008 0.022 0" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.014 0.01 0.0825" pos="0.456 0.022 0" rgba="0.55 0.56 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.013 0.027" pos="0 0.026 0.145" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.013 0.027" pos="0 0.026 -0.145" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="lint_filter" pos="0 0.238 0.29">
+        <inertial pos="0 -0.04 0" mass="0.45" fullinertia="5.137500e-4 3.435000e-3 3.828750e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_lint_filter" type="slide" axis="0 1 0" range="0 0.08" damping="9"/>
+        <geom type="box" size="0.14 0.0475 0.0175" pos="0 -0.0475 0" rgba="0.34 0.37 0.4 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1225 0.041 0.003" pos="0 -0.045 0.008" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.141 0.007 0.009" pos="0 0.007 0.003" rgba="0.16 0.17 0.19 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="drum" pos="0 -0.065 0.41">
+        <inertial pos="0 0 0" mass="8.5" fullinertia="1.977890e-1 1.910120e-1 1.977890e-1 0.000000e+0 0.000000e+0 -2.489331e-8"/>
+        <joint name="cabinet_to_drum" type="hinge" axis="0 1 0" damping="3.82024"/>
+        <geom type="mesh" mesh="dryer_drum_shell" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.07 0.009" pos="0 -0.18 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.202 0.004" pos="0 -0.186 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.085 0.006 0.005" pos="0.12 -0.182 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.085 0.006 0.005" pos="-0.06 -0.182 0.103923" quat="0.49999788 0 0.86602663 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.085 0.006 0.005" pos="-0.06 -0.182 -0.103923" quat="-0.49999991 0 0.86602545 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.017 0.14 0.01" pos="0.189907 0 0.048491" quat="0.99219767 0 0.12467473 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.017 0.14 0.01" pos="-0.137732 0 0.139449" quat="0.38554307 0 0.92268984 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.017 0.14 0.01" pos="-0.05084 0 -0.189292" quat="0.60852752 0 -0.79353277 0" rgba="0.72 0.75 0.78 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_cabinet_to_door" joint="cabinet_to_door" kp="34.65972" ctrlrange="0 1.65"/>
+    <position name="a_cabinet_to_lint_filter" joint="cabinet_to_lint_filter" kp="45" ctrlrange="0 0.08"/>
+    <position name="a_cabinet_to_drum" joint="cabinet_to_drum" kp="19.1012" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

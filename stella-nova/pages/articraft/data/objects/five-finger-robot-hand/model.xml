@@ -1,0 +1,208 @@
+<mujoco model="rec_palm_with_multiple_uncoupled_finger_chains_d2d331a636254040a5ceb7281d693093">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="palm_core" file="palm_core.stl"/>
+    <mesh name="wrist_cuff" file="wrist_cuff.stl"/>
+    <mesh name="index_root" file="index_root.stl"/>
+    <mesh name="middle_root" file="middle_root.stl"/>
+    <mesh name="ring_root" file="ring_root.stl"/>
+    <mesh name="little_root" file="little_root.stl"/>
+    <mesh name="thumb_root" file="thumb_root.stl"/>
+    <mesh name="index_base_shell" file="index_base_shell.stl"/>
+    <mesh name="index_proximal_shell" file="index_proximal_shell.stl"/>
+    <mesh name="index_middle_shell" file="index_middle_shell.stl"/>
+    <mesh name="index_distal_shell" file="index_distal_shell.stl"/>
+    <mesh name="middle_base_shell" file="middle_base_shell.stl"/>
+    <mesh name="middle_proximal_shell" file="middle_proximal_shell.stl"/>
+    <mesh name="middle_middle_shell" file="middle_middle_shell.stl"/>
+    <mesh name="middle_distal_shell" file="middle_distal_shell.stl"/>
+    <mesh name="ring_base_shell" file="ring_base_shell.stl"/>
+    <mesh name="ring_proximal_shell" file="ring_proximal_shell.stl"/>
+    <mesh name="ring_middle_shell" file="ring_middle_shell.stl"/>
+    <mesh name="ring_distal_shell" file="ring_distal_shell.stl"/>
+    <mesh name="little_base_shell" file="little_base_shell.stl"/>
+    <mesh name="little_proximal_shell" file="little_proximal_shell.stl"/>
+    <mesh name="little_middle_shell" file="little_middle_shell.stl"/>
+    <mesh name="little_distal_shell" file="little_distal_shell.stl"/>
+    <mesh name="thumb_base_shell" file="thumb_base_shell.stl"/>
+    <mesh name="thumb_proximal_shell" file="thumb_proximal_shell.stl"/>
+    <mesh name="thumb_distal_shell" file="thumb_distal_shell.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0.06056 -0.066832 -0.003">
+      <inertial pos="-0.000878 -0.007878 0.02212" mass="0.359047" fullinertia="1.323401e-3 5.941993e-4 1.827053e-3 6.295001e-6 6.667346e-6 -4.081708e-5"/>
+      <geom type="mesh" mesh="palm_core" pos="0 0 0.021" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="wrist_cuff" pos="0 -0.104 0.02" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="index_root" pos="-0.048 0.093 0.043" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.002 0.002" pos="-0.048 0.106 0.052" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="middle_root" pos="-0.016 0.093 0.043" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.002 0.002" pos="-0.016 0.106 0.052" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="ring_root" pos="0.016 0.093 0.043" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.002 0.002" pos="0.016 0.106 0.052" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="little_root" pos="0.048 0.093 0.043" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.002 0.002" pos="0.048 0.106 0.052" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="thumb_root" pos="-0.07 0.012 0.043" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.01 0.002" pos="-0.079 0.012 0.052" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+      <body name="index_base" pos="-0.048 0.106 0.043">
+        <inertial pos="0 0.013363 0.000164" mass="0.02" fullinertia="2.440927e-6 1.152994e-6 2.390818e-6 -1.477476e-12 -2.181359e-11 -1.677765e-8"/>
+        <joint name="palm_to_index_splay" type="hinge" axis="0 0 1" range="-0.42 0.34" damping="0.003069"/>
+        <geom type="mesh" mesh="index_base_shell" pos="0 0.016 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0105 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.00495 0.00544 0.001" pos="0 0.01856 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+        <body name="index_proximal" pos="0 0.032 0">
+          <inertial pos="0 0.019543 0.000174" mass="0.02" fullinertia="4.312744e-6 1.136172e-6 4.263426e-6 -1.244582e-12 -1.638533e-11 -2.236231e-8"/>
+          <joint name="index_base_flex" type="hinge" axis="1 0 0" range="0 1.25" damping="0.107374" armature="0.00255302"/>
+          <geom type="mesh" mesh="index_proximal_shell" pos="0 0.0225 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.0105 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.00495 0.00765 0.001" pos="0 0.0261 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+          <body name="index_middle" pos="0 0.045 0">
+            <inertial pos="0 0.012433 0.000162" mass="0.02" fullinertia="2.207098e-6 1.156622e-6 2.156818e-6 -1.515260e-12 -2.298508e-11 -1.583504e-8"/>
+            <joint name="index_middle_flex" type="hinge" axis="1 0 0" range="0 1.55" damping="0.035733" armature="0.0008598"/>
+            <geom type="mesh" mesh="index_middle_shell" pos="0 0.015 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.0105 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.00495 0.0051 0.001" pos="0 0.0174 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+            <body name="index_distal" pos="0 0.03 0">
+              <inertial pos="0 0.012204 0.000119" mass="0.02" fullinertia="1.949950e-6 1.049644e-6 1.909773e-6 4.017558e-13 -2.225269e-11 -2.621902e-9"/>
+              <joint name="index_tip_flex" type="hinge" axis="1 0 0" range="0 1.35" damping="0.007981" armature="0.00019461"/>
+              <geom type="mesh" mesh="index_distal_shell" pos="0 0.0115 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.0105 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.00495 0.00391 0.001" pos="0 0.01334 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+              <geom type="sphere" size="0.00864" pos="0 0.023 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="middle_base" pos="-0.016 0.106 0.043">
+        <inertial pos="0 0.01432 0.000162" mass="0.02" fullinertia="2.719399e-6 1.241121e-6 2.697387e-6 -4.559906e-13 -2.596898e-11 -1.745643e-8"/>
+        <joint name="palm_to_middle_splay" type="hinge" axis="0 0 1" range="-0.3 0.3" damping="0.003419"/>
+        <geom type="mesh" mesh="middle_base_shell" pos="0 0.017 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.011 0.003 0.01075" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005225 0.00578 0.001" pos="0 0.01972 0.00985" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+        <body name="middle_proximal" pos="0 0.034 0">
+          <inertial pos="0 0.022958 0.000172" mass="0.02" fullinertia="5.591863e-6 1.221102e-6 5.570702e-6 -3.601641e-13 -1.806961e-11 -2.470149e-8"/>
+          <joint name="middle_base_flex" type="hinge" axis="1 0 0" range="0 1.25" damping="0.123395" armature="0.00288757"/>
+          <geom type="mesh" mesh="middle_proximal_shell" pos="0 0.026 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.011 0.003 0.01075" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005225 0.00884 0.001" pos="0 0.03016 0.00985" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+          <body name="middle_middle" pos="0 0.052 0">
+            <inertial pos="0 0.01432 0.000162" mass="0.02" fullinertia="2.719399e-6 1.241121e-6 2.697387e-6 -4.559906e-13 -2.596898e-11 -1.745643e-8"/>
+            <joint name="middle_middle_flex" type="hinge" axis="1 0 0" range="0 1.55" damping="0.040365" armature="0.00096813"/>
+            <geom type="mesh" mesh="middle_middle_shell" pos="0 0.017 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.011 0.003 0.01075" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.005225 0.00578 0.001" pos="0 0.01972 0.00985" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+            <body name="middle_distal" pos="0 0.034 0">
+              <inertial pos="0 0.0134 0.00012" mass="0.02" fullinertia="2.240649e-6 1.130054e-6 2.222748e-6 1.532004e-13 -2.599228e-11 -2.590457e-9"/>
+              <joint name="middle_tip_flex" type="hinge" axis="1 0 0" range="0 1.35" damping="0.008764" armature="0.00021326"/>
+              <geom type="mesh" mesh="middle_distal_shell" pos="0 0.0125 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.011 0.003 0.01075" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.005225 0.00425 0.001" pos="0 0.0145 0.00985" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+              <geom type="sphere" size="0.00912" pos="0 0.025 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="ring_base" pos="0.016 0.106 0.043">
+        <inertial pos="0 0.013841 0.000165" mass="0.02" fullinertia="2.564119e-6 1.181346e-6 2.544403e-6 -1.564282e-12 -2.258193e-11 -1.720127e-8"/>
+        <joint name="palm_to_ring_splay" type="hinge" axis="0 0 1" range="-0.34 0.36" damping="0.003291"/>
+        <geom type="mesh" mesh="ring_base_shell" pos="0 0.0165 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.01075 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005088 0.00561 0.001" pos="0 0.01914 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+        <body name="ring_proximal" pos="0 0.033 0">
+          <inertial pos="0 0.021004 0.000176" mass="0.02" fullinertia="4.829408e-6 1.163325e-6 4.810347e-6 -1.283836e-12 -1.644807e-11 -2.350763e-8"/>
+          <joint name="ring_base_flex" type="hinge" axis="1 0 0" range="0 1.25" damping="0.114585" armature="0.00271136"/>
+          <geom type="mesh" mesh="ring_proximal_shell" pos="0 0.024 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.01075 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005088 0.00816 0.001" pos="0 0.02784 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+          <body name="ring_middle" pos="0 0.048 0">
+            <inertial pos="0 0.013373 0.000164" mass="0.02" fullinertia="2.441664e-6 1.183036e-6 2.421887e-6 -1.584679e-12 -2.315767e-11 -1.674114e-8"/>
+            <joint name="ring_middle_flex" type="hinge" axis="1 0 0" range="0 1.55" damping="0.038064" armature="0.00091614"/>
+            <geom type="mesh" mesh="ring_middle_shell" pos="0 0.016 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.01075 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.005088 0.00544 0.001" pos="0 0.01856 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+            <body name="ring_distal" pos="0 0.032 0">
+              <inertial pos="0 0.012829 0.00012" mass="0.02" fullinertia="2.083616e-6 1.076176e-6 2.067586e-6 4.908475e-13 -2.275987e-11 -2.523848e-9"/>
+              <joint name="ring_tip_flex" type="hinge" axis="1 0 0" range="0 1.35" damping="0.00839" armature="0.00020438"/>
+              <geom type="mesh" mesh="ring_distal_shell" pos="0 0.012 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.01075 0.003 0.0105" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.005088 0.00408 0.001" pos="0 0.01392 0.0096" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+              <geom type="sphere" size="0.00888" pos="0 0.024 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="little_base" pos="0.048 0.106 0.043">
+        <inertial pos="0 0.012405 0.000159" mass="0.02" fullinertia="2.151108e-6 1.013181e-6 2.079758e-6 -1.873904e-14 -1.354951e-11 -1.578468e-8"/>
+        <joint name="palm_to_little_splay" type="hinge" axis="0 0 1" range="-0.36 0.46" damping="0.002875"/>
+        <geom type="mesh" mesh="little_base_shell" pos="0 0.015 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.00975 0.003 0.01" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.004537 0.0051 0.001" pos="0 0.0174 0.0091" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+        <body name="little_proximal" pos="0 0.03 0">
+          <inertial pos="0 0.016634 0.000167" mass="0.02" fullinertia="3.321936e-6 1.000025e-6 3.251270e-6 -1.669458e-14 -1.092669e-11 -1.982578e-8"/>
+          <joint name="little_base_flex" type="hinge" axis="1 0 0" range="0 1.25" damping="0.093919" armature="0.00224908"/>
+          <geom type="mesh" mesh="little_proximal_shell" pos="0 0.0195 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.00975 0.003 0.01" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004537 0.00663 0.001" pos="0 0.02262 0.0091" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+          <body name="little_middle" pos="0 0.039 0">
+            <inertial pos="0 0.011029 0.000156" mass="0.02" fullinertia="1.827433e-6 1.019091e-6 1.755777e-6 -1.939592e-14 -1.472793e-11 -1.431649e-8"/>
+            <joint name="little_middle_flex" type="hinge" axis="1 0 0" range="0 1.55" damping="0.032028" armature="0.00077446"/>
+            <geom type="mesh" mesh="little_middle_shell" pos="0 0.0135 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.00975 0.003 0.01" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.004537 0.00459 0.001" pos="0 0.01566 0.0091" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+            <body name="little_distal" pos="0 0.027 0">
+              <inertial pos="0 0.010944 0.000116" mass="0.02" fullinertia="1.645637e-6 9.257461e-7 1.587926e-6 3.356713e-15 -1.418328e-11 -2.830669e-9"/>
+              <joint name="little_tip_flex" type="hinge" axis="1 0 0" range="0 1.35" damping="0.007157" armature="0.00017489"/>
+              <geom type="mesh" mesh="little_distal_shell" pos="0 0.0105 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.00975 0.003 0.01" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.004537 0.00357 0.001" pos="0 0.01218 0.0091" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+              <geom type="sphere" size="0.00792" pos="0 0.021 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="thumb_base" pos="-0.079 0.012 0.043" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="0 0.013912 0.000161" mass="0.02" fullinertia="2.633243e-6 1.412926e-6 2.718076e-6 -1.515511e-13 -9.362641e-12 -1.677898e-8"/>
+        <joint name="palm_to_thumb_splay" type="hinge" axis="0 0 1" range="-0.55 0.55" damping="0.001992"/>
+        <geom type="mesh" mesh="thumb_base_shell" pos="0 0.0165 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.012 0.003 0.011" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005775 0.00561 0.001" pos="0 0.01914 0.0101" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+        <body name="thumb_proximal" pos="0 0.033 0">
+          <inertial pos="0 0.017234 0.000166" mass="0.02" fullinertia="3.590158e-6 1.403648e-6 3.676175e-6 -1.379221e-13 -7.969904e-12 -1.974768e-8"/>
+          <joint name="thumb_base_flex" type="hinge" axis="1 0 0" range="0 1.15" damping="0.047823" armature="0.00113606"/>
+          <geom type="mesh" mesh="thumb_proximal_shell" pos="0 0.02 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.012 0.003 0.011" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005775 0.0068 0.001" pos="0 0.0232 0.0101" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+          <body name="thumb_distal" pos="0 0.04 0">
+            <inertial pos="0 0.01589 0.000121" mass="0.02" fullinertia="2.867044e-6 1.282363e-6 2.931882e-6 6.991561e-14 -8.045762e-12 -2.243458e-9"/>
+            <joint name="thumb_tip_flex" type="hinge" axis="1 0 0" range="0 1.25" damping="0.010392" armature="0.00025188"/>
+            <geom type="mesh" mesh="thumb_distal_shell" pos="0 0.0145 0" rgba="0.72 0.74 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.012 0.003 0.011" pos="0 0.003 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.005775 0.00493 0.001" pos="0 0.01682 0.0101" rgba="0.04 0.24 0.85 1" contype="1" conaffinity="2"/>
+            <geom type="sphere" size="0.01008" pos="0 0.029 0" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_palm_to_index_splay" joint="palm_to_index_splay" kp="0.009204" ctrlrange="-0.42 0.34"/>
+    <position name="a_index_base_flex" joint="index_base_flex" kp="1.073737" ctrlrange="0 1.25"/>
+    <position name="a_index_middle_flex" joint="index_middle_flex" kp="0.357326" ctrlrange="0 1.55"/>
+    <position name="a_index_tip_flex" joint="index_tip_flex" kp="0.079814" ctrlrange="0 1.35"/>
+    <position name="a_palm_to_middle_splay" joint="palm_to_middle_splay" kp="0.009139" ctrlrange="-0.3 0.3"/>
+    <position name="a_middle_base_flex" joint="middle_base_flex" kp="1.233954" ctrlrange="0 1.25"/>
+    <position name="a_middle_middle_flex" joint="middle_middle_flex" kp="0.403649" ctrlrange="0 1.55"/>
+    <position name="a_middle_tip_flex" joint="middle_tip_flex" kp="0.087636" ctrlrange="0 1.35"/>
+    <position name="a_palm_to_ring_splay" joint="palm_to_ring_splay" kp="0.009522" ctrlrange="-0.34 0.36"/>
+    <position name="a_ring_base_flex" joint="ring_base_flex" kp="1.145847" ctrlrange="0 1.25"/>
+    <position name="a_ring_middle_flex" joint="ring_middle_flex" kp="0.380641" ctrlrange="0 1.55"/>
+    <position name="a_ring_tip_flex" joint="ring_tip_flex" kp="0.083902" ctrlrange="0 1.35"/>
+    <position name="a_palm_to_little_splay" joint="palm_to_little_splay" kp="0.01003" ctrlrange="-0.36 0.46"/>
+    <position name="a_little_base_flex" joint="little_base_flex" kp="0.93919" ctrlrange="0 1.25"/>
+    <position name="a_little_middle_flex" joint="little_middle_flex" kp="0.320283" ctrlrange="0 1.55"/>
+    <position name="a_little_tip_flex" joint="little_tip_flex" kp="0.071574" ctrlrange="0 1.35"/>
+    <position name="a_palm_to_thumb_splay" joint="palm_to_thumb_splay" kp="0.00895" ctrlrange="-0.55 0.55"/>
+    <position name="a_thumb_base_flex" joint="thumb_base_flex" kp="0.478231" ctrlrange="0 1.15"/>
+    <position name="a_thumb_tip_flex" joint="thumb_tip_flex" kp="0.103921" ctrlrange="0 1.25"/>
+  </actuator>
+</mujoco>

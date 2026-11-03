@@ -1,0 +1,75 @@
+<mujoco model="rec_camera_flash_5ae8f5e444c24636ad4aa9e42b331fa3">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="battery_body_shell" file="battery_body_shell.stl"/>
+    <mesh name="lamp_head_shell" file="lamp_head_shell.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.01425 0.008">
+      <inertial pos="0.001034 -0.000418 0.035387" mass="0.062094" fullinertia="3.608061e-5 4.713190e-5 2.650450e-5 -2.514209e-8 -1.041398e-7 -2.452576e-8"/>
+      <geom type="mesh" mesh="battery_body_shell" pos="0 0 0.035" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.0025" pos="0 0 0.0725" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.001 0.026 0.0285" pos="0.031 0 0.037" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.001 0.01" pos="0 -0.02 0.05" rgba="0.08 0.18 0.22 0.72" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.022 0.001 0.0095" pos="0 -0.02 0.024" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.0015 0.0025" pos="-0.014 -0.022 0.024" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.0015 0.0025" pos="0 -0.022 0.024" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.0015 0.0025" pos="0.014 -0.022 0.024" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.006 0.0015 0.002" pos="0 -0.022 0.014" rgba="0.86 0.86 0.82 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.01 0.002" pos="0 0 -0.002" rgba="0.42 0.43 0.44 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0035 0.01 0.002" pos="-0.018 0 -0.006" rgba="0.42 0.43 0.44 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0035 0.01 0.002" pos="0.018 0 -0.006" rgba="0.42 0.43 0.44 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.0025" pos="0 0 -0.0055" rgba="0.42 0.43 0.44 1" contype="1" conaffinity="2"/>
+      <body name="neck" pos="0 0 0.075">
+        <inertial pos="0 -0.002076 0.020682" mass="0.02" fullinertia="4.679678e-6 1.804330e-5 1.504871e-5 0.000000e+0 0.000000e+0 4.487489e-7"/>
+        <joint name="body_to_neck" type="hinge" axis="0 0 1" range="-3.14159 3.14159" damping="0.001053"/>
+        <geom type="cylinder" size="0.018 0.003" pos="0 0 0.003" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.008 0.012" pos="0 0 0.015" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.046 0.006 0.003" pos="0 -0.004 0.025" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.003 0.011 0.0125" pos="-0.044 -0.004 0.038" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.003 0.011 0.0125" pos="0.044 -0.004 0.038" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+        <body name="lamp_head" pos="0 0 0.038">
+          <inertial pos="0.000002 0.022408 0.014936" mass="0.059275" fullinertia="2.659071e-5 3.703817e-5 4.978842e-5 -3.070737e-10 -1.829127e-9 -3.353572e-6"/>
+          <joint name="neck_to_head" type="hinge" axis="1 0 0" range="-0.174533 1.65806" damping="0.046207" armature="0.00108559"/>
+          <geom type="cylinder" size="0.009 0.0415" pos="0 -0.004 0" quat="0.70710548 0 0.70710808 0" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="lamp_head_shell" pos="0 0.025 0.017" rgba="0.015 0.016 0.018 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.033 0.0015 0.012" pos="0 0.053 0.018" rgba="0.92 0.9 0.82 0.78" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.036 0.0015 0.0015" pos="0 0.052 0.0315" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.036 0.0015 0.0015" pos="0 0.052 0.0045" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.0015 0.0015 0.0135" pos="-0.036 0.052 0.018" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.0015 0.0015 0.0135" pos="0.036 0.052 0.018" rgba="0.07 0.075 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.024 0.001 0.0015" pos="0 -0.0015 0.03" rgba="0.86 0.86 0.82 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="mode_button_0" pos="0.032 0 0.053">
+        <inertial pos="0.0015 0 0" mass="0.02" fullinertia="2.833333e-7 9.666667e-8 2.166667e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_mode_button_0" type="slide" axis="-1 0 0" range="0 0.0025" damping="0.4"/>
+        <geom type="box" size="0.0015 0.0055 0.0035" pos="0.0015 0 0" rgba="0.08 0.2 0.34 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="mode_button_1" pos="0.032 0 0.04">
+        <inertial pos="0.0015 0 0" mass="0.02" fullinertia="2.833333e-7 9.666667e-8 2.166667e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_mode_button_1" type="slide" axis="-1 0 0" range="0 0.0025" damping="0.4"/>
+        <geom type="box" size="0.0015 0.0055 0.0035" pos="0.0015 0 0" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="mode_button_2" pos="0.032 0 0.027">
+        <inertial pos="0.0015 0 0" mass="0.02" fullinertia="2.833333e-7 9.666667e-8 2.166667e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_mode_button_2" type="slide" axis="-1 0 0" range="0 0.0025" damping="0.4"/>
+        <geom type="box" size="0.0015 0.0055 0.0035" pos="0.0015 0 0" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="mode_button_3" pos="0.032 0 0.014">
+        <inertial pos="0.0015 0 0" mass="0.02" fullinertia="2.833333e-7 9.666667e-8 2.166667e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_mode_button_3" type="slide" axis="-1 0 0" range="0 0.0025" damping="0.4"/>
+        <geom type="box" size="0.0015 0.0055 0.0035" pos="0.0015 0 0" rgba="0.03 0.032 0.035 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_neck" joint="body_to_neck" kp="0.005266" ctrlrange="-3.14159 3.14159"/>
+    <position name="a_neck_to_head" joint="neck_to_head" kp="0.462067" ctrlrange="-0.174533 1.65806"/>
+    <position name="a_body_to_mode_button_0" joint="body_to_mode_button_0" kp="2" ctrlrange="0 0.0025"/>
+    <position name="a_body_to_mode_button_1" joint="body_to_mode_button_1" kp="2" ctrlrange="0 0.0025"/>
+    <position name="a_body_to_mode_button_2" joint="body_to_mode_button_2" kp="2" ctrlrange="0 0.0025"/>
+    <position name="a_body_to_mode_button_3" joint="body_to_mode_button_3" kp="2" ctrlrange="0 0.0025"/>
+  </actuator>
+</mujoco>

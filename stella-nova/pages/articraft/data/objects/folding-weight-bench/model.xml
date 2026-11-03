@@ -1,0 +1,118 @@
+<mujoco model="rec_adjustable_weight_bench_with_hinged_backrest_ac226be3f7e643cea38ac6e89be5fb8a">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="transport_wheel_tire" file="transport_wheel_tire.stl"/>
+    <mesh name="transport_wheel_hub" file="transport_wheel_hub.stl"/>
+    <mesh name="front_foam_roller" file="front_foam_roller.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.027275 0 -0.037069">
+      <inertial pos="-0.000401 0 0.187007" mass="3.765837" fullinertia="1.136211e-1 8.642781e-1 8.896828e-1 -3.041907e-19 -3.606753e-2 9.372018e-8"/>
+      <geom type="cylinder" size="0.018 0.69" pos="0 0 0.14" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.59" pos="-0.02 -0.18 0.12" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.59" pos="-0.02 0.18 0.12" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="-0.55 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="-0.45 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="-0.1 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="-0.04 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="0.25 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.215" pos="0.55 0 0.12" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.28" pos="-0.66 0 0.075" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.065" pos="-0.605 -0.18 0.09" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.065" pos="-0.605 0.18 0.09" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.012 0.07" pos="-0.6 0 0.19" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.012 0.07" pos="-0.26 0 0.19" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.2 0.0225 0.012" pos="-0.43 0 0.258" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.013 0.025 0.013" pos="-0.56 0 0.283" quat="0.98472654 0 -0.17410814 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.013 0.025 0.013" pos="-0.49 0 0.283" quat="0.98472654 0 -0.17410814 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.013 0.025 0.013" pos="-0.42 0 0.283" quat="0.98472654 0 -0.17410814 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.013 0.025 0.013" pos="-0.35 0 0.283" quat="0.98472654 0 -0.17410814 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.013 0.025 0.013" pos="-0.28 0 0.283" quat="0.98472654 0 -0.17410814 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.155" pos="-0.1 -0.185 0.275" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.029 0.0175 0.045" pos="-0.1 -0.185 0.43" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.15" pos="-0.04 -0.185 0.27" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.027 0.0175 0.04" pos="-0.04 -0.185 0.42" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.155" pos="-0.1 0.185 0.275" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.029 0.0175 0.045" pos="-0.1 0.185 0.43" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.15" pos="-0.04 0.185 0.27" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.027 0.0175 0.04" pos="-0.04 0.185 0.42" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.011 0.21" pos="-0.1 0 0.43" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.195" pos="-0.04 0 0.42" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.011 0.05" pos="-0.45 -0.082 0.16" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.0125 0.035" pos="-0.45 -0.082 0.205" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.011 0.05" pos="-0.45 0.082 0.16" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.0125 0.035" pos="-0.45 0.082 0.205" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.011 0.095" pos="-0.45 0 0.205" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.012 0.125" pos="0.635 -0.18 0.1" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.012 0.125" pos="0.635 0.18 0.1" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.013 0.33" pos="0.735 0 0.095" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.016 0.115" pos="0.62 0 0.23" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.015 0.115" pos="0.725 0 0.342" quat="0.70710548 0 0.70710808 0" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0225 0.05 0.0625" pos="0.835 0 0.305" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.012 0.27" pos="0.835 0 0.342" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      <body name="transport_wheel_0" pos="0.735 -0.29 0.095" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="-0.000059 -0.000003 -0.000005" mass="0.106683" fullinertia="1.906172e-4 1.036865e-4 1.037145e-4 -1.965692e-9 3.773937e-9 -9.044809e-9"/>
+        <joint name="frame_to_transport_wheel_0" type="hinge" axis="1 0 0" damping="0.003812"/>
+        <geom type="mesh" mesh="transport_wheel_tire" pos="0 0 0" rgba="0.01 0.01 0.01 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="transport_wheel_hub" pos="0 0 0" rgba="0.12 0.12 0.13 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="transport_wheel_1" pos="0.735 0.29 0.095" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="-0.000059 -0.000003 -0.000005" mass="0.106683" fullinertia="1.906172e-4 1.036865e-4 1.037145e-4 -1.965692e-9 3.773937e-9 -9.044809e-9"/>
+        <joint name="frame_to_transport_wheel_1" type="hinge" axis="1 0 0" damping="0.003812"/>
+        <geom type="mesh" mesh="transport_wheel_tire" pos="0 0 0" rgba="0.01 0.01 0.01 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="transport_wheel_hub" pos="0 0 0" rgba="0.12 0.12 0.13 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="front_roller_0" pos="0.835 -0.145 0.342" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="0 -0.000002 0.000001" mass="0.421932" fullinertia="7.088258e-4 8.087491e-4 8.088000e-4 1.965809e-9 -1.226991e-8 2.303541e-8"/>
+        <joint name="frame_to_front_roller_0" type="hinge" axis="1 0 0" damping="0.014177"/>
+        <geom type="mesh" mesh="front_foam_roller" pos="0 0 0" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="front_roller_1" pos="0.835 0.145 0.342" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="0 -0.000002 0.000001" mass="0.421932" fullinertia="7.088258e-4 8.087491e-4 8.088000e-4 1.965809e-9 -1.226991e-8 2.303541e-8"/>
+        <joint name="frame_to_front_roller_1" type="hinge" axis="1 0 0" damping="0.014177"/>
+        <geom type="mesh" mesh="front_foam_roller" pos="0 0 0" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="backrest" pos="-0.1 0 0.43">
+        <inertial pos="-0.358207 0 0.06434" mass="7.464106" fullinertia="6.521882e-2 3.577699e-1 4.105360e-1 -1.033976e-25 7.752759e-3 3.129159e-9"/>
+        <joint name="frame_to_backrest" type="hinge" axis="0 1 0" range="0 1.1" damping="87.429827" armature="0.83934083"/>
+        <geom type="cylinder" size="0.024 0.1275" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.36 0.155 0.0375" pos="-0.38 0 0.065" rgba="0.015 0.014 0.013 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.3625 0.159 0.005" pos="-0.38 0 0.107" rgba="0.05 0.05 0.055 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.285 0.012 0.014" pos="-0.425 -0.1 0.015" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.285 0.012 0.014" pos="-0.425 0.1 0.015" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.035 0.125 0.015" pos="-0.105 0 0.015" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.05 0.11 0.012" pos="-0.04 0 0.034" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="seat" pos="-0.04 0 0.42">
+        <inertial pos="0.217323 0 0.058936" mass="4.022189" fullinertia="3.473068e-2 6.727235e-2 9.587701e-2 0.000000e+0 -2.707687e-3 1.880153e-9"/>
+        <joint name="frame_to_seat" type="hinge" axis="0 -1 0" range="0 0.38" damping="45.131895" armature="0.85708904"/>
+        <geom type="cylinder" size="0.021 0.1175" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.21 0.155 0.035" pos="0.23 0 0.06" rgba="0.015 0.014 0.013 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.2125 0.159 0.0045" pos="0.23 0 0.099" rgba="0.05 0.05 0.055 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.195 0.0115 0.013" pos="0.205 -0.092 0.012" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.195 0.0115 0.013" pos="0.205 0.092 0.012" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0275 0.12 0.014" pos="0.07 0 0.012" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="rear_link" pos="-0.45 0 0.205">
+        <inertial pos="-0.094379 0 0.097833" mass="0.169342" fullinertia="1.739719e-3 2.968377e-3 1.613514e-3 5.691980e-10 1.470393e-3 -2.828466e-10"/>
+        <joint name="frame_to_rear_link" type="hinge" axis="0 1 0" range="-0.35 0.85" damping="0.670988" armature="0.0106771"/>
+        <geom type="cylinder" size="0.022 0.055" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.14682" pos="-0.12 -0.035 0.1225" quat="0.00000123 -0.3659324 0.00000049 0.93064143" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.019 0.013 0.007" pos="-0.02 -0.035 0.026" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.14682" pos="-0.12 0.035 0.1225" quat="0.00000123 -0.3659324 0.00000049 0.93064143" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.019 0.013 0.007" pos="-0.02 0.035 0.026" rgba="0.025 0.027 0.03 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.017 0.0575" pos="-0.22 0 0.23" quat="0.70710548 -0.70710808 0 0" rgba="0.48 0.5 0.52 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_frame_to_transport_wheel_0" joint="frame_to_transport_wheel_0" kp="0.019062" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_frame_to_transport_wheel_1" joint="frame_to_transport_wheel_1" kp="0.019062" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_frame_to_front_roller_0" joint="frame_to_front_roller_0" kp="0.070883" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_frame_to_front_roller_1" joint="frame_to_front_roller_1" kp="0.070883" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_frame_to_backrest" joint="frame_to_backrest" kp="874.298271" ctrlrange="0 1.1"/>
+    <position name="a_frame_to_seat" joint="frame_to_seat" kp="451.318953" ctrlrange="0 0.38"/>
+    <position name="a_frame_to_rear_link" joint="frame_to_rear_link" kp="6.709876" ctrlrange="-0.35 0.85"/>
+  </actuator>
+</mujoco>

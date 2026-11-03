@@ -1,0 +1,44 @@
+<mujoco model="rec_linear_carriage_with_independent_rotary_endeffector_e8c01cabfa634adf98a52fcc229c3343">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.05575 0">
+      <inertial pos="0 0 0.04165" mass="5.201121" fullinertia="3.687565e-2 5.416093e-1 5.661268e-1 -2.838112e-26 1.385419e-7 -1.084202e-19"/>
+      <geom type="box" size="0.49 0.14 0.0125" pos="0 0 0.0125" rgba="0.06 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.45 0.02 0.021" pos="0 0.075 0.044" rgba="0.06 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.018 0.43" pos="0 0.075 0.083" quat="0.70710548 0 0.70710808 0" rgba="0.78 0.8 0.82 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.45 0.02 0.021" pos="0 -0.075 0.044" rgba="0.06 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.018 0.43" pos="0 -0.075 0.083" quat="0.70710548 0 0.70710808 0" rgba="0.78 0.8 0.82 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.12 0.056" pos="-0.455 0 0.079" rgba="0.06 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.12 0.056" pos="0.455 0 0.079" rgba="0.06 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <body name="carriage" pos="-0.28 0 0.125">
+        <inertial pos="0 0.031024 0.024726" mass="1.15256" fullinertia="8.125296e-3 4.211056e-3 9.523554e-3 0.000000e+0 -2.748718e-5 -1.504360e-3"/>
+        <joint name="rail_to_carriage" type="slide" axis="1 0 0" range="0 0.56" damping="24.42358"/>
+        <geom type="box" size="0.1 0.105 0.0175" pos="0 0 0.02" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.08 0.026 0.018" pos="0 0.075 -0.006" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.005 0.024" pos="0 0.045 -0.02" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.005 0.024" pos="0 0.105 -0.02" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.08 0.026 0.018" pos="0 -0.075 -0.006" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.005 0.024" pos="0 -0.045 -0.02" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.005 0.024" pos="0 -0.105 -0.02" rgba="0.18 0.24 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.07 0.0175 0.06" pos="0 0.095 0.06" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.0175" pos="0 0.13 0.075" quat="0.70710548 -0.70710808 0 0" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.024 0.007" pos="0.05 0.151 0.106" quat="0.70710548 -0.70710808 0 0" rgba="0.78 0.8 0.82 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.024 0.007" pos="-0.05 0.151 0.044" quat="0.70710548 -0.70710808 0 0" rgba="0.78 0.8 0.82 1" contype="1" conaffinity="2"/>
+        <body name="spindle" pos="0 0.1475 0.075">
+          <inertial pos="0 0.07185 0.000617" mass="0.068619" fullinertia="7.296454e-5 4.924752e-5 7.173939e-5 0.000000e+0 0.000000e+0 -1.149458e-6"/>
+          <joint name="carriage_to_spindle" type="hinge" axis="0 1 0" range="-3.14159 3.14159" damping="0.001631"/>
+          <geom type="cylinder" size="0.016 0.04" pos="0 0.04 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.66 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.045 0.01" pos="0 0.087 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.66 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.007 0.005 0.016" pos="0 0.099 0.027" rgba="1 0.72 0.08 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_rail_to_carriage" joint="rail_to_carriage" kp="122.1179" ctrlrange="0 0.56"/>
+    <position name="a_carriage_to_spindle" joint="carriage_to_spindle" kp="0.013505" ctrlrange="-3.14159 3.14159"/>
+  </actuator>
+</mujoco>

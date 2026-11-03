@@ -1,0 +1,48 @@
+<mujoco model="rec_vertical_slide_with_wrist_hinge_0ccb9ada99e34a1fa99e57cd8b1db653">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0.021 0">
+      <inertial pos="0 0.021861 0.132505" mass="0.866395" fullinertia="1.828504e-2 2.029058e-2 4.277627e-3 0.000000e+0 0.000000e+0 -1.657147e-3"/>
+      <geom type="box" size="0.13 0.08 0.0125" pos="0 0 0.0125" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0825 0.008 0.195" pos="0 0.043 0.22" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0725 0.015 0.015" pos="0 0.028 0.04" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0725 0.015 0.015" pos="0 0.028 0.4" rgba="0.08 0.085 0.09 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.008 0.175" pos="-0.045 0.018 0.22" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.008 0.175" pos="0.045 0.018 0.22" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.009 0.002" pos="-0.095 -0.055 0.027" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.009 0.002" pos="0.095 -0.055 0.027" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.009 0.002" pos="-0.095 0.055 0.027" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.009 0.002" pos="0.095 0.055 0.027" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <body name="moving_block" pos="0 0 0.095">
+        <inertial pos="0 -0.01846 -0.000229" mass="0.13303" fullinertia="8.667865e-5 2.611985e-4 2.172444e-4 6.310887e-30 4.882329e-12 -2.311799e-7"/>
+        <joint name="base_to_block" type="slide" axis="0 0 1" range="0 0.2" damping="37.530608" armature="0.78523519"/>
+        <geom type="box" size="0.0625 0.013 0.04" pos="0 -0.022 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.01 0.035" pos="-0.045 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.01 0.035" pos="0.045 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.012 0.006 0.013" pos="-0.04 -0.034 0.01" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0065 0.012" pos="-0.04 -0.041 0.01" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.012 0.006 0.013" pos="0.04 -0.034 0.01" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0065 0.012" pos="0.04 -0.041 0.01" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0032 0.055" pos="0 -0.041 0.01" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.005 0.007" pos="0 -0.034 -0.03" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <body name="face_bracket" pos="0 -0.041 0.01">
+          <inertial pos="0 -0.044125 -0.001344" mass="0.02" fullinertia="1.354339e-5 5.069009e-6 1.797783e-5 0.000000e+0 1.107850e-12 2.608042e-7"/>
+          <joint name="block_to_bracket" type="hinge" axis="-1 0 0" range="0 1.2" damping="0.028868" armature="0.00066917"/>
+          <geom type="cylinder" size="0.006 0.022" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.026 0.037 0.004" pos="0 -0.043 -0.003" rgba="0.08 0.22 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.026 0.004 0.009" pos="0 -0.077 0.002" rgba="0.08 0.22 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.003 0.025 0.005" pos="-0.02 -0.046 0.003" rgba="0.08 0.22 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.003 0.025 0.005" pos="0.02 -0.046 0.003" rgba="0.08 0.22 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.017 0.005 0.0015" pos="0 -0.041 -0.008" rgba="0.015 0.015 0.014 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_block" joint="base_to_block" kp="375.306075" ctrlrange="0 0.2"/>
+    <position name="a_block_to_bracket" joint="block_to_bracket" kp="0.288676" ctrlrange="0 1.2"/>
+  </actuator>
+</mujoco>

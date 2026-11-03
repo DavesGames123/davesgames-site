@@ -1,0 +1,106 @@
+<mujoco model="rec_all_in_one_printer_with_scanner_lid_and_paper_tray_2fa487f194524ba7b35fc345b2252469">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0.0065 0">
+      <inertial pos="0.004069 0.002498 0.075799" mass="3.153409" fullinertia="6.472741e-2 8.968686e-2 1.304486e-1 1.434778e-3 -1.085762e-3 5.440040e-4"/>
+      <geom type="box" size="0.23 0.19 0.009" pos="0 0 0.009" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.19 0.0725" pos="-0.221 0 0.0905" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.19 0.0725" pos="0.221 0 0.0905" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.212 0.009 0.0725" pos="0 0.181 0.0905" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0305 0.009 0.0725" pos="-0.1995 -0.181 0.0905" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0305 0.009 0.0725" pos="0.1995 -0.181 0.0905" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.169 0.009 0.009" pos="0 -0.181 0.009" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.169 0.009 0.0075" pos="0 -0.181 0.0845" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.169 0.009 0.025" pos="0 -0.181 0.137" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.13 0.047 0.0025" pos="0 -0.127 0.0945" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.148 0.035 0.007" pos="-0.032 -0.146 0.156" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.172 0.04 0.007" pos="-0.01 0.151 0.156" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.025 0.122 0.007" pos="-0.205 0 0.156" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.055 0.091 0.007" pos="0.175 0.02 0.156" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.06 0.07 0.007" pos="0.17 -0.11 0.156" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.147 0.107 0.0015" pos="-0.032 0 0.1495" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.143 0.103 0.001" pos="-0.032 0 0.152" rgba="0.56 0.7 0.78 0.45" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.111 0.006" pos="-0.183 0 0.157" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.111 0.006" pos="0.119 0 0.157" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.155 0.004 0.006" pos="-0.032 -0.111 0.157" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.155 0.004 0.006" pos="-0.032 0.111 0.157" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.051 0.022 0.0015" pos="0.155 -0.154 0.1645" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.059 0.004 0.007" pos="0.155 -0.18 0.17" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.059 0.004 0.007" pos="0.155 -0.128 0.17" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.022 0.007" pos="0.1 -0.154 0.17" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.004 0.022 0.007" pos="0.21 -0.154 0.17" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <body name="scanner_lid" pos="-0.032 0.121 0.163">
+        <inertial pos="0 -0.12355 0.009349" mass="0.221696" fullinertia="1.338691e-3 2.303123e-3 3.627088e-3 0.000000e+0 0.000000e+0 4.480272e-6"/>
+        <joint name="body_to_scanner_lid" type="hinge" axis="-1 0 0" range="0 1.3" damping="0.895671" armature="0.0176496"/>
+        <geom type="box" size="0.161 0.122 0.002" pos="0 -0.122 0.014" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.006 0.116 0.008" pos="-0.155 -0.116 0.008" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.006 0.116 0.008" pos="0.155 -0.116 0.008" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.149 0.006 0.008" pos="0 -0.236 0.008" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.149 0.005 0.006" pos="0 -0.005 0.006" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.149 0.115 0.001" pos="0 -0.116 0.001" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="paper_cassette" pos="0 -0.172 0.018">
+        <inertial pos="0 0.089562 0.019135" mass="0.26871" fullinertia="3.243535e-3 3.075078e-3 6.133252e-3 0.000000e+0 0.000000e+0 8.534990e-5"/>
+        <joint name="body_to_paper_cassette" type="slide" axis="0 -1 0" range="0 0.16" damping="5.3742"/>
+        <geom type="box" size="0.166 0.14 0.0015" pos="0 0.13 0.0015" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.14 0.024" pos="-0.1645 0.13 0.024" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.14 0.024" pos="0.1645 0.13 0.024" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.169 0.008 0.029" pos="0 -0.01 0.029" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.169 0.0015 0.02" pos="0 0.2715 0.02" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.15 0.009 0.005" pos="0 0.262 0.045" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="output_tray" pos="0 -0.19 0.092">
+        <inertial pos="0 -0.003266 0.01267" mass="0.02" fullinertia="3.371104e-6 1.121854e-4 1.092449e-4 0.000000e+0 0.000000e+0 -3.767702e-7"/>
+        <joint name="body_to_output_tray" type="hinge" axis="1 0 0" range="0 1.2" damping="0.008213" armature="0.00019854"/>
+        <geom type="box" size="0.131 0.0015 0.02" pos="0 -0.0015 0.02" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.118 0.007 0.002" pos="0 -0.007 0.002" rgba="0.88 0.89 0.9 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.131 0.004 0.002" pos="0 -0.004 0.002" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="selector_dial" pos="0.133 -0.154 0.177">
+        <inertial pos="0.00002 0 0.007525" mass="0.02" fullinertia="2.059078e-6 2.062654e-6 2.796266e-6 0.000000e+0 -3.772309e-9 0.000000e+0"/>
+        <joint name="control_panel_to_selector_dial" type="hinge" axis="0 0 1" damping="0.000056"/>
+        <geom type="cylinder" size="0.006 0.006" pos="0 0 -0.005" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.014 0.002" pos="0 0 0.002" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.018 0.006" pos="0 0 0.01" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.001 0.001" pos="0.008 0 0.017" rgba="0.3 0.53 0.7 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_0" pos="0.175 -0.142 0.177">
+        <inertial pos="0 0 -0.000339" mass="0.02" fullinertia="5.675980e-7 7.045872e-7 4.892473e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="control_panel_to_button_0" type="slide" axis="0 0 -1" range="0 0.003" damping="130.8" armature="3.25"/>
+        <geom type="box" size="0.004 0.003 0.0055" pos="0 0 -0.0055" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.006 0.0025" pos="0 0 0.0025" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_1" pos="0.195 -0.142 0.177">
+        <inertial pos="0 0 -0.000339" mass="0.02" fullinertia="5.675980e-7 7.045872e-7 4.892473e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="control_panel_to_button_1" type="slide" axis="0 0 -1" range="0 0.003" damping="130.8" armature="3.25"/>
+        <geom type="box" size="0.004 0.003 0.0055" pos="0 0 -0.0055" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.006 0.0025" pos="0 0 0.0025" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_2" pos="0.175 -0.166 0.177">
+        <inertial pos="0 0 -0.000339" mass="0.02" fullinertia="5.675980e-7 7.045872e-7 4.892473e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="control_panel_to_button_2" type="slide" axis="0 0 -1" range="0 0.003" damping="130.8" armature="3.25"/>
+        <geom type="box" size="0.004 0.003 0.0055" pos="0 0 -0.0055" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.006 0.0025" pos="0 0 0.0025" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_3" pos="0.195 -0.166 0.177">
+        <inertial pos="0 0 -0.000339" mass="0.02" fullinertia="5.675980e-7 7.045872e-7 4.892473e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="control_panel_to_button_3" type="slide" axis="0 0 -1" range="0 0.003" damping="130.8" armature="3.25"/>
+        <geom type="box" size="0.004 0.003 0.0055" pos="0 0 -0.0055" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.006 0.0025" pos="0 0 0.0025" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_scanner_lid" joint="body_to_scanner_lid" kp="8.956707" ctrlrange="0 1.3"/>
+    <position name="a_body_to_paper_cassette" joint="body_to_paper_cassette" kp="26.871" ctrlrange="0 0.16"/>
+    <position name="a_body_to_output_tray" joint="body_to_output_tray" kp="0.082134" ctrlrange="0 1.2"/>
+    <position name="a_control_panel_to_selector_dial" joint="control_panel_to_selector_dial" kp="0.00028" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_control_panel_to_button_0" joint="control_panel_to_button_0" kp="1308" ctrlrange="0 0.003"/>
+    <position name="a_control_panel_to_button_1" joint="control_panel_to_button_1" kp="1308" ctrlrange="0 0.003"/>
+    <position name="a_control_panel_to_button_2" joint="control_panel_to_button_2" kp="1308" ctrlrange="0 0.003"/>
+    <position name="a_control_panel_to_button_3" joint="control_panel_to_button_3" kp="1308" ctrlrange="0 0.003"/>
+  </actuator>
+</mujoco>

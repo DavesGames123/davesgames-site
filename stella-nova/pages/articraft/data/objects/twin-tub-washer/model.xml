@@ -1,0 +1,62 @@
+<mujoco model="rec_frontload_washing_machine_f25422568bc445c696a40d25832b4d07">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="top_deck" file="top_deck.stl"/>
+    <mesh name="wash_basket" file="wash_basket.stl"/>
+    <mesh name="spin_basket" file="spin_basket.stl"/>
+    <mesh name="wash_door_frame" file="wash_door_frame.stl"/>
+    <mesh name="spin_door_frame" file="spin_door_frame.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0 0 0.42" mass="29" fullinertia="2.309370e+0 3.492570e+0 2.391530e+0 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.406 0.226 0.01" pos="0 0 0.01" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.43 0.012 0.345" pos="0 0.238 0.345" rgba="0.93 0.94 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.43 0.012 0.345" pos="0 -0.238 0.345" rgba="0.93 0.94 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.25 0.345" pos="-0.418 0 0.345" rgba="0.93 0.94 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.25 0.345" pos="0.418 0 0.345" rgba="0.93 0.94 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.018 0.226 0.335" pos="0 0 0.355" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="top_deck" pos="0 0 0" rgba="0.93 0.94 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.3956 0.03 0.06" pos="0 0.22 0.78" rgba="0.44 0.48 0.53 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.045 0.05" pos="-0.19 0 0.07" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.04 0.0475" pos="0.19 0 0.0675" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.004 0.02" pos="-0.345 -0.094 0.736" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.004 0.02" pos="-0.345 0.094 0.736" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.004 0.02" pos="0.055 -0.084 0.736" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.004 0.02" pos="0.055 0.084 0.736" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+      <body name="wash_drum" pos="-0.19 0 0.12">
+        <inertial pos="0 0 0.265" mass="2.8" fullinertia="7.529010e-2 7.529010e-2 1.949360e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_wash_drum" type="hinge" axis="0 0 1" damping="0.389872"/>
+        <geom type="mesh" mesh="wash_basket" pos="0 0 0" rgba="0.77 0.8 0.83 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.038 0.025" pos="0 0 0.025" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="spin_drum" pos="0.19 0 0.115">
+        <inertial pos="0 0 0.245" mass="2" fullinertia="4.501670e-2 4.501670e-2 1.000000e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_spin_drum" type="hinge" axis="0 0 1" damping="0.2"/>
+        <geom type="mesh" mesh="spin_basket" pos="0 0 0" rgba="0.77 0.8 0.83 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.034 0.0225" pos="0 0 0.0225" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="wash_door" pos="-0.345 0 0.736">
+        <inertial pos="0.155 0 -0.008" mass="0.7" fullinertia="4.219310e-3 4.219310e-3 8.408750e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_wash_door" type="hinge" axis="0 -1 0" range="0 1.45" damping="3.550967" armature="0.06769257"/>
+        <geom type="mesh" mesh="wash_door_frame" pos="0 0 0" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.118 0.008" pos="0.155 0 -0.008" rgba="0.72 0.84 0.95 0.45" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.016 0.09" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="spin_door" pos="0.055 0 0.736">
+        <inertial pos="0.135 0 -0.008" mass="0.55" fullinertia="2.517670e-3 2.517670e-3 5.011880e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_spin_door" type="hinge" axis="0 -1 0" range="0 1.45" damping="2.427975" armature="0.04812275"/>
+        <geom type="mesh" mesh="spin_door_frame" pos="0 0 0" rgba="0.63 0.67 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.098 0.008" pos="0.135 0 -0.008" rgba="0.72 0.84 0.95 0.45" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.016 0.08" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.22 0.24 0.27 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_wash_drum" joint="body_to_wash_drum" kp="1.94936" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_spin_drum" joint="body_to_spin_drum" kp="1" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_wash_door" joint="body_to_wash_door" kp="35.509672" ctrlrange="0 1.45"/>
+    <position name="a_body_to_spin_door" joint="body_to_spin_door" kp="24.27975" ctrlrange="0 1.45"/>
+  </actuator>
+</mujoco>

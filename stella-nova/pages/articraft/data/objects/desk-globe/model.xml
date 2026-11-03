@@ -1,0 +1,69 @@
+<mujoco model="rec_globe_3dfdcdb0007d48f59136d9212f155f76">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="tilted_meridian_ring" file="tilted_meridian_ring.stl"/>
+    <mesh name="equator_line" file="equator_line.stl"/>
+    <mesh name="latitude_south_60" file="latitude_south_60.stl"/>
+    <mesh name="latitude_south_30" file="latitude_south_30.stl"/>
+    <mesh name="latitude_north_30" file="latitude_north_30.stl"/>
+    <mesh name="latitude_north_60" file="latitude_north_60.stl"/>
+    <mesh name="longitude_0" file="longitude_0.stl"/>
+    <mesh name="longitude_1" file="longitude_1.stl"/>
+    <mesh name="longitude_2" file="longitude_2.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0.039198 -0.001">
+      <inertial pos="0 0 0.066348" mass="1.060318" fullinertia="8.266620e-3 8.486902e-3 8.466224e-3 -2.348021e-28 -3.412063e-12 1.373586e-20"/>
+      <geom type="box" size="0.17 0.023 0.013" pos="0 0 0.026" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.023 0.17 0.013" pos="0 0 0.026" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.037 0.014" pos="0.15 0 0.018" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.003" pos="0.15 0 0.004" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.037 0.014" pos="-0.15 0 0.018" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.003" pos="-0.15 0 0.004" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.037 0.014" pos="0 0.15 0.018" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.003" pos="0 0.15 0.004" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.037 0.014" pos="0 -0.15 0.018" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.003" pos="0 -0.15 0.004" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.092 0.016" pos="0 0 0.049" rgba="0.2 0.1 0.045 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.05 0.013" pos="0 0 0.073" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.024 0.068" pos="0 0 0.148" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.034 0.009" pos="0 0 0.219" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.022 0.065" pos="-0.051 0 0.2" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.006" pos="-0.051 0 0.27" quat="0.70710548 0 0.70710808 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.022 0.065" pos="0.051 0 0.2" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.006" pos="0.051 0 0.27" quat="0.70710548 0 0.70710808 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.059 0.023 0.015" pos="0 0 0.145" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+      <body name="meridian" pos="0 0 0.27">
+        <inertial pos="0.000007 -0.072123 0.165665" mass="0.536532" fullinertia="9.890233e-3 5.135531e-3 4.778574e-3 -6.451875e-8 2.899479e-7 1.932040e-4"/>
+        <joint name="meridian_tilt" type="hinge" axis="1 0 0" range="-0.35 0.45" damping="26.593985" armature="0.40854891"/>
+        <geom type="mesh" mesh="tilted_meridian_ring" pos="0 0 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.008 0.045" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.017 0.01" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0045 0.0115" pos="0 -0.004586 0.010546" quat="0.97904551 0.20364157 0 0" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.005" pos="0 -0.003987 0.009171" quat="0.97904551 0.20364157 0 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0045 0.0115" pos="0 -0.142952 0.328766" quat="0.97904551 0.20364157 0 0" rgba="0.35 0.24 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.005" pos="0 -0.14355 0.330142" quat="0.97904551 0.20364157 0 0" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+        <body name="globe" pos="0 -0.073769 0.169656" quat="0.97904551 0.20364157 0 0">
+          <inertial pos="0.000001 0 -0.000001" mass="5.292683" fullinertia="4.775427e-2 4.775463e-2 4.692539e-2 2.528070e-9 -8.907156e-8 -2.120648e-7"/>
+          <joint name="globe_spin" type="hinge" axis="0 0 1" damping="0.938508"/>
+          <geom type="sphere" size="0.15" pos="0 0 0" rgba="0.7 0.62 0.42 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="equator_line" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="latitude_south_60" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="latitude_south_30" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="latitude_north_30" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="latitude_north_60" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="longitude_0" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="longitude_1" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="longitude_2" pos="0 0 0" rgba="0.18 0.1 0.045 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.01 0.008" pos="0 0 -0.155" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.01 0.008" pos="0 0 0.155" rgba="0.78 0.57 0.25 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_meridian_tilt" joint="meridian_tilt" kp="265.939846" ctrlrange="-0.35 0.45"/>
+    <position name="a_globe_spin" joint="globe_spin" kp="4.692539" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,31 @@
+<mujoco model="rec_twojoint_revolute_chain_9c56420090b044cd9234210681a4e1a5">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="root_bracket" file="root_bracket.stl"/>
+    <mesh name="link1" file="link1.stl"/>
+    <mesh name="link2" file="link2.stl"/>
+    <mesh name="end_tab" file="end_tab.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.0945 0.0005 0.068">
+      <inertial pos="0.009506 -0.000532 -0.026211" mass="0.057585" fullinertia="6.257832e-5 1.546235e-4 1.134642e-4 -9.427153e-7 -4.085817e-5 1.420970e-7"/>
+      <geom type="mesh" mesh="root_bracket" pos="0 0 0" rgba="0.32 0.34 0.36 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="link1" pos="0 0 0.006" rgba="0.73 0.76 0.8 1" contype="1" conaffinity="2"/>
+      <body name="link2" pos="0.11 0 0.006">
+        <inertial pos="0.050218 0 0" mass="0.02" fullinertia="9.255399e-7 1.410144e-5 1.442670e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="link1_to_link2" type="hinge" axis="0 -1 0" range="-0.15 1.55" damping="0.106183" armature="0.00240508"/>
+        <geom type="mesh" mesh="link2" pos="0 0 0" rgba="0.73 0.76 0.8 1" contype="1" conaffinity="2"/>
+        <body name="end_tab" pos="0.09 0 0">
+          <inertial pos="0.022141 0 0" mass="0.02" fullinertia="9.894364e-7 2.673013e-6 3.092084e-6 -1.886512e-11 6.155185e-11 6.438145e-12"/>
+          <joint name="link2_to_end_tab" type="hinge" axis="0 -1 0" range="-0.35 1.55" damping="0.01448" armature="0.00034953"/>
+          <geom type="mesh" mesh="end_tab" pos="0 0 0" rgba="0.48 0.52 0.56 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_link1_to_link2" joint="link1_to_link2" kp="1.061828" ctrlrange="-0.15 1.55"/>
+    <position name="a_link2_to_end_tab" joint="link2_to_end_tab" kp="0.144802" ctrlrange="-0.35 1.55"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,64 @@
+<mujoco model="rec_robotic_arms_889477f5978f4a08a87bb80c115416f1">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="base_mesh" file="base_mesh.stl"/>
+    <mesh name="shoulder_mesh" file="shoulder_mesh.stl"/>
+    <mesh name="upper_arm_mesh" file="upper_arm_mesh.stl"/>
+    <mesh name="forearm_mesh" file="forearm_mesh.stl"/>
+    <mesh name="wrist_pitch_mesh" file="wrist_pitch_mesh.stl"/>
+    <mesh name="gripper_base_mesh" file="gripper_base_mesh.stl"/>
+    <mesh name="left_jaw_mesh" file="left_jaw_mesh.stl"/>
+    <mesh name="right_jaw_mesh" file="right_jaw_mesh.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.000044 0">
+      <inertial pos="0 -0.000002 0.05" mass="2.472074" fullinertia="1.595387e-2 1.595495e-2 2.778915e-2 -3.839648e-7 1.098235e-7 1.701694e-7"/>
+      <geom type="mesh" mesh="base_mesh" pos="0 0 0" rgba="0.2 0.2 0.2 1" contype="1" conaffinity="2"/>
+      <body name="shoulder" pos="0 0 0.1">
+        <inertial pos="-0.000004 0.000005 0.038101" mass="0.674551" fullinertia="2.401225e-3 2.176602e-3 3.153525e-3 5.768939e-8 -3.523435e-8 1.838407e-7"/>
+        <joint name="base_to_shoulder" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.367515"/>
+        <geom type="mesh" mesh="shoulder_mesh" pos="0 0 0" rgba="0.9 0.4 0.1 1" contype="1" conaffinity="2"/>
+        <body name="upper_arm" pos="0 0 0.1">
+          <inertial pos="-0.000005 0.000003 0.195108" mass="0.652457" fullinertia="1.440455e-2 1.430651e-2 4.648839e-4 -3.282980e-8 -1.824551e-7 8.024178e-8"/>
+          <joint name="shoulder_to_upper_arm" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="11.390737" armature="0.16986484"/>
+          <geom type="mesh" mesh="upper_arm_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 1" contype="1" conaffinity="2"/>
+          <body name="forearm" pos="0 0 0.4">
+            <inertial pos="0.000005 0 0.090416" mass="0.337111" fullinertia="3.727913e-3 3.585355e-3 4.979995e-4 2.526679e-8 1.931853e-7 -4.302877e-8"/>
+            <joint name="upper_arm_to_forearm" type="hinge" axis="0 1 0" range="-2.5 2.5" damping="2.215927" armature="0.03843069"/>
+            <geom type="mesh" mesh="forearm_mesh" pos="0 0 0" rgba="0.9 0.4 0.1 1" contype="1" conaffinity="2"/>
+            <body name="wrist_pitch" pos="0 0 0.3">
+              <inertial pos="0.000003 0.000002 0.010003" mass="0.021451" fullinertia="7.585640e-6 7.753664e-6 3.827683e-6 4.946266e-10 9.285321e-10 1.056723e-9"/>
+              <joint name="forearm_to_wrist_pitch" type="hinge" axis="0 1 0" range="-1.57 1.57" damping="0.258215" armature="0.00561832"/>
+              <geom type="mesh" mesh="wrist_pitch_mesh" pos="0 0 0" rgba="0.2 0.2 0.2 1" contype="1" conaffinity="2"/>
+              <body name="gripper_base" pos="0 0 0.04">
+                <inertial pos="0 0 0.021642" mass="0.046601" fullinertia="9.942198e-6 5.191264e-5 5.121876e-5 1.771709e-10 -9.671678e-12 -4.012353e-14"/>
+                <joint name="wrist_pitch_to_gripper_base" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.011151" armature="0.00021841"/>
+                <geom type="mesh" mesh="gripper_base_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 1" contype="1" conaffinity="2"/>
+                <body name="left_jaw" pos="-0.04 0 0.04">
+                  <inertial pos="0.008793 -0.000169 0.045457" mass="0.02" fullinertia="3.608163e-6 3.404839e-6 1.543273e-6 -2.607327e-8 -6.185926e-7 -1.010220e-8"/>
+                  <joint name="gripper_base_to_left_jaw" type="slide" axis="1 0 0" range="0 0.02" damping="16.406538" armature="0.39016345"/>
+                  <geom type="mesh" mesh="left_jaw_mesh" pos="0 0 0" rgba="0.1 0.1 0.1 1" contype="1" conaffinity="2"/>
+                </body>
+                <body name="right_jaw" pos="0.04 0 0.04">
+                  <inertial pos="-0.008929 -0.000159 0.04554" mass="0.02" fullinertia="3.564952e-6 3.345046e-6 1.551222e-6 2.560164e-8 6.136612e-7 -9.203463e-9"/>
+                  <joint name="gripper_base_to_right_jaw" type="slide" axis="-1 0 0" range="0 0.02" damping="16.406538" armature="0.39016345"/>
+                  <geom type="mesh" mesh="right_jaw_mesh" pos="0 0 0" rgba="0.1 0.1 0.1 1" contype="1" conaffinity="2"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_shoulder" joint="base_to_shoulder" kp="0.419242" ctrlrange="-3.14 3.14"/>
+    <position name="a_shoulder_to_upper_arm" joint="shoulder_to_upper_arm" kp="113.907368" ctrlrange="-1.57 1.57"/>
+    <position name="a_upper_arm_to_forearm" joint="upper_arm_to_forearm" kp="22.159274" ctrlrange="-2.5 2.5"/>
+    <position name="a_forearm_to_wrist_pitch" joint="forearm_to_wrist_pitch" kp="2.582153" ctrlrange="-1.57 1.57"/>
+    <position name="a_wrist_pitch_to_gripper_base" joint="wrist_pitch_to_gripper_base" kp="0.11151" ctrlrange="-3.14 3.14"/>
+    <position name="a_gripper_base_to_left_jaw" joint="gripper_base_to_left_jaw" kp="164.065378" ctrlrange="0 0.02"/>
+    <position name="a_gripper_base_to_right_jaw" joint="gripper_base_to_right_jaw" kp="164.065378" ctrlrange="0 0.02"/>
+  </actuator>
+</mujoco>

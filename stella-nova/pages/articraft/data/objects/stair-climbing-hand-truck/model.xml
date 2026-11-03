@@ -1,0 +1,110 @@
+<mujoco model="rec_hand_truck_dolly_8406519e6f144bdeb2105a14bf92ad5c">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="small_block_tire" file="small_block_tire.stl"/>
+    <mesh name="small_aluminum_wheel" file="small_aluminum_wheel.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.0665 0 0.003817">
+      <inertial pos="-0.012625 0 0.435631" mass="5.82846" fullinertia="1.396170e+0 1.390503e+0 2.509403e-1 -5.420970e-20 3.271282e-1 -3.075229e-8"/>
+      <geom type="box" size="0.019 0.018 0.559015" pos="-0.1 -0.19 0.7" quat="0.99595934 0 -0.08980535 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.019 0.018 0.559015" pos="-0.1 0.19 0.7" quat="0.99595934 0 -0.08980535 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.026 0.235 0.019" pos="-0.002727 0 0.165" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.026 0.235 0.019" pos="-0.078182 0 0.58" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.026 0.235 0.019" pos="-0.158182 0 1.02" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.025 0.28 0.02" pos="-0.205 0 1.255" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.027 0.25" pos="-0.205 0 1.26" quat="0.70710548 0.70710808 0 0" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.175 0.185 0.015" pos="0.19 0 0.02" rgba="0.38 0.4 0.42 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0225 0.2125 0.075" pos="0 0 0.085" rgba="0.38 0.4 0.42 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.14 0.0175 0.016" pos="0.07 -0.155 0.083" quat="0.9624252 0 -0.27154694 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.14 0.0175 0.016" pos="0.07 0.155 0.083" quat="0.9624252 0 -0.27154694 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.027 0.04875" pos="0 -0.22375 0.22" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0275 0.0325 0.05" pos="0 -0.19 0.215" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.027 0.04875" pos="0 0.22375 0.22" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0275 0.0325 0.05" pos="0 0.19 0.215" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+      <body name="bogie_0" pos="0 -0.29 0.22">
+        <inertial pos="0 -0.001922 0" mass="0.287398" fullinertia="1.241179e-3 2.432242e-3 1.241174e-3 4.235141e-22 1.997407e-10 1.516049e-10"/>
+        <joint name="frame_to_bogie_0" type="hinge" axis="0 1 0" damping="0.565522"/>
+        <geom type="cylinder" size="0.038 0.0175" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.005" pos="0 -0.016 0" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="0 0 -0.0675" quat="0.00000133 0 1 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="0 0 -0.135" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="0 -0.006 -0.135" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="0.058457 0 0.03375" quat="0.86602479 0 0.50000106 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="0.116913 0 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="0.116913 -0.006 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="-0.058457 0 0.03375" quat="0.86602479 0 -0.50000106 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="-0.116913 0 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="-0.116913 -0.006 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <body name="wheel_0_0" pos="0 -0.055 -0.135">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_0_to_wheel_0" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="wheel_0_1" pos="0.116913 -0.055 0.0675">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_0_to_wheel_1" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="wheel_0_2" pos="-0.116913 -0.055 0.0675">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_0_to_wheel_2" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="bogie_1" pos="0 0.29 0.22">
+        <inertial pos="0 0.001922 0" mass="0.287398" fullinertia="1.241179e-3 2.432242e-3 1.241174e-3 -4.235157e-22 1.997407e-10 1.516049e-10"/>
+        <joint name="frame_to_bogie_1" type="hinge" axis="0 1 0" damping="0.565523"/>
+        <geom type="cylinder" size="0.038 0.0175" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.005" pos="0 0.016 0" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="0 0 -0.0675" quat="0.00000133 0 1 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="0 0 -0.135" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="0 0.006 -0.135" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="0.058457 0 0.03375" quat="0.86602479 0 0.50000106 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="0.116913 0 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="0.116913 0.006 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.012 0.0775" pos="-0.058457 0 0.03375" quat="0.86602479 0 -0.50000106 0" rgba="0.05 0.19 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.027 0.015" pos="-0.116913 0 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.011 0.016" pos="-0.116913 0.006 0.0675" quat="0.70710548 0.70710808 0 0" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+        <body name="wheel_1_0" pos="0 0.055 -0.135">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_1_to_wheel_0" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="wheel_1_1" pos="0.116913 0.055 0.0675">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_1_to_wheel_1" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="wheel_1_2" pos="-0.116913 0.055 0.0675">
+          <inertial pos="0.000018 0.000094 0.000016" mass="0.39627" fullinertia="7.780028e-4 1.394351e-3 7.778025e-4 -5.155797e-8 4.166224e-8 1.399390e-7"/>
+          <joint name="bogie_1_to_wheel_2" type="hinge" axis="0 1 0" damping="0.027887"/>
+          <geom type="mesh" mesh="small_block_tire" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.005 0.005 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="small_aluminum_wheel" pos="0 0 0" quat="0.70710548 0 0 0.70710808" rgba="0.63 0.66 0.68 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.018 0.033" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_frame_to_bogie_0" joint="frame_to_bogie_0" kp="2.827612" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_0_to_wheel_0" joint="bogie_0_to_wheel_0" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_0_to_wheel_1" joint="bogie_0_to_wheel_1" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_0_to_wheel_2" joint="bogie_0_to_wheel_2" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_frame_to_bogie_1" joint="frame_to_bogie_1" kp="2.827617" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_1_to_wheel_0" joint="bogie_1_to_wheel_0" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_1_to_wheel_1" joint="bogie_1_to_wheel_1" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_bogie_1_to_wheel_2" joint="bogie_1_to_wheel_2" kp="0.139435" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,81 @@
+<mujoco model="rec_microwave_oven_1eefd68eae054d378225ad626c3374ef">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="support_ring" file="support_ring.stl"/>
+    <mesh name="door_frame" file="door_frame.stl"/>
+    <mesh name="time_dial" file="time_dial.stl"/>
+    <mesh name="power_dial" file="power_dial.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0.0365 0">
+      <inertial pos="0.027869 0.009086 0.16065" mass="16.55908" fullinertia="4.556559e-1 7.427836e-1 8.126263e-1 1.697752e-2 7.666044e-4 2.973596e-4"/>
+      <geom type="box" size="0.28 0.21 0.0275" pos="0 0 0.0275" rgba="0.86 0.84 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.28 0.21 0.029" pos="0 0 0.291" rgba="0.86 0.84 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0225 0.21 0.1035" pos="-0.2575 0 0.1585" rgba="0.86 0.84 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.2075 0.0125 0.1035" pos="-0.0725 0.1975 0.1585" rgba="0.86 0.84 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0725 0.21 0.1035" pos="0.2075 0 0.1585" rgba="0.86 0.84 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.185 0.1975 0.002" pos="-0.05 -0.0125 0.057" rgba="0.16 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.185 0.002 0.1035" pos="-0.05 0.183 0.1585" rgba="0.16 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.1975 0.1035" pos="-0.233 -0.0125 0.1585" rgba="0.16 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.185 0.1975 0.002" pos="-0.05 -0.0125 0.26" rgba="0.16 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.061 0.002 0.129" pos="0.209 -0.212 0.16" rgba="0.01 0.01 0.012 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.167654 -0.215 0.199951" quat="0.57357733 0 0 0.81915142" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.167654 -0.215 0.230049" quat="0.81915218 0 0 0.57357624" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.187 -0.215 0.253105" quat="0.9659258 0 0 0.25881915" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.216641 -0.215 0.258332" quat="0.99619469 0 0 -0.08715578" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.242706 -0.215 0.243283" quat="0.90630771 0 0 -0.42261843" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.253 -0.215 0.215" quat="0.70710548 0 0 -0.70710808" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.242706 -0.215 0.186717" quat="-0.42261737 0 0 0.9063082" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.167654 -0.215 0.099951" quat="0.57357733 0 0 0.81915142" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.167654 -0.215 0.130049" quat="0.81915218 0 0 0.57357624" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.187 -0.215 0.153105" quat="0.9659258 0 0 0.25881915" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.216641 -0.215 0.158332" quat="0.99619469 0 0 -0.08715578" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.242706 -0.215 0.143283" quat="0.90630771 0 0 -0.42261843" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.253 -0.215 0.115" quat="0.70710548 0 0 -0.70710808" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0015 0.001 0.005" pos="0.242706 -0.215 0.086717" quat="-0.42261737 0 0 0.9063082" rgba="0.92 0.92 0.86 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.0025 0.116" pos="-0.258 -0.2125 0.16" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="support_ring" pos="-0.05 -0.01 0.065" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      <body name="door" pos="-0.239 -0.227 0.04">
+        <inertial pos="0.144946 -0.003274 0.119331" mass="0.382681" fullinertia="1.317079e-3 6.645318e-3 5.453337e-3 2.611508e-4 -2.193756e-4 2.577564e-5"/>
+        <joint name="housing_to_door" type="hinge" axis="0 0 -1" range="0 1.75" damping="0.269946"/>
+        <geom type="mesh" mesh="door_frame" pos="0 0 0" rgba="0.01 0.01 0.012 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1325 0.003 0.077" pos="0.19 0 0.132" rgba="0.03 0.035 0.04 0.55" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.119 0.001 0.0015" pos="0.19 -0.004 0.09" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.119 0.001 0.0015" pos="0.19 -0.004 0.116" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.119 0.001 0.0015" pos="0.19 -0.004 0.142" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.119 0.001 0.0015" pos="0.19 -0.004 0.168" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.001 0.063" pos="0.11 -0.004 0.132" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.001 0.063" pos="0.16 -0.004 0.132" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.001 0.063" pos="0.21 -0.004 0.132" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.001 0.063" pos="0.26 -0.004 0.132" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.081" pos="0.355 -0.046 0.14" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.012 0.019 0.011" pos="0.355 -0.03 0.07" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.012 0.019 0.011" pos="0.355 -0.03 0.21" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.012 0.11" pos="0 0 0.12" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="time_dial" pos="0.209 -0.21 0.215" quat="0.70710548 0.70710808 0 0">
+        <inertial pos="-0.000001 0 0.015355" mass="0.037144" fullinertia="1.286914e-5 1.286964e-5 1.875580e-5 3.604589e-10 1.315562e-10 4.937926e-10"/>
+        <joint name="panel_to_time_dial" type="hinge" axis="0 0 1" range="-2.35 2.35" damping="0.000375"/>
+        <geom type="mesh" mesh="time_dial" pos="0 0 0" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="power_dial" pos="0.209 -0.21 0.115" quat="0.70710548 0.70710808 0 0">
+        <inertial pos="-0.000001 0 0.015355" mass="0.037144" fullinertia="1.286914e-5 1.286964e-5 1.875580e-5 3.604589e-10 1.315562e-10 4.937926e-10"/>
+        <joint name="panel_to_power_dial" type="hinge" axis="0 0 1" range="-2.35 2.35" damping="0.000375"/>
+        <geom type="mesh" mesh="power_dial" pos="0 0 0" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="turntable" pos="-0.05 -0.01 0.075">
+        <inertial pos="0 0 -0.000286" mass="0.199011" fullinertia="1.057592e-3 1.057592e-3 2.112030e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="ring_to_turntable" type="hinge" axis="0 0 1" damping="0.042241"/>
+        <geom type="cylinder" size="0.148 0.004" pos="0 0 0" rgba="0.72 0.88 0.96 0.35" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.024 0.005" pos="0 0 -0.009" rgba="0.62 0.62 0.58 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_housing_to_door" joint="housing_to_door" kp="1.349732" ctrlrange="0 1.75"/>
+    <position name="a_panel_to_time_dial" joint="panel_to_time_dial" kp="0.001876" ctrlrange="-2.35 2.35"/>
+    <position name="a_panel_to_power_dial" joint="panel_to_power_dial" kp="0.001876" ctrlrange="-2.35 2.35"/>
+    <position name="a_ring_to_turntable" joint="ring_to_turntable" kp="0.211203" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

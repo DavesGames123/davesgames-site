@@ -1,0 +1,68 @@
+<mujoco model="rec_wall_safe_with_hinged_door_and_dial_3e77e640b3264c499a1b3d72c33be67d">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="combination_dial_cap" file="combination_dial_cap.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0.0435 0 0.37">
+      <inertial pos="-0.060619 0.002008 0" mass="5.654004" fullinertia="4.796918e-1 2.658141e-1 2.674031e-1 -9.435685e-4 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.01 0.37 0.055" pos="-0.016 0 0.297" rgba="0.78 0.75 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.37 0.055" pos="-0.016 0 -0.297" rgba="0.78 0.75 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.055 0.37" pos="-0.016 0.297 0" rgba="0.78 0.75 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.055 0.37" pos="-0.016 -0.297 0" rgba="0.78 0.75 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.007 0.195 0.195" pos="-0.187 0 0" rgba="0.015 0.017 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0925 0.195 0.009" pos="-0.0925 0 0.204" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0925 0.195 0.009" pos="-0.0925 0 -0.204" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0925 0.009 0.195" pos="-0.0925 0.204 0" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0925 0.009 0.195" pos="-0.0925 -0.204 0" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.245 0.025" pos="0 0 0.22" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.245 0.025" pos="0 0 -0.22" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.025 0.245" pos="0 0.22 0" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.025 0.245" pos="0 -0.22 0" rgba="0.08 0.095 0.105 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.007 0.19" pos="0.026 0.202 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0175 0.004 0.185" pos="0.0205 0.199 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+      <body name="door" pos="0.012 0.185 0">
+        <inertial pos="0.030396 -0.17759 0" mass="2.791795" fullinertia="5.945866e-2 3.018040e-2 3.101509e-2 4.304029e-5 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_door" type="hinge" axis="0 0 1" range="0 1.75" damping="2.493492"/>
+        <geom type="box" size="0.0275 0.18 0.18" pos="0.0275 -0.18 0" rgba="0.18 0.205 0.225 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.004 0.15 0.15" pos="0.059 -0.18 0" rgba="0.26 0.29 0.31 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.151 0.003" pos="0.064 -0.18 0.153" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.151 0.003" pos="0.064 -0.18 -0.153" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.003 0.151" pos="0.064 -0.028 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0015 0.003 0.151" pos="0.064 -0.332 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.17" pos="0.024 0 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        <body name="dial" pos="0.063 -0.18 0.068">
+          <inertial pos="0.011511 0.000006 -0.000001" mass="0.038154" fullinertia="2.737712e-5 1.558325e-5 1.558533e-5 -2.785243e-9 -1.955080e-10 -6.455466e-10"/>
+          <joint name="door_to_dial" type="hinge" axis="1 0 0" damping="0.000548"/>
+          <geom type="mesh" mesh="combination_dial_cap" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.01 0.002" pos="0.026 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.55 0.28 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="handle" pos="0.063 -0.18 -0.07">
+          <inertial pos="0.015914 0 0" mass="0.033303" fullinertia="5.981735e-5 3.153303e-5 3.153304e-5 -5.878182e-19 -6.437418e-12 -2.581787e-12"/>
+          <joint name="door_to_handle" type="hinge" axis="1 0 0" range="-1.57 1.57" damping="0.001196"/>
+          <geom type="cylinder" size="0.025 0.011" pos="0.011 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.006 0.035 0.006" pos="0.02 0 -0.035" quat="0.70710548 -0.70710808 0 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="sphere" size="0.012" pos="0.02 0 -0.07" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.006 0.035 0.006" pos="0.02 0.030311 0.0175" quat="0.9659258 0.25881915 0 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="sphere" size="0.012" pos="0.02 0.060622 0.035" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.006 0.035 0.006" pos="0.02 -0.030311 0.0175" quat="0.25882092 0.96592532 0 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="sphere" size="0.012" pos="0.02 -0.060622 0.035" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="key_cover" pos="0.063 -0.08 0.068">
+          <inertial pos="0.003235 -0.01874 -0.000355" mass="0.02" fullinertia="1.044081e-5 6.327363e-6 4.253916e-6 -5.753951e-8 2.676329e-8 -2.672451e-8"/>
+          <joint name="door_to_key_cover" type="hinge" axis="0 0 1" range="0 1.75" damping="0.00023"/>
+          <geom type="box" size="0.003 0.0225 0.03" pos="0.003 -0.0225 0" rgba="0.26 0.29 0.31 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.004 0.033" pos="0.004 0 0" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.0015 0.008 0.0035" pos="0.007 -0.0225 -0.021" rgba="0.005 0.005 0.006 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_door" joint="body_to_door" kp="12.467459" ctrlrange="0 1.75"/>
+    <position name="a_door_to_dial" joint="door_to_dial" kp="0.002738" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_door_to_handle" joint="door_to_handle" kp="0.005982" ctrlrange="-1.57 1.57"/>
+    <position name="a_door_to_key_cover" joint="door_to_key_cover" kp="0.001149" ctrlrange="0 1.75"/>
+  </actuator>
+</mujoco>

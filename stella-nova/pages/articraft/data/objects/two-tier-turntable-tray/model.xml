@@ -1,0 +1,47 @@
+<mujoco model="rec_lazy_susan_58dd9952bab54662b5e964ab70b82693">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="base_edge_band" file="base_edge_band.stl"/>
+    <mesh name="outer_bearing_race" file="outer_bearing_race.stl"/>
+    <mesh name="center_bearing_race" file="center_bearing_race.stl"/>
+    <mesh name="outer_annular_tray" file="outer_annular_tray.stl"/>
+    <mesh name="outer_lower_race" file="outer_lower_race.stl"/>
+    <mesh name="outer_nonslip_mat" file="outer_nonslip_mat.stl"/>
+    <mesh name="center_round_platter" file="center_round_platter.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.000029 0.0075">
+      <inertial pos="0 0.000001 0.017486" mass="2.344058" fullinertia="3.713797e-2 3.713800e-2 7.331161e-2 -2.788891e-7 -3.523080e-8 -2.682397e-8"/>
+      <geom type="cylinder" size="0.255 0.014" pos="0 0 0.014" rgba="0.76 0.55 0.32 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="base_edge_band" pos="0 0 0.006" rgba="0.5 0.32 0.17 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="outer_bearing_race" pos="0 0 0.028" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.056 0.025" pos="0 0 0.053" rgba="0.5 0.32 0.17 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="center_bearing_race" pos="0 0 0.076" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.028 0.004" pos="0.175 0.175 -0.0035" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.028 0.004" pos="-0.175 0.175 -0.0035" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.028 0.004" pos="-0.175 -0.175 -0.0035" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.028 0.004" pos="0.175 -0.175 -0.0035" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+      <body name="outer_ring" pos="0 0 0.034">
+        <inertial pos="0.000073 0.000023 0.019226" mass="1.30937" fullinertia="2.511551e-2 2.513288e-2 4.998112e-2 -5.394491e-7 -8.453707e-7 -2.667173e-7"/>
+        <joint name="outer_bearing" type="hinge" axis="0 0 1" damping="0.999623"/>
+        <geom type="mesh" mesh="outer_annular_tray" pos="0 0 0" rgba="0.76 0.55 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="outer_lower_race" pos="0 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="outer_nonslip_mat" pos="0 0 0" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.02 0.006 0.00125" pos="0.184 0 0.027" rgba="0.95 0.72 0.28 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="center_platter" pos="0 0 0.08">
+        <inertial pos="0.000048 0.000001 0.018292" mass="0.35406" fullinertia="1.171539e-3 1.172746e-3 2.288179e-3 -4.915788e-8 -1.730940e-7 -5.676004e-9"/>
+        <joint name="center_bearing" type="hinge" axis="0 0 1" damping="0.045764"/>
+        <geom type="mesh" mesh="center_round_platter" pos="0 0 0" rgba="0.76 0.55 0.32 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.003" pos="0 0 0.003" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.073 0.001" pos="0 0 0.027" rgba="0.025 0.022 0.02 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.005 0.00125" pos="0.062 0 0.029" rgba="0.95 0.72 0.28 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_outer_bearing" joint="outer_bearing" kp="4.998113" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_center_bearing" joint="center_bearing" kp="0.228818" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

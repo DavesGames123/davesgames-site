@@ -1,0 +1,84 @@
+<mujoco model="rec_single_rotor_helicopter_39863ea3a843412f8349168b699859ce">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="fuselage_shell" file="fuselage_shell.stl"/>
+    <mesh name="left_skid" file="left_skid.stl"/>
+    <mesh name="right_skid" file="right_skid.stl"/>
+    <mesh name="forward_cross_tube" file="forward_cross_tube.stl"/>
+    <mesh name="aft_cross_tube" file="aft_cross_tube.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.466868 1.103559 -0.023029">
+      <inertial pos="0.001112 -1.062063 1.422359" mass="2000" fullinertia="7.585665e+3 8.819308e+2 7.608681e+3 5.905312e+0 -1.265086e-1 3.767361e+2"/>
+      <geom type="mesh" mesh="fuselage_shell" pos="0 0 0" rgba="0.76 0.1 0.07 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="left_skid" pos="0 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="right_skid" pos="0 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="forward_cross_tube" pos="0 0 0" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="aft_cross_tube" pos="0 0 0" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.24 0.23" pos="0 -0.1 2.41" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.09 0.58 0.81" pos="0 -6.06 2.11" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.26 0.09 0.2" pos="0.26 -6.36 1.74" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.59 0.15 0.05" pos="0 -5.08 1.34" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.025 0.33" pos="0.95 -0.2 1.39" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.025 0.33" pos="-0.95 -0.2 1.39" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.033 0.56" pos="0.95 0.72 1.2" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.79 0.025 0.37" pos="0 1.6 1.6" quat="0.96105544 -0.27635565 0 0" rgba="0.16 0.22 0.28 0.55" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.025 0.46 0.29" pos="0.9 1.02 1.54" quat="0.99875026 0 -0.04997917 0" rgba="0.16 0.22 0.28 0.55" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.025 0.46 0.29" pos="-0.9 1.02 1.54" quat="0.99875026 0 0.04997917 0" rgba="0.16 0.22 0.28 0.55" contype="1" conaffinity="2"/>
+      <body name="main_rotor" pos="0 -0.05 2.64">
+        <inertial pos="0 0 0.075674" mass="123.52045" fullinertia="4.344498e+2 4.344506e+2 8.686819e+2 1.828597e-4 -1.907146e-7 -6.827219e-24"/>
+        <joint name="rotor_spin" type="hinge" axis="0 0 1" damping="17373.638"/>
+        <geom type="cylinder" size="0.12 0.12" pos="0 0 0.12" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.26 0.08" pos="0 0 0.08" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.18 0.05" pos="0 0 0.18" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.34 0.17 0.025" pos="0.56 0 0.07" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="2.45 0.14 0.0175" pos="2.87 0 0.07" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.34 0.17 0.025" pos="0.17305 0.532592 0.07" quat="0.80901613 0 0 0.58778644" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="2.45 0.14 0.0175" pos="0.886879 2.72953 0.07" quat="0.80901613 0 0 0.58778644" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.34 0.17 0.025" pos="-0.45305 0.32916 0.07" quat="0.30901895 0 0 0.95105588" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="2.45 0.14 0.0175" pos="-2.32188 1.68694 0.07" quat="0.30901895 0 0 0.95105588" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.34 0.17 0.025" pos="-0.45305 -0.32916 0.07" quat="-0.30901643 0 0 0.9510567" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="2.45 0.14 0.0175" pos="-2.32188 -1.68694 0.07" quat="-0.30901643 0 0 0.9510567" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.34 0.17 0.025" pos="0.17305 -0.532592 0.07" quat="0.80901751 0 0 -0.58778454" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="2.45 0.14 0.0175" pos="0.886879 -2.72953 0.07" quat="0.80901751 0 0 -0.58778454" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="tail_rotor" pos="0.52 -6.36 1.74">
+        <inertial pos="0.044102 0 0" mass="4.073108" fullinertia="5.889804e-1 3.021929e-1 3.021929e-1 -1.004745e-18 -6.397618e-9 1.708073e-7"/>
+        <joint name="tail_rotor_spin" type="hinge" axis="1 0 0" damping="11.779608"/>
+        <geom type="cylinder" size="0.08 0.09" pos="0.09 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.63 0.66 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.12 0.03" pos="0.03 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.01 0.39 0.0425" pos="0.02 0.51 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.01 0.39 0.0425" pos="0.02 0 0.51" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.01 0.39 0.0425" pos="0.02 -0.51 0" quat="0.00000133 1 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.01 0.39 0.0425" pos="0.02 0 -0.51" quat="0.70710714 -0.70710642 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="right_service_door" pos="0.975 -0.2 1.06">
+        <inertial pos="0.014027 -0.390384 0.309967" mass="4.747197" fullinertia="3.925183e-1 1.521317e-1 2.410132e-1 2.908529e-5 2.529160e-6 -3.635661e-5"/>
+        <joint name="right_service_hinge" type="hinge" axis="0 0 1" range="0 2.15" damping="19.30837"/>
+        <geom type="box" size="0.014 0.39 0.31" pos="0.014 -0.39 0.31" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.012 0.025" pos="0.03 -0.62 0.29" quat="0.70710548 0 0.70710808 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="left_service_door" pos="-0.975 -0.2 1.06">
+        <inertial pos="-0.014027 -0.390384 0.309967" mass="4.747197" fullinertia="3.925183e-1 1.521317e-1 2.410132e-1 -2.908529e-5 -2.529150e-6 -3.635661e-5"/>
+        <joint name="left_service_hinge" type="hinge" axis="0 0 -1" range="0 2.15" damping="19.30837"/>
+        <geom type="box" size="0.014 0.39 0.31" pos="-0.014 -0.39 0.31" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.012 0.025" pos="-0.03 -0.62 0.29" quat="0.70710548 0 0.70710808 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="crew_door" pos="0.983 0.72 0.64">
+        <inertial pos="0.014667 -0.44107 0.557577" mass="10.603324" fullinertia="1.738920e+0 9.953962e-1 7.449506e-1 -1.436211e-3 -1.357693e-3 -4.162899e-2"/>
+        <joint name="crew_door_hinge" type="hinge" axis="0 0 1" range="0 1.45" damping="56.200627"/>
+        <geom type="box" size="0.014 0.46 0.54" pos="0.014 -0.46 0.54" rgba="0.94 0.95 0.96 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.2 0.19" pos="0.022 -0.22 0.76" rgba="0.16 0.22 0.28 0.55" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.015 0.03" pos="0.032 -0.7 0.48" quat="0.70710548 0 0.70710808 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_rotor_spin" joint="rotor_spin" kp="86868.19" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_tail_rotor_spin" joint="tail_rotor_spin" kp="58.89804" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_right_service_hinge" joint="right_service_hinge" kp="96.541849" ctrlrange="0 2.15"/>
+    <position name="a_left_service_hinge" joint="left_service_hinge" kp="96.541849" ctrlrange="0 2.15"/>
+    <position name="a_crew_door_hinge" joint="crew_door_hinge" kp="281.003135" ctrlrange="0 1.45"/>
+  </actuator>
+</mujoco>

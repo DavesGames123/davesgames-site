@@ -1,0 +1,39 @@
+<mujoco model="rec_wind_turbine_8fe0a625129e4da088c8f10e241ebd13">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="nacelle_body" file="nacelle_body.stl"/>
+    <mesh name="three_blade_rotor" file="three_blade_rotor.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0.0375 0 0">
+      <inertial pos="0 0 0.059255" mass="10.534238" fullinertia="4.134871e-1 7.700332e-1 9.826859e-1 0.000000e+0 3.999453e-10 0.000000e+0"/>
+      <geom type="box" size="0.475 0.325 0.02" pos="0 0 0.02" rgba="0.025 0.025 0.025 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.055 0.18" pos="0 0 0.22" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.108 0.01" pos="0 0 0.41" rgba="0.55 0.57 0.58 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.252487" pos="0.175 0.11 0.19" quat="-0.24568132 -0.44332262 -0.12775841 0.852516" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.252487" pos="0.175 -0.11 0.19" quat="0.24568132 -0.44332262 0.12775841 0.852516" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.252487" pos="-0.175 0.11 0.19" quat="0.85251596 0.12775849 0.4433226 -0.24568147" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.014 0.252487" pos="-0.175 -0.11 0.19" quat="0.85251596 -0.12775849 0.4433226 0.24568147" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <body name="nacelle" pos="0 0 0.42">
+        <inertial pos="0.041065 -0.000001 0.076418" mass="3.013323" fullinertia="9.177514e-3 6.777441e-2 6.705172e-2 -6.827327e-7 -4.612767e-4 3.455912e-8"/>
+        <joint name="tower_to_nacelle" type="hinge" axis="0 0 1" damping="1.791578"/>
+        <geom type="mesh" mesh="nacelle_body" pos="0.04 0 0.085" quat="0.70710548 0 0.70710808 0" rgba="0.88 0.9 0.88 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.06 0.03" pos="0.285 0 0.085" quat="0.70710548 0 0.70710808 0" rgba="0.55 0.57 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.102 0.0175" pos="0 0 0.0175" rgba="0.55 0.57 0.58 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.012 0.17" pos="-0.34 0 0.085" quat="0.70710548 0 0.70710808 0" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.035 0.004 0.085" pos="-0.515 0 0.12" rgba="0.95 0.72 0.14 1" contype="1" conaffinity="2"/>
+        <body name="rotor" pos="0.36 0 0.085">
+          <inertial pos="-0.01392 -0.000008 0.000017" mass="0.143384" fullinertia="3.732448e-4 2.723775e-4 2.728480e-4 1.046037e-8 -3.508321e-8 -1.770752e-9"/>
+          <joint name="nacelle_to_rotor" type="hinge" axis="1 0 0" damping="0.007465"/>
+          <geom type="mesh" mesh="three_blade_rotor" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.94 0.95 0.92 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.024 0.05" pos="-0.03 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.18 0.2 0.22 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_tower_to_nacelle" joint="tower_to_nacelle" kp="8.957889" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_nacelle_to_rotor" joint="nacelle_to_rotor" kp="0.037324" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

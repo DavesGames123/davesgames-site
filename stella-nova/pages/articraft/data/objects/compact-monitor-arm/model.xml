@@ -1,0 +1,64 @@
+<mujoco model="rec_monitor_mount_ee2f63ac8a9844e08b148532730fbe48">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.119 0 0">
+      <inertial pos="-0.019318 0 0.035882" mass="0.071644" fullinertia="9.708968e-5 1.067399e-4 5.582874e-5 0.000000e+0 1.144024e-5 0.000000e+0"/>
+      <geom type="box" size="0.05 0.037 0.004" pos="0 0 0.004" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.016 0.037 0.007" pos="-0.032 0 0.015" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.027 0.041" pos="-0.03 0 0.049" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.011 0.008" pos="-0.016 0 0.068" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.02 0.014" pos="-0.022 0 0.09" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.005 0.017" pos="-0.008 -0.015 0.09" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.005 0.017" pos="-0.008 0.015 0.09" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <body name="lower_link" pos="0 0 0.09">
+        <inertial pos="0.061489 0 0.001032" mass="0.02035" fullinertia="2.702963e-6 2.384958e-5 2.449392e-5 0.000000e+0 2.412688e-7 0.000000e+0"/>
+        <joint name="shoulder_pitch" type="hinge" axis="0 -1 0" range="0 1.2" damping="0.467078" armature="0.01099379"/>
+        <geom type="box" size="0.007 0.01 0.013" pos="0.007 0 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.039 0.009 0.008" pos="0.049 0 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.005 0.005" pos="0.05 0 0.01" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.006 0.02 0.014" pos="0.09 0 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.005 0.014" pos="0.102 -0.015 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.005 0.014" pos="0.102 0.015 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <body name="upper_link" pos="0.11 0 0">
+          <inertial pos="0.051925 0 0.004679" mass="0.02" fullinertia="1.918156e-6 1.682501e-5 1.612429e-5 0.000000e+0 -1.992413e-6 0.000000e+0"/>
+          <joint name="elbow_pitch" type="hinge" axis="0 -1 0" range="0 2.4" damping="0.218186" armature="0.00487295"/>
+          <geom type="box" size="0.007 0.01 0.012" pos="0.007 0 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.035 0.009 0.007" pos="0.047 0 0" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.026 0.005 0.0045" pos="0.05 0 0.009" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.01 0.011 0.015" pos="0.078 0 0.011" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.008 0.011 0.002" pos="0.09 0 0.012" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+          <body name="head_swivel" pos="0.098 0 0.014">
+            <inertial pos="0.011324 0 0.019957" mass="0.02" fullinertia="4.050711e-6 2.906808e-6 3.766384e-6 0.000000e+0 -8.109038e-7 0.000000e+0"/>
+            <joint name="head_swivel_joint" type="hinge" axis="0 0 1" range="-1.6 1.6" damping="0.048443" armature="0.00113488"/>
+            <geom type="cylinder" size="0.013 0.002" pos="0 0 0.002" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.009 0.009" pos="0 0 0.013" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.009 0.009 0.005" pos="0.011 0 0.02" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.005 0.02 0.012" pos="0.014 0 0.024" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.008 0.005 0.012" pos="0.018 -0.015 0.024" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.008 0.005 0.012" pos="0.018 0.015 0.024" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            <body name="head_frame" pos="0.026 0 0.024">
+              <inertial pos="0.036372 0 0.025129" mass="0.02" fullinertia="9.944990e-6 9.757957e-6 1.003131e-5 0.000000e+0 -2.222488e-6 0.000000e+0"/>
+              <joint name="head_tilt_joint" type="hinge" axis="0 1 0" range="-0.8 0.75" damping="0.028327" armature="0.00065934"/>
+              <geom type="box" size="0.007 0.01 0.01" pos="0.007 0 0.01" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.009 0.009 0.01" pos="0.023 0 0.018" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.008 0.009 0.02" pos="0.04 0 0.03" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.004 0.005 0.024" pos="0.05 -0.03 0.03" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.004 0.005 0.024" pos="0.05 0.03 0.03" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.004 0.03 0.004" pos="0.05 0 0.052" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.004 0.03 0.004" pos="0.05 0 0.008" rgba="0.14 0.15 0.17 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_shoulder_pitch" joint="shoulder_pitch" kp="4.670777" ctrlrange="0 1.2"/>
+    <position name="a_elbow_pitch" joint="elbow_pitch" kp="2.181857" ctrlrange="0 2.4"/>
+    <position name="a_head_swivel_joint" joint="head_swivel_joint" kp="0.484431" ctrlrange="-1.6 1.6"/>
+    <position name="a_head_tilt_joint" joint="head_tilt_joint" kp="0.283274" ctrlrange="-0.8 0.75"/>
+  </actuator>
+</mujoco>

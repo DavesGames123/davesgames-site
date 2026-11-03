@@ -1,0 +1,148 @@
+<mujoco model="rec_clock_tower_with_rotating_hour_and_minute_hands_02c304ccc35d4f17b5aee6d5ba5e07a6">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="belfry_wall" file="belfry_wall.stl"/>
+    <mesh name="tower_roof" file="tower_roof.stl"/>
+    <mesh name="tower_bell" file="tower_bell.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0 0 20.457146" mass="282120" fullinertia="4.019151e+7 4.019174e+7 2.424969e+6 3.287798e-5 1.651972e-4 4.573449e-4"/>
+      <geom type="box" size="3.6 3.6 0.6" pos="0 0 0.6" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.6 2.6 13.5" pos="0 0 14.7" rgba="0.66 0.65 0.61 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.41 0.41 8" pos="-1.95 -1.95 8" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.41 0.41 8" pos="-1.95 1.95 8" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.41 0.41 8" pos="1.95 -1.95 8" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.41 0.41 8" pos="1.95 1.95 8" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="3 3 0.225" pos="0 0 21" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.9 2.9 0.175" pos="0 0 28.375" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.075 2.075 0.125" pos="0 0 28.325" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="belfry_wall" pos="0 2.575 30.7" rgba="0.66 0.65 0.61 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="belfry_wall" pos="2.575 0 30.7" quat="0.70710548 0 0 0.70710808" rgba="0.66 0.65 0.61 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="belfry_wall" pos="0 -2.575 30.7" quat="0.00000133 0 0 1" rgba="0.66 0.65 0.61 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="belfry_wall" pos="-2.575 0 30.7" quat="0.70710548 0 0 -0.70710808" rgba="0.66 0.65 0.61 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="1.35 2.46 24.1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="-1.35 2.46 24.1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="2.46 -1.35 24.1" quat="0.70710548 0 0 0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="2.46 1.35 24.1" quat="0.70710548 0 0 0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="-1.35 -2.46 24.1" quat="0.00000133 0 0 1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="1.35 -2.46 24.1" quat="0.00000133 0 0 1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="-2.46 1.35 24.1" quat="0.70710548 0 0 -0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.725 0.11 0.14" pos="-2.46 -1.35 24.1" quat="0.70710548 0 0 -0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.8 0.225 0.4" pos="0 2.575 33.6" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="-2.52 2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="2.52 2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.8 0.225 0.4" pos="2.575 0 33.6" quat="0.70710548 0 0 0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="2.52 2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="2.52 -2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.8 0.225 0.4" pos="0 -2.575 33.6" quat="0.00000133 0 0 1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="2.52 -2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="-2.52 -2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.8 0.225 0.4" pos="-2.575 0 33.6" quat="0.70710548 0 0 -0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="-2.52 -2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.24 0.625" pos="-2.52 2.52 33.85" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="tower_roof" pos="0 0 34" rgba="0.22 0.24 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.1 0.6" pos="0 0 40.2" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.275 0.04 0.04" pos="0 0 40.65" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.04 0.04 0.31" pos="0 0 40.42" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="2.36 0.18 0.14" pos="0 0 31.25" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.12 0.12 1.33" pos="-1.95 0 29.78" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.12 0.12 1.33" pos="1.95 0 29.78" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.775 0.17 0.13" pos="0 0 30.98" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.11 0.21" pos="0 0 30.72" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="tower_bell" pos="0 0 30.23" rgba="0.58 0.42 0.2 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.05 0.26" pos="0 0 29.39" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.97 0.09 0.97" pos="0 2.69 24.3" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.84 0.0175" pos="0 2.705 24.3" quat="0.70710548 0.70710808 0 0" rgba="0.88 0.86 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.93 0.0225" pos="0 2.675 24.3" quat="0.70710548 0.70710808 0 0" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.07 0.01" pos="0 2.77 24.3" quat="0.70710548 0.70710808 0 0" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.97 0.09 0.97" pos="2.69 0 24.3" quat="0.70710548 0 0 -0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.84 0.0175" pos="2.705 0 24.3" quat="-0.49999816 -0.5 0.50000184 0.5" rgba="0.88 0.86 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.93 0.0225" pos="2.675 0 24.3" quat="-0.49999816 -0.5 0.50000184 0.5" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.07 0.01" pos="2.77 -0.000001 24.3" quat="-0.49999816 -0.5 0.50000184 0.5" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.97 0.09 0.97" pos="0 -2.69 24.3" quat="0.00000133 0 0 1" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.84 0.0175" pos="0 -2.705 24.3" quat="0.00000094 0.00000094 0.70710808 0.70710548" rgba="0.88 0.86 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.93 0.0225" pos="0 -2.675 24.3" quat="0.00000094 0.00000094 0.70710808 0.70710548" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.07 0.01" pos="0 -2.77 24.3" quat="0.00000094 0.00000094 0.70710808 0.70710548" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.97 0.09 0.97" pos="-2.69 0 24.3" quat="0.70710548 0 0 0.70710808" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.84 0.0175" pos="-2.705 0 24.3" quat="0.49999816 0.5 0.50000184 0.5" rgba="0.88 0.86 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.93 0.0225" pos="-2.675 0 24.3" quat="0.49999816 0.5 0.50000184 0.5" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.07 0.01" pos="-2.77 -0.000001 24.3" quat="0.49999816 0.5 0.50000184 0.5" rgba="0.54 0.53 0.5 1" contype="1" conaffinity="2"/>
+      <body name="north_hour_hand" pos="0 2.78 24.3">
+        <inertial pos="0 0.009 0.2" mass="18" fullinertia="1.270090e+0 1.329600e+0 6.048600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="north_hour_rotation" type="hinge" axis="0 1 0" damping="117.619985" armature="0.89089963"/>
+        <geom type="cylinder" size="0.08 0.009" pos="0 0.009 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.009 0.36" pos="0 0.009 0.18" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1 0.009 0.09" pos="0 0.009 0.33" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.009 0.1" pos="0 0.009 -0.13" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="north_minute_hand" pos="0 2.798 24.3">
+        <inertial pos="0 0.007 0.34" mass="12" fullinertia="1.537800e+0 1.560100e+0 2.269600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="north_minute_rotation" type="hinge" axis="0 1 0" damping="133.164485" armature="0.38181212"/>
+        <geom type="cylinder" size="0.06 0.007" pos="0 0.007 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.007 0.53" pos="0 0.007 0.3" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.007 0.1" pos="0 0.007 0.55" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.007 0.09" pos="0 0.007 -0.14" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="east_hour_hand" pos="2.78 -0.000001 24.3" quat="0.70710548 0 0 -0.70710808">
+        <inertial pos="0 0.009 0.2" mass="18" fullinertia="1.270090e+0 1.329600e+0 6.048600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="east_hour_rotation" type="hinge" axis="0 1 0" damping="117.704551" armature="0.89301377"/>
+        <geom type="cylinder" size="0.08 0.009" pos="0 0.009 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.009 0.36" pos="0 0.009 0.18" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1 0.009 0.09" pos="0 0.009 0.33" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.009 0.1" pos="0 0.009 -0.13" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="east_minute_hand" pos="2.798 -0.000001 24.3" quat="0.70710548 0 0 -0.70710808">
+        <inertial pos="0 0.007 0.34" mass="12" fullinertia="1.537800e+0 1.560100e+0 2.269600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="east_minute_rotation" type="hinge" axis="0 1 0" damping="130.144695" armature="0.30631737"/>
+        <geom type="cylinder" size="0.06 0.007" pos="0 0.007 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.007 0.53" pos="0 0.007 0.3" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.007 0.1" pos="0 0.007 0.55" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.007 0.09" pos="0 0.007 -0.14" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="south_hour_hand" pos="0 -2.78 24.3" quat="0.00000133 0 0 1">
+        <inertial pos="0 0.009 0.2" mass="18" fullinertia="1.270090e+0 1.329600e+0 6.048600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="south_hour_rotation" type="hinge" axis="0 1 0" damping="115.931705" armature="0.84869262"/>
+        <geom type="cylinder" size="0.08 0.009" pos="0 0.009 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.009 0.36" pos="0 0.009 0.18" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1 0.009 0.09" pos="0 0.009 0.33" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.009 0.1" pos="0 0.009 -0.13" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="south_minute_hand" pos="-0.000001 -2.798 24.3" quat="0.00000133 0 0 1">
+        <inertial pos="0 0.007 0.34" mass="12" fullinertia="1.537800e+0 1.560100e+0 2.269600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="south_minute_rotation" type="hinge" axis="0 1 0" damping="121.950439" armature="0.10146096"/>
+        <geom type="cylinder" size="0.06 0.007" pos="0 0.007 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.007 0.53" pos="0 0.007 0.3" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.007 0.1" pos="0 0.007 0.55" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.007 0.09" pos="0 0.007 -0.14" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="west_hour_hand" pos="-2.78 -0.000001 24.3" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="0 0.009 0.2" mass="18" fullinertia="1.270090e+0 1.329600e+0 6.048600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="west_hour_rotation" type="hinge" axis="0 1 0" damping="115.847233" armature="0.84658083"/>
+        <geom type="cylinder" size="0.08 0.009" pos="0 0.009 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.009 0.36" pos="0 0.009 0.18" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1 0.009 0.09" pos="0 0.009 0.33" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.009 0.1" pos="0 0.009 -0.13" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="west_minute_hand" pos="-2.798 -0.000001 24.3" quat="0.70710548 0 0 0.70710808">
+        <inertial pos="0 0.007 0.34" mass="12" fullinertia="1.537800e+0 1.560100e+0 2.269600e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="west_minute_rotation" type="hinge" axis="0 1 0" damping="132.781202" armature="0.37223006"/>
+        <geom type="cylinder" size="0.06 0.007" pos="0 0.007 0" quat="0.70710548 0.70710808 0 0" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.04 0.007 0.53" pos="0 0.007 0.3" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.075 0.007 0.1" pos="0 0.007 0.55" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.007 0.09" pos="0 0.007 -0.14" rgba="0.16 0.18 0.18 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_north_hour_rotation" joint="north_hour_rotation" kp="1176.199853" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_north_minute_rotation" joint="north_minute_rotation" kp="1331.644848" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_east_hour_rotation" joint="east_hour_rotation" kp="1177.045509" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_east_minute_rotation" joint="east_minute_rotation" kp="1301.446947" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_south_hour_rotation" joint="south_hour_rotation" kp="1159.317048" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_south_minute_rotation" joint="south_minute_rotation" kp="1219.504386" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_west_hour_rotation" joint="west_hour_rotation" kp="1158.472333" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_west_minute_rotation" joint="west_minute_rotation" kp="1327.812023" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

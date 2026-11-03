@@ -1,0 +1,50 @@
+<mujoco model="rec_desktop_pencil_sharpener_with_hand_crank_and_drawer_72d62640f651450abba6dda3c919bbfd">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="rounded_body_shell" file="rounded_body_shell.stl"/>
+    <mesh name="front_port_liner" file="front_port_liner.stl"/>
+    <mesh name="dial_bearing_race" file="dial_bearing_race.stl"/>
+    <mesh name="drawer_front_panel" file="drawer_front_panel.stl"/>
+    <mesh name="sliding_shavings_tray" file="sliding_shavings_tray.stl"/>
+    <mesh name="point_adjustment_dial" file="point_adjustment_dial.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.028 0.00665 0">
+      <inertial pos="0.00084 0.002481 0.054009" mass="0.490661" fullinertia="9.407612e-4 1.589520e-3 1.820946e-3 -3.099583e-6 -8.197608e-7 5.076924e-5"/>
+      <geom type="mesh" mesh="rounded_body_shell" pos="0 0 0" rgba="0.035 0.038 0.043 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.08 0.0575 0.003" pos="0 0 0.003" rgba="0.035 0.038 0.043 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.0575 0.019" pos="-0.07 0 0.0245" rgba="0.035 0.038 0.043 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.0575 0.019" pos="0.07 0 0.0245" rgba="0.035 0.038 0.043 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.06 0.01 0.019" pos="0 0.047 0.0245" rgba="0.035 0.038 0.043 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.021 0.005" pos="0.085 0.01 0.056" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="front_port_liner" pos="0 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="dial_bearing_race" pos="0 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.064 0.036 0.001" pos="0 -0.002 0.096" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+      <body name="drawer" pos="0 -0.0605 0.027">
+        <inertial pos="-0.000545 0.025755 -0.00714" mass="0.022542" fullinertia="1.863404e-5 3.053450e-5 4.503004e-5 1.637245e-7 -1.387615e-7 2.362812e-6"/>
+        <joint name="body_to_drawer" type="slide" axis="0 -1 0" range="0 0.052" damping="0.45084"/>
+        <geom type="mesh" mesh="drawer_front_panel" pos="0 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="sliding_shavings_tray" pos="0 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="crank" pos="0.095 0.01 0.056">
+        <inertial pos="0.012019 0 -0.022006" mass="0.02" fullinertia="9.834114e-6 1.272178e-5 4.465887e-6 0.000000e+0 4.661320e-6 0.000000e+0"/>
+        <joint name="body_to_crank" type="hinge" axis="1 0 0" damping="0.014173" armature="0.00033481"/>
+        <geom type="cylinder" size="0.017 0.005" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.003 0.0065 0.0215" pos="0.006 0 -0.022" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0042 0.017" pos="0.024 0 -0.043" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.009 0.015" pos="0.026 0 -0.043" quat="0.70710548 0 0.70710808 0" rgba="0.006 0.006 0.007 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="dial" pos="0 -0.0673 0.073">
+        <inertial pos="0 0 0.000003" mass="0.02" fullinertia="3.656223e-6 7.148473e-6 3.655595e-6 1.097918e-11 1.060038e-10 -1.779518e-11"/>
+        <joint name="body_to_dial" type="hinge" axis="0 -1 0" damping="0.000143"/>
+        <geom type="mesh" mesh="point_adjustment_dial" pos="0 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_drawer" joint="body_to_drawer" kp="2.2542" ctrlrange="0 0.052"/>
+    <position name="a_body_to_crank" joint="body_to_crank" kp="0.141733" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_dial" joint="body_to_dial" kp="0.000715" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

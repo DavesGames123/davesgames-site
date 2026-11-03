@@ -1,0 +1,89 @@
+<mujoco model="rec_skateboard_040c2a68fd204e0198f3ed615cb4dd37">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="deck_shell" file="deck_shell.stl"/>
+    <mesh name="skate_wheel" file="skate_wheel.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0.075456">
+      <inertial pos="0 0 0.012053" mass="1.9" fullinertia="9.234065e-3 1.051349e-1 1.085157e-1 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="deck_shell" pos="0 0 0" rgba="0.72 0.55 0.32 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.25 0.089 0.0004" pos="0 0 0.0064" rgba="0.1 0.1 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.085 0.055 0.0004" pos="0.287 0 0.03" rgba="0.1 0.1 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.08 0.054 0.0004" pos="-0.286 0 0.028" rgba="0.1 0.1 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.034 0.023 0.002" pos="0.185 0 -0.007" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="0.16 -0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="0.16 0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="0.21 -0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="0.21 0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.009 0.003" pos="0.185 0 -0.008" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.023 0.01 0.007" pos="0.185 0 -0.017" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.034 0.023 0.002" pos="-0.185 0 -0.007" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="-0.21 -0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="-0.21 0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="-0.16 -0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0045 0.001" pos="-0.16 0.02 -0.004" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.009 0.003" pos="-0.185 0 -0.008" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.023 0.01 0.007" pos="-0.185 0 -0.017" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+      <body name="front_truck" pos="0.185 0 -0.003">
+        <inertial pos="-0.012 0 -0.038" mass="0.55" fullinertia="9.395830e-4 2.805000e-3 3.414580e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="deck_to_front_truck" type="hinge" axis="-0.57357616 0 0.81915223" range="-0.38 0.38" damping="0.222728"/>
+        <geom type="cylinder" size="0.01 0.013" pos="0 0 -0.034" rgba="0.64 0.19 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0135 0.002" pos="0 0 -0.023" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0135 0.002" pos="0 0 -0.046" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.014 0.012 0.014" pos="-0.022 0 -0.042" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.024 0.056 0.01" pos="-0.012 0 -0.046" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0085 0.047" pos="-0.012 0 -0.046" quat="0.70710548 0.70710808 0 0" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0045 0.144" pos="-0.012 0 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.005" pos="-0.012 -0.099 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.004" pos="-0.012 -0.14 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.005" pos="-0.012 0.099 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.004" pos="-0.012 0.14 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <body name="front_left_wheel" pos="-0.012 -0.12 -0.044">
+          <inertial pos="0 0 0" mass="0.12" fullinertia="3.052000e-5 4.056000e-5 3.052000e-5 0.000000e+0 0.000000e+0 3.687898e-11"/>
+          <joint name="front_left_wheel_spin" type="hinge" axis="0 1 0" damping="0.000811"/>
+          <geom type="mesh" mesh="skate_wheel" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.95 0.96 0.88 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="front_right_wheel" pos="-0.012 0.12 -0.044">
+          <inertial pos="0 0 0" mass="0.12" fullinertia="3.052000e-5 4.056000e-5 3.052000e-5 0.000000e+0 0.000000e+0 3.687898e-11"/>
+          <joint name="front_right_wheel_spin" type="hinge" axis="0 1 0" damping="0.000811"/>
+          <geom type="mesh" mesh="skate_wheel" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.95 0.96 0.88 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="rear_truck" pos="-0.185 0 -0.003">
+        <inertial pos="0.012 0 -0.038" mass="0.55" fullinertia="9.395830e-4 2.805000e-3 3.414580e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="deck_to_rear_truck" type="hinge" axis="0.57357616 0 0.81915223" range="-0.38 0.38" damping="0.186467"/>
+        <geom type="cylinder" size="0.01 0.013" pos="0 0 -0.034" rgba="0.64 0.19 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0135 0.002" pos="0 0 -0.023" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0135 0.002" pos="0 0 -0.046" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.014 0.012 0.014" pos="0.022 0 -0.042" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.024 0.056 0.01" pos="0.012 0 -0.046" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0085 0.047" pos="0.012 0 -0.046" quat="0.70710548 0.70710808 0 0" rgba="0.74 0.76 0.78 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0045 0.144" pos="0.012 0 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.005" pos="0.012 -0.099 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.004" pos="0.012 -0.14 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.005" pos="0.012 0.099 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0068 0.004" pos="0.012 0.14 -0.044" quat="0.70710548 0.70710808 0 0" rgba="0.58 0.6 0.64 1" contype="1" conaffinity="2"/>
+        <body name="rear_left_wheel" pos="0.012 -0.12 -0.044">
+          <inertial pos="0 0 0" mass="0.12" fullinertia="3.052000e-5 4.056000e-5 3.052000e-5 0.000000e+0 0.000000e+0 3.687898e-11"/>
+          <joint name="rear_left_wheel_spin" type="hinge" axis="0 1 0" damping="0.000811"/>
+          <geom type="mesh" mesh="skate_wheel" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.95 0.96 0.88 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="rear_right_wheel" pos="0.012 0.12 -0.044">
+          <inertial pos="0 0 0" mass="0.12" fullinertia="3.052000e-5 4.056000e-5 3.052000e-5 0.000000e+0 0.000000e+0 3.687898e-11"/>
+          <joint name="rear_right_wheel_spin" type="hinge" axis="0 1 0" damping="0.000811"/>
+          <geom type="mesh" mesh="skate_wheel" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.95 0.96 0.88 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_deck_to_front_truck" joint="deck_to_front_truck" kp="1.781217" ctrlrange="-0.38 0.38"/>
+    <position name="a_front_left_wheel_spin" joint="front_left_wheel_spin" kp="0.004056" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_front_right_wheel_spin" joint="front_right_wheel_spin" kp="0.004056" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_deck_to_rear_truck" joint="deck_to_rear_truck" kp="1.248452" ctrlrange="-0.38 0.38"/>
+    <position name="a_rear_left_wheel_spin" joint="rear_left_wheel_spin" kp="0.004056" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_rear_right_wheel_spin" joint="rear_right_wheel_spin" kp="0.004056" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,36 @@
+<mujoco model="rec_cantilever_articulated_arm_482bb4bc30fc4ab9a905d6a030180276">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="support_frame" file="support_frame.stl"/>
+    <mesh name="shoulder_link" file="shoulder_link.stl"/>
+    <mesh name="elbow_link" file="elbow_link.stl"/>
+    <mesh name="wrist_link" file="wrist_link.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.5115 0 0">
+      <inertial pos="-0.025 0 0.33" mass="16" fullinertia="6.810670e-1 8.298670e-1 2.778670e-1 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="support_frame" pos="0 0 0" rgba="0.2 0.21 0.23 1" contype="1" conaffinity="2"/>
+      <body name="shoulder_link" pos="0.14 0 0.58">
+        <inertial pos="0.242 0 -0.052" mass="4.2" fullinertia="1.071000e-2 7.563500e-2 7.059500e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="shoulder_joint" type="hinge" axis="0 -1 0" range="-0.6 0.95" damping="152.211512" armature="1.44828524"/>
+        <geom type="mesh" mesh="shoulder_link" pos="0 0 0" rgba="0.73 0.75 0.78 1" contype="1" conaffinity="2"/>
+        <body name="elbow_link" pos="0.44 0 0">
+          <inertial pos="0.1944 0 -0.05" mass="3.1" fullinertia="6.800370e-3 3.854330e-2 3.521700e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="elbow_joint" type="hinge" axis="0 -1 0" range="-1.25 1.2" damping="48.815038" armature="0.70452439"/>
+          <geom type="mesh" mesh="elbow_link" pos="0 0 0" rgba="0.73 0.75 0.78 1" contype="1" conaffinity="2"/>
+          <body name="wrist_link" pos="0.36 0 0">
+            <inertial pos="0.124 0 -0.04" mass="1.8" fullinertia="3.270000e-3 1.429500e-2 1.249500e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+            <joint name="wrist_joint" type="hinge" axis="0 -1 0" range="-0.95 1.05" damping="7.6209" armature="0.14567071"/>
+            <geom type="mesh" mesh="wrist_link" pos="0 0 0" rgba="0.36 0.38 0.41 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_shoulder_joint" joint="shoulder_joint" kp="1522.115124" ctrlrange="-0.6 0.95"/>
+    <position name="a_elbow_joint" joint="elbow_joint" kp="488.150382" ctrlrange="-1.25 1.2"/>
+    <position name="a_wrist_joint" joint="wrist_joint" kp="76.209002" ctrlrange="-0.95 1.05"/>
+  </actuator>
+</mujoco>

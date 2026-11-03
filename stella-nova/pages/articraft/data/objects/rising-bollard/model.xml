@@ -1,0 +1,44 @@
+<mujoco model="rec_retractable_bollard_6767b692a3f241d09a8673364b27bb4f">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="bollard_collar_plate" file="bollard_collar_plate.stl"/>
+    <mesh name="bollard_guide_sleeve" file="bollard_guide_sleeve.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.000003 0 0.26">
+      <inertial pos="-0.000004 -0.005103 -0.045378" mass="1.05307" fullinertia="1.160069e-2 1.231952e-2 1.669496e-2 9.142803e-8 1.932836e-7 2.413300e-4"/>
+      <geom type="mesh" mesh="bollard_collar_plate" pos="0 0 0" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="bollard_guide_sleeve" pos="0 0 0" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+      <body name="post" pos="0 0 0">
+        <inertial pos="0 0 0.264866" mass="11.344215" fullinertia="1.002230e+0 1.002230e+0 5.459260e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="collar_to_post" type="slide" axis="0 0 1" range="0 0.2" damping="2815.988949" armature="58.91760773"/>
+        <geom type="cylinder" size="0.098 0.5" pos="0 0 0.24" rgba="0.72 0.74 0.77 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0995 0.036" pos="0 0 0.6" rgba="0.9 0.73 0.16 1" contype="1" conaffinity="2"/>
+        <geom type="sphere" size="0.004" pos="0.102 0 -0.016" rgba="0.14 0.15 0.16 1" contype="1" conaffinity="2"/>
+        <geom type="sphere" size="0.004" pos="-0.051 0.088335 -0.016" rgba="0.14 0.15 0.16 1" contype="1" conaffinity="2"/>
+        <geom type="sphere" size="0.004" pos="-0.051 -0.088335 -0.016" rgba="0.14 0.15 0.16 1" contype="1" conaffinity="2"/>
+        <body name="top_cap" pos="0 0 0.74">
+          <inertial pos="0 0 0.00715" mass="0.137901" fullinertia="3.029544e-4 3.032849e-4 6.013268e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="post_to_top_cap" type="hinge" axis="0 0 1" range="-3.14159 3.14159" damping="0.012027"/>
+          <geom type="cylinder" size="0.094 0.007" pos="0 0 0.007" rgba="0.14 0.15 0.16 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.024 0.007 0.004" pos="0 0 0.018" rgba="0.6 0.63 0.67 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="flap" pos="0 0.148 0.0125">
+        <inertial pos="0 -0.017027 -0.006197" mass="0.02" fullinertia="2.818869e-6 1.521552e-5 1.767087e-5 -5.126225e-23 4.967223e-13 -3.375360e-7"/>
+        <joint name="collar_to_flap" type="hinge" axis="-1 0 0" range="0 1.2" damping="0.011845" armature="0.00028673"/>
+        <geom type="box" size="0.046 0.017 0.003" pos="0 -0.02 -0.0072" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0042 0.013" pos="-0.031 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.003 0.002" pos="-0.031 -0.003 -0.0042" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0042 0.013" pos="0.031 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.003 0.002" pos="0.031 -0.003 -0.0042" rgba="0.27 0.28 0.3 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_collar_to_post" joint="collar_to_post" kp="28159.88949" ctrlrange="0 0.2"/>
+    <position name="a_post_to_top_cap" joint="post_to_top_cap" kp="0.060133" ctrlrange="-3.14159 3.14159"/>
+    <position name="a_collar_to_flap" joint="collar_to_flap" kp="0.118448" ctrlrange="0 1.2"/>
+  </actuator>
+</mujoco>

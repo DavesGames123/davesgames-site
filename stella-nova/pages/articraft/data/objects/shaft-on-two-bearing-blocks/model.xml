@@ -1,0 +1,28 @@
+<mujoco model="rec_single_continuous_rotary_shaft_f1c4a013658c40268bf0d8e5b521429b">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="pillow_bearing_block" file="pillow_bearing_block.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.0225 0 0">
+      <inertial pos="0 0 0.04388" mass="2.092959" fullinertia="1.129226e-2 9.188586e-2 9.310424e-2 2.292994e-9 -7.470528e-10 -4.917206e-8"/>
+      <geom type="box" size="0.38 0.11 0.01" pos="0 0 0.01" rgba="0.1 0.12 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="pillow_bearing_block" pos="-0.18 0 0.02" rgba="0.45 0.47 0.47 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="pillow_bearing_block" pos="0.18 0 0.02" rgba="0.45 0.47 0.47 1" contype="1" conaffinity="2"/>
+      <body name="shaft" pos="0 0 0.125">
+        <inertial pos="0.175073 0 0.000087" mass="0.511062" fullinertia="2.490928e-4 4.000085e-2 3.999891e-2 0.000000e+0 -1.146402e-5 0.000000e+0"/>
+        <joint name="shaft_rotation" type="hinge" axis="1 0 0" damping="0.004982"/>
+        <geom type="cylinder" size="0.018 0.42" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.032 0.0275" pos="0.392 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.044 0.021" pos="0.435 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.08 0.09 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.005" pos="0.41 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.052 0.005" pos="0.46 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.015 0.006 0.004" pos="0.435 0 0.044" rgba="0.08 0.09 0.1 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_shaft_rotation" joint="shaft_rotation" kp="0.02491" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

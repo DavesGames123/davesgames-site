@@ -1,0 +1,22 @@
+<mujoco model="rec_single_yaw_axis_module_c3c23bea19ce4161af0d19f768dee829">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="fixed_housing" file="fixed_housing.stl"/>
+    <mesh name="rotating_head" file="rotating_head.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0.000001 0 0.040938" mass="2.671332" fullinertia="1.819882e-2 3.312622e-2 4.484367e-2 -1.199899e-7 -4.889988e-9 -9.832873e-8"/>
+      <geom type="mesh" mesh="fixed_housing" pos="0 0 0" rgba="0.11 0.12 0.13 1" contype="1" conaffinity="2"/>
+      <body name="head" pos="0 0 0.137">
+        <inertial pos="0 0 0.032247" mass="0.386126" fullinertia="1.063858e-3 1.210355e-3 1.936275e-3 3.743847e-9 -8.149471e-11 -4.527230e-10"/>
+        <joint name="housing_to_head" type="hinge" axis="0 0 1" range="-3.14159 3.14159" damping="0.038726"/>
+        <geom type="mesh" mesh="rotating_head" pos="0 0 0" rgba="0.92 0.44 0.1 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_housing_to_head" joint="housing_to_head" kp="0.193628" ctrlrange="-3.14159 3.14159"/>
+  </actuator>
+</mujoco>

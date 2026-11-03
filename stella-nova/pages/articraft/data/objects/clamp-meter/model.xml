@@ -1,0 +1,60 @@
+<mujoco model="rec_clamp_meter_with_hinged_jaw_and_rotary_selector_0a51248ffdf64581ae824f48a1501ef3">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="clamp_meter_body_shell" file="clamp_meter_body_shell.stl"/>
+    <mesh name="clamp_meter_fixed_jaw" file="clamp_meter_fixed_jaw.stl"/>
+    <mesh name="clamp_meter_jaw" file="clamp_meter_jaw.stl"/>
+    <mesh name="clamp_meter_stand" file="clamp_meter_stand.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.009625 0">
+      <inertial pos="-0.000472 0.00092 0.114388" mass="0.530632" fullinertia="2.272059e-3 2.765906e-3 7.661623e-4 -2.036476e-7 3.199638e-5 7.078484e-6"/>
+      <geom type="mesh" mesh="clamp_meter_body_shell" pos="0 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="clamp_meter_fixed_jaw" pos="0 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.006 0.03 0.008" pos="-0.04694 0 0.23964" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.026 0.059" pos="-0.055 0 0.072" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.026 0.059" pos="0.055 0 0.072" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.04 0.002 0.026" pos="0 0.0269 0.128" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.034 0.0015 0.02" pos="0 0.0276 0.128" rgba="0.2 0.3 0.27 0.45" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.038 0.002" pos="0 0.027 0.086" quat="0.70710548 0.70710808 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.011 0.0015" pos="-0.028 0.0314 0.155" quat="0.70710548 0.70710808 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.0015 0.007" pos="0.039 0.0264 0.098" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.036 0.0025 0.009" pos="0 0.0273 0.022" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <body name="jaw" pos="-0.03294 0 0.24964">
+        <inertial pos="0.026593 -0.000002 0.008654" mass="0.024242" fullinertia="7.301025e-6 1.380298e-5 1.950498e-5 6.139816e-9 -6.612620e-7 -7.522658e-10"/>
+        <joint name="body_to_jaw" type="hinge" axis="0 -1 0" range="0 1.18" damping="0.021081" armature="0.00049425"/>
+        <geom type="mesh" mesh="clamp_meter_jaw" pos="0 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="selector_knob" pos="0 0.029 0.086">
+        <inertial pos="0 0.008041 0.000054" mass="0.02" fullinertia="4.749849e-6 8.289195e-6 4.735614e-6 0.000000e+0 0.000000e+0 -1.186931e-8"/>
+        <joint name="body_to_selector_knob" type="hinge" axis="0 1 0" damping="0.000166"/>
+        <geom type="cylinder" size="0.033 0.003" pos="0 0.003 0" quat="0.70710548 0.70710808 0 0" rgba="0.9 0.63 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.026 0.008" pos="0 0.011 0" quat="0.70710548 0.70710808 0 0" rgba="0.9 0.63 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.003 0.00125 0.009" pos="0 0.019 0.011" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="ncv_button" pos="-0.028 0.0329 0.155">
+        <inertial pos="0 0.002 0" mass="0.02" fullinertia="3.466667e-7 6.400000e-7 3.466667e-7 0.000000e+0 0.000000e+0 1.077473e-12"/>
+        <joint name="body_to_ncv_button" type="slide" axis="0 -1 0" range="0 0.0012" damping="0.4"/>
+        <geom type="cylinder" size="0.008 0.002" pos="0 0.002 0" quat="0.70710548 0.70710808 0 0" rgba="0.82 0.16 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="range_button" pos="0.039 0.0279 0.098">
+        <inertial pos="0 0.002 0" mass="0.02" fullinertia="2.283333e-7 6.283333e-7 4.533333e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_range_button" type="slide" axis="0 -1 0" range="0 0.0012" damping="0.4"/>
+        <geom type="box" size="0.008 0.002 0.0055" pos="0 0.002 0" rgba="0.18 0.19 0.2 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="stand" pos="0 -0.0257 0.03">
+        <inertial pos="0 -0.002 0.046193" mass="0.02" fullinertia="1.591905e-5 2.472288e-5 8.857161e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_stand" type="hinge" axis="1 0 0" range="0 1.05" damping="0.026138" armature="0.00059478"/>
+        <geom type="mesh" mesh="clamp_meter_stand" pos="0 0 0" rgba="0.15 0.16 0.17 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_jaw" joint="body_to_jaw" kp="0.210806" ctrlrange="0 1.18"/>
+    <position name="a_body_to_selector_knob" joint="body_to_selector_knob" kp="0.000829" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_ncv_button" joint="body_to_ncv_button" kp="2" ctrlrange="0 0.0012"/>
+    <position name="a_body_to_range_button" joint="body_to_range_button" kp="2" ctrlrange="0 0.0012"/>
+    <position name="a_body_to_stand" joint="body_to_stand" kp="0.261383" ctrlrange="0 1.05"/>
+  </actuator>
+</mujoco>

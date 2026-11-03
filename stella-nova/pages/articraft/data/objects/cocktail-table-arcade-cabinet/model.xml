@@ -1,0 +1,117 @@
+<mujoco model="rec_arcade_machine_b1e034f7e0434758aa30cbdb8951c32e">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.0125 0 0">
+      <inertial pos="0 0 0.397857" mass="63" fullinertia="4.289157e+0 6.582657e+0 5.790300e+0 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.45 0.3 0.035" pos="0 0 0.035" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.455 0.015 0.28" pos="0 0.305 0.34" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.455 0.015 0.28" pos="0 -0.305 0.34" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.29 0.28" pos="-0.455 0 0.34" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.29 0.08" pos="0.455 0 0.14" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.29 0.11" pos="0.455 0 0.51" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.195 0.09" pos="0.455 -0.095 0.31" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.015 0.09" pos="0.455 0.275 0.31" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.39 0.06 0.013" pos="0 0.23 0.608" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.39 0.06 0.013" pos="0 -0.23 0.608" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.055 0.29 0.013" pos="0.405 0 0.608" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.055 0.29 0.013" pos="-0.405 0 0.608" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.39 0.015 0.06" pos="0 0.165 0.54" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.39 0.015 0.06" pos="0 -0.165 0.54" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.15 0.06" pos="0.39 0 0.54" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.015 0.15 0.06" pos="-0.39 0 0.54" rgba="0.17 0.16 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.38 0.01 0.011" pos="0 0.17 0.609" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.38 0.01 0.011" pos="0 -0.17 0.609" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.16 0.011" pos="0.38 0 0.609" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.01 0.16 0.011" pos="-0.38 0 0.609" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.29 0.17 0.015" pos="0 0 0.495" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.25 0.015 0.014" pos="0 0.125 0.524" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.25 0.015 0.014" pos="0 -0.125 0.524" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.18 0.05 0.0015" pos="-0.05 0.23 0.6225" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.045 0.03 0.0015" pos="0.25 0.19 0.6225" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.006" pos="-0.18 0.19 0.629" rgba="0.09 0.09 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="-0.04 0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="0.02 0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="0.08 0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.18 0.05 0.0015" pos="-0.05 -0.23 0.6225" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.006" pos="-0.18 -0.19 0.629" rgba="0.09 0.09 0.1 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="-0.04 -0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="0.02 -0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.002" pos="0.08 -0.19 0.626" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.38 0.16 0.003" pos="0 0 0.622" rgba="0.33 0.39 0.42 0.38" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.27 0.14 0.019" pos="0 0 0.557" rgba="0.05 0.06 0.07 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.24 0.11 0.0015" pos="0 0 0.5775" rgba="0.12 0.53 0.68 1" contype="1" conaffinity="2"/>
+      <body name="player_one_joystick" pos="-0.18 0.19 0.624">
+        <inertial pos="0 0 0.045" mass="0.08" fullinertia="6.000000e-5 6.000000e-5 1.200000e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_one_joystick" type="hinge" axis="1 0 0" range="-0.35 0.35" damping="0.037938" armature="0.00072644"/>
+        <geom type="cylinder" size="0.005 0.025" pos="0 0 0.035" rgba="0.09 0.09 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="sphere" size="0.015" pos="0 0 0.073" rgba="0.78 0.18 0.17 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_two_joystick" pos="-0.18 -0.19 0.624">
+        <inertial pos="0 0 0.045" mass="0.08" fullinertia="6.000000e-5 6.000000e-5 1.200000e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_two_joystick" type="hinge" axis="1 0 0" range="-0.35 0.35" damping="0.036737" armature="0.00069643"/>
+        <geom type="cylinder" size="0.005 0.025" pos="0 0 0.035" rgba="0.09 0.09 0.1 1" contype="1" conaffinity="2"/>
+        <geom type="sphere" size="0.015" pos="0 0 0.073" rgba="0.2 0.45 0.83 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_one_button_0" pos="-0.04 0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_one_button_0" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.78 0.18 0.17 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_one_button_1" pos="0.02 0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_one_button_1" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.88 0.72 0.15 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_one_button_2" pos="0.08 0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_one_button_2" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.2 0.45 0.83 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_two_button_0" pos="-0.04 -0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_two_button_0" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.78 0.18 0.17 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_two_button_1" pos="0.02 -0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_two_button_1" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.88 0.72 0.15 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="player_two_button_2" pos="0.08 -0.19 0.624">
+        <inertial pos="0 0 0.007" mass="0.03" fullinertia="1.777500e-6 1.777500e-6 3.375000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_player_two_button_2" type="slide" axis="0 0 -1" range="0 0.003" damping="196.2" armature="4.875"/>
+        <geom type="cylinder" size="0.015 0.003" pos="0 0 0.007" rgba="0.2 0.45 0.83 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="coin_door" pos="0.47 0.18 0.4">
+        <inertial pos="0.009 0 -0.09" mass="1.2" fullinertia="5.800000e-3 3.272400e-3 2.592400e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_coin_door" type="hinge" axis="0 -1 0" range="0 1.45" damping="3.548184" armature="0.075615"/>
+        <geom type="box" size="0.009 0.08 0.09" pos="0.009 0 -0.09" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.002 0.03 0.006" pos="0.02 0 -0.035" rgba="0.05 0.06 0.07 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.015 0.005" pos="0.02 0 -0.115" quat="0.70710548 0 0.70710808 0" rgba="0.05 0.06 0.07 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="selector_knob" pos="0.25 0.19 0.624">
+        <inertial pos="0 0 0.0225" mass="0.18" fullinertia="5.941500e-5 5.941500e-5 5.808000e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="cabinet_to_selector_knob" type="hinge" axis="0 0 1" damping="0.001162"/>
+        <geom type="cylinder" size="0.01 0.003" pos="0 0 0.003" rgba="0.11 0.11 0.12 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.004 0.009" pos="0 0 0.01" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.022 0.012" pos="0 0 0.026" rgba="0.11 0.11 0.12 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.016 0.0025" pos="0 0 0.0405" rgba="0.72 0.73 0.75 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_cabinet_to_player_one_joystick" joint="cabinet_to_player_one_joystick" kp="0.379378" ctrlrange="-0.35 0.35"/>
+    <position name="a_cabinet_to_player_two_joystick" joint="cabinet_to_player_two_joystick" kp="0.367371" ctrlrange="-0.35 0.35"/>
+    <position name="a_cabinet_to_player_one_button_0" joint="cabinet_to_player_one_button_0" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_player_one_button_1" joint="cabinet_to_player_one_button_1" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_player_one_button_2" joint="cabinet_to_player_one_button_2" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_player_two_button_0" joint="cabinet_to_player_two_button_0" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_player_two_button_1" joint="cabinet_to_player_two_button_1" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_player_two_button_2" joint="cabinet_to_player_two_button_2" kp="1962" ctrlrange="0 0.003"/>
+    <position name="a_cabinet_to_coin_door" joint="cabinet_to_coin_door" kp="35.481839" ctrlrange="0 1.45"/>
+    <position name="a_cabinet_to_selector_knob" joint="cabinet_to_selector_knob" kp="0.005808" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

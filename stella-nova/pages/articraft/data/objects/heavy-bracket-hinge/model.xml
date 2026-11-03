@@ -1,0 +1,28 @@
+<mujoco model="rec_single_revolute_hinge_d4bb37b28179466396216af38e3a323f">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="side_gusset" file="side_gusset.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.0755 0 0.08">
+      <inertial pos="-0.026311 -0.007345 0" mass="0.132018" fullinertia="3.394349e-4 2.885438e-4 1.298534e-4 7.016675e-6 -1.469368e-38 8.470329e-22"/>
+      <geom type="box" size="0.006 0.0525 0.08" pos="-0.04 0 0" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="side_gusset" pos="0 0 0" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.018 0.013 0.018" pos="-0.016 -0.02 0.04" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.018 0.013 0.018" pos="-0.016 -0.02 -0.04" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.02" pos="0 0 0.04" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.017 0.02" pos="0 0 -0.04" rgba="0.27 0.3 0.33 1" contype="1" conaffinity="2"/>
+      <body name="moving_leaf" pos="0 0 0">
+        <inertial pos="0.082304 0.019542 0" mass="0.083859" fullinertia="9.424545e-5 4.196585e-4 3.413362e-4 -2.980690e-5 0.000000e+0 0.000000e+0"/>
+        <joint name="barrel_hinge" type="hinge" axis="0 0 1" range="0 1.55" damping="0.018828"/>
+        <geom type="box" size="0.09 0.004 0.063" pos="0.107 0.024 0" rgba="0.64 0.67 0.71 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.014 0.013 0.015" pos="0.014 0.015 0" rgba="0.64 0.67 0.71 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.017 0.02" pos="0 0 0" rgba="0.64 0.67 0.71 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_barrel_hinge" joint="barrel_hinge" kp="0.094142" ctrlrange="0 1.55"/>
+  </actuator>
+</mujoco>

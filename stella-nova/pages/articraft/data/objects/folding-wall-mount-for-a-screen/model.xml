@@ -1,0 +1,51 @@
+<mujoco model="rec_tv_wall_mount_9f6dc3a99dac4ea491f35c1664d440f6">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.37 0 0.2">
+      <inertial pos="0.011132 0 0.00283" mass="0.2968" fullinertia="4.019169e-3 3.804309e-3 2.562863e-4 0.000000e+0 -1.584906e-5 0.000000e+0"/>
+      <geom type="box" size="0.01 0.05 0.2" pos="0.01 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.02 0.005" pos="0.03 0 0.075" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.02 0.005" pos="0.03 0 0.025" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+      <body name="arm_1" pos="0.04 0 0.05">
+        <inertial pos="0.172168 -0.006433 -0.00946" mass="0.221993" fullinertia="1.852404e-4 2.233698e-3 2.164272e-3 1.447446e-4 2.306479e-4 -3.269146e-5"/>
+        <joint name="wall_to_arm_1" type="hinge" axis="0 0 1" range="-1.5708 1.5708" damping="0.763286"/>
+        <geom type="cylinder" size="0.02 0.02" pos="0 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.13 0.02 0.02" pos="0.15 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.03 0.01 0.05" pos="0.27 -0.03 -0.03" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.02 0.03 0.005" pos="0.3 -0.01 -0.025" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.02 0.03 0.005" pos="0.3 -0.01 -0.075" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <body name="arm_2" pos="0.3 0 -0.05">
+          <inertial pos="0.15 0 0" mass="0.180786" fullinertia="4.703670e-5 1.639518e-3 1.638345e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="arm_1_to_arm_2" type="hinge" axis="0 0 1" range="0 3.14159" damping="0.397236"/>
+          <geom type="cylinder" size="0.02 0.02" pos="0 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.13 0.02 0.02" pos="0.15 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.02 0.02" pos="0.3 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+          <body name="head_swivel" pos="0.3 0 0">
+            <inertial pos="0.042137 0 0" mass="0.060296" fullinertia="2.931612e-5 4.166424e-5 2.842706e-5 0.000000e+0 0.000000e+0 -2.801987e-12"/>
+            <joint name="arm_2_to_head_swivel" type="hinge" axis="0 0 1" range="-1.5708 1.5708" damping="0.020643"/>
+            <geom type="box" size="0.03 0.02 0.005" pos="0.03 0 0.025" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.03 0.02 0.005" pos="0.03 0 -0.025" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.02 0.02 0.03" pos="0.04 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.015 0.02" pos="0.07 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+            <body name="head_tilt" pos="0.07 0 0">
+              <inertial pos="0.023519 0 0" mass="0.08505" fullinertia="2.997750e-4 1.515908e-4 1.551083e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+              <joint name="head_swivel_to_head_tilt" type="hinge" axis="0 1 0" range="-0.26 0.26" damping="0.075473" armature="0.00168818"/>
+              <geom type="box" size="0.015 0.005 0.015" pos="0.005 0.025 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.015 0.005 0.015" pos="0.005 -0.025 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+              <geom type="box" size="0.005 0.075 0.075" pos="0.025 0 0" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_wall_to_arm_1" joint="wall_to_arm_1" kp="2.578961" ctrlrange="-1.5708 1.5708"/>
+    <position name="a_arm_1_to_arm_2" joint="arm_1_to_arm_2" kp="1.986179" ctrlrange="0 3.14159"/>
+    <position name="a_arm_2_to_head_swivel" joint="arm_2_to_head_swivel" kp="0.103213" ctrlrange="-1.5708 1.5708"/>
+    <position name="a_head_swivel_to_head_tilt" joint="head_swivel_to_head_tilt" kp="0.754725" ctrlrange="-0.26 0.26"/>
+  </actuator>
+</mujoco>

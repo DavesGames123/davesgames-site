@@ -1,0 +1,3835 @@
+{
+ "version": 1,
+ "generated": "2026-11-03",
+ "groups": [
+  {
+   "id": "primitive_joints_and_modules",
+   "title": "Primitive Joints & Modules"
+  },
+  {
+   "id": "kinematic_chains",
+   "title": "Kinematic Chains"
+  },
+  {
+   "id": "linear_stages_and_gantries",
+   "title": "Linear Stages & Gantries"
+  },
+  {
+   "id": "robotic_arms_and_manipulators",
+   "title": "Robotic Arms & Manipulators"
+  },
+  {
+   "id": "household_appliances",
+   "title": "Household Appliances"
+  },
+  {
+   "id": "furniture_and_storage",
+   "title": "Furniture & Storage"
+  },
+  {
+   "id": "electronics_and_optics",
+   "title": "Electronics & Optics"
+  },
+  {
+   "id": "vehicles_and_mobility",
+   "title": "Vehicles & Mobility"
+  },
+  {
+   "id": "mounts_and_positioning",
+   "title": "Mounts & Positioning"
+  },
+  {
+   "id": "tools_and_workshop",
+   "title": "Tools & Workshop"
+  },
+  {
+   "id": "doors_gates_and_access",
+   "title": "Doors, Gates & Access"
+  },
+  {
+   "id": "buildings_and_infrastructure",
+   "title": "Buildings & Infrastructure"
+  },
+  {
+   "id": "outdoor_and_recreation",
+   "title": "Outdoor & Recreation"
+  },
+  {
+   "id": "commercial_coinop_and_vending",
+   "title": "Commercial Coin-Op & Vending"
+  }
+ ],
+ "objects": [
+  {
+   "slug": "six-axis-robot-arm",
+   "title": "Six-axis robot arm",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Robotic Arms",
+   "prompt": "a cad quality model of a robotic arm",
+   "record": "rec_robotic_arms_889477f5978f4a08a87bb80c115416f1",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_robotic_arms_889477f5978f4a08a87bb80c115416f1",
+   "joints": [
+    {
+     "name": "base_to_shoulder",
+     "type": "hinge",
+     "range": [
+      -3.14,
+      3.14
+     ],
+     "act": "a_base_to_shoulder"
+    },
+    {
+     "name": "shoulder_to_upper_arm",
+     "type": "hinge",
+     "range": [
+      -1.57,
+      1.57
+     ],
+     "act": "a_shoulder_to_upper_arm"
+    },
+    {
+     "name": "upper_arm_to_forearm",
+     "type": "hinge",
+     "range": [
+      -2.5,
+      2.5
+     ],
+     "act": "a_upper_arm_to_forearm"
+    },
+    {
+     "name": "forearm_to_wrist_pitch",
+     "type": "hinge",
+     "range": [
+      -1.57,
+      1.57
+     ],
+     "act": "a_forearm_to_wrist_pitch"
+    },
+    {
+     "name": "wrist_pitch_to_gripper_base",
+     "type": "hinge",
+     "range": [
+      -3.14,
+      3.14
+     ],
+     "act": "a_wrist_pitch_to_gripper_base"
+    },
+    {
+     "name": "gripper_base_to_left_jaw",
+     "type": "slide",
+     "range": [
+      0,
+      0.02
+     ],
+     "act": "a_gripper_base_to_left_jaw"
+    },
+    {
+     "name": "gripper_base_to_right_jaw",
+     "type": "slide",
+     "range": [
+      0,
+      0.02
+     ],
+     "act": "a_gripper_base_to_right_jaw"
+    }
+   ],
+   "bytes": 102804,
+   "extent": 0.5412,
+   "center": [
+    0,
+    0,
+    0.52
+   ]
+  },
+  {
+   "slug": "five-finger-robot-hand",
+   "title": "Five-finger robot hand",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Palm with multiple uncoupled finger chains",
+   "prompt": "An anthropomorphic robotic palm with four fingers and a thumb, where each digit has a base knuckle for splay plus serial flexion joints farther out. The palm block carries separate digit roots with room for lateral motion at the metacarpal joints. Each digit base rotates on a splay revolute axis at the palm, and each finger chain continues with serial transverse revolute flexion joints.",
+   "record": "rec_palm_with_multiple_uncoupled_finger_chains_d2d331a636254040a5ceb7281d693093",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_palm_with_multiple_uncoupled_finger_chains_d2d331a636254040a5ceb7281d693093",
+   "joints": [
+    {
+     "name": "palm_to_index_splay",
+     "type": "hinge",
+     "range": [
+      -0.42,
+      0.34
+     ],
+     "act": "a_palm_to_index_splay"
+    },
+    {
+     "name": "index_base_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_index_base_flex"
+    },
+    {
+     "name": "index_middle_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_index_middle_flex"
+    },
+    {
+     "name": "index_tip_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.35
+     ],
+     "act": "a_index_tip_flex"
+    },
+    {
+     "name": "palm_to_middle_splay",
+     "type": "hinge",
+     "range": [
+      -0.3,
+      0.3
+     ],
+     "act": "a_palm_to_middle_splay"
+    },
+    {
+     "name": "middle_base_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_middle_base_flex"
+    },
+    {
+     "name": "middle_middle_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_middle_middle_flex"
+    },
+    {
+     "name": "middle_tip_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.35
+     ],
+     "act": "a_middle_tip_flex"
+    },
+    {
+     "name": "palm_to_ring_splay",
+     "type": "hinge",
+     "range": [
+      -0.34,
+      0.36
+     ],
+     "act": "a_palm_to_ring_splay"
+    },
+    {
+     "name": "ring_base_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_ring_base_flex"
+    },
+    {
+     "name": "ring_middle_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_ring_middle_flex"
+    },
+    {
+     "name": "ring_tip_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.35
+     ],
+     "act": "a_ring_tip_flex"
+    },
+    {
+     "name": "palm_to_little_splay",
+     "type": "hinge",
+     "range": [
+      -0.36,
+      0.46
+     ],
+     "act": "a_palm_to_little_splay"
+    },
+    {
+     "name": "little_base_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_little_base_flex"
+    },
+    {
+     "name": "little_middle_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_little_middle_flex"
+    },
+    {
+     "name": "little_tip_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.35
+     ],
+     "act": "a_little_tip_flex"
+    },
+    {
+     "name": "palm_to_thumb_splay",
+     "type": "hinge",
+     "range": [
+      -0.55,
+      0.55
+     ],
+     "act": "a_palm_to_thumb_splay"
+    },
+    {
+     "name": "thumb_base_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.15
+     ],
+     "act": "a_thumb_base_flex"
+    },
+    {
+     "name": "thumb_tip_flex",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_thumb_tip_flex"
+    }
+   ],
+   "bytes": 85311,
+   "extent": 0.2184,
+   "center": [
+    0,
+    0,
+    0.0256
+   ]
+  },
+  {
+   "slug": "hanging-cantilever-arm",
+   "title": "Hanging cantilever arm",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Cantilever articulated arm",
+   "prompt": "An under-slung cantilever arm. A top support carries the main arm links below it, creating a different silhouette while keeping the chain as three rigid stages. The arm uses shoulder, elbow, and wrist revolute joints in sequence.",
+   "record": "rec_cantilever_articulated_arm_482bb4bc30fc4ab9a905d6a030180276",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_cantilever_articulated_arm_482bb4bc30fc4ab9a905d6a030180276",
+   "joints": [
+    {
+     "name": "shoulder_joint",
+     "type": "hinge",
+     "range": [
+      -0.6,
+      0.95
+     ],
+     "act": "a_shoulder_joint"
+    },
+    {
+     "name": "elbow_joint",
+     "type": "hinge",
+     "range": [
+      -1.25,
+      1.2
+     ],
+     "act": "a_elbow_joint"
+    },
+    {
+     "name": "wrist_joint",
+     "type": "hinge",
+     "range": [
+      -0.95,
+      1.05
+     ],
+     "act": "a_wrist_joint"
+    }
+   ],
+   "bytes": 40965,
+   "extent": 0.7837,
+   "center": [
+    0,
+    0,
+    0.345
+   ]
+  },
+  {
+   "slug": "four-link-fold-out-arm",
+   "title": "Four-link fold-out arm",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Multi-segment fold-out arm",
+   "prompt": "A compact fold-out support arm with four short segments. A fixed base plate carries four boxed links in series and a small platform bracket at the end. The four joints are revolute about parallel axes in one plane so the arm packs close to the base and unfolds into a longer reach.",
+   "record": "rec_multisegment_foldout_arm_6a78b73d29574f53895ef335c67711ac",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_multisegment_foldout_arm_6a78b73d29574f53895ef335c67711ac",
+   "joints": [
+    {
+     "name": "base_to_link_0",
+     "type": "hinge",
+     "range": [
+      0,
+      1.309
+     ],
+     "act": "a_base_to_link_0"
+    },
+    {
+     "name": "link_0_to_link_1",
+     "type": "hinge",
+     "range": [
+      -2.618,
+      2.618
+     ],
+     "act": "a_link_0_to_link_1"
+    },
+    {
+     "name": "link_1_to_link_2",
+     "type": "hinge",
+     "range": [
+      -2.618,
+      2.618
+     ],
+     "act": "a_link_1_to_link_2"
+    },
+    {
+     "name": "link_2_to_link_3",
+     "type": "hinge",
+     "range": [
+      -2.618,
+      2.618
+     ],
+     "act": "a_link_2_to_link_3"
+    }
+   ],
+   "bytes": 6146,
+   "extent": 0.2172,
+   "center": [
+    0,
+    0,
+    0.1441
+   ]
+  },
+  {
+   "slug": "rail-carriage-with-spindle",
+   "title": "Rail carriage with spindle",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Linear carriage with independent rotary end-effector",
+   "prompt": "A linear carriage with an independent rotary end-effector. A grounded rail body carries one sliding carriage, and the carriage supports a short spindle or tool face on its own compact bearing housing. The carriage is a prismatic joint along the rail, and the carried spindle is a separate revolute joint about its own supported axis.",
+   "record": "rec_linear_carriage_with_independent_rotary_endeffector_e8c01cabfa634adf98a52fcc229c3343",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_linear_carriage_with_independent_rotary_endeffector_e8c01cabfa634adf98a52fcc229c3343",
+   "joints": [
+    {
+     "name": "rail_to_carriage",
+     "type": "slide",
+     "range": [
+      0,
+      0.56
+     ],
+     "act": "a_rail_to_carriage"
+    },
+    {
+     "name": "carriage_to_spindle",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_carriage_to_spindle"
+    }
+   ],
+   "bytes": 4174,
+   "extent": 0.5428,
+   "center": [
+    0,
+    0,
+    0.1275
+   ]
+  },
+  {
+   "slug": "vertical-slide-with-hinged-bracket",
+   "title": "Vertical slide with hinged bracket",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Vertical slide with wrist hinge",
+   "prompt": "A low-profile vertical slide carrying a hinged bracket. A broad lower mount supports a vertical guide stage and a small forward-projecting hinged face on the moving block. The moving block is a vertical prismatic joint and the bracket is a revolute joint carried by that block.",
+   "record": "rec_vertical_slide_with_wrist_hinge_0ccb9ada99e34a1fa99e57cd8b1db653",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_vertical_slide_with_wrist_hinge_0ccb9ada99e34a1fa99e57cd8b1db653",
+   "joints": [
+    {
+     "name": "base_to_block",
+     "type": "slide",
+     "range": [
+      0,
+      0.2
+     ],
+     "act": "a_base_to_block"
+    },
+    {
+     "name": "block_to_bracket",
+     "type": "hinge",
+     "range": [
+      0,
+      1.2
+     ],
+     "act": "a_block_to_bracket"
+    }
+   ],
+   "bytes": 4618,
+   "extent": 0.2649,
+   "center": [
+    0,
+    0,
+    0.2075
+   ]
+  },
+  {
+   "slug": "radial-beam-with-carriage",
+   "title": "Radial beam with carriage",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Radial arm with sliding carriage",
+   "prompt": "A shop radial-arm carriage assembly. A grounded pedestal supports a shoulder housing and a horizontal beam, while a smaller carriage is captured on the beam with a simple end plate. The beam yaws on a revolute joint at the pedestal and the carriage translates on a prismatic joint along the beam.",
+   "record": "rec_radial_arm_with_sliding_carriage_f3c5aa592e5e45258283f863fe6d11ae",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_radial_arm_with_sliding_carriage_f3c5aa592e5e45258283f863fe6d11ae",
+   "joints": [
+    {
+     "name": "pedestal_to_arm",
+     "type": "hinge",
+     "range": [
+      -0.75,
+      0.75
+     ],
+     "act": "a_pedestal_to_arm"
+    },
+    {
+     "name": "arm_to_carriage",
+     "type": "slide",
+     "range": [
+      0,
+      0.55
+     ],
+     "act": "a_arm_to_carriage"
+    }
+   ],
+   "bytes": 4858,
+   "extent": 1.1031,
+   "center": [
+    0,
+    0,
+    0.6038
+   ]
+  },
+  {
+   "slug": "tower-arm-with-wrist",
+   "title": "Tower arm with wrist",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Shoulder-elbow-wrist arm",
+   "prompt": "A tower-mounted wristed arm. A short pedestal supports two main links and a compact terminal wrist stage, with the sections stepping down in mass from root to tip. The three articulations are serial revolute joints carried by the base, upper arm, and forearm.",
+   "record": "rec_shoulderelbowwrist_arm_5bc8a524280e443f95a80c23759ed389",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_shoulderelbowwrist_arm_5bc8a524280e443f95a80c23759ed389",
+   "joints": [
+    {
+     "name": "base_to_upper_arm",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_base_to_upper_arm"
+    },
+    {
+     "name": "upper_arm_to_forearm",
+     "type": "hinge",
+     "range": [
+      -1.35,
+      1.55
+     ],
+     "act": "a_upper_arm_to_forearm"
+    },
+    {
+     "name": "forearm_to_wrist",
+     "type": "hinge",
+     "range": [
+      -1.7,
+      1.7
+     ],
+     "act": "a_forearm_to_wrist"
+    }
+   ],
+   "bytes": 92467,
+   "extent": 0.78,
+   "center": [
+    0,
+    0,
+    0.3425
+   ]
+  },
+  {
+   "slug": "trunnion-elbow-arm",
+   "title": "Trunnion elbow arm",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Serial elbow arm",
+   "prompt": "A trunnion-root elbow arm. A grounded pedestal supports an upper link, a forearm, and a plain end plate, with the shoulder hub visibly larger than the elbow hub. The shoulder and elbow are serial revolute joints about parallel supported axes.",
+   "record": "rec_serial_elbow_arm_6b166b55fd0c438fb80b1422f9f92539",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_serial_elbow_arm_6b166b55fd0c438fb80b1422f9f92539",
+   "joints": [
+    {
+     "name": "pedestal_to_upper_link",
+     "type": "hinge",
+     "range": [
+      -0.45,
+      1.2
+     ],
+     "act": "a_pedestal_to_upper_link"
+    },
+    {
+     "name": "upper_link_to_forearm",
+     "type": "hinge",
+     "range": [
+      -0.15,
+      1.45
+     ],
+     "act": "a_upper_link_to_forearm"
+    }
+   ],
+   "bytes": 3240,
+   "extent": 0.4435,
+   "center": [
+    0,
+    0,
+    0.1825
+   ]
+  },
+  {
+   "slug": "hip-knee-ankle-robot-leg",
+   "title": "Hip-knee-ankle robot leg",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Robotic leg",
+   "prompt": "Design a retrofit/legacy-inspired Robotic leg that blends old-school construction cues with modern reliability. Keep the core as a hip-knee-ankle chain with load-bearing limb shells and actuator bays; include service hatches, bolted adapters, and pragmatic reinforcements where components meet. Show leg articulation as true serial kinematics with plausible range limits. The final model must be one connected mechanism where every element is structurally supported. No floating parts.",
+   "record": "rec_robotic_leg_da8e46698ccd44b39ca4be0beb45e907",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_robotic_leg_da8e46698ccd44b39ca4be0beb45e907",
+   "joints": [
+    {
+     "name": "hip_pitch",
+     "type": "hinge",
+     "range": [
+      -0.65,
+      1.05
+     ],
+     "act": "a_hip_pitch"
+    },
+    {
+     "name": "knee_pitch",
+     "type": "hinge",
+     "range": [
+      0,
+      2.05
+     ],
+     "act": "a_knee_pitch"
+    },
+    {
+     "name": "ankle_pitch",
+     "type": "hinge",
+     "range": [
+      -0.55,
+      0.7
+     ],
+     "act": "a_ankle_pitch"
+    }
+   ],
+   "bytes": 11358,
+   "extent": 0.7126,
+   "center": [
+    0,
+    0,
+    0.662
+   ]
+  },
+  {
+   "slug": "twin-jaw-slide-gripper",
+   "title": "Twin-jaw slide gripper",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Opposed twin-slide gripper",
+   "prompt": "Design a realistic, highly detailed opposed twin-slide gripper as a standalone mechanical study assembly for the sdk_hybrid pipeline, with a symmetric gripper body using two sliding jaws that move toward a central opening. Both jaw slides should be guided by explicit rails, guides, or tongue-and-groove tracks with a believable actuation path. Emphasize rigid brackets, exposed guide hardware, removable access covers, and disciplined machined-or-fabricated hard-surface geometry, plus jaw pads, synchronizing link housings, and hard-stop blocks. Keep it as a pure mechanical assembly with explicit joints, guides, bearings, brackets, and support structure. Avoid product styling, decorative housings, or recognizable household or device forms.",
+   "record": "rec_opposed_twinslide_gripper_189a0f981f8846e982edadfa262c3967",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_opposed_twinslide_gripper_189a0f981f8846e982edadfa262c3967",
+   "joints": [
+    {
+     "name": "body_to_jaw_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.075
+     ],
+     "act": "a_body_to_jaw_0"
+    },
+    {
+     "name": "body_to_jaw_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.075
+     ],
+     "act": null,
+     "mimic": "body_to_jaw_0"
+    },
+    {
+     "name": "body_to_pinion",
+     "type": "hinge",
+     "range": [
+      -2.4,
+      0
+     ],
+     "act": "a_body_to_pinion"
+    }
+   ],
+   "bytes": 13868,
+   "extent": 0.4403,
+   "center": [
+    0,
+    0,
+    0.1
+   ]
+  },
+  {
+   "slug": "turntable-with-lift-head",
+   "title": "Turntable with lift head",
+   "group": "robotic_arms_and_manipulators",
+   "category": "Rotary base with vertical slide",
+   "prompt": "A pan-base Z-slide module. A fixed lower rotary table carries an upright guide frame with a compact moving head. The rotary table is a revolute joint about vertical, and the head is a prismatic joint on the upright guide.",
+   "record": "rec_rotary_base_with_vertical_slide_f72fad37371b4949a8d8abccc4265fe1",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_rotary_base_with_vertical_slide_f72fad37371b4949a8d8abccc4265fe1",
+   "joints": [
+    {
+     "name": "base_to_rotary",
+     "type": "hinge",
+     "range": [
+      -3.14,
+      3.14
+     ],
+     "act": "a_base_to_rotary"
+    },
+    {
+     "name": "rotary_to_head",
+     "type": "slide",
+     "range": [
+      0,
+      0.3
+     ],
+     "act": "a_rotary_to_head"
+    }
+   ],
+   "bytes": 2014,
+   "extent": 0.2554,
+   "center": [
+    0,
+    0,
+    0.235
+   ]
+  },
+  {
+   "slug": "hanging-slide-with-two-link-arm",
+   "title": "Hanging slide with two-link arm",
+   "group": "kinematic_chains",
+   "category": "Prismatic-revolute-revolute chain",
+   "prompt": "An under-slung slide-arm-arm unit. A top support carries a hanging carriage and a two-link arm below it. The hanging carriage is a prismatic joint, and the two links are connected by shoulder and elbow revolute joints.",
+   "record": "rec_prismaticrevoluterevolute_chain_37dc7445ab6e4467a42b5d7b8d318b86",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_prismaticrevoluterevolute_chain_37dc7445ab6e4467a42b5d7b8d318b86",
+   "joints": [
+    {
+     "name": "slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.6
+     ],
+     "act": "a_slide"
+    },
+    {
+     "name": "shoulder",
+     "type": "hinge",
+     "range": [
+      -0.95,
+      1.15
+     ],
+     "act": "a_shoulder"
+    },
+    {
+     "name": "elbow",
+     "type": "hinge",
+     "range": [
+      -1.35,
+      1.35
+     ],
+     "act": "a_elbow"
+    }
+   ],
+   "bytes": 6134,
+   "extent": 0.8787,
+   "center": [
+    0,
+    0,
+    0.572
+   ]
+  },
+  {
+   "slug": "folding-inspection-boom",
+   "title": "Folding inspection boom",
+   "group": "kinematic_chains",
+   "category": "Revolute-prismatic-revolute chain",
+   "prompt": "A folding inspection boom with one revolute root joint, one prismatic extension stage, and a rotary end joint, using straight members and mechanical stops.",
+   "record": "rec_revoluteprismaticrevolute_chain_f633f192481243d1af9fa84889f8ddf7",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_revoluteprismaticrevolute_chain_f633f192481243d1af9fa84889f8ddf7",
+   "joints": [
+    {
+     "name": "root_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_root_hinge"
+    },
+    {
+     "name": "boom_slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.45
+     ],
+     "act": "a_boom_slide"
+    },
+    {
+     "name": "end_rotary",
+     "type": "hinge",
+     "range": [
+      -2.6,
+      2.6
+     ],
+     "act": "a_end_rotary"
+    }
+   ],
+   "bytes": 6520,
+   "extent": 0.7304,
+   "center": [
+    0,
+    0,
+    0.3387
+   ]
+  },
+  {
+   "slug": "two-finger-palm",
+   "title": "Two-finger palm",
+   "group": "kinematic_chains",
+   "category": "Dual independent finger chains",
+   "prompt": "A dual-finger mechanism with two independent finger chains on a shared palm block. The grounded palm supports two side-by-side fingers, each built from three rigid phalanx links with visible pin knuckles and a simple fingertip pad. Each finger has three revolute joints bending in its own plane, and the two fingers remain mechanically uncoupled.",
+   "record": "rec_dual_independent_finger_chains_b45f53ef637e44e7b6055096f5436a6a",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_dual_independent_finger_chains_b45f53ef637e44e7b6055096f5436a6a",
+   "joints": [
+    {
+     "name": "palm_to_left_proximal",
+     "type": "hinge",
+     "range": [
+      0,
+      1.1
+     ],
+     "act": "a_palm_to_left_proximal"
+    },
+    {
+     "name": "left_proximal_to_left_middle",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_left_proximal_to_left_middle"
+    },
+    {
+     "name": "left_middle_to_left_distal",
+     "type": "hinge",
+     "range": [
+      0,
+      1.1
+     ],
+     "act": "a_left_middle_to_left_distal"
+    },
+    {
+     "name": "palm_to_right_proximal",
+     "type": "hinge",
+     "range": [
+      0,
+      1.1
+     ],
+     "act": "a_palm_to_right_proximal"
+    },
+    {
+     "name": "right_proximal_to_right_middle",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_right_proximal_to_right_middle"
+    },
+    {
+     "name": "right_middle_to_right_distal",
+     "type": "hinge",
+     "range": [
+      0,
+      1.1
+     ],
+     "act": "a_right_middle_to_right_distal"
+    }
+   ],
+   "bytes": 55492,
+   "extent": 0.0836,
+   "center": [
+    0,
+    0,
+    0.0145
+   ]
+  },
+  {
+   "slug": "four-joint-link-chain",
+   "title": "Four-joint link chain",
+   "group": "kinematic_chains",
+   "category": "Four-joint revolute chain",
+   "prompt": "A boxed four-joint revolute chain. A grounded root bracket carries five rigid links in series with long side plates and a compact end tab at the tip. The chain uses four serial revolute joints about parallel supported axes in one plane.",
+   "record": "rec_fourjoint_revolute_chain_327b4927be2a4de2977623a6deb6137d",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_fourjoint_revolute_chain_327b4927be2a4de2977623a6deb6137d",
+   "joints": [
+    {
+     "name": "root_to_link_1",
+     "type": "hinge",
+     "range": [
+      -1.15,
+      1.2
+     ],
+     "act": "a_root_to_link_1"
+    },
+    {
+     "name": "link_1_to_link_2",
+     "type": "hinge",
+     "range": [
+      -1.35,
+      1.35
+     ],
+     "act": "a_link_1_to_link_2"
+    },
+    {
+     "name": "link_2_to_link_3",
+     "type": "hinge",
+     "range": [
+      -1.35,
+      1.35
+     ],
+     "act": "a_link_2_to_link_3"
+    },
+    {
+     "name": "link_3_to_end_tab",
+     "type": "hinge",
+     "range": [
+      -1.55,
+      1.55
+     ],
+     "act": "a_link_3_to_end_tab"
+    }
+   ],
+   "bytes": 8901,
+   "extent": 0.3845,
+   "center": [
+    0,
+    0,
+    0.061
+   ]
+  },
+  {
+   "slug": "two-joint-link-chain",
+   "title": "Two-joint link chain",
+   "group": "kinematic_chains",
+   "category": "Two-joint revolute chain",
+   "prompt": "A compact two-joint revolute chain. A grounded root bracket carries 3 rigid links in series, using hinge blocks between each link and ending in a compact end tab. The chain has two serial revolute joints about parallel axes in one plane.",
+   "record": "rec_twojoint_revolute_chain_9c56420090b044cd9234210681a4e1a5",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_twojoint_revolute_chain_9c56420090b044cd9234210681a4e1a5",
+   "joints": [
+    {
+     "name": "link1_to_link2",
+     "type": "hinge",
+     "range": [
+      -0.15,
+      1.55
+     ],
+     "act": "a_link1_to_link2"
+    },
+    {
+     "name": "link2_to_end_tab",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      1.55
+     ],
+     "act": "a_link2_to_end_tab"
+    }
+   ],
+   "bytes": 30913,
+   "extent": 0.1543,
+   "center": [
+    0,
+    0,
+    0.0415
+   ]
+  },
+  {
+   "slug": "xyz-bench-stage",
+   "title": "XYZ bench stage",
+   "group": "linear_stages_and_gantries",
+   "category": "XYZ Cartesian stage",
+   "prompt": "A benchtop positioning stage with a long X base, a crosswise Y carriage on top of it, and a vertical Z slide ending in a square tool plate. The three guide directions should be visually obvious and not collapse into one box. The X, Y, and Z motions are stacked orthogonal prismatic joints.",
+   "record": "rec_xyz_cartesian_stage_a186865081b54986a58c785b0970c07b",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_xyz_cartesian_stage_a186865081b54986a58c785b0970c07b",
+   "joints": [
+    {
+     "name": "x_axis",
+     "type": "slide",
+     "range": [
+      -0.12,
+      0.12
+     ],
+     "act": "a_x_axis"
+    },
+    {
+     "name": "y_axis",
+     "type": "slide",
+     "range": [
+      -0.022,
+      0.022
+     ],
+     "act": "a_y_axis"
+    },
+    {
+     "name": "z_axis",
+     "type": "slide",
+     "range": [
+      0,
+      0.08
+     ],
+     "act": "a_z_axis"
+    }
+   ],
+   "bytes": 33505,
+   "extent": 0.3155,
+   "center": [
+    0,
+    0,
+    0.177
+   ]
+  },
+  {
+   "slug": "xy-machine-table",
+   "title": "XY machine table",
+   "group": "linear_stages_and_gantries",
+   "category": "Orthogonal XY stage",
+   "prompt": "A machine-table XY stage. A fixed base rail set carries a long X carriage, and the X carriage carries a shorter Y slide with a plain tooling face. The two supported slides are orthogonal prismatic joints.",
+   "record": "rec_orthogonal_xy_stage_6fbd80ab6518492b8d978a68b347a8fc",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_orthogonal_xy_stage_6fbd80ab6518492b8d978a68b347a8fc",
+   "joints": [
+    {
+     "name": "base_to_x",
+     "type": "slide",
+     "range": [
+      -0.12,
+      0.12
+     ],
+     "act": "a_base_to_x"
+    },
+    {
+     "name": "x_to_y",
+     "type": "slide",
+     "range": [
+      -0.07,
+      0.07
+     ],
+     "act": "a_x_to_y"
+    }
+   ],
+   "bytes": 10133,
+   "extent": 0.4141,
+   "center": [
+    0,
+    0,
+    0.126
+   ]
+  },
+  {
+   "slug": "portal-gantry-with-tool-slide",
+   "title": "Portal gantry with tool slide",
+   "group": "linear_stages_and_gantries",
+   "category": "Portal gantry with vertical slide",
+   "prompt": "A wide inspection portal with box-section legs, a rigid crossbeam, a central shuttle under the beam, and a narrow vertical tool carriage below the shuttle. The moving beam carriage and the hanging tool carriage should be visually distinct in scale, with both clearly supported by guides and brackets. Use realistic detail such as rail caps, gusset plates, carriage ribs, service covers, and practical spacing around the nested moving members. The shuttle slides prismatically across the beam span, and the lower carriage slides prismatically in the vertical direction. Keep every part mechanically grounded with no floating members, and make sure the articulation paths stay clear so nothing clips through covers, stops, housings, rails, or neighboring links.",
+   "record": "rec_portal_gantry_with_vertical_slide_84ca712fa4694ebb8ec1a3a1d796df6d",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_portal_gantry_with_vertical_slide_84ca712fa4694ebb8ec1a3a1d796df6d",
+   "joints": [
+    {
+     "name": "portal_to_shuttle",
+     "type": "slide",
+     "range": [
+      -0.85,
+      0.85
+     ],
+     "act": "a_portal_to_shuttle"
+    },
+    {
+     "name": "shuttle_to_tool",
+     "type": "slide",
+     "range": [
+      0,
+      0.34
+     ],
+     "act": "a_shuttle_to_tool"
+    }
+   ],
+   "bytes": 8231,
+   "extent": 2.0572,
+   "center": [
+    0,
+    0,
+    1.0773
+   ]
+  },
+  {
+   "slug": "wall-backed-yz-stage",
+   "title": "Wall-backed YZ stage",
+   "group": "linear_stages_and_gantries",
+   "category": "Orthogonal YZ stage",
+   "prompt": "A wall-backed positioning stage with a tall fixed plate, a crosswise saddle moving left to right, and a hanging vertical carriage under that saddle. The carriage stack should feel like a side-mounted machine axis rather than a tabletop stage, with all guides tied back into the fixed plate. Use believable detail such as machined guide rails, carriage covers, gusseted backplate geometry, and practical stop hardware on both axes. The saddle is a horizontal prismatic Y axis and the hanging carriage is a vertical prismatic Z axis. Keep every part mechanically grounded with no floating members, and make sure the articulation paths stay clear so nothing clips through covers, stops, housings, rails, or neighboring links.",
+   "record": "rec_orthogonal_yz_stage_398ba8dc772041a491b4d4033bfa7715",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_orthogonal_yz_stage_398ba8dc772041a491b4d4033bfa7715",
+   "joints": [
+    {
+     "name": "y_slide",
+     "type": "slide",
+     "range": [
+      -0.13,
+      0.13
+     ],
+     "act": "a_y_slide"
+    },
+    {
+     "name": "z_slide",
+     "type": "slide",
+     "range": [
+      -0.15,
+      0
+     ],
+     "act": "a_z_slide"
+    }
+   ],
+   "bytes": 48651,
+   "extent": 0.6143,
+   "center": [
+    0,
+    0,
+    0.52
+   ]
+  },
+  {
+   "slug": "telescoping-service-boom",
+   "title": "Telescoping service boom",
+   "group": "linear_stages_and_gantries",
+   "category": "Telescoping boom",
+   "prompt": "A service boom with a fixed root bracket, a stout outer box beam, and nested rectangular inner beams ending in a forked tip. The stage sizes should step down clearly from root to tip so the nesting is easy to read. The inner beam stages slide prismatically along the shared boom axis.",
+   "record": "rec_telescoping_boom_f858a0c9e6564485836ff2b798c5e74d",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_telescoping_boom_f858a0c9e6564485836ff2b798c5e74d",
+   "joints": [
+    {
+     "name": "outer_to_mid",
+     "type": "slide",
+     "range": [
+      0,
+      0.62
+     ],
+     "act": "a_outer_to_mid"
+    },
+    {
+     "name": "mid_to_inner",
+     "type": "slide",
+     "range": [
+      0,
+      0.5
+     ],
+     "act": "a_mid_to_inner"
+    }
+   ],
+   "bytes": 4870,
+   "extent": 1.0533,
+   "center": [
+    0,
+    0,
+    0.31
+   ]
+  },
+  {
+   "slug": "three-box-telescoping-slide",
+   "title": "Three-box telescoping slide",
+   "group": "linear_stages_and_gantries",
+   "category": "Three-stage telescoping slide",
+   "prompt": "A triple-box telescoping slide. A grounded outer channel carries a middle box member, and the middle member carries an inner box member. The middle and inner members translate on serial prismatic joints.",
+   "record": "rec_threestage_telescoping_slide_25c63d480dff4020bd83237d88461627",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_threestage_telescoping_slide_25c63d480dff4020bd83237d88461627",
+   "joints": [
+    {
+     "name": "outer_to_middle",
+     "type": "slide",
+     "range": [
+      0,
+      0.19
+     ],
+     "act": "a_outer_to_middle"
+    },
+    {
+     "name": "middle_to_inner",
+     "type": "slide",
+     "range": [
+      0,
+      0.15
+     ],
+     "act": "a_middle_to_inner"
+    }
+   ],
+   "bytes": 3081,
+   "extent": 0.2386,
+   "center": [
+    0,
+    0,
+    0.033
+   ]
+  },
+  {
+   "slug": "hanging-three-axis-wrist",
+   "title": "Hanging three-axis wrist",
+   "group": "primitive_joints_and_modules",
+   "category": "Yaw-pitch-roll wrist",
+   "prompt": "An under-slung three-axis wrist assembly. A top support carries a yaw stage below it, then a pitch cradle, then a short roll output. The mechanism uses three serial revolute joints on vertical, horizontal, and tool-axis directions.",
+   "record": "rec_yawpitchroll_wrist_aefd600724ec4de9bfb029c97df9af74",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_yawpitchroll_wrist_aefd600724ec4de9bfb029c97df9af74",
+   "joints": [
+    {
+     "name": "yaw_joint",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_yaw_joint"
+    },
+    {
+     "name": "pitch_joint",
+     "type": "hinge",
+     "range": [
+      -1.2,
+      1.2
+     ],
+     "act": "a_pitch_joint"
+    },
+    {
+     "name": "roll_joint",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_roll_joint"
+    }
+   ],
+   "bytes": 5595,
+   "extent": 0.2883,
+   "center": [
+    0,
+    0,
+    0.224
+   ]
+  },
+  {
+   "slug": "yaw-rotary-module",
+   "title": "Yaw rotary module",
+   "group": "primitive_joints_and_modules",
+   "category": "Single yaw axis module",
+   "prompt": "A low-profile a vertical-axis rotary module with a broad mounting plate. The fixed portion is a squat housing with gusseted supports, and the moving portion is a smaller flange or cradle that reads as a single clean link. One revolute joint turns the head about the vertical column axis.",
+   "record": "rec_single_yaw_axis_module_c3c23bea19ce4161af0d19f768dee829",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_single_yaw_axis_module_c3c23bea19ce4161af0d19f768dee829",
+   "joints": [
+    {
+     "name": "housing_to_head",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_housing_to_head"
+    }
+   ],
+   "bytes": 91904,
+   "extent": 0.2894,
+   "center": [
+    0,
+    0,
+    0.11
+   ]
+  },
+  {
+   "slug": "shaft-on-two-bearing-blocks",
+   "title": "Shaft on two bearing blocks",
+   "group": "primitive_joints_and_modules",
+   "category": "Single continuous rotary shaft",
+   "prompt": "A supported rotary shaft module. A straight shaft runs through two bearing blocks on a base plate and ends in a small flange or pulley hub. The shaft is one continuous revolute joint about its own supported axis.",
+   "record": "rec_single_continuous_rotary_shaft_f1c4a013658c40268bf0d8e5b521429b",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_single_continuous_rotary_shaft_f1c4a013658c40268bf0d8e5b521429b",
+   "joints": [
+    {
+     "name": "shaft_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_shaft_rotation"
+    }
+   ],
+   "bytes": 8671,
+   "extent": 0.4513,
+   "center": [
+    0,
+    0,
+    0.0885
+   ]
+  },
+  {
+   "slug": "heavy-bracket-hinge",
+   "title": "Heavy bracket hinge",
+   "group": "primitive_joints_and_modules",
+   "category": "Single revolute hinge",
+   "prompt": "A gusset-backed industrial hinge. A rigid grounded bracket supports the hinge barrel and a broad moving leaf, with the bracket thickened by a simple side rib. One revolute joint carries the moving leaf about the barrel axis.",
+   "record": "rec_single_revolute_hinge_d4bb37b28179466396216af38e3a323f",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_single_revolute_hinge_d4bb37b28179466396216af38e3a323f",
+   "joints": [
+    {
+     "name": "barrel_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_barrel_hinge"
+    }
+   ],
+   "bytes": 2689,
+   "extent": 0.1547,
+   "center": [
+    0,
+    0,
+    0.08
+   ]
+  },
+  {
+   "slug": "clamp-on-task-lamp",
+   "title": "Clamp-on task lamp",
+   "group": "mounts_and_positioning",
+   "category": "Articulated task lamp",
+   "prompt": "A clamp-base monitor-mount task lamp with a C-clamp base, a short post on a revolute swivel joint at the clamp boss, a two-link arm with revolute shoulder and elbow joints, a telescoping forearm link on a prismatic joint, and a small LED head that tilts on a horizontal revolute joint at the forearm tip.",
+   "record": "rec_articulated_task_lamp_40a6b812a19a487e857babea0348cfe7",
+   "revision": "rev_000001",
+   "author": "Zhaomou Song",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_articulated_task_lamp_40a6b812a19a487e857babea0348cfe7",
+   "joints": [
+    {
+     "name": "base_to_post_swivel",
+     "type": "hinge",
+     "range": [
+      -1.7,
+      1.7
+     ],
+     "act": "a_base_to_post_swivel"
+    },
+    {
+     "name": "post_to_upper_arm_shoulder",
+     "type": "hinge",
+     "range": [
+      -0.55,
+      1.25
+     ],
+     "act": "a_post_to_upper_arm_shoulder"
+    },
+    {
+     "name": "upper_arm_to_forearm_elbow",
+     "type": "hinge",
+     "range": [
+      -0.25,
+      1.55
+     ],
+     "act": "a_upper_arm_to_forearm_elbow"
+    },
+    {
+     "name": "forearm_sleeve_to_extension",
+     "type": "slide",
+     "range": [
+      0,
+      0.08
+     ],
+     "act": "a_forearm_sleeve_to_extension"
+    },
+    {
+     "name": "extension_to_head_tilt",
+     "type": "hinge",
+     "range": [
+      -0.95,
+      0.55
+     ],
+     "act": "a_extension_to_head_tilt"
+    }
+   ],
+   "bytes": 6813,
+   "extent": 0.3859,
+   "center": [
+    0,
+    0,
+    0.126
+   ]
+  },
+  {
+   "slug": "folding-wall-mount-for-a-screen",
+   "title": "Folding wall mount for a screen",
+   "group": "mounts_and_positioning",
+   "category": "TV wall mount",
+   "prompt": "A side-hinge TV wall mount shown without the screen. A grounded wall plate supports two arm links and a compact display head with distinct tilt and swivel support pieces. The arm uses two folding revolute joints, and the head adds one swivel revolute and one tilt revolute.",
+   "record": "rec_tv_wall_mount_9f6dc3a99dac4ea491f35c1664d440f6",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_tv_wall_mount_9f6dc3a99dac4ea491f35c1664d440f6",
+   "joints": [
+    {
+     "name": "wall_to_arm_1",
+     "type": "hinge",
+     "range": [
+      -1.5708,
+      1.5708
+     ],
+     "act": "a_wall_to_arm_1"
+    },
+    {
+     "name": "arm_1_to_arm_2",
+     "type": "hinge",
+     "range": [
+      0,
+      3.1416
+     ],
+     "act": "a_arm_1_to_arm_2"
+    },
+    {
+     "name": "arm_2_to_head_swivel",
+     "type": "hinge",
+     "range": [
+      -1.5708,
+      1.5708
+     ],
+     "act": "a_arm_2_to_head_swivel"
+    },
+    {
+     "name": "head_swivel_to_head_tilt",
+     "type": "hinge",
+     "range": [
+      -0.26,
+      0.26
+     ],
+     "act": "a_head_swivel_to_head_tilt"
+    }
+   ],
+   "bytes": 4404,
+   "extent": 0.4236,
+   "center": [
+    0,
+    0,
+    0.2
+   ]
+  },
+  {
+   "slug": "compact-monitor-arm",
+   "title": "Compact monitor arm",
+   "group": "mounts_and_positioning",
+   "category": "Monitor mount",
+   "prompt": "A compact console monitor arm without the monitor. A grounded base bracket supports two short articulated links and a small head frame that can fold close to the base. Two revolute joints fold the arm, and the head adds separate swivel and tilt revolute joints.",
+   "record": "rec_monitor_mount_ee2f63ac8a9844e08b148532730fbe48",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_monitor_mount_ee2f63ac8a9844e08b148532730fbe48",
+   "joints": [
+    {
+     "name": "shoulder_pitch",
+     "type": "hinge",
+     "range": [
+      0,
+      1.2
+     ],
+     "act": "a_shoulder_pitch"
+    },
+    {
+     "name": "elbow_pitch",
+     "type": "hinge",
+     "range": [
+      0,
+      2.4
+     ],
+     "act": "a_elbow_pitch"
+    },
+    {
+     "name": "head_swivel_joint",
+     "type": "hinge",
+     "range": [
+      -1.6,
+      1.6
+     ],
+     "act": "a_head_swivel_joint"
+    },
+    {
+     "name": "head_tilt_joint",
+     "type": "hinge",
+     "range": [
+      -0.8,
+      0.75
+     ],
+     "act": "a_head_tilt_joint"
+    }
+   ],
+   "bytes": 6105,
+   "extent": 0.1959,
+   "center": [
+    0,
+    0,
+    0.092
+   ]
+  },
+  {
+   "slug": "pole-camera-with-pan-and-tilt",
+   "title": "Pole camera with pan and tilt",
+   "group": "mounts_and_positioning",
+   "category": "CCTV mast with pan-tilt camera head",
+   "prompt": "A stadium floodlight-pole CCTV arm with a tall pole, a fixed crossbar, and a camera arm branching from the mast. The camera arm is fixed to the mast. The camera head pans on a continuous bearing and tilts on a revolute tilt joint.",
+   "record": "rec_cctv_mast_with_pantilt_camera_head_93c3153a76bb4780a51a0fc40c883bdb",
+   "revision": "rev_000001",
+   "author": "Zhaomou Song",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_cctv_mast_with_pantilt_camera_head_93c3153a76bb4780a51a0fc40c883bdb",
+   "joints": [
+    {
+     "name": "camera_arm_to_pan_head",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_camera_arm_to_pan_head"
+    },
+    {
+     "name": "pan_head_to_camera_head",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      1.1
+     ],
+     "act": "a_pan_head_to_camera_head"
+    }
+   ],
+   "bytes": 13449,
+   "extent": 10.0049,
+   "center": [
+    0,
+    0,
+    9.85
+   ]
+  },
+  {
+   "slug": "telescoping-floodlight-mast",
+   "title": "Telescoping floodlight mast",
+   "group": "mounts_and_positioning",
+   "category": "Floodlight mast with tilt head",
+   "prompt": "A rooftop flat-base floodlight mast with a square base plate, a telescoping square mast, and a single tilting floodlight head. The mast extends prismatically from the base. The flood head tilts on a revolute hinge at the mast top bracket.",
+   "record": "rec_floodlight_mast_with_tilt_head_5602f7ba2b334892b2535918bfd2c88b",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_floodlight_mast_with_tilt_head_5602f7ba2b334892b2535918bfd2c88b",
+   "joints": [
+    {
+     "name": "mast_slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.38
+     ],
+     "act": "a_mast_slide"
+    },
+    {
+     "name": "head_tilt",
+     "type": "hinge",
+     "range": [
+      -0.45,
+      0.85
+     ],
+     "act": "a_head_tilt"
+    }
+   ],
+   "bytes": 10154,
+   "extent": 0.9568,
+   "center": [
+    0,
+    0,
+    0.8625
+   ]
+  },
+  {
+   "slug": "multimeter-with-tilt-stand",
+   "title": "Multimeter with tilt stand",
+   "group": "tools_and_workshop",
+   "category": "Digital multimeter with tilt stand and rotary selector",
+   "prompt": "A handheld digital multimeter with a rubberized outer bumper, a large central rotary selector, a folding rear tilt stand, and four rectangular function buttons under the display. The selector dial rotates continuously about its center axis, the rear stand rotates outward on a lower horizontal revolute hinge, and each visible front-panel button is a separate small prismatic push button. Handheld electrician-tool scale.",
+   "record": "rec_digital_multimeter_with_tilt_stand_and_rotary_selector_2ba3e131d0f84e2aa8cff3f96a2d40d1",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_digital_multimeter_with_tilt_stand_and_rotary_selector_2ba3e131d0f84e2aa8cff3f96a2d40d1",
+   "joints": [
+    {
+     "name": "selector_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_selector_spin"
+    },
+    {
+     "name": "stand_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      0.95
+     ],
+     "act": "a_stand_hinge"
+    },
+    {
+     "name": "button_press_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.0018
+     ],
+     "act": "a_button_press_0"
+    },
+    {
+     "name": "button_press_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.0018
+     ],
+     "act": "a_button_press_1"
+    },
+    {
+     "name": "button_press_2",
+     "type": "slide",
+     "range": [
+      0,
+      0.0018
+     ],
+     "act": "a_button_press_2"
+    },
+    {
+     "name": "button_press_3",
+     "type": "slide",
+     "range": [
+      0,
+      0.0018
+     ],
+     "act": "a_button_press_3"
+    }
+   ],
+   "bytes": 81887,
+   "extent": 0.1048,
+   "center": [
+    0,
+    0,
+    0.096
+   ]
+  },
+  {
+   "slug": "crank-pencil-sharpener",
+   "title": "Crank pencil sharpener",
+   "group": "tools_and_workshop",
+   "category": "Desktop pencil sharpener with hand crank and drawer",
+   "prompt": "A premium desktop pencil sharpener with a rectangular body, a large side crank, a front drawer with a finger pull, and a circular point-adjustment dial around the pencil port. The pencil opening reads as a real hollow channel leading into the cutter cavity and the dial stays separate from the front shell. The crank rotates continuously on its side hub, the front drawer slides prismatically along the body depth axis, and the point-adjustment dial rotates continuously around the pencil-entry axis. Premium desk-accessory scale.",
+   "record": "rec_desktop_pencil_sharpener_with_hand_crank_and_drawer_72d62640f651450abba6dda3c919bbfd",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_desktop_pencil_sharpener_with_hand_crank_and_drawer_72d62640f651450abba6dda3c919bbfd",
+   "joints": [
+    {
+     "name": "body_to_drawer",
+     "type": "slide",
+     "range": [
+      0,
+      0.052
+     ],
+     "act": "a_body_to_drawer"
+    },
+    {
+     "name": "body_to_crank",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_crank"
+    },
+    {
+     "name": "body_to_dial",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_dial"
+    }
+   ],
+   "bytes": 44426,
+   "extent": 0.1347,
+   "center": [
+    0,
+    0,
+    0.0485
+   ]
+  },
+  {
+   "slug": "paper-shredder",
+   "title": "Paper shredder",
+   "group": "tools_and_workshop",
+   "category": "Paper shredder with pullout bin",
+   "prompt": "A compact paper shredder with a boxy upper head, a translucent pullout bin, and a front panel carrying a rotary mode knob beside three distinct buttons. The bin moves prismatically along the body depth axis, the internal cutter shaft pair rotates continuously on matched horizontal axles, and the mode knob rotates continuously on the front panel. The three visible buttons articulate independently as small prismatic push controls, and a safety flap at the paper slot rotates on a narrow top hinge. Keep the bin thin-walled and hollow with believable internal volume for shredded paper. Home office scale.",
+   "record": "rec_paper_shredder_with_pullout_bin_257c3a6bda134b71a21b4f3fdebb6e88",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_paper_shredder_with_pullout_bin_257c3a6bda134b71a21b4f3fdebb6e88",
+   "joints": [
+    {
+     "name": "body_to_bin",
+     "type": "slide",
+     "range": [
+      0,
+      0.09
+     ],
+     "act": "a_body_to_bin"
+    },
+    {
+     "name": "body_to_cutter_front",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_cutter_front"
+    },
+    {
+     "name": "body_to_cutter_rear",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_cutter_rear"
+    },
+    {
+     "name": "body_to_flap",
+     "type": "hinge",
+     "range": [
+      0,
+      1.15
+     ],
+     "act": "a_body_to_flap"
+    },
+    {
+     "name": "body_to_mode_knob",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_mode_knob"
+    },
+    {
+     "name": "body_to_power_button",
+     "type": "slide",
+     "range": [
+      0,
+      0.0035
+     ],
+     "act": "a_body_to_power_button"
+    },
+    {
+     "name": "body_to_auto_button",
+     "type": "slide",
+     "range": [
+      0,
+      0.0035
+     ],
+     "act": "a_body_to_auto_button"
+    },
+    {
+     "name": "body_to_reverse_button",
+     "type": "slide",
+     "range": [
+      0,
+      0.0035
+     ],
+     "act": "a_body_to_reverse_button"
+    }
+   ],
+   "bytes": 83539,
+   "extent": 0.313,
+   "center": [
+    0,
+    0,
+    0.2275
+   ]
+  },
+  {
+   "slug": "clamp-meter",
+   "title": "Clamp meter",
+   "group": "tools_and_workshop",
+   "category": "Clamp meter with hinged jaw and rotary selector",
+   "prompt": "A heavy-duty power clamp meter with a wide circular jaw opening, a thick body shell, a rear kickstand, and a large selector knob, plus a non-contact-voltage button near the top shoulder and a range button beside the dial. the body reads as an industrial inspection instrument with a deeper head section, and the controls stay visible instead of reading as molded graphics. The jaw rotates on a hinge above the display, the selector knob rotates continuously on the front face, and the rear stand swings on a lower hinge, and the upper button and the range button both move independently as small push controls. Industrial meter scale.",
+   "record": "rec_clamp_meter_with_hinged_jaw_and_rotary_selector_0a51248ffdf64581ae824f48a1501ef3",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_clamp_meter_with_hinged_jaw_and_rotary_selector_0a51248ffdf64581ae824f48a1501ef3",
+   "joints": [
+    {
+     "name": "body_to_jaw",
+     "type": "hinge",
+     "range": [
+      0,
+      1.18
+     ],
+     "act": "a_body_to_jaw"
+    },
+    {
+     "name": "body_to_selector_knob",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_selector_knob"
+    },
+    {
+     "name": "body_to_ncv_button",
+     "type": "slide",
+     "range": [
+      0,
+      0.0012
+     ],
+     "act": "a_body_to_ncv_button"
+    },
+    {
+     "name": "body_to_range_button",
+     "type": "slide",
+     "range": [
+      0,
+      0.0012
+     ],
+     "act": "a_body_to_range_button"
+    },
+    {
+     "name": "body_to_stand",
+     "type": "hinge",
+     "range": [
+      0,
+      1.05
+     ],
+     "act": "a_body_to_stand"
+    }
+   ],
+   "bytes": 29664,
+   "extent": 0.1484,
+   "center": [
+    0,
+    0,
+    0.1355
+   ]
+  },
+  {
+   "slug": "rolling-toolbox",
+   "title": "Rolling toolbox",
+   "group": "tools_and_workshop",
+   "category": "Rolling toolbox with telescoping handle",
+   "prompt": "A tall rolling toolbox with a narrow upright body, two recessed transport wheels, and a telescoping pull handle hidden in a rear spine channel. The handle extends prismatically along the rear spine, a front panel door rotates outward on a vertical side hinge to reveal the main compartment, and the wheels rotate continuously on their axle joints. Compact mobile tool-storage scale.",
+   "record": "rec_rolling_toolbox_with_telescoping_handle_4d03191d2c76437f8bff47e8c3c3f6b1",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_rolling_toolbox_with_telescoping_handle_4d03191d2c76437f8bff47e8c3c3f6b1",
+   "joints": [
+    {
+     "name": "body_to_wheel_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_wheel_0"
+    },
+    {
+     "name": "body_to_wheel_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_wheel_1"
+    },
+    {
+     "name": "body_to_front_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_body_to_front_door"
+    },
+    {
+     "name": "body_to_pull_handle",
+     "type": "slide",
+     "range": [
+      0,
+      0.3
+     ],
+     "act": "a_body_to_pull_handle"
+    }
+   ],
+   "bytes": 152779,
+   "extent": 0.4777,
+   "center": [
+    0,
+    0,
+    0.4432
+   ]
+  },
+  {
+   "slug": "juicer-with-plunger",
+   "title": "Juicer with plunger",
+   "group": "household_appliances",
+   "category": "Centrifugal juicer with articulated components",
+   "prompt": "A stainless steel juicer with a broad motor base, a transparent hinged lid, and a cylindrical plunger that lifts vertically from the feed tube at the center of the lid. A selector dial and a small pulse button are mounted on the front of the housing, and a spinning grater basket is visible through the clear upper chamber. The plunger slides prismatically along the feed tube axis, the lid rotates on a rear hinge, the selector dial rotates on its front axis, the pulse button moves on a short prismatic plunger, and the grater basket rotates continuously on the vertical drive axis.",
+   "record": "rec_centrifugal_juicer_with_articulated_components_7c6f5b279ac5419095505f5d360a141d",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_centrifugal_juicer_with_articulated_components_7c6f5b279ac5419095505f5d360a141d",
+   "joints": [
+    {
+     "name": "lid_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_lid_hinge"
+    },
+    {
+     "name": "plunger_slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.11
+     ],
+     "act": "a_plunger_slide"
+    },
+    {
+     "name": "basket_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_basket_spin"
+    },
+    {
+     "name": "dial_rotation",
+     "type": "hinge",
+     "range": [
+      -2.35,
+      2.35
+     ],
+     "act": "a_dial_rotation"
+    },
+    {
+     "name": "pulse_press",
+     "type": "slide",
+     "range": [
+      0,
+      0.006
+     ],
+     "act": "a_pulse_press"
+    }
+   ],
+   "bytes": 171942,
+   "extent": 0.3541,
+   "center": [
+    0,
+    0,
+    0.2745
+   ]
+  },
+  {
+   "slug": "countertop-microwave",
+   "title": "Countertop microwave",
+   "group": "household_appliances",
+   "category": "Microwave oven",
+   "prompt": "A countertop microwave oven with a side-hinged front door and two rotary dials. A rectangular housing encloses the cavity and supports the door on one side, while a glass turntable sits on a support ring inside the chamber. The door rotates on a vertical revolute hinge axis, the two control dials rotate about front-to-back axes in the control panel, and the turntable rotates on a vertical axis inside the cavity.",
+   "record": "rec_microwave_oven_1eefd68eae054d378225ad626c3374ef",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_microwave_oven_1eefd68eae054d378225ad626c3374ef",
+   "joints": [
+    {
+     "name": "housing_to_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_housing_to_door"
+    },
+    {
+     "name": "panel_to_time_dial",
+     "type": "hinge",
+     "range": [
+      -2.35,
+      2.35
+     ],
+     "act": "a_panel_to_time_dial"
+    },
+    {
+     "name": "panel_to_power_dial",
+     "type": "hinge",
+     "range": [
+      -2.35,
+      2.35
+     ],
+     "act": "a_panel_to_power_dial"
+    },
+    {
+     "name": "ring_to_turntable",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_ring_to_turntable"
+    }
+   ],
+   "bytes": 189253,
+   "extent": 0.4059,
+   "center": [
+    0,
+    0,
+    0.16
+   ]
+  },
+  {
+   "slug": "tower-fan",
+   "title": "Tower fan",
+   "group": "household_appliances",
+   "category": "Tower fan with rotary controls",
+   "prompt": "A slim household tower fan with a narrow vertical body, a rounded base, and two knurled dials on the top cap, plus a carry handle integrated into the rear of the top cap. the front intake and outlet grille runs nearly the full height of the body, and the handle remains a real opening or supported bridge in the cap. The body oscillates left and right on a vertical joint at the base, the internal blower wheel spins continuously on the center axis, and the two dials rotate continuously. Home-appliance scale.",
+   "record": "rec_tower_fan_with_rotary_controls_9829351aafdb48bf84198895fefa69e6",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_tower_fan_with_rotary_controls_9829351aafdb48bf84198895fefa69e6",
+   "joints": [
+    {
+     "name": "base_to_body",
+     "type": "hinge",
+     "range": [
+      -0.78,
+      0.78
+     ],
+     "act": "a_base_to_body"
+    },
+    {
+     "name": "body_to_dial_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_dial_0"
+    },
+    {
+     "name": "body_to_dial_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_dial_1"
+    },
+    {
+     "name": "body_to_blower_wheel",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_blower_wheel"
+    }
+   ],
+   "bytes": 18405,
+   "extent": 0.4852,
+   "center": [
+    0,
+    0,
+    0.4588
+   ]
+  },
+  {
+   "slug": "compact-clothes-dryer",
+   "title": "Compact clothes dryer",
+   "group": "household_appliances",
+   "category": "Front-load dryer",
+   "prompt": "A compact stackable ventless condensation dryer with a slim rectangular body, a front door, and a removable lint filter panel. The front door opens on revolute hinges at the door's vertical edge. The lint filter slides prismatically out from the door opening rim. The drum rotates continuously inside.",
+   "record": "rec_frontload_dryer_2aa487e0070b4132bdce1eaab09647b0",
+   "revision": "rev_000001",
+   "author": "Zhaomou Song",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_frontload_dryer_2aa487e0070b4132bdce1eaab09647b0",
+   "joints": [
+    {
+     "name": "cabinet_to_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.65
+     ],
+     "act": "a_cabinet_to_door"
+    },
+    {
+     "name": "cabinet_to_lint_filter",
+     "type": "slide",
+     "range": [
+      0,
+      0.08
+     ],
+     "act": "a_cabinet_to_lint_filter"
+    },
+    {
+     "name": "cabinet_to_drum",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_cabinet_to_drum"
+    }
+   ],
+   "bytes": 113003,
+   "extent": 0.5993,
+   "center": [
+    0,
+    0,
+    0.425
+   ]
+  },
+  {
+   "slug": "twin-tub-washer",
+   "title": "Twin-tub washer",
+   "group": "household_appliances",
+   "category": "Front-load washing machine",
+   "prompt": "A twin-tub washing machine with a wide rectangular body divided into two compartments — a left wash drum on a continuous revolute axle and a right spin-dry drum on a separate continuous revolute axle — each with a separate porthole door on its own left-edge revolute hinges.",
+   "record": "rec_frontload_washing_machine_f25422568bc445c696a40d25832b4d07",
+   "revision": "rev_000001",
+   "author": "Zhaomou Song",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_frontload_washing_machine_f25422568bc445c696a40d25832b4d07",
+   "joints": [
+    {
+     "name": "body_to_wash_drum",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_wash_drum"
+    },
+    {
+     "name": "body_to_spin_drum",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_spin_drum"
+    },
+    {
+     "name": "body_to_wash_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.45
+     ],
+     "act": "a_body_to_wash_door"
+    },
+    {
+     "name": "body_to_spin_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.45
+     ],
+     "act": "a_body_to_spin_door"
+    }
+   ],
+   "bytes": 189721,
+   "extent": 0.651,
+   "center": [
+    0,
+    0,
+    0.42
+   ]
+  },
+  {
+   "slug": "retro-stand-mixer",
+   "title": "Retro stand mixer",
+   "group": "household_appliances",
+   "category": "Stand Mixer",
+   "prompt": "A rounded 1950s-inspired stand mixer with a curved base shell, a bright bowl on a low carriage, and a compact head carrying a balloon whisk. Use one canonical articulation set only: short prismatic bowl slide at the base front, rear horizontal revolute head tilt, continuous vertical whisk drive under the head, revolute speed control mounted on the base, and prismatic head-lock control mounted on the base.",
+   "record": "rec_stand_mixer_e87679fb832549fea06e97ed878f4300",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_stand_mixer_e87679fb832549fea06e97ed878f4300",
+   "joints": [
+    {
+     "name": "base_to_bowl_carriage",
+     "type": "slide",
+     "range": [
+      0,
+      0.07
+     ],
+     "act": "a_base_to_bowl_carriage"
+    },
+    {
+     "name": "base_to_head",
+     "type": "hinge",
+     "range": [
+      0,
+      1.0123
+     ],
+     "act": "a_base_to_head"
+    },
+    {
+     "name": "head_to_whisk",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_head_to_whisk"
+    },
+    {
+     "name": "base_to_speed_control",
+     "type": "hinge",
+     "range": [
+      -0.9,
+      0.9
+     ],
+     "act": "a_base_to_speed_control"
+    },
+    {
+     "name": "base_to_head_lock",
+     "type": "slide",
+     "range": [
+      0,
+      0.018
+     ],
+     "act": "a_base_to_head_lock"
+    }
+   ],
+   "bytes": 192544,
+   "extent": 0.3348,
+   "center": [
+    0,
+    0,
+    0.2218
+   ]
+  },
+  {
+   "slug": "sketch-box-easel",
+   "title": "Sketch-box easel",
+   "group": "furniture_and_storage",
+   "category": "Easel",
+   "prompt": "A French sketch-box easel with two front legs and a single rear leg forming an A-frame, plus a storage box panel below the canvas rest. The rear leg extends prismatically from the top apex for height. The front legs spread on a revolute hinge at the apex. The canvas tray slides prismatically on the front leg.",
+   "record": "rec_easel_df2ad7ec92e94cc4a2566526ad7162a1",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_easel_df2ad7ec92e94cc4a2566526ad7162a1",
+   "joints": [
+    {
+     "name": "front_spread",
+     "type": "hinge",
+     "range": [
+      -0.18,
+      0.38
+     ],
+     "act": "a_front_spread"
+    },
+    {
+     "name": "tray_slide",
+     "type": "slide",
+     "range": [
+      -0.18,
+      0.32
+     ],
+     "act": "a_tray_slide"
+    },
+    {
+     "name": "rear_extension",
+     "type": "slide",
+     "range": [
+      0,
+      0.28
+     ],
+     "act": "a_rear_extension"
+    }
+   ],
+   "bytes": 6992,
+   "extent": 0.9255,
+   "center": [
+    0,
+    0,
+    0.7162
+   ]
+  },
+  {
+   "slug": "two-tier-turntable-tray",
+   "title": "Two-tier turntable tray",
+   "group": "furniture_and_storage",
+   "category": "Lazy Susan",
+   "prompt": "A tabletop serving lazy Susan with an outer ring and an inner center platter on independent bearings. The larger lower disc supports the outer serving ring, while a smaller round center platter is mounted above on its own bearing. The outer ring rotates on one vertical revolute axis, and the center platter rotates independently on a second vertical axis.",
+   "record": "rec_lazy_susan_58dd9952bab54662b5e964ab70b82693",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_lazy_susan_58dd9952bab54662b5e964ab70b82693",
+   "joints": [
+    {
+     "name": "outer_bearing",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_outer_bearing"
+    },
+    {
+     "name": "center_bearing",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_center_bearing"
+    }
+   ],
+   "bytes": 180721,
+   "extent": 0.2828,
+   "center": [
+    0,
+    0,
+    0.0638
+   ]
+  },
+  {
+   "slug": "overbed-table",
+   "title": "Overbed table",
+   "group": "furniture_and_storage",
+   "category": "Overbed table",
+   "prompt": "A compact laptop-style overbed table with a narrow offset base, a slender telescoping column, a rectangular top, and a front retaining lip, plus a chart clip bar at the tray edge. the support head keeps the top centered over the column rather than cantilevering from a hidden arm, and the clip bar is carried by two short supports instead of being fused into the top surface. The column slides prismatically in its outer sleeve, the top tilts on a horizontal hinge at the support head, and the swivel casters rotate continuously on their wheel axles, and the clip bar rotates on a narrow hinge line along the tray rim. Small bedside workstation scale.",
+   "record": "rec_overbed_table_5f76668df014481492342e4a62d16a62",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_overbed_table_5f76668df014481492342e4a62d16a62",
+   "joints": [
+    {
+     "name": "base_to_inner_column",
+     "type": "slide",
+     "range": [
+      0,
+      0.2
+     ],
+     "act": "a_base_to_inner_column"
+    },
+    {
+     "name": "inner_column_to_tray",
+     "type": "hinge",
+     "range": [
+      0,
+      0.9076
+     ],
+     "act": "a_inner_column_to_tray"
+    },
+    {
+     "name": "tray_to_clip_bar",
+     "type": "hinge",
+     "range": [
+      0,
+      1.0123
+     ],
+     "act": "a_tray_to_clip_bar"
+    },
+    {
+     "name": "base_to_caster_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_base_to_caster_0"
+    },
+    {
+     "name": "base_to_caster_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_base_to_caster_1"
+    },
+    {
+     "name": "base_to_caster_2",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_base_to_caster_2"
+    },
+    {
+     "name": "base_to_caster_3",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_base_to_caster_3"
+    }
+   ],
+   "bytes": 9828,
+   "extent": 0.6299,
+   "center": [
+    0,
+    0,
+    0.4855
+   ]
+  },
+  {
+   "slug": "two-door-pantry-cabinet",
+   "title": "Two-door pantry cabinet",
+   "group": "furniture_and_storage",
+   "category": "Hinged-door cabinet",
+   "prompt": "A pantry cabinet with two tall framed doors and adjustable interior shelves. Each door is mounted to the cabinet sides on concealed hinges, and one meeting stile carries a compact rotary latch. The two doors rotate on separate vertical hinge axes at the cabinet sides, and the latch rotates on its own small pivot.",
+   "record": "rec_hingeddoor_cabinet_976b1a62a32e48b48ea77d7fcb17a6eb",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_hingeddoor_cabinet_976b1a62a32e48b48ea77d7fcb17a6eb",
+   "joints": [
+    {
+     "name": "cabinet_to_door_0",
+     "type": "hinge",
+     "range": [
+      0,
+      1.85
+     ],
+     "act": "a_cabinet_to_door_0"
+    },
+    {
+     "name": "door_0_to_latch",
+     "type": "hinge",
+     "range": [
+      0,
+      1.5708
+     ],
+     "act": "a_door_0_to_latch"
+    },
+    {
+     "name": "cabinet_to_door_1",
+     "type": "hinge",
+     "range": [
+      0,
+      1.85
+     ],
+     "act": "a_cabinet_to_door_1"
+    }
+   ],
+   "bytes": 20419,
+   "extent": 1.1709,
+   "center": [
+    0,
+    0,
+    1.025
+   ]
+  },
+  {
+   "slug": "camera-flash",
+   "title": "Camera flash",
+   "group": "electronics_and_optics",
+   "category": "Camera flash",
+   "prompt": "A hot-shoe flash with a boxy lamp head, a short articulated neck, and a rear control panel below the display, plus a side control strip with individual mode buttons. the head and neck stay visibly separate from the battery body, and the side buttons stay separate from the lamp head and neck geometry. The neck swivels on a vertical revolute joint above the body and the flash head tilts on a horizontal revolute joint at the top of the neck, and the side control buttons each depress independently as small prismatic controls. Mirrorless-camera accessory scale.",
+   "record": "rec_camera_flash_5ae8f5e444c24636ad4aa9e42b331fa3",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_camera_flash_5ae8f5e444c24636ad4aa9e42b331fa3",
+   "joints": [
+    {
+     "name": "body_to_neck",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_body_to_neck"
+    },
+    {
+     "name": "neck_to_head",
+     "type": "hinge",
+     "range": [
+      -0.1745,
+      1.6581
+     ],
+     "act": "a_neck_to_head"
+    },
+    {
+     "name": "body_to_mode_button_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.0025
+     ],
+     "act": "a_body_to_mode_button_0"
+    },
+    {
+     "name": "body_to_mode_button_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.0025
+     ],
+     "act": "a_body_to_mode_button_1"
+    },
+    {
+     "name": "body_to_mode_button_2",
+     "type": "slide",
+     "range": [
+      0,
+      0.0025
+     ],
+     "act": "a_body_to_mode_button_2"
+    },
+    {
+     "name": "body_to_mode_button_3",
+     "type": "slide",
+     "range": [
+      0,
+      0.0025
+     ],
+     "act": "a_body_to_mode_button_3"
+    }
+   ],
+   "bytes": 38115,
+   "extent": 0.0932,
+   "center": [
+    0,
+    0,
+    0.0775
+   ]
+  },
+  {
+   "slug": "camcorder-with-flip-out-screen",
+   "title": "Camcorder with flip-out screen",
+   "group": "electronics_and_optics",
+   "category": "Camcorder with flip-out screen",
+   "prompt": "A compact home-video camcorder with a tapered body, a front objective barrel, and a wide side display door. The display door rotates outward on a vertical hinge along the left body side, the eyepiece diopter wheel rotates on a small transverse shaft at the rear viewfinder, and the focus ring rotates continuously around the lens barrel. Consumer product scale with believable handheld proportions.",
+   "record": "rec_camcorder_with_flipout_screen_acb9eb4f13824629829be7540a8372e9",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_camcorder_with_flipout_screen_acb9eb4f13824629829be7540a8372e9",
+   "joints": [
+    {
+     "name": "display_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_display_hinge"
+    },
+    {
+     "name": "focus_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_focus_rotation"
+    },
+    {
+     "name": "diopter_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_diopter_rotation"
+    }
+   ],
+   "bytes": 91823,
+   "extent": 0.1457,
+   "center": [
+    0,
+    0,
+    0.0548
+   ]
+  },
+  {
+   "slug": "folding-headphones",
+   "title": "Folding headphones",
+   "group": "electronics_and_optics",
+   "category": "Over-ear headphones with folding earcups",
+   "prompt": "A travel over-ear headphone set with inward-folding earcups and slim telescoping headband arms. Each earcup hangs from a yoke at the end of a sliding headband arm, and a fold hinge sits above each yoke. Each earcup swivels within its yoke, each fold hinge rotates to tuck the cup inward, and the two headband arms slide prismatically in and out for size adjustment. Keep each sliding headband arm clipped inside its sleeve so the size adjusters extend without pulling free.",
+   "record": "rec_overear_headphones_with_folding_earcups_f5e1c285152947658fae734893cf3d58",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_overear_headphones_with_folding_earcups_f5e1c285152947658fae734893cf3d58",
+   "joints": [
+    {
+     "name": "left_arm_slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.028
+     ],
+     "act": "a_left_arm_slide"
+    },
+    {
+     "name": "left_fold_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_left_fold_hinge"
+    },
+    {
+     "name": "left_cup_swivel",
+     "type": "hinge",
+     "range": [
+      -0.55,
+      0.55
+     ],
+     "act": "a_left_cup_swivel"
+    },
+    {
+     "name": "right_arm_slide",
+     "type": "slide",
+     "range": [
+      0,
+      0.028
+     ],
+     "act": "a_right_arm_slide"
+    },
+    {
+     "name": "right_fold_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.25
+     ],
+     "act": "a_right_fold_hinge"
+    },
+    {
+     "name": "right_cup_swivel",
+     "type": "hinge",
+     "range": [
+      -0.55,
+      0.55
+     ],
+     "act": "a_right_cup_swivel"
+    }
+   ],
+   "bytes": 87412,
+   "extent": 0.1673,
+   "center": [
+    0,
+    0,
+    0.1374
+   ]
+  },
+  {
+   "slug": "printer-with-scanner-lid",
+   "title": "Printer with scanner lid",
+   "group": "electronics_and_optics",
+   "category": "All-in-one printer with scanner lid and paper tray",
+   "prompt": "A home-office all-in-one printer with a flatbed scanner on top, a front paper cassette, a fold-out output tray, and a small right-front control panel with a selector dial plus four buttons. The scanner lid rotates upward on a rear horizontal revolute hinge, the paper cassette slides prismatically out from the lower front body, the output tray flap rotates downward on a small front hinge, and the selector dial rotates continuously on the control panel. All four control buttons are separate small prismatic push buttons. Keep the scanner bay under the lid as a shallow hollow recess and the trays as thin shell or panel-like parts rather than solid slabs. Desktop office scale.",
+   "record": "rec_all_in_one_printer_with_scanner_lid_and_paper_tray_2fa487f194524ba7b35fc345b2252469",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_all_in_one_printer_with_scanner_lid_and_paper_tray_2fa487f194524ba7b35fc345b2252469",
+   "joints": [
+    {
+     "name": "body_to_scanner_lid",
+     "type": "hinge",
+     "range": [
+      0,
+      1.3
+     ],
+     "act": "a_body_to_scanner_lid"
+    },
+    {
+     "name": "body_to_paper_cassette",
+     "type": "slide",
+     "range": [
+      0,
+      0.16
+     ],
+     "act": "a_body_to_paper_cassette"
+    },
+    {
+     "name": "body_to_output_tray",
+     "type": "hinge",
+     "range": [
+      0,
+      1.2
+     ],
+     "act": "a_body_to_output_tray"
+    },
+    {
+     "name": "control_panel_to_selector_dial",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_control_panel_to_selector_dial"
+    },
+    {
+     "name": "control_panel_to_button_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_control_panel_to_button_0"
+    },
+    {
+     "name": "control_panel_to_button_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_control_panel_to_button_1"
+    },
+    {
+     "name": "control_panel_to_button_2",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_control_panel_to_button_2"
+    },
+    {
+     "name": "control_panel_to_button_3",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_control_panel_to_button_3"
+    }
+   ],
+   "bytes": 10627,
+   "extent": 0.3178,
+   "center": [
+    0,
+    0,
+    0.0975
+   ]
+  },
+  {
+   "slug": "skateboard",
+   "title": "Skateboard",
+   "group": "vehicles_and_mobility",
+   "category": "Skateboard",
+   "prompt": "A skateboard with standard trucks. A deck supports front and rear truck hangers, each holding one axle and two wheels. Joints: each wheel spins continuously about its axle, and each truck steers on a revolute kingpin axis. Place the wheels close to the body so the silhouette stays tight.",
+   "record": "rec_skateboard_040c2a68fd204e0198f3ed615cb4dd37",
+   "revision": "rev_000001",
+   "author": "shawlyu",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_skateboard_040c2a68fd204e0198f3ed615cb4dd37",
+   "joints": [
+    {
+     "name": "deck_to_front_truck",
+     "type": "hinge",
+     "range": [
+      -0.38,
+      0.38
+     ],
+     "act": "a_deck_to_front_truck"
+    },
+    {
+     "name": "front_left_wheel_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_front_left_wheel_spin"
+    },
+    {
+     "name": "front_right_wheel_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_front_right_wheel_spin"
+    },
+    {
+     "name": "deck_to_rear_truck",
+     "type": "hinge",
+     "range": [
+      -0.38,
+      0.38
+     ],
+     "act": "a_deck_to_rear_truck"
+    },
+    {
+     "name": "rear_left_wheel_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_rear_left_wheel_spin"
+    },
+    {
+     "name": "rear_right_wheel_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_rear_right_wheel_spin"
+    }
+   ],
+   "bytes": 83346,
+   "extent": 0.4435,
+   "center": [
+    0,
+    0,
+    0.0724
+   ]
+  },
+  {
+   "slug": "bicycle-crankset",
+   "title": "Bicycle crankset",
+   "group": "vehicles_and_mobility",
+   "category": "Bicycle crankset and pedal assembly",
+   "prompt": "A single-speed flat-bar urban crankset with a round bottom-bracket shell, two crank arms, a single chainring, and two platform pedals. The crankset spindle and both arms rotate continuously. Each pedal rotates continuously about its axle.",
+   "record": "rec_bicycle_crankset_and_pedal_assembly_9304867f712844ec9eb912f655084898",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_bicycle_crankset_and_pedal_assembly_9304867f712844ec9eb912f655084898",
+   "joints": [
+    {
+     "name": "shell_to_crank",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_shell_to_crank"
+    },
+    {
+     "name": "crank_to_pedal_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_crank_to_pedal_0"
+    },
+    {
+     "name": "crank_to_pedal_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_crank_to_pedal_1"
+    }
+   ],
+   "bytes": 86083,
+   "extent": 0.251,
+   "center": [
+    0,
+    0,
+    0.189
+   ]
+  },
+  {
+   "slug": "utility-helicopter",
+   "title": "Utility helicopter",
+   "group": "vehicles_and_mobility",
+   "category": "Single-rotor helicopter",
+   "prompt": "A fire utility helicopter with a robust fuselage, skid landing gear, a five-blade main rotor, and a tail boom carrying a tail rotor near the tip. The engine bay has one service door on each side behind the mast, and the cabin has a crew access door on one side. The main rotor rotates continuously about the vertical mast axis, the tail rotor rotates continuously about the transverse tail axis, the two service doors rotate on side hinges, and the crew door rotates on a vertical side hinge.",
+   "record": "rec_single_rotor_helicopter_39863ea3a843412f8349168b699859ce",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_single_rotor_helicopter_39863ea3a843412f8349168b699859ce",
+   "joints": [
+    {
+     "name": "rotor_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_rotor_spin"
+    },
+    {
+     "name": "tail_rotor_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_tail_rotor_spin"
+    },
+    {
+     "name": "right_service_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      2.15
+     ],
+     "act": "a_right_service_hinge"
+    },
+    {
+     "name": "left_service_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      2.15
+     ],
+     "act": "a_left_service_hinge"
+    },
+    {
+     "name": "crew_door_hinge",
+     "type": "hinge",
+     "range": [
+      0,
+      1.45
+     ],
+     "act": "a_crew_door_hinge"
+    }
+   ],
+   "bytes": 188514,
+   "extent": 6.4805,
+   "center": [
+    0,
+    0,
+    1.4485
+   ]
+  },
+  {
+   "slug": "stair-climbing-hand-truck",
+   "title": "Stair-climbing hand truck",
+   "group": "vehicles_and_mobility",
+   "category": "Hand truck dolly",
+   "prompt": "A stair-climbing hand truck with tri-wheel clusters on both sides. The rigid frame carries one three-wheel bogie at each side near the base, and a narrow toe plate projects from the front edge. Each small wheel spins on its axle, and each three-wheel bogie rotates about its central hub relative to the frame.",
+   "record": "rec_hand_truck_dolly_8406519e6f144bdeb2105a14bf92ad5c",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_hand_truck_dolly_8406519e6f144bdeb2105a14bf92ad5c",
+   "joints": [
+    {
+     "name": "frame_to_bogie_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_bogie_0"
+    },
+    {
+     "name": "bogie_0_to_wheel_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_0_to_wheel_0"
+    },
+    {
+     "name": "bogie_0_to_wheel_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_0_to_wheel_1"
+    },
+    {
+     "name": "bogie_0_to_wheel_2",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_0_to_wheel_2"
+    },
+    {
+     "name": "frame_to_bogie_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_bogie_1"
+    },
+    {
+     "name": "bogie_1_to_wheel_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_1_to_wheel_0"
+    },
+    {
+     "name": "bogie_1_to_wheel_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_1_to_wheel_1"
+    },
+    {
+     "name": "bogie_1_to_wheel_2",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_bogie_1_to_wheel_2"
+    }
+   ],
+   "bytes": 187891,
+   "extent": 0.7533,
+   "center": [
+    0,
+    0,
+    0.6454
+   ]
+  },
+  {
+   "slug": "farm-swing-gate",
+   "title": "Farm swing gate",
+   "group": "doors_gates_and_access",
+   "category": "Barrier gate",
+   "prompt": "A farm swing gate on a pintle-post hinge with a wide rectangular timber-frame panel. The gate panel revolves on two revolute joints vertically aligned on a round timber post.",
+   "record": "rec_barrier_gate_6914569f72e1432d9bbe3d43ca86c6f0",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_barrier_gate_6914569f72e1432d9bbe3d43ca86c6f0",
+   "joints": [
+    {
+     "name": "lower_pintle",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": "a_lower_pintle"
+    },
+    {
+     "name": "upper_pintle",
+     "type": "hinge",
+     "range": [
+      0,
+      1.55
+     ],
+     "act": null,
+     "mimic": "lower_pintle"
+    }
+   ],
+   "bytes": 37213,
+   "extent": 1.979,
+   "center": [
+    0,
+    0,
+    0.8675
+   ]
+  },
+  {
+   "slug": "wall-safe",
+   "title": "Wall safe",
+   "group": "doors_gates_and_access",
+   "category": "Wall Safe With Hinged Door And Dial",
+   "prompt": "A recessed home wall safe with a square body, a thick right-hinged door, a round combination dial, and a short three-spoke handle below it, plus a small key-override cover beside the dial. The deep door slab stays visibly separate from the frame ring and the key cover reads as a real hinged flap on the door face. The safe door rotates on a vertical hinge at the frame edge, the combination dial rotates continuously about its center shaft, the handle rotates on its hub, and the key-override cover rotates on a small hinge. Wall-safe scale.",
+   "record": "rec_wall_safe_with_hinged_door_and_dial_3e77e640b3264c499a1b3d72c33be67d",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_wall_safe_with_hinged_door_and_dial_3e77e640b3264c499a1b3d72c33be67d",
+   "joints": [
+    {
+     "name": "body_to_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_body_to_door"
+    },
+    {
+     "name": "door_to_dial",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_door_to_dial"
+    },
+    {
+     "name": "door_to_handle",
+     "type": "hinge",
+     "range": [
+      -1.57,
+      1.57
+     ],
+     "act": "a_door_to_handle"
+    },
+    {
+     "name": "door_to_key_cover",
+     "type": "hinge",
+     "range": [
+      0,
+      1.75
+     ],
+     "act": "a_door_to_key_cover"
+    }
+   ],
+   "bytes": 9689,
+   "extent": 0.5121,
+   "center": [
+    0,
+    0,
+    0.37
+   ]
+  },
+  {
+   "slug": "rising-bollard",
+   "title": "Rising bollard",
+   "group": "doors_gates_and_access",
+   "category": "Retractable bollard",
+   "prompt": "A service-lane bollard with a cylindrical rising post, a flat annular collar at grade, and a narrow access flap integrated into the collar. The post translates prismatically along the vertical centerline, the access flap rotates upward on a small hinge, and a keyed top cap rotates on a revolute joint at the post crown. Clean urban-infrastructure scale.",
+   "record": "rec_retractable_bollard_6767b692a3f241d09a8673364b27bb4f",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_retractable_bollard_6767b692a3f241d09a8673364b27bb4f",
+   "joints": [
+    {
+     "name": "collar_to_post",
+     "type": "slide",
+     "range": [
+      0,
+      0.2
+     ],
+     "act": "a_collar_to_post"
+    },
+    {
+     "name": "post_to_top_cap",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_post_to_top_cap"
+    },
+    {
+     "name": "collar_to_flap",
+     "type": "hinge",
+     "range": [
+      0,
+      1.2
+     ],
+     "act": "a_collar_to_flap"
+    }
+   ],
+   "bytes": 62234,
+   "extent": 0.5203,
+   "center": [
+    0,
+    0,
+    0.511
+   ]
+  },
+  {
+   "slug": "a-frame-step-ladder",
+   "title": "A-frame step ladder",
+   "group": "buildings_and_infrastructure",
+   "category": "Simple A-frame step ladder",
+   "prompt": "Design a retrofit/legacy-inspired Simple aframe step ladder that blends old-school construction cues with modern reliability. Keep the core as an A-frame ladder with paired legs, treads, and spread-limit braces; include service hatches, bolted adapters, and pragmatic reinforcements where components meet. Spread braces and leg pivots should define stable open/closed states. The final model must be one connected mechanism where every element is structurally supported. No floating parts.",
+   "record": "rec_simple_aframe_step_ladder_0ccc2f16dacb4d70bc19939a2140441e",
+   "revision": "rev_000001",
+   "author": "shawlyu",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_simple_aframe_step_ladder_0ccc2f16dacb4d70bc19939a2140441e",
+   "joints": [
+    {
+     "name": "rear_hinge",
+     "type": "hinge",
+     "range": [
+      -0.7,
+      0.1
+     ],
+     "act": "a_rear_hinge"
+    },
+    {
+     "name": "left_rear_brace_hinge",
+     "type": "hinge",
+     "range": [
+      -0.15,
+      1.25
+     ],
+     "act": "a_left_rear_brace_hinge"
+    },
+    {
+     "name": "right_rear_brace_hinge",
+     "type": "hinge",
+     "range": [
+      -0.15,
+      1.25
+     ],
+     "act": "a_right_rear_brace_hinge"
+    },
+    {
+     "name": "left_front_brace_hinge",
+     "type": "hinge",
+     "range": [
+      -1.75,
+      0.15
+     ],
+     "act": "a_left_front_brace_hinge"
+    },
+    {
+     "name": "right_front_brace_hinge",
+     "type": "hinge",
+     "range": [
+      -1.75,
+      0.15
+     ],
+     "act": "a_right_front_brace_hinge"
+    }
+   ],
+   "bytes": 12876,
+   "extent": 0.8143,
+   "center": [
+    0,
+    0,
+    0.6234
+   ]
+  },
+  {
+   "slug": "dock-leveler",
+   "title": "Dock leveler",
+   "group": "buildings_and_infrastructure",
+   "category": "Dock loading ramp",
+   "prompt": "An edge-of-dock lip plate leveler with a flat rectangular deck and a pivoting lip extension plate at the front edge. The lip plate pivots on a revolute hinge at the front edge of the deck to bridge the gap to the truck bed. The deck itself pivots on a revolute hinge at the dock edge.",
+   "record": "rec_dock_loading_ramp_37614f47a0e04dda88eb15c4513c418e",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_dock_loading_ramp_37614f47a0e04dda88eb15c4513c418e",
+   "joints": [
+    {
+     "name": "dock_to_deck",
+     "type": "hinge",
+     "range": [
+      -0.08,
+      0.45
+     ],
+     "act": "a_dock_to_deck"
+    },
+    {
+     "name": "deck_to_lip",
+     "type": "hinge",
+     "range": [
+      -1.05,
+      0.35
+     ],
+     "act": "a_deck_to_lip"
+    }
+   ],
+   "bytes": 6966,
+   "extent": 1.5523,
+   "center": [
+    0,
+    0,
+    0.209
+   ]
+  },
+  {
+   "slug": "clock-tower",
+   "title": "Clock tower",
+   "group": "buildings_and_infrastructure",
+   "category": "Clock tower with rotating hour and minute hands",
+   "prompt": "A Gothic stone bell and clock tower with a square masonry shaft and four clock faces on the four sides. Each clock face has a minute hand rotating continuously about the face center axis and an hour hand rotating continuously on a separate coaxial joint.",
+   "record": "rec_clock_tower_with_rotating_hour_and_minute_hands_02c304ccc35d4f17b5aee6d5ba5e07a6",
+   "revision": "rev_000001",
+   "author": "Zhaomou Song",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_clock_tower_with_rotating_hour_and_minute_hands_02c304ccc35d4f17b5aee6d5ba5e07a6",
+   "joints": [
+    {
+     "name": "north_hour_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_north_hour_rotation"
+    },
+    {
+     "name": "north_minute_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_north_minute_rotation"
+    },
+    {
+     "name": "east_hour_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_east_hour_rotation"
+    },
+    {
+     "name": "east_minute_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_east_minute_rotation"
+    },
+    {
+     "name": "south_hour_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_south_hour_rotation"
+    },
+    {
+     "name": "south_minute_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_south_minute_rotation"
+    },
+    {
+     "name": "west_hour_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_west_hour_rotation"
+    },
+    {
+     "name": "west_minute_rotation",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_west_minute_rotation"
+    }
+   ],
+   "bytes": 141957,
+   "extent": 21.0257,
+   "center": [
+    0,
+    0,
+    20.4
+   ]
+  },
+  {
+   "slug": "exercise-bike",
+   "title": "Exercise bike",
+   "group": "outdoor_and_recreation",
+   "category": "Stationary exercise bike",
+   "prompt": "A realistic, highly detailed stationary exercise bike with a sturdy base, flywheel housing, crank assembly, adjustable seat, and handlebar structure. The pedals, crank, flywheel, and standard adjustment points articulate naturally, and the machine should feel like a premium piece of real fitness equipment.",
+   "record": "rec_stationary_exercise_bike_4e344677af4347e78b5da55907b34be5",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_stationary_exercise_bike_4e344677af4347e78b5da55907b34be5",
+   "joints": [
+    {
+     "name": "frame_to_crank",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_crank"
+    },
+    {
+     "name": "crank_to_right_pedal",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_crank_to_right_pedal"
+    },
+    {
+     "name": "crank_to_left_pedal",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_crank_to_left_pedal"
+    },
+    {
+     "name": "frame_to_flywheel",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": null,
+     "mimic": "frame_to_crank"
+    },
+    {
+     "name": "frame_to_seat_post",
+     "type": "slide",
+     "range": [
+      0,
+      0.17
+     ],
+     "act": "a_frame_to_seat_post"
+    },
+    {
+     "name": "seat_post_to_saddle",
+     "type": "slide",
+     "range": [
+      -0.055,
+      0.07
+     ],
+     "act": "a_seat_post_to_saddle"
+    },
+    {
+     "name": "frame_to_handlebar_post",
+     "type": "slide",
+     "range": [
+      0,
+      0.13
+     ],
+     "act": "a_frame_to_handlebar_post"
+    },
+    {
+     "name": "frame_to_seat_knob",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_seat_knob"
+    },
+    {
+     "name": "frame_to_handlebar_knob",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_handlebar_knob"
+    },
+    {
+     "name": "frame_to_resistance_knob",
+     "type": "hinge",
+     "range": [
+      -2.4,
+      2.4
+     ],
+     "act": "a_frame_to_resistance_knob"
+    }
+   ],
+   "bytes": 165275,
+   "extent": 1.1507,
+   "center": [
+    0,
+    0,
+    0.7145
+   ]
+  },
+  {
+   "slug": "folding-weight-bench",
+   "title": "Folding weight bench",
+   "group": "outdoor_and_recreation",
+   "category": "Adjustable weight bench with hinged backrest",
+   "prompt": "A folding adjustable weight bench with a low tubular frame, a split backrest and seat pad, a rear support link, and front transport wheels, plus a foot-roller assembly at the front end. the pads sit on separate support brackets over a compact home-gym frame, and the roller pair is mounted on a rigid front yoke. The backrest pivots on a transverse hinge relative to the center frame, the seat pad pivots on its own hinge ahead of the backrest, the rear support link rotates on a lower frame pivot, and the front wheels spin continuously on their axle, and the two front rollers spin continuously on their shared support axle. Compact home-gym scale.",
+   "record": "rec_adjustable_weight_bench_with_hinged_backrest_ac226be3f7e643cea38ac6e89be5fb8a",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_adjustable_weight_bench_with_hinged_backrest_ac226be3f7e643cea38ac6e89be5fb8a",
+   "joints": [
+    {
+     "name": "frame_to_transport_wheel_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_transport_wheel_0"
+    },
+    {
+     "name": "frame_to_transport_wheel_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_transport_wheel_1"
+    },
+    {
+     "name": "frame_to_front_roller_0",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_front_roller_0"
+    },
+    {
+     "name": "frame_to_front_roller_1",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_frame_to_front_roller_1"
+    },
+    {
+     "name": "frame_to_backrest",
+     "type": "hinge",
+     "range": [
+      0,
+      1.1
+     ],
+     "act": "a_frame_to_backrest"
+    },
+    {
+     "name": "frame_to_seat",
+     "type": "hinge",
+     "range": [
+      0,
+      0.38
+     ],
+     "act": "a_frame_to_seat"
+    },
+    {
+     "name": "frame_to_rear_link",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      0.85
+     ],
+     "act": "a_frame_to_rear_link"
+    }
+   ],
+   "bytes": 160077,
+   "extent": 0.9195,
+   "center": [
+    0,
+    0,
+    0.2525
+   ]
+  },
+  {
+   "slug": "wind-turbine",
+   "title": "Wind turbine",
+   "group": "outdoor_and_recreation",
+   "category": "Wind turbine",
+   "prompt": "A horizontal-axis wind turbine. A tower supports a nacelle and a front hub with multiple blades. Joints: the rotor spins continuously about the main shaft axis, and the nacelle yaws about the vertical tower axis. Use a low wide support with the rotating mass kept near the ground or mounting plane.",
+   "record": "rec_wind_turbine_8fe0a625129e4da088c8f10e241ebd13",
+   "revision": "rev_000001",
+   "author": "RuiningLi",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_wind_turbine_8fe0a625129e4da088c8f10e241ebd13",
+   "joints": [
+    {
+     "name": "tower_to_nacelle",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_tower_to_nacelle"
+    },
+    {
+     "name": "nacelle_to_rotor",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_nacelle_to_rotor"
+    }
+   ],
+   "bytes": 70848,
+   "extent": 0.6882,
+   "center": [
+    0,
+    0,
+    0.3246
+   ]
+  },
+  {
+   "slug": "desk-globe",
+   "title": "Desk globe",
+   "group": "outdoor_and_recreation",
+   "category": "Globe",
+   "prompt": "An antique desk globe with a tilted meridian and a four-foot pedestal base. The sphere is carried between polar pivots inside the meridian, and the meridian rises from a short central post above the base. The globe rotates continuously about its polar axis, and the meridian tilts on a horizontal revolute axis through the side supports.",
+   "record": "rec_globe_3dfdcdb0007d48f59136d9212f155f76",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_globe_3dfdcdb0007d48f59136d9212f155f76",
+   "joints": [
+    {
+     "name": "meridian_tilt",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      0.45
+     ],
+     "act": "a_meridian_tilt"
+    },
+    {
+     "name": "globe_spin",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_globe_spin"
+    }
+   ],
+   "bytes": 188614,
+   "extent": 0.3854,
+   "center": [
+    0,
+    0,
+    0.315
+   ]
+  },
+  {
+   "slug": "cocktail-table-arcade-cabinet",
+   "title": "Cocktail-table arcade cabinet",
+   "group": "commercial_coinop_and_vending",
+   "category": "Arcade Machine",
+   "prompt": "A cocktail-table arcade machine with a low rectangular body, a glass top around a recessed screen, and control panels at the two long sides. A hinged coin box door rotates downward on a front horizontal revolute hinge under one side rail, and a selector knob on one player panel rotates continuously about its vertical shaft.",
+   "record": "rec_arcade_machine_b1e034f7e0434758aa30cbdb8951c32e",
+   "revision": "rev_000001",
+   "author": "mattzh72",
+   "url": "https://github.com/mattzh72/articraft-data/tree/main/records/rec_arcade_machine_b1e034f7e0434758aa30cbdb8951c32e",
+   "joints": [
+    {
+     "name": "cabinet_to_player_one_joystick",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      0.35
+     ],
+     "act": "a_cabinet_to_player_one_joystick"
+    },
+    {
+     "name": "cabinet_to_player_two_joystick",
+     "type": "hinge",
+     "range": [
+      -0.35,
+      0.35
+     ],
+     "act": "a_cabinet_to_player_two_joystick"
+    },
+    {
+     "name": "cabinet_to_player_one_button_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_one_button_0"
+    },
+    {
+     "name": "cabinet_to_player_one_button_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_one_button_1"
+    },
+    {
+     "name": "cabinet_to_player_one_button_2",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_one_button_2"
+    },
+    {
+     "name": "cabinet_to_player_two_button_0",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_two_button_0"
+    },
+    {
+     "name": "cabinet_to_player_two_button_1",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_two_button_1"
+    },
+    {
+     "name": "cabinet_to_player_two_button_2",
+     "type": "slide",
+     "range": [
+      0,
+      0.003
+     ],
+     "act": "a_cabinet_to_player_two_button_2"
+    },
+    {
+     "name": "cabinet_to_coin_door",
+     "type": "hinge",
+     "range": [
+      0,
+      1.45
+     ],
+     "act": "a_cabinet_to_coin_door"
+    },
+    {
+     "name": "cabinet_to_selector_knob",
+     "type": "hinge",
+     "range": [
+      -3.1416,
+      3.1416
+     ],
+     "act": "a_cabinet_to_selector_knob"
+    }
+   ],
+   "bytes": 11611,
+   "extent": 0.6562,
+   "center": [
+    0,
+    0,
+    0.356
+   ]
+  }
+ ]
+}

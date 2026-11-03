@@ -1,0 +1,36 @@
+<mujoco model="rec_xyz_cartesian_stage_a186865081b54986a58c785b0970c07b">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="stage_base" file="stage_base.stl"/>
+    <mesh name="stage_x_carriage" file="stage_x_carriage.stl"/>
+    <mesh name="stage_y_carriage" file="stage_y_carriage.stl"/>
+    <mesh name="stage_z_slide" file="stage_z_slide.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.003 0">
+      <inertial pos="0 0 0.014729" mass="0.913413" fullinertia="3.010837e-3 1.671640e-2 1.955080e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="stage_base" pos="0 0 0" rgba="0.2 0.22 0.24 1" contype="1" conaffinity="2"/>
+      <body name="x_carriage" pos="0 0 0.04">
+        <inertial pos="0 0 0.028053" mass="0.412883" fullinertia="1.239781e-3 7.906852e-4 1.831588e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="x_axis" type="slide" axis="1 0 0" range="-0.12 0.12" damping="19.0621"/>
+        <geom type="mesh" mesh="stage_x_carriage" pos="0 0 0" rgba="0.52 0.55 0.58 1" contype="1" conaffinity="2"/>
+        <body name="y_carriage" pos="0 0 0.062">
+          <inertial pos="0 0.000976 0.105701" mass="0.397162" fullinertia="2.437568e-3 2.601161e-3 4.501091e-4 4.768493e-21 3.181528e-20 -1.088077e-5"/>
+          <joint name="y_axis" type="slide" axis="0 1 0" range="-0.022 0.022" damping="10.80444"/>
+          <geom type="mesh" mesh="stage_y_carriage" pos="0 0 0" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+          <body name="z_slide" pos="0 0.026 0.052">
+            <inertial pos="0 0.037718 0.040722" mass="0.14306" fullinertia="1.455423e-4 1.868326e-4 1.784110e-4 9.772565e-11 5.284763e-11 -1.110523e-5"/>
+            <joint name="z_axis" type="slide" axis="0 0 1" range="0 0.08" damping="35.085465" armature="0.73407663"/>
+            <geom type="mesh" mesh="stage_z_slide" pos="0 0 0" rgba="0.55 0.63 0.72 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_x_axis" joint="x_axis" kp="95.3105" ctrlrange="-0.12 0.12"/>
+    <position name="a_y_axis" joint="y_axis" kp="54.0222" ctrlrange="-0.022 0.022"/>
+    <position name="a_z_axis" joint="z_axis" kp="350.85465" ctrlrange="0 0.08"/>
+  </actuator>
+</mujoco>

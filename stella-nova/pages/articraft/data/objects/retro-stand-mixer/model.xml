@@ -1,0 +1,52 @@
+<mujoco model="rec_stand_mixer_e87679fb832549fea06e97ed878f4300">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="base_shell" file="base_shell.stl"/>
+    <mesh name="bowl_carriage_frame" file="bowl_carriage_frame.stl"/>
+    <mesh name="mixer_bowl_shell" file="mixer_bowl_shell.stl"/>
+    <mesh name="head_shell" file="head_shell.stl"/>
+    <mesh name="balloon_whisk" file="balloon_whisk.stl"/>
+    <mesh name="speed_dial" file="speed_dial.stl"/>
+    <mesh name="head_lock_slider" file="head_lock_slider.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.072749 -0.008007 0">
+      <inertial pos="-0.035 0 0.165" mass="10" fullinertia="1.348330e-1 1.560830e-1 1.094170e-1 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="base_shell" pos="0 0 0" rgba="0.94 0.9 0.82 1" contype="1" conaffinity="2"/>
+      <body name="bowl_carriage" pos="0.21 0 0.028">
+        <inertial pos="0 0 0.085" mass="1.5" fullinertia="8.571880e-3 8.571880e-3 9.918750e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="base_to_bowl_carriage" type="slide" axis="1 0 0" range="0 0.07" damping="30"/>
+        <geom type="mesh" mesh="bowl_carriage_frame" pos="0 0 0" rgba="0.82 0.84 0.87 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="mixer_bowl_shell" pos="0 0 0" rgba="0.2 0.77 0.79 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="head" pos="-0.086 0 0.325">
+        <inertial pos="0.165 0 0.04" mass="4.8" fullinertia="2.048000e-2 5.648000e-2 5.648000e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="base_to_head" type="hinge" axis="0 -1 0" range="0 1.01229" damping="29.17167" armature="0.49675208"/>
+        <geom type="mesh" mesh="head_shell" pos="0 0 0" rgba="0.94 0.9 0.82 1" contype="1" conaffinity="2"/>
+        <body name="whisk" pos="0.286 0 -0.083">
+          <inertial pos="0 0 -0.07" mass="0.35" fullinertia="8.779170e-4 8.779170e-4 3.543750e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="head_to_whisk" type="hinge" axis="0 0 1" damping="0.007087"/>
+          <geom type="mesh" mesh="balloon_whisk" pos="0 0 0" rgba="0.82 0.84 0.87 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="speed_control" pos="-0.05 0.112 0.18">
+        <inertial pos="0 0.009 0" mass="0.06" fullinertia="9.620000e-6 1.600000e-5 9.620000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="base_to_speed_control" type="hinge" axis="0 1 0" range="-0.9 0.9" damping="0.00032"/>
+        <geom type="mesh" mesh="speed_dial" pos="0 0 0" rgba="0.12 0.12 0.13 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="head_lock" pos="-0.115 0.089981 0.116">
+        <inertial pos="0.016 0.008 0" mass="0.04" fullinertia="1.933330e-6 4.493330e-6 4.266670e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="base_to_head_lock" type="slide" axis="1 0 0" range="0 0.018" damping="0.8"/>
+        <geom type="mesh" mesh="head_lock_slider" pos="0 0 0" rgba="0.12 0.12 0.13 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_bowl_carriage" joint="base_to_bowl_carriage" kp="150" ctrlrange="0 0.07"/>
+    <position name="a_base_to_head" joint="base_to_head" kp="291.7167" ctrlrange="0 1.01229"/>
+    <position name="a_head_to_whisk" joint="head_to_whisk" kp="0.035437" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_base_to_speed_control" joint="base_to_speed_control" kp="0.0016" ctrlrange="-0.9 0.9"/>
+    <position name="a_base_to_head_lock" joint="base_to_head_lock" kp="4" ctrlrange="0 0.018"/>
+  </actuator>
+</mujoco>

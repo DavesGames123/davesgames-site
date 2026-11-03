@@ -1,0 +1,68 @@
+<mujoco model="rec_bicycle_crankset_and_pedal_assembly_9304867f712844ec9eb912f655084898">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="bottom_shell_body" file="bottom_shell_body.stl"/>
+    <mesh name="bearing_cup_0" file="bearing_cup_0.stl"/>
+    <mesh name="bearing_cup_1" file="bearing_cup_1.stl"/>
+    <mesh name="toothed_chainring" file="toothed_chainring.stl"/>
+    <mesh name="drive_arm_mesh" file="drive_arm_mesh.stl"/>
+    <mesh name="non_drive_arm_mesh" file="non_drive_arm_mesh.stl"/>
+    <mesh name="pedal_0_platform" file="pedal_0_platform.stl"/>
+    <mesh name="pedal_1_platform" file="pedal_1_platform.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.000005 0.189">
+      <inertial pos="0 -0.000001 0" mass="0.1198" fullinertia="1.205831e-4 5.269188e-5 1.205839e-4 -7.582255e-10 -3.706688e-10 5.591606e-10"/>
+      <geom type="mesh" mesh="bottom_shell_body" pos="0 0 0" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="bearing_cup_0" pos="0 -0.041 0" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="bearing_cup_1" pos="0 0.041 0" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+      <body name="crank" pos="0 0 0">
+        <inertial pos="0 0.022033 0" mass="0.144054" fullinertia="9.672036e-4 8.221126e-4 4.288248e-4 -2.273273e-10 2.931588e-10 2.287658e-4"/>
+        <joint name="shell_to_crank" type="hinge" axis="0 1 0" damping="0.085765"/>
+        <geom type="cylinder" size="0.01 0.084" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="toothed_chainring" pos="0 0.044 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.037 0.0025 0.006" pos="0.043749 0.046 0.014215" quat="0.98768836 0 -0.15643433 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.037 0.0025 0.006" pos="0 0.046 0.046" quat="0.70710548 0 -0.70710808 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.037 0.0025 0.006" pos="-0.043749 0.046 0.014215" quat="-0.15643614 0 0.98768808 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.037 0.0025 0.006" pos="-0.027038 0.046 -0.037215" quat="0.4539903 0 0.89100663 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.037 0.0025 0.006" pos="0.027038 0.046 -0.037215" quat="0.89100709 0 0.45398939 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.026 0.007" pos="0 0.056 0" quat="0.70710548 0.70710808 0 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.023 0.007" pos="0 -0.056 0" quat="0.70710548 0.70710808 0 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="drive_arm_mesh" pos="0 0.056 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="non_drive_arm_mesh" pos="0 -0.056 0" quat="0.00000133 0 1 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.019 0.007" pos="0 0.056 -0.17" quat="0.70710548 0.70710808 0 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.019 0.007" pos="0 -0.056 0.17" quat="0.70710548 0.70710808 0 0" rgba="0.01 0.012 0.014 1" contype="1" conaffinity="2"/>
+        <body name="pedal_0" pos="0 0.066 -0.17">
+          <inertial pos="0.000022 0.068482 -0.000002" mass="0.058334" fullinertia="2.461641e-5 4.753827e-5 6.891110e-5 2.911550e-10 -6.513131e-10 1.492682e-9"/>
+          <joint name="crank_to_pedal_0" type="hinge" axis="0 1 0" damping="0.000951"/>
+          <geom type="cylinder" size="0.0055 0.028" pos="0 0.024 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="pedal_0_platform" pos="0 0.07 0" rgba="0.015 0.014 0.013 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="-0.035 0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0 0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0.035 0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="-0.035 0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0 0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0.035 0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+        </body>
+        <body name="pedal_1" pos="0 -0.066 0.17">
+          <inertial pos="0.000022 -0.06858 -0.000002" mass="0.058334" fullinertia="2.463318e-5 4.753827e-5 6.892788e-5 4.043345e-9 -6.513131e-10 1.215452e-9"/>
+          <joint name="crank_to_pedal_1" type="hinge" axis="0 1 0" damping="0.000951"/>
+          <geom type="cylinder" size="0.0055 0.028" pos="0 -0.024 0" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.7 0.66 1" contype="1" conaffinity="2"/>
+          <geom type="mesh" mesh="pedal_1_platform" pos="0 -0.07 0" rgba="0.015 0.014 0.013 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="-0.035 -0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0 -0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0.035 -0.07 0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="-0.035 -0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0 -0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.03 0.002" pos="0.035 -0.07 -0.01" rgba="0.003 0.003 0.004 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_shell_to_crank" joint="shell_to_crank" kp="0.428827" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_crank_to_pedal_0" joint="crank_to_pedal_0" kp="0.004754" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_crank_to_pedal_1" joint="crank_to_pedal_1" kp="0.004754" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,67 @@
+<mujoco model="rec_rolling_toolbox_with_telescoping_handle_4d03191d2c76437f8bff47e8c3c3f6b1">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="body_shell" file="body_shell.stl"/>
+    <mesh name="wheel_rim" file="wheel_rim.stl"/>
+    <mesh name="wheel_tire" file="wheel_tire.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0.0095 0.00967 -0.00066">
+      <inertial pos="-0.000632 -0.036779 0.481983" mass="7.174606" fullinertia="5.008895e-1 5.447389e-1 1.156736e-1 2.082799e-3 -8.827987e-4 4.512164e-3"/>
+      <geom type="mesh" mesh="body_shell" pos="0 0 0" rgba="0.06 0.16 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.061 0.002 0.2975" pos="0 -0.1225 0.45" rgba="0.015 0.018 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.006 0.032" pos="-0.126 -0.105 0.068" quat="0.70710548 0 0.70710808 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.006 0.032" pos="0.126 -0.105 0.068" quat="0.70710548 0 0.70710808 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0125 0.019 0.019" pos="-0.093 -0.105 0.068" rgba="0.06 0.16 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0125 0.019 0.019" pos="0.093 -0.105 0.068" rgba="0.06 0.16 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.095 0.012 0.015" pos="0 -0.134 0.365" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.095 0.012 0.015" pos="0 -0.134 0.665" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.141 0.075 0.007" pos="0 -0.02 0.31" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.141 0.075 0.007" pos="0 -0.02 0.51" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.141 0.075 0.007" pos="0 -0.02 0.71" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.115 0.004 0.3" pos="0 -0.085 0.445" rgba="0.015 0.018 0.02 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.01 0.04" pos="-0.164 0.11 0.21" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0425" pos="-0.169 0.121 0.21" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.01 0.04" pos="-0.164 0.11 0.47" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0425" pos="-0.169 0.121 0.47" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.01 0.04" pos="-0.164 0.11 0.73" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0425" pos="-0.169 0.121 0.73" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      <body name="wheel_0" pos="-0.126 -0.105 0.068">
+        <inertial pos="0.000024 0.000005 -0.000006" mass="0.138703" fullinertia="2.819666e-4 1.535782e-4 1.536077e-4 -3.967079e-9 3.225266e-10 9.682020e-9"/>
+        <joint name="body_to_wheel_0" type="hinge" axis="1 0 0" damping="0.005639"/>
+        <geom type="mesh" mesh="wheel_rim" pos="0 0 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="wheel_tire" pos="0 0 0" rgba="0.02 0.02 0.018 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="wheel_1" pos="0.126 -0.105 0.068">
+        <inertial pos="0.000024 0.000005 -0.000006" mass="0.138703" fullinertia="2.819666e-4 1.535782e-4 1.536077e-4 -3.967079e-9 3.225266e-10 9.682020e-9"/>
+        <joint name="body_to_wheel_1" type="hinge" axis="1 0 0" damping="0.005639"/>
+        <geom type="mesh" mesh="wheel_rim" pos="0 0 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="wheel_tire" pos="0 0 0" rgba="0.02 0.02 0.018 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="front_door" pos="-0.163 0.112 0.115">
+        <inertial pos="0.148577 0.018902 0.360057" mass="2.36273" fullinertia="9.901780e-2 1.163583e-1 1.765743e-2 -1.460582e-5 -4.405791e-5 -4.721549e-6"/>
+        <joint name="body_to_front_door" type="hinge" axis="0 0 1" range="0 1.75" damping="1.413183"/>
+        <geom type="box" size="0.15 0.013 0.36" pos="0.15 0.017 0.36" rgba="0.08 0.22 0.4 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.1325 0.003 0.33" pos="0.15 0.029 0.36" rgba="0.025 0.025 0.028 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.0325 0.005 0.01" pos="0.245 0.036 0.4176" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.0575" pos="0 0.017 0.205" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.0575" pos="0 0.017 0.505" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="pull_handle" pos="0 -0.142 0.57">
+        <inertial pos="0 0 0.055417" mass="0.080964" fullinertia="4.171289e-3 4.353656e-3 1.851176e-4 0.000000e+0 1.447211e-10 0.000000e+0"/>
+        <joint name="body_to_pull_handle" type="slide" axis="0 0 1" range="0 0.3" damping="19.856421" armature="0.41544652"/>
+        <geom type="cylinder" size="0.006 0.31" pos="-0.052 0 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.006 0.31" pos="0.052 0 0" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.012 0.0725" pos="0 0 0.305" quat="0.70710548 0 0.70710808 0" rgba="0.02 0.02 0.018 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.059 0.006 0.009" pos="0 0 -0.282" rgba="0.7 0.72 0.7 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_wheel_0" joint="body_to_wheel_0" kp="0.028197" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_wheel_1" joint="body_to_wheel_1" kp="0.028197" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_front_door" joint="body_to_front_door" kp="7.065916" ctrlrange="0 1.75"/>
+    <position name="a_body_to_pull_handle" joint="body_to_pull_handle" kp="198.56421" ctrlrange="0 0.3"/>
+  </actuator>
+</mujoco>

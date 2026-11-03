@@ -1,0 +1,71 @@
+<mujoco model="rec_digital_multimeter_with_tilt_stand_and_rotary_selector_2ba3e131d0f84e2aa8cff3f96a2d40d1">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="multimeter_housing" file="multimeter_housing.stl"/>
+    <mesh name="multimeter_bumper" file="multimeter_bumper.stl"/>
+    <mesh name="multimeter_selector" file="multimeter_selector.stl"/>
+    <mesh name="multimeter_stand_frame" file="multimeter_stand_frame.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.00165 -0.000004">
+      <inertial pos="0.000001 -0.000851 0.089089" mass="0.224298" fullinertia="7.501866e-4 8.886393e-4 1.954306e-4 2.778637e-9 -1.265062e-8 5.389693e-6"/>
+      <geom type="mesh" mesh="multimeter_housing" pos="0 0 0" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="multimeter_bumper" pos="0 0 0" rgba="0.93 0.71 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.00225 0.017" pos="0 0.0148 0.143" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.026 0.0012 0.012" pos="0 0.0158 0.143" rgba="0.41 0.56 0.42 0.55" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.031 0.0016" pos="0 0.0154 0.086" quat="0.70710548 -0.70710808 0 0" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.032 0.00175 0.01" pos="0 0.0152 0.028" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.006 0.0025" pos="-0.022 0.016 0.028" quat="0.70710548 -0.70710808 0 0" rgba="0.05 0.05 0.05 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.006 0.0025" pos="0 0.016 0.028" quat="0.70710548 -0.70710808 0 0" rgba="0.05 0.05 0.05 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.006 0.0025" pos="0.022 0.016 0.028" quat="0.70710548 -0.70710808 0 0" rgba="0.05 0.05 0.05 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.00225 0.0065" pos="-0.023 -0.0187 0.0335" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0032 0.0055" pos="-0.023 -0.0206 0.03" quat="0.70710548 0 0.70710808 0" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.005 0.00225 0.0065" pos="0.023 -0.0187 0.0335" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0032 0.0055" pos="0.023 -0.0206 0.03" quat="0.70710548 0 0.70710808 0" rgba="0.19 0.2 0.22 1" contype="1" conaffinity="2"/>
+      <body name="selector" pos="0 0.0135 0.086">
+        <inertial pos="0.000002 0.006714 0" mass="0.02" fullinertia="3.340987e-6 6.031665e-6 3.340893e-6 9.851851e-11 -3.904431e-10 -1.621216e-11"/>
+        <joint name="selector_spin" type="hinge" axis="0 1 0" damping="0.000121"/>
+        <geom type="mesh" mesh="multimeter_selector" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.12 0.13 0.14 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="stand" pos="0 -0.0206 0.03">
+        <inertial pos="-0.000001 0.001463 0.051171" mass="0.02" fullinertia="2.870179e-5 3.421294e-5 5.579064e-6 -2.693345e-10 7.911557e-9 -1.402222e-7"/>
+        <joint name="stand_hinge" type="hinge" axis="1 0 0" range="0 0.95" damping="0.025501" armature="0.00055641"/>
+        <geom type="mesh" mesh="multimeter_stand_frame" pos="0 0.0016 0" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.0036 0.017" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_0" pos="-0.024 0.0167 0.115">
+        <inertial pos="0 -0.00027 0" mass="0.02" fullinertia="2.125338e-7 3.375985e-7 3.866032e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="button_press_0" type="slide" axis="0 -1 0" range="0 0.0018" damping="0.4"/>
+        <geom type="box" size="0.007 0.0017 0.004" pos="0 0.0017 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.00275 0.00275" pos="0 -0.00275 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_1" pos="-0.008 0.0167 0.115">
+        <inertial pos="0 -0.00027 0" mass="0.02" fullinertia="2.125338e-7 3.375985e-7 3.866032e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="button_press_1" type="slide" axis="0 -1 0" range="0 0.0018" damping="0.4"/>
+        <geom type="box" size="0.007 0.0017 0.004" pos="0 0.0017 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.00275 0.00275" pos="0 -0.00275 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_2" pos="0.008 0.0167 0.115">
+        <inertial pos="0 -0.00027 0" mass="0.02" fullinertia="2.125338e-7 3.375985e-7 3.866032e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="button_press_2" type="slide" axis="0 -1 0" range="0 0.0018" damping="0.4"/>
+        <geom type="box" size="0.007 0.0017 0.004" pos="0 0.0017 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.00275 0.00275" pos="0 -0.00275 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="button_3" pos="0.024 0.0167 0.115">
+        <inertial pos="0 -0.00027 0" mass="0.02" fullinertia="2.125338e-7 3.375985e-7 3.866032e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="button_press_3" type="slide" axis="0 -1 0" range="0 0.0018" damping="0.4"/>
+        <geom type="box" size="0.007 0.0017 0.004" pos="0 0.0017 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.00275 0.00275" pos="0 -0.00275 0" rgba="0.25 0.38 0.55 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_selector_spin" joint="selector_spin" kp="0.000603" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_stand_hinge" joint="stand_hinge" kp="0.255012" ctrlrange="0 0.95"/>
+    <position name="a_button_press_0" joint="button_press_0" kp="2" ctrlrange="0 0.0018"/>
+    <position name="a_button_press_1" joint="button_press_1" kp="2" ctrlrange="0 0.0018"/>
+    <position name="a_button_press_2" joint="button_press_2" kp="2" ctrlrange="0 0.0018"/>
+    <position name="a_button_press_3" joint="button_press_3" kp="2" ctrlrange="0 0.0018"/>
+  </actuator>
+</mujoco>

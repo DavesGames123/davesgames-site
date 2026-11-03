@@ -1,0 +1,52 @@
+<mujoco model="rec_camcorder_with_flipout_screen_acb9eb4f13824629829be7540a8372e9">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="tapered_body" file="tapered_body.stl"/>
+    <mesh name="display_panel" file="display_panel.stl"/>
+    <mesh name="display_hinge_sleeve" file="display_hinge_sleeve.stl"/>
+    <mesh name="focus_ring_grip" file="focus_ring_grip.stl"/>
+    <mesh name="diopter_wheel_grip" file="diopter_wheel_grip.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.027751 -0.00355 0.042">
+      <inertial pos="0.010965 -0.001211 0.002952" mass="0.472407" fullinertia="4.589367e-4 2.427890e-3 2.363889e-3 -1.309680e-5 1.022278e-4 -2.229643e-6"/>
+      <geom type="mesh" mesh="tapered_body" pos="0 0 0" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0475 0.0045 0.025" pos="-0.015 -0.041 -0.002" rgba="0.012 0.012 0.013 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.038 0.018 0.013" pos="-0.055 0 0.049" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.018 0.005" pos="-0.1 0 0.049" quat="0.70710548 0 0.70710808 0" rgba="0.012 0.012 0.013 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.033 0.012" pos="0.09 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.004 0.004 0.005 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0208 0.033" pos="0.126 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.004 0.004 0.005 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.027 0.01" pos="0.15 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.001" pos="0.161 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.01 0.028 0.055 0.82" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0029 0.041" pos="-0.066 0.0445 0" rgba="0.45 0.47 0.48 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0065 0.0045 0.003" pos="-0.066 0.0405 0.039" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.0065 0.0045 0.003" pos="-0.066 0.0405 -0.039" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.0044 0.0125" pos="-0.095 -0.023 0.056" quat="0.70710548 -0.70710808 0 0" rgba="0.45 0.47 0.48 1" contype="1" conaffinity="2"/>
+      <body name="display_door" pos="-0.066 0.0445 0">
+        <inertial pos="0.06076 0.004085 -0.000001" mass="0.022714" fullinertia="8.166820e-6 3.729646e-5 2.938499e-5 -2.120535e-7 -1.831372e-9 -8.460016e-11"/>
+        <joint name="display_hinge" type="hinge" axis="0 0 1" range="0 1.75" damping="0.002272"/>
+        <geom type="mesh" mesh="display_panel" pos="0.066 0.0046 0" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.045 0.0006 0.025" pos="0.066 0.0006 0" rgba="0.02 0.055 0.09 0.92" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="display_hinge_sleeve" pos="0 0 0" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.006 0.002 0.03" pos="0.006 0.0045 0" rgba="0.055 0.06 0.064 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="focus_ring" pos="0.118 0 0">
+        <inertial pos="0.000021 -0.000044 -0.000005" mass="0.02" fullinertia="1.312736e-5 7.515075e-6 7.541438e-6 1.319200e-8 -4.424474e-10 -2.400220e-9"/>
+        <joint name="focus_rotation" type="hinge" axis="1 0 0" damping="0.000263"/>
+        <geom type="mesh" mesh="focus_ring_grip" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.012 0.012 0.013 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.001 0.0015 0.005" pos="0.0126 -0.0305 0" rgba="0.86 0.88 0.84 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="diopter_wheel" pos="-0.095 -0.027 0.056">
+        <inertial pos="-0.000006 -0.000001 -0.000004" mass="0.02" fullinertia="8.436956e-7 1.474997e-6 8.446572e-7 9.159024e-11 3.032390e-11 1.715707e-11"/>
+        <joint name="diopter_rotation" type="hinge" axis="0 1 0" damping="0.000029"/>
+        <geom type="mesh" mesh="diopter_wheel_grip" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.012 0.012 0.013 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_display_hinge" joint="display_hinge" kp="0.011362" ctrlrange="0 1.75"/>
+    <position name="a_focus_rotation" joint="focus_rotation" kp="0.001313" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_diopter_rotation" joint="diopter_rotation" kp="0.000147" ctrlrange="-3.1416 3.1416"/>
+  </actuator>
+</mujoco>

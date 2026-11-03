@@ -1,0 +1,29 @@
+<mujoco model="rec_rotary_base_with_vertical_slide_f72fad37371b4949a8d8abccc4265fe1">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0 0 0.025" mass="0.549779" fullinertia="1.488984e-3 1.488984e-3 2.748894e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="cylinder" size="0.1 0.025" pos="0 0 0.025" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+      <body name="rotary_table" pos="0 0 0.05">
+        <inertial pos="-0.02523 0 0.115967" mass="0.443911" fullinertia="8.467351e-3 8.744773e-3 1.436712e-3 0.000000e+0 1.165169e-3 0.000000e+0"/>
+        <joint name="base_to_rotary" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.039821"/>
+        <geom type="cylinder" size="0.1 0.01" pos="0 0 0.01" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.02 0.02 0.2" pos="-0.05 0 0.22" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        <body name="moving_head" pos="0 0 0.02">
+          <inertial pos="-0.0125 0 0.04" mass="0.1792" fullinertia="2.090667e-4 2.258667e-4 2.437867e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="rotary_to_head" type="slide" axis="0 0 1" range="0 0.3" damping="43.9488" armature="0.91952"/>
+          <geom type="box" size="0.03 0.04 0.04" pos="0 0 0.04" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.02 0.01 0.04" pos="-0.05 0.03 0.04" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.02 0.01 0.04" pos="-0.05 -0.03 0.04" rgba="0.7 0.7 0.72 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_rotary" joint="base_to_rotary" kp="0.199107" ctrlrange="-3.14 3.14"/>
+    <position name="a_rotary_to_head" joint="rotary_to_head" kp="439.488" ctrlrange="0 0.3"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,29 @@
+<mujoco model="rec_orthogonal_xy_stage_6fbd80ab6518492b8d978a68b347a8fc">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="base_rail_set" file="base_rail_set.stl"/>
+    <mesh name="x_carriage" file="x_carriage.stl"/>
+    <mesh name="y_slide" file="y_slide.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0">
+      <inertial pos="0 0 0.0375" mass="34" fullinertia="4.692710e-1 1.326070e+0 1.763470e+0 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="base_rail_set" pos="0 0 0" rgba="0.42 0.45 0.48 1" contype="1" conaffinity="2"/>
+      <body name="x_carriage" pos="0 0 0.075">
+        <inertial pos="0 0 0.0485" mass="18" fullinertia="1.677140e-1 3.891140e-1 5.286000e-1 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="base_to_x" type="slide" axis="1 0 0" range="-0.12 0.12" damping="540"/>
+        <geom type="mesh" mesh="x_carriage" pos="0 0 0" rgba="0.68 0.71 0.75 1" contype="1" conaffinity="2"/>
+        <body name="y_slide" pos="0 0 0.097">
+          <inertial pos="0 0 0.04" mass="9" fullinertia="5.167500e-2 7.230000e-2 1.143750e-1 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="x_to_y" type="slide" axis="0 1 0" range="-0.07 0.07" damping="180"/>
+          <geom type="mesh" mesh="y_slide" pos="0 0 0" rgba="0.78 0.8 0.84 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_x" joint="base_to_x" kp="2700" ctrlrange="-0.12 0.12"/>
+    <position name="a_x_to_y" joint="x_to_y" kp="900" ctrlrange="-0.07 0.07"/>
+  </actuator>
+</mujoco>

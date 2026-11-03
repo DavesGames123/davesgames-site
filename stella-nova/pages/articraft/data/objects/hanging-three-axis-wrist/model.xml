@@ -1,0 +1,56 @@
+<mujoco model="rec_yawpitchroll_wrist_aefd600724ec4de9bfb029c97df9af74">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.01325 0.364">
+      <inertial pos="0 0 0.054693" mass="0.76019" fullinertia="2.529597e-3 4.744636e-3 6.736848e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.15 0.105 0.013" pos="0 0 0.063" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.056 0.025" pos="0 0 0.025" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.036 0.004" pos="0 0 0.08" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0035" pos="-0.11 -0.07 0.077" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0035" pos="-0.11 0.07 0.077" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0035" pos="0.11 -0.07 0.077" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.01 0.0035" pos="0.11 0.07 0.077" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+      <body name="yaw_stage" pos="0 0 0">
+        <inertial pos="0 0 -0.116271" mass="0.58174" fullinertia="3.380607e-3 4.464356e-3 1.829458e-3 0.000000e+0 -2.101977e-11 0.000000e+0"/>
+        <joint name="yaw_joint" type="hinge" axis="0 0 1" range="-3.14159 3.14159" damping="0.058074"/>
+        <geom type="cylinder" size="0.045 0.026" pos="0 0 -0.026" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.07 0.01" pos="0 0 -0.058" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.023 0.036 0.039" pos="0 0 -0.104" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.087 0.027 0.015" pos="0 0 -0.145" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.009 0.048 0.061" pos="-0.075 0 -0.205" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.009 0.048 0.061" pos="0.075 0 -0.205" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.033 0.0045" pos="-0.088 0 -0.205" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.033 0.0045" pos="0.088 0 -0.205" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+        <body name="pitch_cradle" pos="0 0 -0.205">
+          <inertial pos="0 -0.01033 -0.056428" mass="0.341967" fullinertia="1.069208e-3 1.222176e-3 5.160234e-4 3.063153e-24 4.623921e-10 -2.068967e-4"/>
+          <joint name="pitch_joint" type="hinge" axis="1 0 0" range="-1.2 1.2" damping="0.853628" armature="0.01755372"/>
+          <geom type="cylinder" size="0.026 0.066" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.052 0.025 0.02" pos="0 0 -0.03" rgba="0.95 0.36 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.009 0.02 0.054" pos="-0.04 0 -0.068" rgba="0.95 0.36 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.009 0.02 0.054" pos="0.04 0 -0.068" rgba="0.95 0.36 0.08 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.034 0.0375" pos="0 -0.0375 -0.115" quat="0.70710548 -0.70710808 0 0" rgba="0.16 0.17 0.18 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.044 0.005" pos="0 0.002 -0.115" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+          <body name="roll_output" pos="0 0 -0.115">
+            <inertial pos="0 0.07297 0" mass="0.080891" fullinertia="9.192841e-5 4.383317e-5 9.192841e-5 0.000000e+0 0.000000e+0 7.364119e-12"/>
+            <joint name="roll_joint" type="hinge" axis="0 1 0" range="-3.14159 3.14159" damping="0.000877"/>
+            <geom type="cylinder" size="0.018 0.045" pos="0 0.045 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.043 0.01" pos="0 0.087 0" quat="0.70710548 -0.70710808 0 0" rgba="0.05 0.055 0.06 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.014 0.0175" pos="0 0.114 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.0045 0.0035" pos="0.022 0.1 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.0045 0.0035" pos="-0.022 0.1 0" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.0045 0.0035" pos="0 0.1 0.022" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+            <geom type="cylinder" size="0.0045 0.0035" pos="0 0.1 -0.022" quat="0.70710548 -0.70710808 0 0" rgba="0.62 0.64 0.62 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_yaw_joint" joint="yaw_joint" kp="0.29037" ctrlrange="-3.14159 3.14159"/>
+    <position name="a_pitch_joint" joint="pitch_joint" kp="8.536284" ctrlrange="-1.2 1.2"/>
+    <position name="a_roll_joint" joint="roll_joint" kp="0.004383" ctrlrange="-3.14159 3.14159"/>
+  </actuator>
+</mujoco>

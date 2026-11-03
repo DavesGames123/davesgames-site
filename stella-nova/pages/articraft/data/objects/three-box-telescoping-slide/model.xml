@@ -1,0 +1,37 @@
+<mujoco model="rec_threestage_telescoping_slide_25c63d480dff4020bd83237d88461627">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0.188 0 0.006">
+      <inertial pos="-0.206166 0 0.021566" mass="0.224322" fullinertia="3.515511e-4 3.334591e-3 3.399046e-3 0.000000e+0 2.112569e-5 0.000000e+0"/>
+      <geom type="box" size="0.21 0.045 0.002" pos="-0.21 0 0.002" rgba="0.24 0.27 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.21 0.045 0.002" pos="-0.21 0 0.058" rgba="0.24 0.27 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.21 0.002 0.026" pos="-0.21 -0.043 0.03" rgba="0.24 0.27 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.21 0.002 0.026" pos="-0.21 0.043 0.03" rgba="0.24 0.27 0.3 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.195 0.035 0.003" pos="-0.195 0 -0.003" rgba="0.24 0.27 0.3 1" contype="1" conaffinity="2"/>
+      <body name="middle_member" pos="0 0 0.004">
+        <inertial pos="-0.175 0 0.024" mass="0.110789" fullinertia="1.311926e-4 1.374533e-3 1.422982e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="outer_to_middle" type="slide" axis="1 0 0" range="0 0.19" damping="3.78826"/>
+        <geom type="box" size="0.19 0.039 0.00175" pos="-0.175 0 0.00175" rgba="0.56 0.59 0.63 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.19 0.039 0.00175" pos="-0.175 0 0.04625" rgba="0.56 0.59 0.63 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.19 0.00175 0.0205" pos="-0.175 -0.03725 0.024" rgba="0.56 0.59 0.63 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.19 0.00175 0.0205" pos="-0.175 0.03725 0.024" rgba="0.56 0.59 0.63 1" contype="1" conaffinity="2"/>
+        <body name="inner_member" pos="0.015 0 0.0035">
+          <inertial pos="-0.127692 0 0.018" mass="0.078624" fullinertia="5.854598e-5 9.422627e-4 9.691780e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="middle_to_inner" type="slide" axis="1 0 0" range="0 0.15" damping="1.57248"/>
+          <geom type="box" size="0.17 0.033 0.0015" pos="-0.15 0 0.0015" rgba="0.76 0.78 0.8 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.17 0.033 0.0015" pos="-0.15 0 0.0345" rgba="0.76 0.78 0.8 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.17 0.0015 0.015" pos="-0.15 -0.0315 0.018" rgba="0.76 0.78 0.8 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.17 0.0015 0.015" pos="-0.15 0.0315 0.018" rgba="0.76 0.78 0.8 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.005 0.036 0.02" pos="0.024 0 0.018" rgba="0.76 0.78 0.8 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_outer_to_middle" joint="outer_to_middle" kp="18.9413" ctrlrange="0 0.19"/>
+    <position name="a_middle_to_inner" joint="middle_to_inner" kp="7.8624" ctrlrange="0 0.15"/>
+  </actuator>
+</mujoco>

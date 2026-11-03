@@ -1,0 +1,39 @@
+<mujoco model="rec_shoulderelbowwrist_arm_5bc8a524280e443f95a80c23759ed389">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="base_structure" file="base_structure.stl"/>
+    <mesh name="upper_arm_structure" file="upper_arm_structure.stl"/>
+    <mesh name="forearm_structure" file="forearm_structure.stl"/>
+    <mesh name="wrist_stage" file="wrist_stage.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.440766 -0.000092 0">
+      <inertial pos="0.000001 -0.000001 0.214104" mass="13.797502" fullinertia="5.633426e-1 5.492085e-1 2.404397e-1 -3.666675e-6 -2.346857e-6 1.007991e-6"/>
+      <geom type="mesh" mesh="base_structure" pos="0 0 0" rgba="0.12 0.13 0.15 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.02 0.15" pos="0 0 0.58" quat="0.70710548 -0.70710808 0 0" rgba="0.02 0.025 0.03 1" contype="1" conaffinity="2"/>
+      <body name="upper_arm" pos="0 0 0.58">
+        <inertial pos="0.218485 0 0.000002" mass="3.343939" fullinertia="1.042417e-2 1.374561e-1 1.374993e-1 -2.155997e-7 1.441697e-6 6.755250e-9"/>
+        <joint name="base_to_upper_arm" type="hinge" axis="0 -1 0" range="0 1.25" damping="61.502602" armature="0.63075509"/>
+        <geom type="mesh" mesh="upper_arm_structure" pos="0 0 0" rgba="0.95 0.38 0.08 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.016 0.085" pos="0.55 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.02 0.025 0.03 1" contype="1" conaffinity="2"/>
+        <body name="forearm" pos="0.55 0 0">
+          <inertial pos="0.187128 0 0.000001" mass="1.185515" fullinertia="1.735810e-3 2.584931e-2 2.575965e-2 -4.313383e-8 2.162280e-7 -9.610578e-9"/>
+          <joint name="upper_arm_to_forearm" type="hinge" axis="0 -1 0" range="-1.35 1.55" damping="11.494364" armature="0.17022852"/>
+          <geom type="mesh" mesh="forearm_structure" pos="0 0 0" rgba="0.93 0.62 0.16 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.012 0.065" pos="0.42 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.02 0.025 0.03 1" contype="1" conaffinity="2"/>
+          <body name="wrist" pos="0.42 0 0">
+            <inertial pos="0.066238 -0.000002 -0.000001" mass="0.266673" fullinertia="1.784791e-4 1.105001e-3 1.092961e-3 1.676349e-8 4.459250e-8 1.873299e-8"/>
+            <joint name="forearm_to_wrist" type="hinge" axis="0 -1 0" range="-1.7 1.7" damping="0.577609" armature="0.01216521"/>
+            <geom type="mesh" mesh="wrist_stage" pos="0 0 0" rgba="0.18 0.32 0.48 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_base_to_upper_arm" joint="base_to_upper_arm" kp="615.026018" ctrlrange="0 1.25"/>
+    <position name="a_upper_arm_to_forearm" joint="upper_arm_to_forearm" kp="114.943638" ctrlrange="-1.35 1.55"/>
+    <position name="a_forearm_to_wrist" joint="forearm_to_wrist" kp="5.776091" ctrlrange="-1.7 1.7"/>
+  </actuator>
+</mujoco>

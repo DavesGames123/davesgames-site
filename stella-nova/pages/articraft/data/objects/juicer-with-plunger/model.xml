@@ -1,0 +1,66 @@
+<mujoco model="rec_centrifugal_juicer_with_articulated_components_7c6f5b279ac5419095505f5d360a141d">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="rounded_motor_base" file="rounded_motor_base.stl"/>
+    <mesh name="clear_upper_chamber" file="clear_upper_chamber.stl"/>
+    <mesh name="lower_chrome_bowl_rim" file="lower_chrome_bowl_rim.stl"/>
+    <mesh name="upper_chrome_bowl_rim" file="upper_chrome_bowl_rim.stl"/>
+    <mesh name="pulse_button_bezel" file="pulse_button_bezel.stl"/>
+    <mesh name="clear_lid_cover" file="clear_lid_cover.stl"/>
+    <mesh name="clear_feed_tube" file="clear_feed_tube.stl"/>
+    <mesh name="spinning_grater_basket" file="spinning_grater_basket.stl"/>
+    <mesh name="selector_dial_knob" file="selector_dial_knob.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.000092 0.0107 0">
+      <inertial pos="0.000019 0.003744 0.125546" mass="8.389073" fullinertia="1.245530e-1 1.487020e-1 1.519971e-1 5.965531e-5 7.247092e-5 -7.634131e-3"/>
+      <geom type="mesh" mesh="rounded_motor_base" pos="0 0 0.095" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.115 0.004 0.045" pos="0 -0.143 0.105" rgba="0.025 0.025 0.025 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="clear_upper_chamber" pos="0 0 0.185" rgba="0.62 0.86 1 0.32" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="lower_chrome_bowl_rim" pos="0 0 0.185" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="upper_chrome_bowl_rim" pos="0 0 0.329" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="cylinder" size="0.026 0.01" pos="0 0 0.2" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.17 0.015 0.022" pos="0 0.133 0.312" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.0275 0.045" pos="-0.155 0.135 0.315" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.0275 0.045" pos="0.155 0.135 0.315" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="pulse_button_bezel" pos="0.065 -0.146 0.102" quat="0.70710548 0.70710808 0 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+      <body name="lid" pos="0 0.15 0.335">
+        <inertial pos="-0.000059 -0.141678 0.032787" mass="0.770162" fullinertia="5.472822e-3 5.200229e-3 7.642192e-3 4.173172e-7 4.099210e-7 1.299016e-5"/>
+        <joint name="lid_hinge" type="hinge" axis="-1 0 0" range="0 1.25" damping="4.632096" armature="0.08383005"/>
+        <geom type="mesh" mesh="clear_lid_cover" pos="0 0 0" rgba="0.62 0.86 1 0.32" contype="1" conaffinity="2"/>
+        <geom type="mesh" mesh="clear_feed_tube" pos="0 0 0" rgba="0.62 0.86 1 0.32" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.008 0.13" pos="0 0 0.027" quat="0.70710548 0 0.70710808 0" rgba="0.72 0.72 0.68 1" contype="1" conaffinity="2"/>
+        <body name="plunger" pos="0 -0.145 0.188">
+          <inertial pos="0 0 -0.044161" mass="0.224409" fullinertia="8.512774e-4 8.512774e-4 1.848693e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="plunger_slide" type="slide" axis="0 0 1" range="0 0.11" damping="55.036307" armature="1.15149868"/>
+          <geom type="cylinder" size="0.028 0.08" pos="0 0 -0.08" rgba="0.01 0.01 0.012 1" contype="1" conaffinity="2"/>
+          <geom type="cylinder" size="0.055 0.013" pos="0 0 0.013" rgba="0.01 0.01 0.012 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+      <body name="grater_basket" pos="0 0 0.21">
+        <inertial pos="-0.000116 0.000058 0.058896" mass="0.363583" fullinertia="1.597194e-3 1.601431e-3 2.599362e-3 4.877054e-7 1.212659e-6 -4.221866e-7"/>
+        <joint name="basket_spin" type="hinge" axis="0 0 1" damping="0.051987"/>
+        <geom type="mesh" mesh="spinning_grater_basket" pos="0 0 0" rgba="0.86 0.86 0.82 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="selector_dial" pos="-0.06 -0.147 0.105">
+        <inertial pos="-0.000003 -0.015046 0.000003" mass="0.035538" fullinertia="1.205961e-5 1.737996e-5 1.205517e-5 -3.248749e-10 6.370178e-10 2.547003e-9"/>
+        <joint name="dial_rotation" type="hinge" axis="0 -1 0" range="-2.35 2.35" damping="0.000348"/>
+        <geom type="mesh" mesh="selector_dial_knob" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.025 0.025 0.025 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="pulse_button" pos="0.065 -0.154 0.102">
+        <inertial pos="0 -0.004457 0" mass="0.02" fullinertia="1.192878e-6 1.836400e-6 1.192878e-6 0.000000e+0 0.000000e+0 2.755638e-12"/>
+        <joint name="pulse_press" type="slide" axis="0 1 0" range="0 0.006" damping="0.4"/>
+        <geom type="cylinder" size="0.011 0.006" pos="0 -0.006 0" quat="0.70710548 0.70710808 0 0" rgba="0.025 0.025 0.025 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.018 0.001" pos="0 -0.001 0" quat="0.70710548 0.70710808 0 0" rgba="0.025 0.025 0.025 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_lid_hinge" joint="lid_hinge" kp="46.320962" ctrlrange="0 1.25"/>
+    <position name="a_plunger_slide" joint="plunger_slide" kp="550.363073" ctrlrange="0 0.11"/>
+    <position name="a_basket_spin" joint="basket_spin" kp="0.259937" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_dial_rotation" joint="dial_rotation" kp="0.001738" ctrlrange="-2.35 2.35"/>
+    <position name="a_pulse_press" joint="pulse_press" kp="2" ctrlrange="0 0.006"/>
+  </actuator>
+</mujoco>

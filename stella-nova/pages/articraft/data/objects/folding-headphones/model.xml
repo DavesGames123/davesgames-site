@@ -1,0 +1,88 @@
+<mujoco model="rec_overear_headphones_with_folding_earcups_f5e1c285152947658fae734893cf3d58">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="headband_outer" file="headband_outer.stl"/>
+    <mesh name="headband_cushion" file="headband_cushion.stl"/>
+    <mesh name="earcup_shell_ring" file="earcup_shell_ring.stl"/>
+    <mesh name="earcup_back_cap" file="earcup_back_cap.stl"/>
+    <mesh name="earcup_badge" file="earcup_badge.stl"/>
+    <mesh name="ear_pad_ring" file="ear_pad_ring.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 0 0.102794">
+      <inertial pos="0 0 0.105" mass="0.28" fullinertia="1.178330e-3 7.933330e-4 1.299670e-3 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="mesh" mesh="headband_outer" pos="0 0 0" rgba="0.22 0.23 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="mesh" mesh="headband_cushion" pos="0 0 0.003" rgba="0.24 0.25 0.27 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.003 0.026" pos="-0.008 -0.081 0.089" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.003 0.026" pos="0.008 -0.081 0.089" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.003 0.026" pos="-0.008 0.081 0.089" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.002 0.003 0.026" pos="0.008 0.081 0.089" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.007 0.005" pos="0 -0.081 0.12" rgba="0.22 0.23 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.009 0.007 0.005" pos="0 0.081 0.12" rgba="0.22 0.23 0.25 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.05 0.006" pos="0 0 0.126" rgba="0.24 0.25 0.27 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.008 0.01" pos="0 -0.058 0.124" rgba="0.24 0.25 0.27 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.011 0.008 0.01" pos="0 0.058 0.124" rgba="0.24 0.25 0.27 1" contype="1" conaffinity="2"/>
+      <body name="left_slider_arm" pos="0 -0.081 0.115">
+        <inertial pos="0 0 -0.041" mass="0.035" fullinertia="1.990330e-5 2.055670e-5 1.236670e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="left_arm_slide" type="slide" axis="0 0 -1" range="0 0.028" damping="133.135714" armature="3.13839286"/>
+        <geom type="box" size="0.006 0.003 0.003" pos="0 0 -0.008" rgba="0.63 0.65 0.69 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.002 0.028" pos="0 0 -0.034" rgba="0.63 0.65 0.69 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.005 0.007" pos="0 0 -0.068" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+        <body name="left_yoke" pos="0 0 -0.075">
+          <inertial pos="0 0 -0.029" mass="0.045" fullinertia="1.807500e-5 4.255500e-5 2.595000e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="left_fold_hinge" type="hinge" axis="1 0 0" range="0 1.25" damping="0.313586" armature="0.00700789"/>
+          <geom type="box" size="0.011 0.005 0.003" pos="0 0 -0.003" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.004 0.007" pos="0 0 -0.01" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.041 0.004 0.003" pos="0 0 -0.006" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.003 0.026" pos="0.041 0 -0.035" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.003 0.026" pos="-0.041 0 -0.035" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <body name="left_earcup" pos="0 0 -0.022">
+            <inertial pos="0 0 -0.056" mass="0.11" fullinertia="1.462630e-4 1.880270e-4 8.759670e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+            <joint name="left_cup_swivel" type="hinge" axis="1 0 0" range="-0.55 0.55" damping="0.201103" armature="0.00453635"/>
+            <geom type="box" size="0.037 0.003 0.004" pos="0 0 0" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.006 0.003 0.01" pos="0 0 -0.014" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_shell_ring" pos="0 0 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_back_cap" pos="0 -0.015 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.22 0.23 0.25 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_badge" pos="0 -0.0185 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.74 0.77 0.81 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="ear_pad_ring" pos="0 0.021 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.14 0.14 0.15 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+      <body name="right_slider_arm" pos="0 0.081 0.115" quat="0.00000133 0 0 1">
+        <inertial pos="0 0 -0.041" mass="0.035" fullinertia="1.990330e-5 2.055670e-5 1.236670e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="right_arm_slide" type="slide" axis="0 0 -1" range="0 0.028" damping="133.135714" armature="3.13839286"/>
+        <geom type="box" size="0.006 0.003 0.003" pos="0 0 -0.008" rgba="0.63 0.65 0.69 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.005 0.002 0.028" pos="0 0 -0.034" rgba="0.63 0.65 0.69 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.008 0.005 0.007" pos="0 0 -0.068" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+        <body name="right_yoke" pos="0 0 -0.075">
+          <inertial pos="0 0 -0.029" mass="0.045" fullinertia="1.807500e-5 4.255500e-5 2.595000e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+          <joint name="right_fold_hinge" type="hinge" axis="1 0 0" range="0 1.25" damping="0.304903" armature="0.0067892"/>
+          <geom type="box" size="0.011 0.005 0.003" pos="0 0 -0.003" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.004 0.007" pos="0 0 -0.01" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.041 0.004 0.003" pos="0 0 -0.006" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.003 0.026" pos="0.041 0 -0.035" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.004 0.003 0.026" pos="-0.041 0 -0.035" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+          <body name="right_earcup" pos="0 0 -0.022">
+            <inertial pos="0 0 -0.056" mass="0.11" fullinertia="1.462630e-4 1.880270e-4 8.759670e-5 0.000000e+0 0.000000e+0 0.000000e+0"/>
+            <joint name="right_cup_swivel" type="hinge" axis="1 0 0" range="-0.55 0.55" damping="0.198378" armature="0.00446823"/>
+            <geom type="box" size="0.037 0.003 0.004" pos="0 0 0" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="box" size="0.006 0.003 0.01" pos="0 0 -0.014" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_shell_ring" pos="0 0 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.1 0.1 0.11 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_back_cap" pos="0 -0.015 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.22 0.23 0.25 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="earcup_badge" pos="0 -0.0185 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.74 0.77 0.81 1" contype="1" conaffinity="2"/>
+            <geom type="mesh" mesh="ear_pad_ring" pos="0 0.021 -0.07" quat="0.70710548 0.70710808 0 0" rgba="0.14 0.14 0.15 1" contype="1" conaffinity="2"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_left_arm_slide" joint="left_arm_slide" kp="1331.357143" ctrlrange="0 0.028"/>
+    <position name="a_left_fold_hinge" joint="left_fold_hinge" kp="3.135864" ctrlrange="0 1.25"/>
+    <position name="a_left_cup_swivel" joint="left_cup_swivel" kp="2.01103" ctrlrange="-0.55 0.55"/>
+    <position name="a_right_arm_slide" joint="right_arm_slide" kp="1331.357143" ctrlrange="0 0.028"/>
+    <position name="a_right_fold_hinge" joint="right_fold_hinge" kp="3.049032" ctrlrange="0 1.25"/>
+    <position name="a_right_cup_swivel" joint="right_cup_swivel" kp="1.983782" ctrlrange="-0.55 0.55"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,38 @@
+<mujoco model="rec_serial_elbow_arm_6b166b55fd0c438fb80b1422f9f92539">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+  </asset>
+  <worldbody>
+    <body name="root" pos="-0.219 0 0">
+      <inertial pos="0 0 0.096848" mass="2.23615" fullinertia="2.533650e-2 3.076162e-2 1.739780e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.17 0.11 0.02" pos="0 0 0.02" rgba="0.16 0.18 0.2 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.06 0.06 0.09" pos="0 0 0.13" rgba="0.16 0.18 0.2 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.05 0.065 0.0125" pos="0 0 0.2325" rgba="0.16 0.18 0.2 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.05 0.01 0.06" pos="0 0.055 0.305" rgba="0.16 0.18 0.2 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.05 0.01 0.06" pos="0 -0.055 0.305" rgba="0.16 0.18 0.2 1" contype="1" conaffinity="2"/>
+      <body name="upper_link" pos="0 0 0.305">
+        <inertial pos="0.124427 0 -0.0007" mass="0.845355" fullinertia="1.290777e-3 1.165493e-2 1.203038e-2 -1.615587e-27 1.512294e-5 8.934173e-11"/>
+        <joint name="pedestal_to_upper_link" type="hinge" axis="0 -1 0" range="-0.45 1.2" damping="11.475464" armature="0.18361231"/>
+        <geom type="cylinder" size="0.055 0.045" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.105 0.04 0.03" pos="0.15 0 0" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.02 0.008" pos="0.15 0 -0.022" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.011 0.045" pos="0.29 0.051 0" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.06 0.011 0.045" pos="0.29 -0.051 0" rgba="0.7 0.73 0.76 1" contype="1" conaffinity="2"/>
+        <body name="forearm" pos="0.29 0 0">
+          <inertial pos="0.164456 0 -0.000778" mass="0.540749" fullinertia="5.115537e-4 7.223461e-3 7.265470e-3 0.000000e+0 -8.186862e-6 -8.988235e-11"/>
+          <joint name="upper_link_to_forearm" type="hinge" axis="0 -1 0" range="-0.15 1.45" damping="2.907992" armature="0.05085103"/>
+          <geom type="cylinder" size="0.035 0.04" pos="0 0 0" quat="0.70710548 0.70710808 0 0" rgba="0.62 0.65 0.69 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.105 0.03 0.025" pos="0.14 0 0" rgba="0.62 0.65 0.69 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.065 0.017 0.008" pos="0.145 0 -0.017" rgba="0.62 0.65 0.69 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.0275 0.036 0.035" pos="0.2725 0 0" rgba="0.62 0.65 0.69 1" contype="1" conaffinity="2"/>
+          <geom type="box" size="0.009 0.06 0.06" pos="0.309 0 0" rgba="0.55 0.57 0.6 1" contype="1" conaffinity="2"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_pedestal_to_upper_link" joint="pedestal_to_upper_link" kp="114.754638" ctrlrange="-0.45 1.2"/>
+    <position name="a_upper_link_to_forearm" joint="upper_link_to_forearm" kp="29.07992" ctrlrange="-0.15 1.45"/>
+  </actuator>
+</mujoco>

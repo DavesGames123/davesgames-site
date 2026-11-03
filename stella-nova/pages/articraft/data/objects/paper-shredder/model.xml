@@ -1,0 +1,106 @@
+<mujoco model="rec_paper_shredder_with_pullout_bin_257c3a6bda134b71a21b4f3fdebb6e88">
+  <compiler angle="radian" meshdir="meshes" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast"/>
+  <asset>
+    <mesh name="paper_shredder_bin" file="paper_shredder_bin.stl"/>
+    <mesh name="paper_shredder_mode_knob" file="paper_shredder_mode_knob.stl"/>
+  </asset>
+  <worldbody>
+    <body name="root" pos="0 -0.014 0">
+      <inertial pos="0 0 0.2275" mass="5.8" fullinertia="1.267540e-1 1.559350e-1 8.256540e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+      <geom type="box" size="0.003 0.1175 0.2275" pos="-0.167 0 0.2275" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.003 0.1175 0.2275" pos="0.167 0 0.2275" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.164 0.003 0.2275" pos="0 -0.1145 0.2275" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.17 0.06175 0.005" pos="0 -0.05575 0.45" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.17 0.04675 0.005" pos="0 0.07075 0.45" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.009 0.005" pos="-0.14 0.015 0.45" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.03 0.009 0.005" pos="0.14 0.015 0.45" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.17 0.005 0.0735" pos="0 0.1125 0.3815" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.164 0.0275 0.005" pos="0 -0.0835 0.313" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.164 0.01 0.005" pos="0 0.0975 0.313" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.071 0.005" pos="-0.155 0.015 0.313" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.012 0.071 0.005" pos="0.155 0.015 0.313" rgba="0.18 0.19 0.21 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.164 0.0825 0.004" pos="0 -0.029 0.024" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.089 0.002 0.041" pos="-0.002 0.1195 0.386" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.011 0.012" pos="-0.156 0.026 0.355" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.011 0.012" pos="0.156 0.026 0.355" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.011 0.012" pos="-0.156 0.004 0.355" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.008 0.011 0.012" pos="0.156 0.004 0.355" rgba="0.24 0.25 0.28 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.02 0.004" pos="-0.147 0.076 0.004" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.02 0.004" pos="0.147 0.076 0.004" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.02 0.004" pos="-0.147 -0.08 0.004" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <geom type="box" size="0.02 0.02 0.004" pos="0.147 -0.08 0.004" rgba="0.07 0.07 0.08 1" contype="1" conaffinity="2"/>
+      <body name="bin" pos="0 0.1145 0.1555">
+        <inertial pos="0 0 0" mass="0.95" fullinertia="8.158130e-3 1.217810e-2 1.004060e-2 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_bin" type="slide" axis="0 1 0" range="0 0.09" damping="19"/>
+        <geom type="mesh" mesh="paper_shredder_bin" pos="0 0 0" rgba="0.68 0.77 0.83 0.38" contype="1" conaffinity="2"/>
+        <geom type="box" size="0.074 0.004 0.011" pos="0 0.004 0.094" rgba="0.1 0.11 0.12 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="cutter_front" pos="0 0.026 0.355">
+        <inertial pos="0 0 0" mass="0.28" fullinertia="1.400000e-5 2.051370e-3 2.051370e-3 0.000000e+0 7.483678e-9 0.000000e+0"/>
+        <joint name="body_to_cutter_front" type="hinge" axis="1 0 0" damping="0.00028"/>
+        <geom type="cylinder" size="0.004 0.148" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.099 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.077 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.055 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.033 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.011 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.011 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.033 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.055 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.077 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.099 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="cutter_rear" pos="0 0.004 0.355">
+        <inertial pos="0 0 0" mass="0.28" fullinertia="1.400000e-5 2.051370e-3 2.051370e-3 0.000000e+0 7.483678e-9 0.000000e+0"/>
+        <joint name="body_to_cutter_rear" type="hinge" axis="1 0 0" damping="0.00028"/>
+        <geom type="cylinder" size="0.004 0.148" pos="0 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.18 0.18 0.19 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.099 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.077 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.055 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.033 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="-0.011 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.011 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.033 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.055 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.077 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+        <geom type="cylinder" size="0.01 0.006" pos="0.099 0 0" quat="0.70710548 0 0.70710808 0" rgba="0.58 0.6 0.62 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="flap" pos="0 0.006 0.447">
+        <inertial pos="0 0 0" mass="0.04" fullinertia="1.093330e-6 1.442270e-4 1.452930e-4 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_flap" type="hinge" axis="-1 0 0" range="0 1.15" damping="0.000022"/>
+        <geom type="box" size="0.104 0.009 0.0009" pos="0 0.009 -0.0009" rgba="0.56 0.63 0.68 0.45" contype="1" conaffinity="2"/>
+      </body>
+      <body name="mode_knob" pos="-0.055 0.1215 0.384">
+        <inertial pos="0 0 0" mass="0.06" fullinertia="9.220000e-6 1.444000e-5 9.220000e-6 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_mode_knob" type="hinge" axis="0 1 0" damping="0.000289"/>
+        <geom type="mesh" mesh="paper_shredder_mode_knob" pos="0 0 0" quat="0.70710548 -0.70710808 0 0" rgba="0.11 0.12 0.13 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="power_button" pos="0.055 0.1215 0.402">
+        <inertial pos="0 0 0" mass="0.01" fullinertia="2.433330e-7 4.266670e-7 2.433330e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_power_button" type="slide" axis="0 -1 0" range="0 0.0035" damping="0.2"/>
+        <geom type="cylinder" size="0.008 0.003" pos="0 0.003 0" quat="0.70710548 -0.70710808 0 0" rgba="0.72 0.16 0.16 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="auto_button" pos="0.055 0.1215 0.384">
+        <inertial pos="0 0 0" mass="0.01" fullinertia="1.500000e-7 3.333330e-7 2.433330e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_auto_button" type="slide" axis="0 -1 0" range="0 0.0035" damping="0.2"/>
+        <geom type="box" size="0.008 0.003 0.006" pos="0 0.003 0" rgba="0.26 0.56 0.28 1" contype="1" conaffinity="2"/>
+      </body>
+      <body name="reverse_button" pos="0.055 0.1215 0.366">
+        <inertial pos="0 0 0" mass="0.01" fullinertia="1.133330e-7 4.866670e-7 4.333330e-7 0.000000e+0 0.000000e+0 0.000000e+0"/>
+        <joint name="body_to_reverse_button" type="slide" axis="0 -1 0" range="0 0.0035" damping="0.2"/>
+        <geom type="box" size="0.011 0.003 0.005" pos="0 0.003 0" rgba="0.73 0.75 0.77 1" contype="1" conaffinity="2"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_body_to_bin" joint="body_to_bin" kp="95" ctrlrange="0 0.09"/>
+    <position name="a_body_to_cutter_front" joint="body_to_cutter_front" kp="0.0014" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_cutter_rear" joint="body_to_cutter_rear" kp="0.0014" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_flap" joint="body_to_flap" kp="0.000109" ctrlrange="0 1.15"/>
+    <position name="a_body_to_mode_knob" joint="body_to_mode_knob" kp="0.001444" ctrlrange="-3.1416 3.1416"/>
+    <position name="a_body_to_power_button" joint="body_to_power_button" kp="1" ctrlrange="0 0.0035"/>
+    <position name="a_body_to_auto_button" joint="body_to_auto_button" kp="1" ctrlrange="0 0.0035"/>
+    <position name="a_body_to_reverse_button" joint="body_to_reverse_button" kp="1" ctrlrange="0 0.0035"/>
+  </actuator>
+</mujoco>
