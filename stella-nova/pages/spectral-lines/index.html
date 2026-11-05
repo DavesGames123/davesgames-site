@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="The emission and absorption lines of every element from NIST data: a periodic table of glowing spectra, a stack of all spectra, a zoomable spectrum per element and a live energy-level diagram with photons.">
+<title>Spectral Lines — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SPECTRAL LINES  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Three canvases, 2D only (no WebGL or WebGPU context):
+     #over    the overview: every element with its spectrum, as a periodic
+              table or as a stack of rows by Z. The cells fly between them.
+     #band    the spectrum of the element (or of 2 to 4 compared elements):
+              zoom, pan, hover or tap a line, tap the axis to search.
+     #levels  the energy-level (Grotrian) diagram with photons.
+
+   LOAD ORDER
+     head   1. gpu-guard  2. wishlist  3. stats-beacon   (../../lib/)
+            4. style.css  5. ../../lib/sci.css (Inter, STIX Two Text)
+     body   data/lines.js (classic script: window.SPECTRA), then main.js
+            (module). main.js imports core.js, draw.js and
+            ../periodic-table/data/elements.js (names, table places).
+            then saver.js (module, lane C). While window.snSaverActive
+            is true, main.js stops its frame loop and input handlers.
+
+   REGIONS
+     .topbar     brand and title (hidden in the shell frame)
+     #stage      #overWrap (bar + #over), #bandWrap (bar + #band + #tip)
+     #panel      element head + tube, #levels, brightness model and
+                 temperature, compare, find by wavelength, about and credits
+     #dock       phone: panel, view, ion, play
+
+   GREP MAP
+     grep -n 'id="viewSeg'     the table / stack buttons
+     grep -n 'id="ionSeg'      I / II / both
+     grep -n 'id="temp'        the temperature slider
+     grep -n 'id="findList'    the find-by-wavelength results
+     grep -n 'id="credits'     the NIST credit
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Spectral lines</div>
+  <div class="topstat" id="topStat"></div>
+</header>
+
+<main id="stage">
+  <section id="overWrap">
+    <div class="bar">
+      <div class="seg" id="viewSeg" role="group" aria-label="Overview layout">
+        <button data-view="table" class="on">Table</button><button data-view="stack">Stack</button>
+      </div>
+      <div class="seg" id="ionSeg" role="group" aria-label="Ion stage">
+        <button data-ion="I" class="on" title="Neutral atom">I</button><button data-ion="II" title="Singly ionized">II</button><button data-ion="both" title="Both">I+II</button>
+      </div>
+      <div class="seg" id="modeSeg" role="group" aria-label="Spectrum type">
+        <button data-mode="emission" class="on">Emission</button><button data-mode="absorption">Absorption</button>
+      </div>
+      <div class="seg" id="rangeSeg" role="group" aria-label="Overview range">
+        <button data-range="visible" class="on" title="380 to 750 nm">Visible</button><button data-range="full" title="200 to 1100 nm">200–1100</button><button data-range="band" title="The window of the spectrum below">Window</button>
+      </div>
+      <div class="readout" id="overRead"></div>
+    </div>
+    <canvas id="over" aria-label="Every element and its spectrum"></canvas>
+  </section>
+
+  <section id="bandWrap">
+    <div class="bar">
+      <div class="bandTitle" id="bandTitle"></div>
+      <div class="readout" id="bandRead"></div>
+      <button class="mini" id="bandReset" title="Show the full range">Reset zoom</button>
+    </div>
+    <canvas id="band" aria-label="Spectrum of the element"></canvas>
+    <div id="tip" hidden><div class="tipIn" id="tipIn"></div></div>
+  </section>
+</main>
+
+<aside id="panel" class="open" aria-label="Element and controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="elHead">
+    <div class="elSym" id="elSym">H</div>
+    <div class="elMeta">
+      <div class="elName" id="elName">Hydrogen</div>
+      <div class="elSub" id="elSub"></div>
+    </div>
+    <div class="tubeBox" title="Perceived colour of a discharge tube">
+      <div class="tube" id="tube"><span class="tubeCore"></span></div>
+      <div class="tubeHex" id="tubeHex"></div>
+    </div>
+  </div>
+  <div class="elNav">
+    <button class="mini" id="prevEl" aria-label="Previous element">◀</button>
+    <input id="elFind" list="elList" placeholder="Element (Na, iron, 26)" autocomplete="off" aria-label="Go to element">
+    <datalist id="elList"></datalist>
+    <button class="mini" id="nextEl" aria-label="Next element">▶</button>
+  </div>
+
+  <div class="sec-label">Energy levels <span class="dimtxt" id="lvTitle"></span></div>
+  <div class="seg small" id="lvIonSeg" role="group" aria-label="Diagram ion">
+    <button data-lion="I" class="on">I</button><button data-lion="II">II</button>
+  </div>
+  <canvas id="levels" aria-label="Energy-level diagram"></canvas>
+  <div class="lvFoot"><button class="mini" id="playBtn">Pause glow</button><span class="dimtxt">tap a line in the spectrum to fire it</span></div>
+
+  <div class="sec-label">Brightness</div>
+  <div class="seg" id="modelSeg" role="group" aria-label="Brightness model">
+    <button data-model="nist" class="on">NIST intensity</button><button data-model="boltz">Boltzmann at T</button>
+  </div>
+  <div class="row"><label for="temp">Temperature</label><input type="range" id="temp" min="0" max="1000" value="460"><span class="val" id="tempV">6000 K</span></div>
+  <div class="hint" id="modelHint"></div>
+
+  <div class="sec-label">Compare</div>
+  <div class="chips" id="chips"></div>
+  <div class="btnRow"><button class="mini" id="cmpAdd">Add this element</button><button class="mini" id="cmpClear">Clear</button></div>
+  <div class="hint">Shift-click a cell to add or remove it. Two to four elements stack in the spectrum.</div>
+
+  <div class="sec-label">Find by wavelength</div>
+  <div class="btnRow"><input id="findIn" type="number" step="0.01" min="200" max="1100" placeholder="nm, for example 589.0" aria-label="Wavelength in nm"><button class="mini" id="findGo">Find ±0.5 nm</button></div>
+  <div class="hint">Or tap the wavelength axis under a spectrum.</div>
+  <ol id="findList"></ol>
+
+  <details class="about" id="about">
+    <summary>About the data and the model</summary>
+    <p>Each line is a transition of an electron from an upper level <i>k</i> to a lower level <i>i</i>. The photon carries the energy difference:</p>
+    <div class="sci-eq" data-tex="E_\gamma = E_k - E_i = \frac{hc}{\lambda}"></div>
+    <p>“NIST intensity” shows the relative intensity of NIST (or gA when NIST gives none), as a log rank. “Boltzmann at T” uses an optically thin gas in local equilibrium:</p>
+    <div class="sci-eq" data-tex="I \propto \frac{g_k A_{ki}}{\lambda}\, e^{-E_k / k_B T}"></div>
+    <p>Each spectrum is scaled to its own strongest line. The page does not balance I against II (no Saha equation). A line with no A<sub>ki</sub> uses its NIST rank. Wavelengths are in air. The colours come from the CIE 1931 functions (fit of Wyman, Sloan and Shirley 2013); lines below 380 nm (UV) and above 750 nm (IR) are dashed in muted colours.</p>
+    <p id="credits" class="credit">Line data: NIST Atomic Spectra Database (ver. 5.12), A. Kramida, Yu. Ralchenko, J. Reader and NIST ASD Team, https://physics.nist.gov/asd, fetched 2026-11-04. (c) U.S. Secretary of Commerce on behalf of the United States of America. All rights reserved. This page shows a selection of lines (our rule: strongest by NIST relative intensity, else gA).</p>
+    <p class="credit">Element names and table places: the Periodic Table page of this site (komed3/periodic-table, MIT; PubChem, public domain).</p>
+  </details>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg" id="dockView"><button data-view="table" class="on">Table</button><button data-view="stack">Stack</button></div>
+  <div class="seg" id="dockIon"><button data-ion="I" class="on">I</button><button data-ion="II">II</button><button data-ion="both">I+II</button></div>
+  <button id="dockPlay" aria-label="Pause the glow">❚❚</button>
+</nav>
+
+<script src="data/lines.js"></script>
+<script type="module" src="main.js"></script>
+<script type="module" src="saver.js"></script>
+</body>
+</html>

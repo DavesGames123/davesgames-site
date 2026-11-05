@@ -1,0 +1,212 @@
+/* ============================================================================
+   SPECTRAL LINES  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A dark instrument: near-black glass, hairline rules, Inter for the
+   controls, STIX Two Text for names, the system mono for numbers. Type
+   comes from lib/sci.css (loaded after this file). Labels are sentence
+   case. The overview fills the upper stage, the spectrum band the lower
+   stage, and the panel the right edge.
+     grep -n 'STAGE'      the overview and the band
+     grep -n 'PANEL'      the element head, the tube, the controls
+     grep -n 'TIP'        the line card over the band
+     grep -n 'TOUCH'      44 px targets on a coarse pointer
+     grep -n 'PHONE'      dock and bottom sheet (portrait)
+     grep -n 'LANDSCAPE'  the right drawer on a short screen
+     grep -n 'sn-saver'   the screensaver mode
+
+   PHONE. The band sits at the top of the stage, under the topbar, and the
+   sheet can not grow over it: its height is at most the viewport less the
+   topbar, the band and the dock. So the spectrum never hides under the
+   sheet. In landscape the stage gets a right margin when the drawer opens.
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --ink:#030409; --ink2:#080a12; --ink3:#0e1220; --text:#e4e8f2; --dim:#8a93ab; --faint:#2c3348;
+  --line:rgba(150,180,255,0.10); --line-b:rgba(150,190,255,0.22);
+  --glow:#9fd8ff; --warm:#ffd27a; --lamp:#888;
+  --top:44px; --panel-w:360px; --band-h:clamp(210px,36vh,360px); --bar-h:38px; --dock-h:0px;
+  --sans:var(--sci-sans,Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif);
+  --serif:var(--sci-serif,'STIX Two Text','Times New Roman',Georgia,serif);
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden}
+html,body{width:100%;height:100%;background:var(--ink);overscroll-behavior:none}
+body{overflow:hidden;font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
+button,select,input{font-family:inherit;color:inherit}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:16px;padding:0 18px;
+  background:linear-gradient(180deg,rgba(3,4,9,0.96),rgba(3,4,9,0.82));border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-size:1.1rem;color:#eef2fb}
+.pagetitle{font-size:0.82rem;color:var(--dim)}
+.topstat{margin-left:auto;font-family:var(--mono);font-size:0.72rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+
+/* STAGE */
+#stage{position:fixed;top:var(--top);left:0;right:var(--panel-w);bottom:var(--dock-h);display:grid;
+  grid-template-rows:minmax(0,1fr) var(--band-h);transition:right 0.3s cubic-bezier(0.4,0,0.2,1)}
+#overWrap,#bandWrap{position:relative;display:flex;flex-direction:column;min-height:0;min-width:0}
+#bandWrap{border-top:1px solid var(--line-b);background:#000}
+.bar{flex:0 0 var(--bar-h);display:flex;align-items:center;gap:8px;padding:0 10px;min-width:0;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--line);background:rgba(8,10,18,0.9)}
+.bar::-webkit-scrollbar{display:none}
+#over,#band{flex:1 1 auto;width:100%;min-height:0;display:block;touch-action:none}
+#over{cursor:pointer}
+#band{cursor:crosshair}
+.readout{font-family:var(--mono);font-size:0.72rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;text-align:right}
+.bandTitle{font-family:var(--serif);font-size:1rem;white-space:nowrap;color:#f2f4fa}
+.bandTitle .dimtxt{font-family:var(--sans);font-size:0.75rem}
+
+.seg{display:inline-flex;flex:0 0 auto;border:1px solid var(--line-b);border-radius:8px;overflow:hidden;height:26px}
+.seg button{border:0;border-right:1px solid var(--line);background:transparent;color:var(--dim);font-size:0.74rem;padding:0 10px;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:rgba(159,216,255,0.13);color:var(--glow)}
+.seg.small{height:24px;margin:0 0 6px}
+.mini{flex:0 0 auto;height:26px;padding:0 10px;border:1px solid var(--line-b);border-radius:8px;background:var(--ink3);color:var(--text);font-size:0.74rem;white-space:nowrap}
+.mini:hover{border-color:var(--glow);color:var(--glow)}
+.dimtxt{color:var(--dim);font-size:0.72rem}
+
+/* TIP. #tip has the hidden attribute when no line is under the pointer;
+   it gets no display rule here, only .tipIn does. */
+#tip{position:absolute;z-index:20;pointer-events:none;left:0;top:0;transform:translate(-50%,-100%)}
+.tipIn{min-width:210px;max-width:300px;padding:9px 11px;border-radius:10px;border:1px solid var(--line-b);
+  background:rgba(6,8,14,0.94);box-shadow:0 10px 30px rgba(0,0,0,0.6);font-size:0.74rem;line-height:1.45}
+.tipIn .wl{font-family:var(--mono);font-size:0.95rem;color:#fff}
+.tipIn .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.tipIn .k{color:var(--dim)}
+.tipIn .tr{margin-top:4px;font-family:var(--mono);font-size:0.68rem;color:#cfd6e6;word-break:break-word}
+
+/* PANEL */
+#panel{position:fixed;top:var(--top);right:0;bottom:0;width:var(--panel-w);z-index:35;overflow-y:auto;
+  padding:14px 16px 28px;background:rgba(7,9,15,0.97);border-left:1px solid var(--line-b);scrollbar-width:thin}
+#sheetGrip,#panelClose,#dock{display:none}
+.elHead{display:flex;align-items:center;gap:12px}
+.elSym{flex:0 0 auto;width:62px;height:62px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--serif);font-size:1.9rem;color:#fff;border:1px solid var(--line-b);
+  background:radial-gradient(circle at 50% 120%,color-mix(in srgb,var(--lamp) 40%,transparent),transparent 70%),var(--ink3);
+  text-shadow:0 0 14px var(--lamp)}
+.elMeta{flex:1 1 auto;min-width:0}
+.elName{font-family:var(--serif);font-size:1.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.elSub{font-family:var(--mono);font-size:0.7rem;color:var(--dim);line-height:1.5}
+.tubeBox{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px}
+.tube{position:relative;width:20px;height:62px;border-radius:10px;background:var(--lamp);
+  box-shadow:0 0 10px var(--lamp),0 0 28px var(--lamp),0 0 60px color-mix(in srgb,var(--lamp) 55%,transparent);
+  animation:tubeHum 2.6s ease-in-out infinite;transition:background 0.5s,box-shadow 0.5s}
+.tubeCore{position:absolute;left:6px;right:6px;top:6px;bottom:6px;border-radius:4px;background:rgba(255,255,255,0.65);filter:blur(2px)}
+.tube.flash{animation:none;filter:brightness(1.35)}
+@keyframes tubeHum{0%,100%{filter:brightness(1)}47%{filter:brightness(0.9)}50%{filter:brightness(1.08)}53%{filter:brightness(0.95)}}
+.tubeHex{font-family:var(--mono);font-size:0.62rem;color:var(--dim)}
+.elNav{display:flex;gap:6px;margin:12px 0 4px}
+#elFind,#findIn{flex:1 1 auto;min-width:0;height:26px;border:1px solid var(--line-b);border-radius:8px;background:var(--ink2);padding:0 9px;font-size:0.78rem}
+.sec-label{font-family:var(--serif);font-size:0.95rem;color:#dfe5f3;margin:18px 0 8px;display:flex;align-items:baseline;gap:8px}
+#levels{display:block;width:100%;height:300px;border:1px solid var(--line);border-radius:10px;background:#000;touch-action:pan-y}
+.lvFoot{display:flex;align-items:center;gap:10px;margin-top:6px}
+.row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.row label{flex:0 0 88px;font-size:0.76rem;color:var(--dim)}
+.row input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--warm)}
+.row .val{flex:0 0 62px;text-align:right;font-family:var(--mono);font-size:0.74rem}
+.hint{font-size:0.7rem;color:var(--dim);line-height:1.5;margin-top:4px}
+.btnRow{display:flex;gap:6px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 10px;border-radius:13px;border:1px solid var(--line-b);background:var(--ink3);font-size:0.76rem}
+.chip i{font-style:normal;width:8px;height:8px;border-radius:50%}
+.chip button{border:0;background:transparent;color:var(--dim);width:22px;height:22px;border-radius:11px}
+.chip button:hover{color:#fff}
+#findList{list-style:none;margin-top:8px;max-height:260px;overflow-y:auto}
+#findList li{display:flex;align-items:center;gap:8px;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;font-size:0.76rem}
+#findList li:hover{background:rgba(159,216,255,0.06)}
+#findList .sym{font-family:var(--serif);font-size:0.95rem;width:52px}
+#findList .wl{font-family:var(--mono);flex:1 1 auto}
+#findList .bar2{flex:0 0 60px;height:4px;border-radius:2px;background:var(--faint);overflow:hidden}
+#findList .bar2 span{display:block;height:100%}
+.about{margin-top:20px;border-top:1px solid var(--line);padding-top:10px}
+.about summary{cursor:pointer;font-family:var(--serif);font-size:0.95rem;color:#dfe5f3;min-height:26px}
+.about p{font-size:0.76rem;line-height:1.6;color:#c9d0e0;margin:8px 0}
+.about .sci-eq{margin:6px 0;font-size:0.95rem}
+.credit{color:var(--dim)!important;font-size:0.7rem!important}
+
+/* TOUCH. Any coarse pointer: every target is 44 px or more, text 11 px or more. */
+@media (pointer:coarse){
+  .seg{height:44px;min-height:44px}
+  .seg button{min-width:44px;min-height:44px;font-size:0.8rem}
+  .seg.small{height:44px}
+  .mini{height:44px;min-height:44px;min-width:44px;font-size:0.8rem}
+  #elFind,#findIn{height:44px;min-height:44px;font-size:0.9rem}
+  .chip{height:44px;min-height:44px;border-radius:22px}
+  .chip button{width:44px;height:44px;min-height:44px}
+  #findList li{min-height:44px}
+  .about summary{min-height:44px;display:flex;align-items:center}
+  #panelClose{width:44px;height:44px;min-height:44px}
+  .row{min-height:44px}
+  .row input[type=range]{height:44px}
+  .hint,.dimtxt,.readout,.tubeHex,.elSub{font-size:0.72rem}
+  :root{--bar-h:52px}
+}
+
+/* PHONE (portrait, or a narrow window). The query matches PHONE_Q in main.js. */
+@media (max-width:768px){
+  :root{--top:calc(44px + env(safe-area-inset-top));--band-h:clamp(170px,30vh,240px);--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{padding:env(safe-area-inset-top) 14px 0 calc(14px + env(safe-area-inset-left))}
+  .pagetitle{display:none}
+  #stage{right:0;grid-template-rows:var(--band-h) minmax(0,1fr)}
+  #bandWrap{grid-row:1;border-top:0;border-bottom:1px solid var(--line-b)}
+  #overWrap{grid-row:2}
+  #overWrap #viewSeg,#overWrap #ionSeg{display:none}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(6,8,14,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink3);color:var(--text);font-size:1.05rem}
+  #dock > button.on{border-color:var(--glow);color:var(--glow)}
+  #dock .seg{flex:1 1 0;height:48px;border-radius:12px;min-width:0}
+  #dock .seg button{flex:1 1 0;min-width:0;padding:0 4px;font-size:0.8rem}
+  /* The sheet: above the dock, never over the band. */
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    --sheet-max:calc(100vh - var(--top) - var(--band-h) - var(--dock-h) - 6px);
+    height:min(52vh,var(--sheet-max));max-height:var(--sheet-max);
+    border-left:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  @supports (height:100dvh){#panel{--sheet-max:calc(100dvh - var(--top) - var(--band-h) - var(--dock-h) - 6px);height:min(52dvh,var(--sheet-max))}}
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:var(--sheet-max)}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px 4px;
+    background:linear-gradient(180deg,rgba(7,9,15,1) 65%,rgba(7,9,15,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  #levels{height:240px}
+  .elSym{width:52px;height:52px;font-size:1.6rem}
+  .tube{height:52px}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge; the stage
+   gives it room, so the band stays in full view. */
+@media (max-height:500px) and (orientation:landscape){
+  :root{--top:0px;--band-h:44vh;--dock-h:calc(56px + env(safe-area-inset-bottom))}
+  .topbar{display:none}
+  #stage{right:0;left:env(safe-area-inset-left);grid-template-rows:minmax(0,1fr) var(--band-h)}
+  #bandWrap{grid-row:2;border-top:1px solid var(--line-b);border-bottom:0}
+  #overWrap{grid-row:1}
+  #overWrap #viewSeg,#overWrap #ionSeg{display:none}
+  body.panel-open #stage{right:min(46vw,380px)}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:4px calc(10px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(6,8,14,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink3);color:var(--text)}
+  #dock > button.on{border-color:var(--glow);color:var(--glow)}
+  #dock .seg{flex:1 1 0;height:48px;border-radius:12px;min-width:0}
+  #dock .seg button{flex:1 1 0;min-width:0}
+  #panel,#panel.full{top:0;bottom:var(--dock-h);left:auto;right:0;width:min(46vw,380px);height:auto;max-height:none;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;border:1px solid var(--line-b);border-radius:10px;background:var(--ink3);color:var(--text)}
+  #levels{height:200px}
+}
+
+/* screensaver (lib/screensaver.js): the saver canvas alone fills the frame */
+html.sn-saver #panel,html.sn-saver #dock,html.sn-saver .topbar,html.sn-saver #tip{visibility:hidden}
