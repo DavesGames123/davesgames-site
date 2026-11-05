@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-233 registered pages in 6 regions and 26 constellations.
+234 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -180,6 +180,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `frqi` (pages/frqi-quantum-image-lab) | Quantum Image Encoding | Quantum > Quantum Computing | IMG | Store an image in qubits with FRQI, layer by layer. |  | shown | hook, tier 3, default | yes |
 | `particle-collider` | Particle Collider | Quantum > Particle Physics | SIM | Collide two particles and trace the products. |  | shown | hook, tier 4, default | yes |
 | `periodic-table` | Periodic Table | Chemistry > The Elements | NEW | Eleven shapes of the table, and the live atom of every element. |  | shown | hook, tier 4, default | yes |
+| `spectral-lines` | Spectral Lines | Chemistry > The Elements | NEW | The bright lines of every element, from NIST data: glowing spectra, a living level diagram, a lamp colour you can heat. |  | shown | hook, tier 3, default | yes |
 | `molecular-bond` | Molecular Bond | Chemistry > Molecules & Reactions | SIM | Watch two atoms share an electron. |  | shown | hook, tier 3, default | yes |
 | `molecules` | Molecule Explorer | Chemistry > Molecules & Reactions | 2D/3D | Over a thousand molecules, skeletal formula beside 3D. |  | shown | hook, tier 3, default | yes |
 | `reactions` | Reaction Explorer | Chemistry > Molecules & Reactions | NEW | Watch molecules change in 3D through famous syntheses. |  | shown | hook, tier 3, default | yes |

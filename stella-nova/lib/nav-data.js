@@ -121,7 +121,8 @@ w.SN_NAV = [
   ] },
   { id: "chemistry", label: "Chemistry", short: "Chemistry", icon: "⚗", color: "#7ee0b0", color2: "#ffc46b", groups: [
     { h: "The Elements", p: [
-      ["periodic-table", "Periodic Table", "NEW"]
+      ["periodic-table", "Periodic Table", "NEW"],
+      ["spectral-lines", "Spectral Lines", "NEW"]
     ] },
     { h: "Molecules & Reactions", p: [
       ["molecular-bond", "Molecular Bond", "SIM"],
