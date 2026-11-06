@@ -253,6 +253,7 @@ w.SN_NAV = [
     { h: "Music", p: [
       ["chordlab", "ChordLab", "MIC"],
       ["string-lab", "String Lab", "3D"],
+      ["alto-sax", "Alto Saxophone", "3D"],
       ["chordchart", "Chord Chart", "NEW", "chord-chart"],
       ["harmonywheel", "Harmony Wheel", "NEW", "harmony-wheel"],
       ["stem-splitter", "Stem Splitter", "NEW"]

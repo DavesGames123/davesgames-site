@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-235 registered pages in 6 regions and 26 constellations.
+236 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -251,6 +251,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `tensor-calculus` | Tensor Calculus | Mathematics > Geometry & Tensors | 3D | Tensor calculus in three linked views: the index equation, a 3D picture and its Penrose diagram, played step by step. |  | shown | hook, tier 4, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
+| `alto-sax` | Alto Saxophone | Sound & Vibration > Music | 3D | Every key, rod, spring and pad of an alto sax in 3D: press a key or pick a note and watch the linkages move. |  | shown | hook, tier 4, default | no |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
 | `harmonywheel` (pages/harmony-wheel) | Harmony Wheel | Sound & Vibration > Music | NEW | The circle of fifths you can spin. |  | shown | hook, tier 3 | yes |
 | `stem-splitter` | Stem Splitter | Sound & Vibration > Music | NEW | Split a song into drums, bass, vocals and more with Demucs, on your device. |  | shown | generic, tier 5 | yes |
@@ -370,7 +371,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `line-art` | Line Art | Generative Art > Pen & Ink | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | yes |
 | `markov-junior` | MarkovJunior | Generative Art > Rules & Grammars | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
 | `context-free` | Context Free | Generative Art > Rules & Grammars | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | yes |
-| `wfc-city` | Collapse City | Generative Art > Rules & Grammars | RUST | Walk an endless city that wave function collapse builds round you, block by block, in Rust and WebGPU. |  | shown | hook, tier 3, default | no |
+| `wfc-city` | Collapse City | Generative Art > Rules & Grammars | RUST | Walk an endless city that wave function collapse builds round you, block by block, in Rust and WebGPU. |  | shown | hook, tier 3, default | yes |
 | `holocloth` | Holocloth | Generative Art > Rules & Grammars | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | yes |
 
 ### Finance
