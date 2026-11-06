@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Collapse City — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   COLLAPSE CITY  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An infinite city that a 3D wave function collapse solver (Rust, WASM)
+   builds round the camera. Walk it, fly over it, or watch each slot fall
+   in. The idea is from marian42/wavefunctioncollapse (MIT, Unity); the
+   algorithm is Maxim Gumin's WaveFunctionCollapse (MIT). The module set,
+   the geometry, the palette and the solver are our own. CONTRACT.md is
+   the spec.
+
+   FILES
+     main.js        DOM, camera modes, controls, the loop, the world load
+     gpu.js         WebGPU device, pipelines, chunk buffers, sky and light
+     shaders/       common.wgsl (uniform, sky, fog, tone map), city.wgsl,
+                    sky.wgsl
+     mock-world.js  the JavaScript stand-in, used only when pkg/ is missing
+     saver.js       the screensaver hook and the shot director
+     style.css      desktop drawer, phone dock and sheet, touch controls
+     tests.mjs      node tests (no browser)
+     pkg/           wfc_city.js + wfc_city_bg.wasm (lane A, crate/build.sh)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #stage, #view ... the WebGPU canvas, full window
+     .topbar ......... page name, #mockBadge, #gear
+     #boot ........... loading and error line
+     #hint ........... the key and pointer hint for the mode
+     #heldNote ....... "the ground under you is still open" (walk)
+     .crosshair ...... the walk mode aim dot
+     #touch .......... phone walk controls: #stick (#stickKnob), #btnJump,
+                       #btnFlyT
+     #panel .......... mode (#modeSeg), city (#seedInput, #btnNew), sliders
+                       (#radius #speed #anim #hour, each with a ...V
+                       readout), #statsLine, #solverInfo, credits
+                       (right drawer; bottom sheet in phone portrait,
+                       #sheetGrip, #panelClose)
+     #dock ........... phone base dock: #dockPanel, #dockMode, #dockNew
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Collapse City: an infinite city that a 3D wave function collapse solver in Rust and WebGPU builds around you. Walk the streets, fly over the roofs, or watch each slot fall into place.">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage"><canvas id="view" tabindex="0" aria-label="3D view of the city. In Walk mode, click to look with the mouse and move with WASD. In Fly-over mode, drag to look."></canvas></div>
+
+<header class="topbar">
+  <span class="brand">Collapse City</span>
+  <span id="mockBadge" class="mock-badge" hidden>mock world · pkg/ missing</span>
+  <button type="button" id="gear" class="tb-btn" aria-label="Open the controls" aria-expanded="true">⚙</button>
+</header>
+
+<div id="boot" class="boot" role="status" aria-live="polite">Loading…</div>
+<p id="hint" class="hint-line"></p>
+<p id="heldNote" class="held-note" hidden>The ground under you is still open. It collapses in a moment.</p>
+<div class="crosshair" aria-hidden="true"></div>
+
+<div id="touch" class="touch" aria-hidden="true">
+  <div id="stick" class="stick"><div id="stickKnob" class="knob"></div></div>
+  <button type="button" id="btnFlyT" class="tbtn fly" aria-label="Fly" aria-pressed="false">✈</button>
+  <button type="button" id="btnJump" class="tbtn jump" aria-label="Jump">⤒</button>
+</div>
+
+<aside id="panel" class="panel open" aria-label="Controls">
+  <div id="sheetGrip" class="grip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button type="button" id="panelClose" class="close" aria-label="Close the controls">✕</button>
+
+  <section class="sec">
+    <h2 class="title">Collapse City</h2>
+    <p class="meta">A wave function collapse solver builds the city round you, one slot at a time.</p>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Mode</h3>
+    <div class="seg" id="modeSeg" role="group" aria-label="Mode">
+      <button type="button" data-mode="walk" aria-pressed="false">Walk</button>
+      <button type="button" data-mode="fly" class="on" aria-pressed="true">Fly-over</button>
+      <button type="button" data-mode="watch" aria-pressed="false">Watch</button>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">City</h3>
+    <div class="row">
+      <label for="seedInput" class="lbl">Seed</label>
+      <input id="seedInput" type="number" min="1" max="4294967295" step="1" inputmode="numeric" class="num">
+      <button type="button" id="btnNew" class="btn">New city</button>
+    </div>
+    <div class="slider"><label for="radius">View distance</label><output id="radiusV"></output>
+      <input id="radius" type="range" min="16" max="64" step="2"></div>
+    <div class="slider"><label for="speed">Generation speed</label><output id="speedV"></output>
+      <input id="speed" type="range" min="1" max="10" step="1"></div>
+    <div class="slider"><label for="anim">Collapse animation</label><output id="animV"></output>
+      <input id="anim" type="range" min="0.1" max="3" step="0.1"></div>
+    <div class="slider"><label for="hour">Time of day</label><output id="hourV"></output>
+      <input id="hour" type="range" min="0" max="24" step="0.25"></div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Solver</h3>
+    <p id="statsLine" class="stats">–</p>
+    <p id="solverInfo" class="meta"></p>
+  </section>
+
+  <section class="sec keys">
+    <h3 class="sec-label">Keys</h3>
+    <dl>
+      <dt>1 2 3</dt><dd>Walk, Fly-over, Watch</dd>
+      <dt>WASD</dt><dd>move (walk), speed and turn (fly-over)</dd>
+      <dt>Space</dt><dd>jump; up while flying</dd>
+      <dt>Shift</dt><dd>run</dd>
+      <dt>F</dt><dd>fly on or off (walk)</dd>
+      <dt>N</dt><dd>new city</dd>
+      <dt>[ ]</dt><dd>time of day</dd>
+      <dt>H</dt><dd>show or hide this panel</dd>
+    </dl>
+  </section>
+
+  <section class="sec credits">
+    <h3 class="sec-label">Credits</h3>
+    <p>The idea of an infinite, walkable city made by wave function collapse is from <a href="https://github.com/marian42/wavefunctioncollapse" target="_blank" rel="noopener">marian42/wavefunctioncollapse</a> by Marian Kleineberg (MIT, Unity). The algorithm is <a href="https://github.com/mxgmn/WaveFunctionCollapse" target="_blank" rel="noopener">WaveFunctionCollapse</a> by Maxim Gumin (MIT).</p>
+    <p>No code, models, module set or look come from those projects. The module set, the geometry, the palette, the solver (Rust, WebAssembly) and the WebGPU renderer are our own.</p>
+  </section>
+</aside>
+
+<nav id="dock" class="dock" aria-label="Main controls">
+  <button type="button" id="dockPanel" aria-label="Controls" aria-expanded="false">⚙</button>
+  <div class="seg" id="dockMode" role="group" aria-label="Mode">
+    <button type="button" data-mode="walk" aria-pressed="false">Walk</button>
+    <button type="button" data-mode="fly" class="on" aria-pressed="true">Fly</button>
+    <button type="button" data-mode="watch" aria-pressed="false">Watch</button>
+  </div>
+  <button type="button" id="dockNew" aria-label="New city">⟳</button>
+</nav>
+
+<footer class="credit-bar">
+  After <a href="https://github.com/marian42/wavefunctioncollapse" target="_blank" rel="noopener">marian42/wavefunctioncollapse</a> (MIT) ·
+  algorithm <a href="https://github.com/mxgmn/WaveFunctionCollapse" target="_blank" rel="noopener">Maxim Gumin</a> (MIT)
+</footer>
+<script type="module" src="saver.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
