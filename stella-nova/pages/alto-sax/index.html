@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Alto Sax Mechanism — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ALTO SAX MECHANISM  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An interactive 3D model of a generic modern alto saxophone in Eb (low
+   Bb3 to high F#6). Every key, pad cup, tone hole, hinge, spring, felt and
+   cork is modelled, and every linkage between keys. CONTRACT.md is the
+   spec, with the facts and the sources.
+
+   FILES
+     model.js     data: centre line, holes, rods, keys, links, chart; solve()
+     scene.js     three.js model from the data (no DOM, node can build it)
+     synth.js     a small reed-like Web Audio voice
+     main.js      DOM: view, picking, chart, groups, labels, dock, sheet
+     saver.js     screensaver hook (window.snSaver) and its seeded director
+     style.css    desktop drawer, phone dock and sheet, landscape drawer
+     tests.mjs    node tests (no browser)
+     CONTRACT.md  facts with sources, model rules, page spec
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #stage ...... the 3D view mount point, full window
+     .topbar ..... page name, #noteTitle, #btnSound, #gear
+     #boot ....... loading and error line
+     #hint ....... the key and pointer hint
+     #tip ........ the name of the touch piece under the mouse
+     #labels ..... part labels of the isolated group
+     #panel ...... note readout (#noteName #noteSub #ventLine #pressed),
+                   chart (#chart #chartAlt), what it moves (#moves),
+                   mechanisms (#groups #explode #explodeVal #groupText
+                   #groupParts), view (#btnClear #btnTint #btnLabels
+                   #btnReset), about (#counts); #panelClose, #sheetGrip
+                   (right drawer; bottom sheet in phone portrait)
+     #dock ....... phone dock: #dockPanel #dockPrev #dockNote #dockNext
+                   #dockGroup #dockSound
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The full mechanism of a modern alto saxophone in 3D: every key, pad, tone hole, spring, felt and linkage. Pick a note from the fingering chart, press any key to see what it moves, and isolate each mechanism, from the automatic octave key to the articulated G sharp.">
+<link rel="stylesheet" href="../../lib/sci.css">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage" aria-label="3D view of an alto saxophone. Click or tap a key to press it. Drag to orbit, pinch or scroll to zoom."></div>
+<div id="labels" class="labels" aria-hidden="true"></div>
+<div id="tip" class="tip" hidden></div>
+
+<header class="topbar">
+  <span class="brand">Alto Sax Mechanism</span>
+  <span id="noteTitle" class="obj-title"></span>
+  <button type="button" id="btnSound" class="tb-btn" aria-pressed="false" title="Play the note (S)">Sound</button>
+  <button type="button" id="gear" class="tb-btn" aria-label="Open the panel" aria-expanded="true">&#9881;</button>
+</header>
+
+<div id="boot" class="boot" role="status" aria-live="polite">Building the instrument…</div>
+<p id="hint" class="hint-line">Click a key to press it · ← → notes · 1–8 mechanisms · E explode · S sound · drag to orbit</p>
+
+<aside id="panel" class="panel open" aria-label="Fingering and mechanism panel">
+  <div id="sheetGrip" class="grip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button type="button" id="panelClose" class="close" aria-label="Close the panel">&#10005;</button>
+
+  <section class="sec">
+    <h2 id="noteName" class="obj-name">C♯5</h2>
+    <p id="noteSub" class="meta"></p>
+    <p id="ventLine" class="meta"></p>
+    <div id="pressed" class="chips" aria-label="Keys that are down"></div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Fingering chart (written pitch)</h3>
+    <div id="chart" class="chart" role="group" aria-label="Notes"></div>
+    <h3 class="sec-label sub">Other fingerings</h3>
+    <div id="chartAlt" class="chart alt" role="group" aria-label="Other fingerings"></div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">What it moves</h3>
+    <div id="moves" class="moves"></div>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">Mechanisms</h3>
+    <div id="groups" class="groups" role="group" aria-label="Isolate a mechanism"></div>
+    <label class="slider">Explode <input type="range" id="explode" min="0" max="1" step="0.01" value="0.6"> <span id="explodeVal">60%</span></label>
+    <p id="groupText" class="gtext"></p>
+    <ul id="groupParts" class="parts"></ul>
+  </section>
+
+  <section class="sec">
+    <h3 class="sec-label">View</h3>
+    <div class="actions">
+      <button type="button" id="btnClear" class="btn">Release all</button>
+      <button type="button" id="btnTint" class="btn" aria-pressed="false">Group colours</button>
+      <button type="button" id="btnLabels" class="btn" aria-pressed="true">Labels</button>
+      <button type="button" id="btnReset" class="btn">Reset view</button>
+    </div>
+  </section>
+
+  <section class="sec about">
+    <h3 class="sec-label">About the model</h3>
+    <p>A generic modern alto in E♭. Written pitch is shown; the instrument sounds a major sixth lower. The first open tone hole sets the note, and the octave key opens one of two small register holes. The parts are larger than true scale where that helps to see them, and the key travel is exaggerated.</p>
+    <p id="counts"></p>
+    <p>Facts from J. Wolfe (UNSW Music Acoustics), S. Howard's repair notes on octave mechanisms, Taming the Saxophone, public-domain US patents, and other repair notes. The full list, with the parts that are our own inference, is in <a href="CONTRACT.md" target="_blank" rel="noopener">CONTRACT.md</a>. Our own model and text.</p>
+  </section>
+</aside>
+
+<nav id="dock" class="dock" aria-label="Main controls">
+  <button type="button" id="dockPanel" aria-label="Panel" aria-expanded="false">&#9776;</button>
+  <button type="button" id="dockPrev" aria-label="Previous note">&#8249;</button>
+  <button type="button" id="dockNote" class="note" aria-label="Current note">C♯5</button>
+  <button type="button" id="dockNext" aria-label="Next note">&#8250;</button>
+  <button type="button" id="dockGroup" aria-label="Next mechanism">&#9678;</button>
+  <button type="button" id="dockSound" aria-label="Sound" aria-pressed="false">&#9835;</button>
+</nav>
+
+<footer class="credit-bar">Generic instrument · our own model · sources in CONTRACT.md</footer>
+<script type="module" src="saver.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

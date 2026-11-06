@@ -1,0 +1,199 @@
+/* ============================================================================
+   ALTO SAX MECHANISM  ·  stylesheet
+   ----------------------------------------------------------------------------
+   The 3D view fills the window. Desktop: the panel is a drawer on the right
+   edge. Type comes from lib/sci.css (Inter for text, the system mono for
+   numbers only).
+
+   PHONE (max-width 768px, or a short landscape touch screen). The pattern
+   of pages/wave-membrane: a dock at the base holds the primary controls. In
+   portrait the panel is a bottom sheet above the dock. In landscape it is a
+   drawer on the right edge. Every control is 44px or more on a touch screen.
+   main.js measures the overlays and moves the camera view offset, so the
+   sheet never covers the instrument.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block (PHONE_Q in main.js)
+     grep -n 'LANDSCAPE'  the landscape overrides
+     grep -n 'CHART'      the fingering chart buttons
+     grep -n 'LABELS'     part labels and the hover tip
+     grep -n 'as-saver'   the screensaver mode
+
+   An element with the hidden attribute must have no display rule of its
+   own. tests.mjs checks it.
+   ========================================================================== */
+[hidden]{display:none!important}
+:root{
+  --bg:#07090d; --bg2:#0f131c; --ink:#dde2ea; --dim:#8d95a6; --faint:#2a3242;
+  --line:rgba(150,180,230,0.12); --line-b:rgba(150,180,230,0.24);
+  --warm:#f0b25e; --cool:#7fb4ff; --panel-w:340px; --dock-h:0px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);overflow:hidden}
+body{width:100%;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sci-sans);-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+html,body{height:100%}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+a{color:var(--cool)}
+
+#stage{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 38%,#1a1f2b 0%,#0b0e15 55%,#05070a 100%)}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+
+.topbar{
+  position:fixed;top:0;left:0;right:var(--panel-w);z-index:30;display:flex;align-items:center;gap:14px;
+  height:52px;padding:0 18px;pointer-events:none}
+body.panel-closed .topbar{right:0}
+.brand{font-family:var(--sci-serif);font-size:1.12rem;color:#eef2fa;white-space:nowrap}
+.obj-title{font-size:0.95rem;color:var(--warm);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sci-serif)}
+.tb-btn{
+  pointer-events:auto;height:34px;padding:0 12px;border:1px solid var(--line-b);border-radius:9px;
+  background:rgba(14,18,27,0.75);color:var(--ink);font-size:0.82rem;cursor:pointer}
+.tb-btn:hover{border-color:var(--warm);color:var(--warm)}
+.tb-btn[aria-pressed="true"]{border-color:var(--warm);color:var(--warm)}
+#btnSound{margin-left:auto}
+#gear{width:34px;padding:0;visibility:hidden}
+body.panel-closed #gear{visibility:visible}
+
+.boot{
+  position:fixed;left:50%;top:45%;transform:translate(-50%,-50%);z-index:25;padding:10px 16px;
+  border:1px solid var(--line);border-radius:10px;background:rgba(14,18,27,0.85);font-size:0.86rem;color:var(--dim);max-width:80vw;text-align:center}
+.boot.err{color:#ff8a7a;border-color:rgba(255,120,100,0.4)}
+.hint-line{position:fixed;left:18px;bottom:34px;z-index:20;font-size:0.76rem;color:var(--dim);pointer-events:none;transition:opacity 0.6s}
+.hint-line.gone{opacity:0}
+.credit-bar{position:fixed;left:18px;bottom:10px;z-index:20;font-size:0.72rem;color:var(--dim)}
+
+/* LABELS: part labels of an isolated group, and the hover tip */
+.labels{position:fixed;inset:0;z-index:15;pointer-events:none;overflow:hidden}
+.lbl{
+  position:absolute;left:0;top:0;padding:2px 7px 2px 14px;font-size:0.72rem;line-height:1.35;color:#f2f5fa;white-space:nowrap;
+  background:rgba(8,10,15,0.72);border:1px solid var(--line-b);border-radius:6px;margin:-10px 0 0 6px}
+.lbl::before{content:'';position:absolute;left:5px;top:50%;width:5px;height:5px;margin-top:-2.5px;border-radius:50%;background:var(--c,#fff)}
+.tip{
+  position:fixed;left:0;top:0;z-index:40;pointer-events:none;padding:4px 8px;font-size:0.76rem;color:#f2f5fa;
+  background:rgba(8,10,15,0.9);border:1px solid var(--line-b);border-radius:7px;white-space:nowrap}
+
+/* ---- panel (desktop: a drawer on the right edge) ---- */
+.panel{
+  position:fixed;top:0;right:0;bottom:0;width:var(--panel-w);z-index:35;overflow-y:auto;
+  background:rgba(10,12,18,0.96);border-left:1px solid var(--line-b);padding:14px 18px 24px;
+  transform:translateX(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+.panel.open{transform:translateX(0)}
+.close{
+  position:absolute;top:12px;right:12px;width:30px;height:30px;border:1px solid var(--line);border-radius:7px;
+  background:transparent;color:var(--dim);cursor:pointer}
+.close:hover{color:var(--warm);border-color:var(--warm)}
+.grip{display:none}
+.sec{padding:12px 0;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.obj-name{font-family:var(--sci-serif);font-size:1.6rem;font-weight:500;margin-right:40px;line-height:1.2;color:#f4f6fa}
+.meta{font-size:0.78rem;color:var(--dim);margin:4px 0;line-height:1.45}
+.sec-label{font-size:0.74rem;font-weight:600;color:var(--dim);margin-bottom:8px;letter-spacing:0.02em}
+.sec-label.sub{margin-top:10px}
+.btn{
+  height:32px;padding:0 10px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);
+  font-size:0.8rem;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--warm);color:var(--warm)}
+.btn.on,.btn[aria-pressed="true"]{border-color:var(--warm);color:var(--warm);background:rgba(240,178,94,0.1)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chips .none{font-size:0.76rem;color:var(--dim)}
+.chip{
+  height:26px;padding:0 9px 0 18px;position:relative;border:1px solid var(--line-b);border-radius:13px;background:var(--bg2);color:var(--ink);font-size:0.74rem;cursor:pointer}
+.chip::before{content:'';position:absolute;left:7px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--c,#fff)}
+.chip:hover{border-color:var(--warm)}
+
+/* CHART */
+.chart{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.chart button{
+  min-height:34px;padding:2px 0;border:1px solid var(--line);border-radius:7px;background:var(--bg2);color:var(--ink);
+  font:0.8rem var(--sci-serif);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.chart button small{font:0.6rem var(--sci-sans);color:var(--dim)}
+.chart button:hover{border-color:var(--warm)}
+.chart button.on{border-color:var(--warm);color:var(--warm);background:rgba(240,178,94,0.12)}
+.chart.alt{grid-template-columns:repeat(4,1fr)}
+
+.moves .steps{margin:6px 0 0 18px;font-size:0.76rem;line-height:1.5;color:var(--ink)}
+.moves .steps li{margin-bottom:4px}
+.moves .steps b{color:#f4f6fa}
+
+.groups{display:flex;flex-wrap:wrap;gap:5px}
+.groups button{
+  height:30px;padding:0 10px 0 20px;position:relative;border:1px solid var(--line-b);border-radius:15px;background:var(--bg2);color:var(--ink);font-size:0.76rem;cursor:pointer}
+.groups button::before{content:'';position:absolute;left:8px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:var(--c,#8d95a6)}
+.groups button.on{border-color:var(--c,var(--warm));color:#fff;background:rgba(255,255,255,0.06)}
+.slider{display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:0.76rem;color:var(--dim)}
+.slider input{flex:1;accent-color:var(--warm)}
+.slider span{font:0.72rem var(--sci-mono);min-width:34px;text-align:right}
+.gtext{font-size:0.8rem;line-height:1.55;color:var(--ink);margin-top:8px}
+.parts{list-style:none;margin-top:8px;font-size:0.76rem;line-height:1.45}
+.parts li{padding:5px 0;border-top:1px solid var(--line);color:var(--dim)}
+.parts li b{color:var(--ink);font-weight:600}
+.parts li.lk{padding-left:12px;border-left:2px solid var(--faint);border-top:0;margin-top:2px}
+.about p{font-size:0.78rem;line-height:1.6;color:var(--dim);margin-bottom:6px}
+
+.dock{display:none}
+
+/* TOUCH. Any touch screen or narrow window: every target is 44px or more,
+   and all text is 11px or more. */
+@media (pointer:coarse), (max-width:768px){
+  .tb-btn{height:44px;min-width:44px}
+  .btn{height:44px;font-size:0.82rem}
+  .close{width:44px;height:44px;top:4px;right:4px}
+  .chart button{min-height:44px}
+  .chip{height:44px;border-radius:22px}
+  .groups button{height:44px;border-radius:22px}
+  .slider input{height:44px}
+  .meta,.sec-label,.parts,.moves .steps,.hint-line,.credit-bar,.chart button small,.lbl{font-size:0.74rem}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{right:0;height:calc(52px + env(safe-area-inset-top));padding:env(safe-area-inset-top) calc(12px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left));gap:10px}
+  .brand{font-size:1rem}
+  #gear{display:none}
+  .hint-line,.credit-bar{display:none}
+  .dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:6px;align-items:center;
+    padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+    background:rgba(8,10,15,0.95);border-top:1px solid var(--line-b)}
+  .dock > button{flex:0 0 46px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.15rem;cursor:pointer}
+  .dock > button.note{flex:1;font:1.05rem var(--sci-serif);color:var(--warm)}
+  .dock > button.on,.dock > button[aria-pressed="true"]{border-color:var(--warm);color:var(--warm)}
+  /* The panel is a bottom sheet above the dock. */
+  .panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    height:min(44vh,520px);height:min(44dvh,520px);
+    border-left:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1)}
+  .panel.open{transform:translateY(0)}
+  .panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  .grip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px;
+    background:linear-gradient(180deg,rgba(10,12,18,1) 65%,rgba(10,12,18,0));touch-action:none;cursor:grab}
+  .grip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .chart{grid-template-columns:repeat(6,1fr)}
+  .chart.alt{grid-template-columns:repeat(3,1fr)}
+  .obj-name{font-size:1.35rem}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
+   tab at the lower left. The topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar{display:none}
+  .dock{right:auto;width:min(420px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  .panel,.panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(44vw,360px);height:auto;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;
+    transform:translateX(100%)}
+  .panel.open{transform:translateX(0)}
+  .grip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--bg2)}
+}
+
+/* screensaver (saver.js): only the 3D view shows */
+html.as-saver .topbar,html.as-saver .panel,html.as-saver .dock,html.as-saver .hint-line,html.as-saver .credit-bar,
+html.as-saver .boot,html.as-saver .labels,html.as-saver .tip{visibility:hidden}
+html.as-saver #stage canvas{cursor:none}
+html.sn-saver .topbar,html.sn-saver .panel,html.sn-saver .dock,html.sn-saver .hint-line,html.sn-saver .credit-bar{visibility:hidden}
