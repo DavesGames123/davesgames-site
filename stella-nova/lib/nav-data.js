@@ -446,6 +446,7 @@ w.SN_NAV = [
     { h: "Rules & Grammars", p: [
       ["markov-junior", "MarkovJunior", "RULES"],
       ["context-free", "Context Free", "WASM"],
+      ["wfc-city", "Collapse City", "RUST"],
       ["holocloth", "Holocloth", "CLOTH"]
     ] }
   ] }

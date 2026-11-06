@@ -328,6 +328,7 @@ const BLURBS = {
   reactions: 'Watch molecules change in 3D through famous syntheses.',
   'octane-number': 'Why some fuels knock: the octane scale, a live cylinder, and fuels in 3D.',
   'periodic-table': 'Eleven shapes of the table, and the live atom of every element.',
+  'wfc-city': 'Walk an endless city that wave function collapse builds round you, block by block, in Rust and WebGPU.',
   'spectral-lines': 'The bright lines of every element, from NIST data: glowing spectra, a living level diagram, a lamp colour you can heat.',
   qave: 'Quantum algorithms step by step in 3D.',
   'qft-flow': 'Four qubit phase knobs and the spectrum a QFT reads out.',

@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-234 registered pages in 6 regions and 26 constellations.
+235 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -370,6 +370,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `line-art` | Line Art | Generative Art > Pen & Ink | RUST | The ln 3D line-art engine, as a pen plotter. | ln by Michael Fogleman (MIT) | search only | hook, tier 3, default | yes |
 | `markov-junior` | MarkovJunior | Generative Art > Rules & Grammars | RULES | Rewrite rules grow mazes, caves and towns. | MarkovJunior by Maxim Gumin | search only | no | yes |
 | `context-free` | Context Free | Generative Art > Rules & Grammars | WASM | The Context Free engine: grow designs from grammar. | Context Free by Mark Lentczner and John Horigan (GPL-2+) | search only | hook, tier 3, default | yes |
+| `wfc-city` | Collapse City | Generative Art > Rules & Grammars | RUST | Walk an endless city that wave function collapse builds round you, block by block, in Rust and WebGPU. |  | shown | hook, tier 3, default | no |
 | `holocloth` | Holocloth | Generative Art > Rules & Grammars | CLOTH | A holographic foil cloth in zero gravity. | Holocloth by Dmitry Kurash (MIT) | search only | no | yes |
 
 ### Finance
