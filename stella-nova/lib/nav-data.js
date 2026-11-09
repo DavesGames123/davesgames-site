@@ -409,10 +409,11 @@ w.SN_NAV = [
       ["fire", "Fire Table", "WGSL", "fire-table"],
       ["fire-ev1", "Fire Table (Evolved 1)", "WGSL", "fire-table-evolved-1"]
     ] },
-    { h: "Heat & Frost", p: [
+    { h: "Heat, Frost & Corruption", p: [
       ["heat-diffraction", "Heat Diffraction", "IMG"],
       ["heat-metal", "Heat Metal", "WGSL"],
-      ["frost", "Frost Table", "WGSL", "frost-table"]
+      ["frost", "Frost Table", "WGSL", "frost-table"],
+      ["corruption", "Corruption Shader", "WGSL"]
     ] }
   ] },
   { id: "rendering", label: "Rendering", short: "Render", icon: "◈", color: "#96c8ff", color2: "#ffb478", groups: [

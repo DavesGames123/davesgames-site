@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-236 registered pages in 6 regions and 26 constellations.
+237 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -251,7 +251,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `tensor-calculus` | Tensor Calculus | Mathematics > Geometry & Tensors | 3D | Tensor calculus in three linked views: the index equation, a 3D picture and its Penrose diagram, played step by step. |  | shown | hook, tier 4, default | yes |
 | `chordlab` | ChordLab | Sound & Vibration > Music | MIC | Sing or play: it names the chord live. |  | shown | generic, tier 5 | yes |
 | `string-lab` | String Lab | Sound & Vibration > Music | 3D | Pluck, strum and bow a guitar and a violin in slow motion and see the harmonic ratios. |  | shown | hook, tier 3, default | yes |
-| `alto-sax` | Alto Saxophone | Sound & Vibration > Music | 3D | Every key, rod, spring and pad of an alto sax in 3D: press a key or pick a note and watch the linkages move. |  | shown | hook, tier 4, default | no |
+| `alto-sax` | Alto Saxophone | Sound & Vibration > Music | 3D | Every key, rod, spring and pad of an alto sax in 3D: press a key or pick a note and watch the linkages move. |  | shown | hook, tier 4, default | yes |
 | `chordchart` (pages/chord-chart) | Chord Chart | Sound & Vibration > Music | NEW | Every chord shape on one chart. |  | shown | generic, tier 5 | yes |
 | `harmonywheel` (pages/harmony-wheel) | Harmony Wheel | Sound & Vibration > Music | NEW | The circle of fifths you can spin. |  | shown | hook, tier 3 | yes |
 | `stem-splitter` | Stem Splitter | Sound & Vibration > Music | NEW | Split a song into drums, bass, vocals and more with Demucs, on your device. |  | shown | generic, tier 5 | yes |
@@ -348,9 +348,10 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `beam` (pages/beam-table) | Beam & Decal Table | Game Effects > Weapons & Engines | WGSL | Lasers, beams and decals. |  | shown | hook, tier 3, default | yes |
 | `fire` (pages/fire-table) | Fire Table | Game Effects > Fire & Smoke | WGSL | Procedural fire, many variants. |  | shown | hook, tier 3, default | yes |
 | `fire-ev1` (pages/fire-table-evolved-1) | Fire Table (Evolved 1) | Game Effects > Fire & Smoke | WGSL | An evolved set of fire shaders. |  | shown | hook, tier 3, default | yes |
-| `heat-diffraction` | Heat Diffraction | Game Effects > Heat & Frost | IMG | Heat haze that bends the image. |  | shown | hook, tier 3 | yes |
-| `heat-metal` | Heat Metal | Game Effects > Heat & Frost | WGSL | Metal that glows from a hot spot. |  | shown | hook, tier 3, default | yes |
-| `frost` (pages/frost-table) | Frost Table | Game Effects > Heat & Frost | WGSL | Frost that creeps across glass. |  | shown | hook, tier 3, default | yes |
+| `heat-diffraction` | Heat Diffraction | Game Effects > Heat, Frost & Corruption | IMG | Heat haze that bends the image. |  | shown | hook, tier 3 | yes |
+| `heat-metal` | Heat Metal | Game Effects > Heat, Frost & Corruption | WGSL | Metal that glows from a hot spot. |  | shown | hook, tier 3, default | yes |
+| `frost` (pages/frost-table) | Frost Table | Game Effects > Heat, Frost & Corruption | WGSL | Frost that creeps across glass. |  | shown | hook, tier 3, default | yes |
+| `corruption` | Corruption Shader | Game Effects > Heat, Frost & Corruption | WGSL | A computer-virus corruption that eats any model: voxel crust, a red front, shed polyhedra and red zeros and ones. Shuffle for a new strain. |  | shown | no | no |
 | `supernova` (pages/fractal-orb) | Fractal Orb | Rendering > Ray Marching | SHADER | A raymarched fractal orb. |  | shown | hook, tier 2, default | yes |
 | `biome-parts` | Biome Parts | Rendering > Ray Marching | AI | A 1.2M-parameter model builds CAD parts live, command by command. |  | shown | hook, tier 4, default | yes |
 | `sphere-tracing` | Sphere Tracing Lab | Rendering > Ray Marching | LAB | Watch one ray march through a distance field. |  | shown | hook, tier 3, default | yes |
