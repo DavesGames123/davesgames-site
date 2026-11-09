@@ -1,0 +1,58 @@
+/* ============================================================================
+   CORRUPTION SHADER  ·  style.css — the page layer over lib/sn-panel.css
+   ----------------------------------------------------------------------------
+   The view fills the window. Desktop: the panel at the left, the stage bar
+   (model chips, Shuffle, seed) at the base. Phone: lib/sn-panel.css dock and
+   sheet; the stage bar hides and the dock carries the model and Shuffle.
+   GREP MAP
+     grep -n 'TOKENS'   the red accent on the shared panel
+     grep -n 'STAGE'    the stage bar and the chips
+     grep -n 'PHONE'    the phone form
+   ========================================================================== */
+[hidden]{display:none!important}
+
+/* TOKENS */
+:root{
+  --snp-accent:#ff4a4a; --snp-accent-ink:#2a0303; --snp-accent-soft:rgba(255,74,74,0.16);
+  --snp-bg:rgba(12,10,12,0.86); --snp-solid:#0d0a0c; --snp-line:rgba(255,160,160,0.12);
+  --snp-ink:#efe6e6; --snp-dim:#b29c9c;
+  --dim:#b29c9c;
+}
+html,body{margin:0;height:100%;background:#030304;color:var(--snp-ink);overflow:hidden;font-family:var(--sci-sans)}
+#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view.drag{cursor:grabbing}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:#ff4a4a;box-shadow:0 0 10px #ff4a4a}
+#nogpu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:#ffc4a3;font-size:0.9375rem;z-index:50}
+#hint{bottom:84px}
+
+/* STAGE */
+#stageBar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:8px;
+  padding:6px;max-width:calc(100vw - 32px);background:var(--snp-bg);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--snp-line);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,0.5)}
+body:not(.panel-closed) #stageBar{left:calc(50% + var(--snp-w) / 2);max-width:calc(100vw - var(--snp-w) - 32px)}
+#modelChips{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+#modelChips::-webkit-scrollbar{display:none}
+#modelChips button,#btnShuffle{height:34px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--snp-dim);
+  font:500 0.8125rem var(--sci-sans);white-space:nowrap;cursor:pointer;touch-action:manipulation}
+#modelChips button:hover{background:rgba(255,255,255,0.06);color:var(--snp-ink)}
+#modelChips button[aria-pressed="true"]{background:var(--snp-accent-soft);color:#ffd6d6}
+#modelChips button:focus-visible,#btnShuffle:focus-visible{outline:2px solid var(--snp-accent);outline-offset:1px}
+#btnShuffle{display:inline-flex;align-items:center;gap:6px;background:var(--snp-accent);color:var(--snp-accent-ink);font-weight:600;padding:0 14px}
+#btnShuffle:hover{filter:brightness(1.1)}
+#btnShuffle .snp-ic{width:18px;height:18px}
+#seedLbl{font-size:0.75rem;color:var(--snp-dim);font-variant-numeric:tabular-nums;padding:0 6px 0 2px;white-space:nowrap}
+#btnShuffle.spin .snp-ic{animation:spin 0.45s var(--snp-ease)}
+@keyframes spin{to{transform:rotate(180deg)}}
+
+#drop{position:fixed;inset:12px;z-index:60;display:flex;align-items:center;justify-content:center;border:2px dashed var(--snp-accent);
+  border-radius:18px;background:rgba(20,4,4,0.6);font-size:1rem;color:#ffd6d6;pointer-events:none}
+
+body.saver .topbar,body.saver #stageBar,body.saver #hint,body.saver .snp,body.saver .snp-gear,body.saver .snp-dock{display:none!important}
+
+/* PHONE */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #stageBar{display:none}
+  #hint{bottom:calc(var(--snp-dock-h) + 12px);width:calc(100vw - 32px)}
+  .snp-dock > button:first-child{flex:0.9 1 0}
+}
+@media (prefers-reduced-motion:reduce){#btnShuffle.spin .snp-ic{animation:none}}
