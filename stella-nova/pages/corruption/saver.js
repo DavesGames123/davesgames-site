@@ -5,10 +5,14 @@
 //  with { calm 0..1, seconds, caption, seed }. Each shot is a new shuffle on
 //  a model, with its own camera: a slow orbit, a push-in on the front, or a
 //  low pass along the deck. Shots last 7 to 12 s; the model changes on most
-//  cuts. Calm lowers the screen glitch and the orbit speed.
+//  cuts. Calm lowers the screen glitch and the orbit speed. Each shot names
+//  itself on the shell label plate (opts.label): the model, the seed, three
+//  parameters and the real WGSL of fn corruptField as the code extract.
+//  main.js frames the subject in the clear band (lib/saver-clear.js).
 //
 //  GREP MAP
 //    grep -n 'export function makePlan'   seed -> shots (no DOM)
+//    grep -n 'export function codeExtract'  the WGSL lines for the plate
 //    grep -n 'export function installSaver' the window hook (main.js passes the view)
 // ============================================================================
 import { rng } from './params.js';
@@ -36,7 +40,16 @@ export function makePlan(seed, n = 24) {
   return shots;
 }
 
-// view: { canvas, applyShot(shot, calm), tick(shot, k, calm), setSaver(on), plateShift() }
+// the infection field from the page shader: fn spreadR and fn corruptFieldOct,
+// with the comment lines dropped so the plate shows code only
+export function codeExtract(wgsl) {
+  const a = wgsl.indexOf('fn spreadR'), b = wgsl.indexOf('fn corruptField(p');
+  if (a < 0 || b < a) return '';
+  return wgsl.slice(a, b).split('\n').filter(l => l.trim() && !l.trim().startsWith('//')).join('\n');
+}
+
+// view: { canvas, applyShot(shot, calm), tick(shot, k, calm), setSaver(on),
+//         describe() -> plate info }
 export function installSaver(view) {
   let run = null;
   window.snSaver = {
@@ -45,8 +58,11 @@ export function installSaver(view) {
       const calm = Math.min(1, Math.max(0, opts.calm ?? 0.6));
       const plan = makePlan(opts.seed ?? (Math.random() * 4294967296) >>> 0);
       run = { plan, i: 0, t0: performance.now(), calm, raf: 0 };
+      const label = typeof opts.label === 'function' ? opts.label : null;
+      run.label = label;
       view.setSaver(true);
       view.applyShot(plan[0], calm);
+      if (label) label(view.describe());
       const step = () => {
         if (!run) return;
         const s = run.plan[run.i % run.plan.length];
@@ -54,6 +70,7 @@ export function installSaver(view) {
         if (k >= 1) {
           run.i++; run.t0 = performance.now();
           view.applyShot(run.plan[run.i % run.plan.length], calm);
+          if (run.label) run.label(view.describe());
         } else view.tick(s, k, calm);
         run.raf = requestAnimationFrame(step);
       };
@@ -63,10 +80,16 @@ export function installSaver(view) {
     exit() {
       if (!run) return;
       cancelAnimationFrame(run.raf);
+      if (run.label) run.label(null);
       run = null;
       view.setSaver(false);
     },
     debug() { return run ? { shot: run.i, model: run.plan[run.i % run.plan.length].model } : null; },
-    cut() { if (run) { run.i++; run.t0 = performance.now(); view.applyShot(run.plan[run.i % run.plan.length], run.calm); } },
+    cut() {
+      if (!run) return;
+      run.i++; run.t0 = performance.now();
+      view.applyShot(run.plan[run.i % run.plan.length], run.calm);
+      if (run.label) run.label(view.describe());
+    },
   };
 }

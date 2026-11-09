@@ -27,7 +27,7 @@ import * as Pm from './params.js';
 import * as Md from './models.js';
 import { orbitCamera, mul4 } from './camera.js';
 import { buildModule, sliceLibrary, LIB_START, LIB_END } from './gpu.js';
-import { makePlan, SAVER_MODELS } from './saver.js';
+import { makePlan, SAVER_MODELS, codeExtract } from './saver.js';
 
 const here = new URL('./', import.meta.url);
 const path = f => new URL(f, here).pathname;
@@ -203,6 +203,8 @@ ok(JSON.stringify(makePlan(43)) !== JSON.stringify(pl), 'another seed gives anot
 ok(pl.every(s => s.dur >= 7 && s.dur <= 12 && SAVER_MODELS.includes(s.model)), 'shots last 7 to 12 s on stage models');
 ok(new Set(pl.map(s => s.model)).size >= 4, `a plan visits several models (${new Set(pl.map(s => s.model)).size})`);
 ok(!SAVER_MODELS.includes('custom'), 'the saver never asks for the custom model');
+const ex = codeExtract(page);
+ok(ex.startsWith('fn spreadR') && ex.includes('fn corruptFieldOct') && !ex.includes('//') && ex.split('\n').length <= 16, `the plate code extract is the field, ${ex.split('\n').length} lines`);
 
 // ── page ────────────────────────────────────────────────────────────────────
 section('page');

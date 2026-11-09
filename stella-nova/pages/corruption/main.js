@@ -24,7 +24,8 @@ import { PARAMS, MODES, defaults, shuffle, spreadAt, packUniforms, readQuery, fi
 import { MODELS, MODEL, torusKnot, hullPod, bench, fitMesh, meshFromGLB, sampleSurface } from './models.js';
 import { orbitCamera } from './camera.js';
 import { buildModule, createRenderer, MAX_SAMPLES } from './gpu.js';
-import { installSaver } from './saver.js';
+import { installSaver, codeExtract } from './saver.js';
+import { plateBand } from '../../lib/saver-clear.js';
 
 const PHONE_QUERY = '(max-width:768px), (max-height:500px) and (pointer:coarse)';
 const $ = id => document.getElementById(id);
@@ -54,7 +55,8 @@ async function boot() {
   if (!adapter) throw new Error('nogpu');
   S.device = await adapter.requestDevice();
   const SH = await loadShaders(import.meta.url, ['shaders/corruption.wgsl', '../sdf-solids-table/shaders/pack.wgsl']);
-  const code = buildModule(SH['../sdf-solids-table/shaders/pack.wgsl'], SH['shaders/corruption.wgsl']);
+  S.shaderText = SH['shaders/corruption.wgsl'];
+  const code = buildModule(SH['../sdf-solids-table/shaders/pack.wgsl'], S.shaderText);
   const format = navigator.gpu.getPreferredCanvasFormat();
   S.ctx = canvas.getContext('webgpu');
   S.ctx.configure({ device: S.device, format, alphaMode: 'opaque' });
@@ -67,7 +69,7 @@ async function boot() {
   if (q.seed !== null) applySeed(q.seed); else { S.seed = 0; S.P.src = fitSrc(defaults().src, MODEL.trooper.bound, S.bound); }
   buildUI();
   bindInput();
-  installSaver({ canvas, applyShot, tick: saverTick, setSaver });
+  installSaver({ canvas, applyShot, tick: saverTick, setSaver, describe });
   requestAnimationFrame(frame);
 }
 
@@ -382,11 +384,35 @@ function applyShot(shot, calm) {
   S.time = 0; S.heal = 1; S.healTarget = 1; S.burst = 0.6 * (1 - calm);
   S.cam.yaw = shot.yaw; S.cam.pitch = shot.pitch;
   S.cam.dist = S.bound.r * shot.dist[0];
-  S.cam.shiftY = -0.08;
+  S.cam.shiftY = bandFrame().shift;
+}
+// the clear band of the shell label plate: the principal point moves to its
+// centre and the camera backs off by h / band so the subject fits it
+function bandFrame() {
+  const h = innerHeight, b = plateBand(h);
+  if (!b) return { shift: 0, back: 1 };
+  const yc = (b.t + (h - b.b)) / 2, band = Math.max(1, h - b.t - b.b);
+  return { shift: (2 * yc) / h - 1, back: Math.min(2, h / band) };
+}
+function describe() {
+  const m = MODEL[S.model];
+  return {
+    title: 'Corruption Shader',
+    sub: `${m.label} · ${m.kind === 'sdf' ? 'signed distance field' : 'triangle mesh'} · strain #${S.seed.toString(36)}`,
+    params: [
+      { sym: 'v', name: 'voxel', value: `${(S.P.voxel * 100).toFixed(1)} cm` },
+      { sym: 'N', name: 'polyhedra', value: String(S.P.parts) },
+      { sym: 'b', name: 'zeros and ones', value: String(S.P.glyphs) },
+    ],
+    lines: ['One WGSL material for any geometry: it reads only a world point and a normal.'],
+    code: { lang: 'wgsl', name: 'corruption.wgsl · the infection field', text: codeExtract(S.shaderText || '') },
+  };
 }
 function saverTick(shot, k, calm) {
   const e = k * k * (3 - 2 * k);
-  S.cam.dist = S.bound.r * (shot.dist[0] + (shot.dist[1] - shot.dist[0]) * e);
+  const bf = bandFrame();
+  S.cam.shiftY = bf.shift;
+  S.cam.dist = S.bound.r * (shot.dist[0] + (shot.dist[1] - shot.dist[0]) * e) * bf.back;
   S.cam.yaw += shot.dir * 0.0016 * (1 - 0.5 * calm) * (shot.move === 'low' ? 1.6 : 1);
   if (shot.move === 'low') S.cam.target = [S.bound.c[0], S.bound.c[1] * 0.7, S.bound.c[2]];
   else S.cam.target = [...S.bound.c];
