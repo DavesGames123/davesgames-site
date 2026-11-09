@@ -25,7 +25,7 @@
 //    vs_part ..... instanced polyhedra (tetra, cube, octa, icosa) shed from
 //                  the infected surface
 //    vs_glyph .... instanced red 0 and 1 digits (distance-field glyphs)
-//    fs_post ..... tear bands, colour split, bloom taps, scan lines, finish
+//    fs_post ..... bloom taps and the finisher (no screen-space effect)
 //
 //  GREP MAP
 //    grep -n 'struct U'           the uniform block (params.js UNIFORM_FIELDS)
@@ -436,15 +436,13 @@ fn marchScene(ro: vec3f, rd: vec3f, tmax: f32) -> vec2f {
     return vec2f(-1.0, 0.0);
 }
 
-// ── the backdrop: the studio, or a void with stars and a red haze ─────────
+// ── the backdrop: the studio, or a void with stars ─────────────────────────
 fn backdropC(rd: vec3f) -> vec3f {
     if (u.k.z > 0.5) { return env(rd) * mix(0.35, 1.0, u.studio); }
     let cell = floor(rd * 220.0);
     let h = hash3(cell);
     var c = vec3f(0.004, 0.004, 0.007);
     c += vec3f(0.8, 0.85, 1.0) * step(0.9975, h.x) * pow(h.y, 4.0) * 3.0;
-    let hz = fbm3(rd * 2.4 + vec3f(seedF() * 0.1), 3);
-    c += redE() * 0.025 * smoothstep(0.0, 0.6, hz) * (1.0 - abs(rd.y));
     return c;
 }
 
@@ -736,25 +734,13 @@ struct GOut {
     return vec4f(c, 1.0);
 }
 
-// ── post: glitch, colour split, bloom taps, scan lines, the finisher ──────
+// ── post: bloom taps and the finisher. No screen-space effect: the image is
+//    not displaced, split or lined, so the corruption stays on the geometry.
 @fragment fn fs_post(@builtin(position) fp: vec4f) -> @location(0) vec4f {
-    var uv = fp.xy / u.size;
-    let g = u.fx.x;
-    let tq = floor(u.time * 14.0);
-    let band = floor(uv.y * 38.0);
-    let hb = hash3(vec3f(band, tq, 5.0));
-    let tear = step(1.0 - g * 0.2, hb.x);
-    uv.x += (hb.y - 0.5) * 0.08 * g * tear;
-    if (tear > 0.5 && hb.z < g * 0.5) {
-        let grid = vec2f(96.0, 54.0);
-        uv = (floor(uv * grid) + 0.5) / grid;
-    }
-    let ch = u.fx.y * 0.0035 * (1.0 + 4.0 * tear);
-    let cr = textureSampleLevel(hdrTex, hdrSamp, uv + vec2f(ch, 0.0), 0.0).r;
-    let cg = textureSampleLevel(hdrTex, hdrSamp, uv, 0.0).g;
-    let cb = textureSampleLevel(hdrTex, hdrSamp, uv - vec2f(ch, 0.0), 0.0).b;
-    var c = vec3f(cr, cg, cb);
-    // bloom: three rings of taps on the bright part
+    let uv = fp.xy / u.size;
+    var c = textureSampleLevel(hdrTex, hdrSamp, uv, 0.0).rgb;
+    // bloom: three rings of taps on the bright part (the glow of the front,
+    // the sparks and the digits)
     var bl = vec3f(0.0);
     let asp = vec2f(u.size.y / u.size.x, 1.0);
     for (var r = 0; r < 3; r++) {
@@ -766,9 +752,6 @@ struct GOut {
         }
     }
     c += bl / 24.0 * u.fx.w * 2.2;
-    c *= 1.0 - u.fx.z * 0.3 * (0.5 + 0.5 * sin(fp.y * 2.1));
-    let roll = fract(uv.y * 0.6 - u.time * 0.11);
-    c *= 1.0 - u.fx.z * 0.18 * smoothstep(0.0, 0.03, roll) * (1.0 - smoothstep(0.03, 0.1, roll));
     let vu = (fp.xy - 0.5 * u.size) / max(min(u.size.x, u.size.y), 1.0);
     return finish(c, vu);
 }

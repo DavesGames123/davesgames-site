@@ -88,6 +88,9 @@ ok(mixedBits.length === 0, `no line mixes bit and arithmetic operators (${mixedB
 const fsMesh = page.slice(page.indexOf('fn fs_mesh'), page.indexOf('fn fs_mesh') + 400);
 ok(fsMesh.indexOf('dpdx') < fsMesh.indexOf('if ('), 'fs_mesh takes derivatives before any branch (uniform control flow)');
 ok(!/textureSample\(/.test(page), 'post uses textureSampleLevel only (no uniformity rule)');
+const post = page.slice(page.indexOf('fn fs_post'));
+ok(!/u\.fx\.[xyz]/.test(page) && !/\buv(\.x)?\s*[+*-]=|\n\s*uv\s*=/.test(post) && !/fp\.y\s*\*/.test(post), 'no screen-space effect: post neither moves uv nor lines the image');
+ok(!Pm.PARAMS.some(p => /glitch|chroma|scan/.test(p.id)), 'no screen-effect parameters in the panel');
 
 // ── uniforms ────────────────────────────────────────────────────────────────
 section('uniforms');

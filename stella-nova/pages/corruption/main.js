@@ -3,8 +3,8 @@
 //  click pick, the frame loop and the resolution governor
 // ----------------------------------------------------------------------------
 //  State: P (the look parameters, params.js), the stage model, the orbit
-//  camera, heal (Purge eases the spread to 0, Infect back to 1) and a glitch
-//  burst after each shuffle. The URL keeps ?seed= and ?model= so a shuffled
+//  camera and heal (Purge eases the spread to 0, Infect back to 1). The page
+//  has no screen-space effect. The URL keeps ?seed= and ?model= so a shuffled
 //  variant can be shared; slider edits after a shuffle stay local.
 //
 //  GREP MAP
@@ -32,7 +32,7 @@ const $ = id => document.getElementById(id);
 const canvas = $('view');
 const SECTIONS = [
   ['infect', 'Infection'], ['surface', 'Surface'], ['glow', 'Glow'], ['particles', 'Particles'],
-  ['sdf', 'SDF set pieces'], ['glitch', 'Screen glitch'], ['scene', 'Scene'],
+  ['sdf', 'SDF set pieces'], ['scene', 'Scene'],
 ];
 const BUILDERS = { knot: () => fitMesh(torusKnot(), 1.9), pod: () => fitMesh(hullPod(), 2.0), bench: () => fitMesh(bench(), 1.9) };
 
@@ -42,7 +42,7 @@ const S = {
   meshCache: new Map(), custom: null, cpuMesh: null,
   cam: orbitCamera({ target: [0, 1, 0], dist: 4.4 }),
   time: 0, last: performance.now(), freeze: false, autoOrbit: true, idleAt: 0,
-  heal: 1, healTarget: 1, burst: 0,
+  heal: 1, healTarget: 1,
   inFlight: 0, scale: 0.8, gpuMs: [], goodSince: 0, w: 0, h: 0,
   saver: false, panel: null, sheet: null,
 };
@@ -122,7 +122,6 @@ async function loadGLB(file) {
 function applySeed(seed) {
   S.seed = seed >>> 0;
   S.P = shuffle(S.seed, S.bound);
-  S.burst = 1;
   syncPanel();
   writeURL();
 }
@@ -331,9 +330,7 @@ async function pickAt(x, y) {
 // ── the loop ────────────────────────────────────────────────────────────────
 function uniforms(w, h) {
   const m = MODEL[S.model];
-  const P = S.saver ? { ...S.P, glitch: S.P.glitch * (1 - 0.6 * S.saverCalm) } : S.P;
-  const Pf = { ...P, glitch: Math.min(1, P.glitch + S.burst * 0.8) };
-  return packUniforms(Pf, S.cam.viewState(w, h), {
+  return packUniforms(S.P, S.cam.viewState(w, h), {
     time: S.time, amount: spreadAt(S.P, S.time) * S.heal, kind: m.kind === 'mesh' ? 1 : 0, sdfId: m.sdf ?? 0,
     samples: 0, bound: S.bound, mat: m.mat, mat2: m.mat2, seed: S.seed || 1,
   });
@@ -353,7 +350,6 @@ function frame(now) {
   if (S.inFlight >= 2 || document.hidden) return;
   if (!S.freeze) S.time += dt;
   S.heal += (S.healTarget - S.heal) * Math.min(1, dt * 1.6);
-  S.burst = Math.max(0, S.burst - dt * 2.5);
   if (S.autoOrbit && !S.saver && now - S.idleAt > 3500) S.cam.yaw += dt * 0.12;
 
   const cw = canvas.clientWidth, ch = canvas.clientHeight;
@@ -381,7 +377,7 @@ function applyShot(shot, calm) {
   S.saverCalm = calm;
   selectModel(shot.model, { keepCam: false });
   S.seed = shot.seed; S.P = shuffle(shot.seed, S.bound); S.P.mode = 'sweep';
-  S.time = 0; S.heal = 1; S.healTarget = 1; S.burst = 0.6 * (1 - calm);
+  S.time = 0; S.heal = 1; S.healTarget = 1;
   S.cam.yaw = shot.yaw; S.cam.pitch = shot.pitch;
   S.cam.dist = S.bound.r * shot.dist[0];
   S.cam.shiftY = bandFrame().shift;

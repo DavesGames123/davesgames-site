@@ -61,9 +61,6 @@ const ROWS = [
   ['tendrils',  'sdf',       'Tendrils',          0,    6,    1,     3,    0,    6,    ''],
   ['reach',     'sdf',       'Tendril reach',     0.4,  3,    0.05,  1.7,  0.8,  2.6,  'm'],
   ['shards',    'sdf',       'Shards',            0,    8,    1,     4,    0,    8,    ''],
-  ['glitch',    'glitch',    'Screen glitch',     0,    1,    0.01,  0.22, 0,    0.7,  ''],
-  ['chroma',    'glitch',    'Colour split',      0,    1,    0.01,  0.35, 0,    0.9,  ''],
-  ['scan',      'glitch',    'Scan lines',        0,    1,    0.01,  0.18, 0,    0.6,  ''],
   ['studio',    'scene',     'Studio light',      0,    1.5,  0.01,  0.55, 0.3,  0.9,  ''],
   ['exposure',  'scene',     'Exposure',          0.4,  2.2,  0.01,  1.1,  0.9,  1.3,  ''],
 ];
@@ -98,14 +95,13 @@ export const clampParam = (id, v) => snap(PARAM[id], v);
 
 // shuffle(seed): a completely new set. Every row is drawn in its shuffle
 // range; a few rows get a coin flip to an extreme so that sets differ in
-// kind, not only in degree (no code, no tendrils, a hard glitch, and so on).
+// kind, not only in degree (no code, no tendrils, a full swarm, and so on).
 export function shuffle(seed, bound = { c: [0, 1, 0], r: 1 }) {
   const r = rng(seed);
   const o = defaults();
   for (const p of PARAMS) o[p.id] = snap(p, p.lo + (p.hi - p.lo) * r());
   if (r() < 0.25) o.code = 0;
   if (r() < 0.2) o.tendrils = 0;
-  if (r() < 0.15) o.glitch = snap(PARAM.glitch, 0.75 + 0.25 * r());
   if (r() < 0.2) o.swarm = snap(PARAM.swarm, 0.85 + 0.15 * r());
   if (r() < 0.3) o.holes = 0;
   o.mode = MODES[Math.floor(r() * MODES.length)].id;
@@ -156,7 +152,7 @@ export const UNIFORM_FIELDS = [
   ['grow', 4],       // growth, holes, stutter, pulse
   ['emis', 4],       // rgb red, w rim intensity
   ['sdfx', 4],       // tendrils, reach, shards, flow
-  ['fx', 4],         // glitch, chroma, scan, bloom
+  ['fx', 4],         // -, -, -, bloom (x, y, z unused: no screen-space effect)
   ['bound', 4],      // model centre xyz, radius
   ['part', 4],       // polyhedra, glyphs, polyhedron size, swarm
   ['part2', 4],      // digit size, flip rate, -, -
@@ -201,7 +197,7 @@ export function packUniforms(P, view, x, out = new Float32Array(UNIFORM_FLOATS))
   put('grow', [P.growth, P.holes, P.jitter, P.pulse]);
   put('emis', [...E, P.rim]);
   put('sdfx', [P.tendrils, P.reach, P.shards, P.flow]);
-  put('fx', [P.glitch, P.chroma, P.scan, P.bloom]);
+  put('fx', [0, 0, 0, P.bloom]);
   put('bound', [...x.bound.c, x.bound.r]);
   put('part', [P.parts, P.glyphs, P.partSize, P.swarm]);
   put('part2', [P.glyphSize, P.flip, 0, 0]);

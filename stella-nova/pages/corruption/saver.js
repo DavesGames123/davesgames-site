@@ -5,7 +5,7 @@
 //  with { calm 0..1, seconds, caption, seed }. Each shot is a new shuffle on
 //  a model, with its own camera: a slow orbit, a push-in on the front, or a
 //  low pass along the deck. Shots last 7 to 12 s; the model changes on most
-//  cuts. Calm lowers the screen glitch and the orbit speed. Each shot names
+//  cuts. Calm lowers the orbit speed. Each shot names
 //  itself on the shell label plate (opts.label): the model, the seed, three
 //  parameters and the real WGSL of fn corruptField as the code extract.
 //  main.js frames the subject in the clear band (lib/saver-clear.js).
