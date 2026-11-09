@@ -351,7 +351,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `heat-diffraction` | Heat Diffraction | Game Effects > Heat, Frost & Corruption | IMG | Heat haze that bends the image. |  | shown | hook, tier 3 | yes |
 | `heat-metal` | Heat Metal | Game Effects > Heat, Frost & Corruption | WGSL | Metal that glows from a hot spot. |  | shown | hook, tier 3, default | yes |
 | `frost` (pages/frost-table) | Frost Table | Game Effects > Heat, Frost & Corruption | WGSL | Frost that creeps across glass. |  | shown | hook, tier 3, default | yes |
-| `corruption` | Corruption Shader | Game Effects > Heat, Frost & Corruption | WGSL | A computer-virus corruption that eats any model: voxel crust, a red front, shed polyhedra and red zeros and ones. Shuffle for a new strain. |  | shown | hook, tier 4, default | no |
+| `corruption` | Corruption Shader | Game Effects > Heat, Frost & Corruption | WGSL | A computer-virus corruption that eats any model: voxel crust, a red front, shed polyhedra and red zeros and ones. Shuffle for a new strain. |  | shown | hook, tier 4, default | yes |
 | `supernova` (pages/fractal-orb) | Fractal Orb | Rendering > Ray Marching | SHADER | A raymarched fractal orb. |  | shown | hook, tier 2, default | yes |
 | `biome-parts` | Biome Parts | Rendering > Ray Marching | AI | A 1.2M-parameter model builds CAD parts live, command by command. |  | shown | hook, tier 4, default | yes |
 | `sphere-tracing` | Sphere Tracing Lab | Rendering > Ray Marching | LAB | Watch one ray march through a distance field. |  | shown | hook, tier 3, default | yes |
