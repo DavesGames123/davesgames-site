@@ -5,7 +5,8 @@
 //  State: P (the look parameters, params.js), the stage model, the orbit
 //  camera and heal (Purge eases the spread to 0, Infect back to 1). The page
 //  has no screen-space effect. The URL keeps ?seed= and ?model= so a shuffled
-//  variant can be shared; slider edits after a shuffle stay local.
+//  variant can be shared; slider edits after a shuffle stay local. The
+//  default model is the torus knot (grep -n 'DEFAULT_MODEL').
 //
 //  GREP MAP
 //    grep -n 'async function boot'      device, shaders, renderer
@@ -36,9 +37,12 @@ const SECTIONS = [
 ];
 const BUILDERS = { knot: () => fitMesh(torusKnot(), 1.9), pod: () => fitMesh(hullPod(), 2.0), bench: () => fitMesh(bench(), 1.9) };
 
+// The page opens on the torus knot. S.bound starts at the trooper bound
+// because defaults().src is set for the trooper, and selectModel maps it.
+const DEFAULT_MODEL = 'knot';
 const S = {
   R: null, ctx: null, device: null,
-  P: defaults(), seed: 0, model: 'trooper', bound: MODEL.trooper.bound,
+  P: defaults(), seed: 0, model: DEFAULT_MODEL, bound: MODEL.trooper.bound,
   meshCache: new Map(), custom: null, cpuMesh: null,
   cam: orbitCamera({ target: [0, 1, 0], dist: 4.4 }),
   time: 0, last: performance.now(), freeze: false, autoOrbit: true, idleAt: 0,
@@ -134,7 +138,7 @@ function writeURL() {
   try {
     const q = new URLSearchParams(location.search);
     if (S.seed) q.set('seed', String(S.seed)); else q.delete('seed');
-    if (S.model !== 'trooper' && S.model !== 'custom') q.set('model', S.model); else q.delete('model');
+    if (S.model !== DEFAULT_MODEL && S.model !== 'custom') q.set('model', S.model); else q.delete('model');
     const s = q.toString();
     history.replaceState(null, '', location.pathname + (s ? '?' + s : '') + location.hash);
   } catch (e) { /* sandboxed frame */ }
