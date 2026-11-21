@@ -60,6 +60,7 @@ const FILES = [
   path.join(HOME, 'thumbs', 'list.js'),
   path.join(HOME, '..', '..', 'lib', 'nav-data.js'),
   path.join(HOME, 'sectors.js'),
+  path.join(HOME, '..', '..', 'lib', 'site-search.js'),
   path.join(HOME, 'chart-layout.js'),
   path.join(HOME, 'main.js'),
 ];
@@ -182,6 +183,30 @@ for (const q of ['ten minute physics', 'muller', 'Müller']) {
   const h = new Set(hits(q).map(it => it.key));
   const lost = tmp.filter(k => !h.has(k));
   check(`every Ten Minute Physics port is found by "${q}" (${tmp.length})`, !lost.length, 'not found: ' + lost.join(', '));
+}
+
+// Ranked search: lib/search-index.js loaded, findResults uses snSearch.
+// The index must be current (tools/search-index.mjs --check).
+{
+  const { execFileSync } = await import('node:child_process');
+  let fresh = true, msg = '';
+  try { msg = execFileSync('node', [path.join(HOME, '..', '..', '..', 'tools', 'search-index.mjs'), '--check'], { encoding: 'utf8' }).trim(); }
+  catch (e) { fresh = false; msg = String(e.stdout || e.message).trim(); }
+  check('lib/search-index.js is up to date', fresh, msg);
+  vm.runInContext(fs.readFileSync(path.join(HOME, '..', '..', 'lib', 'search-index.js'), 'utf8'), ctx);
+  check('snSearch is ready after the index loads', !!(ctx.snSearch && ctx.snSearch.ready()));
+  const idxKeys = new Set(ctx.SN_SEARCH_INDEX.pages.map(r => r.k));
+  const noRow = want.filter(p => !idxKeys.has(p.key)).map(p => p.key);
+  check(`every searchable page has an index row (${idxKeys.size})`, !noRow.length, 'missing: ' + noRow.join(', '));
+  const lost = want.filter(p => !findResults(p.label).res.some(it => it.key === p.key)).map(p => p.key);
+  check('ranked: a label search shows the page in the top 8', !lost.length, 'not shown: ' + lost.join(', '));
+  const s = findResults('strings');
+  check(`ranked: "strings" finds string-lab first and ${s.total} pages in all`, s.res[0] && s.res[0].key === 'string-lab' && s.total >= 8, s.res.map(it => it.key).join(' '));
+  for (const [q, key] of [['violins', 'string-lab'], ['guitar', 'string-lab'], ['strng', 'string-lab'], ['orbits', 'orbital'], ['blackholes', 'blackhole'], ['fruit fly', 'fly-duel'], ['tidal disruption', 'roche-limit']]) {
+    const r = findResults(q);
+    check(`ranked: "${q}" finds ${key} in the top 8`, r.res.some(it => it.key === key), r.res.map(it => it.key).join(' '));
+  }
+  check('ranked: a nonsense word finds nothing', findResults('zzzzqx').total === 0);
 }
 
 const leak = [...DIRECTORY_ONLY].filter(k => inIndex.has(k));

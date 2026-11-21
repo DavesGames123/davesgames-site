@@ -152,6 +152,23 @@ for (const [W, H, coarse] of VPS) {
   ok($('#sb-nav .active') && $('#sb-nav .active').dataset.tab === key && w.document.title.includes(w.LABELS[key]), `${tag}: a page choice marks the new page (${key})`);
   if (drawer) ok(!sb.classList.contains('open'), `${tag}: a page choice closes the drawer and shows the page`);
 
+  // Ranked search (lib/site-search.js + lib/search-index.js). Before the
+  // index loads, the literal filter above runs; after, a ranked flat list.
+  w.eval(src('lib/site-search.js')); w.eval(src('lib/search-index.js'));
+  const literal = $$('#sb-nav .nav-reg [data-q]').filter(e => e.dataset.q.includes('strings')).length;
+  q.value = 'strings'; q.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const rk = $$('#sb-results [data-tab]').map(e => e.dataset.tab);
+  ok(rk[0] === 'string-lab' && rk.length >= 5 && rk.length > literal, `${tag}: ranked search "strings" puts string-lab first and finds ${rk.length} pages (literal ${literal})`, rk.slice(0, 8).join(' '));
+  ok(!$('#sb-results').hidden && $$('#sb-nav .nav-reg').every(r => r.hidden), `${tag}: ranked results replace the tree`);
+  q.value = 'voilin'; q.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok($$('#sb-results [data-tab]').some(e => e.dataset.tab === 'string-lab'), `${tag}: a typo ("voilin") still finds string-lab`);
+  q.value = 'zzzzqx'; q.dispatchEvent(new w.Event('input', { bubbles: true }));
+  ok(!$('#sb-empty').hidden && $('#sb-results').hidden, `${tag}: a ranked search with no hit shows the empty note`);
+  q.value = 'orbit'; q.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const first = $('#sb-results [data-tab]').dataset.tab;
+  q.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  ok($('#sb-nav .active') && $('#sb-nav .active').dataset.tab === first && q.value === '' && $('#sb-results').hidden && !$$('#sb-nav .nav-reg').some(r => r.hidden), `${tag}: Enter opens the top result (${first}) and clears the search`);
+
   // Region tabs.
   w.jumpRegion('graphics');
   ok($('#sb-regions .rg-tab[data-region="graphics"]').getAttribute('aria-selected') === 'true' && $$('#sb-regions [aria-selected="true"]').length === 1, `${tag}: a region tab jump marks that tab`);

@@ -807,9 +807,20 @@ function hl(text, terms) {
   for (const t of terms) if (t) out = out.replace(new RegExp('(' + reEsc(esc(t)) + ')', 'ig'), '<mark>$1</mark>');
   return out;
 }
+// With the index of lib/site-search.js loaded (on the first focus of a
+// field, SEARCH_INDEX_SRC), the ranking is snSearch.search: stems, concept
+// groups and typos, so "strings" also finds violin, guitar and thread pages.
+// Before that, every word must be a substring of the page text.
+const SEARCH_INDEX_SRC = '../../lib/search-index.js';
 function findResults(q) {
   const terms = fold(q).split(/\s+/).filter(Boolean);
   if (!terms.length) return { terms, res: FEATURED.slice(0, 6).map(k => FIND_ITEMS.find(x => x.key === k)).filter(Boolean), total: 0 };
+  const S = window.snSearch;
+  if (S && S.ready()) {
+    const byKey = new Map(FIND_ITEMS.map(it => [it.key, it]));
+    const ranked = S.search(q, { limit: 200 }).map(r => byKey.get(r.key)).filter(Boolean);
+    return { terms, res: ranked.slice(0, 8), total: ranked.length };
+  }
   const res = FIND_ITEMS.filter(it => terms.every(t => it.hay.includes(t)))
     .map(it => { const l = fold(it.label); return { it, sc: l.startsWith(terms[0]) ? 0 : l.includes(terms[0]) ? 1 : 2 }; })
     .sort((a, b) => a.sc - b.sc).map(x => x.it);
@@ -845,7 +856,7 @@ function initFind(root) {
   }
   function open() { list.hidden = false; input.setAttribute('aria-expanded', 'true'); }
   function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); sel = -1; }
-  input.addEventListener('focus', render);
+  input.addEventListener('focus', () => { render(); if (window.snSearch) window.snSearch.load(SEARCH_INDEX_SRC, () => { if (document.activeElement === input || !list.hidden) render(); }); });
   input.addEventListener('input', render);
   input.addEventListener('keydown', e => {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) render(); mark(sel + 1); }
