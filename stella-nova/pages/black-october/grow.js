@@ -67,7 +67,11 @@ export const PRECISION = Object.freeze(['minute', 'hour', 'day']);
 
 export const DEFAULTS = Object.freeze({
   seed: 1,
-  scale: 'sqrt',     // 'linear' or 'sqrt' (sqrt opens the dense first hours)
+  scale: 'sqrt',     // 'linear', 'sqrt' (opens the dense first hours) or 'density' (per-day share)
+  densFloor: 1,      // scale 'density': the share of a day with no event
+  densPow: 0.5,      // scale 'density': a day share grows as count^densPow
+  densArea: false,   // scale 'density': share is disc area, not radius
+  areaNeed: 0,       // > 0: a sector also needs room for each day of its events (see layout)
   inner: 0.06,       // radius of T0; the centre stays clear for the title
   minGap: 0.012,     // the shortest distance between two nodes (unit disc)
   sectorGap: 0.05,   // radians between two thread sectors (at most)
@@ -81,6 +85,7 @@ export const DEFAULTS = Object.freeze({
   bandOut: 0.17,     // radius of the last event before the window
   bandGap: 0.03,     // empty ring between the band and the window
   monthGap: 0.01,    // the shortest radial step between two month rings
+  needShare: 0.5,    // the largest part of the room that th.need may add over the weights
 });
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
@@ -132,8 +137,34 @@ export function validate(events) {
 }
 
 // Time to radius. u is 0 at T0 and 1 at the last event.
-export function timeScale(t0, t1, o) {
+// scale 'density' (needs times): each UTC day between t0 and t1 gets a
+// radial share densFloor + n^densPow, where n is the count of events on
+// that day. Inside a day u is linear, so u is monotone in time and the day
+// rings are the knots. A dense day gets more radius than a quiet day.
+export function timeScale(t0, t1, o, times) {
   const span = Math.max(t1 - t0, 1);
+  if (o.scale === 'density' && times) {
+    const d0 = Math.floor(t0 / DAY) * DAY, nd = Math.max(1, Math.ceil((t1 - d0) / DAY));
+    const cnt = new Float64Array(nd);
+    for (const t of times) if (t >= t0 && t <= t1) cnt[Math.min(nd - 1, Math.floor((t - d0) / DAY))]++;
+    // knot k is at max(t0, d0 + k DAY); cum[k] is u at knot k.
+    const kt = k => Math.min(t1, Math.max(t0, d0 + k * DAY));
+    const share = new Float64Array(nd);
+    for (let k = 0; k < nd; k++) share[k] = (o.densFloor + Math.pow(cnt[k], o.densPow)) * (kt(k + 1) - kt(k)) / DAY;
+    const cum = new Float64Array(nd + 1);
+    for (let k = 0; k < nd; k++) cum[k + 1] = cum[k] + share[k];
+    const tot = cum[nd] || 1;
+    return ms => {
+      const c = Math.min(Math.max(ms, t0), t1);
+      const k = Math.min(nd - 1, Math.max(0, Math.floor((c - d0) / DAY)));
+      const a = kt(k), b = kt(k + 1);
+      const f = b > a ? (c - a) / (b - a) : 0;
+      const u = (cum[k] + share[k] * f) / tot;
+      // densArea: equal disc area (not radius) per unit of share, so an
+      // inner day, on a short ring, gets a wider band.
+      return o.densArea ? Math.sqrt(o.inner * o.inner + (1 - o.inner * o.inner) * u) : o.inner + (1 - o.inner) * u;
+    };
+  }
   return ms => {
     const u = Math.min(Math.max((ms - t0) / span, 0), 1);
     return o.inner + (1 - o.inner) * (o.scale === 'linear' ? u : Math.sqrt(u));
@@ -154,9 +185,10 @@ export function sectors(threads, o) {
   // asks for. A thread under its need gets the need, and the other threads
   // share what is left by weight.
   // Needs are scaled down when the width they add over the weights would
-  // take more than half of the room, so a sector never goes to a hair.
+  // take more than needShare of the room, so a sector never goes to a hair.
   const extra = threads.reduce((acc, th, i) => acc + Math.max(0, (th.need || 0) - room * w[i] / sum), 0);
-  const k = extra > room / 2 ? room / 2 / extra : 1;
+  const cap = room * (o.needShare == null ? 0.5 : o.needShare);
+  const k = extra > cap ? cap / extra : 1;
   threads.forEach(th => { th.need = (th.need || 0) * k; });
   const width = w.map(x => room * x / sum), fixed = new Set();
   for (let pass = 0; pass < threads.length; pass++) {
@@ -217,7 +249,14 @@ function placeNode(t, e, p, th, nodes, radiusOf, tw, rand, o) {
   if (p && t >= tw && p.r > r0) r0 = Math.min(p.r, radiusOf(s1));
   let a = placeAngle(r0, a0, th, nodes, rand, o);
   if (placeAngle.room >= o.minGap || t < tw) return [r0, a];
-  const lo = Math.max(radiusOf(Math.max(s0, tw)), p ? p.r : 0), hi = radiusOf(s1);
+  // A node does not move past the room its children need: hi stops
+  // minGap/2 inside the end of the earliest child span (th.kidEnd), so a
+  // child with a later minute stamp can still sit at or beyond it.
+  const kid = th.kidEnd && th.kidEnd.get(e.id);
+  let hi = radiusOf(s1);
+  if (kid != null) hi = Math.min(hi, Math.max(radiusOf(Math.max(t, tw)), radiusOf(kid) - o.minGap / 2));
+  const lo = Math.max(radiusOf(Math.max(s0, tw)), p ? p.r : 0);
+  if (hi < lo) return [r0, a];
   let best = [r0, a], bestRoom = placeAngle.room;
   const n = Math.min(24, Math.floor((hi - lo) / (o.minGap * 0.5)));
   const cand = [];
@@ -328,12 +367,12 @@ export function layout(events, opts = {}) {
   if (pre.length) {
     tw = w;
     const rMain = o.bandOut + o.bandGap;
-    radiusOf = bandScale(pre, tw, timeScale(tw, t1, { ...o, inner: rMain }), o);
+    radiusOf = bandScale(pre, tw, timeScale(tw, t1, { ...o, inner: rMain }, order.map(x => x.t)), o);
     band = { r0: o.bandIn, r1: o.bandOut, rMain, t0, t1: tw,
       count: pre.length, label: 'before ' + MONTHS[new Date(tw).getUTCMonth()], months: monthRings(t0, tw, radiusOf, o) };
   } else {
     if (w != null) tw = Math.min(w, t0);
-    radiusOf = timeScale(tw, t1, o);
+    radiusOf = timeScale(tw, t1, o, order.map(x => x.t));
   }
 
   const byThread = new Map();
@@ -343,6 +382,7 @@ export function layout(events, opts = {}) {
     th.count++;
     if (e.parent == null) { th.root = e.id; th.t = t; }
     if (t >= tw) (th.rs ||= []).push([radiusOf(t), e.tPrecision === 'minute' ? 1 : 0]);
+    if (t >= tw) { const d = Math.floor(t / DAY) * DAY; (th.days ||= new Map()).set(d, (th.days.get(d) || 0) + 1); }
   }
   // A minute stamp cannot leave its ring. A day or hour stamp tries its own
   // ring first and moves out only when that ring is full. So m minute
@@ -358,10 +398,25 @@ export function layout(events, opts = {}) {
       const k = m + (m < i - j + 1 ? 1 : 0);
       if (m && k > 1) need = Math.max(need, (k + 1) * o.minGap / rs[j][0]);
     }
-    th.need = need; delete th.rs;
+    // Area need (o.areaNeed): the events of one UTC day must fit in the
+    // ring band of that day. c events in a band of radial width dr at
+    // radius r need about c minGap^2 / (r dr) of angle.
+    if (o.areaNeed && th.days) for (const [d, c] of th.days) {
+      if (c < 2) continue;
+      const ra = radiusOf(Math.max(d, tw)), rb = radiusOf(d + DAY), dr = Math.max(rb - ra, o.minGap);
+      need = Math.max(need, o.areaNeed * c * o.minGap * o.minGap / (ra * dr));
+    }
+    th.need = need; delete th.rs; delete th.days;
   }
   const threads = sectors([...byThread.values()].sort((a, b) => a.t - b.t || (a.id < b.id ? -1 : 1)), o);
   const thOf = new Map(threads.map(th => [th.id, th]));
+  // th.kidEnd: id -> the earliest span end of its children (placeNode).
+  for (const { e, t } of order) {
+    if (e.parent == null) continue;
+    const th = thOf.get(e.thread), end = spanOf(t, e.tPrecision)[1];
+    th.kidEnd ||= new Map();
+    if (!(th.kidEnd.get(e.parent) <= end)) th.kidEnd.set(e.parent, end);
+  }
 
   const nodes = [], edges = [], byId = new Map();
   for (const { e, t } of order) {

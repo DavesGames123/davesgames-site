@@ -89,6 +89,17 @@ section('radius is time');
   const lin = timeScale(0, 100, { ...DEFAULTS, scale: 'linear' }), sq = timeScale(0, 100, { ...DEFAULTS, scale: 'sqrt' });
   ok(near(lin(50), DEFAULTS.inner + (1 - DEFAULTS.inner) * 0.5), 'linear scale');
   ok(near(sq(25), DEFAULTS.inner + (1 - DEFAULTS.inner) * 0.5), 'sqrt scale');
+  {
+    // density scale: day 0 has 9 events, days 1-3 none. Monotone, inner at
+    // t0, 1 at t1, and the busy day gets more radius than a quiet day.
+    const D = 86400000, ts = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(k => k * 3600000).concat([4 * D - 1]);
+    for (const area of [false, true]) {
+      const o = { ...DEFAULTS, scale: 'density', densArea: area, densPow: 0.55, densFloor: 0.3 };
+      const f = timeScale(0, 4 * D - 1, o, ts), xs = Array.from({ length: 401 }, (_, k) => f(k * (4 * D - 1) / 400));
+      ok(xs.every((x, k) => !k || x >= xs[k - 1] - 1e-12) && near(f(0), DEFAULTS.inner) && near(f(4 * D - 1), 1), `density scale (densArea ${area}) is monotone from inner to 1`);
+      ok(f(D) - f(0) > f(2 * D) - f(D), `density scale (densArea ${area}) gives the busy day more radius`);
+    }
+  }
   ok(L.rings.length >= 3 && L.rings.every(g => /^\d{4}-\d\d-\d\d$/.test(g.label) && g.t % 86400000 === 0), `day rings (${L.rings.length})`);
 }
 
@@ -213,6 +224,9 @@ section('the full ledger has room');
   // rim, so dots of two such neighbours can touch (20 pairs at 1546
   // events). No gapShare or sectorPow value gave less than 16, so the
   // limit is win/70, not win/100.
+  // At 1639 events / 207 threads over 51 days a linear scale gave 198
+  // pairs and 0.001 rad sectors. The density scale (LAYOUT_OPTS) and the
+  // kidEnd cap in placeNode give 21 pairs, inside the same win/70 limit.
   ok(stacked <= win.length / 70, `${stacked} window node pairs nearer than half of minGap (limit ${(win.length / 70).toFixed(0)})`);
 }
 
@@ -298,7 +312,7 @@ section('page logic (model.js, render.js)');
   const R = await import('./render.js');
   const L = layout(EVENTS, M.LAYOUT_OPTS), N = L.nodes.length;
   ok(L.band && L.band.label === 'before October' && L.band.count === 76, `ledger band: ${L.band && L.band.label}, ${L.band && L.band.count} events`);
-  ok(L.rings.length === 33 && L.rings[0].label === '2026-10-02', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
+  ok(L.rings.length === 51 && L.rings[0].label === '2026-10-02', `ledger day rings ${L.rings.length} from ${L.rings[0] && L.rings[0].label}`);
   ok(L.threads.every(t => M.THREAD_NAMES[t.id]), 'every thread has a display name');
   const C = M.threadColors(L.threads);
   ok(new Set(C.values()).size === L.threads.length, 'thread colours are distinct');

@@ -218,12 +218,28 @@ export const THREAD_NAMES = Object.freeze({
   'hybe-approval': "HYBE e-approval hack",
   'securitize-bonds': "Securitize Japan digital-bond leak",
   'sej-7now': "7NOW delivery-contractor leak",
+  'checkpoint-gaia': "Check Point Gaia root flaw",
+  'fsi-assessment': "Financial Security Institute breach",
+  'kakao-work': "Kakao Work messenger breach",
+  'inje-univ': "Inje University leak",
+  'komsco-chak': "KOMSCO chak app lookup",
+  'riken-fugaku': "RIKEN Fugaku intrusion",
+  'smbc-nikko-mochikabu': "SMBC Nikko shareholding-plan leak",
+  'smbc-cf-guarantee': "SMBC Consumer Finance guarantee leak",
+  'rakuten-sec': "Rakuten Securities test-data leak",
+  'edion-ec': "Edion EC-site log leak",
+  'noran-umbrella': "Noran Umbrella mutual-aid breach",
 });
 export const threadName = id => THREAD_NAMES[id] || id;
 
-// The layout options of the page and the saver. linear: each UTC day ring
-// has the same width (the events get denser toward the last days).
-export const LAYOUT_OPTS = Object.freeze({ seed: 7, scale: 'linear', windowStart: '2026-10' });
+// The layout options of the page and the saver.
+// scale 'density' with densArea (2026-11-21): at 1639 events over 51 days a
+// linear scale squeezed October into thin inner rings, and one-event
+// sectors fell to 0.001 rad. Each day now gets disc area by its event
+// count (count^0.55 + 0.3), so dense October days get wide bands and quiet
+// November days thin ones. needShare and areaNeed: see grow.js DEFAULTS.
+export const LAYOUT_OPTS = Object.freeze({ seed: 7, scale: 'density', densArea: true, densPow: 0.55, densFloor: 0.3,
+  needShare: 0.27, areaNeed: 1, windowStart: '2026-10' });
 
 export const CONF_TEXT = Object.freeze({
   confirmed: 'a primary source states it',
