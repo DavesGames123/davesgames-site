@@ -1,0 +1,5 @@
+# Written by tools/seo.mjs. Do not edit by hand.
+User-agent: *
+Allow: /
+
+Sitemap: https://davesgames.io/sitemap.xml
