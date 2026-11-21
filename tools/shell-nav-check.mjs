@@ -9,6 +9,9 @@
 //    release   releaseFrame on a page with lib/gpu-guard.js calls
 //              __snRelease and makes no new canvas context; on a page with
 //              no guard it still loses each WebGL context
+//    burst     switchTab/doSwap with a fake clock: a click series at 30,
+//              60 or 120 ms mounts at most 3 pages and ends on the last
+//              tab; a single click mounts at once
 //    random    (jsdom, skipped when jsdom does not resolve) the #tb-random
 //              button: it is a button in the top bar left, before the
 //              title, with a label for screen readers; 44 px at each
@@ -217,6 +220,40 @@ await (async () => {
   }
   ok(/min-height: 44px/.test(lib('lib/screensaver.js')) && /\.sn-saver-lab \{ display: none; \}/.test(lib('lib/screensaver.js')), 'saver button: 44 px target; under 520 px only the icon shows');
 })();
+
+// ── burst ───────────────────────────────────────────────────────────────────
+// switchTab and doSwap with a fake clock, a fake #frame-wrap and frames
+// whose about:blank load comes 20 ms later. A click series at 30, 60 and
+// 120 ms must mount at most 3 pages and end on the last tab. A single
+// click must mount at once (no quiet wait before the first mount).
+function burstRun(clicks, every) {
+  let now = 0, timers = [], mounts = [];
+  const later = (f, ms) => { timers.push({ at: now + (ms || 0), f }); };
+  const run = until => { for (;;) { timers.sort((a, b) => a.at - b.at); const t = timers[0]; if (!t || t.at > until) break; timers.shift(); now = t.at; t.f(); } now = until; };
+  const frames = [];
+  const mkFrame = () => { const ls = []; const f = { style: {}, contentWindow: { location: { replace: () => later(() => ls.splice(0).forEach(g => g()), 20) } },
+    addEventListener: (e, g) => ls.push(g) }; return f; };
+  const wrap = { querySelectorAll: () => frames.slice(), set innerHTML(v) { frames.length = 0; } };
+  const ctx = vm.createContext({
+    setTimeout: later, Date: { now: () => now }, document: { getElementById: () => wrap }, Array,
+    PAGES: new Proxy({}, { get: () => 'p.html' }), markTab() {}, closeSidebar() {}, setHistory() {}, tabHash: () => '', releaseFrame() {},
+    mountTab: id => { mounts.push([id, now]); frames.push(mkFrame()); },
+  });
+  vm.runInContext(html.match(/^var pendingTab=.*$/m)[0] + '\nvar activeTab=null,activeSub="";\n' + fnSource('doSwap') + '\n' + fnSource('switchTab'), ctx);
+  ctx.switchTab('home'); run(1000); mounts.length = 0;
+  const t0 = now;
+  for (let i = 0; i < clicks; i++) { ctx.switchTab('t' + i); run(now + every); }
+  run(now + 5000);
+  return { mounts, first: mounts.length ? mounts[0][1] - t0 : null, last: mounts.length ? mounts[mounts.length - 1][0] : null };
+}
+for (const every of [30, 60, 120]) {
+  const r = burstRun(60, every);
+  ok(r.mounts.length <= 3 && r.last === 't59', `burst: 60 clicks at ${every} ms mount ${r.mounts.length} pages (<= 3), the last is t59 (${r.last})`);
+}
+{
+  const r = burstRun(1, 0);
+  ok(r.mounts.length === 1 && r.first <= 30, `burst: one click mounts one page after ${r.first} ms (<= 30, no quiet wait)`);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
