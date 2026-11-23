@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Energy Dashboard — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ENERGY DASHBOARD  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   The bouncing ball with a live dashboard: potential, kinetic and total mechanical energy over time.
+
+   CREDIT. The simulation is by Shengzhe Hou (China), a contribution to Ten Minute Physics by Matthias Müller.
+   Upstream file: tenMinutePhysics/contribs/energyVisualization.html in
+   https://github.com/matthias-research/pages (no licence text upstream; the author keeps all rights).
+   Contributions page: https://matthias-research.github.io/pages/tenMinutePhysics/contribs/
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The bouncing ball with a live dashboard: potential, kinetic and total mechanical energy over time. By Shengzhe Hou, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<h2> Energy DashBoard </h2> 
+	<h3 style="color: #B93226;">This example shows the curve of the mechanical energy (potential energy and kinetic
+		energy) of the ball during the simulation.</h3>
+
+	<div class="wrapper">
+		<div class="box1">
+			<canvas id="mycanvas"></canvas>
+		</div>
+
+		<div class="box2">
+			<p><input type="checkbox" onclick="onCoords_x()"> Coordinate X</p>
+			<p><input type="checkbox" onclick="onCoords_y()"> Coordinate Y</p>
+			<p><input type="checkbox" onclick="onEnergy_p()"> Potential Energy</p>
+			<p><input type="checkbox" onclick="onEnergy_k()"> Kinetic Energy</p>
+			<p><input type="checkbox" onclick="onEnergy()"> Mechanical Energy</p>
+		</div>
+
+		<div class="box3">
+			<canvas id="dashboard"></canvas>
+		</div>
+	</div>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
