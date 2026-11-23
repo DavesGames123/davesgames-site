@@ -126,6 +126,14 @@ const { stageOf } = await import('./engine/look/shuffle.js');
   const used = [...js.matchAll(/\$\('([^']+)'\)/g)].map((m) => m[1]);
   for (const id of new Set(used)) ok(ids.has(id), 'main.js binds #' + id);
   ok(ids.has('saverCanvas'), 'saver canvas in the document');
+  // Every swatch must be reachable: the tray wraps, it never hides a sideways scroll.
+  const sw = (css.match(/#swatches\{[^}]*\}/) || [''])[0];
+  ok(/flex-wrap:wrap/.test(sw) && !/overflow-x/.test(sw) && !/#swatches::-webkit-scrollbar/.test(css), 'swatch tray wraps, no hidden sideways scroll');
+  {
+    const n = (k) => Object.values(PALETTE_INFO).filter((i) => i.kind === k).length;
+    const rowW = (c) => c * 64 + (c - 1) * 6, room = 760 - 24 - 10 - 74;
+    ok(rowW(Math.max(n('real'), n('fantasy'))) <= room, 'each palette group fits one desktop row');
+  }
   ok(!/v67-graph|map\/overlay|explore\.js|tunnels\.js/.test(js), 'no route map code');
 }
 
