@@ -231,6 +231,7 @@ const BLURBS = {
   leo: 'Thousands of real satellites in low orbit.',
   gravity: 'A Barnes-Hut n-body sandbox. Fling planets.',
   galaxy: 'A spiral galaxy that holds its own arms.',
+  nebula: 'Fly through a star-forming cloud, then grow a new one.',
   forge: 'Sculpt and paint a planet from noise.',
   blackhole: 'Gravitational lensing around a Schwarzschild hole.',
   wormhole: 'Fly through an Ellis wormhole.',

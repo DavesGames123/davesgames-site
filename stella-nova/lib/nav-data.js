@@ -97,6 +97,7 @@ w.SN_NAV = [
     ] },
     { h: "Deep Space", p: [
       ["galaxy", "Galaxy", "SIM"],
+      ["nebula", "Nebula", "NEW"],
       ["blackhole", "Black Hole", "GPU"],
       ["wormhole", "Wormhole", "GPU", "ellis-wormhole"],
       ["chandrasekhar-limit", "Chandrasekhar Limit", "NEW"],
