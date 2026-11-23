@@ -1,0 +1,112 @@
+/* ============================================================================
+   NEBULA  ·  stylesheet
+   ----------------------------------------------------------------------------
+   The canvas fills the window. One dock at the bottom centre holds every
+   control; the colour tray and the options sheet open above it. Phones use
+   the same layout with larger targets.
+     grep -n 'TOUCH'   44 px targets for any touch screen
+     grep -n 'PHONE'   narrow screens
+     grep -n 'SAVER'   html.saving hides the GUI and shows #saverCanvas
+   ========================================================================== */
+:root{--ink:#e8ebf2;--dim:#9aa2b2;--line:rgba(200,210,255,.14);--glass:rgba(8,10,18,.62);--acc:#9fe3ff;--acc-ink:#05121a;--safe-b:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;overscroll-behavior:none}
+body{font-family:var(--sci-sans,system-ui,sans-serif);color:var(--ink);-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+button,input{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+svg .f{fill:currentColor;stroke:none}
+
+#viewer{position:fixed;inset:0;touch-action:none;cursor:grab;outline:none}
+#viewer.is-dragging{cursor:grabbing}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#saverCanvas{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:80;background:#000}
+
+#hud{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:20px;z-index:10;pointer-events:none;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+#hud h1{font-family:var(--sci-serif,Georgia,serif);font-weight:400;font-size:1.2rem;letter-spacing:.02em}
+#hudLine{font-size:.78rem;color:var(--dim);margin-top:2px}
+html.in-frame #hud{left:28px}
+
+#busy{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column;gap:6px;align-items:center;padding:8px 14px 9px;border-radius:14px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:.8rem;white-space:nowrap}
+#busy i{display:block;width:160px;height:3px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
+#busy b{display:block;height:100%;width:0;background:linear-gradient(90deg,#7fd7ff,#e7a6ff);transition:width .3s}
+
+#hint{position:fixed;left:50%;bottom:calc(118px + var(--safe-b));transform:translateX(-50%);z-index:10;font-size:.8rem;color:var(--ink);opacity:.85;pointer-events:none;transition:opacity .9s;text-shadow:0 1px 8px #000;white-space:nowrap}
+#hint.gone{opacity:0}
+
+#bottom{position:fixed;left:50%;bottom:calc(14px + var(--safe-b));transform:translateX(-50%);z-index:20;display:flex;flex-direction:column;align-items:center;gap:10px;width:min(560px,calc(100vw - 24px))}
+#track{position:relative;width:100%;height:18px;cursor:pointer;touch-action:none}
+#track::before{content:"";position:absolute;left:0;right:0;top:8px;height:2px;border-radius:2px;background:rgba(255,255,255,.18)}
+#trackWin{position:absolute;top:5px;height:8px;border-radius:5px;background:rgba(255,255,255,.75);box-shadow:0 0 10px rgba(160,220,255,.6)}
+#dock{display:flex;gap:8px;align-items:center;padding:7px;border-radius:20px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#dock button{height:44px;border-radius:14px;border:1px solid transparent;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;font-size:.88rem}
+#dock button svg{width:22px;height:22px}
+#dock .ic{width:44px}
+#dock .wide-ic{width:auto;padding:0 12px}
+#dock button:hover:not(:disabled){background:rgba(255,255,255,.08)}
+#dock button:disabled{opacity:.35;cursor:default}
+#dock button[aria-expanded="true"]{background:rgba(255,255,255,.12);border-color:var(--line)}
+#dock .primary{padding:0 18px;background:var(--acc);color:var(--acc-ink);font-weight:600}
+#dock .primary:hover{background:#c4efff!important}
+html.baking #dock .primary{background:linear-gradient(90deg,#9fe3ff,#e7b5ff,#9fe3ff);background-size:200% 100%;animation:sh 1.6s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+button:focus-visible,#track:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+#tray,#sheet{position:fixed;left:50%;bottom:calc(108px + var(--safe-b));transform:translateX(-50%);z-index:25;border-radius:18px;background:rgba(8,10,18,.82);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#tray{width:min(760px,calc(100vw - 24px));padding:12px 12px 10px;display:flex;gap:10px;align-items:stretch}
+#swatches{flex:1;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;align-items:flex-start;padding-bottom:2px}
+#swatches::-webkit-scrollbar{display:none}
+.tray-h{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);align-self:center;padding:0 2px}
+.sw,.dice{flex:0 0 auto;width:64px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px 0;border:0;background:none;color:var(--ink);cursor:pointer;border-radius:12px}
+.sw .chip{width:48px;height:48px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 2px 10px rgba(0,0,0,.5);transition:transform .15s}
+.sw .nm,.dice span{font-size:.7rem;color:var(--dim);white-space:nowrap}
+.sw:hover .chip{transform:scale(1.07)}
+.sw[aria-pressed="true"] .chip{box-shadow:0 0 0 2px #000,0 0 0 4px #fff,0 0 18px rgba(255,255,255,.35)}
+.sw[aria-pressed="true"] .nm{color:#fff;font-weight:600}
+.dice{border-left:1px solid var(--line);border-radius:0;padding-left:10px;width:74px}
+.dice svg{width:48px;height:48px;padding:10px;border-radius:50%;background:rgba(255,255,255,.08)}
+.dice svg circle{fill:currentColor;stroke:none}
+
+#sheet{width:min(340px,calc(100vw - 24px));padding:14px}
+.sh-h{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:3px;border-radius:12px;background:rgba(255,255,255,.06);margin-bottom:12px}
+.seg button{height:36px;border:0;border-radius:9px;background:none;color:var(--dim);font-size:.8rem;cursor:pointer}
+.seg button[aria-pressed="true"]{background:rgba(255,255,255,.16);color:#fff}
+.tog{display:flex;align-items:center;gap:10px;font-size:.88rem;padding:6px 2px 12px}
+.tog input{width:18px;height:18px;accent-color:var(--acc)}
+.wide{display:block;width:100%;height:42px;margin-top:6px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink);font-size:.85rem;cursor:pointer}
+.wide:hover{background:rgba(255,255,255,.1)}
+.keys{margin-top:12px;font-size:.72rem;color:var(--dim)}
+.keys b{color:var(--ink);font-weight:600}
+
+#msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:60;background:radial-gradient(circle at 50% 40%,#1a1030,#000 70%);font-size:.95rem;line-height:1.5}
+#msg p{max-width:420px}
+
+/* TOUCH */
+@media (pointer:coarse){
+  .seg button{height:44px}
+  #dock .primary{padding:0 16px}
+  #hint{font-size:.85rem}
+}
+/* PHONE */
+@media (max-width:560px){
+  #hud h1{font-size:1.05rem}
+  #dock{gap:4px}
+  #dock .wide-ic span{display:none}
+  #dock .wide-ic{width:44px;padding:0}
+  .sw{width:58px}
+  .sw .chip{width:44px;height:44px}
+  .tray-h{display:none}
+  #tray{bottom:calc(104px + var(--safe-b))}
+}
+@media (max-height:440px){
+  #bottom{bottom:calc(6px + var(--safe-b));gap:4px}
+  #tray,#sheet{bottom:calc(84px + var(--safe-b))}
+  #sheet{max-height:calc(100vh - 100px);overflow-y:auto}
+  #hint{bottom:calc(88px + var(--safe-b))}
+}
+@media (prefers-reduced-motion:reduce){html.baking #dock .primary{animation:none}}
+
+/* SAVER */
+html.saving #hud,html.saving #bottom,html.saving #tray,html.saving #sheet,html.saving #hint,html.saving #busy{display:none!important}
+html.saving #viewer{cursor:none}
