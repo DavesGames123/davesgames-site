@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-239 registered pages in 6 regions and 26 constellations.
+240 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -271,6 +271,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `mrna-vaccine` | The mRNA Vaccine | Research > Biology & Medicine | NEW | The decades of science behind the 2020 mRNA vaccines. |  | shown | hook, tier 3, default | yes |
 | `fly-duel` | Fly Brain Card Duel | Research > Biology & Medicine | NEW | Two model fruit fly brains, wired from the connectome, learn a card duel. |  | shown | hook, tier 4, default | yes |
 | `4d-codebench` | 4DCodeBench | Research > Machine Learning | NEW | Can coding agents rebuild a moving scene from video? Play the benchmark in your browser. |  | shown | no | yes |
+| `autoregressive-view-model` | Autoregressive View Model | Research > Machine Learning | NEW | A scene made as a stream of views, with no 3D model. |  | shown | no | no |
 | `cnn-explainer` | CNN Explainer | Research > Machine Learning | NEW | A real convolutional network sorts a photo in your browser. Watch every kernel, ReLU, pool and softmax step. |  | shown | hook, tier 3, default | yes |
 
 ### Machines
