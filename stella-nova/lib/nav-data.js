@@ -195,7 +195,8 @@ w.SN_NAV = [
   { id: "weather", label: "Meteorology", short: "Weather", icon: "☁", color: "#c4d2ec", color2: "#ffd25a", groups: [
     { h: "Weather & Storms", p: [
       ["storm-globe", "Storm Globe", "DATA"],
-      ["weather-map", "Weather Map", "DATA"]
+      ["weather-map", "Weather Map", "DATA"],
+      ["thunder-acoustics", "Thunder Acoustics", "SIM"]
     ] },
     { h: "Atmospheric Convection", p: [
       ["thermal-convection", "Thermal Convection", "SIM"]

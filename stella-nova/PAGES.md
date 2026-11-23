@@ -128,7 +128,7 @@ A port is a page that runs or translates code that we did not write.
 ## Page table
 
 <!-- PAGES:BEGIN (written by tools/nav-sync.js; do not edit by hand) -->
-238 registered pages in 6 regions and 26 constellations.
+239 registered pages in 6 regions and 26 constellations.
 Columns: Home = how the home page uses the page (shown; search only for the EXCLUDED ports; directory only).
 Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb = thumbs/list.js names the key.
 
@@ -167,7 +167,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `roche-limit` | Roche Limit | Space & Gravity > Planets | SIM | An icy moon crosses the Roche limit and becomes a ring. |  | shown | hook, tier 4, default | yes |
 | `planet-collision` | Planet Collision | Space & Gravity > Planets | NEW | Two planets collide as molten particles: the Moon hits Earth. |  | shown | hook, tier 4, default | yes |
 | `galaxy` | Galaxy | Space & Gravity > Deep Space | SIM | A spiral galaxy that holds its own arms. |  | shown | hook, tier 1, default | yes |
-| `nebula` | Nebula | Space & Gravity > Deep Space | NEW | Fly through a star-forming cloud, then grow a new one. |  | shown | no | yes |
+| `nebula` | Nebula | Space & Gravity > Deep Space | NEW | Fly through a star-forming cloud, then grow a new one. |  | shown | hook, tier 1, default | yes |
 | `blackhole` | Black Hole | Space & Gravity > Deep Space | GPU | Gravitational lensing around a Schwarzschild hole. |  | shown | hook, tier 1, default | yes |
 | `wormhole` (pages/ellis-wormhole) | Wormhole | Space & Gravity > Deep Space | GPU | Fly through an Ellis wormhole. |  | shown | hook, tier 2, default | yes |
 | `chandrasekhar-limit` | Chandrasekhar Limit | Space & Gravity > Deep Space | NEW | Why no white dwarf weighs more than 1.4 Suns. |  | shown | hook, tier 4, default | yes |
@@ -222,6 +222,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `map-projections` | Map Projections | Earth & Oceans > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
 | `storm-globe` | Storm Globe | Meteorology > Weather & Storms | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
 | `weather-map` | Weather Map | Meteorology > Weather & Storms | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
+| `thunder-acoustics` | Thunder Acoustics | Meteorology > Weather & Storms | SIM | Draw a lightning channel and hear the thunder arrive. |  | shown | no | no |
 | `thermal-convection` | Thermal Convection | Meteorology > Atmospheric Convection | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
