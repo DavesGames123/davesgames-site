@@ -1,0 +1,24 @@
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            border: 1px solid black;
+            background: #101010;
+            display: block;  /* Removes small gap at bottom */
+        }
+        .controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            margin: 10px 0;
+            font-family: Arial, sans-serif;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .stats {
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    
