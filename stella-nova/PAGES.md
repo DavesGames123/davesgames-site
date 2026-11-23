@@ -222,7 +222,7 @@ Saver = lib/screensaver-catalog.js (hook or generic, tier, default list). Thumb 
 | `map-projections` | Map Projections | Earth & Oceans > Maps & Cities | MATH | 26 map projections, Tissot circles and a true-size tool. |  | shown | hook, tier 3, default | yes |
 | `storm-globe` | Storm Globe | Meteorology > Weather & Storms | DATA | Today’s storms on a globe of real GFS winds. |  | shown | hook, tier 3, default | yes |
 | `weather-map` | Weather Map | Meteorology > Weather & Storms | DATA | Live US weather on a real globe: fronts, radar, forecasts. |  | shown | hook, tier 4, default | yes |
-| `thunder-acoustics` | Thunder Acoustics | Meteorology > Weather & Storms | SIM | Draw a lightning channel and hear the thunder arrive. |  | shown | no | no |
+| `thunder-acoustics` | Thunder Acoustics | Meteorology > Weather & Storms | SIM | Draw a lightning channel and hear the thunder arrive. |  | shown | no | yes |
 | `thermal-convection` | Thermal Convection | Meteorology > Atmospheric Convection | SIM | Hot fluid rising in cells: the surface and the cut beneath. |  | shown | hook, tier 4, default | no |
 | `magnetlab` | MagnetLab | Light & Fields > Electromagnetism | NEW | Drag magnets and see the field lines. |  | shown | hook, tier 2, default | yes |
 | `biot-savart` | Biot–Savart Law | Light & Fields > Electromagnetism | NEW | The field around a current. |  | shown | hook, tier 2, default | yes |
