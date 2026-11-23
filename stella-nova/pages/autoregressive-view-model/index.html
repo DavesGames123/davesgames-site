@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Autoregressive View Model — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   AUTOREGRESSIVE VIEW MODEL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A one-paper explainer for Research > Machine Learning: AVM (Zhou et al.,
+   arXiv:2611.23417, Meta and Oxford, CC BY 4.0). An article with one live
+   figure, the view-stream lab, and the paper's tables.
+     world.js   the toy floor plan, ray-cast views, surface bins, paths
+     stream.js  the toy sampling loop: pool, sink / retrieved / motion
+                context, chunks, the four retrieval policies
+     data.js    the paper's numbers (Tables 2 to 6 and 8)
+     lab.js     the lab figure: the map, the strips, the context bar
+     main.js    the tables, the lab controls, the saver hook
+     equations.js  MathJax SVG through lib/sci-math.js
+
+   HEAD LOAD ORDER
+     gpu-guard, wishlist, stats-beacon (the site order), then style.css,
+     then lib/sci.css.
+
+   COLOURS  (lib/sci.css)  used in the lab, the context bar and the TeX
+     m6 sink (lavender)   m3 retrieved (green)   m2 motion (orange)
+     m1 target (blue)     m5 prefill (gold)      m4 imagined (pink)
+
+   GREP MAP
+     grep -n 'id="lab"'        the lab figure and its controls
+     grep -n '<section'        the article sections
+     grep -n 'data-table'      where main.js puts each table
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How the Autoregressive View Model (Meta and Oxford, 2026) makes a scene as a stream of views with no 3D model: an in-context video diffusion transformer, a bounded context of sink, retrieved and motion views, causal distillation, and the results, with a live toy of the retrieval loop.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<main>
+<header class="paper">
+  <div class="kicker">Research · Machine Learning · paper explainer</div>
+  <h1>Autoregressive View Model</h1>
+  <p class="sub">Generating a scene as a stream of views, with no 3D model in between.</p>
+  <p class="byline" id="byline"></p>
+</header>
+
+<section id="lab" class="figure" aria-label="View-stream lab">
+  <div class="fig-head"><span class="fig-no">Figure 1</span> A toy of the sampling loop. The camera walks a path in chunks of <span class="m1">three target views</span>. Each chunk sees a bounded context: <span class="m6">sink</span> views from the input, <span class="m3">retrieved</span> views from anywhere in the pool, and the last <span class="m2">motion</span> views. Columns that the context shows are copied; the rest are <span class="m4">imagined</span>.</div>
+  <div class="lab-grid">
+    <div class="lab-map"><canvas id="map" aria-label="Floor plan with cameras"></canvas>
+      <div class="legend"><i class="m5">■</i> prefill <i class="m6">■</i> sink <i class="m3">■</i> retrieved <i class="m2">■</i> motion <i class="m1">■</i> target <i class="m4">■</i> imagined ray</div></div>
+    <div class="lab-side">
+      <div class="lab-label">Context of this chunk</div>
+      <div id="ctxbar" class="ctxbar"></div>
+      <div class="lab-label">Target views now <span class="dim">(top: generated, bottom: the true scene)</span></div>
+      <canvas id="now" aria-label="Target views of this chunk"></canvas>
+      <div class="lab-label">The stream so far <span class="dim">(one row per view, time runs down)</span></div>
+      <canvas id="film" aria-label="All generated views"></canvas>
+      <table class="nums" id="labNums"></table>
+    </div>
+  </div>
+  <div class="lab-controls">
+    <div class="ctl"><span class="ctl-l">Camera path</span><div class="seg" id="paths"></div></div>
+    <div class="ctl"><span class="ctl-l">Retrieval</span><div class="seg" id="policies"></div></div>
+    <div class="ctl ctl-row">
+      <label for="prefill" class="ctl-l">Input images</label><input type="range" id="prefill" min="0" max="6" step="1" value="3"><span class="val" id="prefillV">3</span>
+      <button id="play" class="btn primary">Play</button><button id="stepBtn" class="btn">Step</button><button id="resetBtn" class="btn">Reset</button>
+    </div>
+  </div>
+  <p class="note" id="pathNote"></p>
+  <p class="note">This is a toy. The real model generates pixels and has no floor plan; here the walls are given and a lookup stands in for the network. What carries over is the bookkeeping: what the context holds decides what can be copied, and only retrieval lets a view from long ago come back. Try <b>No retrieval</b> on <b>Out and back</b> and watch the revisit score fall.</p>
+</section>
+
+<section>
+  <h2>The idea</h2>
+  <p>Most systems that let you walk through a scene from a few photos first build an explicit 3D model, a point cloud, a mesh, a radiance field or Gaussian splats, and then render it. AVM does not. It treats a scene as a stream of <em>views</em>: each view is a short video clip with a camera pose and a timestamp. Given some views as context and a camera path, it generates the next clip along the path, adds it to its history, and goes on.</p>
+  <p>Whether it reconstructs or invents is not a switch. Where the context shows the requested part of the scene, the output follows the context (reconstruction and interpolation). Where nothing in the context covers it, a learned video prior fills it in (extrapolation). The same interface handles single images, several posed images, a video, synchronised multi-camera video, and the model's own earlier output.</p>
+</section>
+
+<section>
+  <h2>One model, N views in, one clip out</h2>
+  <p>AVM fine-tunes a pretrained image-to-video diffusion transformer with 14 billion parameters. A spatiotemporal autoencoder turns video into latents, one latent per 8 × 8 pixel × 4 frame block. The transformer reads N context slots and one target slot as one sequence. Each slot gets its noisy latent, a reference latent and a mask: the context slots carry the clean latent with mask 1, the target slot carries zeros.</p>
+  <div class="sci-eq" data-tex="x_{i,t}=\big[\,z_{i,t}\;\|\;c_i\;\|\;m_i\,\big],\qquad c^{\text{ctx}}=z_0^{\text{ctx}},\;m^{\text{ctx}}=1,\qquad c^{\text{tgt}}=m^{\text{tgt}}=0"></div>
+  <p>The camera enters in two places. Translation, in metric world units, goes in as rotary position embeddings on the attention queries and keys, so large coordinates stay in range. Rotation goes in as embeddings of the per-pixel camera rays, added to the patches. Timestamps get a sinusoidal embedding: constant for a static scene, rising for a moving one. Text prompts go through T5 and cross-attention.</p>
+  <p>Training is flow matching. Noise and data are joined by a straight line, and the network learns the velocity along it for every slot:</p>
+  <div class="sci-eq" data-tex="z_t=(1-t)\,z_0+t\,\epsilon,\qquad v=\epsilon-z_0,\qquad \mathcal L_\text{FM}=\mathbb E\,\big\|\hat v-v\big\|_2^2"></div>
+  <p>Context images or clips of the same scene lose their timestamps and act like the examples in a language-model prompt: that is the "in-context" part. Synchronised streams from another camera keep the target's timestamps.</p>
+</section>
+
+<section>
+  <h2>A bounded context</h2>
+  <p>A long walk makes a long history, and attention over all of it would grow without end. AVM keeps the context for each target to a fixed size made of four parts, the parts of Figure 1:</p>
+  <div class="sci-eq" data-tex="L=L_\text{sin}+L_\text{rtr}+L_\text{win},\qquad L_\text{win}=L_\text{mot}+L_\text{tgt}"></div>
+  <p><span class="m6"><b>Sink</b></span> views are input views kept for the whole run, so the style and content of the input stay fixed. <span class="m3"><b>Retrieved</b></span> views come from the pool of input and generated views by camera pose (or by timestamp for synced video). <span class="m2"><b>Motion</b></span> views are the most recent frames, for smooth motion. The base model makes 19 latent frames per chunk after 2 frames of motion; the causal model makes 3 at a time after 15 and keeps the rest in a KV cache, which it can move to CPU memory and load back when a view is retrieved.</p>
+  <p>The paper compares three ways to retrieve. Greedy nearest ranks views by the distance between camera matrices:</p>
+  <div class="sci-eq" data-tex="d(q,r)=\big\|P_q^{-1}\,(P_r-P_q)\big\|_F"></div>
+  <p>Spatial retrieval puts anchor points along the target's rays and picks, again and again, the view that covers the most anchors not yet covered. The default adds up to four views that fill the missing headings (same way, opposite, left, right) and then drops near-duplicates. With one slot per target:</p>
+  <div class="tbl" data-table="T8"></div>
+  <p>Turning retrieval off is the clearest result of the ablation: revisit PSNR falls from 28.04 to 11.13 dB, while a smaller active window (21 to 15 latent frames) changes almost nothing.</p>
+</section>
+
+<section>
+  <h2>From slow and bidirectional to fast and causal</h2>
+  <p>The base model sees its whole target clip at once and needs 50 Euler steps with classifier-free guidance:</p>
+  <div class="sci-eq" data-tex="\hat v_\text{CFG}=\hat v^{+}+(s-1)\,\big(\hat v^{+}-\hat v^{-}\big)"></div>
+  <p>For streaming, the authors turn it into a causal model with sparse attention. They start with a mix of teacher forcing (conditioning on clean earlier blocks) and diffusion forcing (on noisy ones), with error recycling that feeds the model its own stored mistakes. Then they tune it on its own rollouts with distribution-matching distillation and an adversarial loss, on rollouts that get longer over training, with the same prefill and history context as at inference. The result samples in 4 steps with the guidance folded in. The ablation shows why the last stage matters: the causal model before on-policy tuning reaches a revisit PSNR of only 10.12 dB.</p>
+  <div class="tbl" data-table="T6"></div>
+</section>
+
+<section>
+  <h2>Data</h2>
+  <p>About 6 million labelled scenes with metric camera poses and captions (indoor and outdoor captures, posed web video, object videos, synthetic and game renderings, synchronised multi-camera video, cubemaps) and about 2 million unlabelled clips that keep the base model's motion and text following. Clips are five seconds long; resolution grows from 448 × 448 to 720 × 1280 during training. Image edits with FLUX teach the model to stay coherent when the context images disagree.</p>
+</section>
+
+<section>
+  <h2>Results</h2>
+  <p><b>From one image.</b> Each model gets one starting image. Bold marks the best value in each column; "–" means the paper reports none. AVM is close to the best view-synthesis model (SEVA) on camera control on DL3DV and far above the world models on WorldScore, and has the best FID and VMAF. It trails on text alignment and has the lowest dynamic degree. On camera control on WorldScore, GEN3C scores higher.</p>
+  <div class="tbl" data-table="T2"></div>
+  <p><b>From seven posed images</b> (sparse reconstruction, DL3DV):</p>
+  <div class="tbl" data-table="T3"></div>
+  <p><b>From a video</b> (4D reconstruction of a second synchronised camera, MultiCam):</p>
+  <div class="tbl" data-table="T4"></div>
+  <p><b>Coming back</b> (revisits along a 721-frame loop on WorldScore, compared with the model's own earlier frames). This is the result that retrieval makes possible:</p>
+  <div class="tbl" data-table="T5"></div>
+</section>
+
+<section>
+  <h2>Limits</h2>
+  <ul>
+    <li>Text control is weak: 39.65 against 54.07 for the best world model, and a "garden party" prompt can still give an indoor room.</li>
+    <li>Motion is cautious: the lowest dynamic degree of the four models tested (24.88 against 35.55).</li>
+    <li>The authors say visual artifacts remain and expect quality to grow with model and data scale. Dense-capture prefill is an early result.</li>
+    <li>On 3D consistency for revisits, LingBot-World scores higher (57.00 against 53.13).</li>
+    <li>At the time of writing the project page links no code or weights.</li>
+  </ul>
+  <p>The authors' next steps: stronger open-weight video priors, optional geometric proxies for finer control, and use inside agent workflows.</p>
+</section>
+
+<section class="credits">
+  <h2>Source</h2>
+  <p id="cite"></p>
+  <p>Numbers and the description of the method are from the paper, which is published under CC BY 4.0; the tables are reproduced from it with column subsets. The videos are on the <a id="siteLink" target="_blank" rel="noopener">project page</a>. The lab in Figure 1 and all page code are our own and are not from the authors.</p>
+</section>
+</main>
+<script type="module" src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

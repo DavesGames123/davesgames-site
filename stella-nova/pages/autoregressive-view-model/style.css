@@ -1,0 +1,94 @@
+/* ============================================================================
+   AUTOREGRESSIVE VIEW MODEL  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A paper explainer: one reading column, one wide figure (the lab), plain
+   tables. Type from lib/sci.css (loaded after this file): STIX Two Text
+   for headings, Inter for text, the system mono for numbers.
+     grep -n 'FIGURE'   the lab figure and its controls
+     grep -n 'TABLE'    the paper tables
+     grep -n 'PHONE'    one column below 820 px
+     grep -n 'avm-saver' the screensaver mode
+   ========================================================================== */
+:root{--bg:#06080b;--bg2:#0d1117;--ink:#d8dee6;--dim:#8692a0;--line:rgba(150,180,210,0.12);--line-b:rgba(150,180,210,0.24);--acc:#e6ebf1}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);overflow-x:hidden}
+body{font-family:var(--sci-sans);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;line-height:1.65}
+a{color:#9fd3ff}
+main{max-width:1120px;margin:0 auto;padding:40px 24px 80px}
+html.in-frame main{padding-top:24px}
+.paper{max-width:760px;margin:0 auto 28px}
+.kicker{font-size:0.78rem;color:var(--dim)}
+h1{font-family:var(--sci-serif);font-weight:400;font-size:2.3rem;line-height:1.15;color:#f0f3f6;margin:6px 0 4px}
+.sub{font-family:var(--sci-serif);font-style:italic;font-size:1.15rem;color:#c9d2db}
+.byline{font-size:0.82rem;color:var(--dim);margin-top:10px}
+section{max-width:760px;margin:0 auto 34px}
+section p,section li{font-size:0.95rem;color:#c4ccd5;margin:10px 0}
+section ul{padding-left:20px}
+h2{font-family:var(--sci-serif);font-weight:400;font-size:1.45rem;color:#eef2f4;margin:10px 0 6px;padding-top:18px;border-top:1px solid var(--line)}
+b{color:var(--ink);font-weight:600}
+.sci-eq{font-size:1rem;margin:10px 0 14px}
+
+/* FIGURE */
+section.figure{max-width:1120px;padding:16px;border:1px solid var(--line-b);border-radius:12px;background:#080b0f}
+.fig-head{font-size:0.86rem;color:#c4ccd5;margin-bottom:12px}
+.fig-no{font-family:var(--sci-serif);font-weight:600;color:#eef2f4;margin-right:4px}
+.fig-head span[class^="m"],.legend i{font-weight:600;font-style:normal}
+.lab-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px}
+.lab-map canvas{display:block;width:100%;aspect-ratio:20/12.6;border-radius:8px;background:#05070a;border:1px solid var(--line)}
+.legend{font-size:0.74rem;color:var(--dim);margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 10px}
+.lab-label{font-size:0.78rem;color:var(--ink);margin:4px 0 6px}
+.lab-label .dim{color:var(--dim)}
+#now{display:block;width:100%;height:96px;border-radius:6px;background:#05070a;border:1px solid var(--line)}
+#film{display:block;width:100%;height:150px;border-radius:6px;background:#05070a;border:1px solid var(--line);margin-bottom:8px}
+.ctxbar{display:flex;gap:2px;height:26px;margin-bottom:10px;font:0.7rem/26px var(--sci-mono)}
+.ctxbar span{flex:1 1 0;min-width:0;text-align:center;border-radius:3px;color:#05070a;overflow:hidden;white-space:nowrap}
+.ctxbar .k-sink{background:var(--m6)} .ctxbar .k-rtr{background:var(--m3)} .ctxbar .k-mot{background:var(--m2)} .ctxbar .k-tgt{background:var(--m1)}
+.ctxbar .k-none{background:transparent;color:var(--dim);border:1px dashed var(--line-b)}
+.nums{width:100%;border-collapse:collapse;font-size:0.78rem}
+.nums td{padding:4px 0;border-bottom:1px solid var(--line)}
+.nums td:first-child{color:var(--dim)}
+.nums td:last-child{text-align:right;font-family:var(--sci-mono);font-variant-numeric:tabular-nums}
+.lab-controls{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin-top:14px}
+.ctl{display:flex;flex-direction:column;gap:4px}
+.ctl-row{flex-direction:row;align-items:center;gap:10px}
+.ctl-l{font-size:0.74rem;color:var(--dim)}
+.seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border:1px solid var(--line-b);border-radius:9px;background:rgba(10,13,18,0.82)}
+.seg button{height:30px;padding:0 10px;border:0;border-radius:7px;background:transparent;color:var(--dim);font:0.78rem var(--sci-sans);cursor:pointer}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:rgba(255,255,255,0.09);color:#fff}
+.btn{height:32px;padding:0 14px;border:1px solid var(--line-b);border-radius:8px;background:var(--bg2);color:var(--ink);font:0.8rem var(--sci-sans);cursor:pointer}
+.btn.primary{background:#e6ebf1;color:#0a0d12;border-color:#e6ebf1;font-weight:600}
+.val{font:0.78rem var(--sci-mono);min-width:1.5em}
+input[type=range]{accent-color:#c9d3df;width:120px}
+.note{font-size:0.8rem;color:var(--dim);margin-top:10px;max-width:none}
+
+/* TABLE */
+.tbl{overflow-x:auto;margin:10px 0 18px;-webkit-overflow-scrolling:touch}
+.tbl table{border-collapse:collapse;font-size:0.8rem;min-width:100%}
+.tbl th,.tbl td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tbl th{font-weight:500;color:var(--dim);font-size:0.74rem;vertical-align:bottom}
+.tbl th small{display:block;font-size:0.68rem;color:#6d7884}
+.tbl td{font-family:var(--sci-mono);font-variant-numeric:tabular-nums;color:#c4ccd5}
+.tbl th:first-child,.tbl td:first-child{text-align:left;font-family:var(--sci-sans);color:var(--ink)}
+.tbl td.best{color:#fff;font-weight:700}
+.tbl tr.avm td{background:rgba(98,196,255,0.07)}
+.tbl tr.grp td{font:italic 0.74rem var(--sci-sans);color:var(--dim);text-align:left;border-bottom:0;padding-top:10px}
+.credits p{font-size:0.84rem}
+
+/* TOUCH */
+@media (pointer:coarse){ .seg button{height:44px;padding:0 12px} .btn{height:44px} input[type=range]{height:44px;width:150px} }
+
+/* PHONE */
+@media (max-width:820px){
+  main{padding:24px 16px 60px}
+  h1{font-size:1.8rem}
+  .lab-grid{grid-template-columns:1fr}
+  section.figure{padding:12px}
+  .lab-controls{gap:10px}
+  .ctl-row{flex-wrap:wrap}
+}
+
+/* screensaver: the figure alone */
+html.avm-saver main > :not(#lab){display:none!important}
+html.avm-saver .lab-controls,html.avm-saver #lab .note{display:none!important}
