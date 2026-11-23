@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Pendulum Trail — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PENDULUM TRAIL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   The 3D triple pendulum with a trail that draws the chaotic path of its tip.
+
+   CREDIT. The simulation is by Shengzhe Hou (China), a contribution to Ten Minute Physics by Matthias Müller.
+   Upstream file: tenMinutePhysics/contribs/pendulumTrail.html in
+   https://github.com/matthias-research/pages (no licence text upstream; the author keeps all rights).
+   Contributions page: https://matthias-research.github.io/pages/tenMinutePhysics/contribs/
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The 3D triple pendulum with a trail that draws the chaotic path of its tip. By Shengzhe Hou, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Pendulum 3D</h1>
+
+    <p>
+        <button id="btnRun" class="button" onclick="run()">Run</button>
+        &nbsp&nbsp
+        dt: 1/60
+        &nbsp&nbsp
+        sub-steps:
+        <input type="range" min="0" max="5" value="5" id="stepsSlider" class="slider"> <span id="steps">100000</span>
+        &nbsp&nbsp
+        <input type="checkbox" onclick="onTrail()" checked="checked"> <span id="trail">Trail</span>
+    </p>
+    <div id="container"></div>
+<script src="../../vendor/three@0.139.2/build/three.min.js"></script>
+<script src="../../vendor/three@0.139.2/examples/js/controls/OrbitControls.js"></script>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
