@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Thunder acoustics — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   THUNDER ACOUSTICS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A vertical cross-section through a thunderstorm:
+   draw a lightning channel, shape the ground, place a microphone, and
+   watch and hear the thunder that reaches it. The page is laid out as a
+   figure with three panels and a parameter column.
+     channel.js  the tortuous channel and the Few (1969) source numbers
+     scene.js    terrain, buildings, the temperature profile, ISO 9613-1
+     fdtd.js     the 2D acoustic solver (staggered grid, rigid ground)
+     thunder.js  p(t) at the microphone: 3D N-wave sum with absorption,
+                 a ground image, diffraction and terrain scatter
+     fft.js      radix-2 FFT (absorption filters, spectrogram)
+     render.js   the figure: (a) cross-section, (b) p(t), (c) spectrogram
+     main.js     state, pointer tools, the run loop, audio, the panel
+     equations.js  MathJax SVG of the equations in the panel
+
+   HEAD LOAD ORDER
+     gpu-guard, wishlist, stats-beacon (the site order), then style.css,
+     then lib/sci.css (STIX Two Text, Inter, the math colours .m1 to .m6).
+
+   SYMBOL COLOURS  (lib/sci.css)
+     m4 E_l, R_0 (pink)    m2 f_m (orange)    m1 c, T (blue)
+     m3 r, distances (green)   m5 p at the microphone (gold)   m6 sigma
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ .topbar  Stella Nova · Thunder acoustics        #strike #reset    │
+     ├────────────┬──────────────────────────────────────────────────────┤
+     │ #panel     │  #fig  (a) the cross-section, axes in km, colour bar │
+     │  scenario  │        (b) p(t) at the microphone                    │
+     │  tools     │        (c) the spectrogram                           │
+     │  discharge │  #tools  the pointer tools over the figure           │
+     │  air, grid │                                                      │
+     │  numbers   │                                                      │
+     │  methods   │                                                      │
+     ├────────────┴──────────────────────────────────────────────────────┤
+     │ #status   grid · dt · c0 · state                                  │
+     └───────────────────────────────────────────────────────────────────┘
+   PHONE (max-width 768px, or a short landscape touch screen)
+     #dock    the tool, strike, the view, sound, the panel
+     #panel   a bottom sheet above the dock (#sheetGrip); a drawer on the
+              right in landscape
+
+   GREP MAP
+     grep -n 'id="panel"'      the panel and its sections
+     grep -n 'class="sec-label geo'   the method sections and equations
+     grep -n 'id="dock"'       the phone dock
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A cross-section through a thunderstorm: draw a lightning channel, shape the ground and the air, and see and hear the thunder at a microphone. A 2D acoustic grid solver shows the wavefield; a 3D N-wave model with ISO 9613-1 absorption gives the sound and its spectrogram.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Thunder acoustics</div>
+</div>
+<div id="actions">
+  <button id="strike" class="primary" title="Strike (space)">Strike</button>
+  <button id="reset" title="Clear the field (R)">Reset</button>
+  <button id="sound" aria-pressed="true" title="Sound on or off (S)">Sound on</button>
+</div>
+<button id="gear" aria-label="Open the panel" title="Open the panel">☰</button>
+
+<canvas id="fig"></canvas>
+<div id="tools" class="seg" role="group" aria-label="Pointer tool">
+  <button data-tool="channel" title="Draw a channel (1)"><svg viewBox="0 0 24 24"><path d="M14 2 8 12h5l-3 10 7-12h-5z"/></svg><span>Channel</span></button>
+  <button data-tool="mic" title="Move the microphone (2)"><svg viewBox="0 0 24 24"><path d="M12 3v11M8 21h8M12 17v4M6 11a6 6 0 0 0 12 0"/></svg><span>Microphone</span></button>
+  <button data-tool="raise" title="Raise the ground (3)"><svg viewBox="0 0 24 24"><path d="M2 20c5 0 6-10 10-10s5 10 10 10M12 3v4M10 5l2-2 2 2"/></svg><span>Raise</span></button>
+  <button data-tool="lower" title="Lower the ground (4)"><svg viewBox="0 0 24 24"><path d="M2 12c5 0 6 8 10 8s5-8 10-8M12 3v4M10 5l2 2 2-2"/></svg><span>Lower</span></button>
+  <button data-tool="building" title="Add or remove a building (5)"><svg viewBox="0 0 24 24"><path d="M4 21V9h6v12M10 21V4h8v17M2 21h20"/></svg><span>Building</span></button>
+</div>
+<div id="probe" hidden></div>
+
+<aside id="panel" class="open" aria-label="Controls and explanation">
+  <div id="sheetGrip" role="button" aria-label="Resize the panel"><span></span></div>
+  <button id="panelClose" aria-label="Close the panel">✕</button>
+
+  <div class="sec-label">Scenario</div>
+  <div id="presets" class="chips" role="group" aria-label="Scenario"></div>
+  <p class="desc" id="presetNote"></p>
+
+  <div class="sec-label">Discharge</div>
+  <div id="params"></div>
+  <div class="row"><button id="newChannel" class="wide-btn">New random channel</button></div>
+
+  <div class="sec-label">Atmosphere</div>
+  <div class="seg wide" id="profiles" role="group" aria-label="Temperature profile"></div>
+  <p class="desc" id="profileNote"></p>
+  <div id="airParams"></div>
+  <canvas id="cprof" aria-label="Sound speed against height"></canvas>
+
+  <div class="sec-label">Display and grid</div>
+  <div class="seg wide" id="views" role="group" aria-label="Field view">
+    <button data-view="p">Overpressure</button>
+    <button data-view="e">Energy</button>
+  </div>
+  <div class="seg wide" id="grids" role="group" aria-label="Grid spacing">
+    <button data-dx="25">Δx 25 m</button>
+    <button data-dx="16">Δx 16 m</button>
+    <button data-dx="10">Δx 10 m</button>
+  </div>
+  <div class="seg wide" id="speeds" role="group" aria-label="Speed">
+    <button data-speed="1">Real time</button>
+    <button data-speed="2">2×</button>
+    <button data-speed="4">4×</button>
+  </div>
+  <div class="chips" id="togs">
+    <button data-tog="auto">Auto colour scale</button>
+    <button data-tog="front">First-arrival circle</button>
+    <button data-tog="grid">Grid trace in (b)</button>
+    <button data-tog="norm">Normalise loudness</button>
+  </div>
+  <p class="hint">Sound plays only in real time. Without <b>Normalise loudness</b> the playback level follows the peak pressure at the microphone, so far thunder is quiet.</p>
+
+  <div class="sec-label">Numbers</div>
+  <table class="nums" id="nums"></table>
+
+  <div class="sec-label geo">The source</div>
+  <p class="geo">A return stroke heats the channel to about 30 000 K in a few microseconds. The pressure in it rises to many atmospheres and the channel expands as a cylindrical shock. Few (1969) uses the energy per unit length <span class="m4">E<sub>l</sub></span>: the shock becomes a weak acoustic wave near the radius where the work against the air equals that energy.</p>
+  <div class="sci-eq" data-tex="R_0=\sqrt{\frac{E_l}{p_0}},\qquad f_m\approx0.63\,\frac{c_0}{R_0}"></div>
+  <p class="geo">With <span class="m4">E<sub>l</sub></span> = 5 × 10⁵ J/m, <span class="m4">R<sub>0</sub></span> ≈ 2.2 m and the spectrum has its peak <span class="m2">f<sub>m</sub></span> near 100 Hz. Each short piece of the channel sends an N-wave of length about <i>R<sub>0</sub></i>/<i>c</i>.</p>
+
+  <div class="sec-label geo">Why thunder rumbles</div>
+  <p class="geo">The whole channel flashes within about 50 μs, but its pieces are at different distances <span class="m3">r</span> from you. The sound of each piece arrives at <span class="m3">r</span>/<span class="m1">c</span>. The thunder lasts from the nearest point to the farthest point.</p>
+  <div class="sci-eq" data-tex="p(t)=\sum_i K\sqrt{\frac{w_i E_l}{E_\text{ref}}}\;\frac{\Delta l_i}{r_i}\;N\!\Big(t-\frac{r_i}{c}\Big)*h_{r_i}(t)"></div>
+  <p class="geo">A straight piece of channel seen from the side has all its points at nearly the same distance: their N-waves arrive together and add up to a clap. Seen end-on, the same piece spreads its sound over Δ<i>t</i> = <i>L</i>/<span class="m1">c</span>: a low rumble. The tortuosity <span class="m6">σ</span> of the channel sets how many claps you hear. No extra directivity is put in; it comes from the sum.</p>
+
+  <div class="sec-label geo">Air absorption</div>
+  <p class="geo">Air takes energy from sound through viscosity and through the relaxation of oxygen and nitrogen molecules, and water vapour sets the relaxation rates. The page uses the ISO 9613-1 coefficient α(<i>f</i>, <span class="m1">T</span>, RH). At 20 °C and 50 % RH it is about 5 dB/km at 1 kHz but only about 0.3 dB/km at 100 Hz. So near thunder cracks, and far thunder only rumbles.</p>
+  <div class="sci-eq" data-tex="H_r(f)=10^{-\alpha(f)\,r/20}"></div>
+
+  <div class="sec-label geo">The wavefield in panel (a)</div>
+  <p class="geo">Panel (a) solves the linear acoustic equations on a grid across the plane. The rigid ground and buildings reflect; the edges absorb. The sound speed changes with height:</p>
+  <div class="sci-eq" data-tex="\rho\frac{\partial\vec v}{\partial t}=-\nabla p,\qquad \frac{\partial p}{\partial t}=-\rho\,c(z)^2\,\nabla\cdot\vec v,\qquad c=20.05\sqrt{T}"></div>
+  <p class="geo">In a normal atmosphere <span class="m1">T</span> falls with height, so <span class="m1">c</span> falls too and the wavefronts tilt: rays bend up, away from the ground. Beyond some range no ray reaches the ground, and you do not hear thunder there: the acoustic shadow. A night inversion bends rays down and carries thunder farther. Watch the front near the ground in the energy view.</p>
+  <p class="geo">The grid is a low-pass picture of the wave. It carries only frequencies below about <span class="m1">c</span>/(6Δ<i>x</i>), a few hertz, so it cannot make the sound. It is 2D: the channel acts as a sheet across the plane, which spreads as 1/√<span class="m3">r</span>, like a long channel seen from nearer than its length.</p>
+
+  <div class="sec-label geo">Ground, ridges and echoes</div>
+  <p class="geo">The model in panel (b) adds a reflection from the ground under the microphone (an image source, |<i>R</i>| = 0.8). A ridge or building on a ray makes the sound bend over its top. The extra path δ gives a Fresnel number and a loss after Maekawa:</p>
+  <div class="sci-eq" data-tex="N=\frac{2\delta f_m}{c},\qquad \Delta L=10\log_{10}(3+20N)\ \text{dB}"></div>
+  <p class="geo">Slopes and walls that can see both the channel and the microphone scatter late echoes (first order, diffuse). Valleys ring; open plains do not.</p>
+
+  <div class="sec-label geo">Limits</div>
+  <p class="geo">Rays in (b) are straight: refraction moves the arrival times a little and the shadow zone is in (a), not in (b). The level is calibrated to one assumption: a straight 2 km channel seen side-on from 1 km gives 5 Pa peak (108 dB) at 5 × 10⁵ J/m. Wind, turbulence, the shock region near the channel and channels out of the plane are not modelled.</p>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>Based on the idea of <a href="https://www.thunderlab.cloud" target="_blank" rel="noopener">ThunderLab</a> by Barrington Russell: draw a bolt, shape the ground, hear the thunder. This page shares no code or assets with it.</p>
+    <p>Sources: A. A. Few, Power spectrum of thunder, <i>J. Geophys. Res.</i> 74 (1969) 6926. ISO 9613-1:1993, attenuation of sound by the atmosphere. Z. Maekawa, Noise reduction by screens, <i>Appl. Acoust.</i> 1 (1968) 157. V. A. Rakov and M. A. Uman, <i>Lightning: Physics and Effects</i> (2003), ch. 11.</p>
+  </div>
+</aside>
+
+<div id="status"><span id="stMain"></span><span id="stRight" class="right"></span></div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockTool" class="name" aria-label="Pointer tool"><span id="dockName">Channel</span></button>
+  <button id="dockStrike" class="primary" aria-label="Strike">⚡︎</button>
+  <button id="dockView" aria-label="Field view">p′</button>
+  <button id="dockSound" aria-label="Sound" aria-pressed="true">♪</button>
+  <button id="dockPanel" aria-label="Panel" aria-expanded="false">☰</button>
+</nav>
+
+<script type="module" src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
