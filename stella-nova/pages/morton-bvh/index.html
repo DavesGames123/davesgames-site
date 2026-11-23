@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Morton BVH — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MORTON BVH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A bounding volume hierarchy built very fast from Morton codes, used for collision detection of many objects.
+
+   CREDIT. The simulation is by Matthias Müller, Ten Minute Physics #24.
+   Upstream file: tenMinutePhysics/24-morton.html in
+   https://github.com/matthias-research/pages (no licence text upstream; the author keeps all rights).
+   Video tutorial: https://youtu.be/LAxHQZ8RjQ4
+
+   The upstream demo is split into the page pad with no change to its
+   code: style.css holds its <style> blocks, main.js (and script-N.js)
+   its inline scripts in order, one shared global scope. CDN libraries
+   load from vendor/. The site adds only these files:
+     ../../widgets/ten-minute-physics/kit.js   credit bar + saver director
+     saver.js                                  TMP.page credit + snSaver shots
+
+   GREP MAP
+     grep -n 'TMP.page'    saver.js   the credit record
+     grep -n 'shots:'      saver.js   the screensaver shot list
+     grep -n 'fit('        saver.js   how the sim is resized for the saver
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A bounding volume hierarchy built very fast from Morton codes, used for collision detection of many objects. By Matthias Müller, Ten Minute Physics.">
+<script src="../../widgets/ten-minute-physics/kit.js"></script>
+<link rel="stylesheet" href="../../widgets/ten-minute-physics/kit.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="container"></div>
+    <div class="info">
+        <h3>3D Morton BVH Collision Detection</h3>
+        <p>Boxes: <span id="boxCount">0</span></p>
+        <p>Collisions: <span id="collisionCount">0</span></p>
+        <p>BVH Build Time: <span id="buildTime">0</span> ms</p>
+        <p>Collision Check Time: <span id="checkTime">0</span> ms</p>
+        <p>BVH Checks: <span id="bvhChecks">0</span></p>
+        <p>FPS: <span id="fps">0</span></p>
+    </div>
+<script src="../../vendor/three@0.128.0/build/three.min.js"></script>
+<script src="main.js"></script>
+<script src="saver.js"></script>
+</body>
+</html>
