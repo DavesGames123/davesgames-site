@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<script src="../../lib/wishlist.js"></script>
+<script src="../../lib/stats-beacon.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>FACET Regional Head Model — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FACET HEAD MODEL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A one-paper explainer for Research > Machine Learning: FACET (Lamarre et
+   al., Electronic Arts, arXiv:2611.26773, SIGGRAPH Asia 2026 Technical
+   Communications, CC BY-NC-ND 4.0). The licence forbids derivatives: the
+   page copies no figure and no text, only numbers (data.js). Both figures
+   are our own 2D toy.
+     head.js    the toy head population: 2D profiles, 8 regions, blend weights
+     model.js   global PCA, the regional model and its Laplacian solve,
+                region swap, cut and paste, held-out curves
+     data.js    the paper's numbers (Table 1 and the text of Sec. 4)
+     lab.js     drawing: profile panels, the error chart
+     main.js    tables, the figure controls, the saver hook
+     equations.js  MathJax SVG through lib/sci-math.js
+
+   HEAD LOAD ORDER
+     gpu-guard, wishlist, stats-beacon (the site order), then style.css,
+     then lib/sci.css.
+
+   COLOURS  (lib/sci.css)
+     m2 global PCA (orange)   m1 regional (blue)   m3 Laplacian targets
+     m5 position targets      m6 action units
+
+   GREP MAP
+     grep -n 'id="lab"'        Figure 1, the rank wall
+     grep -n 'id="swap"'       Figure 2, the region swap
+     grep -n '<section'        the article sections
+     grep -n 'data-table'      where main.js puts each table
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How FACET (Electronic Arts, SIGGRAPH Asia 2026) gets more out of a few hundred head scans: 16 regional PCA bases joined by one Laplacian solve, FACS action units fitted per identity by a small network, and a neck region that stops pose leaking into the face. With a live toy of the N - 1 rank wall.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<main>
+<header class="paper">
+  <div class="kicker">Research · Machine Learning · paper explainer</div>
+  <h1>FACET: a regional head model</h1>
+  <p class="sub">When you cannot scan more people, cut the face into parts.</p>
+  <p class="byline" id="byline"></p>
+</header>
+
+<section id="lab" class="figure" aria-label="Rank wall lab">
+  <div class="fig-head"><span class="fig-no">Figure 1</span> The rank wall, in a toy. Both models learn from the same <b>N</b> training heads and fit heads they have never seen. A <span class="m2">global PCA</span> has at most N − 1 modes. The <span class="m1">regional model</span> has two small PCAs per region, each with up to N − 1 modes, and joins the regions with one least-squares solve. Colour along a fit shows its error at each vertex, from <span class="e0">0</span> to <span class="e3">3 mm</span>.</div>
+  <canvas id="heads" aria-label="A held-out head and the two fits"></canvas>
+  <div class="lab-grid">
+    <canvas id="chart" aria-label="Held-out error against coefficient count"></canvas>
+    <table class="nums" id="labNums"></table>
+  </div>
+  <div class="lab-controls">
+    <div class="ctl ctl-row"><label for="nIn" class="ctl-l">Training heads N</label><input type="range" id="nIn" min="6" max="60" step="1" value="24"><span class="val" id="nV">24</span></div>
+    <div class="ctl ctl-row"><label for="kIn" class="ctl-l">Coefficients K</label><input type="range" id="kIn" min="0" max="1000" step="1" value="620"><span class="val" id="kV"></span></div>
+    <div class="ctl ctl-row"><button id="prevHead" class="btn">Previous head</button><button id="nextHead" class="btn primary">Next head</button></div>
+  </div>
+  <p class="note">This is our own toy, not the paper's model. A head is a 2D side profile of 180 vertices with 8 regions; the paper uses 3D scans, 16 regions and 8,447 vertices. Each toy head is a mix of four random bumps per region plus a global size and face length, so the population has 34 dimensions. Push N past 35 and the global wall moves out of the way; below it, no number of coefficients can bring the global error down.</p>
+</section>
+
+<section>
+  <h2>The problem</h2>
+  <p>A parametric head model is a small set of numbers that an artist or a fitting program turns into a head mesh: some numbers for who the person is (identity), some for what the face is doing (expression), and joint angles for jaw, neck and eyes. The usual recipe, made famous by FLAME, learns one global PCA basis for identity and another for expression from a large set of registered 3D scans. More fidelity has mostly meant more scans: LSFM uses nearly ten thousand people.</p>
+  <p>A game studio does not have that. Registered, high-quality head scans are expensive, so the pool is a fixed few hundred people. For FACET it is 347. The paper asks how much a model can get from those 347 heads if the data cannot grow, and its answer is architecture, in three parts, each tested against a matched global-PCA version of itself.</p>
+</section>
+
+<section>
+  <h2>The N − 1 wall</h2>
+  <p>PCA on N heads, after the mean is taken out, has at most N − 1 directions. A held-out head that is not a mix of the training heads cannot be fitted exactly, however many coefficients you allow: there are no more. Better scans do not move this limit. On 347 identities a global identity basis stops at 346 modes.</p>
+  <p>FACET splits the head into 16 anatomical regions and gives each region two PCA bases of its own, one on vertex positions and one on Laplacian coordinates (each vertex minus the average of its neighbours, which records local shape). Every region still sees only the same 347 people, but it describes a much smaller patch, and a new face can be a new combination of known noses, lips and brows. Each region gets up to 2(N − 1) coefficients:</p>
+  <div class="sci-eq" data-tex="\underbrace{N-1=346}_{\text{global}}\qquad\text{vs}\qquad \underbrace{16\cdot 2\cdot(N-1)=11{,}072}_{\text{regional}}"></div>
+  <p>The extra dimensions are only worth having if they help on heads the model has not seen. That is what the paper measures, and what Figure 1 shows in miniature: the regional curve goes on down past the wall.</p>
+</section>
+
+<section>
+  <h2>Joining the regions with one solve</h2>
+  <p>A global model adds offsets to a template. FACET instead lets each region predict target positions <span class="m5">ξ</span> and target Laplacians <span class="m3">δ</span> for its vertices, and then finds the one mesh that best agrees with all of them:</p>
+  <div class="sci-eq" data-tex="p^\star=\arg\min_{p}\;\big\|W_L\,(Lp-\delta)\big\|^2+\lambda^2\,\big\|W_P\,(p-\xi)\big\|^2,\qquad \delta=\mu_L+\sum_{r=1}^{16}D^L_r\beta^L_r,\quad \xi=\mu_P+\sum_{r=1}^{16}D^P_r\beta^P_r"></div>
+  <p>L is the cotangent Laplacian of the mesh, D and β are each region's bases and coefficients, and the per-vertex weights W overlap across region borders, so the borders blend inside the solve and the result is one seamless mesh. λ is fixed at 0.58 in every reported result. The system matrix does not depend on the coefficients, so it is factored once and each new fit is a pair of triangular solves; the authors reuse the GPU Cholesky solver from the "Large Steps" inverse-rendering paper.</p>
+  <p>Locality gives a second gift: parts become portable. Take one person's coefficients for the nose and lips and another person's for the rest, solve, and you get a clean head with the swapped features, which a global basis cannot do without moving the whole face.</p>
+</section>
+
+<section id="swap" class="figure" aria-label="Region swap">
+  <div class="fig-head"><span class="fig-no">Figure 2</span> A region swap in the same toy. Head A keeps its own coefficients except in the regions you pick, which come from head B. The <span class="m1">regional solve</span> blends the borders; plain <span class="m2">cut and paste</span> of vertices leaves a step at each cut (circled).</div>
+  <canvas id="swapCv" aria-label="Head A, head B, the swapped head and the cut-and-paste head"></canvas>
+  <div class="lab-controls">
+    <div class="ctl"><span class="ctl-l">Regions from B</span><div class="seg chips" id="regionChips"></div></div>
+    <div class="ctl ctl-row"><button id="newPair" class="btn">New pair</button></div>
+  </div>
+  <table class="nums" id="swapNums"></table>
+</section>
+
+<section>
+  <h2>Expression: action units, fitted to each face</h2>
+  <p>Production rigs are driven by FACS action units: named muscle actions such as "brow raiser" or "lip corner puller" that animators and capture pipelines already speak. FLAME's authors set FACS aside as overcomplete and hard to fit, and used an abstract global expression PCA. FACET keeps the action units and makes them fit better.</p>
+  <p>Each region has a bank of learnable blendshapes, one per action unit. A generic blendshape cannot know how the same action moves a different face, so a small network personalises it. Two hash-grid encodings, one of the mesh position and one of the Laplacian coordinates, make a spatial code. The code scales and shifts each blendshape (FiLM), and a tiny MLP with a single hidden layer of 16 neurons reads the result, the code and the person's identity coefficients, and outputs a 6D offset (position plus Laplacian) for each action unit. The weighted sum over the active units is the expression:</p>
+  <div class="sci-eq" data-tex="E(w,\beta)=\sum_{a=1}^{A} w_a\;N_\theta\!\big(\phi(x),\,(\gamma+1)\odot B_a+\tau,\;\beta\big)\;+\;\sum_{k=1}^{4} g_k(w)\,C_k(x;\beta)"></div>
+  <p>These offsets enter the same solve as extra Laplacian and position targets. The second sum handles combinations of units that do not add up linearly: a small encoder maps the unit weights to 4 numbers, and a decoder that sees only the geometry gives a per-person corrective basis. Because the decoder does not depend on the weights, it can run once per person and be stored as a table, so a frame only touches the tiny encoder. Each region stores only its left and centre units and mirrors the rest, which roughly halves the blendshapes.</p>
+  <p>Training needs action-unit labels on every identity. The authors bootstrap them: each neutral head is built as a per-region blend of eight existing production rigs, whose expressions are transferred onto it. Fits of pose and action units per sample then alternate with global personalisation passes.</p>
+  <p>Swap the network for a fixed basis that ignores identity, and the unit weights for abstract coefficients, and you are back at a FLAME-style global expression PCA. That is the baseline.</p>
+</section>
+
+<section>
+  <h2>Neck and shoulders</h2>
+  <p>Jaw, neck and eyes move by linear blend skinning. The scans, though, are of real people in slightly different poses, and fitting a model to a posed scan means "unposing" it back to a neutral stance. Without a place for the neck and shoulder motion to go, it leaks into the identity shape, and the forehead and eye orbits, which should not change with pose, get bent. FACET adds a dedicated neck and shoulder region to take it.</p>
+</section>
+
+<section>
+  <h2>Results</h2>
+  <p>All variants share the FACET mesh, the same eye-based normalisation and the same 347 training identities; every weight of every model comes from that pool alone. The baselines are matched global-PCA ablations on this setup, not the released FLAME model. Errors are mean vertex-to-vertex distances in millimetres on held-out data: 59 neutral scans for identity, and those 59 people in 19 expressions each for expression. Lower is better; bold marks the lower value in a row.</p>
+  <p><b>E1, identity.</b> The global basis floors at 1.95 mm at its wall of 346 modes. The regional model passes under that floor at about 320 coefficients and reaches 0.23 mm at 5,120 (median 0.17 mm, 95th percentile 0.60 mm), which the paper puts at roughly 8.3 times lower. The gain is largest where locality matters: nose, eye orbits, lips.</p>
+  <div class="tbl" data-table="E1"></div>
+  <p><b>E2, expression.</b> Each held-out neutral is fixed with the production identity model, and only the expression is fitted. The global PCA gets an eigenvalue-weighted MAP prior (weight 5×10⁻⁵), which the authors note is a stronger prior than FLAME's plain squared norm, so the baseline is not handicapped. Over K = 50 to 1000 components, both action-unit models beat the PCA at every K, and the personalised one is best throughout. Eyelids, where a global basis struggles most with eye closure, show the largest gap. The generic AU column is from the text; Table 1 of the paper gives the other two.</p>
+  <div class="tbl" data-table="E2"></div>
+  <p><b>E3, pose leakage.</b> Across all 347 identities the upper face moves 0.50 mm in the global-PCA ablation and 0.16 mm with FACET's neck region, about 3.1 times less, while the whole-head displacement is about the same. The difference is pose that no longer leaks into the face.</p>
+  <div class="tbl" data-table="E3"></div>
+</section>
+
+<section>
+  <h2>What to keep in mind</h2>
+  <ul>
+    <li>The test pools are small: 59 identities and 59 × 19 expressions. The authors name this as the limit, and it follows from the fixed pool that motivates the work.</li>
+    <li>Every comparison is against the authors' own global-PCA ablation on their data, not against FLAME, ICT-FaceKit or other released models. It isolates the design choice; it does not rank FACET against them.</li>
+    <li>This is a four-page Technical Communication. Table 1 lists 4 of the 16 regions. No model, code or data is released with it, and the scans are of consenting participants under agreements with the studio.</li>
+    <li>The idea of regional face models is not new (Tena and colleagues, 2011; NPHM's per-region networks, 2023). The new framing is regionality as a way to get more from a fixed number of people, measured on held-out heads.</li>
+    <li>Our toy shows the counting argument, not the size of the effect. Its numbers depend on how many latent dimensions we gave the population and on the noise we added, and they say nothing about real faces.</li>
+  </ul>
+</section>
+
+<section class="credits">
+  <h2>Source</h2>
+  <p id="cite"></p>
+  <p>The paper is published under CC BY-NC-ND 4.0, which does not allow adaptations. This page copies none of its figures or text: the explanation is in our own words, and the numbers in the tables are facts reported in the paper, cited above. Read the paper for its figures (error maps, the personalisation network, the nose and lips swap). Both figures here, the toy model and all page code are our own and are not from the authors or Electronic Arts.</p>
+</section>
+</main>
+<script type="module" src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
