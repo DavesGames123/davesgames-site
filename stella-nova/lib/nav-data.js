@@ -286,6 +286,7 @@ w.SN_NAV = [
     { h: "Machine Learning", p: [
       ["4d-codebench", "4DCodeBench", "NEW"],
       ["autoregressive-view-model", "Autoregressive View Model", "NEW"],
+      ["facet-head-model", "FACET Head Model", "NEW"],
       ["cnn-explainer", "CNN Explainer", "NEW"]
     ] }
   ] }
